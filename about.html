@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - catn8.us</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5a623;
+            --text-color: #333;
+            --background-color: #f9f9f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        .about-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 8rem 2rem 4rem;
+            text-align: center;
+        }
+
+        .about-header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .about-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .about-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .about-section h2 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .about-section p {
+            margin-bottom: 1rem;
+        }
+
+        .timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 4rem auto;
+            padding: 2rem;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 100%;
+            background: var(--primary-color);
+        }
+
+        .timeline-item {
+            margin-bottom: 2rem;
+            position: relative;
+            width: 50%;
+            padding: 0 2rem;
+        }
+
+        .timeline-item:nth-child(odd) {
+            left: 0;
+        }
+
+        .timeline-item:nth-child(even) {
+            left: 50%;
+        }
+
+        .timeline-content {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .timeline-content h3 {
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .timeline::before {
+                left: 0;
+            }
+
+            .timeline-item {
+                width: 100%;
+                left: 0 !important;
+                padding-left: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="/" style="text-decoration: none; color: var(--primary-color); font-weight: bold; font-size: 1.2rem;">catn8.us</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about.html">About</a>
+                <a href="/family.html">Family</a>
+                <a href="/connect.html">Connect</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="about-header">
+        <h1>About catn8.us</h1>
+        <p>Discover the meaning behind our family connection platform</p>
+    </header>
+
+    <main class="about-content">
+        <section class="about-section">
+            <h2>The Meaning of Catenation</h2>
+            <p>The term "catenation" originates from the Latin word "catena," meaning chain. In chemistry, it refers to the ability of atoms to form chains with other atoms of the same element. This concept beautifully parallels how families connect and grow together.</p>
+            <p>Just as atoms form strong bonds in chains, family members create unbreakable connections through shared experiences, love, and support. Each family member is like a link in a chain, making the whole family stronger through their unique contributions.</p>
+        </section>
+
+        <section class="about-section">
+            <h2>Our Vision</h2>
+            <p>At catn8.us, we believe that family connections are the foundation of a strong and supportive community. Our platform is designed to strengthen these bonds by providing tools and spaces for families to:</p>
+            <ul style="margin-left: 2rem; margin-top: 1rem;">
+                <li>Share and preserve family stories</li>
+                <li>Connect with relatives near and far</li>
+                <li>Build a digital family tree</li>
+                <li>Create lasting memories together</li>
+            </ul>
+        </section>
+
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-content">
+                    <h3>Family Stories</h3>
+                    <p>Every family has unique stories that shape their identity. We provide a platform to capture and share these stories, ensuring they're preserved for future generations.</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-content">
+                    <h3>Digital Heritage</h3>
+                    <p>Create a digital family tree that grows with your family, documenting relationships, milestones, and special moments.</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-content">
+                    <h3>Connection Tools</h3>
+                    <p>Stay connected with family members through our interactive features, making distance feel closer than ever.</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-content">
+                    <h3>Memory Preservation</h3>
+                    <p>Store and organize family photos, videos, and documents in a secure, accessible way for all family members.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html> 

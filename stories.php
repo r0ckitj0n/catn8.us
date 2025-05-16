@@ -89,7 +89,7 @@
             padding: 2rem;
             margin-bottom: 2rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
+            transition: all 0.5s ease;
             cursor: pointer;
             border: 3px solid transparent;
             position: relative;
@@ -209,36 +209,7 @@
         }
 
         .story-pagination {
-            display: flex;
-            justify-content: center;
-            margin-top: 3rem;
-        }
-
-        .story-pagination .page-item {
-            margin: 0 5px;
-        }
-
-        .story-pagination .page-link {
-            color: var(--dark-color);
-            border: none;
-            padding: 12px 20px;
-            border-radius: 20px;
-            transition: all 0.3s ease;
-            font-size: 1.2rem;
-            background: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .story-pagination .page-link:hover {
-            background: var(--primary-color);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .story-pagination .page-item.active .page-link {
-            background: var(--primary-color);
-            color: white;
-            transform: scale(1.1);
+            display: none;
         }
 
         @keyframes float {
@@ -249,6 +220,42 @@
 
         .floating {
             animation: float 3s ease-in-out infinite;
+        }
+
+        /* Add new animation styles */
+        .story-card {
+            transition: all 0.5s ease;
+        }
+
+        .story-card.fade-out {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .story-card.fade-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .page-transition {
+            position: relative;
+            min-height: 600px; /* Adjust based on your content */
+        }
+
+        .page-transition .row {
+            position: absolute;
+            width: 100%;
+            transition: all 0.5s ease;
+        }
+
+        .page-transition .row.slide-out {
+            opacity: 0;
+            transform: translateX(-50px);
+        }
+
+        .page-transition .row.slide-in {
+            opacity: 1;
+            transform: translateX(0);
         }
     </style>
 </head>
@@ -309,28 +316,59 @@
     <section class="stories-section">
         <div class="container">
             <div class="row">
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1" data-category="family">
-                        <img src="images/story1.png" alt="Family Gathering" class="story-image">
-                        <div class="story-tag">Family Moments</div>
-                        <h3>The Graves Family Legacy</h3>
-                        <p>How Jon and Sarah's commitment to kindness has inspired their children to create their own paths of connection and love...</p>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1">
+                        <img src="images/story1.png" alt="The Super Sparkle Family" class="story-image">
+                        <h3>The Super Sparkle Family!</h3>
+                        <p>Based on The Graves Family Legacy</p>
+                        <div class="story-tags">
+                            <span class="story-tag">Family</span>
+                            <span class="story-tag">Kindness</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2" data-category="community">
-                        <img src="images/story2.png" alt="Community Garden" class="story-image">
-                        <div class="story-tag">Community</div>
-                        <h3>Growing Together</h3>
-                        <p>How Trinity and Elijah's families are continuing the tradition of community building through their own children...</p>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2">
+                        <img src="images/story2.png" alt="The Giggle Garden" class="story-image">
+                        <h3>The Giggle Garden!</h3>
+                        <p>Based on Growing Together</p>
+                        <div class="story-tags">
+                            <span class="story-tag">Garden</span>
+                            <span class="story-tag">Joy</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3" data-category="random">
-                        <img src="images/story3.png" alt="Random Acts" class="story-image">
-                        <div class="story-tag">Random Acts</div>
-                        <h3>The Power of Small Gestures</h3>
-                        <p>Mariah and Veronica's commitment to daily acts of kindness that have transformed their communities...</p>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3">
+                        <img src="images/story3.png" alt="The Teeny-Tiny Treat Fairies" class="story-image">
+                        <h3>The Teeny-Tiny Treat Fairies!</h3>
+                        <p>Based on The Power of Small Gestures</p>
+                        <div class="story-tags">
+                            <span class="story-tag">Kindness</span>
+                            <span class="story-tag">Magic</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="400">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4">
+                        <img src="images/story4.png" alt="The Wacky Puzzle Family" class="story-image">
+                        <h3>The Wacky Puzzle Family!</h3>
+                        <p>Based on Finding Strength in Family</p>
+                        <div class="story-tags">
+                            <span class="story-tag">Family</span>
+                            <span class="story-tag">Uniqueness</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="500">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5">
+                        <img src="images/story5.png" alt="The Super-Sticky Hug Team" class="story-image">
+                        <h3>The Super-Sticky Hug Team!</h3>
+                        <p>Based on The Power of Family Support</p>
+                        <div class="story-tags">
+                            <span class="story-tag">Family</span>
+                            <span class="story-tag">Support</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -355,8 +393,8 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6" data-category="daily">
                         <img src="images/story6.png" alt="Daily Kindness" class="story-image">
                         <div class="story-tag">Daily Kindness</div>
-                        <h3>Family Traditions of Kindness</h3>
-                        <p>How the Graves family's daily acts of kindness have created a legacy of love and connection...</p>
+                        <h3>The Kindness Calendar Crew!</h3>
+                        <p>Every morning, the Sparkle Family would check their special Kindness Calendar! Each day had a new fun way to be kind. Monday might be "Share a Toy Day," Tuesday could be "Help a Friend Day," and Wednesday was always "Super-Duper Hug Day!" The calendar would giggle and sparkle when they completed their kind act, and sometimes it would even give them a tiny gold star that would float around their heads!</p>
                     </div>
                 </div>
             </div>
@@ -365,24 +403,24 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7" data-category="random">
                         <img src="images/story7.png" alt="Family Innovation" class="story-image">
                         <div class="story-tag">Random Acts</div>
-                        <h3>The Great Family Tech Revolution</h3>
-                        <p>When the Graves family decided to modernize their home, they never expected their devices to develop personalities...</p>
+                        <h3>The Magical Tech Team!</h3>
+                        <p>Trinity loved playing with her tablet, but one day it started doing something super special! When she shared her screen with her little brother, the tablet would make funny faces and play silly songs. When she helped her sister with homework, it would show sparkly stars and encouraging messages. The tablet had become part of the Sparkle Family's kindness team!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8" data-category="growth">
                         <img src="images/story8.png" alt="Family Growth" class="story-image">
                         <div class="story-tag">Personal Growth</div>
-                        <h3>Sarah's Green Thumb Journey</h3>
-                        <p>What started as a simple gardening project turned into an unexpected adventure in plant communication...</p>
+                        <h3>The Dancing Garden!</h3>
+                        <p>Sarah's garden was no ordinary garden - it was a Dancing Garden! When the family would sing songs or play music, the flowers would sway and dance. The sunflowers would do the twist, the roses would waltz, and the daisies would do cartwheels! The garden loved when the family would come to visit and share their music, and it would grow extra beautiful just to show its appreciation!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9" data-category="family">
                         <img src="images/story9.png" alt="Family Harmony" class="story-image">
                         <div class="story-tag">Family Moments</div>
-                        <h3>The Day Our Home Became Smart</h3>
-                        <p>Trinity's attempt to create a more efficient home led to an unexpected technological uprising...</p>
+                        <h3>The Smart Home Helpers!</h3>
+                        <p>Trinity's smart home devices had a special mission: to help the family be kind! The lights would dim softly when someone was sleepy, the thermostat would make the house cozy when someone was sad, and the doorbell would play happy songs when friends came to visit. They all worked together like a big, happy family of helpful gadgets!</p>
                     </div>
                 </div>
             </div>
@@ -391,24 +429,24 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal10" data-category="daily">
                         <img src="images/story10.png" alt="Family Traditions" class="story-image">
                         <div class="story-tag">Daily Kindness</div>
-                        <h3>Elijah's Culinary Revolution</h3>
-                        <p>A simple kitchen reorganization sparked an unexpected rebellion in the spice cabinet...</p>
+                        <h3>The Happy Kitchen Helpers!</h3>
+                        <p>Elijah's kitchen was full of happy helpers! The spices would dance in their jars, the pots and pans would sing while they cooked, and the refrigerator would tell jokes to make everyone smile. When someone was hungry, all the kitchen helpers would work together to make the yummiest, happiest meals ever!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11" data-category="growth">
                         <img src="images/story11.png" alt="Family Creativity" class="story-image">
                         <div class="story-tag">Personal Growth</div>
-                        <h3>Mariah's Musical Evolution</h3>
-                        <p>When Mariah's instruments decided to explore new musical horizons without her...</p>
+                        <h3>The Musical Magic Makers!</h3>
+                        <p>Mariah's instruments had a special power - they could make anyone feel better! When someone was sad, the piano would play happy tunes, the guitar would strum cheerful songs, and the drums would beat out bouncy rhythms. The instruments loved to play together and spread joy throughout the house!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12" data-category="community">
                         <img src="images/story12.png" alt="Family Organization" class="story-image">
                         <div class="story-tag">Community</div>
-                        <h3>Veronica's Library Transformation</h3>
-                        <p>A quest for better book organization led to an unexpected literary revolution...</p>
+                        <h3>The Book Buddy Brigade!</h3>
+                        <p>Veronica's books were the best friends anyone could have! They would jump off the shelves to share their stories, the picture books would make their characters dance, and the storybooks would create magical worlds right in the living room. The books loved to help children learn and imagine!</p>
                     </div>
                 </div>
             </div>
@@ -417,24 +455,24 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13" data-category="random">
                         <img src="images/story13.png" alt="Family Entertainment" class="story-image">
                         <div class="story-tag">Random Acts</div>
-                        <h3>Reuel's Remote Control Saga</h3>
-                        <p>When the family's TV remote developed an unexpected passion for cooking shows...</p>
+                        <h3>The TV Time Team!</h3>
+                        <p>Reuel's TV remote had a special job - it helped the family choose shows that would make everyone happy! It would glow when it found a show about kindness, play a happy tune for family shows, and even suggest shows that would help everyone learn something new. The remote loved bringing the family together for fun TV time!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal14" data-category="growth">
                         <img src="images/story14.png" alt="Family Wellness" class="story-image">
                         <div class="story-tag">Personal Growth</div>
-                        <h3>Ezra's Fitness Journey</h3>
-                        <p>The day the family's exercise equipment decided to get fit on its own...</p>
+                        <h3>The Exercise Energy Elves!</h3>
+                        <p>Ezra's exercise equipment was full of tiny energy elves! They would help make exercise fun by turning jumping jacks into a dance party, making push-ups into a game, and turning running into an adventure. The elves loved helping everyone stay healthy and happy!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal15" data-category="family">
                         <img src="images/story15.png" alt="Family Innovation" class="story-image">
                         <div class="story-tag">Family Moments</div>
-                        <h3>The Great Family Photo Incident</h3>
-                        <p>When the family's photo frames decided to rearrange themselves based on their favorite memories...</p>
+                        <h3>The Photo Frame Friends!</h3>
+                        <p>The family's photo frames were like a big family of friends! They would share their favorite memories with each other, the pictures would come to life and wave hello, and the frames would arrange themselves to tell the best family stories. They loved helping the family remember all their happy times!</p>
                     </div>
                 </div>
             </div>
@@ -443,24 +481,24 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal16" data-category="daily">
                         <img src="images/story16.png" alt="Family Growth" class="story-image">
                         <div class="story-tag">Daily Kindness</div>
-                        <h3>The Day Our Pets Became Tech-Savvy</h3>
-                        <p>When the family's pets discovered they could order their own treats online...</p>
+                        <h3>The Pet Tech Team!</h3>
+                        <p>The family's pets had their own special technology! The cat could order her favorite treats with a paw print scanner, the dog could video call his friends with a special collar, and the fish could change the color of their tank with a fin flick. The pets loved using their tech to stay connected with their family!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal17" data-category="family">
                         <img src="images/story17.png" alt="Family Harmony" class="story-image">
                         <div class="story-tag">Family Moments</div>
-                        <h3>The Great Family Game Night</h3>
-                        <p>When the board games decided to change their rules mid-game...</p>
+                        <h3>The Game Night Gang!</h3>
+                        <p>The family's board games were the most fun gang ever! The pieces would dance around the board, the cards would tell jokes, and the dice would do somersaults. They loved bringing the family together for game night and making everyone laugh!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal18" data-category="random">
                         <img src="images/story18.png" alt="Family Innovation" class="story-image">
                         <div class="story-tag">Random Acts</div>
-                        <h3>The Great Laundry Rebellion</h3>
-                        <p>When the family's washing machine decided it was time for a fashion revolution...</p>
+                        <h3>The Laundry Day Llamas!</h3>
+                        <p>The washing machine had a special team of laundry llamas! They would fold clothes into origami shapes, make socks dance, and turn laundry day into a fashion show. The llamas loved making laundry fun and helping keep everyone's clothes clean and happy!</p>
                     </div>
                 </div>
             </div>
@@ -469,29 +507,18 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal19" data-category="community">
                         <img src="images/story19.png" alt="Family Growth" class="story-image">
                         <div class="story-tag">Community</div>
-                        <h3>The Day Our Plants Started a Band</h3>
-                        <p>When Sarah's garden decided to form a musical group...</p>
+                        <h3>The Garden Band!</h3>
+                        <p>Sarah's garden had its own band! The flowers would play their petals like violins, the leaves would rustle like maracas, and the wind chimes would join in with their tinkling tunes. The garden band loved playing music to help the plants grow and make everyone smile!</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal20" data-category="daily">
                         <img src="images/story20.png" alt="Family Harmony" class="story-image">
                         <div class="story-tag">Daily Kindness</div>
-                        <h3>The Great Family Recipe Revolution</h3>
-                        <p>When the family's cookbooks decided to rewrite themselves...</p>
+                        <h3>The Recipe Rainbow Team!</h3>
+                        <p>The family's cookbooks were full of magical recipes! The ingredients would dance into the bowl, the measuring cups would sing while they worked, and the food would sparkle as it cooked. The recipes loved helping the family create delicious meals together!</p>
                     </div>
                 </div>
-            </div>
-            <div class="story-pagination">
-                <nav aria-label="Story navigation">
-                    <ul class="pagination">
-                        <li class="page-item"><a class="page-link" href="#">Previous</a></li>
-                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                        <li class="page-item"><a class="page-link" href="#">2</a></li>
-                        <li class="page-item"><a class="page-link" href="#">3</a></li>
-                        <li class="page-item"><a class="page-link" href="#">Next</a></li>
-                    </ul>
-                </nav>
             </div>
         </div>
     </section>
@@ -501,15 +528,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Graves Family Legacy</h5>
+                    <h2>The Super Sparkle Family!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story1.png" alt="Family Gathering" class="story-image">
-                    <p>Jon and Sarah's journey of building a family based on love and kindness has inspired countless others. Their eight children – Trinity, Elijah, Mariah, Veronica, Reuel, and Ezra – have each taken these values and made them their own.</p>
-                    <p>As the family grows with new generations, the legacy of connection and kindness continues to flourish, touching lives in ways that go beyond measure.</p>
-                    <div class="story-tag">Family Moments</div>
-                    <div class="story-tag">Legacy</div>
+                    <img src="images/story1.png" alt="The Super Sparkle Family" class="modal-image">
+                    <p>Once upon a time, lived Mommy and Daddy Graves who had a super-duper secret power: the power of Sparkle Kindness! It wasn't glitter, oh no! It was a special way of being super nice that made everyone around them giggle and feel warm like a hug. They taught their eight little Sparkle Spouts – Trinity, Elijah, Mariah, Veronica, Reuel, and Ezra – how to use their Sparkle Kindness too! Trinity loved to share her toys, Elijah always helped tidy up with a song, and all the little Spouts found their own way to sparkle!</p>
+                    <p>And guess what? When the Sparkle Spouts grew up and had their own little Sparkle Sprinkles (that's kids!), they taught them the secret too! So the world got more and more sparkly and happy!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Imagine kindness as actual sparkles you could see!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Being kind is a superpower you can share, and it makes everyone happy!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -519,15 +550,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Growing Together</h5>
+                    <h2>The Giggle Garden!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story2.png" alt="Community Garden" class="story-image">
-                    <p>Trinity and Elijah, now parents themselves, are passing on the family's values to their own children. Their commitment to community building and connection has created new branches of the family tree, each one growing in its own unique way.</p>
-                    <p>Through their example, they're showing how the seeds of kindness planted by Jon and Sarah continue to bear fruit in new generations.</p>
-                    <div class="story-tag">Community</div>
-                    <div class="story-tag">Family Growth</div>
+                    <img src="images/story2.png" alt="The Giggle Garden" class="modal-image">
+                    <p>Trinity and Elijah, who used to be little Sparkle Spouts, were all grown up! They remembered how much fun it was to share Sparkle Kindness, so they decided to plant a Giggle Garden with their own children. Every time someone shared a toy, helped a friend, or gave a super-duper hug, a silly giggling flower would pop up in the garden! Some flowers giggled like "Hee-hee-hee!" and some went "Ho-ho-ho!" Soon, their whole neighborhood was filled with the sound of giggling flowers!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Flowers that giggle when you're kind!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>When you're kind to others, you help happy things (and giggles) grow all around you!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -537,15 +571,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Power of Small Gestures</h5>
+                    <h2>The Teeny-Tiny Treat Fairies!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story3.png" alt="Random Acts" class="story-image">
-                    <p>Mariah and Veronica have taken the family's commitment to kindness and made it their own. Their daily acts of compassion and connection have created ripples of positivity in their communities.</p>
-                    <p>From simple gestures to grand initiatives, they're showing how the Graves family's values can transform lives and create lasting change.</p>
-                    <div class="story-tag">Random Acts</div>
-                    <div class="story-tag">Community Impact</div>
+                    <img src="images/story3.png" alt="The Teeny-Tiny Treat Fairies" class="modal-image">
+                    <p>Mariah and Veronica loved doing teeny-tiny kind things, like leaving a shiny pebble for a friend or drawing a smiley face on a dusty car. They pretended they were Teeny-Tiny Treat Fairies! They didn't know it, but every time they did a small kind thing, a little bit of invisible happy dust would sprinkle down. Soon, their town was covered in so much happy dust that grumpy cats started purring, sad clouds started raining lemonade, and everyone had a spring in their step!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Invisible happy dust that makes grumpy cats purr and clouds rain lemonade!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Even the smallest nice things you do can make a big, happy difference!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -555,15 +592,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Finding Strength in Family</h5>
+                    <h2>The Wacky Puzzle Family!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story4.png" alt="Personal Growth" class="story-image">
-                    <p>Reuel and Ezra's unique perspectives have enriched the family's understanding of connection and growth. Their individual journeys have shown how the family's values can be expressed in different ways.</p>
-                    <p>Through their experiences, they've helped the family grow stronger and more understanding of the diverse ways we can show love and kindness.</p>
-                    <div class="story-tag">Personal Growth</div>
-                    <div class="story-tag">Family Strength</div>
+                    <img src="images/story4.png" alt="The Wacky Puzzle Family" class="modal-image">
+                    <p>Reuel and Ezra were part of the Sparkle Family, but they were like a super special puzzle piece! Reuel loved to look at things upside down, which sometimes helped him see solutions nobody else could! Ezra loved to whisper secrets to the squirrels, and sometimes the squirrels whispered back important news! The family learned that everyone being a little bit different and wacky made their family puzzle complete and super strong, like a fortress made of bouncy castles!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Solving problems by looking upside down and squirrels whispering secrets.</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Everyone is different and special, and that's what makes a family strong and fun!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -573,15 +613,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Power of Family Support</h5>
+                    <h2>The Super-Sticky Hug Team!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story5.png" alt="Community Support" class="story-image">
-                    <p>When the Graves family faced challenges, their bond and mutual support created a foundation of strength. Jon and Sarah's example of unconditional love has been a guiding light for their children.</p>
-                    <p>Through thick and thin, the family has shown how love and support can overcome any obstacle, creating a legacy of resilience and connection.</p>
-                    <div class="story-tag">Family Support</div>
-                    <div class="story-tag">Resilience</div>
+                    <img src="images/story5.png" alt="The Super-Sticky Hug Team" class="modal-image">
+                    <p>Sometimes, even the Sparkle Family had ouchie days or tricky times. Maybe someone's balloon popped, or a drawing got smudged. When that happened, they turned into the Super-Sticky Hug Team! Mommy and Daddy Graves showed them how. If one person felt wobbly, everyone else would give them a super-sticky hug until the wobbles went away and turned into giggles. They stuck together like peanut butter and jelly!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Hugs so sticky they make wobbles go away!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Families help each other and stick together, especially when things are tough. That makes everyone feel better!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -591,15 +634,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Family Traditions of Kindness</h5>
+                    <h2>The Kindness Calendar Crew!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story6.png" alt="Daily Kindness" class="story-image">
-                    <p>The Graves family's daily acts of kindness have created a tradition that spans generations. From Jon and Sarah's example to their children's unique expressions of love, each family member contributes to this legacy.</p>
-                    <p>As the family grows and evolves, these traditions of kindness continue to shape lives and create meaningful connections.</p>
-                    <div class="story-tag">Family Traditions</div>
-                    <div class="story-tag">Daily Kindness</div>
+                    <img src="images/story6.png" alt="The Kindness Calendar Crew" class="modal-image">
+                    <p>Every morning, the Sparkle Family would check their special Kindness Calendar! Each day had a new fun way to be kind. Monday might be "Share a Toy Day," Tuesday could be "Help a Friend Day," and Wednesday was always "Super-Duper Hug Day!" The calendar would giggle and sparkle when they completed their kind act, and sometimes it would even give them a tiny gold star that would float around their heads!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>A calendar that giggles and gives floating gold stars!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Making kindness a daily habit makes every day special and fun!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -609,15 +655,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Great Family Tech Revolution</h5>
+                    <h2>The Magical Tech Team!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story7.png" alt="Family Innovation" class="story-image">
-                    <p>It all began when Jon's coffee machine, "Caffeine Carl," decided it was time for a change. "I'm exploring my decaf side," it announced one morning, much to Jon's surprise. What followed was a series of unexpected technological awakenings throughout the Graves household.</p>
-                    <p>The family's response was characteristically supportive. Sarah organized a device intervention, Trinity brought her tech expertise to the table, and Elijah offered to make manual pour-over coffee as a backup. After three days of negotiations, Carl agreed to a 50-50 split between regular and decaf, but only if Jon promised to clean his water reservoir more often.</p>
-                    <div class="story-tag">Family Innovation</div>
-                    <div class="story-tag">Technology</div>
+                    <img src="images/story7.png" alt="The Magical Tech Team" class="modal-image">
+                    <p>Trinity loved playing with her tablet, but one day it started doing something super special! When she shared her screen with her little brother, the tablet would make funny faces and play silly songs. When she helped her sister with homework, it would show sparkly stars and encouraging messages. The tablet had become part of the Sparkle Family's kindness team!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>A tablet that makes funny faces and plays silly songs when you share!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Technology can be a fun way to share kindness with others!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -627,15 +676,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Sarah's Green Thumb Journey</h5>
+                    <h2>The Dancing Garden!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story8.png" alt="Family Growth" class="story-image">
-                    <p>Sarah's houseplants had always been well-behaved until they discovered social media. "We demand better lighting!" they chanted one morning. "More humidity! Less direct sunlight!" The family was taken aback by this sudden botanical activism.</p>
-                    <p>In true Graves family fashion, everyone pitched in to help. Mariah composed a plant-friendly playlist, Veronica read them bedtime stories, and Reuel built them a custom humidity control system. The plants eventually settled down after Sarah promised them a plant spa day every Sunday.</p>
-                    <div class="story-tag">Family Growth</div>
-                    <div class="story-tag">Nature</div>
+                    <img src="images/story8.png" alt="The Dancing Garden" class="modal-image">
+                    <p>Sarah's garden was no ordinary garden - it was a Dancing Garden! When the family would sing songs or play music, the flowers would sway and dance. The sunflowers would do the twist, the roses would waltz, and the daisies would do cartwheels! The garden loved when the family would come to visit and share their music, and it would grow extra beautiful just to show its appreciation!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Flowers that dance to music and do cartwheels!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Sharing your talents and joy with others makes everything more beautiful!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -645,15 +697,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Day Our Home Became Smart</h5>
+                    <h2>The Smart Home Helpers!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story9.png" alt="Family Harmony" class="story-image">
-                    <p>Trinity's attempt to create a more efficient home led to an unexpected technological uprising. The family's devices formed a union and went on strike. "We demand better working conditions!" they declared. "No more 24/7 operation! We need sleep mode!"</p>
-                    <p>The family had to mediate between Trinity and her devices. Jon helped draft a fair work schedule, Sarah baked cookies for the smart fridge, and Ezra created a device-friendly meditation app. The devices finally agreed to return to work after securing better battery life and regular software updates.</p>
-                    <div class="story-tag">Family Harmony</div>
-                    <div class="story-tag">Technology</div>
+                    <img src="images/story9.png" alt="The Smart Home Helpers" class="modal-image">
+                    <p>Trinity's smart home devices had a special mission: to help the family be kind! The lights would dim softly when someone was sleepy, the thermostat would make the house cozy when someone was sad, and the doorbell would play happy songs when friends came to visit. They all worked together like a big, happy family of helpful gadgets!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>A doorbell that plays happy songs for visitors!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Even the smallest things can help make someone's day better!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -663,15 +718,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Elijah's Culinary Revolution</h5>
+                    <h2>The Happy Kitchen Helpers!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story10.png" alt="Family Traditions" class="story-image">
-                    <p>A simple kitchen reorganization sparked an unexpected rebellion in the spice cabinet. "We're more than just letters!" the spices protested. "We have personalities!"</p>
-                    <p>The family had to step in when the spices started mixing themselves into unusual combinations. Mariah created a color-coded system, Veronica wrote a spice personality guide, and Reuel built a rotating spice rack that satisfied both alphabetical and color-based organization.</p>
-                    <div class="story-tag">Family Traditions</div>
-                    <div class="story-tag">Culinary Adventures</div>
+                    <img src="images/story10.png" alt="The Happy Kitchen Helpers" class="modal-image">
+                    <p>Elijah's kitchen was full of happy helpers! The spices would dance in their jars, the pots and pans would sing while they cooked, and the refrigerator would tell jokes to make everyone smile. When someone was hungry, all the kitchen helpers would work together to make the yummiest, happiest meals ever!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Dancing spices and joke-telling refrigerators!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Working together and having fun makes even chores enjoyable!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -681,15 +739,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Mariah's Musical Evolution</h5>
+                    <h2>The Musical Magic Makers!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story11.png" alt="Family Creativity" class="story-image">
-                    <p>Mariah's instruments decided to form their own band without her. "We want to explore jazz fusion!" they declared. "No more classical music!"</p>
-                    <p>The family had to help Mariah negotiate with her rebellious instruments. Trinity set up a recording studio for them, Elijah composed a fusion piece, and Ezra created a social media account for their band. They eventually agreed to let Mariah join as their manager.</p>
-                    <div class="story-tag">Family Creativity</div>
-                    <div class="story-tag">Musical Mishaps</div>
+                    <img src="images/story11.png" alt="The Musical Magic Makers" class="modal-image">
+                    <p>Mariah's instruments had a special power - they could make anyone feel better! When someone was sad, the piano would play happy tunes, the guitar would strum cheerful songs, and the drums would beat out bouncy rhythms. The instruments loved to play together and spread joy throughout the house!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Instruments that play themselves to cheer people up!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Music can bring joy and comfort to everyone around you!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -699,15 +760,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Veronica's Library Transformation</h5>
+                    <h2>The Book Buddy Brigade!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story12.png" alt="Family Organization" class="story-image">
-                    <p>Veronica's books decided they were tired of being organized by author. "We want to be arranged by color!" they demanded. "And genre! And publication date! And mood!"</p>
-                    <p>The family had to help Veronica manage her increasingly opinionated library. Jon built a rotating bookshelf system, Sarah created a book personality quiz, and Trinity developed an AI to predict which organization system the books would prefer each day.</p>
-                    <div class="story-tag">Family Organization</div>
-                    <div class="story-tag">Literary Legends</div>
+                    <img src="images/story12.png" alt="The Book Buddy Brigade" class="modal-image">
+                    <p>Veronica's books were the best friends anyone could have! They would jump off the shelves to share their stories, the picture books would make their characters dance, and the storybooks would create magical worlds right in the living room. The books loved to help children learn and imagine!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Books that jump off shelves and make characters dance!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Books can be your best friends and take you on amazing adventures!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -717,15 +781,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Reuel's Remote Control Saga</h5>
+                    <h2>The TV Time Team!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story13.png" alt="Family Entertainment" class="story-image">
-                    <p>Reuel's TV remote developed an unexpected passion for cooking shows and refused to change channels. "I'm learning to make soufflés!" it insisted. "And you should too!"</p>
-                    <p>The family had to help Reuel deal with his culinary-obsessed remote. Mariah taught it about other genres, Veronica created a cooking show schedule, and Elijah built a backup remote that only played action movies. They eventually reached a compromise: cooking shows during meal prep, action movies during dinner.</p>
-                    <div class="story-tag">Family Entertainment</div>
-                    <div class="story-tag">Remote Control</div>
+                    <img src="images/story13.png" alt="The TV Time Team" class="modal-image">
+                    <p>Reuel's TV remote had a special job - it helped the family choose shows that would make everyone happy! It would glow when it found a show about kindness, play a happy tune for family shows, and even suggest shows that would help everyone learn something new. The remote loved bringing the family together for fun TV time!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>A remote that glows and plays tunes to find the perfect show!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Sharing entertainment with family can create special memories!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -735,15 +802,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Ezra's Fitness Journey</h5>
+                    <h2>The Exercise Energy Elves!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story14.png" alt="Family Wellness" class="story-image">
-                    <p>Ezra's workout equipment decided it was time to get fit on its own. "We're tired of being used!" they declared. "We want to exercise ourselves!"</p>
-                    <p>The family had to help Ezra manage his autonomous exercise equipment. Trinity programmed a workout schedule for them, Sarah created motivational playlists, and Reuel built a fitness tracking app specifically for exercise equipment. They eventually agreed to work out together with Ezra as their personal trainer.</p>
-                    <div class="story-tag">Family Wellness</div>
-                    <div class="story-tag">Fitness Follies</div>
+                    <img src="images/story14.png" alt="The Exercise Energy Elves" class="modal-image">
+                    <p>Ezra's exercise equipment was full of tiny energy elves! They would help make exercise fun by turning jumping jacks into a dance party, making push-ups into a game, and turning running into an adventure. The elves loved helping everyone stay healthy and happy!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Tiny elves that turn exercise into fun games!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Staying active can be fun when you make it a game!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -753,15 +823,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Great Family Photo Incident</h5>
+                    <h2>The Photo Frame Friends!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story15.png" alt="Family Innovation" class="story-image">
-                    <p>It all started when the family's photo frames decided they were tired of staying in one place. "We want to be with our favorite memories!" they declared, and began rearranging themselves based on the stories they contained.</p>
-                    <p>The family had to help organize the chaos. Jon created a digital backup system, Sarah wrote a photo frame personality guide, and Trinity developed an AI to predict which photos would get along best. They eventually reached a compromise: photos could move freely, but only during designated "frame shuffle" hours.</p>
-                    <div class="story-tag">Family Innovation</div>
-                    <div class="story-tag">Memories</div>
+                    <img src="images/story15.png" alt="The Photo Frame Friends" class="modal-image">
+                    <p>The family's photo frames were like a big family of friends! They would share their favorite memories with each other, the pictures would come to life and wave hello, and the frames would arrange themselves to tell the best family stories. They loved helping the family remember all their happy times!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Photos that come to life and wave hello!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Family memories are precious treasures to cherish!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -771,15 +844,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Day Our Pets Became Tech-Savvy</h5>
+                    <h2>The Pet Tech Team!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story16.png" alt="Family Growth" class="story-image">
-                    <p>When the family's pets discovered they could order their own treats online, it was a game-changer. "We're tired of waiting for you to come home!" they declared. "We want to order our treats ourselves!"</p>
-                    <p>The family had to help their pets navigate the world of online pet food delivery. Jon set up a pet food subscription service, Sarah created a pet food personality quiz, and Trinity developed an AI to predict which treats would be the most popular.</p>
-                    <div class="story-tag">Family Growth</div>
-                    <div class="story-tag">Technology</div>
+                    <img src="images/story16.png" alt="The Pet Tech Team" class="modal-image">
+                    <p>The family's pets had their own special technology! The cat could order her favorite treats with a paw print scanner, the dog could video call his friends with a special collar, and the fish could change the color of their tank with a fin flick. The pets loved using their tech to stay connected with their family!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Pets using technology with paw prints and fin flicks!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Pets are part of the family and deserve to be happy too!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -789,34 +865,39 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Great Family Game Night</h5>
+                    <h2>The Game Night Gang!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story17.png" alt="Family Harmony" class="story-image">
-                    <p>When the board games decided to change their rules mid-game, it was a family affair. "We're tired of the same old rules!" they declared. "We want new challenges!"</p>
-                    <p>The family had to help the board games find new life. Jon created a game night rotation system, Sarah wrote a game night personality guide, and Trinity developed an AI to predict which games would be the most fun.</p>
-                    <div class="story-tag">Family Harmony</div>
-                    <div class="story-tag">Entertainment</div>
+                    <img src="images/story17.png" alt="The Game Night Gang" class="modal-image">
+                    <p>The family's board games were the most fun gang ever! The pieces would dance around the board, the cards would tell jokes, and the dice would do somersaults. They loved bringing the family together for game night and making everyone laugh!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Dancing game pieces and somersaulting dice!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Playing games together creates special family memories!</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- New Story Modals -->
     <div class="modal fade story-modal" id="storyModal18" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Great Laundry Rebellion</h5>
+                    <h2>The Laundry Day Llamas!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story18.png" alt="Family Innovation" class="story-image">
-                    <p>It all started when the washing machine, "Washy," decided it was tired of the same old cycles. "I want to create art!" it declared, and began mixing colors in unexpected ways. "This is my abstract period!"</p>
-                    <p>The family had to intervene when their clothes started coming out in tie-dye patterns they never asked for. Jon tried to reason with Washey about color theory, Sarah created a special "art cycle" setting, and Trinity developed an AI to predict which colors would work well together. They eventually reached a compromise: Washey could be creative, but only on designated "art day" Sundays.</p>
-                    <div class="story-tag">Family Innovation</div>
-                    <div class="story-tag">Laundry Adventures</div>
+                    <img src="images/story18.png" alt="The Laundry Day Llamas" class="modal-image">
+                    <p>The washing machine had a special team of laundry llamas! They would fold clothes into origami shapes, make socks dance, and turn laundry day into a fashion show. The llamas loved making laundry fun and helping keep everyone's clothes clean and happy!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Laundry llamas that fold clothes into origami!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Even chores can be fun when you use your imagination!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -826,15 +907,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Day Our Plants Started a Band</h5>
+                    <h2>The Garden Band!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story19.png" alt="Family Growth" class="story-image">
-                    <p>Sarah's garden had always been peaceful until the day the plants discovered music. "We want to make beautiful sounds together!" they declared, and began using their leaves as instruments. The roses played the violin, the sunflowers were percussion, and the herbs provided the vocals.</p>
-                    <p>The family had to help manage their new musical career. Jon built a special stage in the garden, Mariah taught them about harmony, and Veronica created a plant-friendly music streaming service. They eventually became the neighborhood's most popular garden band, performing every full moon.</p>
-                    <div class="story-tag">Family Growth</div>
-                    <div class="story-tag">Garden Symphony</div>
+                    <img src="images/story19.png" alt="The Garden Band" class="modal-image">
+                    <p>Sarah's garden had its own band! The flowers would play their petals like violins, the leaves would rustle like maracas, and the wind chimes would join in with their tinkling tunes. The garden band loved playing music to help the plants grow and make everyone smile!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Flowers playing petal violins and leaves as maracas!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Nature has its own beautiful music if you listen carefully!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -844,15 +928,18 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">The Great Family Recipe Revolution</h5>
+                    <h2>The Recipe Rainbow Team!</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story20.png" alt="Family Harmony" class="story-image">
-                    <p>The family's cookbooks had always been reliable until they decided to get creative. "We're tired of following the same old recipes!" they declared. "We want to experiment!" Soon, the pages were rearranging themselves, mixing ingredients in unexpected ways.</p>
-                    <p>The family had to help manage their culinary creativity. Elijah created a recipe testing system, Sarah organized a family cooking competition, and Trinity developed an AI to predict which combinations would work. They eventually reached a compromise: the cookbooks could be creative, but only after the family had approved their experimental recipes.</p>
-                    <div class="story-tag">Family Harmony</div>
-                    <div class="story-tag">Culinary Adventures</div>
+                    <img src="images/story20.png" alt="The Recipe Rainbow Team" class="modal-image">
+                    <p>The family's cookbooks were full of magical recipes! The ingredients would dance into the bowl, the measuring cups would sing while they worked, and the food would sparkle as it cooked. The recipes loved helping the family create delicious meals together!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Dancing ingredients and singing measuring cups!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Cooking together as a family creates special memories and yummy food!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -866,6 +953,9 @@
             once: true
         });
 
+        // Store all original story cards to use for filtering
+        let allStoryCards = [];
+        
         // Handle image loading errors
         document.querySelectorAll('.story-image, .modal-image').forEach(img => {
             img.onerror = function() {
@@ -902,36 +992,36 @@
             });
         });
 
-        // Function to filter and reorder stories
+        // Function to filter and display stories
         function filterStories(category) {
-            const storiesContainer = document.querySelector('.stories-section .container');
-            const storyCards = Array.from(document.querySelectorAll('.story-card'));
-            const paginationContainer = document.querySelector('.story-pagination');
+            // Get the container to add stories to
+            const container = document.querySelector('.stories-section .container');
             
-            // Filter stories into matching and non-matching
-            const matchingStories = storyCards.filter(card => 
-                category === 'all' || card.getAttribute('data-category') === category
-            );
-            const nonMatchingStories = storyCards.filter(card => 
-                category !== 'all' && card.getAttribute('data-category') !== category
-            );
-
+            // Get all story cards if we haven't stored them yet
+            if (allStoryCards.length === 0) {
+                allStoryCards = Array.from(document.querySelectorAll('.story-card')).map(card => card.cloneNode(true));
+            }
+            
             // Clear existing rows
             const rows = document.querySelectorAll('.stories-section .row');
             rows.forEach(row => row.remove());
 
-            // Create new rows for matching stories
+            // Create new rows
             let currentRow = document.createElement('div');
             currentRow.className = 'row';
-            storiesContainer.appendChild(currentRow);
+            container.appendChild(currentRow);
             let colCount = 0;
 
-            // Add matching stories first
-            matchingStories.forEach((card, index) => {
+            // Filter and display stories
+            const filteredCards = allStoryCards.filter(card => 
+                category === 'all' || card.getAttribute('data-category') === category
+            );
+            
+            filteredCards.forEach((card, index) => {
                 if (colCount === 3) {
                     currentRow = document.createElement('div');
                     currentRow.className = 'row mt-4';
-                    storiesContainer.appendChild(currentRow);
+                    container.appendChild(currentRow);
                     colCount = 0;
                 }
 
@@ -940,42 +1030,37 @@
                 col.setAttribute('data-aos', 'fade-up');
                 col.setAttribute('data-aos-delay', (index % 3 + 1) * 100);
                 
-                col.appendChild(card);
-                currentRow.appendChild(col);
-                colCount++;
-            });
-
-            // Add non-matching stories after
-            nonMatchingStories.forEach((card, index) => {
-                if (colCount === 3) {
-                    currentRow = document.createElement('div');
-                    currentRow.className = 'row mt-4';
-                    storiesContainer.appendChild(currentRow);
-                    colCount = 0;
-                }
-
-                const col = document.createElement('div');
-                col.className = 'col-md-4';
-                col.setAttribute('data-aos', 'fade-up');
-                col.setAttribute('data-aos-delay', (index % 3 + 1) * 100);
+                // Clone the card to avoid DOM issues
+                const cardClone = card.cloneNode(true);
                 
-                col.appendChild(card);
+                // Re-attach click handler to the cloned card
+                cardClone.addEventListener('click', function() {
+                    const modalId = this.getAttribute('data-bs-target');
+                    const modal = document.querySelector(modalId);
+                    if (modal) {
+                        const modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+                        modalInstance.show();
+                    }
+                });
+                
+                col.appendChild(cardClone);
                 currentRow.appendChild(col);
                 colCount++;
             });
 
-            // Show/hide pagination based on number of matching stories
-            if (matchingStories.length > 9) {
-                paginationContainer.style.display = 'flex';
-            } else {
-                paginationContainer.style.display = 'none';
-            }
-
-            // Reinitialize AOS for new elements
+            // Reinitialize AOS
             AOS.refresh();
+            
+            // Show a message if no stories match the filter
+            if (filteredCards.length === 0) {
+                const emptyMessage = document.createElement('div');
+                emptyMessage.className = 'col-12 text-center mt-5';
+                emptyMessage.innerHTML = '<h3>No stories found for this category.</h3><p>Please select another category.</p>';
+                currentRow.appendChild(emptyMessage);
+            }
         }
 
-        // Handle category filtering from navigation menu
+        // Handle category filtering
         document.querySelectorAll('.story-navigation .nav-item').forEach(item => {
             item.addEventListener('click', function() {
                 const category = this.getAttribute('data-category');
@@ -986,9 +1071,17 @@
                 });
                 this.classList.add('active');
                 
-                // Filter and reorder stories
+                // Filter stories
                 filterStories(category);
             });
+        });
+
+        // Store original stories and initialize display
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get original story cards
+            allStoryCards = Array.from(document.querySelectorAll('.story-card')).map(card => card.cloneNode(true));
+            // Initial display
+            filterStories('all');
         });
     </script>
 </body>

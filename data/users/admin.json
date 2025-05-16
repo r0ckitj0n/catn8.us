@@ -1,0 +1,11 @@
+{
+    "admin4catn8": {
+        "email": "admin@catn8.us",
+        "name": "Admin",
+        "password": "$2y$10$YourSecureHashHere",
+        "is_admin": true,
+        "created_at": "2024-03-21 00:00:00",
+        "description": "System Administrator",
+        "profile_photo": "images/default-profile.jpg"
+    }
+} 

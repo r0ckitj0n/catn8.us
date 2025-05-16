@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>catn8.us - Connecting Families</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5a623;
+            --text-color: #333;
+            --background-color: #f9f9f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        .hero {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(74, 144, 226, 0.9), rgba(245, 166, 35, 0.9));
+            color: white;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('images/catfamily.jpeg');
+            background-size: cover;
+            background-position: center;
+            z-index: -1;
+            filter: brightness(0.8);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 2rem;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            max-width: 800px;
+            width: 90%;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: fadeIn 2s ease-in;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            max-width: 600px;
+            margin-bottom: 2rem;
+            animation: fadeIn 2s ease-in 0.5s backwards;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .cta-button {
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            background-color: white;
+            color: var(--primary-color);
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            animation: fadeIn 2s ease-in 1s backwards;
+        }
+
+        .cta-button:hover {
+            transform: scale(1.05);
+        }
+
+        .features {
+            padding: 4rem 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .about-section {
+            padding: 6rem 2rem;
+            background: white;
+        }
+
+        .about-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .about-text h2 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .about-text p {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .family-values {
+            padding: 6rem 2rem;
+            background: var(--background-color);
+        }
+
+        .values-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .values-content h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 3rem;
+        }
+
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .value-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .value-card h3 {
+            color: var(--secondary-color);
+            margin-bottom: 1rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .about-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="/" style="text-decoration: none; color: var(--primary-color); font-weight: bold; font-size: 1.2rem;">catn8.us</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about.html">About</a>
+                <a href="/family.html">Family</a>
+                <a href="/connect.html">Connect</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1>catn8.us</h1>
+            <p>Where families connect, memories intertwine, and stories come alive.</p>
+            <button class="cta-button">Join Our Family</button>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="feature-card">
+            <h2>Share Stories</h2>
+            <p>Create and share family stories that will be cherished for generations.</p>
+        </div>
+        <div class="feature-card">
+            <h2>Connect</h2>
+            <p>Stay connected with family members near and far through our interactive platform.</p>
+        </div>
+        <div class="feature-card">
+            <h2>Preserve Memories</h2>
+            <p>Build a digital family tree and preserve precious moments forever.</p>
+        </div>
+    </section>
+
+    <section class="about-section">
+        <div class="about-content">
+            <div class="about-text">
+                <h2>The Power of Catenation</h2>
+                <p>The word "catenate" comes from the Latin "catena," meaning chain. In our family context, it represents the beautiful way we link together, creating an unbreakable chain of love, support, and shared experiences.</p>
+                <p>Just as links in a chain strengthen each other, our family connections make us stronger. Each story shared, each memory preserved, and each moment celebrated adds another link to our family's chain.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Our Mission</h3>
+                <p>To strengthen family bonds through the power of connection, creating a lasting legacy of shared experiences and cherished memories.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="family-values">
+        <div class="values-content">
+            <h2>Our Family Values</h2>
+            <div class="values-grid">
+                <div class="value-card">
+                    <h3>Connection</h3>
+                    <p>Building and maintaining strong bonds between family members, near and far.</p>
+                </div>
+                <div class="value-card">
+                    <h3>Heritage</h3>
+                    <p>Preserving and celebrating our family's unique history and traditions.</p>
+                </div>
+                <div class="value-card">
+                    <h3>Growth</h3>
+                    <p>Supporting each other's personal development and shared journey.</p>
+                </div>
+                <div class="value-card">
+                    <h3>Unity</h3>
+                    <p>Standing together as one family, supporting each other through life's challenges.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

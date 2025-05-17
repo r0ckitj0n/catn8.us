@@ -86,34 +86,72 @@
         .game-card {
             background: white;
             border-radius: 20px;
-            padding: 2rem;
+            padding: 1.5rem;
             margin-bottom: 2rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
+            transition: all 0.5s ease;
             cursor: pointer;
             border: 3px solid transparent;
             position: relative;
             overflow: hidden;
-            text-decoration: none;
-            color: var(--dark-color);
-            display: block;
+            height: auto;
+            min-height: 429px;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
         }
 
-        .game-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-            border-color: var(--accent-color);
-            color: var(--dark-color);
-            text-decoration: none;
+        .game-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
         }
 
         .game-image {
             width: 100%;
-            height: 200px;
+            height: 214px;
             object-fit: cover;
             border-radius: 15px;
             margin-bottom: 1rem;
             border: 3px solid var(--accent-color);
+        }
+
+        .game-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #5DBCB3;
+            font-weight: bold;
+        }
+
+        .game-card p {
+            font-size: 0.9rem;
+            color: var(--dark-color);
+            margin-bottom: 0.5rem;
+            flex-grow: 1;
+            overflow: visible;
+            display: block;
+        }
+
+        .game-platforms {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .platform {
+            background: var(--accent-color);
+            color: var(--primary-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+        }
+
+        .game-category {
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
         }
 
         .game-tag {
@@ -129,16 +167,23 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        .game-description {
-            font-size: 1.1rem;
-            margin-top: 1rem;
-            color: var(--dark-color);
-        }
-
         .game-platform {
             font-size: 0.9rem;
             color: var(--primary-color);
             margin-top: 0.5rem;
+        }
+
+        .age-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--primary-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            z-index: 1;
         }
 
         @keyframes float {
@@ -149,6 +194,50 @@
 
         .floating {
             animation: float 3s ease-in-out infinite;
+        }
+
+        .filter-menu {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 3px solid var(--accent-color);
+        }
+
+        .filter-menu button {
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.2rem;
+            padding: 10px;
+            border-radius: 15px;
+            text-align: center;
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: var(--dark-color);
+        }
+
+        .filter-menu button:hover {
+            background: var(--accent-color);
+            transform: scale(1.1);
+            color: white;
+        }
+
+        .filter-menu button.active {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-color: var(--accent-color);
         }
     </style>
 </head>
@@ -167,13 +256,16 @@
                         <a class="nav-link" href="/">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="stories.php">Stories</a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link" href="about.php">About</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="stories.php">Stories</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link active" href="games.php">Games</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="activities.php">Activities</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/#guiding-lights">Our Lights</a>
@@ -186,25 +278,34 @@
         </div>
     </nav>
 
-    <section class="hero">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-md-8 text-center" data-aos="fade-up">
-                    <h1>Family Games</h1>
-                    <p class="lead">Discover a collection of fun and engaging games that bring families together. From classic favorites to modern adventures, there's something for everyone to enjoy.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <section class="games-section">
         <div class="container">
-            <!-- Ages 3-7 Section -->
-            <div class="age-group mb-5" data-aos="fade-up">
-                <h2 class="text-center mb-4">Ages 3-7</h2>
-                <div class="row">
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                        <a href="https://pbskids.org/games" target="_blank" class="game-card">
+            <div class="row">
+                <div class="col-12">
+                    <!-- Filter menu will be fixed on the right, outside the grid -->
+                </div>
+            </div>
+
+            <!-- Fixed Filter Menu -->
+            <div class="filter-menu" data-aos="fade-left">
+                <div class="d-flex flex-column gap-2">
+                    <button class="btn active" data-filter="all">All Games</button>
+                    <button class="btn" data-filter="3-7">Ages 3-7</button>
+                    <button class="btn" data-filter="8-12">Ages 8-12</button>
+                    <button class="btn" data-filter="13">Ages 13+</button>
+                    <button class="btn" data-filter="educational">Educational</button>
+                    <button class="btn" data-filter="simulation">Simulation</button>
+                    <button class="btn" data-filter="adventure">Adventure</button>
+                    <button class="btn" data-filter="strategy">Strategy</button>
+                </div>
+            </div>
+
+            <!-- Ages 3-7 Games -->
+            <div class="row">
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="3-7" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://pbskids.org/games', '_blank')">
+                            <span class="age-badge">Ages 3-7</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#4ECDC4"/>
@@ -218,10 +319,13 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                        <a href="https://www.nickjr.com/games/" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="3-7" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.nickjr.com/games/', '_blank')">
+                            <span class="age-badge">Ages 3-7</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FF6B6B"/>
@@ -235,10 +339,13 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                        <a href="https://www.starfall.com/" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="3-7" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.starfall.com/', '_blank')">
+                            <span class="age-badge">Ages 3-7</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FFE66D"/>
@@ -252,17 +359,17 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Ages 8-12 Section -->
-            <div class="age-group mb-5" data-aos="fade-up">
-                <h2 class="text-center mb-4">Ages 8-12</h2>
-                <div class="row">
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                        <a href="https://www.coolmathgames.com/" target="_blank" class="game-card">
+            <!-- Ages 8-12 Games -->
+            <div class="row">
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="8-12" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.coolmathgames.com/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#4ECDC4"/>
@@ -276,10 +383,13 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                        <a href="https://www.abcya.com/" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="8-12" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.abcya.com/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FF6B6B"/>
@@ -293,10 +403,13 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                        <a href="https://www.prodigygame.com/" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="8-12" data-category="educational">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.prodigygame.com/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FFE66D"/>
@@ -310,68 +423,71 @@
                                 <span class="platform">Web</span>
                                 <span class="platform">Mobile</span>
                             </div>
-                        </a>
-                    </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                        <div class="game-card">
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Animal Crossing</text>
-                                </svg>
-                            </div>
-                            <div class="game-category">Simulation</div>
-                            <h3>Animal Crossing</h3>
-                            <p>Create your own island paradise and make friends with adorable animal villagers.</p>
-                            <div class="game-platforms">
-                                <span class="platform">Nintendo Switch</span>
-                            </div>
                         </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                        <div class="game-card">
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Stardew Valley</text>
-                                </svg>
-                            </div>
-                            <div class="game-category">Simulation</div>
-                            <h3>Stardew Valley</h3>
-                            <p>Build your farm, make friends, and explore a charming rural world.</p>
-                            <div class="game-platforms">
-                                <span class="platform">PC</span>
-                                <span class="platform">Console</span>
-                                <span class="platform">Mobile</span>
-                            </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="8-12" data-category="simulation">
+                    <div class="game-card">
+                        <span class="age-badge">Ages 8-12</span>
+                        <div class="game-image">
+                            <svg width="100%" height="200" viewBox="0 0 400 200">
+                                <rect width="100%" height="100%" fill="#4ECDC4"/>
+                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Animal Crossing</text>
+                            </svg>
+                        </div>
+                        <div class="game-category">Simulation</div>
+                        <h3>Animal Crossing</h3>
+                        <p>Create your own island paradise and make friends with adorable animal villagers.</p>
+                        <div class="game-platforms">
+                            <span class="platform">Nintendo Switch</span>
                         </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                        <div class="game-card">
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FFE66D"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Overcooked</text>
-                                </svg>
-                            </div>
-                            <div class="game-category">Co-op</div>
-                            <h3>Overcooked</h3>
-                            <p>Work together in chaotic kitchen scenarios to prepare meals against the clock.</p>
-                            <div class="game-platforms">
-                                <span class="platform">PC</span>
-                                <span class="platform">Console</span>
-                            </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="8-12" data-category="simulation">
+                    <div class="game-card">
+                        <span class="age-badge">Ages 8-12</span>
+                        <div class="game-image">
+                            <svg width="100%" height="200" viewBox="0 0 400 200">
+                                <rect width="100%" height="100%" fill="#FF6B6B"/>
+                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Stardew Valley</text>
+                            </svg>
+                        </div>
+                        <div class="game-category">Simulation</div>
+                        <h3>Stardew Valley</h3>
+                        <p>Build your farm, make friends, and explore a charming rural world.</p>
+                        <div class="game-platforms">
+                            <span class="platform">PC</span>
+                            <span class="platform">Console</span>
+                            <span class="platform">Mobile</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="8-12" data-category="simulation">
+                    <div class="game-card">
+                        <span class="age-badge">Ages 8-12</span>
+                        <div class="game-image">
+                            <svg width="100%" height="200" viewBox="0 0 400 200">
+                                <rect width="100%" height="100%" fill="#FFE66D"/>
+                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Overcooked</text>
+                            </svg>
+                        </div>
+                        <div class="game-category">Co-op</div>
+                        <h3>Overcooked</h3>
+                        <p>Work together in chaotic kitchen scenarios to prepare meals against the clock.</p>
+                        <div class="game-platforms">
+                            <span class="platform">PC</span>
+                            <span class="platform">Console</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Ages 13+ Section -->
-            <div class="age-group" data-aos="fade-up">
-                <h2 class="text-center mb-4">Ages 13+</h2>
-                <div class="row">
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                        <a href="https://www.minecraft.net/" target="_blank" class="game-card">
+            <!-- Ages 13+ Games -->
+            <div class="row">
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="13" data-category="adventure">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.minecraft.net/', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#4ECDC4"/>
@@ -384,28 +500,36 @@
                             <div class="game-platforms">
                                 <span class="platform">PC</span>
                                 <span class="platform">Console</span>
+                                <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                        <a href="https://www.roblox.com/" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="13" data-category="adventure">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.roblox.com/', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FF6B6B"/>
                                     <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Roblox</text>
                                 </svg>
                             </div>
-                            <div class="game-category">Social</div>
+                            <div class="game-category">Adventure</div>
                             <h3>Roblox</h3>
-                            <p>Create, play, and share games with friends in this social gaming platform.</p>
+                            <p>Create and play games with friends in a social gaming platform.</p>
                             <div class="game-platforms">
                                 <span class="platform">PC</span>
                                 <span class="platform">Console</span>
+                                <span class="platform">Mobile</span>
                             </div>
-                        </a>
+                        </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                        <a href="https://www.lego.com/en-us/games" target="_blank" class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="13" data-category="adventure">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.lego.com/en-us/games', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
                                     <rect width="100%" height="100%" fill="#FFE66D"/>
@@ -414,59 +538,70 @@
                             </div>
                             <div class="game-category">Adventure</div>
                             <h3>LEGO Games</h3>
-                            <p>Fun adventures featuring your favorite LEGO themes and characters.</p>
-                            <div class="game-platforms">
-                                <span class="platform">PC</span>
-                                <span class="platform">Console</span>
-                            </div>
-                        </a>
-                    </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                        <div class="game-card">
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Factorio</text>
-                                </svg>
-                            </div>
-                            <div class="game-category">Strategy</div>
-                            <h3>Factorio</h3>
-                            <p>Build and optimize automated factories in this complex strategy game.</p>
-                            <div class="game-platforms">
-                                <span class="platform">PC</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                        <div class="game-card">
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Civilization VI</text>
-                                </svg>
-                            </div>
-                            <div class="game-category">Strategy</div>
-                            <h3>Civilization VI</h3>
-                            <p>Lead your civilization from the Stone Age to the Information Age.</p>
+                            <p>Fun adventures with your favorite LEGO themes and characters.</p>
                             <div class="game-platforms">
                                 <span class="platform">PC</span>
                                 <span class="platform">Console</span>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                        <div class="game-card">
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="13" data-category="strategy">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.civilization.com/', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
                             <div class="game-image">
                                 <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FFE66D"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Oxygen Not Included</text>
+                                    <rect width="100%" height="100%" fill="#4A90E2"/>
+                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Civilization</text>
+                                </svg>
+                            </div>
+                            <div class="game-category">Strategy</div>
+                            <h3>Civilization</h3>
+                            <p>Build and lead your civilization from ancient times to the modern era.</p>
+                            <div class="game-platforms">
+                                <span class="platform">PC</span>
+                                <span class="platform">Console</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="13" data-category="strategy">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.ea.com/games/sims', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
+                            <div class="game-image">
+                                <svg width="100%" height="200" viewBox="0 0 400 200">
+                                    <rect width="100%" height="100%" fill="#FF9F1C"/>
+                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">The Sims</text>
                                 </svg>
                             </div>
                             <div class="game-category">Simulation</div>
-                            <h3>Oxygen Not Included</h3>
-                            <p>Manage a space colony and keep your duplicants alive in this survival game.</p>
+                            <h3>The Sims</h3>
+                            <p>Create and control virtual people in a life simulation game.</p>
                             <div class="game-platforms">
                                 <span class="platform">PC</span>
+                                <span class="platform">Console</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="13" data-category="strategy">
+                    <div class="game-card">
+                        <div class="game-content" onclick="window.open('https://www.rockstargames.com/gta-v', '_blank')">
+                            <span class="age-badge">Ages 13+</span>
+                            <div class="game-image">
+                                <svg width="100%" height="200" viewBox="0 0 400 200">
+                                    <rect width="100%" height="100%" fill="#2C3E50"/>
+                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Grand Theft Auto V</text>
+                                </svg>
+                            </div>
+                            <div class="game-category">Adventure</div>
+                            <h3>Grand Theft Auto V</h3>
+                            <p>Open-world action-adventure game set in the fictional city of Los Santos.</p>
+                            <div class="game-platforms">
+                                <span class="platform">PC</span>
+                                <span class="platform">Console</span>
                             </div>
                         </div>
                     </div>
@@ -481,6 +616,35 @@
         AOS.init({
             duration: 1000,
             once: true
+        });
+
+        // Filter functionality
+        document.querySelectorAll('.filter-menu button').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.filter-menu button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                this.classList.add('active');
+
+                const filter = this.getAttribute('data-filter');
+                const items = document.querySelectorAll('[data-age], [data-category]');
+
+                items.forEach(item => {
+                    if (filter === 'all') {
+                        item.style.display = 'block';
+                    } else {
+                        const age = item.getAttribute('data-age');
+                        const category = item.getAttribute('data-category');
+                        if (age === filter || category === filter) {
+                            item.style.display = 'block';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    }
+                });
+            });
         });
 
         // Handle image loading errors

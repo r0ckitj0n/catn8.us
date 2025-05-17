@@ -98,7 +98,8 @@
             border: 3px solid transparent;
             position: relative;
             overflow: hidden;
-            height: 429px;  /* Increased from 390px by 10% */
+            height: auto;  /* Changed from fixed height to auto */
+            min-height: 429px;  /* Added min-height instead */
             display: flex;
             flex-direction: column;
         }
@@ -111,7 +112,7 @@
 
         .story-image {
             width: 100%;
-            height: 214px;  /* Increased from 195px by 10% */
+            height: 214px;
             object-fit: cover;
             border-radius: 15px;
             margin-bottom: 1rem;
@@ -130,10 +131,10 @@
             color: var(--dark-color);
             margin-bottom: 0.5rem;
             flex-grow: 1;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+            overflow: visible;  /* Changed from hidden to visible */
+            display: block;  /* Changed from -webkit-box to block */
+            -webkit-line-clamp: unset;  /* Removed line clamp */
+            -webkit-box-orient: unset;  /* Removed box orient */
         }
 
         .story-tags {
@@ -145,7 +146,7 @@
 
         .story-tag {
             background: var(--accent-color);
-            color: white;
+            color: var(--primary-color);
             padding: 0.25rem 0.75rem;
             border-radius: 15px;
             font-size: 0.8rem;
@@ -210,8 +211,7 @@
         .story-navigation {
             position: fixed;
             right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
+            top: 100px;
             z-index: 1000;
             background: white;
             padding: 20px;
@@ -239,6 +239,19 @@
             background: var(--primary-color);
             color: white;
             transform: scale(1.1);
+        }
+
+        .age-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--primary-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            z-index: 1;
         }
 
         .story-pagination {
@@ -331,6 +344,15 @@
         .story-box:hover {
             transform: translateY(-5px);
         }
+
+        .platform {
+            background: var(--accent-color);
+            color: var(--primary-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -357,6 +379,9 @@
                         <a class="nav-link" href="games.php">Games</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="activities.php">Activities</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/#guiding-lights">Our Lights</a>
                     </li>
                     <li class="nav-item">
@@ -367,31 +392,25 @@
         </div>
     </nav>
 
-    <section class="hero">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-md-8 text-center" data-aos="fade-up">
-                    <h1>Stories of Kindness</h1>
-                    <p class="lead">Every act of kindness, no matter how small, creates ripples of love that touch countless lives. Here, we share stories that inspire, heal, and connect us all.</p>
-                </div>
-            </div>
+    <!-- Story Navigation -->
+    <div class="story-navigation" data-aos="fade-left">
+        <div class="d-flex flex-column gap-2">
+            <div class="nav-item active" data-filter="all">All Stories</div>
+            <div class="nav-item" data-filter="3-7">Ages 3-7</div>
+            <div class="nav-item" data-filter="8-12">Ages 8-12</div>
+            <div class="nav-item" data-filter="13">Ages 13+</div>
+            <div class="nav-item" data-filter="family">Family</div>
+            <div class="nav-item" data-filter="daily">Daily Kindness</div>
+            <div class="nav-item" data-filter="growth">Growth</div>
+            <div class="nav-item" data-filter="random">Random Acts</div>
         </div>
-    </section>
-
-    <div class="story-navigation">
-        <div class="nav-item active" data-category="all">All Stories</div>
-        <div class="nav-item" data-category="family">Family Moments</div>
-        <div class="nav-item" data-category="community">Community</div>
-        <div class="nav-item" data-category="random">Random Acts</div>
-        <div class="nav-item" data-category="growth">Personal Growth</div>
-        <div class="nav-item" data-category="daily">Daily Kindness</div>
     </div>
 
     <section class="stories-section">
         <div class="container">
             <div class="row">
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story1.png" alt="The Super Sparkle Family" class="story-image">
                             <h3>The Super Sparkle Family!</h3>
@@ -401,10 +420,11 @@
                             <span class="story-tag">Family</span>
                             <span class="story-tag">Kindness</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2" data-category="daily" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story2.png" alt="Elijah's Kitchen of Culinary Craziness" class="story-image">
                             <h3>Elijah's Kitchen of Culinary Craziness</h3>
@@ -414,10 +434,11 @@
                             <span class="story-tag">Daily Kindness</span>
                             <span class="story-tag">Creativity</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story3.png" alt="Trinity's Teeny-Tiny Treat Fairies" class="story-image">
                             <h3>Trinity's Teeny-Tiny Treat Fairies!</h3>
@@ -427,44 +448,41 @@
                             <span class="story-tag">Family</span>
                             <span class="story-tag">Magic</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
             </div>
             <div class="row mt-4">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4" data-category="growth">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story4.png" alt="Reuel's Wacky Puzzle Family" class="story-image">
                             <h3>Reuel's Wacky Puzzle Family!</h3>
                             <p>Reuel loved puzzles, but he never expected his puzzle pieces to come to life! Each piece represented a member of his family, and they all had their own personalities.</p>
-                            <p>There was Papa and Nana's piece, strong and wise. Trinity's piece was creative and kind, while Mariah's piece was full of energy. Veronica's piece brought laughter, and Elijah's piece was always cooking up new ideas.</p>
-                            <p>Ezra's piece was thoughtful and quiet, while Ian's piece was full of adventure. Marisa's piece brought beauty to everything, and little Lyra's piece was the sparkle that made everything complete.</p>
-                            <p>As Reuel put the puzzle together, he discovered that each piece was unique and important. Just like in his real family, every piece fit together perfectly to create a beautiful picture of love and support!</p>
                         </div>
                         <div class="story-tags">
+                            <span class="story-tag">Family Moments</span>
                             <span class="story-tag">Family</span>
-                            <span class="story-tag">Magic</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5" data-category="community">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story5.png" alt="The Super-Sticky Hug Team" class="story-image">
                             <h3>The Super-Sticky Hug Team!</h3>
                             <p>Papa and Nana had a special power - their hugs were so full of love that they stuck with you forever! When they hugged someone, a little bit of their love magic would stay with them, helping them through any challenge.</p>
-                            <p>Their hugs helped Trinity find strength when she needed it most, gave Elijah confidence in the kitchen, and helped Reuel solve his trickiest puzzles. The magic spread to Mariah, Veronica, Ezra, Ian, Marisa, and little Lyra too!</p>
-                            <p>Soon, everyone in the family learned to share their own super-sticky hugs. When someone was sad, a hug would make them feel better. When someone was scared, a hug would make them brave. And when someone was happy, a hug would make that joy last even longer!</p>
-                            <p>The Super-Sticky Hug Team showed everyone that love is the strongest magic of all, and that family support can help you overcome anything!</p>
                         </div>
                         <div class="story-tags">
+                            <span class="story-tag">Family Moments</span>
                             <span class="story-tag">Family</span>
-                            <span class="story-tag">Magic</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6" data-category="daily">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6" data-category="daily" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story6.png" alt="Daily Kindness" class="story-image">
                             <h3>Finding Strength in Family</h3>
@@ -474,12 +492,13 @@
                             <span class="story-tag">Daily Kindness</span>
                             <span class="story-tag">Family</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
             </div>
             <div class="row mt-4">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7" data-category="random">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7" data-category="random" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story7.png" alt="Family Innovation" class="story-image">
                             <h3>Trinity's Totally Bonkers Tablet of Kindness</h3>
@@ -489,10 +508,11 @@
                             <span class="story-tag">Random Acts</span>
                             <span class="story-tag">Family</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8" data-category="growth">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8" data-category="growth" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story8.png" alt="Family Growth" class="story-image">
                             <h3>Mariah's Ridiculously Rhythmic Dancing Garden</h3>
@@ -502,10 +522,11 @@
                             <span class="story-tag">Growth</span>
                             <span class="story-tag">Family</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9" data-category="family">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story9.png" alt="Family Harmony" class="story-image">
                             <h3>Trinity's Hilariously Helpful Smart Home Gadgets</h3>
@@ -515,12 +536,13 @@
                             <span class="story-tag">Family Moments</span>
                             <span class="story-tag">Innovation</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
             </div>
             <div class="row mt-4">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2" data-category="daily">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2" data-category="daily" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story2.png" alt="Elijah's Kitchen of Culinary Craziness" class="story-image">
                             <h3>Elijah's Kitchen of Culinary Craziness</h3>
@@ -530,10 +552,11 @@
                             <span class="story-tag">Daily Kindness</span>
                             <span class="story-tag">Creativity</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11" data-category="growth">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11" data-category="growth" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story11.png" alt="The Musical Magic Makers" class="story-image">
                             <h3>The Musical Magic Makers!</h3>
@@ -543,10 +566,11 @@
                             <span class="story-tag">Personal Growth</span>
                             <span class="story-tag">Creativity</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12" data-category="growth">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12" data-category="growth" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story12.png" alt="The Book Buddy Brigade" class="story-image">
                             <h3>The Book Buddy Brigade!</h3>
@@ -556,12 +580,13 @@
                             <span class="story-tag">Personal Growth</span>
                             <span class="story-tag">Creativity</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
             </div>
             <div class="row mt-4">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13" data-category="family">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13" data-category="family" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story13.png" alt="The TV Time Team" class="story-image">
                             <h3>The TV Time Team!</h3>
@@ -571,10 +596,11 @@
                             <span class="story-tag">Family Moments</span>
                             <span class="story-tag">Daily Kindness</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal14" data-category="random">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal14" data-category="random" data-age="3-7">
                         <div class="story-content">
                             <img src="images/story14.png" alt="The Exercise Energy Elves" class="story-image">
                             <h3>The Exercise Energy Elves!</h3>
@@ -584,6 +610,7 @@
                             <span class="story-tag">Random Acts</span>
                             <span class="story-tag">Health</span>
                         </div>
+                        <div class="age-badge">3-7</div>
                     </div>
                 </div>
             </div>
@@ -1120,38 +1147,68 @@
         </div>
     </div>
 
-    <div class="modal fade" id="storyModal4" tabindex="-1" aria-labelledby="storyModal4Label" aria-hidden="true">
+    <div class="modal fade story-modal" id="storyModal4" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="storyModal4Label">Reuel's Wacky Puzzle Family!</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h2>Reuel's Wacky Puzzle Family!</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story4.png" alt="Reuel's Wacky Puzzle Family" class="story-image">
-                        <p>Reuel loved puzzles, but he never expected his puzzle pieces to come to life! Each piece represented a member of his family, and they all had their own personalities.</p>
-                        <p>There was Papa and Nana's piece, strong and wise. Trinity's piece was creative and kind, while Mariah's piece was full of energy. Veronica's piece brought laughter, and Elijah's piece was always cooking up new ideas.</p>
-                        <p>Ezra's piece was thoughtful and quiet, while Ian's piece was full of adventure. Marisa's piece brought beauty to everything, and little Lyra's piece was the sparkle that made everything complete.</p>
-                        <p>As Reuel put the puzzle together, he discovered that each piece was unique and important. Just like in his real family, every piece fit together perfectly to create a beautiful picture of love and support!</p>
+                    <img src="images/story4.png" alt="Reuel's Wacky Puzzle Family" class="modal-image">
+                    <p>Reuel loved puzzles, but he never expected his puzzle pieces to come to life! Each piece represented a member of his family, and they all had their own personalities.</p>
+                    <p>There was Papa and Nana's piece, strong and wise. Trinity's piece was creative and kind, while Mariah's piece was full of energy. Veronica's piece brought laughter, and Elijah's piece was always cooking up new ideas.</p>
+                    <p>Ezra's piece was thoughtful and quiet, while Ian's piece was full of adventure. Marisa's piece brought beauty to everything, and little Lyra's piece was the sparkle that made everything complete.</p>
+                    <p>As Reuel put the puzzle together, he discovered that each piece was unique and important. Just like in his real family, every piece fit together perfectly to create a beautiful picture of love and support!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Puzzle pieces that come to life and show each family member's unique personality!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Every family member is unique and important, and together they create a beautiful picture of love!</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="storyModal5" tabindex="-1" aria-labelledby="storyModal5Label" aria-hidden="true">
+    <div class="modal fade story-modal" id="storyModal5" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="storyModal5Label">The Super-Sticky Hug Team!</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h2>The Super-Sticky Hug Team!</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story5.png" alt="The Super-Sticky Hug Team" class="story-image">
-                        <p>Papa and Nana had a special power - their hugs were so full of love that they stuck with you forever! When they hugged someone, a little bit of their love magic would stay with them, helping them through any challenge.</p>
-                        <p>Their hugs helped Trinity find strength when she needed it most, gave Elijah confidence in the kitchen, and helped Reuel solve his trickiest puzzles. The magic spread to Mariah, Veronica, Ezra, Ian, Marisa, and little Lyra too!</p>
+                    <img src="images/story5.png" alt="The Super-Sticky Hug Team" class="modal-image">
+                    <p>Papa and Nana had a special power - their hugs were so full of love that they stuck with you forever! When they hugged someone, a little bit of their love magic would stay with them, helping them through any challenge.</p>
+                    <p>Their hugs helped Trinity find strength when she needed it most, gave Elijah confidence in the kitchen, and helped Reuel solve his trickiest puzzles. The magic spread to Mariah, Veronica, Ezra, Ian, Marisa, and little Lyra too!</p>
+                    <p>One day, when everyone was feeling a bit down, Papa and Nana's hugs created a magical chain reaction. Each family member passed on their love magic to the next, until the whole house was filled with sparkles of joy and laughter!</p>
+                    <p>The Super-Sticky Hug Team taught everyone that the best kind of magic is the love we share with our family. And that's why their hugs will always be remembered as the most magical hugs in the world!</p>
+                    <div class="story-lessons">
+                        <h4>Silly Bit:</h4>
+                        <p>Hugs that leave sparkly love magic that helps everyone feel better!</p>
+                        <h4>Life Lesson:</h4>
+                        <p>Family love is the most powerful magic of all, and it grows stronger when we share it!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fixed Filter Menu -->
+    <div class="filter-menu" data-aos="fade-left">
+        <div class="d-flex flex-column gap-2">
+            <button class="btn active" data-filter="all">All Stories</button>
+            <button class="btn" data-filter="3-7">Ages 3-7</button>
+            <button class="btn" data-filter="8-12">Ages 8-12</button>
+            <button class="btn" data-filter="13">Ages 13+</button>
+            <button class="btn" data-filter="family">Family</button>
+            <button class="btn" data-filter="daily">Daily Kindness</button>
+            <button class="btn" data-filter="random">Random Acts</button>
+            <button class="btn" data-filter="growth">Growth</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
     <script>
@@ -1173,7 +1230,7 @@
         });
 
         // Initialize all modals
-        const modals = document.querySelectorAll('.story-modal');
+        const modals = document.querySelectorAll('.modal');
         modals.forEach(modal => {
             const modalInstance = new bootstrap.Modal(modal);
             
@@ -1200,13 +1257,18 @@
         });
 
         // Function to filter and display stories
-        function filterStories(category) {
+        function filterStories(filter) {
+            console.log('Filtering stories for:', filter);
+            
             // Get the container to add stories to
             const container = document.querySelector('.stories-section .container');
             
             // Get all story cards if we haven't stored them yet
             if (allStoryCards.length === 0) {
-                allStoryCards = Array.from(document.querySelectorAll('.story-card')).map(card => card.cloneNode(true));
+                allStoryCards = Array.from(document.querySelectorAll('.story-card')).map(card => {
+                    const clone = card.cloneNode(true);
+                    return clone;
+                });
             }
             
             // Clear existing rows
@@ -1220,10 +1282,14 @@
             let colCount = 0;
 
             // Filter and display stories
-            const filteredCards = allStoryCards.filter(card => 
-                category === 'all' || card.getAttribute('data-category') === category
-            );
+            const filteredCards = allStoryCards.filter(card => {
+                const cardCategory = card.getAttribute('data-category');
+                const cardAge = card.getAttribute('data-age');
+                return filter === 'all' || cardCategory === filter || cardAge === filter;
+            });
             
+            console.log('Filtered cards:', filteredCards.length);
+
             filteredCards.forEach((card, index) => {
                 if (colCount === 3) {
                     currentRow = document.createElement('div');
@@ -1270,7 +1336,8 @@
         // Handle category filtering
         document.querySelectorAll('.story-navigation .nav-item').forEach(item => {
             item.addEventListener('click', function() {
-                const category = this.getAttribute('data-category');
+                const filter = this.getAttribute('data-filter');
+                console.log('Filter clicked:', filter);
                 
                 // Update active state in navigation
                 document.querySelectorAll('.story-navigation .nav-item').forEach(navItem => {
@@ -1279,7 +1346,7 @@
                 this.classList.add('active');
                 
                 // Filter stories
-                filterStories(category);
+                filterStories(filter);
             });
         });
 
@@ -1287,6 +1354,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Get original story cards
             allStoryCards = Array.from(document.querySelectorAll('.story-card')).map(card => card.cloneNode(true));
+            console.log('Total story cards:', allStoryCards.length);
             // Initial display
             filterStories('all');
         });

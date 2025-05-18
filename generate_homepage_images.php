@@ -1,7 +1,10 @@
 <?php
 require 'vendor/autoload.php';
 
-$openai = OpenAI::client('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');
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+$openai = OpenAI::client($_ENV['OPENAI_API_KEY']);
 
 // Images to generate for the homepage
 $images = [

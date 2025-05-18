@@ -6,6 +6,7 @@
     <title>About - catn8.us</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #FF6B6B;
@@ -13,51 +14,89 @@
             --accent-color: #FFE66D;
             --dark-color: #2C3E50;
             --light-color: #F7F9FC;
+            --fun-purple: #9B59B6;
+            --fun-green: #2ECC71;
+            --fun-orange: #E67E22;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Comic Sans MS', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Comic Neue', cursive;
             line-height: 1.6;
             color: var(--dark-color);
-            background-color: var(--light-color);
+            background: url('images/pattern.svg') repeat;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('images/homepage_friends.jpg') center/cover no-repeat fixed;
+            opacity: 0.1;
+            z-index: -1;
         }
 
         .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            padding: 1rem 0;
         }
 
         .navbar-brand img {
-            height: 40px;
+            height: 60px;
+            transition: transform 0.3s ease;
         }
 
-        .navbar-dark .navbar-nav .nav-link {
-            color: var(--dark-color) !important;
-            font-weight: 700;
-            font-size: 20px;
+        .navbar-brand img:hover {
+            transform: scale(1.1);
+        }
+
+        .nav-link {
+            font-size: 1.2rem;
+            color: white !important;
             padding: 0.5rem 1rem;
-            transition: color 0.3s ease;
+            margin: 0 0.5rem;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
         }
 
-        .navbar-dark .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
+            transform: translateY(-2px);
         }
 
-        .navbar-dark .navbar-nav .nav-link.active {
-            color: var(--primary-color) !important;
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
             font-weight: 600;
         }
 
         .navbar-toggler {
-            border-color: var(--dark-color);
+            border: none;
+            padding: 0.5rem;
+        }
+
+        .navbar-toggler:focus {
+            box-shadow: none;
         }
 
         .navbar-toggler-icon {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(44, 62, 80, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
         }
 
         .hero {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
             color: white;
             padding: 8rem 0 4rem;
             position: relative;
@@ -76,67 +115,81 @@
             animation: float 20s linear infinite;
         }
 
-        .philosophy-section {
+        .section {
             padding: 5rem 0;
-            background: var(--light-color);
+            color: white;
         }
 
-        .value-card {
-            background: white;
-            border-radius: 15px;
+        .section-alt {
+            background: linear-gradient(135deg, var(--fun-orange), var(--fun-purple));
+        }
+
+        .section-main {
+            background: linear-gradient(135deg, var(--fun-green), var(--secondary-color));
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            height: 100%;
         }
 
-        .value-card:hover {
+        .card:hover {
             transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 15px;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .card h3 {
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .card p {
+            color: white;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
 
         .value-icon {
             font-size: 3rem;
             margin-bottom: 1.5rem;
-            color: var(--primary-color);
-        }
-
-        .value-card h3 {
-            color: var(--dark-color);
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-
-        .value-card p {
-            color: var(--dark-color);
-            font-size: 1.1rem;
-            line-height: 1.6;
-        }
-
-        .story-section {
-            padding: 5rem 0;
-            background: var(--dark-color);
             color: white;
-        }
-
-        .story-card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            backdrop-filter: blur(5px);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
         .quote {
             font-style: italic;
             font-size: 1.2rem;
-            color: var(--dark-color);
+            color: white;
             margin: 2rem 0;
             text-align: center;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.15);
             padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
 
         .interactive-element {
@@ -148,6 +201,15 @@
             transform: scale(1.05);
         }
 
+        h1, h2 {
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        p {
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
         @keyframes float {
             0% { transform: translateY(0); }
             100% { transform: translateY(-100%); }
@@ -155,10 +217,10 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <nav class="navbar navbar-expand-lg fixed-top">
         <div class="container">
             <a class="navbar-brand" href="/">
-                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo" height="40">
+                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -180,12 +242,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="activities.php">Activities</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/#guiding-lights">Our Lights</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/#invitation">Our Circle</a>
-                    </li>
                 </ul>
             </div>
         </div>
@@ -197,18 +253,20 @@
                 <div class="col-md-8 text-center" data-aos="fade-up">
                     <h1>Our Philosophy</h1>
                     <p class="lead">At catn8.us, our name whispers our deepest aspiration: to catenate, to tenderly link together, not just ideas, but hearts. Founded by Jon and Sarah Graves, our community is built on the foundation of family, love, and connection.</p>
+                    <img src="images/homepage_family.jpg" alt="Family Connection" class="img-fluid rounded mt-4" style="max-height: 400px; width: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="philosophy-section">
+    <section class="section section-alt">
         <div class="container">
             <div class="row">
                 <div class="col-md-6" data-aos="fade-right">
                     <h2>Our Vision</h2>
                     <p>We dream of a world where empathy is a universal language, where acts of kindness are as natural as breathing, and where communities are sanctuaries built upon unconditional love and unwavering mutual support.</p>
                     <p>Through the example of our growing family – from Jon and Sarah to their children Trinity, Elijah, Mariah, Veronica, Reuel, and Ezra, and now to the next generation – we envision a future where every individual feels a deep sense of belonging.</p>
+                    <img src="images/homepage_kindness.jpg" alt="Community Vision" class="img-fluid rounded mt-4" style="max-height: 300px; width: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
                 </div>
                 <div class="col-md-6" data-aos="fade-left">
                     <div class="quote">
@@ -221,26 +279,29 @@
         </div>
     </section>
 
-    <section class="story-section">
+    <section class="section section-main">
         <div class="container">
             <h2 class="text-center mb-5" data-aos="fade-up">Our Core Values</h2>
             <div class="row">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="value-card interactive-element">
+                    <div class="card interactive-element">
+                        <img src="images/about_family.jpg" alt="Family First" class="img-fluid rounded">
                         <div class="value-icon">💝</div>
                         <h3>Family First</h3>
                         <p>Following Jon and Sarah's example, we believe in putting family at the heart of everything we do, creating bonds that last through generations.</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="value-card interactive-element">
+                    <div class="card interactive-element">
+                        <img src="images/about_community.jpg" alt="Empathy in Action" class="img-fluid rounded">
                         <div class="value-icon">🤝</div>
                         <h3>Empathy in Action</h3>
                         <p>From Trinity and Elijah's parenting to Mariah and Veronica's community work, we see how empathy transforms lives and builds stronger connections.</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="value-card interactive-element">
+                    <div class="card interactive-element">
+                        <img src="images/about_growth.jpg" alt="Gentle Growth" class="img-fluid rounded">
                         <div class="value-icon">🌱</div>
                         <h3>Gentle Growth</h3>
                         <p>Through Reuel and Ezra's unique perspectives, we've learned that growth comes in many forms, each beautiful in its own way.</p>
@@ -250,89 +311,49 @@
         </div>
     </section>
 
-    <section class="philosophy-section">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-8 mx-auto">
-                    <div class="story-card" data-aos="fade-up">
-                        <h2 class="text-center mb-4">Why This Path, Why Now?</h2>
-                        <p>In an era often marked by rapid change, digital distance, and echoes of division, the Graves family's journey stands as a testament to the enduring power of connection. From Jon and Sarah's initial vision to their children's diverse expressions of love and kindness, we've seen how family values can create ripples of positive change.</p>
-                        <p>catn8.us seeks to be a soft light in the fog, a nurturing space where these essential human qualities are not only remembered but actively cultivated and celebrated, just as they are in the Graves family.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="story-section">
+    <section class="section section-alt">
         <div class="container">
             <h2 class="text-center mb-5" data-aos="fade-up">Our Journey</h2>
             <div class="row">
                 <div class="col-md-6" data-aos="fade-right">
-                    <div class="story-card">
+                    <div class="card">
+                        <img src="images/homepage_family.jpg" alt="The Beginning" class="img-fluid rounded">
                         <h3>The Beginning</h3>
                         <p>It all started with Jon and Sarah's vision of creating a space where family values and community connection could flourish. Their commitment to kindness and love has been the foundation upon which everything else has been built.</p>
-                        <p>What began as a family's journey has grown into a vibrant community of people committed to spreading kindness and fostering genuine human connection.</p>
                     </div>
                 </div>
                 <div class="col-md-6" data-aos="fade-left">
-                    <div class="story-card">
+                    <div class="card">
+                        <img src="images/homepage_kindness.jpg" alt="Our Growth" class="img-fluid rounded">
                         <h3>Our Growth</h3>
                         <p>As the Graves family has grown, so has our understanding of what it means to truly connect. From Trinity and Elijah's new roles as parents to the unique contributions of Mariah, Veronica, Reuel, and Ezra, each family member has enriched our collective experience.</p>
-                        <p>Each new generation brings fresh perspectives while honoring the core values that make our community special.</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="philosophy-section">
-        <div class="container">
-            <h2 class="text-center mb-5" data-aos="fade-up">Our Impact</h2>
-            <div class="row">
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="value-card">
-                        <div class="value-icon">🌟</div>
-                        <h3>Family Legacy</h3>
-                        <p>From Jon and Sarah to their children and now to the next generation, our values of kindness and connection continue to grow and evolve.</p>
-                    </div>
-                </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="value-card">
-                        <div class="value-icon">💫</div>
-                        <h3>Community Impact</h3>
-                        <p>Through the diverse contributions of each family member, we've created ripples of positive change that touch countless lives.</p>
-                    </div>
-                </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="value-card">
-                        <div class="value-icon">✨</div>
-                        <h3>Personal Growth</h3>
-                        <p>Each family member's unique journey has shown us new ways to express love, kindness, and connection in our daily lives.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="story-section">
+    <section class="section section-main">
         <div class="container">
             <h2 class="text-center mb-5" data-aos="fade-up">Our Team</h2>
             <div class="row">
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card">
+                    <div class="card">
+                        <img src="images/homepage_friends.jpg" alt="Family Leaders" class="img-fluid rounded">
                         <h3>Family Leaders</h3>
                         <p>Jon and Sarah's vision and leadership continue to guide our community, while Trinity and Elijah bring their experience as parents to help shape our future.</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card">
+                    <div class="card">
+                        <img src="images/about_community.jpg" alt="Community Builders" class="img-fluid rounded">
                         <h3>Community Builders</h3>
                         <p>Mariah and Veronica's commitment to community service and connection helps us create meaningful experiences for everyone.</p>
                     </div>
                 </div>
                 <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card">
+                    <div class="card">
+                        <img src="images/about_growth.jpg" alt="Creative Minds" class="img-fluid rounded">
                         <h3>Creative Minds</h3>
                         <p>Reuel and Ezra's unique perspectives and creative approaches help us find new ways to express our values and connect with others.</p>
                     </div>

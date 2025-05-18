@@ -331,7 +331,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story1_beginning.jpg" alt="Papa and Nana creating magical sparkles" class="story-image">
+                            <img src="images/story1.jpg" alt="The Super Sparkle Family" class="story-image">
                             <h3 class="story-title">The Super Sparkle Family!</h3>
                             <p class="story-text">Papa and Nana had a special power - their hugs were so full of love that they created magical sparkles! When they hugged someone, tiny stars of joy would float around them, making everyone feel warm and happy inside.</p>
                         </div>
@@ -346,7 +346,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story2_beginning.jpg" alt="Kitchen appliances coming to life" class="story-image">
+                            <img src="images/story2.jpg" alt="Elijah's Kitchen of Culinary Craziness" class="story-image">
                             <h3 class="story-title">Elijah's Kitchen of Culinary Craziness</h3>
                             <p class="story-text">When Elijah's kitchen appliances came to life with their own personalities, they turned cooking into a wild adventure. His blender started doing happy dances, his toaster told jokes, and his mixer sang songs while it worked.</p>
                         </div>
@@ -361,7 +361,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story3_beginning.jpg" alt="Magical calendar with eyeballs" class="story-image">
+                            <img src="images/story3.jpg" alt="The Magical Calendar of Kindness" class="story-image">
                             <h3 class="story-title">The Magical Calendar of Kindness</h3>
                             <p class="story-text">In a cozy corner of the house, there lived a magical calendar with blinking eyes. It wasn't just any calendar - it had the power to make every day special with acts of kindness!</p>
                         </div>
@@ -376,7 +376,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story4_beginning.jpg" alt="Puzzle pieces coming to life" class="story-image">
+                            <img src="images/story4.jpg" alt="The Family Puzzle Adventure" class="story-image">
                             <h3 class="story-title">The Family Puzzle Adventure</h3>
                             <p class="story-text">In a magical puzzle box, each piece came alive with its own personality. Some pieces were round and bouncy, others were square and steady, but they all had one thing in common - they were part of the same family!</p>
                         </div>
@@ -391,7 +391,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story5_beginning.jpg" alt="Magical garden coming to life" class="story-image">
+                            <img src="images/story5.jpg" alt="The Singing Garden" class="story-image">
                             <h3 class="story-title">The Singing Garden</h3>
                             <p class="story-text">In a special garden, flowers sang sweet melodies and trees danced in the breeze. It was a place where nature came alive with music and joy!</p>
                         </div>
@@ -406,7 +406,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story6_beginning.jpg" alt="Talking animals in forest" class="story-image">
+                            <img src="images/story6.jpg" alt="The Wise Forest Friends" class="story-image">
                             <h3 class="story-title">The Wise Forest Friends</h3>
                             <p class="story-text">Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!</p>
                         </div>
@@ -421,7 +421,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story7_beginning.jpg" alt="Magical library entrance" class="story-image">
+                            <img src="images/story7.jpg" alt="The Living Library" class="story-image">
                             <h3 class="story-title">The Living Library</h3>
                             <p class="story-text">In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers.</p>
                         </div>
@@ -436,7 +436,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story8_beginning.jpg" alt="Musical instruments coming to life" class="story-image">
+                            <img src="images/story8.jpg" alt="The Musical Instrument Friends" class="story-image">
                             <h3 class="story-title">The Musical Instrument Friends</h3>
                             <p class="story-text">In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!</p>
                         </div>
@@ -451,7 +451,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story9_beginning.jpg" alt="Colorful paint splashes" class="story-image">
+                            <img src="images/story9.jpg" alt="The Magical Paint Box" class="story-image">
                             <h3 class="story-title">The Magical Paint Box</h3>
                             <p class="story-text">In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own.</p>
                         </div>
@@ -466,7 +466,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal10">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story10_beginning.jpg" alt="Numbers dancing" class="story-image">
+                            <img src="images/story10.jpg" alt="The Dancing Numbers" class="story-image">
                             <h3 class="story-title">The Dancing Numbers</h3>
                             <p class="story-text">In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality.</p>
                         </div>
@@ -481,7 +481,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story11_beginning.jpg" alt="Letters floating" class="story-image">
+                            <img src="images/story11.jpg" alt="The Dancing Letters" class="story-image">
                             <h3 class="story-title">The Dancing Letters</h3>
                             <p class="story-text">In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality.</p>
                         </div>
@@ -496,7 +496,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story12_beginning.jpg" alt="Shapes dancing" class="story-image">
+                            <img src="images/story12.jpg" alt="The Shape Shapers" class="story-image">
                             <h3 class="story-title">The Shape Shapers</h3>
                             <p class="story-text">In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains.</p>
                         </div>
@@ -511,7 +511,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story13.png" alt="Colors mixing" class="story-image">
+                            <img src="images/story13.jpg" alt="The Color Mixers" class="story-image">
                             <h3 class="story-title">The Color Mixers</h3>
                             <p class="story-text">In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green.</p>
                         </div>
@@ -526,7 +526,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal14">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story14.png" alt="Animals in classroom" class="story-image">
+                            <img src="images/story14.jpg" alt="The Animal Teachers" class="story-image">
                             <h3 class="story-title">The Animal Teachers</h3>
                             <p class="story-text">In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share.</p>
                         </div>
@@ -541,7 +541,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal15">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story15.png" alt="Musical notes floating" class="story-image">
+                            <img src="images/story15.jpg" alt="The Dancing Notes" class="story-image">
                             <h3 class="story-title">The Dancing Notes</h3>
                             <p class="story-text">In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality.</p>
                         </div>
@@ -556,7 +556,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal16">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story16.png" alt="Words floating" class="story-image">
+                            <img src="images/story16.jpg" alt="The Word Wizards" class="story-image">
                             <h3 class="story-title">The Word Wizards</h3>
                             <p class="story-text">In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality.</p>
                         </div>
@@ -571,7 +571,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal17">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story17.png" alt="Numbers dancing" class="story-image">
+                            <img src="images/story17.jpg" alt="The Number Ninjas" class="story-image">
                             <h3 class="story-title">The Number Ninjas</h3>
                             <p class="story-text">In a magical math room, numbers came alive and played games! Each number had its own special value and personality.</p>
                         </div>
@@ -586,7 +586,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal18">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story18.png" alt="Colors mixing" class="story-image">
+                            <img src="images/story18.jpg" alt="The Color Creators" class="story-image">
                             <h3 class="story-title">The Color Creators</h3>
                             <p class="story-text">In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality.</p>
                         </div>
@@ -601,7 +601,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal19">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story19.png" alt="Animals in classroom" class="story-image">
+                            <img src="images/story19.jpg" alt="The Nature Navigators" class="story-image">
                             <h3 class="story-title">The Nature Navigators</h3>
                             <p class="story-text">In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality.</p>
                         </div>
@@ -616,7 +616,7 @@
                     <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal20">
                         <div class="age-badge">3-7</div>
                         <div class="story-section">
-                            <img src="images/story20.png" alt="Musical notes floating" class="story-image">
+                            <img src="images/story20.jpg" alt="The Melody Makers" class="story-image">
                             <h3 class="story-title">The Melody Makers</h3>
                             <p class="story-text">In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality.</p>
                         </div>
@@ -758,11 +758,11 @@
                         <img src="images/story6_beginning.jpg" alt="Talking animals in forest" class="modal-image">
                         <p>Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!</p>
                         
-                        <img src="images/story6_middle.jpg" alt="Children learning from animals" class="modal-image">
-                        <p>The wise owl taught about patience, the playful squirrels showed the importance of sharing, and the gentle deer demonstrated kindness in action.</p>
+                        <img src="images/story6_middle.jpg" alt="Animals teaching children" class="modal-image">
+                        <p>The wise owl taught about the night sky, the friendly fox showed how to identify plants, and the gentle deer shared secrets of the forest.</p>
                         
-                        <img src="images/story6_end.jpg" alt="Forest harmony celebration" class="modal-image">
-                        <p>Through their forest friends, children learned that wisdom comes in many forms, and that nature has much to teach us about living in harmony with others!</p>
+                        <img src="images/story6_end.jpg" alt="Children and animals working together" class="modal-image">
+                        <p>Together, they learned that nature is the greatest teacher of all, and that every creature has something special to share!</p>
                     </div>
                 </div>
             </div>
@@ -781,11 +781,11 @@
                         <img src="images/story7_beginning.jpg" alt="Magical library entrance" class="modal-image">
                         <p>In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers.</p>
                         
-                        <img src="images/story7_middle.jpg" alt="Books floating and dancing" class="modal-image">
-                        <p>Children could interact with their favorite characters, ask questions, and even help solve problems in the stories. Each book became an interactive adventure!</p>
+                        <img src="images/story7_middle.jpg" alt="Characters coming to life" class="modal-image">
+                        <p>Each book had its own magical world to explore, and the characters were excited to share their adventures with the children.</p>
                         
-                        <img src="images/story7_end.jpg" alt="Children reading with book characters" class="modal-image">
-                        <p>The library taught everyone that reading isn't just about words on a page - it's about bringing stories to life and making new friends along the way!</p>
+                        <img src="images/story7_end.jpg" alt="Children reading with characters" class="modal-image">
+                        <p>The library taught everyone that books are magical portals to new worlds, and that reading is the key to endless adventures!</p>
                     </div>
                 </div>
             </div>
@@ -804,11 +804,11 @@
                         <img src="images/story8_beginning.jpg" alt="Musical instruments coming to life" class="modal-image">
                         <p>In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!</p>
                         
-                        <img src="images/story8_middle.jpg" alt="Children dancing with instruments" class="modal-image">
-                        <p>The piano played gentle lullabies, the drums kept the beat, and the violin sang sweet melodies. Together, they created beautiful harmonies!</p>
+                        <img src="images/story8_middle.jpg" alt="Instruments playing together" class="modal-image">
+                        <p>The piano played gentle lullabies, the drums kept the beat, and the violin sang sweet melodies. Together, they created beautiful music!</p>
                         
-                        <img src="images/story8_end.jpg" alt="Musical celebration" class="modal-image">
-                        <p>Children learned that music is a universal language that brings people together and makes every day more magical!</p>
+                        <img src="images/story8_end.jpg" alt="Children playing instruments" class="modal-image">
+                        <p>The instruments showed that music is a language everyone can understand, and that playing together creates the most beautiful harmony!</p>
                     </div>
                 </div>
             </div>
@@ -827,11 +827,11 @@
                         <img src="images/story9_beginning.jpg" alt="Colorful paint splashes" class="modal-image">
                         <p>In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own.</p>
                         
-                        <img src="images/story9_middle.jpg" alt="Children painting with magical colors" class="modal-image">
-                        <p>Children learned that each color had its own personality - red was bold and brave, blue was calm and peaceful, and yellow was bright and cheerful!</p>
+                        <img src="images/story9_middle.jpg" alt="Paints creating art" class="modal-image">
+                        <p>Each color had its own personality - red was bold and brave, blue was calm and peaceful, and yellow was bright and cheerful.</p>
                         
-                        <img src="images/story9_end.jpg" alt="Art gallery of children's work" class="modal-image">
-                        <p>Together, the colors and children created masterpieces that showed how art can express feelings and tell stories without words!</p>
+                        <img src="images/story9_end.jpg" alt="Children painting together" class="modal-image">
+                        <p>The paints taught everyone that art is a way to express feelings and create magic, and that every color has its own special story to tell!</p>
                     </div>
                 </div>
             </div>
@@ -850,11 +850,11 @@
                         <img src="images/story10_beginning.jpg" alt="Numbers dancing" class="modal-image">
                         <p>In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality.</p>
                         
-                        <img src="images/story10_middle.jpg" alt="Children solving math puzzles" class="modal-image">
-                        <p>Children learned that math could be fun as they watched numbers form patterns, solve puzzles, and create beautiful mathematical dances!</p>
+                        <img src="images/story10_middle.jpg" alt="Numbers teaching math" class="modal-image">
+                        <p>The numbers showed how they could add up to make bigger numbers, subtract to make smaller ones, and multiply to create patterns.</p>
                         
-                        <img src="images/story10_end.jpg" alt="Math celebration" class="modal-image">
-                        <p>The numbers showed everyone that math isn't just about counting - it's about patterns, shapes, and the magic of numbers working together!</p>
+                        <img src="images/story10_end.jpg" alt="Children solving math problems" class="modal-image">
+                        <p>The dancing numbers proved that math can be fun and exciting, and that every number has its own special place in the world!</p>
                     </div>
                 </div>
             </div>
@@ -873,11 +873,11 @@
                         <img src="images/story11_beginning.jpg" alt="Letters floating" class="modal-image">
                         <p>In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality.</p>
                         
-                        <img src="images/story11_middle.jpg" alt="Children reading with floating letters" class="modal-image">
-                        <p>Children learned to read as they watched letters form words and sentences. The letters would jump and twirl, making reading fun!</p>
+                        <img src="images/story11_middle.jpg" alt="Letters forming words" class="modal-image">
+                        <p>The letters showed how they could join together to make words, and how words could tell stories and share ideas.</p>
                         
-                        <img src="images/story11_end.jpg" alt="Reading celebration" class="modal-image">
-                        <p>Reading became a joyful adventure as children discovered the magic of words and stories!</p>
+                        <img src="images/story11_end.jpg" alt="Children reading and writing" class="modal-image">
+                        <p>The dancing letters taught everyone that reading and writing are magical ways to share stories and learn new things!</p>
                     </div>
                 </div>
             </div>
@@ -896,11 +896,11 @@
                         <img src="images/story12_beginning.jpg" alt="Shapes dancing" class="modal-image">
                         <p>In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains.</p>
                         
-                        <img src="images/story12_middle.jpg" alt="Children playing with shapes" class="modal-image">
-                        <p>Children learned about geometry as they watched shapes combine and create amazing designs. Each shape had its own special power!</p>
+                        <img src="images/story12_middle.jpg" alt="Shapes creating pictures" class="modal-image">
+                        <p>Each shape had its own special power - circles could roll, squares could stack, and triangles could point the way.</p>
                         
-                        <img src="images/story12_end.jpg" alt="Shape celebration" class="modal-image">
-                        <p>Shapes became the building blocks of imagination, showing children how to create anything they could dream of!</p>
+                        <img src="images/story12_end.jpg" alt="Children creating with shapes" class="modal-image">
+                        <p>The shapes showed that everything in the world is made up of basic shapes, and that imagination can turn simple shapes into amazing things!</p>
                     </div>
                 </div>
             </div>
@@ -916,14 +916,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story13.png" alt="Colors mixing" class="modal-image">
+                        <img src="images/story13_beginning.jpg" alt="Colors mixing" class="modal-image">
                         <p>In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green.</p>
                         
-                        <img src="images/story13_middle.jpg" alt="Children painting with colors" class="story-image">
-                        <p>Children learned about color mixing as they watched colors combine and create beautiful new shades. Each color had its own personality!</p>
+                        <img src="images/story13_middle.jpg" alt="Colors creating new colors" class="modal-image">
+                        <p>Each color had its own special friend - red loved to dance with blue, yellow loved to play with blue, and red loved to twirl with yellow.</p>
                         
-                        <img src="images/story13_end.jpg" alt="Color celebration" class="modal-image">
-                        <p>Art became a colorful adventure as children discovered the magic of creating their own unique colors!</p>
+                        <img src="images/story13_end.jpg" alt="Children mixing colors" class="modal-image">
+                        <p>The colors taught everyone that mixing colors creates new possibilities, and that every color has its own special place in the rainbow!</p>
                     </div>
                 </div>
             </div>
@@ -939,14 +939,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story14.png" alt="Animals in classroom" class="modal-image">
+                        <img src="images/story14_beginning.jpg" alt="Animals in classroom" class="modal-image">
                         <p>In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share.</p>
                         
-                        <img src="images/story14_middle.jpg" alt="Children learning from animals" class="modal-image">
-                        <p>Children learned about different species and their habitats. The wise owl taught about the night, the playful dolphin about the ocean.</p>
+                        <img src="images/story14_middle.jpg" alt="Animals teaching children" class="modal-image">
+                        <p>The wise owl taught about the night sky, the friendly fox showed how to identify plants, and the gentle deer shared secrets of the forest.</p>
                         
-                        <img src="images/story14_end.jpg" alt="Nature celebration" class="modal-image">
-                        <p>Nature became a classroom of wonder as children discovered the amazing diversity of life on Earth!</p>
+                        <img src="images/story14_end.jpg" alt="Children and animals working together" class="modal-image">
+                        <p>Together, they learned that nature is the greatest teacher of all, and that every creature has something special to share!</p>
                     </div>
                 </div>
             </div>
@@ -962,14 +962,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story15.png" alt="Musical notes floating" class="modal-image">
+                        <img src="images/story15_beginning.jpg" alt="Musical notes floating" class="modal-image">
                         <p>In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality.</p>
                         
-                        <img src="images/story15_middle.jpg" alt="Children playing music" class="modal-image">
-                        <p>Children learned to play music as they watched notes dance and create beautiful melodies. The notes would jump and twirl, making music fun!</p>
+                        <img src="images/story15_middle.jpg" alt="Notes creating melodies" class="modal-image">
+                        <p>The notes showed how they could join together to make melodies, and how melodies could tell stories and share feelings.</p>
                         
-                        <img src="images/story15_end.jpg" alt="Music celebration" class="modal-image">
-                        <p>Music became a celebration of joy as children discovered the magic of creating their own songs!</p>
+                        <img src="images/story15_end.jpg" alt="Children playing music" class="modal-image">
+                        <p>The dancing notes taught everyone that music is a magical way to express feelings and share joy!</p>
                     </div>
                 </div>
             </div>
@@ -985,14 +985,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story16.png" alt="Words floating" class="modal-image">
+                        <img src="images/story16_beginning.jpg" alt="Words floating" class="modal-image">
                         <p>In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality.</p>
                         
-                        <img src="images/story16_middle.jpg" alt="Children writing stories" class="modal-image">
-                        <p>Children learned to write as they watched words combine and create amazing tales. The words would dance and play, making writing fun!</p>
+                        <img src="images/story16_middle.jpg" alt="Words forming sentences" class="modal-image">
+                        <p>The words showed how they could join together to make sentences, and how sentences could tell stories and share ideas.</p>
                         
-                        <img src="images/story16_end.jpg" alt="Writing celebration" class="modal-image">
-                        <p>Writing became a creative adventure as children discovered the magic of telling their own stories!</p>
+                        <img src="images/story16_end.jpg" alt="Children writing stories" class="modal-image">
+                        <p>The word wizards taught everyone that writing is a magical way to share stories and learn new things!</p>
                     </div>
                 </div>
             </div>
@@ -1008,14 +1008,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story17.png" alt="Numbers dancing" class="modal-image">
+                        <img src="images/story17_beginning.jpg" alt="Numbers dancing" class="modal-image">
                         <p>In a magical math room, numbers came alive and played games! Each number had its own special value and personality.</p>
                         
-                        <img src="images/story17_middle.jpg" alt="Children counting objects" class="modal-image">
-                        <p>Children learned math as they watched numbers solve puzzles and play games. The numbers would jump and twirl, making math fun!</p>
+                        <img src="images/story17_middle.jpg" alt="Numbers solving problems" class="modal-image">
+                        <p>The numbers showed how they could add up to make bigger numbers, subtract to make smaller ones, and multiply to create patterns.</p>
                         
-                        <img src="images/story17_end.jpg" alt="Math celebration" class="modal-image">
-                        <p>Math became an exciting challenge as children discovered the magic of numbers!</p>
+                        <img src="images/story17_end.jpg" alt="Children solving math problems" class="modal-image">
+                        <p>The number ninjas proved that math can be fun and exciting, and that every number has its own special place in the world!</p>
                     </div>
                 </div>
             </div>
@@ -1031,14 +1031,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story18.png" alt="Colors mixing" class="modal-image">
+                        <img src="images/story18_beginning.jpg" alt="Colors mixing" class="modal-image">
                         <p>In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality.</p>
                         
-                        <img src="images/story18_middle.jpg" alt="Children painting" class="modal-image">
-                        <p>Children learned to paint as they watched colors mix and create beautiful art. The colors would dance and play, making art fun!</p>
+                        <img src="images/story18_middle.jpg" alt="Colors creating art" class="modal-image">
+                        <p>The colors showed how they could mix to create new colors, and how colors could tell stories and share feelings.</p>
                         
-                        <img src="images/story18_end.jpg" alt="Art celebration" class="modal-image">
-                        <p>Art became a colorful journey as children discovered the magic of creating their own masterpieces!</p>
+                        <img src="images/story18_end.jpg" alt="Children creating art" class="modal-image">
+                        <p>The color creators taught everyone that art is a magical way to express feelings and create beauty!</p>
                     </div>
                 </div>
             </div>
@@ -1054,14 +1054,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story19.png" alt="Animals in classroom" class="modal-image">
+                        <img src="images/story19_beginning.jpg" alt="Animals in classroom" class="modal-image">
                         <p>In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality.</p>
                         
-                        <img src="images/story19_middle.jpg" alt="Children learning from animals" class="modal-image">
-                        <p>Children learned about nature as they watched animals teach and play. The animals would dance and sing, making learning fun!</p>
+                        <img src="images/story19_middle.jpg" alt="Animals teaching about nature" class="modal-image">
+                        <p>The animals showed how they lived in harmony with nature, and how they could teach children about the world around them.</p>
                         
-                        <img src="images/story19_end.jpg" alt="Nature celebration" class="modal-image">
-                        <p>Nature became a magical teacher as children discovered the wonders of the world!</p>
+                        <img src="images/story19_end.jpg" alt="Children learning about nature" class="modal-image">
+                        <p>The nature navigators taught everyone that nature is full of wonder and wisdom, and that every creature has something special to share!</p>
                     </div>
                 </div>
             </div>
@@ -1077,14 +1077,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story20.png" alt="Musical notes floating" class="modal-image">
+                        <img src="images/story20_beginning.jpg" alt="Musical notes floating" class="modal-image">
                         <p>In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality.</p>
                         
-                        <img src="images/story20_middle.jpg" alt="Children playing music" class="modal-image">
-                        <p>Children learned to make music as they watched melodies dance and play. The melodies would jump and twirl, making music fun!</p>
+                        <img src="images/story20_middle.jpg" alt="Melodies creating music" class="modal-image">
+                        <p>The melodies showed how they could join together to make songs, and how songs could tell stories and share feelings.</p>
                         
-                        <img src="images/story20_end.jpg" alt="Music celebration" class="modal-image">
-                        <p>Music became a celebration of joy as children discovered the magic of creating their own songs!</p>
+                        <img src="images/story20_end.jpg" alt="Children making music" class="modal-image">
+                        <p>The melody makers taught everyone that music is a magical way to express feelings and share joy!</p>
                     </div>
                 </div>
             </div>

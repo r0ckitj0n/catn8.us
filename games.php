@@ -306,12 +306,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://pbskids.org/games', '_blank')">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">PBS Kids Games</text>
-                                </svg>
-                            </div>
+                            <img src="images/pbs-kids-learning-adventure.jpg" alt="PBS Kids Games" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>PBS Kids Games</h3>
                             <p>Educational games featuring beloved PBS Kids characters, perfect for early learning.</p>
@@ -326,12 +321,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.nickjr.com/games/', '_blank')">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Nick Jr. Games</text>
-                                </svg>
-                            </div>
+                            <img src="images/nick-jr-character-playground.jpg" alt="Nick Jr. Games" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>Nick Jr. Games</h3>
                             <p>Fun and educational games featuring popular Nick Jr. characters.</p>
@@ -346,12 +336,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.starfall.com/', '_blank')">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FFE66D"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Starfall</text>
-                                </svg>
-                            </div>
+                            <img src="images/starfall-reading-adventure.jpg" alt="Starfall" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>Starfall</h3>
                             <p>Interactive reading and math games for early learners.</p>
@@ -370,12 +355,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.coolmathgames.com/', '_blank')">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Cool Math Games</text>
-                                </svg>
-                            </div>
+                            <img src="images/cool-math-puzzle-challenge.jpg" alt="Cool Math Games" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>Cool Math Games</h3>
                             <p>Fun math games and puzzles that make learning enjoyable.</p>
@@ -390,12 +370,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.abcya.com/', '_blank')">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">ABCya!</text>
-                                </svg>
-                            </div>
+                            <img src="images/abcya-elementary-learning.jpg" alt="ABCya!" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>ABCya!</h3>
                             <p>Educational games and activities for elementary school students.</p>
@@ -410,12 +385,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.prodigygame.com/', '_blank')">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FFE66D"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Prodigy Math</text>
-                                </svg>
-                            </div>
+                            <img src="images/prodigy-math-rpg-adventure.jpg" alt="Prodigy Math" class="game-image">
                             <div class="game-category">Educational</div>
                             <h3>Prodigy Math</h3>
                             <p>RPG-style math game that adapts to your child's learning level.</p>
@@ -428,55 +398,46 @@
                 </div>
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100" data-age="8-12" data-category="simulation">
                     <div class="game-card">
-                        <span class="age-badge">Ages 8-12</span>
-                        <div class="game-image">
-                            <svg width="100%" height="200" viewBox="0 0 400 200">
-                                <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Animal Crossing</text>
-                            </svg>
-                        </div>
-                        <div class="game-category">Simulation</div>
-                        <h3>Animal Crossing</h3>
-                        <p>Create your own island paradise and make friends with adorable animal villagers.</p>
-                        <div class="game-platforms">
-                            <span class="platform">Nintendo Switch</span>
+                        <div class="game-content" onclick="window.open('https://www.nintendo.com/store/products/animal-crossing-new-horizons-switch/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
+                            <img src="images/animal-crossing-island-life.jpg" alt="Animal Crossing" class="game-image">
+                            <div class="game-category">Simulation</div>
+                            <h3>Animal Crossing</h3>
+                            <p>Create your own island paradise and make friends with adorable animal villagers.</p>
+                            <div class="game-platforms">
+                                <span class="platform">Nintendo Switch</span>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200" data-age="8-12" data-category="simulation">
                     <div class="game-card">
-                        <span class="age-badge">Ages 8-12</span>
-                        <div class="game-image">
-                            <svg width="100%" height="200" viewBox="0 0 400 200">
-                                <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Stardew Valley</text>
-                            </svg>
-                        </div>
-                        <div class="game-category">Simulation</div>
-                        <h3>Stardew Valley</h3>
-                        <p>Build your farm, make friends, and explore a charming rural world.</p>
-                        <div class="game-platforms">
-                            <span class="platform">PC</span>
-                            <span class="platform">Console</span>
-                            <span class="platform">Mobile</span>
+                        <div class="game-content" onclick="window.open('https://www.stardewvalley.net/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
+                            <img src="images/stardew-valley-farm-life.jpg" alt="Stardew Valley" class="game-image">
+                            <div class="game-category">Simulation</div>
+                            <h3>Stardew Valley</h3>
+                            <p>Build your farm, make friends, and explore a charming rural world.</p>
+                            <div class="game-platforms">
+                                <span class="platform">PC</span>
+                                <span class="platform">Console</span>
+                                <span class="platform">Mobile</span>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300" data-age="8-12" data-category="simulation">
                     <div class="game-card">
-                        <span class="age-badge">Ages 8-12</span>
-                        <div class="game-image">
-                            <svg width="100%" height="200" viewBox="0 0 400 200">
-                                <rect width="100%" height="100%" fill="#FFE66D"/>
-                                <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">Overcooked</text>
-                            </svg>
-                        </div>
-                        <div class="game-category">Co-op</div>
-                        <h3>Overcooked</h3>
-                        <p>Work together in chaotic kitchen scenarios to prepare meals against the clock.</p>
-                        <div class="game-platforms">
-                            <span class="platform">PC</span>
-                            <span class="platform">Console</span>
+                        <div class="game-content" onclick="window.open('https://www.team17.com/games/overcooked/', '_blank')">
+                            <span class="age-badge">Ages 8-12</span>
+                            <img src="images/overcooked-kitchen-chaos.jpg" alt="Overcooked" class="game-image">
+                            <div class="game-category">Co-op</div>
+                            <h3>Overcooked</h3>
+                            <p>Work together in chaotic kitchen scenarios to prepare meals against the clock.</p>
+                            <div class="game-platforms">
+                                <span class="platform">PC</span>
+                                <span class="platform">Console</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -488,12 +449,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.minecraft.net/', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Minecraft</text>
-                                </svg>
-                            </div>
+                            <img src="images/minecraft-blocky-world.jpg" alt="Minecraft" class="game-image">
                             <div class="game-category">Adventure</div>
                             <h3>Minecraft</h3>
                             <p>Build, explore, and survive in a blocky world of endless possibilities.</p>
@@ -509,12 +465,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.roblox.com/', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF6B6B"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Roblox</text>
-                                </svg>
-                            </div>
+                            <img src="images/roblox-social-gaming.jpg" alt="Roblox" class="game-image">
                             <div class="game-category">Adventure</div>
                             <h3>Roblox</h3>
                             <p>Create and play games with friends in a social gaming platform.</p>
@@ -530,12 +481,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.lego.com/en-us/games', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FFE66D"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="#2C3E50" text-anchor="middle" dominant-baseline="middle">LEGO Games</text>
-                                </svg>
-                            </div>
+                            <img src="images/lego-fun-adventures.jpg" alt="LEGO Games" class="game-image">
                             <div class="game-category">Adventure</div>
                             <h3>LEGO Games</h3>
                             <p>Fun adventures with your favorite LEGO themes and characters.</p>
@@ -550,12 +496,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.civilization.com/', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4A90E2"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Civilization</text>
-                                </svg>
-                            </div>
+                            <img src="images/civilization-ancient-times.jpg" alt="Civilization" class="game-image">
                             <div class="game-category">Strategy</div>
                             <h3>Civilization</h3>
                             <p>Build and lead your civilization from ancient times to the modern era.</p>
@@ -570,12 +511,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.ea.com/games/sims', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#FF9F1C"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">The Sims</text>
-                                </svg>
-                            </div>
+                            <img src="images/the-sims-life-simulation.jpg" alt="The Sims" class="game-image">
                             <div class="game-category">Simulation</div>
                             <h3>The Sims</h3>
                             <p>Create and control virtual people in a life simulation game.</p>
@@ -590,12 +526,7 @@
                     <div class="game-card">
                         <div class="game-content" onclick="window.open('https://www.rockstargames.com/gta-v', '_blank')">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="game-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#2C3E50"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Grand Theft Auto V</text>
-                                </svg>
-                            </div>
+                            <img src="images/grand-theft-auto-v-open-world.jpg" alt="Grand Theft Auto V" class="game-image">
                             <div class="game-category">Adventure</div>
                             <h3>Grand Theft Auto V</h3>
                             <p>Open-world action-adventure game set in the fictional city of Los Santos.</p>

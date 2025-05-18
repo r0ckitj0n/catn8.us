@@ -272,12 +272,7 @@
                     <div class="activity-card" data-category="learning reading" data-age="3-7" onclick="window.open('https://www.starfall.com', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Starfall</text>
-                                </svg>
-                            </div>
+                            <img src="images/starfall-reading-fun.jpg" alt="Starfall" class="activity-image">
                             <h3>Starfall</h3>
                             <p>Learn to read with fun interactive stories and games! Perfect for beginning readers.</p>
                         </div>
@@ -291,12 +286,7 @@
                     <div class="activity-card" data-category="coloring art" data-age="3-7" onclick="window.open('https://www.coloring.ws', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Coloring.ws</text>
-                                </svg>
-                            </div>
+                            <img src="images/coloring-ws-art-adventure.jpg" alt="Coloring.ws" class="activity-image">
                             <h3>Coloring.ws</h3>
                             <p>Simple coloring pages perfect for little artists! From animals to shapes.</p>
                         </div>
@@ -310,12 +300,7 @@
                     <div class="activity-card" data-category="games learning" data-age="3-7" onclick="window.open('https://pbskids.org/games', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 3-7</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">PBS Kids Games</text>
-                                </svg>
-                            </div>
+                            <img src="images/pbs-kids-educational-play.jpg" alt="PBS Kids Games" class="activity-image">
                             <h3>PBS Kids Games</h3>
                             <p>Fun educational games featuring favorite PBS Kids characters!</p>
                         </div>
@@ -331,12 +316,7 @@
                     <div class="activity-card" data-category="coloring art" data-age="8-12" onclick="window.open('https://coloritbynumbers.com', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Color It By Numbers</text>
-                                </svg>
-                            </div>
+                            <img src="images/color-by-numbers-art.jpg" alt="Color It By Numbers" class="activity-image">
                             <h3>Color It By Numbers</h3>
                             <p>Create beautiful artwork by following the numbers! A fun way to learn colors and numbers.</p>
                         </div>
@@ -350,12 +330,7 @@
                     <div class="activity-card" data-category="puzzles learning" data-age="8-12" onclick="window.open('https://puzzlemaker.discoveryeducation.com', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Puzzle Maker</text>
-                                </svg>
-                            </div>
+                            <img src="images/puzzle-maker-learning.jpg" alt="Puzzle Maker" class="activity-image">
                             <h3>Puzzle Maker</h3>
                             <p>Create your own word searches and crosswords! Great for learning new words.</p>
                         </div>
@@ -369,12 +344,7 @@
                     <div class="activity-card" data-category="crafts art" data-age="8-12" onclick="window.open('https://www.crayola.com/crafts', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 8-12</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Crayola Crafts</text>
-                                </svg>
-                            </div>
+                            <img src="images/crayola-crafts-creative.jpg" alt="Crayola Crafts" class="activity-image">
                             <h3>Crayola Crafts</h3>
                             <p>Fun craft projects for kids! From paper crafts to DIY decorations.</p>
                         </div>
@@ -390,12 +360,7 @@
                     <div class="activity-card" data-category="learning education" data-age="13" onclick="window.open('https://www.khanacademy.org/kids', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Khan Academy Kids</text>
-                                </svg>
-                            </div>
+                            <img src="images/khan-academy-interactive.jpg" alt="Khan Academy Kids" class="activity-image">
                             <h3>Khan Academy Kids</h3>
                             <p>Interactive learning activities covering math, reading, and more!</p>
                         </div>
@@ -409,12 +374,7 @@
                     <div class="activity-card" data-category="music learning" data-age="13" onclick="window.open('https://www.musictheory.net', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">Music Theory</text>
-                                </svg>
-                            </div>
+                            <img src="images/music-theory-learning.jpg" alt="Music Theory" class="activity-image">
                             <h3>Music Theory</h3>
                             <p>Learn about music in a fun way! Practice reading notes and learn about rhythm.</p>
                         </div>
@@ -428,12 +388,7 @@
                     <div class="activity-card" data-category="learning games" data-age="13" onclick="window.open('https://www.abcya.com', '_blank')">
                         <div class="activity-content">
                             <span class="age-badge">Ages 13+</span>
-                            <div class="activity-image">
-                                <svg width="100%" height="200" viewBox="0 0 400 200">
-                                    <rect width="100%" height="100%" fill="#4ECDC4"/>
-                                    <text x="50%" y="50%" font-family="Comic Sans MS" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle">ABCya</text>
-                                </svg>
-                            </div>
+                            <img src="images/abcya-educational-games.jpg" alt="ABCya" class="activity-image">
                             <h3>ABCya</h3>
                             <p>Educational games and activities! Learn math, reading, and more while having fun.</p>
                         </div>

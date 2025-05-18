@@ -6,7 +6,7 @@
     <title>Stories - catn8.us</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css">
-    <link rel="stylesheet" href="css/stories.css">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #FF6B6B;
@@ -14,168 +14,248 @@
             --accent-color: #FFE66D;
             --dark-color: #2C3E50;
             --light-color: #F7F9FC;
+            --fun-purple: #9B59B6;
+            --fun-green: #2ECC71;
+            --fun-orange: #E67E22;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Comic Sans MS', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Comic Neue', cursive;
             line-height: 1.6;
             color: var(--dark-color);
-            background-color: var(--light-color);
-            background-image: url('images/pattern.svg');
-            background-size: 200px;
-            background-repeat: repeat;
+            background: url('images/pattern.svg') repeat;
+            overflow-x: hidden;
+            position: relative;
         }
 
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('images/homepage_friends.jpg') center/cover no-repeat fixed;
+            opacity: 0.1;
+            z-index: -1;
+        }
+
+        /* PBS Kids-inspired Navigation */
         .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            padding: 1rem 0;
         }
 
         .navbar-brand img {
-            height: 40px;
+            height: 60px;
+            transition: transform 0.3s ease;
         }
 
-        .navbar-dark .navbar-nav .nav-link {
-            color: var(--dark-color) !important;
-            font-weight: 700;
-            font-size: 20px;
+        .navbar-brand img:hover {
+            transform: scale(1.1);
+        }
+
+        .nav-link {
+            font-size: 1.2rem;
+            color: white !important;
             padding: 0.5rem 1rem;
-            transition: color 0.3s ease;
+            margin: 0 0.5rem;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
         }
 
-        .navbar-dark .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
+            transform: translateY(-2px);
         }
 
-        .navbar-dark .navbar-nav .nav-link.active {
-            color: var(--primary-color) !important;
-            font-weight: 600;
-        }
-
-        .navbar-toggler {
-            border-color: var(--dark-color);
-        }
-
-        .navbar-toggler-icon {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(44, 62, 80, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
-        }
-
-        .hero {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
+        /* Section Styles */
+        .section {
             padding: 4rem 0;
             position: relative;
-            overflow: hidden;
+        }
+
+        .section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            filter: blur(10px);
+            z-index: -1;
+        }
+
+        .section:nth-child(odd) {
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
+            color: white;
+        }
+
+        .section:nth-child(even) {
+            background: linear-gradient(135deg, var(--fun-orange), var(--fun-purple));
+            color: white;
+        }
+
+        .section.bg-light {
+            background: linear-gradient(135deg, var(--fun-green), var(--secondary-color)) !important;
+            color: white;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            color: white;
             margin-bottom: 2rem;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .hero h1 {
-            font-size: 3.5rem;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-            color: #5DBCB3 !important;
-            margin-bottom: 1rem;
-        }
-
-        .hero p {
-            font-size: 1.5rem;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-            margin-bottom: 0;
-        }
-
-        .stories-section {
-            padding: 5rem 0;
-            background: var(--light-color);
-        }
-
+        /* Story Cards */
         .story-card {
-            background: white;
+            background: rgba(255, 255, 255, 0.15);
             border-radius: 20px;
-            padding: 1rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: all 0.5s ease;
-            cursor: pointer;
-            border: 3px solid transparent;
-            position: relative;
             overflow: hidden;
-            height: 429px;
-            display: flex;
-            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            position: relative;
+            cursor: pointer;
         }
 
-        .story-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
+        .age-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
+            z-index: 1;
+        }
+
+        .story-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
         }
 
         .story-section {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .story-title {
+            color: white;
+            font-size: 1.5rem;
+            margin: 1rem 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .story-text {
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
         }
 
         .story-image {
             width: 100%;
-            height: 214px;
+            height: 250px;
             object-fit: cover;
             border-radius: 15px;
-            margin-bottom: 0.5rem;
-            border: 3px solid var(--accent-color);
+            margin-bottom: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: transform 0.3s ease;
         }
 
-        .story-text {
-            font-size: 0.9rem;
-            color: var(--dark-color);
-            margin-bottom: 0.5rem;
-            line-height: 1.4;
-            flex-grow: 1;
+        .story-card:hover .story-image {
+            transform: scale(1.05);
         }
 
         .story-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
-            margin-top: auto;
+            margin-top: 1rem;
         }
 
         .story-tag {
-            background: var(--accent-color);
-            color: var(--primary-color);
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
             padding: 0.25rem 0.75rem;
             border-radius: 15px;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
         }
 
-        .story-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-            border-color: var(--accent-color);
-        }
-
-        .story-image.error {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .lead {
             color: white;
-            font-size: 1.2rem;
-            text-align: center;
-            padding: 1rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
 
+        /* Story Navigation */
+        .story-navigation {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .story-navigation .nav-item {
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+            padding: 10px;
+            border-radius: 15px;
+            text-align: center;
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .story-navigation .nav-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .story-navigation .nav-item.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* Modal Styles */
         .story-modal .modal-content {
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
             border: none;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
         }
 
         .story-modal .modal-header {
             border-bottom: none;
             padding: 2rem 2rem 1rem;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
             color: white;
             border-radius: 20px 20px 0 0;
         }
@@ -191,193 +271,28 @@
             object-fit: cover;
             border-radius: 15px;
             margin-bottom: 1.5rem;
-            border: 3px solid var(--accent-color);
+            border: 2px solid rgba(255, 255, 255, 0.3);
         }
 
-        .story-modal .modal-image.error {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .story-navigation {
-            position: fixed;
-            right: 20px;
-            top: 100px;
-            z-index: 1000;
-            background: white;
-            padding: 20px;
-            border-radius: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border: 3px solid var(--accent-color);
-        }
-
-        .story-navigation .nav-item {
-            margin: 15px 0;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1.2rem;
-            padding: 10px;
-            border-radius: 15px;
-            text-align: center;
-        }
-
-        .story-navigation .nav-item:hover {
-            background: var(--accent-color);
-            transform: scale(1.1);
-        }
-
-        .story-navigation .nav-item.active {
-            background: var(--primary-color);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .age-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: var(--primary-color);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            z-index: 1;
-        }
-
-        .story-pagination {
-            display: none;
-        }
-
-        @keyframes float {
-            0% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0); }
-        }
-
-        .floating {
-            animation: float 3s ease-in-out infinite;
-        }
-
-        /* Add new animation styles */
-        .story-card {
-            transition: all 0.5s ease;
-        }
-
-        .story-card.fade-out {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        .story-card.fade-in {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .page-transition {
-            position: relative;
-            min-height: 600px; /* Adjust based on your content */
-        }
-
-        .page-transition .row {
-            position: absolute;
-            width: 100%;
-            transition: all 0.5s ease;
-        }
-
-        .page-transition .row.slide-out {
-            opacity: 0;
-            transform: translateX(-50px);
-        }
-
-        .page-transition .row.slide-in {
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        .story-box {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-            height: 300px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .story-box img {
-            width: 100%;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 10px;
-            margin-bottom: 15px;
-        }
-
-        .story-box h3 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
-            color: var(--primary-color);
-        }
-
-        .story-box p {
-            font-size: 0.9rem;
-            color: var(--dark-color);
-            margin-bottom: 0;
-            flex-grow: 1;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-        }
-
-        .story-box:hover {
-            transform: translateY(-5px);
-        }
-
-        .platform {
-            background: var(--accent-color);
-            color: var(--primary-color);
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-
-        .modal-body .story-content {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .modal-body .modal-image {
-            width: 100%;
-            max-height: 400px;
-            object-fit: cover;
-            border-radius: 15px;
-            border: 3px solid var(--accent-color);
-        }
-
-        .modal-body p {
-            font-size: 1.2rem;
-            line-height: 1.6;
-            color: var(--dark-color);
-            margin: 0;
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .section-title {
+                font-size: 2rem;
+            }
+            
+            .story-navigation {
+                position: static;
+                margin-bottom: 2rem;
+            }
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
         <div class="container">
             <a class="navbar-brand" href="/">
-                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo" height="40">
+                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -399,348 +314,316 @@
                     <li class="nav-item">
                         <a class="nav-link" href="activities.php">Activities</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/#guiding-lights">Our Lights</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/#invitation">Our Circle</a>
-                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <!-- Story Navigation -->
-    <div class="story-navigation" data-aos="fade-left">
-        <div class="d-flex flex-column gap-2">
-            <div class="nav-item active" data-filter="all">All Stories</div>
-            <div class="nav-item" data-filter="3-7">Ages 3-7</div>
-            <div class="nav-item" data-filter="8-12">Ages 8-12</div>
-            <div class="nav-item" data-filter="13">Ages 13+</div>
-            <div class="nav-item" data-filter="family">Family</div>
-            <div class="nav-item" data-filter="daily">Daily Kindness</div>
-            <div class="nav-item" data-filter="growth">Growth</div>
-            <div class="nav-item" data-filter="random">Random Acts</div>
-        </div>
-    </div>
-
-    <section class="stories-section">
+    <!-- Hero Section -->
+    <section class="section">
         <div class="container">
+            <h1 class="section-title">Magical Stories for Everyone!</h1>
+            <p class="lead text-center mb-5">Discover enchanting tales that spark imagination and joy!</p>
+            
             <div class="row">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Super Sparkle Family!</h3>
-                            <div class="story-section">
-                                <img src="images/story1_beginning.jpg" alt="Papa and Nana creating magical sparkles" class="story-image">
-                                <p class="story-text">Papa and Nana's magical hugs create sparkles of joy that make everyone feel warm and happy!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Kindness</span>
-                            </div>
-                        </div>
+                <!-- Story Cards -->
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal1">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story1_beginning.jpg" alt="Papa and Nana creating magical sparkles" class="story-image">
+                            <h3 class="story-title">The Super Sparkle Family!</h3>
+                            <p class="story-text">Papa and Nana had a special power - their hugs were so full of love that they created magical sparkles! When they hugged someone, tiny stars of joy would float around them, making everyone feel warm and happy inside.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Adventure</span>
+                            <span class="story-tag">Friendship</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2" data-category="daily" data-age="3-7">
-                        <div class="story-content">
-                            <h3>Elijah's Kitchen of Culinary Craziness</h3>
-                            <div class="story-section">
-                                <img src="images/story2_beginning.jpg" alt="Kitchen appliances coming to life" class="story-image">
-                                <p class="story-text">Dancing blenders and singing mixers turn cooking into a wild adventure for the whole family!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Daily Kindness</span>
-                                <span class="story-tag">Creativity</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal2">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story2_beginning.jpg" alt="Kitchen appliances coming to life" class="story-image">
+                            <h3 class="story-title">Elijah's Kitchen of Culinary Craziness</h3>
+                            <p class="story-text">When Elijah's kitchen appliances came to life with their own personalities, they turned cooking into a wild adventure. His blender started doing happy dances, his toaster told jokes, and his mixer sang songs while it worked.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Family</span>
+                            <span class="story-tag">Creativity</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Sparkle Family's Giggle-Wiggle Kindness Calendar</h3>
-                            <div class="story-section">
-                                <img src="images/story3_beginning.jpg" alt="Magical calendar with eyeballs" class="story-image">
-                                <p class="story-text">A magical calendar with blinking eyes makes every day a new adventure in kindness!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal3">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story3_beginning.jpg" alt="Magical calendar with eyeballs" class="story-image">
+                            <h3 class="story-title">The Magical Calendar of Kindness</h3>
+                            <p class="story-text">In a cozy corner of the house, there lived a magical calendar with blinking eyes. It wasn't just any calendar - it had the power to make every day special with acts of kindness!</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Kindness</span>
+                            <span class="story-tag">Magic</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>Reuel's Wacky Puzzle Family!</h3>
-                            <div class="story-section">
-                                <img src="images/story4_beginning.jpg" alt="Puzzle pieces coming to life" class="story-image">
-                                <p class="story-text">Puzzle pieces come alive, each representing a family member with their own special personality!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Creativity</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal4">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story4_beginning.jpg" alt="Puzzle pieces coming to life" class="story-image">
+                            <h3 class="story-title">The Family Puzzle Adventure</h3>
+                            <p class="story-text">In a magical puzzle box, each piece came alive with its own personality. Some pieces were round and bouncy, others were square and steady, but they all had one thing in common - they were part of the same family!</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Family</span>
+                            <span class="story-tag">Creativity</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Super-Sticky Hug Team!</h3>
-                            <div class="story-section">
-                                <img src="images/story5_beginning.jpg" alt="Magical hugs with sparkles" class="story-image">
-                                <p class="story-text">Magical hugs that stick with you forever, helping you through any challenge!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal5">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story5_beginning.jpg" alt="Magical garden coming to life" class="story-image">
+                            <h3 class="story-title">The Singing Garden</h3>
+                            <p class="story-text">In a special garden, flowers sang sweet melodies and trees danced in the breeze. It was a place where nature came alive with music and joy!</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Nature</span>
+                            <span class="story-tag">Friendship</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Family Tech Team</h3>
-                            <div class="story-section">
-                                <img src="images/story6_beginning.jpg" alt="Tablet coming to life" class="story-image">
-                                <p class="story-text">Magical tech gadgets turn screen time into family time and make learning fun!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Personal Growth</span>
-                                <span class="story-tag">Innovation</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal6">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story6_beginning.jpg" alt="Talking animals in forest" class="story-image">
+                            <h3 class="story-title">The Wise Forest Friends</h3>
+                            <p class="story-text">Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Animals</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7" data-category="random" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Musical Magic Makers!</h3>
-                            <div class="story-section">
-                                <img src="images/story7_beginning.jpg" alt="Piano coming to life" class="story-image">
-                                <p class="story-text">Instruments come alive with big personalities, turning music into magical adventures!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Random Acts</span>
-                                <span class="story-tag">Family</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal7">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story7_beginning.jpg" alt="Magical library entrance" class="story-image">
+                            <h3 class="story-title">The Living Library</h3>
+                            <p class="story-text">In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Reading</span>
+                            <span class="story-tag">Imagination</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8" data-category="growth" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Book Buddy Brigade!</h3>
-                            <div class="story-section">
-                                <img src="images/story8_beginning.jpg" alt="Books coming to life" class="story-image">
-                                <p class="story-text">Books jump and dance, telling the silliest stories and making reading magical!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Personal Growth</span>
-                                <span class="story-tag">Creativity</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal8">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story8_beginning.jpg" alt="Musical instruments coming to life" class="story-image">
+                            <h3 class="story-title">The Musical Instrument Friends</h3>
+                            <p class="story-text">In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Music</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Photo Frame Friends</h3>
-                            <div class="story-section">
-                                <img src="images/story9_beginning.jpg" alt="Photo frames coming to life" class="story-image">
-                                <p class="story-text">Magical frames bring memories to life, making them dance right off the walls!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal9">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story9_beginning.jpg" alt="Colorful paint splashes" class="story-image">
+                            <h3 class="story-title">The Magical Paint Box</h3>
+                            <p class="story-text">In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Art</span>
+                            <span class="story-tag">Creativity</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal10" data-category="daily" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Musical Magic Makers</h3>
-                            <div class="story-section">
-                                <img src="images/story10_beginning.jpg" alt="Instruments coming to life" class="story-image">
-                                <p class="story-text">Magical instruments with big personalities make music time an adventure!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Random Acts</span>
-                                <span class="story-tag">Family</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal10">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story10_beginning.jpg" alt="Numbers dancing" class="story-image">
+                            <h3 class="story-title">The Dancing Numbers</h3>
+                            <p class="story-text">In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Math</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11" data-category="growth" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Book Buddy Brigade</h3>
-                            <div class="story-section">
-                                <img src="images/story11_beginning.jpg" alt="Books coming to life" class="story-image">
-                                <p class="story-text">Books come alive to jump, dance, and tell the silliest stories ever!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Personal Growth</span>
-                                <span class="story-tag">Creativity</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal11">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story11_beginning.jpg" alt="Letters floating" class="story-image">
+                            <h3 class="story-title">The Dancing Letters</h3>
+                            <p class="story-text">In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Reading</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The TV Time Team!</h3>
-                            <div class="story-section">
-                                <img src="images/story13.png" alt="TV coming to life" class="story-image">
-                                <p class="story-text">A magical remote creates shows that make family time extra special!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal12">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story12_beginning.jpg" alt="Shapes dancing" class="story-image">
+                            <h3 class="story-title">The Shape Shapers</h3>
+                            <p class="story-text">In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Shapes</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Sparkle House Family</h3>
-                            <div class="story-section">
-                                <img src="images/story14.png" alt="Sparkle house" class="story-image">
-                                <p class="story-text">A magical house that sparkles brighter than a disco ball brings joy to everyone who visits!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal13">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story13.png" alt="Colors mixing" class="story-image">
+                            <h3 class="story-title">The Color Mixers</h3>
+                            <p class="story-text">In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Colors</span>
+                            <span class="story-tag">Art</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal16" data-category="daily" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Bedtime Book Buddies!</h3>
-                            <div class="story-section">
-                                <img src="images/story16.png" alt="Books coming to life" class="story-image">
-                                <p class="story-text">Books wake up at night to make bedtime the most magical time of day!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Bedtime</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal14">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story14.png" alt="Animals in classroom" class="story-image">
+                            <h3 class="story-title">The Animal Teachers</h3>
+                            <p class="story-text">In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Animals</span>
+                            <span class="story-tag">Nature</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal17" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Pet Tech Team!</h3>
-                            <div class="story-section">
-                                <img src="images/story17.png" alt="Pets using technology" class="story-image">
-                                <p class="story-text">Pets use technology to help others and spread joy through their special abilities!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family Moments</span>
-                                <span class="story-tag">Innovation</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal15">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story15.png" alt="Musical notes floating" class="story-image">
+                            <h3 class="story-title">The Dancing Notes</h3>
+                            <p class="story-text">In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Music</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal18" data-category="daily" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Laundry Day Llamas!</h3>
-                            <div class="story-section">
-                                <img src="images/story18.png" alt="Laundry llamas" class="story-image">
-                                <p class="story-text">Laundry llamas fold clothes into origami and turn laundry day into a fashion show!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Fun</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal16">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story16.png" alt="Words floating" class="story-image">
+                            <h3 class="story-title">The Word Wizards</h3>
+                            <p class="story-text">In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Writing</span>
+                            <span class="story-tag">Creativity</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal19" data-category="nature" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Garden Growth Gang!</h3>
-                            <div class="story-section">
-                                <img src="images/story19.png" alt="Garden coming to life" class="story-image">
-                                <p class="story-text">Magical plants make sure every seed grows into something special!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Nature</span>
-                                <span class="story-tag">Magic</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal17">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story17.png" alt="Numbers dancing" class="story-image">
+                            <h3 class="story-title">The Number Ninjas</h3>
+                            <p class="story-text">In a magical math room, numbers came alive and played games! Each number had its own special value and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Math</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal20" data-category="family" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Family Fun Factory!</h3>
-                            <div class="story-section">
-                                <img src="images/story20.png" alt="House coming to life" class="story-image">
-                                <p class="story-text">A magical house where every room transforms into an exciting adventure!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Family</span>
-                                <span class="story-tag">Adventure</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal18">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story18.png" alt="Colors mixing" class="story-image">
+                            <h3 class="story-title">The Color Creators</h3>
+                            <p class="story-text">In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Art</span>
+                            <span class="story-tag">Creativity</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal15" data-category="creativity" data-age="3-7">
-                        <div class="story-content">
-                            <h3>The Art Adventure Squad!</h3>
-                            <div class="story-section">
-                                <img src="images/story15.png" alt="Art supplies coming to life" class="story-image">
-                                <p class="story-text">Art supplies come alive as a happy family of frame friends with special powers!</p>
-                            </div>
-                            <div class="story-tags">
-                                <span class="story-tag">Creativity</span>
-                                <span class="story-tag">Fun</span>
-                            </div>
-                        </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal19">
                         <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story19.png" alt="Animals in classroom" class="story-image">
+                            <h3 class="story-title">The Nature Navigators</h3>
+                            <p class="story-text">In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Animals</span>
+                            <span class="story-tag">Nature</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="story-card" data-bs-toggle="modal" data-bs-target="#storyModal20">
+                        <div class="age-badge">3-7</div>
+                        <div class="story-section">
+                            <img src="images/story20.png" alt="Musical notes floating" class="story-image">
+                            <h3 class="story-title">The Melody Makers</h3>
+                            <p class="story-text">In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality.</p>
+                        </div>
+                        <div class="story-tags">
+                            <span class="story-tag">Music</span>
+                            <span class="story-tag">Learning</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -748,12 +631,12 @@
     </section>
 
     <!-- Story Modals -->
-    <div class="modal fade story-modal" id="storyModal1" tabindex="-1" aria-labelledby="storyModal1Label" aria-hidden="true">
+    <div class="modal fade story-modal" id="storyModal1" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="storyModal1Label">The Super Sparkle Family!</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h2>The Super Sparkle Family!</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
@@ -771,12 +654,12 @@
         </div>
     </div>
 
-    <div class="modal fade story-modal" id="storyModal2" tabindex="-1" aria-labelledby="storyModal2Label" aria-hidden="true">
+    <div class="modal fade story-modal" id="storyModal2" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="storyModal2Label">Elijah's Kitchen of Culinary Craziness</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h2>Elijah's Kitchen of Culinary Craziness</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
@@ -794,23 +677,23 @@
         </div>
     </div>
 
-    <div class="modal fade story-modal" id="storyModal3" tabindex="-1" aria-labelledby="storyModal3Label" aria-hidden="true">
+    <div class="modal fade story-modal" id="storyModal3" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="storyModal3Label">The Sparkle Family's Giggle-Wiggle Kindness Calendar</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h2>The Magical Calendar of Kindness</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
                         <img src="images/story3_beginning.jpg" alt="Magical calendar with eyeballs" class="modal-image">
-                        <p>The Sparkle Family wasn't just any regular family. OH NO! They had SPARKLY TOES that left tiny glitter trails wherever they walked. Even their pet goldfish, Bubbles, had sparkly fins that made the water look like a disco ball!</p>
+                        <p>In a cozy corner of the house, there lived a magical calendar with blinking eyes. It wasn't just any calendar - it had the power to make every day special with acts of kindness!</p>
                         
                         <img src="images/story3_middle.jpg" alt="Calendar doing the chicken dance" class="modal-image">
-                        <p>Every morning, the Sparkle Family would check their special Kindness Calendar hanging in the kitchen. But this wasn't your ordinary, boring calendar with squares and numbers. NOPE! This calendar had EYEBALLS that blinked and a MOUTH that went "MWAH-MWAH-GOOD MORNING!" whenever someone touched it.</p>
+                        <p>The calendar would dance and sing, suggesting fun ways to be kind. It taught the family that even small acts of kindness could make big differences in someone's day.</p>
                         
                         <img src="images/story3_end.jpg" alt="Family group hug with sparkles" class="modal-image">
-                        <p>"Being kind is the SILLIEST, FUNNEST thing EVER!" declared Ezra as he watched the stars from the calendar chase the rainbow around the living room. And the whole Sparkle Family agreed—with a SUPER-DUPER group hug that was so powerful, it made their sparkly toes light up like tiny fireworks!</p>
+                        <p>From sharing toys to helping with chores, the calendar showed that kindness was the best way to make every day magical. And that's how the family learned that kindness is the greatest superpower of all!</p>
                     </div>
                 </div>
             </div>
@@ -821,19 +704,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Reuel's Wacky Puzzle Family!</h2>
+                    <h2>The Family Puzzle Adventure</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
                         <img src="images/story4_beginning.jpg" alt="Puzzle pieces coming to life" class="modal-image">
-                        <p>Reuel loved puzzles, but he never expected his puzzle pieces to come to life! Each piece represented a member of his family, and they all had their own personalities.</p>
+                        <p>In a magical puzzle box, each piece came alive with its own personality. Some pieces were round and bouncy, others were square and steady, but they all had one thing in common - they were part of the same family!</p>
                         
                         <img src="images/story4_middle.jpg" alt="Family puzzle pieces dancing" class="modal-image">
-                        <p>There was Papa and Nana's piece, strong and wise. Trinity's piece was creative and kind, while Mariah's piece was full of energy. Veronica's piece brought laughter, and Elijah's piece was always cooking up new ideas.</p>
+                        <p>Each piece represented a family member with their special traits. Papa's piece was strong and protective, Nana's piece was warm and caring, and each child's piece showed their unique talents and interests.</p>
                         
                         <img src="images/story4_end.jpg" alt="Complete family puzzle" class="modal-image">
-                        <p>As Reuel put the puzzle together, he discovered that each piece was unique and important. Just like in his real family, every piece fit together perfectly to create a beautiful picture of love and support!</p>
+                        <p>When all the pieces came together, they created a beautiful picture of family love. The puzzle taught everyone that even though they were different, they fit together perfectly as a family!</p>
                     </div>
                 </div>
             </div>
@@ -844,19 +727,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Super-Sticky Hug Team!</h2>
+                    <h2>The Singing Garden</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story5_beginning.jpg" alt="Magical hugs with sparkles" class="modal-image">
-                        <p>Papa and Nana had a special power - their hugs were so full of love that they stuck with you forever! When they hugged someone, a little bit of their love magic would stay with them, helping them through any challenge.</p>
+                        <img src="images/story5_beginning.jpg" alt="Magical garden coming to life" class="modal-image">
+                        <p>In a special garden, flowers sang sweet melodies and trees danced in the breeze. It was a place where nature came alive with music and joy!</p>
                         
-                        <img src="images/story5_middle.jpg" alt="Love magic chain reaction" class="modal-image">
-                        <p>Their hugs helped Trinity find strength when she needed it most, gave Elijah confidence in the kitchen, and helped Reuel solve his trickiest puzzles. The magic spread to everyone in the family!</p>
+                        <img src="images/story5_middle.jpg" alt="Children playing in garden" class="modal-image">
+                        <p>Children discovered that each plant had its own song to share. The roses sang lullabies, the sunflowers hummed happy tunes, and the trees provided the rhythm with their swaying branches.</p>
                         
-                        <img src="images/story5_end.jpg" alt="House filled with joy and laughter" class="modal-image">
-                        <p>The Super-Sticky Hug Team taught everyone that the best kind of magic is the love we share with our family. And that's why their hugs will always be remembered as the most magical hugs in the world!</p>
+                        <img src="images/story5_end.jpg" alt="Garden party celebration" class="modal-image">
+                        <p>The garden taught everyone that nature is full of music and magic, and that every living thing has its own special song to share with the world!</p>
                     </div>
                 </div>
             </div>
@@ -867,19 +750,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Family Tech Team</h2>
+                    <h2>The Wise Forest Friends</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story6_beginning.jpg" alt="Tablet coming to life" class="modal-image">
-                        <p>The family's tech gadgets weren't just regular, boring devices that sat on shelves. OH NO! They were magical machines that could turn screen time into family time and make learning as fun as a game of hide-and-seek!</p>
+                        <img src="images/story6_beginning.jpg" alt="Talking animals in forest" class="modal-image">
+                        <p>Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!</p>
                         
-                        <img src="images/story6_middle.jpg" alt="Tech Team helping with learning" class="modal-image">
-                        <p>Each device had its own special power: Tablet Tina made lessons come alive, Computer Charlie turned games into adventures, and Phone Phil made family calls feel like magic.</p>
+                        <img src="images/story6_middle.jpg" alt="Children learning from animals" class="modal-image">
+                        <p>The wise owl taught about patience, the playful squirrels showed the importance of sharing, and the gentle deer demonstrated kindness in action.</p>
                         
-                        <img src="images/story6_end.jpg" alt="Family learning with Tech Team" class="modal-image">
-                        <p>The Tech Team taught everyone that the best learning is the kind you share with your family! And that's exactly what they did every single day!</p>
+                        <img src="images/story6_end.jpg" alt="Forest harmony celebration" class="modal-image">
+                        <p>Through their forest friends, children learned that wisdom comes in many forms, and that nature has much to teach us about living in harmony with others!</p>
                     </div>
                 </div>
             </div>
@@ -890,19 +773,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Bedtime Story Stars</h2>
+                    <h2>The Living Library</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story7_beginning.jpg" alt="Books coming to life" class="modal-image">
-                        <p>Noah's bedtime books weren't just regular, boring books that sat on shelves. OH NO! They were magical story stars that could turn bedtime into the most exciting adventure of the day!</p>
+                        <img src="images/story7_beginning.jpg" alt="Magical library entrance" class="modal-image">
+                        <p>In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers.</p>
                         
-                        <img src="images/story7_middle.jpg" alt="Magical storytelling" class="modal-image">
-                        <p>Each story had its own special power: Fairy Tale Fiona could make dreams dance, Adventure Andy turned bedtime into stories, and Lullaby Lucy made sleeping magical!</p>
+                        <img src="images/story7_middle.jpg" alt="Books floating and dancing" class="modal-image">
+                        <p>Children could interact with their favorite characters, ask questions, and even help solve problems in the stories. Each book became an interactive adventure!</p>
                         
-                        <img src="images/story7_end.jpg" alt="Family bedtime" class="modal-image">
-                        <p>The Bedtime Story Stars showed everyone that bedtime isn't just about sleeping - it's about sharing magical moments together as a family!</p>
+                        <img src="images/story7_end.jpg" alt="Children reading with book characters" class="modal-image">
+                        <p>The library taught everyone that reading isn't just about words on a page - it's about bringing stories to life and making new friends along the way!</p>
                     </div>
                 </div>
             </div>
@@ -913,19 +796,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Family Fun Factory</h2>
+                    <h2>The Musical Instrument Friends</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story8_beginning.jpg" alt="Magical toy box coming to life" class="modal-image">
-                        <p>In a house that looked like it had been painted by a rainbow with hiccups lived the Fun Factory Family. OH NO! They weren't called that because they made boring old toys. They were called the Fun Factory Family because they had a magical machine that could turn ANYTHING into fun!</p>
+                        <img src="images/story8_beginning.jpg" alt="Musical instruments coming to life" class="modal-image">
+                        <p>In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!</p>
                         
-                        <img src="images/story8_middle.jpg" alt="Fun Factory Team adventures" class="modal-image">
-                        <p>Each room had its own special power: Playful Patty the Playroom could turn toys into real-life adventures, Kitchen King Karl made cooking magical, and Bedroom Buddy Bella transformed bedtime into a dreamy journey.</p>
+                        <img src="images/story8_middle.jpg" alt="Children dancing with instruments" class="modal-image">
+                        <p>The piano played gentle lullabies, the drums kept the beat, and the violin sang sweet melodies. Together, they created beautiful harmonies!</p>
                         
-                        <img src="images/story8_end.jpg" alt="Family fun with the Fun Factory Team" class="modal-image">
-                        <p>The best part was that the house taught everyone that family time isn't just about being together—it's about creating magical moments that make everyone smile!</p>
+                        <img src="images/story8_end.jpg" alt="Musical celebration" class="modal-image">
+                        <p>Children learned that music is a universal language that brings people together and makes every day more magical!</p>
                     </div>
                 </div>
             </div>
@@ -936,19 +819,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Photo Frame Friends</h2>
+                    <h2>The Magical Paint Box</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story9_beginning.jpg" alt="Photo frames coming to life" class="modal-image">
-                        <p>The family's photo frames weren't just regular, boring frames that held still pictures. OH NO! They were magical frames that could bring memories to life and make them dance right off the walls!</p>
+                        <img src="images/story9_beginning.jpg" alt="Colorful paint splashes" class="modal-image">
+                        <p>In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own.</p>
                         
-                        <img src="images/story9_middle.jpg" alt="Frames sharing memories" class="modal-image">
-                        <p class="story-text">Each frame had its own special power: Memory Molly the Beach Frame could make beach days come alive, Vacation Vicky the Travel Frame could make trips feel real, and Birthday Benny the Party Frame could make celebrations sparkle!</p>
+                        <img src="images/story9_middle.jpg" alt="Children painting with magical colors" class="modal-image">
+                        <p>Children learned that each color had its own personality - red was bold and brave, blue was calm and peaceful, and yellow was bright and cheerful!</p>
                         
-                        <img src="images/story9_end.jpg" alt="Family enjoying memories" class="modal-image">
-                        <p class="story-text">The Photo Frame Friends taught everyone that memories aren't just about looking at pictures—they're about feeling the joy and love in every moment we share with our family!</p>
+                        <img src="images/story9_end.jpg" alt="Art gallery of children's work" class="modal-image">
+                        <p>Together, the colors and children created masterpieces that showed how art can express feelings and tell stories without words!</p>
                     </div>
                 </div>
             </div>
@@ -959,19 +842,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Musical Magic Makers</h2>
+                    <h2>The Dancing Numbers</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story10_beginning.jpg" alt="Instruments coming to life" class="modal-image">
-                        <p>The family's musical instruments weren't just regular, boring objects that sat in cases. OH NO! They were magical music makers that could turn any day into a concert!</p>
+                        <img src="images/story10_beginning.jpg" alt="Numbers dancing" class="modal-image">
+                        <p>In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality.</p>
                         
-                        <img src="images/story10_middle.jpg" alt="Musical adventures" class="modal-image">
-                        <p>Each instrument had its own special power: Piano Pete could make dreams dance, Guitar Grace turned songs into adventures, and Drum Dave made rhythms feel like magic!</p>
+                        <img src="images/story10_middle.jpg" alt="Children solving math puzzles" class="modal-image">
+                        <p>Children learned that math could be fun as they watched numbers form patterns, solve puzzles, and create beautiful mathematical dances!</p>
                         
-                        <img src="images/story10_end.jpg" alt="Family music time" class="modal-image">
-                        <p>The Musical Magic Makers taught everyone that music isn't just about playing notes—it's about sharing joy and creating magical moments together!</p>
+                        <img src="images/story10_end.jpg" alt="Math celebration" class="modal-image">
+                        <p>The numbers showed everyone that math isn't just about counting - it's about patterns, shapes, and the magic of numbers working together!</p>
                     </div>
                 </div>
             </div>
@@ -982,19 +865,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Book Buddy Brigade</h2>
+                    <h2>The Dancing Letters</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story11_beginning.jpg" alt="Books coming to life" class="modal-image">
-                        <p>The family's books weren't just regular, boring books that sat on shelves. OH NO! They were magical story buddies that could turn reading into the most exciting adventure!</p>
+                        <img src="images/story11_beginning.jpg" alt="Letters floating" class="modal-image">
+                        <p>In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality.</p>
                         
-                        <img src="images/story11_middle.jpg" alt="Book adventures" class="modal-image">
-                        <p>Each book had its own special power: Story Sam could make characters dance, Adventure Amy turned pages into portals, and Learning Lucy made knowledge feel like magic!</p>
+                        <img src="images/story11_middle.jpg" alt="Children reading with floating letters" class="modal-image">
+                        <p>Children learned to read as they watched letters form words and sentences. The letters would jump and twirl, making reading fun!</p>
                         
-                        <img src="images/story11_end.jpg" alt="Family reading time" class="modal-image">
-                        <p>The Book Buddy Brigade taught everyone that reading isn't just about words on a page—it's about using your IMAGINATION to make stories come alive!</p>
+                        <img src="images/story11_end.jpg" alt="Reading celebration" class="modal-image">
+                        <p>Reading became a joyful adventure as children discovered the magic of words and stories!</p>
                     </div>
                 </div>
             </div>
@@ -1005,27 +888,19 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The TV Time Team!</h2>
+                    <h2>The Shape Shapers</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="images/story13.png" alt="The TV Time Team" class="modal-image">
-                    <p>Reuel's TV remote wasn't just any old boring remote that sat on the couch collecting cookie crumbs. OH NO! It was a MAGICAL REMOTE with a personality bigger than a popcorn machine at a movie theater!</p>
-                    <p>It all started one Saturday morning when Reuel was trying to find a show to watch. The remote suddenly started GLOWING like it had swallowed a rainbow! Then it started TALKING in a voice that sounded like it had been eating too many marshmallows!</p>
-                    <p>"EXCUSE ME!" said the remote, doing a little dance on the coffee table. "But I think you need something more EXCITING than cartoons about talking vegetables!"</p>
-                    <p>Before Reuel could say "HOLY CHANNEL SURFING!" the remote started zapping the TV with magical beams of light! The screen started showing the most AMAZING shows—ones that weren't even on regular TV!</p>
-                    <p>There was a cooking show where the food would JUMP out of the screen and do the cha-cha! A nature show where the animals would tell jokes (the penguins were especially funny)! And a science show where the experiments would create tiny rainbows that floated around the living room!</p>
-                    <p>The remote had a special way of knowing exactly what everyone wanted to watch. When Reuel's little sister was sad, it would show shows about friendship that made her smile. When Dad was tired from work, it would find the funniest comedies that made him laugh until his belly hurt!</p>
-                    <p>One day, Reuel's whole family was arguing about what to watch. Mom wanted a cooking show, Dad wanted sports, and Reuel's sister wanted cartoons. The remote had a BRILLIANT idea! It started GLOWING SUPER BRIGHT and created a magical show that combined ALLtheir favorites!</p>
-                    <p>The show had cooking sports commentators who made food while doing backflips, cartoon characters playing basketball with giant meatballs, and a halftime show where the chefs would do synchronized swimming in a pool of chocolate pudding!</p>
-                    <p>Everyone was so amazed that they forgot to argue! They spent the whole evening laughing and enjoying the most CRAZY, FUN show they'd ever seen!</p>
-                    <p>From that day on, the remote became the family's favorite TV buddy. It would wake them up with morning shows that made their breakfast dance, help them learn new things with magical educational programs, and even create special shows just for family movie night!</p>
-                    <p>The best part was that the remote taught Reuel that watching TV isn't just about sitting and staring—it's about sharing fun moments with the people you love! And that's exactly what his magical remote friend did every single day!</p>
-                    <div class="story-lessons">
-                        <h4>Silly Bit:</h4>
-                        <p>A talking remote that creates shows with dancing food and swimming chefs!</p>
-                        <h4>Life Lesson:</h4>
-                        <p>Sharing entertainment with family can create the most magical moments!</p>
+                    <div class="story-content">
+                        <img src="images/story12_beginning.jpg" alt="Shapes dancing" class="modal-image">
+                        <p>In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains.</p>
+                        
+                        <img src="images/story12_middle.jpg" alt="Children playing with shapes" class="modal-image">
+                        <p>Children learned about geometry as they watched shapes combine and create amazing designs. Each shape had its own special power!</p>
+                        
+                        <img src="images/story12_end.jpg" alt="Shape celebration" class="modal-image">
+                        <p>Shapes became the building blocks of imagination, showing children how to create anything they could dream of!</p>
                     </div>
                 </div>
             </div>
@@ -1036,134 +911,42 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Sparkle House Family</h2>
+                    <h2>The Color Mixers</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story14.png" alt="Sparkle house" class="modal-image">
-                        <p>The Sparkle House wasn't just any regular house. OH NO! It was a magical home that sparkled brighter than a disco ball at a dance party! Every window twinkled like stars, and the walls glowed with rainbow colors.</p>
+                        <img src="images/story13.png" alt="Colors mixing" class="modal-image">
+                        <p>In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green.</p>
                         
-                        <img src="images/story14_middle.jpg" alt="Family in sparkle house" class="modal-image">
-                        <p>The house had special powers: it could make rainy days sunny, turn frowns into smiles, and create the most magical family moments ever!</p>
+                        <img src="images/story13_middle.jpg" alt="Children painting with colors" class="story-image">
+                        <p>Children learned about color mixing as they watched colors combine and create beautiful new shades. Each color had its own personality!</p>
                         
-                        <img src="images/story14_end.jpg" alt="Sparkle house at night" class="modal-image">
-                        <p>The Sparkle House taught everyone that home isn't just a place to live—it's where love and magic come together to create the most wonderful memories!</p>
+                        <img src="images/story13_end.jpg" alt="Color celebration" class="modal-image">
+                        <p>Art became a colorful adventure as children discovered the magic of creating their own unique colors!</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade story-modal" id="storyModal16" tabindex="-1">
+    <div class="modal fade story-modal" id="storyModal14" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Bedtime Book Buddies!</h2>
+                    <h2>The Animal Teachers</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story16.png" alt="Books coming to life" class="modal-image">
-                        <p>Every night, when the moon was high and the stars were twinkling like tiny flashlights, something MAGICAL happened in little Noah's bedroom. His books would wake up from their daytime naps and become his very own BEDTIME BOOK BUDDIES!</p>
+                        <img src="images/story14.png" alt="Animals in classroom" class="modal-image">
+                        <p>In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share.</p>
                         
-                        <img src="images/story16_middle.jpg" alt="Books telling stories" class="modal-image">
-                        <p>Each book had its own special bedtime power: Dreamy Dora could make the room feel cozy, Sleepy Sam turned the ceiling into a galaxy, and Lullaby Lucy sang the sweetest bedtime songs!</p>
+                        <img src="images/story14_middle.jpg" alt="Children learning from animals" class="modal-image">
+                        <p>Children learned about different species and their habitats. The wise owl taught about the night, the playful dolphin about the ocean.</p>
                         
-                        <img src="images/story16_end.jpg" alt="Peaceful bedtime" class="modal-image">
-                        <p>The Book Buddies taught Noah that bedtime isn't just about sleeping—it's about having magical moments with your favorite stories!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade story-modal" id="storyModal17" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>The Pet Tech Team!</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story17.png" alt="Pets using technology" class="modal-image">
-                        <p>The family's pets weren't just regular, boring animals that sat around all day. OH NO! They were magical tech experts who could use technology to help others!</p>
-                        
-                        <img src="images/story17_middle.jpg" alt="Pets helping with technology" class="modal-image">
-                        <p>Each pet had its own special power: Computer Cat could fix any tech problem, Tablet Turtle made learning fun, and Phone Puppy could connect people with love!</p>
-                        
-                        <img src="images/story17_end.jpg" alt="Family with tech-savvy pets" class="modal-image">
-                        <p>The Pet Tech Team taught everyone that technology isn't just about screens—it's about using it to help others and spread joy!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade story-modal" id="storyModal18" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>The Laundry Day Llamas!</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story18.png" alt="Laundry llamas" class="modal-image">
-                        <p>The family's laundry wasn't just regular, boring clothes that needed washing. OH NO! It was a magical fashion show with llamas as the stars!</p>
-                        
-                        <img src="images/story18_middle.jpg" alt="Llamas folding clothes" class="modal-image">
-                        <p>Each llama had its own special power: Folding Fred could turn clothes into origami, Washing Wendy made bubbles dance, and Drying Danny created rainbow steam!</p>
-                        
-                        <img src="images/story18_end.jpg" alt="Family fashion show" class="modal-image">
-                        <p>The Laundry Day Llamas taught everyone that chores aren't just about cleaning—they're about making everyday tasks magical and fun!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade story-modal" id="storyModal19" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>The Garden Growth Gang!</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story19.png" alt="Garden coming to life" class="modal-image">
-                        <p>The family's garden wasn't just regular, boring plants that grew in the ground. OH NO! It was a magical place where plants could talk and dance!</p>
-                        
-                        <img src="images/story19_middle.jpg" alt="Magical plants growing" class="modal-image">
-                        <p>Each plant had its own special power: Flower Fiona could make colors dance, Tree Tommy turned seeds into treasures, and Herb Harry made gardening magical!</p>
-                        
-                        <img src="images/story19_end.jpg" alt="Family in magical garden" class="modal-image">
-                        <p>The Garden Growth Gang taught everyone that growing plants isn't just about dirt—it's about watching magic happen right before your eyes!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade story-modal" id="storyModal20" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>The Family Fun Factory!</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="story-content">
-                        <img src="images/story20.png" alt="House coming to life" class="modal-image">
-                        <p>The family's house wasn't just regular, boring rooms with walls and doors. OH NO! It was a magical factory that could turn any room into an adventure!</p>
-                        
-                        <img src="images/story20_middle.jpg" alt="Magical room transformations" class="modal-image">
-                        <p>Each room had its own special power: Playroom Patty could turn toys into real adventures, Kitchen Karl made cooking magical, and Bedroom Bella transformed bedtime into dreams!</p>
-                        
-                        <img src="images/story20_end.jpg" alt="Family in transformed house" class="modal-image">
-                        <p>The Family Fun Factory taught everyone that home isn't just a place to live—it's where magic happens every single day!</p>
+                        <img src="images/story14_end.jpg" alt="Nature celebration" class="modal-image">
+                        <p>Nature became a classroom of wonder as children discovered the amazing diversity of life on Earth!</p>
                     </div>
                 </div>
             </div>
@@ -1174,26 +957,140 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>The Art Adventure Squad!</h2>
+                    <h2>The Dancing Notes</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="story-content">
-                        <img src="images/story15.png" alt="Art supplies coming to life" class="modal-image">
-                        <p>The family's art supplies weren't just regular, boring tools that sat in a box. OH NO! They were a big, happy family of FRAME FRIENDS who loved to share their favorite memories and tell the SILLIEST stories!</p>
+                        <img src="images/story15.png" alt="Musical notes floating" class="modal-image">
+                        <p>In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality.</p>
                         
-                        <img src="images/story15_middle.jpg" alt="Art supplies creating magic" class="modal-image">
-                        <p>Each art supply had its own special power: Paintbrush Pete could make colors dance, Crayon Carol turned drawings into adventures, and Glue Gary made everything stick together in the most magical ways!</p>
+                        <img src="images/story15_middle.jpg" alt="Children playing music" class="modal-image">
+                        <p>Children learned to play music as they watched notes dance and create beautiful melodies. The notes would jump and twirl, making music fun!</p>
                         
-                        <img src="images/story15_end.jpg" alt="Family art time" class="modal-image">
-                        <p>The Art Adventure Squad taught everyone that creativity isn't just about making art—it's about using your IMAGINATION to make the world more colorful and fun!</p>
+                        <img src="images/story15_end.jpg" alt="Music celebration" class="modal-image">
+                        <p>Music became a celebration of joy as children discovered the magic of creating their own songs!</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Remove the Fixed Filter Menu -->
+    <div class="modal fade story-modal" id="storyModal16" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>The Word Wizards</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-content">
+                        <img src="images/story16.png" alt="Words floating" class="modal-image">
+                        <p>In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality.</p>
+                        
+                        <img src="images/story16_middle.jpg" alt="Children writing stories" class="modal-image">
+                        <p>Children learned to write as they watched words combine and create amazing tales. The words would dance and play, making writing fun!</p>
+                        
+                        <img src="images/story16_end.jpg" alt="Writing celebration" class="modal-image">
+                        <p>Writing became a creative adventure as children discovered the magic of telling their own stories!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade story-modal" id="storyModal17" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>The Number Ninjas</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-content">
+                        <img src="images/story17.png" alt="Numbers dancing" class="modal-image">
+                        <p>In a magical math room, numbers came alive and played games! Each number had its own special value and personality.</p>
+                        
+                        <img src="images/story17_middle.jpg" alt="Children counting objects" class="modal-image">
+                        <p>Children learned math as they watched numbers solve puzzles and play games. The numbers would jump and twirl, making math fun!</p>
+                        
+                        <img src="images/story17_end.jpg" alt="Math celebration" class="modal-image">
+                        <p>Math became an exciting challenge as children discovered the magic of numbers!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade story-modal" id="storyModal18" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>The Color Creators</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-content">
+                        <img src="images/story18.png" alt="Colors mixing" class="modal-image">
+                        <p>In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality.</p>
+                        
+                        <img src="images/story18_middle.jpg" alt="Children painting" class="modal-image">
+                        <p>Children learned to paint as they watched colors mix and create beautiful art. The colors would dance and play, making art fun!</p>
+                        
+                        <img src="images/story18_end.jpg" alt="Art celebration" class="modal-image">
+                        <p>Art became a colorful journey as children discovered the magic of creating their own masterpieces!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade story-modal" id="storyModal19" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>The Nature Navigators</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-content">
+                        <img src="images/story19.png" alt="Animals in classroom" class="modal-image">
+                        <p>In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality.</p>
+                        
+                        <img src="images/story19_middle.jpg" alt="Children learning from animals" class="modal-image">
+                        <p>Children learned about nature as they watched animals teach and play. The animals would dance and sing, making learning fun!</p>
+                        
+                        <img src="images/story19_end.jpg" alt="Nature celebration" class="modal-image">
+                        <p>Nature became a magical teacher as children discovered the wonders of the world!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade story-modal" id="storyModal20" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>The Melody Makers</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-content">
+                        <img src="images/story20.png" alt="Musical notes floating" class="modal-image">
+                        <p>In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality.</p>
+                        
+                        <img src="images/story20_middle.jpg" alt="Children playing music" class="modal-image">
+                        <p>Children learned to make music as they watched melodies dance and play. The melodies would jump and twirl, making music fun!</p>
+                        
+                        <img src="images/story20_end.jpg" alt="Music celebration" class="modal-image">
+                        <p>Music became a celebration of joy as children discovered the magic of creating their own songs!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
     <script>
@@ -1201,7 +1098,7 @@
             duration: 1000,
             once: true
         });
-        
+
         // Handle image loading errors
         document.querySelectorAll('.story-image, .modal-image').forEach(img => {
             img.onerror = function() {
@@ -1214,23 +1111,7 @@
         // Initialize all modals
         const modals = document.querySelectorAll('.modal');
         modals.forEach(modal => {
-            const modalInstance = new bootstrap.Modal(modal);
-            
-            // Handle modal closing
-            modal.addEventListener('hidden.bs.modal', function () {
-                document.querySelectorAll('.story-card.active').forEach(card => {
-                    card.classList.remove('active');
-                });
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            });
-        });
-
-        // Handle story card clicks
-        document.querySelectorAll('.story-card').forEach(card => {
-            card.addEventListener('click', function() {
-                this.classList.add('active');
-            });
+            new bootstrap.Modal(modal);
         });
     </script>
 </body>

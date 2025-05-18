@@ -29,18 +29,32 @@
             font-family: 'Comic Neue', cursive;
             line-height: 1.6;
             color: var(--dark-color);
-            background-color: var(--light-color);
+            background: url('images/pattern.svg') repeat;
             overflow-x: hidden;
+            position: relative;
         }
 
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('images/homepage_friends.jpg') center/cover no-repeat fixed;
+            opacity: 0.1;
+            z-index: -1;
+        }
+
+        /* PBS Kids-inspired Navigation */
         .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-bottom: 4px solid var(--accent-color);
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            padding: 1rem 0;
         }
 
         .navbar-brand img {
-            height: 50px;
+            height: 60px;
             transition: transform 0.3s ease;
         }
 
@@ -48,267 +62,193 @@
             transform: scale(1.1);
         }
 
-        .navbar-dark .navbar-nav .nav-link {
-            color: var(--dark-color) !important;
-            font-weight: 700;
-            font-size: 20px;
+        .nav-link {
+            font-size: 1.2rem;
+            color: white !important;
             padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
+            border-radius: 25px;
             transition: all 0.3s ease;
-            position: relative;
+            background: rgba(255, 255, 255, 0.1);
         }
 
-        .navbar-dark .navbar-nav .nav-link::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            width: 0;
-            height: 3px;
-            background: var(--primary-color);
-            transition: all 0.3s ease;
-            transform: translateX(-50%);
-        }
-
-        .navbar-dark .navbar-nav .nav-link:hover::after {
-            width: 80%;
-        }
-
-        .navbar-dark .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
             transform: translateY(-2px);
         }
 
+        /* Hero Section */
         .hero {
-            min-height: 100vh;
             background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
+            padding: 2rem 0;
             position: relative;
             overflow: hidden;
-            padding-top: 80px;
-        }
-
-        .hero::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('images/pattern.svg') repeat;
-            opacity: 0.1;
-            animation: float 20s linear infinite;
-        }
-
-        .bubble {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            animation: float-bubble 15s infinite ease-in-out;
-        }
-
-        @keyframes float-bubble {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(180deg); }
         }
 
         .hero-content {
             position: relative;
             z-index: 1;
-            padding: 2rem;
-            color: white;
         }
 
         .welcome-message {
             background: rgba(255, 255, 255, 0.15);
             padding: 2rem;
             border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 4px solid var(--accent-color);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            transform-style: preserve-3d;
-            transition: transform 0.3s ease;
-        }
-
-        .welcome-message:hover {
-            transform: translateY(-5px) rotate(1deg);
-        }
-
-        .family-image {
-            width: 100%;
-            max-width: 500px;
-            border-radius: 20px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-            border: 4px solid var(--accent-color);
-            margin: 2rem auto;
-            display: block;
-            transition: transform 0.3s ease;
-        }
-
-        .family-image:hover {
-            transform: scale(1.02);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
         }
 
         .welcome-message h1 {
-            font-size: 4rem;
+            color: white;
+            font-size: 3.5rem;
             margin-bottom: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--accent-color);
-            text-shadow: 3px 3px 0 var(--dark-color);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .welcome-message .subtitle {
-            font-size: 1.8rem;
-            margin-bottom: 1.5rem;
+        .welcome-message p {
             color: white;
-            text-shadow: 2px 2px 0 var(--dark-color);
         }
 
-        .welcome-message .message {
-            font-size: 1.3rem;
-            max-width: 800px;
-            margin: 0 auto;
-            line-height: 1.8;
+        /* Quick Access Buttons */
+        .quick-access {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
         }
 
-        .dictionary-entry {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 1.5rem;
+        .quick-access-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             border-radius: 15px;
-            margin-top: 2rem;
-            border: 3px solid var(--accent-color);
-            transform: rotate(-1deg);
-            transition: transform 0.3s ease;
-        }
-
-        .dictionary-entry:hover {
-            transform: rotate(0deg) scale(1.02);
-        }
-
-        .dictionary-entry h3 {
-            color: var(--accent-color);
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            text-shadow: 2px 2px 0 var(--dark-color);
-        }
-
-        .guiding-lights {
-            padding: 5rem 0;
-            background: linear-gradient(135deg, var(--fun-orange), var(--fun-purple));
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             color: white;
-            position: relative;
-            overflow: hidden;
+            backdrop-filter: blur(10px);
         }
 
-        .light-card {
+        .quick-access-btn:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .quick-access-btn img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* Featured Content Grid */
+        .featured-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 2rem 0;
+        }
+
+        .featured-card {
             background: rgba(255, 255, 255, 0.15);
             border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            backdrop-filter: blur(5px);
-            border: 3px solid var(--accent-color);
-            transition: all 0.3s ease;
-            position: relative;
             overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
         }
 
-        .light-card::before {
+        .featured-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .featured-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .featured-card-content {
+            padding: 1.5rem;
+            color: white;
+        }
+
+        .featured-card-content h3 {
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        /* Section Styles */
+        .section {
+            padding: 4rem 0;
+            position: relative;
+        }
+
+        .section::before {
             content: '';
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            transform: rotate(45deg);
-            animation: shine 3s infinite;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            filter: blur(10px);
+            z-index: -1;
         }
 
-        @keyframes shine {
-            0% { transform: rotate(45deg) translateY(-100%); }
-            100% { transform: rotate(45deg) translateY(100%); }
-        }
-
-        .light-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .light-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            color: var(--accent-color);
-            text-shadow: 2px 2px 0 var(--dark-color);
-            animation: bounce 2s infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .invitation-section {
-            padding: 5rem 0;
-            background: linear-gradient(135deg, var(--fun-green), var(--fun-orange));
+        .section:nth-child(odd) {
+            background: linear-gradient(135deg, var(--fun-purple), var(--fun-green));
             color: white;
-            position: relative;
-            overflow: hidden;
         }
 
-        .invitation-content {
-            background: rgba(255, 255, 255, 0.15);
-            padding: 3rem;
-            border-radius: 20px;
-            backdrop-filter: blur(5px);
-            border: 4px solid var(--accent-color);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            transform-style: preserve-3d;
-            transition: transform 0.3s ease;
+        .section:nth-child(even) {
+            background: linear-gradient(135deg, var(--fun-orange), var(--fun-purple));
+            color: white;
         }
 
-        .invitation-content:hover {
-            transform: translateY(-5px) rotate(-1deg);
+        .section.bg-light {
+            background: linear-gradient(135deg, var(--fun-green), var(--secondary-color)) !important;
+            color: white;
         }
 
         .section-title {
-            font-size: 3rem;
+            font-size: 2.5rem;
+            color: white;
+            margin-bottom: 2rem;
             text-align: center;
-            margin-bottom: 3rem;
-            color: var(--accent-color);
-            text-shadow: 3px 3px 0 var(--dark-color);
-            position: relative;
-            display: inline-block;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .section-title::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            height: 4px;
-            background: var(--accent-color);
-            border-radius: 2px;
+        .lead {
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
 
+        /* Responsive Design */
         @media (max-width: 768px) {
             .welcome-message h1 {
-                font-size: 3rem;
+                font-size: 2.5rem;
             }
-            .welcome-message .subtitle {
-                font-size: 1.5rem;
-            }
-            .welcome-message .message {
-                font-size: 1.1rem;
+            .quick-access {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
         <div class="container">
             <a class="navbar-brand" href="/">
-                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo" height="50">
+                <img src="images/catn8_logo.jpeg" alt="catn8.us Logo">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -330,106 +270,82 @@
                     <li class="nav-item">
                         <a class="nav-link" href="activities.php">Activities</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#guiding-lights">Our Lights</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#invitation">Our Circle</a>
-                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
+    <!-- Hero Section -->
     <section class="hero">
-        <div class="bubble" style="width: 100px; height: 100px; top: 20%; left: 10%;"></div>
-        <div class="bubble" style="width: 150px; height: 150px; top: 60%; left: 80%;"></div>
-        <div class="bubble" style="width: 80px; height: 80px; top: 80%; left: 30%;"></div>
-        <div class="container hero-content">
+        <div class="container">
             <div class="row align-items-center">
-                <div class="col-md-6" data-aos="fade-right">
-                    <img src="images/catfamily.jpeg" alt="The Graves Family" class="family-image">
-                    <div class="image-caption mt-2 text-center" style="color: white; font-size: 1.2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                        Our family loves making new friends and sharing adventures!
-                    </div>
-                </div>
-                <div class="col-md-6" data-aos="fade-left">
+                <div class="col-lg-6">
                     <div class="welcome-message">
-                        <h1>catn8.us</h1>
-                        <div class="subtitle">Where Fun Meets Family!</div>
-                        <div class="message">
-                            <p>Welcome to our magical corner of the internet! This is a special place where families come together to share stories, play games, and create wonderful memories. We believe that every day is an adventure waiting to happen, and we're here to make it extra special!</p>
-                            <div class="dictionary-entry">
-                                <h3>catenate</h3>
-                                <p style="font-style: italic; margin-bottom: 0.5rem;">/ˈkatnˌāt/</p>
-                                <p style="margin-bottom: 0.5rem;"><strong>verb</strong> (used with object)</p>
-                                <p style="margin-bottom: 0.5rem;">1. to link together; form into a chain</p>
-                                <p style="font-size: 1rem; color: var(--accent-color);">Synonyms: connect, link, join, unite, bind</p>
-                            </div>
+                        <h1>Welcome to catn8.us!</h1>
+                        <p class="lead">Where Fun Meets Family!</p>
+                        <p>Welcome to our magical corner of the internet! This is a special place where families come together to share stories, play games, and create wonderful memories.</p>
+                        <div class="dictionary-entry mt-3">
+                            <h3>catenate</h3>
+                            <p style="font-style: italic;">/ˈkatnˌāt/</p>
+                            <p><strong>verb</strong> (used with object)</p>
+                            <p>1. to link together; form into a chain</p>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- What Makes Us Special Section -->
-    <section class="what-makes-us-special py-5" style="background: linear-gradient(135deg, var(--fun-green), var(--fun-purple));">
-        <div class="container">
-            <h2 class="section-title text-center mb-5" data-aos="fade-up">What Makes Us Special</h2>
-            <div class="row align-items-center mb-5">
-                <div class="col-md-6" data-aos="fade-right">
-                    <img src="images/homepage_friends.jpg" alt="Children playing together" class="img-fluid rounded shadow" style="max-width: 100%; border: 4px solid var(--accent-color);">
-                    <div class="image-caption mt-3 text-center" style="color: white; font-size: 1.2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                        Making friends is what we do best!
-                    </div>
-                </div>
-                <div class="col-md-6" data-aos="fade-left">
-                    <div class="content-box p-4" style="background: rgba(255, 255, 255, 0.15); border-radius: 20px; backdrop-filter: blur(5px);">
-                        <h3 class="mb-4" style="color: var(--accent-color);">Our Story</h3>
-                        <p class="mb-4" style="color: white; font-size: 1.2rem;">We're a family that believes in the power of connection and kindness. Every day, we create new adventures and share them with friends like you. From playing games to reading stories, we make learning fun and friendship magical!</p>
-                        <p style="color: white; font-size: 1.2rem;">Join us on this wonderful journey where every moment is a chance to learn, grow, and make new friends!</p>
-                    </div>
+                <div class="col-lg-6">
+                    <img src="images/catfamily.jpeg" alt="The Graves Family" class="img-fluid rounded shadow">
                 </div>
             </div>
         </div>
     </section>
 
-    <section id="guiding-lights" class="guiding-lights">
+    <!-- Quick Access Section -->
+    <section class="section bg-light">
         <div class="container">
-            <h2 class="section-title" data-aos="fade-up">Our Guiding Lights</h2>
-            <div class="row">
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="light-card">
-                        <div class="light-icon">🤝</div>
+            <div class="quick-access">
+                <a href="stories.php" class="quick-access-btn">
+                    <img src="images/homepage_friends.jpg" alt="Stories" class="rounded-circle">
+                    <h3>Stories</h3>
+                    <p>Read our fun adventures!</p>
+                </a>
+                <a href="games.php" class="quick-access-btn">
+                    <img src="images/homepage_growth.jpg" alt="Games" class="rounded-circle">
+                    <h3>Games</h3>
+                    <p>Play and learn together!</p>
+                </a>
+                <a href="activities.php" class="quick-access-btn">
+                    <img src="images/homepage_kindness.jpg" alt="Activities" class="rounded-circle">
+                    <h3>Activities</h3>
+                    <p>Fun things to do!</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Content -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">What Makes Us Special</h2>
+            <div class="featured-grid">
+                <div class="featured-card">
+                    <img src="images/homepage_friends.jpg" alt="Making Friends">
+                    <div class="featured-card-content">
                         <h3>Making Friends</h3>
-                        <p>We love making new friends and being kind to everyone! Here, we learn how to be good friends by sharing, listening, and helping each other. Every smile and kind word makes our world a happier place!</p>
-                        <img src="images/homepage_growth.jpg" alt="Children learning and growing" class="img-fluid rounded shadow mt-3" style="max-width: 180px; border: 3px solid var(--fun-purple); background: white;">
-                        <div class="image-caption mt-2" style="color: var(--accent-color); font-size: 1rem;">
-                            Growing together, learning together!
-                        </div>
+                        <p>We love making new friends and being kind to everyone! Here, we learn how to be good friends by sharing, listening, and helping each other.</p>
                     </div>
                 </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="light-card">
-                        <div class="light-icon">💝</div>
+                <div class="featured-card">
+                    <img src="images/homepage_kindness.jpg" alt="Spreading Joy">
+                    <div class="featured-card-content">
                         <h3>Spreading Joy</h3>
-                        <p>Did you know that being kind is like spreading magic? Every time we do something nice, it makes someone else happy, and that happiness grows and grows! We love finding new ways to make others smile.</p>
-                        <img src="images/homepage_kindness.jpg" alt="Acts of kindness" class="img-fluid rounded shadow mt-3" style="max-width: 180px; border: 3px solid var(--fun-green); background: white;">
-                        <div class="image-caption mt-2" style="color: var(--accent-color); font-size: 1rem;">
-                            Kindness is our superpower!
-                        </div>
+                        <p>Did you know that being kind is like spreading magic? Every time we do something nice, it makes someone else happy, and that happiness grows and grows!</p>
                     </div>
                 </div>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="light-card">
-                        <div class="light-icon">🌱</div>
+                <div class="featured-card">
+                    <img src="images/homepage_growth.jpg" alt="Growing Together">
+                    <div class="featured-card-content">
                         <h3>Growing Together</h3>
-                        <p>Just like plants need water and sunshine to grow, we need love and friendship to grow into our best selves! Here, we help each other learn, play, and become the amazing people we're meant to be.</p>
-                        <img src="images/homepage_family.jpg" alt="Happy family having fun" class="img-fluid rounded shadow mt-3" style="max-width: 180px; border: 3px solid var(--fun-orange); background: white;">
-                        <div class="image-caption mt-2" style="color: var(--accent-color); font-size: 1rem;">
-                            Family fun makes everything better!
-                        </div>
+                        <p>Just like plants need water and sunshine to grow, we need love and friendship to grow into our best selves!</p>
                     </div>
                 </div>
             </div>
@@ -437,39 +353,33 @@
     </section>
 
     <!-- Adventure Section -->
-    <section class="adventure-section py-5" style="background: linear-gradient(135deg, var(--fun-orange), var(--fun-purple));">
+    <section class="section bg-light">
         <div class="container">
             <div class="row align-items-center">
-                <div class="col-md-6" data-aos="fade-right">
-                    <div class="content-box p-4" style="background: rgba(255, 255, 255, 0.15); border-radius: 20px; backdrop-filter: blur(5px);">
-                        <h3 class="mb-4" style="color: var(--accent-color);">Ready for Adventure?</h3>
-                        <p class="mb-4" style="color: white; font-size: 1.2rem;">Every day is a new adventure waiting to happen! Whether we're exploring new stories, playing exciting games, or learning something new, we make sure it's always fun and full of surprises.</p>
-                        <p style="color: white; font-size: 1.2rem;">Join us on this amazing journey where every moment is a chance to discover something wonderful!</p>
-                    </div>
+                <div class="col-lg-6">
+                    <h2 class="section-title">Ready for Adventure?</h2>
+                    <p class="lead">Every day is a new adventure waiting to happen! Whether we're exploring new stories, playing exciting games, or learning something new, we make sure it's always fun and full of surprises.</p>
+                    <p>Join us on this amazing journey where every moment is a chance to discover something wonderful!</p>
                 </div>
-                <div class="col-md-6" data-aos="fade-left">
-                    <img src="images/homepage_adventure.jpg" alt="Children on an adventure" class="img-fluid rounded shadow" style="max-width: 100%; border: 4px solid var(--accent-color);">
-                    <div class="image-caption mt-3 text-center" style="color: white; font-size: 1.2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                        Adventure awaits around every corner!
-                    </div>
+                <div class="col-lg-6">
+                    <img src="images/homepage_adventure.jpg" alt="Adventure" class="img-fluid rounded shadow">
                 </div>
             </div>
         </div>
     </section>
 
-    <section id="invitation" class="invitation-section">
+    <!-- Join Our Family Section -->
+    <section class="section" style="background: linear-gradient(135deg, var(--fun-green), var(--fun-purple));">
         <div class="container">
             <div class="row justify-content-center">
-                <div class="col-md-8">
-                    <div class="invitation-content" data-aos="fade-up">
-                        <h2 class="section-title">Join Our Family!</h2>
-                        <p class="text-center mb-4">Welcome to our special family circle! We're like a big, friendly tree where everyone can find a branch to sit on. New friends join us through invitations from our current members, making sure our tree grows with love and care.</p>
-                        <p class="text-center mb-4">We can't wait to meet you and share all the fun adventures waiting for us!</p>
-                        <img src="images/homepage_family.jpg" alt="Family fun" class="img-fluid rounded shadow mt-4" style="max-width: 300px; border: 3px solid var(--accent-color); background: white;">
-                        <div class="image-caption mt-3 text-center" style="color: white; font-size: 1.2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                            Together, we make the best memories!
-                        </div>
-                    </div>
+                <div class="col-lg-8 text-center text-white">
+                    <h2 class="section-title text-white">Join Our Family!</h2>
+                    <p class="lead mb-4">Welcome to our special family circle! We're like a big, friendly tree where everyone can find a branch to sit on.</p>
+                    <p class="mb-4">Here at catn8.us, we believe that every family is unique and special. We're not just a website - we're a community of friends who love to learn, play, and grow together. Our family tree keeps growing with new friends who bring their own special magic to our circle.</p>
+                    <p class="mb-4">What makes our family special? It's the way we care for each other, share our stories, and create memories that last a lifetime. Whether you're reading our fun stories, playing our exciting games, or trying out our creative activities, you're part of something wonderful.</p>
+                    <p class="mb-4">New friends join us through invitations from our current members, making sure our tree grows with love and care. It's like having a secret handshake that only special friends know about!</p>
+                    <p class="mb-4">So, are you ready to be part of our growing family? We can't wait to share adventures, create memories, and make new friends together. Remember, in our family, everyone is welcome, everyone is special, and everyone belongs!</p>
+                    <img src="images/homepage_family.jpg" alt="Family fun" class="img-fluid rounded shadow mt-4" style="max-width: 400px;">
                 </div>
             </div>
         </div>
@@ -482,23 +392,6 @@
             duration: 1000,
             once: true
         });
-
-        // Add floating bubbles
-        function createBubbles() {
-            const hero = document.querySelector('.hero');
-            for (let i = 0; i < 10; i++) {
-                const bubble = document.createElement('div');
-                bubble.className = 'bubble';
-                bubble.style.width = Math.random() * 100 + 50 + 'px';
-                bubble.style.height = bubble.style.width;
-                bubble.style.left = Math.random() * 100 + '%';
-                bubble.style.top = Math.random() * 100 + '%';
-                bubble.style.animationDelay = Math.random() * 5 + 's';
-                hero.appendChild(bubble);
-            }
-        }
-
-        createBubbles();
     </script>
 </body>
 </html>

@@ -30,4 +30,8 @@ yarn-error.log*
 
 # Cache directories
 .cache/
-.temp/ 
+.temp/
+
+# Files containing sensitive information
+generate_images.php
+test_api_key.php 

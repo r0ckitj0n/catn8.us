@@ -1,0 +1,8 @@
+{
+    "require": {
+        "php": ">=7.4",
+        "openai-php/client": "^0.8.0",
+        "php-http/guzzle7-adapter": "^1.1",
+        "vlucas/phpdotenv": "^5.6"
+    }
+}

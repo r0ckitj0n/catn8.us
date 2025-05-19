@@ -352,14 +352,42 @@
         
         // Base speeds for game elements (reduced from original values)
         const BASE_SPEEDS = {
-            car1: 0.4,    // Slow cars
+            car1: 0.4,    // Small cars
             car2: 0.6,    // Medium cars
-            car3: 0.8,    // Fast cars
+            car3: 0.8,    // Large cars
             car4: 0.3,    // Very slow trucks
             log1: 0.5,    // Short logs
             log2: 0.4,    // Long logs
             turtle1: 0.4, // First turtle group
             turtle2: 0.5  // Second turtle group
+        };
+        
+        // Vehicle types with their properties
+        const VEHICLE_TYPES = {
+            smallCar: {
+                width: GRID_SIZE - 10,
+                height: GRID_SIZE - 10,
+                color: '#E74C3C',  // Red
+                speed: 'car1'
+            },
+            mediumCar: {
+                width: GRID_SIZE * 1.2,
+                height: GRID_SIZE - 10,
+                color: '#9B59B6',  // Purple
+                speed: 'car2'
+            },
+            largeCar: {
+                width: GRID_SIZE * 1.5,
+                height: GRID_SIZE - 10,
+                color: '#E67E22',  // Orange
+                speed: 'car3'
+            },
+            truck: {
+                width: GRID_SIZE * 2,
+                height: GRID_SIZE - 10,
+                color: '#1ABC9C',  // Teal
+                speed: 'car4'
+            }
         };
         
         // Speed increase per level (reduced from original)
@@ -398,7 +426,72 @@
         let animationId;
         let lastTime = 0;
         let timer;
+        let showCongratulations = false;
+        let congratulationsTimer = 0;
         
+        // Event Listeners
+        startButton.addEventListener('click', () => {
+            if (gameOver || !gameStarted) {
+                // Cancel any existing animation frame
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                }
+                
+                // Reset game state
+                setupGame();
+                gameStarted = true;
+                startButton.textContent = 'Restart Game';
+                
+                // Start the game loop
+                lastTime = 0;
+                gameLoop(0);
+            } else {
+                // Cancel any existing animation frame
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                }
+                
+                gameStarted = false;
+                startButton.textContent = 'Start Game';
+            }
+        });
+
+        pauseButton.addEventListener('click', () => {
+            if (gameStarted) {
+                paused = !paused;
+                pauseButton.textContent = paused ? 'Resume' : 'Pause';
+            }
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameStarted || paused || gameOver) return;
+
+            const oldX = frog.x;
+            const oldY = frog.y;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    frog.y -= frog.speed;
+                    break;
+                case 'ArrowDown':
+                    frog.y += frog.speed;
+                    break;
+                case 'ArrowLeft':
+                    frog.x -= frog.speed;
+                    break;
+                case 'ArrowRight':
+                    frog.x += frog.speed;
+                    break;
+            }
+
+            // Keep frog within bounds
+            if (frog.x < 0) frog.x = 0;
+            if (frog.x + frog.width > GAME_WIDTH) frog.x = GAME_WIDTH - frog.width;
+            if (frog.y < 0) frog.y = 0;
+            if (frog.y + frog.height > GAME_HEIGHT) frog.y = GAME_HEIGHT - frog.height;
+        });
+
         // Initialize the game
         function setupGame() {
             // Reset game state
@@ -408,6 +501,14 @@
             timeLeft = LEVEL_TIME;
             gameOver = false;
             paused = false;
+            showCongratulations = false;
+            congratulationsTimer = 0;
+            
+            // Clear existing game elements
+            cars = [];
+            logs = [];
+            turtles = [];
+            lilyPads = [];
             
             // Update display
             scoreElement.textContent = score;
@@ -421,7 +522,7 @@
             // Setup obstacles and safe areas
             setupLevel();
             
-            // Start the timer
+            // Reset timer
             if (timer) clearInterval(timer);
             timer = setInterval(() => {
                 if (gameStarted && !paused && !gameOver) {
@@ -436,7 +537,7 @@
                 }
             }, 1000);
         }
-        
+
         // Reset frog to starting position
         function resetFrog() {
             frog = {
@@ -460,9 +561,8 @@
             
             // Create lily pads (goals) - always 9 lily pads
             for (let i = 0; i < 9; i++) {
-                const segmentWidth = GAME_WIDTH / 9;
                 lilyPads.push({
-                    x: (i * segmentWidth) + (segmentWidth / 2) - 20, // Center in each segment
+                    x: i * (GAME_WIDTH / 9) + (GAME_WIDTH / 18),
                     y: 40,
                     width: 40,
                     height: 40,
@@ -470,102 +570,82 @@
                 });
             }
             
-            // Calculate speed multiplier based on level
-            const speedMultiplier = 1 + (level - 1) * SPEED_INCREASE_PER_LEVEL;
-            
             // Calculate number of vehicles and logs based on level
-            const carCount = Math.min(4, Math.floor(3 + level / 2)); // Start with 3 cars, max 4
-            const logCount = Math.max(4, Math.floor(9 - level)); // Start with 9 logs, minimum 4
+            // Start with 1 vehicle per row, add 1 vehicle every 2 levels, max 4 per row
+            const carCount = Math.min(4, Math.floor(1 + Math.floor(level / 2)));
+            const logCount = Math.max(4, Math.floor(12 - (level * 2))); // Start with 12 logs, remove 2 per level, minimum 4
             
-            // Setup cars (rows 6-9 from bottom)
-            // Row 1 (closest to frog) - slow cars moving right
-            if (level >= 1) createCarRow(GAME_HEIGHT - 2 * GRID_SIZE, 1, 1, COLORS.car1, 1, carCount);
+            // Create cars with different types
+            createCarRow(GAME_HEIGHT - 2 * GRID_SIZE, carCount, 'smallCar', true);
+            createCarRow(GAME_HEIGHT - 3 * GRID_SIZE, carCount, 'mediumCar', false);
+            createCarRow(GAME_HEIGHT - 4 * GRID_SIZE, carCount, 'largeCar', true);
+            createCarRow(GAME_HEIGHT - 5 * GRID_SIZE, carCount, 'truck', false);
             
-            // Row 2 - medium cars moving left
-            if (level >= 2) createCarRow(GAME_HEIGHT - 3 * GRID_SIZE, -1, 1.2, COLORS.car2, 0.7, carCount);
-            
-            // Row 3 - fast cars moving right
-            if (level >= 3) createCarRow(GAME_HEIGHT - 4 * GRID_SIZE, 1, 1.5, COLORS.car3, 1.3, carCount);
-            
-            // Row 4 - very slow trucks moving left
-            if (level >= 4) createCarRow(GAME_HEIGHT - 5 * GRID_SIZE, -1, 0.8, COLORS.car4, 2, carCount);
-            
-            // Setup logs and turtles (rows 2-5 from bottom)
-            // Row 1 (just above median) - short logs moving right
-            createLogRow(GAME_HEIGHT - 7 * GRID_SIZE, 1, 1, 2, logCount);
-            
-            // Row 2 - turtles moving left
-            if (level >= 2) createTurtleRow(GAME_HEIGHT - 8 * GRID_SIZE, -1, 1, 3);
-            
-            // Row 3 - long logs moving right
-            createLogRow(GAME_HEIGHT - 9 * GRID_SIZE, 1, 0.8, 3, logCount);
-            
-            // Row 4 - turtles moving left
-            if (level >= 3) createTurtleRow(GAME_HEIGHT - 10 * GRID_SIZE, -1, 1, 2);
-            
-            // Apply level-based speed increase
-            cars.forEach(car => {
-                car.speed *= speedMultiplier;
-            });
-            
-            logs.forEach(log => {
-                log.speed *= speedMultiplier;
-            });
-            
-            turtles.forEach(turtle => {
-                turtle.speed *= speedMultiplier;
-            });
+            // Create logs and turtles
+            createLogRow(GAME_HEIGHT - 7 * GRID_SIZE, logCount, 'log1', true);
+            createTurtleRow(GAME_HEIGHT - 8 * GRID_SIZE, 3, 'turtle1', false);
+            createLogRow(GAME_HEIGHT - 9 * GRID_SIZE, logCount, 'log2', true);
+            createTurtleRow(GAME_HEIGHT - 10 * GRID_SIZE, 3, 'turtle2', false);
+            createLogRow(GAME_HEIGHT - 11 * GRID_SIZE, logCount, 'log1', true);
         }
         
         // Create a row of cars
-        function createCarRow(y, direction, speed, color, length, count) {
-            const carLength = length * GRID_SIZE;
+        function createCarRow(y, count, carType, direction) {
+            const vehicleType = VEHICLE_TYPES[carType];
             const totalWidth = GAME_WIDTH;
             const spacing = totalWidth / count;
             
             for (let i = 0; i < count; i++) {
-                // Calculate exact position with no randomization
-                const x = i * spacing;
+                // Add randomness to position
+                const randomOffset = (Math.random() - 0.5) * (spacing * 0.3);
+                const x = i * spacing + randomOffset;
+                const baseSpeed = BASE_SPEEDS[vehicleType.speed];
                 
                 cars.push({
                     x: x,
                     y: y,
-                    width: carLength,
-                    height: GRID_SIZE - 10,
-                    speed: direction * speed * BASE_SPEEDS.car1,
-                    color: color
+                    width: vehicleType.width,
+                    height: vehicleType.height,
+                    speed: direction ? -baseSpeed : baseSpeed,
+                    color: vehicleType.color,
+                    type: carType
                 });
             }
         }
         
         // Create a row of logs
-        function createLogRow(y, direction, speed, length, count) {
-            const logLength = length * GRID_SIZE;
+        function createLogRow(y, count, logType, direction) {
+            const logLength = GRID_SIZE;
             const totalWidth = GAME_WIDTH;
             const spacing = totalWidth / count;
             
             for (let i = 0; i < count; i++) {
-                // Calculate exact position with no randomization
-                const x = i * spacing;
+                // Add randomness to position
+                const randomOffset = (Math.random() - 0.5) * (spacing * 0.3);
+                const x = i * spacing + randomOffset;
+                const baseSpeed = BASE_SPEEDS[logType];
                 
                 logs.push({
                     x: x,
                     y: y,
                     width: logLength,
                     height: GRID_SIZE - 10,
-                    speed: direction * speed * (length === 2 ? BASE_SPEEDS.log1 : BASE_SPEEDS.log2)
+                    speed: direction ? -baseSpeed : baseSpeed,
+                    logType: logType
                 });
             }
         }
         
         // Create a row of turtles
-        function createTurtleRow(y, direction, speed, count) {
-            const turtleGroups = 2;
+        function createTurtleRow(y, count, turtleType, direction) {
+            const turtleGroups = 3;
             const groupSpacing = GAME_WIDTH / turtleGroups;
             
             for (let i = 0; i < turtleGroups; i++) {
-                // Calculate exact position for each group with no randomization
-                const x = i * groupSpacing;
+                // Add randomness to group position
+                const randomOffset = (Math.random() - 0.5) * (groupSpacing * 0.2);
+                const x = i * groupSpacing + randomOffset;
+                const baseSpeed = BASE_SPEEDS[turtleType];
                 
                 for (let j = 0; j < count; j++) {
                     turtles.push({
@@ -573,7 +653,8 @@
                         y: y,
                         width: GRID_SIZE - 5,
                         height: GRID_SIZE - 10,
-                        speed: direction * speed * (i === 0 ? BASE_SPEEDS.turtle1 : BASE_SPEEDS.turtle2),
+                        speed: direction ? -baseSpeed : baseSpeed,
+                        turtleType: turtleType,
                         diving: false,
                         diveTimer: Math.random() * 200,
                         diveState: 0
@@ -756,6 +837,18 @@
                 ctx.font = '20px "Comic Neue", cursive';
                 ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10);
                 ctx.fillText('Press "Start Game" to play again!', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
+            } else if (showCongratulations) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                
+                ctx.font = '30px "Comic Neue", cursive';
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.fillText('Congratulations!', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30);
+                
+                ctx.font = '20px "Comic Neue", cursive';
+                ctx.fillText(`Level ${level} Complete!`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10);
+                ctx.fillText('Get ready for the next level...', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
             } else if (!gameStarted) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -818,6 +911,19 @@
                 // Draw the frog
                 drawFrog();
 
+                // Update congratulations timer
+                if (showCongratulations) {
+                    congratulationsTimer += deltaTime;
+                    if (congratulationsTimer >= 2000) { // Show for 2 seconds
+                        showCongratulations = false;
+                        congratulationsTimer = 0;
+                        level++;
+                        levelElement.textContent = level;
+                        setupLevel();
+                        resetFrog();
+                    }
+                }
+
                 // Draw text overlays
                 drawText();
             }
@@ -828,8 +934,14 @@
 
         // Update and draw all game elements
         function updateAndDrawGameElements() {
+            // Calculate speed multiplier based on current level
+            const speedMultiplier = 1 + (level - 1) * SPEED_INCREASE_PER_LEVEL;
+
             // Update and draw cars
             cars.forEach(car => {
+                const vehicleType = VEHICLE_TYPES[car.type];
+                const baseSpeed = BASE_SPEEDS[vehicleType.speed];
+                car.speed = (car.speed > 0 ? baseSpeed : -baseSpeed) * speedMultiplier;
                 car.x += car.speed;
                 if (car.speed > 0 && car.x > GAME_WIDTH) {
                     car.x = -car.width;
@@ -841,6 +953,8 @@
 
             // Update and draw logs
             logs.forEach(log => {
+                const baseSpeed = BASE_SPEEDS[log.logType];
+                log.speed = (log.speed > 0 ? baseSpeed : -baseSpeed) * speedMultiplier;
                 log.x += log.speed;
                 if (log.speed > 0 && log.x > GAME_WIDTH) {
                     log.x = -log.width;
@@ -852,6 +966,8 @@
 
             // Update and draw turtles
             turtles.forEach(turtle => {
+                const baseSpeed = BASE_SPEEDS[turtle.turtleType];
+                turtle.speed = (turtle.speed > 0 ? baseSpeed : -baseSpeed) * speedMultiplier;
                 turtle.x += turtle.speed;
                 if (turtle.speed > 0 && turtle.x > GAME_WIDTH) {
                     turtle.x = -turtle.width;
@@ -918,23 +1034,23 @@
                 }
             });
 
+            // Check if frog reached the grass area
+            if (frog.y <= GRID_SIZE && !showCongratulations) {
+                score += 100;
+                scoreElement.textContent = score;
+                showCongratulations = true;
+                congratulationsTimer = 0;
+                frog.y = GRID_SIZE; // Keep frog at the top
+            }
+
             // Check lily pad collisions
             lilyPads.forEach(pad => {
                 if (!pad.reached && isColliding(frog, pad)) {
                     pad.reached = true;
                     score += 100;
                     scoreElement.textContent = score;
-                    resetFrog();
                 }
             });
-
-            // Check if all lily pads are reached
-            if (lilyPads.every(pad => pad.reached)) {
-                level++;
-                levelElement.textContent = level;
-                setupLevel();
-                resetFrog();
-            }
         }
 
         // Collision detection helper
@@ -970,55 +1086,6 @@
                 resetFrog();
             }
         }
-
-        // Event Listeners
-        startButton.addEventListener('click', () => {
-            if (gameOver) {
-                setupGame();
-            }
-            gameStarted = !gameStarted;
-            startButton.textContent = gameStarted ? 'Restart Game' : 'Start Game';
-            if (gameStarted) {
-                lastTime = 0;
-                gameLoop(0);
-            }
-        });
-
-        pauseButton.addEventListener('click', () => {
-            if (gameStarted) {
-                paused = !paused;
-                pauseButton.textContent = paused ? 'Resume' : 'Pause';
-            }
-        });
-
-        // Keyboard controls
-        document.addEventListener('keydown', (e) => {
-            if (!gameStarted || paused || gameOver) return;
-
-            const oldX = frog.x;
-            const oldY = frog.y;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    frog.y -= frog.speed;
-                    break;
-                case 'ArrowDown':
-                    frog.y += frog.speed;
-                    break;
-                case 'ArrowLeft':
-                    frog.x -= frog.speed;
-                    break;
-                case 'ArrowRight':
-                    frog.x += frog.speed;
-                    break;
-            }
-
-            // Keep frog within bounds
-            if (frog.x < 0) frog.x = 0;
-            if (frog.x + frog.width > GAME_WIDTH) frog.x = GAME_WIDTH - frog.width;
-            if (frog.y < 0) frog.y = 0;
-            if (frog.y + frog.height > GAME_HEIGHT) frog.y = GAME_HEIGHT - frog.height;
-        });
 
         // Initialize the game
         setupGame();

@@ -29,21 +29,13 @@
             font-family: 'Comic Neue', cursive;
             line-height: 1.6;
             color: var(--dark-color);
-            background: url('images/pattern.svg') repeat;
+            background: var(--light-color);
             overflow-x: hidden;
             position: relative;
         }
 
         body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('images/homepage_growth.jpg') center/cover no-repeat fixed;
-            opacity: 0.1;
-            z-index: -1;
+            display: none;
         }
 
         .navbar {
@@ -98,6 +90,7 @@
         .section {
             padding: 4rem 0;
             position: relative;
+            min-height: calc(100vh - 80px); /* Subtract navbar height */
         }
 
         .section::before {
@@ -227,27 +220,29 @@
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section class="section">
-        <div class="container">
-            <h1 class="section-title">Arcade</h1>
-            <p class="lead text-center mb-5">Welcome to our arcade! Here you'll find fun and educational games to play. Each game is designed to be both entertaining and help develop important skills.</p>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="game-card">
-                        <a href="tetris-game.php">
-                            <img src="images/tetris-preview.jpg" alt="Tetris Game Preview">
-                            <div class="game-info">
-                                <h3>Tetris</h3>
-                                <p>Classic block-stacking puzzle game</p>
-                            </div>
-                        </a>
+    <main>
+        <!-- Hero Section -->
+        <section class="section">
+            <div class="container">
+                <h1 class="section-title">Arcade</h1>
+                <p class="lead text-center mb-5">Welcome to our arcade! Here you'll find fun and educational games to play. Each game is designed to be both entertaining and help develop important skills.</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="game-card">
+                            <a href="tetris-game.php">
+                                <img src="images/tetris-preview.jpg" alt="Tetris Game Preview">
+                                <div class="game-info">
+                                    <h3>Tetris</h3>
+                                    <p>Classic block-stacking puzzle game</p>
+                                </div>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>

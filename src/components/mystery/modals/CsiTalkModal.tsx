@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { WebpImage } from '../../common/WebpImage';
+
 interface CsiTalkModalProps {
   modalRef: React.RefObject<HTMLDivElement>;
   csiName: string;
@@ -34,7 +36,7 @@ export function CsiTalkModal({
           <div className="modal-body catn8-mystery-interrogation-body">
             <div className="catn8-mystery-interrogation-left">
               <div className="catn8-mystery-interrogation-image-wrap">
-                <img 
+                <WebpImage 
                   className="catn8-mystery-interrogation-image" 
                   src={csiImageUrl || '/images/mystery/interrogation_room_empty.png'} 
                   alt={csiName || 'CSI Detective'} 

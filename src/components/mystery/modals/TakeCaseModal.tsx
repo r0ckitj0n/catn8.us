@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../../common/WebpImage';
 import './TakeCaseModal.css';
 
 interface TakeCaseModalProps {
@@ -45,7 +47,7 @@ export function TakeCaseModal({ modalRef, cases, busy, onTakeCase }: TakeCaseMod
                           disabled={busy || !cid}
                         >
                           {bgUrl ? (
-                            <img className="catn8-take-case-tile-bg" src={bgUrl} alt="" aria-hidden="true" />
+                            <WebpImage className="catn8-take-case-tile-bg" src={bgUrl} alt="" aria-hidden="true" />
                           ) : null}
                           <div className="catn8-take-case-tile-inner">
                             <div className="catn8-take-case-title">{title}</div>

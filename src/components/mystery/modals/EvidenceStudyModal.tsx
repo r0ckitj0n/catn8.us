@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../../common/WebpImage';
 import './EvidenceStudyModal.css';
 
 import { IEvidence } from '../../../types/game';
@@ -74,7 +76,7 @@ export function EvidenceStudyModal({
                       <div className="d-flex gap-3 mb-3">
                         {item.image_url && (
                           <div className="catn8-evidence-thumb">
-                            <img src={item.image_url} alt={item.title} className="img-fluid rounded" />
+                            <WebpImage src={item.image_url} alt={item.title} className="img-fluid rounded" />
                           </div>
                         )}
                         <div className="flex-grow-1">

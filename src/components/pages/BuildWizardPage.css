@@ -114,9 +114,14 @@
   font-weight: 600;
   padding: 10px;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  white-space: nowrap;
+  white-space: normal;
+  min-width: 0;
+}
+
+.build-wizard-tab > span:last-child {
+  overflow-wrap: anywhere;
 }
 
 .build-wizard-tab.is-active {

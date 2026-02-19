@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
+
+import { WebpImage } from '../../common/WebpImage';
 import { ApiClient } from '../../../core/ApiClient';
 import './PlayerLocationVisitModal.css';
 
@@ -33,11 +35,11 @@ export function PlayerLocationVisitModal({
   scenario,
   onClose,
 }: PlayerLocationVisitModalProps) {
-  const [locations, setLocations] = useState<ILocationEntity[]>([]);
-  const [scenarioEntities, setScenarioEntities] = useState<ILocationEntity[]>([]);
-  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [locations, setLocations] = React.useState<ILocationEntity[]>([]);
+  const [scenarioEntities, setScenarioEntities] = React.useState<ILocationEntity[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (caseId > 0) {
@@ -137,7 +139,7 @@ export function PlayerLocationVisitModal({
                 {selectedLocation && (
                   <div className="catn8-location-report-view animate-fade-in">
                     <div className="catn8-location-image-wrapper mb-4 text-center">
-                      <img 
+                      <WebpImage 
                         src={imageUrl} 
                         alt={selectedLocation.entity_name} 
                         className="img-fluid rounded shadow-sm catn8-location-img"

@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import './GamesPage.css';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
@@ -41,7 +43,7 @@ export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
                 {sec.items.map((it: any) => (
                   <div className="col-md-6" key={it.title}>
                     <div className="game-card">
-                      <img src={it.image} alt={it.title} />
+                      <WebpImage src={it.image} alt={it.title} />
                       <div className="game-card-content">
                         <h3>{it.title}</h3>
                         <p className="mb-0">{it.description}</p>

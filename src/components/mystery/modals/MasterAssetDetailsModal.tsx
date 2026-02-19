@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { WebpImage } from '../../common/WebpImage';
+
 interface MasterAssetDetailsModalProps {
   modalRef: React.RefObject<HTMLDivElement>;
   busy: boolean;
@@ -600,7 +602,7 @@ export function MasterAssetDetailsModal({
                         <div className="mt-3">
                           <div className="fw-bold">Main Image</div>
                           {masterCharacterImageUrl ? (
-                            <img className="img-fluid rounded mt-2" src={masterCharacterImageUrl} alt="Character" />
+                            <WebpImage className="img-fluid rounded mt-2" src={masterCharacterImageUrl} alt="Character" />
                           ) : (
                             <div className="form-text mt-2">No image found.</div>
                           )}
@@ -637,7 +639,7 @@ export function MasterAssetDetailsModal({
                         <div className="mt-3">
                           <div className="fw-bold">Mugshot</div>
                           {masterCharacterMugshotUrl ? (
-                            <img className="img-fluid rounded mt-2" src={masterCharacterMugshotUrl} alt="Mugshot" />
+                            <WebpImage className="img-fluid rounded mt-2" src={masterCharacterMugshotUrl} alt="Mugshot" />
                           ) : (
                             <div className="form-text mt-2">No mugshot found.</div>
                           )}
@@ -659,7 +661,7 @@ export function MasterAssetDetailsModal({
                           {masterCharacterIrUrls.length > 0 ? (
                             <div className="mt-2">
                               <div className="form-text">Photo {masterCharacterIrIndex + 1} / {masterCharacterIrUrls.length}</div>
-                              <img className="img-fluid rounded" src={masterCharacterIrUrls[masterCharacterIrIndex]} alt="IR" />
+                              <WebpImage className="img-fluid rounded" src={masterCharacterIrUrls[masterCharacterIrIndex]} alt="IR" />
                               <div className="mt-2 d-flex gap-2">
                                 <button className="btn btn-sm btn-outline-secondary" onClick={() => setMasterCharacterIrIndex(i => Math.max(0, i - 1))} disabled={masterCharacterIrIndex === 0}>Prev</button>
                                 <button className="btn btn-sm btn-outline-secondary" onClick={() => setMasterCharacterIrIndex(i => (i + 1) % masterCharacterIrUrls.length)}>Next</button>
@@ -727,7 +729,7 @@ export function MasterAssetDetailsModal({
                           <div className="mt-3">
                             <div className="fw-bold">Image</div>
                             {getMasterAssetDataObject().image?.url && (
-                              <img className="img-fluid rounded mt-2" src={getMasterAssetDataObject().image.url} alt="Asset" />
+                              <WebpImage className="img-fluid rounded mt-2" src={getMasterAssetDataObject().image.url} alt="Asset" />
                             )}
                             <div className="mt-2 d-flex gap-2">
                               {isAdmin && <button className="btn btn-sm btn-outline-primary" onClick={generateMasterAssetPrimaryImage}>Generate Image</button>}

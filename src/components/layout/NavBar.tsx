@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import './NavBar.css';
 
 interface NavBarProps {
@@ -38,7 +40,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       <div className="container">
         <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
         <a className="navbar-brand" href="/">
-          <img src="images/catn8_logo.svg" alt="catn8.us Logo" />
+          <WebpImage src="images/catn8_logo.svg" alt="catn8.us Logo" />
         </a>
         <button
           className="navbar-toggler"

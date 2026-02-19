@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
 import { normalizeText } from '../../utils/textUtils';
@@ -31,7 +33,7 @@ export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mys
             {filtered.map((g) => (
               <div className="col-md-6" key={g.id}>
                 <a className="game-card" href={g.href}>
-                  <img src={g.image} alt={g.title} />
+                  <WebpImage src={g.image} alt={g.title} />
                   <div className="game-info">
                     <h3>{g.title}</h3>
                     <p className="mb-0">{g.description}</p>

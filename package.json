@@ -6,6 +6,7 @@
     "dev": "VITE_DEV_PORT=5178 VITE_HMR_PORT=5178 printf 'http://localhost:5178' > hot && npm run typecheck && vite --host localhost --port 5178 --strictPort",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host localhost --port 5179",
+    "images:webp": "bash scripts/convert_images_to_webp.sh",
     "stop": "rm -f hot",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

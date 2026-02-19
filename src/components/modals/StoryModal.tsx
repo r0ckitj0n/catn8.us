@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import './StoryModal.css';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 
@@ -44,7 +46,7 @@ export function StoryModal({ open, onClose, story }: StoryModalProps) {
             <div className="catn8-story-content">
               {blocks.map((b, idx) => (
                 <div key={`${b?.image || 'img'}-${idx}`} className="catn8-story-block">
-                  {b?.image ? <img className="catn8-story-modal-image" src={b.image} alt={String(b.alt || '')} /> : null}
+                  {b?.image ? <WebpImage className="catn8-story-modal-image" src={b.image} alt={String(b.alt || '')} /> : null}
                   {b?.text ? <p className="catn8-story-modal-text">{b.text}</p> : null}
                 </div>
               ))}

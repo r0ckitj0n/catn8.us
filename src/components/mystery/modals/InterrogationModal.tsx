@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../../common/WebpImage';
 import './InterrogationModal.css';
 
 interface InterrogationModalProps {
@@ -61,7 +63,7 @@ export function InterrogationModal({
           <div className="modal-body catn8-mystery-interrogation-body">
             <div className="catn8-mystery-interrogation-left">
               <div className="catn8-mystery-interrogation-image-wrap">
-                <img className="catn8-mystery-interrogation-image" src={interrogationImageUrlFinal} alt={interrogationEntityName || 'Interrogation'} />
+                <WebpImage className="catn8-mystery-interrogation-image" src={interrogationImageUrlFinal} alt={interrogationEntityName || 'Interrogation'} />
               </div>
 
               <form className="catn8-mystery-interrogation-typed-form" onSubmit={onAskTyped}>

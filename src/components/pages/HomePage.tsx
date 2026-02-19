@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import './HomePage.css';
 import { PageLayout } from '../layout/PageLayout';
 
@@ -42,14 +44,14 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
                       <div>1. to link together; form into a chain</div>
                     </div>
                     <div className="col-md-4 text-center">
-                      <img className="catn8-dictionary-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
             <div className="col-lg-6 text-center">
-              <img className="catn8-hero-image" src="/images/catfamily.jpeg" alt="The Graves Family" />
+              <WebpImage className="catn8-hero-image" src="/images/catfamily.jpeg" alt="The Graves Family" />
             </div>
           </div>
         </div>
@@ -60,7 +62,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
           <div className="quick-access">
             {cards.map((c) => (
               <a className="quick-access-btn" href={c.href} key={c.href}>
-                <img className="catn8-quick-access-image" src={c.image} alt={c.title} />
+                <WebpImage className="catn8-quick-access-image" src={c.image} alt={c.title} />
                 <div className="quick-access-title">{c.title}</div>
                 <div>{c.text}</div>
               </a>
@@ -74,7 +76,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
           <h2 className="section-title">What Makes Us Special</h2>
           <div className="featured-grid">
             <div className="featured-card">
-              <img className="catn8-featured-image" src="/images/homepage_friends.jpg" alt="Making Friends" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_friends.jpg" alt="Making Friends" />
               <div className="featured-card-content">
                 <h3>Making Friends</h3>
                 <p>
@@ -84,7 +86,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               </div>
             </div>
             <div className="featured-card">
-              <img className="catn8-featured-image" src="/images/homepage_kindness.jpg" alt="Spreading Joy" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_kindness.jpg" alt="Spreading Joy" />
               <div className="featured-card-content">
                 <h3>Spreading Joy</h3>
                 <p>
@@ -94,7 +96,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               </div>
             </div>
             <div className="featured-card">
-              <img className="catn8-featured-image" src="/images/homepage_growth.jpg" alt="Growing Together" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_growth.jpg" alt="Growing Together" />
               <div className="featured-card-content">
                 <h3>Growing Together</h3>
                 <p>
@@ -118,7 +120,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               <p>Join us on this amazing journey where every moment is a chance to discover something wonderful!</p>
             </div>
             <div className="col-lg-6 text-center">
-              <img className="catn8-hero-image" src="/images/homepage_adventure.jpg" alt="Adventure" />
+              <WebpImage className="catn8-hero-image" src="/images/homepage_adventure.jpg" alt="Adventure" />
             </div>
           </div>
         </div>

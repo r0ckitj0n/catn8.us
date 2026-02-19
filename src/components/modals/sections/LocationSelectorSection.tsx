@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { WebpImage } from '../../common/WebpImage';
+
 interface LocationSelectorSectionProps {
   locations: any[];
   locationSelectedId: string;
@@ -114,8 +116,7 @@ export function LocationSelectorSection({
 
         {String(locationImageDraft?.url || '').trim() ? (
           <div className="mt-2">
-            <img
-              className="img-fluid rounded"
+            <WebpImage               className="img-fluid rounded"
               src={String(locationImageDraft?.url || '')}
               alt={String(locationImageDraft?.alt_text || 'Location')}
               loading="lazy"

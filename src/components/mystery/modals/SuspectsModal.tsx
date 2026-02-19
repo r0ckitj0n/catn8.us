@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../../common/WebpImage';
 import './SuspectsModal.css';
 
 interface SuspectsModalProps {
@@ -56,7 +58,7 @@ export function SuspectsModal({
                         title={`Question ${c.name}`}
                       >
                         <div className="catn8-mystery-suspect-thumb">
-                          <img 
+                          <WebpImage 
                             className="catn8-mystery-suspect-thumb-img" 
                             src={c.irImageUrl || '/images/mystery/interrogation_room_empty.png'} 
                             alt={c.name} 

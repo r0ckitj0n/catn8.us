@@ -1,4 +1,6 @@
 import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardStep } from '../../types/buildWizard';
 import './BuildWizardPage.css';
@@ -886,7 +888,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                 onClick={() => setLightboxDoc({ src: doc.public_url, title: doc.original_name })}
                 title="Click to enlarge"
               >
-                <img src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
+                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
               </button>
             ) : (
               <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link">
@@ -1224,7 +1226,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
               </a>
               <button className="build-wizard-lightbox-close" onClick={() => setLightboxDoc(null)}>Close</button>
             </div>
-            <img src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
+            <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
           </div>
         </div>

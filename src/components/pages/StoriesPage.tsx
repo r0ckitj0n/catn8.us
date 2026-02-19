@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
+
+import { WebpImage } from '../common/WebpImage';
 import './StoriesPage.css';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
@@ -16,7 +18,7 @@ interface StoriesPageProps {
 
 export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: StoriesPageProps) {
   const [query, setQuery] = React.useState('');
-  const [activeStoryId, setActiveStoryId] = useState<number | null>(null);
+  const [activeStoryId, setActiveStoryId] = React.useState<number | null>(null);
   const [modalOpen, setModalOpen] = React.useState(false);
   const q = normalizeText(query);
   
@@ -57,7 +59,7 @@ export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, my
                 >
                   <div className="age-badge">{s.age}</div>
                   <div className="story-section">
-                    <img src={s.image} alt={s.title} className="story-image" />
+                    <WebpImage src={s.image} alt={s.title} className="story-image" />
                     <h3 className="story-title">{s.title}</h3>
                     <p className="story-text">{s.excerpt}</p>
                     <div className="story-tags">

@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { WebpImage } from '../../common/WebpImage';
+
 interface WeaponSelectorSectionProps {
   weapons: any[];
   weaponSelectedId: string;
@@ -95,8 +97,7 @@ export function WeaponSelectorSection({
 
         {String(weaponImageDraft?.url || '').trim() ? (
           <div className="mt-2">
-            <img
-              className="img-fluid rounded"
+            <WebpImage               className="img-fluid rounded"
               src={String(weaponImageDraft?.url || '')}
               alt={String(weaponImageDraft?.alt_text || 'Weapon')}
               loading="lazy"

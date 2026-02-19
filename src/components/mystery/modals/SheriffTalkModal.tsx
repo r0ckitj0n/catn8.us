@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { WebpImage } from '../../common/WebpImage';
+
 interface SheriffTalkModalProps {
   modalRef: React.RefObject<HTMLDivElement>;
   sheriffName: string;
@@ -34,7 +36,7 @@ export function SheriffTalkModal({
           <div className="modal-body catn8-mystery-interrogation-body">
             <div className="catn8-mystery-interrogation-left">
               <div className="catn8-mystery-interrogation-image-wrap">
-                <img 
+                <WebpImage 
                   className="catn8-mystery-interrogation-image" 
                   src={sheriffImageUrl || '/images/mystery/sheriff.png'} 
                   alt={sheriffName || 'Sheriff'} 

@@ -245,7 +245,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
-  const uploadDocument = React.useCallback(async (kind: string, file: File) => {
+  const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string) => {
     if (!file || projectId <= 0) {
       return;
     }
@@ -253,6 +253,12 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     formData.append('project_id', String(projectId));
     formData.append('kind', kind);
     formData.append('file', file);
+    if (stepId && stepId > 0) {
+      formData.append('step_id', String(stepId));
+    }
+    if (caption && String(caption).trim() !== '') {
+      formData.append('caption', String(caption).trim());
+    }
 
     try {
       const res = await ApiClient.postFormData<{ success: boolean; document: IBuildWizardDocument }>('/api/build_wizard.php?action=upload_document', formData);

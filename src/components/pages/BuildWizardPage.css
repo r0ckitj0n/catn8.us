@@ -221,6 +221,18 @@
   font-size: 0.9rem;
 }
 
+.build-wizard-step-media {
+  margin-top: 10px;
+}
+
+.build-wizard-upload-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
 .build-wizard-desk-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -239,6 +251,66 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.build-wizard-doc-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.build-wizard-doc-card {
+  border: 1px solid #d5dce6;
+  border-radius: 10px;
+  background: #fff;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.build-wizard-doc-thumb-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.build-wizard-doc-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #cdd8e8;
+}
+
+.build-wizard-doc-file-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  border: 1px dashed #b9c8dc;
+  border-radius: 6px;
+  color: #2459a5;
+  text-decoration: none;
+}
+
+.build-wizard-doc-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-wizard-doc-meta {
+  font-size: 0.75rem;
+  color: #5a6a80;
+}
+
+.build-wizard-section-divider {
+  height: 1px;
+  margin: 12px 0;
+  background: #dbe4f0;
 }
 
 .build-wizard-ai-actions {
@@ -368,6 +440,48 @@
 .build-wizard-footer-meta {
   color: #425369;
   font-size: 0.9rem;
+}
+
+.build-wizard-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.7);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.build-wizard-lightbox-inner {
+  background: #fff;
+  border-radius: 10px;
+  width: min(1200px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 10px;
+}
+
+.build-wizard-lightbox-close {
+  border: 1px solid #c5d4e8;
+  background: #f3f8ff;
+  color: #223449;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.build-wizard-lightbox-image {
+  width: 100%;
+  height: auto;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.build-wizard-lightbox-title {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #3d4f66;
 }
 
 .build-wizard-muted {

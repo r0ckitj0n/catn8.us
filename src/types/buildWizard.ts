@@ -29,13 +29,17 @@ export interface IBuildWizardStep {
 export interface IBuildWizardDocument {
   id: number;
   project_id: number;
+  step_id: number | null;
   kind: string;
   original_name: string;
   mime_type: string;
   storage_path: string;
   file_size_bytes: number;
+  caption: string | null;
   uploaded_at: string;
   public_url: string;
+  thumbnail_url: string;
+  is_image: number;
 }
 
 export interface IBuildWizardProject {

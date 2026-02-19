@@ -33,14 +33,30 @@ function catn8_build_wizard_tables_ensure(): void
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_documents (
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
+        step_id INT NULL,
         kind VARCHAR(32) NOT NULL DEFAULT 'other',
         original_name VARCHAR(255) NOT NULL,
         mime_type VARCHAR(120) NOT NULL DEFAULT '',
         storage_path VARCHAR(255) NOT NULL,
         file_size_bytes INT NOT NULL DEFAULT 0,
+        caption VARCHAR(255) NULL,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_project_id (project_id),
+        KEY idx_step_id (step_id),
         CONSTRAINT fk_build_wizard_documents_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_document_images (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        document_id INT NOT NULL,
+        mime_type VARCHAR(120) NOT NULL DEFAULT 'image/jpeg',
+        image_blob LONGBLOB NOT NULL,
+        width_px INT NULL,
+        height_px INT NULL,
+        file_size_bytes INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_document_id (document_id),
+        CONSTRAINT fk_build_wizard_document_images_document FOREIGN KEY (document_id) REFERENCES build_wizard_documents(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_steps (
@@ -77,6 +93,23 @@ function catn8_build_wizard_tables_ensure(): void
         KEY idx_step_id (step_id),
         CONSTRAINT fk_build_wizard_step_notes_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $hasStepId = Database::queryOne(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+        ['build_wizard_documents', 'step_id']
+    );
+    if (!$hasStepId) {
+        Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN step_id INT NULL AFTER project_id');
+        Database::execute('ALTER TABLE build_wizard_documents ADD KEY idx_step_id (step_id)');
+    }
+
+    $hasCaption = Database::queryOne(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+        ['build_wizard_documents', 'caption']
+    );
+    if (!$hasCaption) {
+        Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN caption VARCHAR(255) NULL AFTER file_size_bytes');
+    }
 }
 
 function catn8_build_wizard_default_questions(): array
@@ -481,30 +514,54 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
 function catn8_build_wizard_documents_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, project_id, kind, original_name, mime_type, storage_path, file_size_bytes, uploaded_at
-         FROM build_wizard_documents
-         WHERE project_id = ?
-         ORDER BY uploaded_at DESC, id DESC',
+        'SELECT d.id, d.project_id, d.step_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
+                CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
+         FROM build_wizard_documents d
+         LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
+         WHERE d.project_id = ?
+         ORDER BY d.uploaded_at DESC, d.id DESC',
         [$projectId]
     );
 
     $docs = [];
     foreach ($rows as $r) {
-        $path = (string)($r['storage_path'] ?? '');
-        $baseName = basename($path);
+        $docId = (int)($r['id'] ?? 0);
+        $mimeType = (string)($r['mime_type'] ?? '');
         $docs[] = [
-            'id' => (int)($r['id'] ?? 0),
+            'id' => $docId,
             'project_id' => (int)($r['project_id'] ?? 0),
+            'step_id' => $r['step_id'] !== null ? (int)$r['step_id'] : null,
             'kind' => (string)($r['kind'] ?? ''),
             'original_name' => (string)($r['original_name'] ?? ''),
-            'mime_type' => (string)($r['mime_type'] ?? ''),
-            'storage_path' => $path,
+            'mime_type' => $mimeType,
+            'storage_path' => (string)($r['storage_path'] ?? ''),
             'file_size_bytes' => (int)($r['file_size_bytes'] ?? 0),
+            'caption' => $r['caption'] !== null ? (string)$r['caption'] : null,
             'uploaded_at' => (string)($r['uploaded_at'] ?? ''),
-            'public_url' => '/uploads/build-wizard/' . rawurlencode($baseName),
+            'public_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId,
+            'thumbnail_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1',
+            'is_image' => ((int)($r['has_image_blob'] ?? 0) === 1 || strpos(strtolower($mimeType), 'image/') === 0) ? 1 : 0,
         ];
     }
     return $docs;
+}
+
+function catn8_build_wizard_document_for_user(int $documentId, int $uid): ?array
+{
+    if ($documentId <= 0) {
+        return null;
+    }
+
+    return Database::queryOne(
+        'SELECT d.id, d.project_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
+                bi.image_blob, bi.mime_type AS blob_mime_type
+         FROM build_wizard_documents d
+         INNER JOIN build_wizard_projects p ON p.id = d.project_id
+         LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
+         WHERE d.id = ? AND p.owner_user_id = ?
+         LIMIT 1',
+        [$documentId, $uid]
+    );
 }
 
 function catn8_build_wizard_step_by_id(int $stepId): ?array
@@ -933,6 +990,49 @@ try {
 
     $action = trim((string)($_GET['action'] ?? 'bootstrap'));
 
+    if ($action === 'get_document') {
+        catn8_require_method('GET');
+        $documentId = isset($_GET['document_id']) ? (int)$_GET['document_id'] : 0;
+        $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
+        if (!$doc) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo 'Document not found';
+            exit;
+        }
+
+        $blob = $doc['image_blob'] ?? null;
+        if (is_string($blob) && $blob !== '') {
+            $mime = trim((string)($doc['blob_mime_type'] ?? $doc['mime_type'] ?? 'application/octet-stream'));
+            if ($mime === '') {
+                $mime = 'application/octet-stream';
+            }
+            header('Content-Type: ' . $mime);
+            header('Content-Length: ' . strlen($blob));
+            header('Cache-Control: private, max-age=600');
+            echo $blob;
+            exit;
+        }
+
+        $path = (string)($doc['storage_path'] ?? '');
+        if ($path === '' || !is_file($path)) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo 'Document file missing';
+            exit;
+        }
+
+        $mime = trim((string)($doc['mime_type'] ?? 'application/octet-stream'));
+        if ($mime === '') {
+            $mime = 'application/octet-stream';
+        }
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($path));
+        header('Cache-Control: private, max-age=600');
+        readfile($path);
+        exit;
+    }
+
     if ($action === 'bootstrap') {
         catn8_require_method('GET');
 
@@ -1178,10 +1278,26 @@ try {
 
         $projectId = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
         catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $stepId = isset($_POST['step_id']) ? (int)$_POST['step_id'] : 0;
+        if ($stepId > 0) {
+            $stepRow = Database::queryOne(
+                'SELECT id FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+                [$stepId, $projectId]
+            );
+            if (!$stepRow) {
+                throw new RuntimeException('Invalid step_id for this project');
+            }
+        } else {
+            $stepId = 0;
+        }
 
         $kind = trim((string)($_POST['kind'] ?? 'other'));
         if ($kind === '') {
             $kind = 'other';
+        }
+        $caption = trim((string)($_POST['caption'] ?? ''));
+        if ($caption === '') {
+            $caption = null;
         }
         if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
             throw new RuntimeException('No file uploaded');
@@ -1207,7 +1323,15 @@ try {
             $safeName = 'document';
         }
 
-        $mime = trim((string)($file['type'] ?? 'application/octet-stream'));
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $detectedMime = $finfo ? finfo_file($finfo, $tmp) : false;
+        if ($finfo) {
+            finfo_close($finfo);
+        }
+        $mime = trim((string)($detectedMime ?: ($file['type'] ?? 'application/octet-stream')));
+        if ($mime === '') {
+            $mime = 'application/octet-stream';
+        }
         $uploadDir = dirname(__DIR__) . '/uploads/build-wizard';
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
             throw new RuntimeException('Failed to prepare upload directory');
@@ -1220,8 +1344,8 @@ try {
         }
 
         Database::execute(
-            'INSERT INTO build_wizard_documents (project_id, kind, original_name, mime_type, storage_path, file_size_bytes) VALUES (?, ?, ?, ?, ?, ?)',
-            [$projectId, $kind, $origName, $mime, $destPath, $size]
+            'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$projectId, ($stepId > 0 ? $stepId : null), $kind, $origName, $mime, $destPath, $size, $caption]
         );
 
         $docId = (int)Database::lastInsertId();
@@ -1229,12 +1353,30 @@ try {
             Database::execute('UPDATE build_wizard_projects SET blueprint_document_id = ? WHERE id = ?', [$docId, $projectId]);
         }
 
-        $doc = Database::queryOne('SELECT id, project_id, kind, original_name, mime_type, storage_path, file_size_bytes, uploaded_at FROM build_wizard_documents WHERE id = ?', [$docId]);
+        if (strpos(strtolower($mime), 'image/') === 0) {
+            $bytes = file_get_contents($destPath);
+            if (!is_string($bytes) || $bytes === '') {
+                throw new RuntimeException('Failed to read uploaded image');
+            }
+            $sizeInfo = @getimagesize($destPath);
+            $width = is_array($sizeInfo) && isset($sizeInfo[0]) ? (int)$sizeInfo[0] : null;
+            $height = is_array($sizeInfo) && isset($sizeInfo[1]) ? (int)$sizeInfo[1] : null;
+            Database::execute(
+                'INSERT INTO build_wizard_document_images (document_id, mime_type, image_blob, width_px, height_px, file_size_bytes)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), image_blob = VALUES(image_blob), width_px = VALUES(width_px), height_px = VALUES(height_px), file_size_bytes = VALUES(file_size_bytes)',
+                [$docId, $mime, $bytes, $width, $height, strlen($bytes)]
+            );
+        }
+
+        $doc = Database::queryOne('SELECT id, project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, uploaded_at FROM build_wizard_documents WHERE id = ?', [$docId]);
         if (!$doc) {
             throw new RuntimeException('Saved document not found');
         }
 
-        $doc['public_url'] = '/uploads/build-wizard/' . rawurlencode(basename((string)$doc['storage_path']));
+        $doc['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId;
+        $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
+        $doc['is_image'] = (strpos(strtolower((string)($doc['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
         catn8_json_response(['success' => true, 'document' => $doc]);
     }
 

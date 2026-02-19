@@ -267,6 +267,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -352,6 +353,10 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
       totalCount: steps.length,
     };
   }, [steps]);
+
+  const projectDocuments = React.useMemo(() => {
+    return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
+  }, [documents]);
 
   const openBuild = async (nextProjectId: number) => {
     await openProject(nextProjectId);
@@ -523,6 +528,27 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => void onSubmitNote(step)}>Add Note</button>
               </div>
 
+              <div className="build-wizard-step-media">
+                <label className="build-wizard-upload-inline">
+                  Add Progress Photo / File
+                  <input
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                      if (file) {
+                        void uploadDocument('progress_photo', file, step.id, step.title);
+                      }
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                {renderDocumentGallery(
+                  documents.filter((d) => Number(d.step_id || 0) === step.id),
+                  'No media attached to this step yet.'
+                )}
+              </div>
+
               {step.notes.length > 0 ? (
                 <div className="build-wizard-note-list">
                   {step.notes.map((n) => (
@@ -533,6 +559,36 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  const renderDocumentGallery = (items: typeof documents, emptyText: string) => {
+    if (!items.length) {
+      return <div className="build-wizard-muted">{emptyText}</div>;
+    }
+
+    return (
+      <div className="build-wizard-doc-gallery">
+        {items.map((doc) => (
+          <div className="build-wizard-doc-card" key={doc.id}>
+            {Number(doc.is_image) === 1 ? (
+              <button
+                className="build-wizard-doc-thumb-btn"
+                onClick={() => setLightboxDoc({ src: doc.public_url, title: doc.original_name })}
+                title="Click to enlarge"
+              >
+                <img src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
+              </button>
+            ) : (
+              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link">
+                Open File
+              </a>
+            )}
+            <div className="build-wizard-doc-name">{doc.original_name}</div>
+            <div className="build-wizard-doc-meta">{doc.kind}</div>
+          </div>
+        ))}
       </div>
     );
   };
@@ -706,6 +762,32 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
               <span>Estimated Total: {formatCurrency(projectTotals.totalEstimated)}</span>
               <span>Actual Total: {formatCurrency(projectTotals.totalActual)}</span>
             </div>
+
+            <div className="build-wizard-section-divider" />
+            <h3>Project Photos & Key Paperwork</h3>
+            <div className="build-wizard-upload-row">
+              <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+                <option value="site_photo">Site Photo</option>
+                <option value="home_photo">Home Photo</option>
+                <option value="blueprint">Blueprint</option>
+                <option value="survey">Survey</option>
+                <option value="permit">Permit</option>
+                <option value="receipt">Receipt</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                onChange={(e) => {
+                  const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                  if (file) {
+                    void uploadDocument(docKind, file);
+                  }
+                  e.currentTarget.value = '';
+                }}
+              />
+            </div>
+            {renderDocumentGallery(projectDocuments, 'No project media yet.')}
           </div>
         ) : null}
 
@@ -737,9 +819,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     />
                   </div>
                   <div className="build-wizard-doc-list">
-                    {documents.length ? documents.map((doc) => (
-                      <a key={doc.id} href={doc.public_url} target="_blank" rel="noreferrer">{doc.kind}: {doc.original_name}</a>
-                    )) : <div className="build-wizard-muted">No documents uploaded yet.</div>}
+                    {renderDocumentGallery(documents, 'No documents uploaded yet.')}
                   </div>
                 </div>
                 <div>
@@ -826,6 +906,16 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
           <DateRangeChart steps={footerSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} compact />
         </div>
       </footer>
+
+      {lightboxDoc ? (
+        <div className="build-wizard-lightbox" onClick={() => setLightboxDoc(null)}>
+          <div className="build-wizard-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <button className="build-wizard-lightbox-close" onClick={() => setLightboxDoc(null)}>Close</button>
+            <img src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
+            <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 

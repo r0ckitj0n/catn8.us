@@ -2,7 +2,7 @@ import React from 'react';
 
 import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
-import { IBuildWizardStep } from '../../types/buildWizard';
+import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import './BuildWizardPage.css';
 
 interface BuildWizardPageProps {
@@ -18,6 +18,8 @@ interface BuildWizardPageProps {
 type WizardView = 'launcher' | 'build';
 type BuildTabId = 'start' | 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes' | 'desk' | 'completed';
 type StepDraftMap = Record<number, IBuildWizardStep>;
+type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number }>;
+type StepType = IBuildWizardStep['step_type'];
 
 const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
   { id: 'start', label: '1. Start' },
@@ -54,6 +56,29 @@ const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
   finishes: 'interior_finishes',
   desk: 'general',
 };
+
+const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
+  { value: 'construction', label: 'Construction' },
+  { value: 'purchase', label: 'Purchase' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'permit', label: 'Permit' },
+  { value: 'documentation', label: 'Documentation' },
+  { value: 'other', label: 'Other' },
+];
+
+const PERMIT_STATUS_OPTIONS = ['', 'not_started', 'drafting', 'submitted', 'approved', 'rejected', 'closed'];
+const PURCHASE_UNIT_OPTIONS = ['', 'ea', 'ft', 'sqft', 'cuft', 'gal', 'lb', 'box', 'bundle', 'set', 'roll'];
+
+const DOC_KIND_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'site_photo', label: 'Site Photo' },
+  { value: 'home_photo', label: 'Home Photo' },
+  { value: 'blueprint', label: 'Blueprint' },
+  { value: 'survey', label: 'Survey' },
+  { value: 'permit', label: 'Permit' },
+  { value: 'receipt', label: 'Receipt' },
+  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'other', label: 'Other' },
+];
 
 function formatCurrency(value: number | null): string {
   if (value === null || Number.isNaN(Number(value))) {
@@ -170,6 +195,14 @@ function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
     return 'finishes';
   }
   return 'desk';
+}
+
+function prettyPhaseLabel(phaseKey: string | null | undefined): string {
+  const raw = String(phaseKey || '').trim();
+  if (!raw) {
+    return 'General';
+  }
+  return raw.split('_').filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
 function stepDateRange(step: IBuildWizardStep): { start: Date | null; end: Date | null } {
@@ -443,7 +476,7 @@ function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRa
   );
 }
 
-export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPageProps) {
+export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const {
     aiBusy,
     projectId,
@@ -463,25 +496,31 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
     deleteStep,
     addStepNote,
     uploadDocument,
+    deleteDocument,
+    updateDocument,
+    findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
-    backfillDocumentBlobs,
-    hydrateMissingDocumentBlobs,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
   const [view, setView] = React.useState<WizardView>(initialUrlState.view);
   const [activeTab, setActiveTab] = React.useState<BuildTabId>('start');
   const [docKind, setDocKind] = React.useState<string>('blueprint');
+  const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
+  const [docStepId, setDocStepId] = React.useState<number>(0);
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
-  const [repairBusy, setRepairBusy] = React.useState<boolean>(false);
-  const [hydrateBusy, setHydrateBusy] = React.useState<boolean>(false);
-  const hydrateInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [documentManagerOpen, setDocumentManagerOpen] = React.useState<boolean>(false);
+  const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
+  const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
+  const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
+  const [findingStepId, setFindingStepId] = React.useState<number>(0);
+  const [purchaseOptionsByStep, setPurchaseOptionsByStep] = React.useState<Record<number, Array<any>>>({});
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -588,6 +627,52 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
   }, [documents]);
 
+  const phaseOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ value: string; label: string }> = [{ value: 'general', label: 'General' }];
+    steps.forEach((step) => {
+      const key = String(step.phase_key || '').trim() || 'general';
+      if (seen.has(key) || key === 'general') {
+        return;
+      }
+      seen.add(key);
+      options.push({ value: key, label: prettyPhaseLabel(key) });
+    });
+    return options;
+  }, [steps]);
+
+  const selectableDocSteps = React.useMemo(() => {
+    if (!docPhaseKey || docPhaseKey === 'general') {
+      return steps;
+    }
+    return steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
+  }, [steps, docPhaseKey]);
+
+  React.useEffect(() => {
+    if (docStepId <= 0) {
+      return;
+    }
+    const exists = selectableDocSteps.some((step) => step.id === docStepId);
+    if (!exists) {
+      setDocStepId(0);
+    }
+  }, [docStepId, selectableDocSteps]);
+
+  React.useEffect(() => {
+    if (!documentManagerOpen) {
+      return;
+    }
+    const nextDrafts: DocumentDraftMap = {};
+    documents.forEach((doc) => {
+      nextDrafts[doc.id] = {
+        kind: doc.kind || 'other',
+        caption: doc.caption || '',
+        step_id: Number(doc.step_id || 0),
+      };
+    });
+    setDocumentDrafts(nextDrafts);
+  }, [documentManagerOpen, documents]);
+
   const openBuild = async (nextProjectId: number) => {
     await openProject(nextProjectId);
     setActiveTab('start');
@@ -602,59 +687,6 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
       setActiveTab('start');
       setView('build');
       pushUrlState('build', nextId);
-    }
-  };
-
-  const onRepairDocumentBlobs = async () => {
-    if (!isAdmin || repairBusy) {
-      return;
-    }
-    const shouldRun = window.confirm('Backfill Build Wizard file blobs into the database now?');
-    if (!shouldRun) {
-      return;
-    }
-    setRepairBusy(true);
-    try {
-      const report = await backfillDocumentBlobs(true, projectId > 0 ? projectId : undefined, 0);
-      if (!report) {
-        return;
-      }
-      const message = `Blob repair complete: wrote ${report.written}, already ${report.already_blob}, missing ${report.missing}.`;
-      onToast?.({ tone: report.missing > 0 ? 'warning' : 'success', message });
-      if (report.missing > 0) {
-        const shouldUpload = window.confirm('Some files are still missing on the server. Upload those original files now to complete repair?');
-        if (shouldUpload) {
-          hydrateInputRef.current?.click();
-        }
-      }
-      await openProject(projectId);
-    } finally {
-      setRepairBusy(false);
-    }
-  };
-
-  const onHydrateFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isAdmin || hydrateBusy) {
-      return;
-    }
-    const picked = Array.from(e.target.files || []);
-    if (!picked.length) {
-      return;
-    }
-    setHydrateBusy(true);
-    try {
-      const res = await hydrateMissingDocumentBlobs(picked, projectId > 0 ? projectId : undefined);
-      if (!res) {
-        return;
-      }
-      const unmatchedCount = Array.isArray(res.unmatched_filenames) ? res.unmatched_filenames.length : 0;
-      const tone = unmatchedCount > 0 ? 'warning' : 'success';
-      const msg = `Uploaded ${res.processed_files} file(s), matched ${res.matched_documents}, wrote ${res.written_blobs} blob(s), unmatched ${unmatchedCount}.`;
-      onToast?.({ tone, message: msg });
-      await openProject(projectId);
-    } finally {
-      e.target.value = '';
-      setHydrateBusy(false);
     }
   };
 
@@ -685,6 +717,90 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
     await addStepNote(step.id, draft);
     setNoteDraftByStep((prev) => ({ ...prev, [step.id]: '' }));
     return true;
+  };
+
+  const onDeleteDocument = async (docId: number, docName: string) => {
+    if (docId <= 0 || deletingDocumentId === docId) {
+      return;
+    }
+    const confirmed = window.confirm(`Delete "${docName}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+    setDeletingDocumentId(docId);
+    try {
+      await deleteDocument(docId);
+    } finally {
+      setDeletingDocumentId(0);
+    }
+  };
+
+  const onSaveDocument = async (documentId: number, patch: { kind?: string; caption?: string | null; step_id?: number | null }) => {
+    if (documentSavingId === documentId) {
+      return;
+    }
+    setDocumentSavingId(documentId);
+    try {
+      await updateDocument(documentId, patch);
+    } finally {
+      setDocumentSavingId(0);
+    }
+  };
+
+  const updateDocumentDraft = (documentId: number, patch: Partial<{ kind: string; caption: string; step_id: number }>) => {
+    setDocumentDrafts((prev) => ({
+      ...prev,
+      [documentId]: {
+        kind: patch.kind ?? (prev[documentId]?.kind || 'other'),
+        caption: patch.caption ?? (prev[documentId]?.caption || ''),
+        step_id: patch.step_id ?? (prev[documentId]?.step_id || 0),
+      },
+    }));
+  };
+
+  const onSaveDocumentDraft = async (doc: IBuildWizardDocument) => {
+    const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
+    await onSaveDocument(doc.id, {
+      kind: draft.kind,
+      caption: draft.caption.trim() || null,
+      step_id: draft.step_id > 0 ? draft.step_id : null,
+    });
+  };
+
+  const onFindPurchase = async (step: IBuildWizardStep) => {
+    if (findingStepId === step.id) {
+      return;
+    }
+    setFindingStepId(step.id);
+    try {
+      const draft = stepDrafts[step.id] || step;
+      const res = await findPurchaseOptions(step.id, draft.purchase_url || '');
+      if (!res) {
+        return;
+      }
+      setPurchaseOptionsByStep((prev) => ({ ...prev, [step.id]: res.options || [] }));
+      if (res.step) {
+        setStepDrafts((prev) => ({ ...prev, [step.id]: { ...res.step! } }));
+      }
+      if (!res.options.length) {
+        onToast?.({ tone: 'warning', message: 'No product options found for this step.' });
+      }
+    } finally {
+      setFindingStepId(0);
+    }
+  };
+
+  const onUsePurchaseOption = async (step: IBuildWizardStep, option: any) => {
+    const patch: Partial<IBuildWizardStep> = {
+      title: option.title || step.title,
+      purchase_url: option.url || null,
+      purchase_vendor: option.vendor || null,
+      purchase_unit_price: typeof option.unit_price === 'number' ? option.unit_price : (step.purchase_unit_price ?? null),
+      purchase_brand: step.purchase_brand || null,
+      purchase_model: step.purchase_model || null,
+    };
+    updateStepDraft(step.id, patch);
+    await commitStep(step.id, patch);
   };
 
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
@@ -766,6 +882,25 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                         }}
                       />
                     </label>
+                    <label className="build-wizard-date-inline">
+                      Type
+                      <select
+                        value={(draft.step_type || 'construction') as StepType}
+                        onChange={(e) => {
+                          const nextType = e.target.value as StepType;
+                          const nextPatch: Partial<IBuildWizardStep> = {
+                            step_type: nextType,
+                            permit_required: nextType === 'permit' ? 1 : draft.permit_required,
+                          };
+                          updateStepDraft(step.id, nextPatch);
+                          void commitStep(step.id, nextPatch);
+                        }}
+                      >
+                        {STEP_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 </div>
                 <div className="build-wizard-step-header-right">
@@ -815,15 +950,139 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                     <option value="1">Yes</option>
                   </select>
                 </label>
-                <label>
-                  Permit Name
-                  <input
-                    type="text"
-                    value={draft.permit_name || ''}
-                    onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
-                    onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
-                  />
-                </label>
+                {draft.step_type === 'permit' ? (
+                  <>
+                    <label>
+                      Permit Name
+                      <input
+                        type="text"
+                        value={draft.permit_name || ''}
+                        onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
+                      />
+                    </label>
+                    <label>
+                      Authority
+                      <input
+                        type="text"
+                        value={draft.permit_authority || ''}
+                        onChange={(e) => updateStepDraft(step.id, { permit_authority: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { permit_authority: toStringOrNull(stepDrafts[step.id]?.permit_authority || '') })}
+                      />
+                    </label>
+                    <label>
+                      Permit Status
+                      <select
+                        value={draft.permit_status || ''}
+                        onChange={(e) => updateStepDraft(step.id, { permit_status: e.target.value || null })}
+                        onBlur={() => void commitStep(step.id, { permit_status: toStringOrNull(stepDrafts[step.id]?.permit_status || '') })}
+                      >
+                        {PERMIT_STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>{status === '' ? 'Select status' : status}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Permit URL
+                      <input
+                        type="url"
+                        value={draft.permit_application_url || ''}
+                        onChange={(e) => updateStepDraft(step.id, { permit_application_url: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { permit_application_url: toStringOrNull(stepDrafts[step.id]?.permit_application_url || '') })}
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {draft.step_type === 'purchase' ? (
+                  <>
+                    <label>
+                      Category
+                      <input
+                        type="text"
+                        value={draft.purchase_category || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_category: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_category: toStringOrNull(stepDrafts[step.id]?.purchase_category || '') })}
+                      />
+                    </label>
+                    <label>
+                      Brand
+                      <input
+                        type="text"
+                        value={draft.purchase_brand || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_brand: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_brand: toStringOrNull(stepDrafts[step.id]?.purchase_brand || '') })}
+                      />
+                    </label>
+                    <label>
+                      Model
+                      <input
+                        type="text"
+                        value={draft.purchase_model || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_model: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_model: toStringOrNull(stepDrafts[step.id]?.purchase_model || '') })}
+                      />
+                    </label>
+                    <label>
+                      SKU
+                      <input
+                        type="text"
+                        value={draft.purchase_sku || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_sku: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_sku: toStringOrNull(stepDrafts[step.id]?.purchase_sku || '') })}
+                      />
+                    </label>
+                    <label>
+                      Qty
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={draft.purchase_qty ?? ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_qty: toNumberOrNull(e.target.value) })}
+                        onBlur={() => void commitStep(step.id, { purchase_qty: toNumberOrNull(String(stepDrafts[step.id]?.purchase_qty ?? '')) })}
+                      />
+                    </label>
+                    <label>
+                      Unit
+                      <select
+                        value={draft.purchase_unit || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_unit: e.target.value || null })}
+                        onBlur={() => void commitStep(step.id, { purchase_unit: toStringOrNull(stepDrafts[step.id]?.purchase_unit || '') })}
+                      >
+                        {PURCHASE_UNIT_OPTIONS.map((unit) => (
+                          <option key={unit} value={unit}>{unit === '' ? 'Select unit' : unit}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Unit Price
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={draft.purchase_unit_price ?? ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_unit_price: toNumberOrNull(e.target.value) })}
+                        onBlur={() => void commitStep(step.id, { purchase_unit_price: toNumberOrNull(String(stepDrafts[step.id]?.purchase_unit_price ?? '')) })}
+                      />
+                    </label>
+                    <label>
+                      Vendor
+                      <input
+                        type="text"
+                        value={draft.purchase_vendor || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
+                      />
+                    </label>
+                    <label>
+                      Product URL
+                      <input
+                        type="url"
+                        value={draft.purchase_url || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_url: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_url: toStringOrNull(stepDrafts[step.id]?.purchase_url || '') })}
+                      />
+                    </label>
+                  </>
+                ) : null}
                 <label>
                   Estimated Cost
                   <input
@@ -863,6 +1122,15 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                 >
                   Add Note
                 </button>
+                {draft.step_type === 'purchase' ? (
+                  <button
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => void onFindPurchase(step)}
+                    disabled={findingStepId === step.id}
+                  >
+                    {findingStepId === step.id ? 'Finding...' : 'Find'}
+                  </button>
+                ) : null}
                 <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
                   Upload
                   <input
@@ -871,7 +1139,7 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                     onChange={(e) => {
                       const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
                       if (file) {
-                        void uploadDocument('progress_photo', file, step.id, step.title);
+                        void uploadDocument('progress_photo', file, step.id, step.title, step.phase_key);
                       }
                       e.currentTarget.value = '';
                     }}
@@ -907,6 +1175,23 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                       Cancel
                     </button>
                   </div>
+                </div>
+              ) : null}
+
+              {draft.step_type === 'purchase' && (purchaseOptionsByStep[step.id] || []).length > 0 ? (
+                <div className="build-wizard-purchase-options">
+                  {(purchaseOptionsByStep[step.id] || []).map((opt: any, idx: number) => (
+                    <div className="build-wizard-purchase-option" key={`${step.id}-opt-${idx}`}>
+                      <div className="build-wizard-purchase-option-title">{opt.title}</div>
+                      <div className="build-wizard-purchase-option-meta">
+                        <span>{opt.vendor || 'Unknown vendor'}</span>
+                        <span>{typeof opt.unit_price === 'number' ? formatCurrency(opt.unit_price) : '-'}</span>
+                        <a href={opt.url} target="_blank" rel="noreferrer">Open</a>
+                      </div>
+                      <div className="build-wizard-purchase-option-summary">{opt.summary || ''}</div>
+                      <button className="btn btn-sm btn-outline-success" onClick={() => void onUsePurchaseOption(step, opt)}>Use Option</button>
+                    </div>
+                  ))}
                 </div>
               ) : null}
 
@@ -953,8 +1238,24 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                 Open File
               </a>
             )}
+            <button
+              type="button"
+              className="build-wizard-doc-delete-btn"
+              title="Delete file"
+              aria-label={`Delete ${doc.original_name}`}
+              onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
+              disabled={deletingDocumentId === doc.id}
+            >
+              <svg viewBox="0 0 24 24" className="build-wizard-doc-delete-icon" aria-hidden="true">
+                <path d="M9 3h6a1 1 0 0 1 1 1v1h4v2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7H4V5h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-3 2v12h10V7H7Zm2 2h2v8H9V9Zm4 0h2v8h-2V9Z" />
+              </svg>
+            </button>
             <div className="build-wizard-doc-name">{doc.original_name}</div>
-            <div className="build-wizard-doc-meta">{doc.kind}</div>
+            <div className="build-wizard-doc-meta">
+              <span>{doc.kind}</span>
+              <span>{prettyPhaseLabel(doc.step_phase_key)}</span>
+              <span>{doc.step_title || 'No Step Linked'}</span>
+            </div>
           </div>
         ))}
       </div>
@@ -1001,27 +1302,9 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
         <div className="build-wizard-topbar">
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
-          {isAdmin ? (
-            <div className="build-wizard-topbar-actions">
-              <button className="btn btn-outline-primary btn-sm" onClick={() => void onRepairDocumentBlobs()} disabled={repairBusy}>
-                {repairBusy ? 'Repairing Files...' : 'Repair File Blobs'}
-              </button>
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                onClick={() => hydrateInputRef.current?.click()}
-                disabled={hydrateBusy}
-              >
-                {hydrateBusy ? 'Uploading...' : 'Upload Missing Files'}
-              </button>
-              <input
-                ref={hydrateInputRef}
-                type="file"
-                multiple
-                onChange={(e) => void onHydrateFileInputChange(e)}
-                style={{ display: 'none' }}
-              />
-            </div>
-          ) : null}
+          <div className="build-wizard-topbar-actions">
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
+          </div>
         </div>
 
         <div className="build-wizard-tabs">
@@ -1158,13 +1441,20 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
             <h3>Project Photos & Key Paperwork</h3>
             <div className="build-wizard-upload-row">
               <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                <option value="site_photo">Site Photo</option>
-                <option value="home_photo">Home Photo</option>
-                <option value="blueprint">Blueprint</option>
-                <option value="survey">Survey</option>
-                <option value="permit">Permit</option>
-                <option value="receipt">Receipt</option>
-                <option value="other">Other</option>
+                {DOC_KIND_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
+                {phaseOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
+                <option value="">Auto-link by phase</option>
+                {selectableDocSteps.map((step) => (
+                  <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
+                ))}
               </select>
               <input
                 type="file"
@@ -1172,7 +1462,7 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                 onChange={(e) => {
                   const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
                   if (file) {
-                    void uploadDocument(docKind, file);
+                    void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
                   }
                   e.currentTarget.value = '';
                 }}
@@ -1207,18 +1497,27 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
                   <h3>Documents</h3>
                   <div className="build-wizard-upload-row">
                     <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                      <option value="blueprint">Blueprint</option>
-                      <option value="permit">Permit Document</option>
-                      <option value="survey">Survey</option>
-                      <option value="spec_sheet">Spec Sheet</option>
-                      <option value="other">Other</option>
+                      {DOC_KIND_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
+                      {phaseOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
+                      <option value="">Auto-link by phase</option>
+                      {selectableDocSteps.map((step) => (
+                        <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
+                      ))}
                     </select>
                     <input
                       type="file"
                       onChange={(e) => {
                         const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
                         if (file) {
-                          void uploadDocument(docKind, file);
+                          void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
                         }
                         e.currentTarget.value = '';
                       }}
@@ -1288,6 +1587,103 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
           <FooterPhaseTimeline steps={footerTimelineSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
         </div>
       </footer>
+
+      {documentManagerOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setDocumentManagerOpen(false)}>
+          <div className="build-wizard-doc-manager-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Document Manager</h3>
+              <button className="btn btn-outline-secondary btn-sm" onClick={() => setDocumentManagerOpen(false)}>Close</button>
+            </div>
+            {documents.length ? (
+              <div className="build-wizard-doc-manager-list">
+                {documents.map((doc) => {
+                  const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
+                  const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
+                  const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
+
+                  return (
+                    <div className="build-wizard-doc-manager-row" key={doc.id}>
+                      <div className="build-wizard-doc-manager-preview">
+                        {Number(doc.is_image) === 1 ? (
+                          <button
+                            className="build-wizard-doc-thumb-btn"
+                            onClick={() => setLightboxDoc({ src: doc.public_url, title: doc.original_name })}
+                            title="Open preview"
+                          >
+                            <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
+                          </button>
+                        ) : (
+                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link">Open File</a>
+                        )}
+                      </div>
+                      <div className="build-wizard-doc-manager-fields">
+                        <div className="build-wizard-doc-manager-title">{doc.original_name}</div>
+                        <div className="build-wizard-doc-manager-meta">Uploaded: {formatTimelineDate(doc.uploaded_at)} | Phase: {phaseLabel}</div>
+                        <div className="build-wizard-doc-manager-grid">
+                          <label>
+                            Kind
+                            <select
+                              value={draft.kind}
+                              onChange={(e) => updateDocumentDraft(doc.id, { kind: e.target.value })}
+                            >
+                              {DOC_KIND_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Linked Step
+                            <select
+                              value={draft.step_id > 0 ? String(draft.step_id) : ''}
+                              onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
+                            >
+                              <option value="">No step linked</option>
+                              {steps.map((step) => (
+                                <option key={step.id} value={step.id}>
+                                  {prettyPhaseLabel(step.phase_key)} - #{step.step_order} {step.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="is-wide">
+                            Caption
+                            <input
+                              type="text"
+                              value={draft.caption}
+                              onChange={(e) => updateDocumentDraft(doc.id, { caption: e.target.value })}
+                            />
+                          </label>
+                        </div>
+                        <div className="build-wizard-doc-manager-actions">
+                          <a className="btn btn-outline-primary btn-sm" href={doc.public_url} target="_blank" rel="noreferrer">Open</a>
+                          <a className="btn btn-outline-secondary btn-sm" href={withDownloadFlag(doc.public_url)}>Download</a>
+                          <button
+                            className="btn btn-success btn-sm"
+                            onClick={() => void onSaveDocumentDraft(doc)}
+                            disabled={documentSavingId === doc.id}
+                          >
+                            {documentSavingId === doc.id ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
+                            disabled={deletingDocumentId === doc.id}
+                          >
+                            {deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="build-wizard-muted">No documents uploaded yet.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {lightboxDoc ? (
         <div className="build-wizard-lightbox" onClick={() => setLightboxDoc(null)}>

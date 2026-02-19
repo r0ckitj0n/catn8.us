@@ -4,7 +4,10 @@ import {
   IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
   IBuildWizardDocument,
+  IBuildWizardFindPurchaseOptionsResponse,
   IBuildWizardHydrateBlobsResponse,
+  IBuildWizardHydrateFromSourcesResponse,
+  IBuildWizardPurchaseOption,
   IBuildWizardProject,
   IBuildWizardProjectSummary,
   IBuildWizardQuestionnaire,
@@ -46,6 +49,17 @@ type DeleteStepResponse = {
   success: boolean;
   deleted_step_id: number;
   steps: IBuildWizardStep[];
+};
+
+type DeleteDocumentResponse = {
+  success: boolean;
+  deleted_document_id: number;
+  documents: IBuildWizardDocument[];
+};
+
+type UpdateDocumentResponse = {
+  success: boolean;
+  document: IBuildWizardDocument;
 };
 
 export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
@@ -204,10 +218,23 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     const body: Record<string, unknown> = { step_id: stepId };
     const acceptedFields = [
       'phase_key',
+      'step_type',
       'title',
       'description',
       'permit_required',
       'permit_name',
+      'permit_authority',
+      'permit_status',
+      'permit_application_url',
+      'purchase_category',
+      'purchase_brand',
+      'purchase_model',
+      'purchase_sku',
+      'purchase_unit',
+      'purchase_qty',
+      'purchase_unit_price',
+      'purchase_vendor',
+      'purchase_url',
       'expected_start_date',
       'expected_end_date',
       'expected_duration_days',
@@ -307,7 +334,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast, refreshCurrentProject]);
 
-  const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string) => {
+  const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string, phaseKey?: string) => {
     if (!file || projectId <= 0) {
       return;
     }
@@ -317,6 +344,9 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     formData.append('file', file);
     if (stepId && stepId > 0) {
       formData.append('step_id', String(stepId));
+    }
+    if (phaseKey && String(phaseKey).trim() !== '') {
+      formData.append('phase_key', String(phaseKey).trim());
     }
     if (caption && String(caption).trim() !== '') {
       formData.append('caption', String(caption).trim());
@@ -332,6 +362,86 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       onToast?.({ tone: 'error', message: err?.message || 'Upload failed' });
     }
   }, [projectId, onToast]);
+
+  const deleteDocument = React.useCallback(async (documentId: number) => {
+    if (documentId <= 0) {
+      return false;
+    }
+    try {
+      const res = await ApiClient.post<DeleteDocumentResponse>('/api/build_wizard.php?action=delete_document', {
+        document_id: documentId,
+      });
+      if (Array.isArray(res?.documents)) {
+        setDocuments(res.documents);
+      } else {
+        setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+      }
+      onToast?.({ tone: 'success', message: 'Document deleted.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to delete document' });
+      await refreshCurrentProject();
+      return false;
+    }
+  }, [onToast, refreshCurrentProject]);
+
+  const updateDocument = React.useCallback(async (
+    documentId: number,
+    patch: { kind?: string; caption?: string | null; step_id?: number | null },
+  ) => {
+    if (documentId <= 0) {
+      return null;
+    }
+    const body: Record<string, unknown> = { document_id: documentId };
+    if (Object.prototype.hasOwnProperty.call(patch, 'kind')) {
+      body.kind = String(patch.kind || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'caption')) {
+      body.caption = patch.caption;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'step_id')) {
+      body.step_id = patch.step_id;
+    }
+    if (Object.keys(body).length <= 1) {
+      return null;
+    }
+
+    try {
+      const res = await ApiClient.post<UpdateDocumentResponse>('/api/build_wizard.php?action=update_document', body);
+      if (res?.document) {
+        setDocuments((prev) => prev.map((doc) => (doc.id === documentId ? res.document : doc)));
+      }
+      onToast?.({ tone: 'success', message: 'Document updated.' });
+      return res?.document || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to update document' });
+      await refreshCurrentProject();
+      return null;
+    }
+  }, [onToast, refreshCurrentProject]);
+
+  const findPurchaseOptions = React.useCallback(async (stepId: number, productUrl?: string): Promise<{ options: IBuildWizardPurchaseOption[]; step: IBuildWizardStep | null } | null> => {
+    if (stepId <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<IBuildWizardFindPurchaseOptionsResponse>('/api/build_wizard.php?action=find_purchase_options', {
+        step_id: stepId,
+        product_url: (productUrl || '').trim() || undefined,
+      });
+      const nextStep = res?.step || null;
+      if (nextStep) {
+        setSteps((prev) => prev.map((s) => (s.id === stepId ? nextStep : s)));
+      }
+      return {
+        options: Array.isArray(res?.options) ? res.options : [],
+        step: nextStep,
+      };
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to find purchase options' });
+      return null;
+    }
+  }, [onToast]);
 
   const packageForAi = React.useCallback(async () => {
     if (projectId <= 0) {
@@ -411,6 +521,19 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const hydrateMissingDocumentBlobsFromSources = React.useCallback(async (targetProjectId?: number, scanLimit: number = 10000) => {
+    try {
+      const res = await ApiClient.post<IBuildWizardHydrateFromSourcesResponse>('/api/build_wizard.php?action=hydrate_missing_document_blobs_from_sources', {
+        project_id: (targetProjectId && targetProjectId > 0) ? targetProjectId : undefined,
+        scan_limit: Number.isFinite(scanLimit) ? Math.max(1, Math.min(25000, Math.trunc(scanLimit))) : 10000,
+      });
+      return res || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to hydrate missing blobs from server sources' });
+      return null;
+    }
+  }, [onToast]);
+
   return {
     loading,
     saving,
@@ -435,9 +558,13 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     deleteStep,
     addStepNote,
     uploadDocument,
+    deleteDocument,
+    updateDocument,
+    findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
     backfillDocumentBlobs,
     hydrateMissingDocumentBlobs,
+    hydrateMissingDocumentBlobsFromSources,
   };
 }

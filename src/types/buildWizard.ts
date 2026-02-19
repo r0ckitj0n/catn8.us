@@ -10,10 +10,23 @@ export interface IBuildWizardStep {
   project_id: number;
   step_order: number;
   phase_key: string;
+  step_type: 'permit' | 'purchase' | 'inspection' | 'documentation' | 'construction' | 'other';
   title: string;
   description: string;
   permit_required: number;
   permit_name: string | null;
+  permit_authority: string | null;
+  permit_status: string | null;
+  permit_application_url: string | null;
+  purchase_category: string | null;
+  purchase_brand: string | null;
+  purchase_model: string | null;
+  purchase_sku: string | null;
+  purchase_unit: string | null;
+  purchase_qty: number | null;
+  purchase_unit_price: number | null;
+  purchase_vendor: string | null;
+  purchase_url: string | null;
   expected_start_date: string | null;
   expected_end_date: string | null;
   expected_duration_days: number | null;
@@ -30,6 +43,8 @@ export interface IBuildWizardDocument {
   id: number;
   project_id: number;
   step_id: number | null;
+  step_phase_key: string | null;
+  step_title: string | null;
   kind: string;
   original_name: string;
   mime_type: string;
@@ -128,4 +143,36 @@ export interface IBuildWizardHydrateBlobsResponse {
   matched_documents: number;
   written_blobs: number;
   unmatched_filenames: string[];
+  ambiguous_filenames?: string[];
+}
+
+export interface IBuildWizardHydrateFromSourcesResponse {
+  success: boolean;
+  source_roots: string[];
+  source_files_scanned: number;
+  missing_documents_considered: number;
+  matched_documents: number;
+  written_blobs: number;
+  ambiguous_documents: Array<{
+    document_id: number;
+    original_name: string;
+  }>;
+}
+
+export interface IBuildWizardPurchaseOption {
+  title: string;
+  url: string;
+  vendor: string | null;
+  unit_price: number | null;
+  summary: string;
+  source: 'provided_url' | 'web_search';
+}
+
+export interface IBuildWizardFindPurchaseOptionsResponse {
+  success: boolean;
+  step_id: number;
+  step_type: string;
+  query: string;
+  options: IBuildWizardPurchaseOption[];
+  step: IBuildWizardStep;
 }

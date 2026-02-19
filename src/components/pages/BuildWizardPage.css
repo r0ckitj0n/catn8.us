@@ -430,6 +430,14 @@
   margin-bottom: 10px;
 }
 
+.build-wizard-upload-row select {
+  min-width: 160px;
+}
+
+.build-wizard-upload-row input[type="file"] {
+  min-width: 220px;
+}
+
 .build-wizard-doc-list {
   display: flex;
   flex-direction: column;
@@ -449,6 +457,7 @@
   padding: 6px;
   display: grid;
   gap: 4px;
+  position: relative;
 }
 
 .build-wizard-doc-thumb-btn {
@@ -488,6 +497,63 @@
 .build-wizard-doc-meta {
   font-size: 0.75rem;
   color: #5a6a80;
+  display: grid;
+  gap: 2px;
+}
+
+.build-wizard-doc-delete-btn {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #f0b4b4;
+  border-radius: 999px;
+  background: #fff2f2;
+  color: #8d2323;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.build-wizard-doc-delete-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.build-wizard-purchase-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.build-wizard-purchase-option {
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-purchase-option-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.build-wizard-purchase-option-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: #4b5d74;
+}
+
+.build-wizard-purchase-option-summary {
+  font-size: 0.83rem;
+  color: #334357;
 }
 
 .build-wizard-section-divider {
@@ -687,6 +753,90 @@
   padding: 14px;
 }
 
+.build-wizard-doc-manager {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.62);
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.build-wizard-doc-manager-inner {
+  width: min(1200px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ced9ea;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.build-wizard-doc-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.build-wizard-doc-manager-head h3 {
+  margin: 0;
+}
+
+.build-wizard-doc-manager-list {
+  display: grid;
+  gap: 10px;
+}
+
+.build-wizard-doc-manager-row {
+  border: 1px solid #d5dce6;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.build-wizard-doc-manager-preview {
+  display: flex;
+  align-items: flex-start;
+}
+
+.build-wizard-doc-manager-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-doc-manager-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.build-wizard-doc-manager-meta {
+  color: #4f6178;
+  font-size: 0.8rem;
+}
+
+.build-wizard-doc-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 180px) minmax(220px, 1fr) minmax(180px, 1fr);
+  gap: 8px;
+}
+
+.build-wizard-doc-manager-grid label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.build-wizard-doc-manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .build-wizard-lightbox-inner {
   background: #fff;
   border-radius: 10px;
@@ -788,6 +938,14 @@
   }
 
   .build-wizard-step-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-doc-manager-row {
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-doc-manager-grid {
     grid-template-columns: 1fr;
   }
 

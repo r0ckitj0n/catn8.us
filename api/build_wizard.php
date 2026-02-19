@@ -75,10 +75,23 @@ function catn8_build_wizard_tables_ensure(): void
         project_id INT NOT NULL,
         step_order INT NOT NULL,
         phase_key VARCHAR(64) NOT NULL DEFAULT 'general',
+        step_type VARCHAR(32) NOT NULL DEFAULT 'construction',
         title VARCHAR(255) NOT NULL,
         description TEXT NULL,
         permit_required TINYINT(1) NOT NULL DEFAULT 0,
         permit_name VARCHAR(191) NULL,
+        permit_authority VARCHAR(191) NULL,
+        permit_status VARCHAR(32) NULL,
+        permit_application_url VARCHAR(500) NULL,
+        purchase_category VARCHAR(120) NULL,
+        purchase_brand VARCHAR(120) NULL,
+        purchase_model VARCHAR(191) NULL,
+        purchase_sku VARCHAR(120) NULL,
+        purchase_unit VARCHAR(32) NULL,
+        purchase_qty DECIMAL(10,2) NULL,
+        purchase_unit_price DECIMAL(10,2) NULL,
+        purchase_vendor VARCHAR(191) NULL,
+        purchase_url VARCHAR(500) NULL,
         expected_start_date DATE NULL,
         expected_end_date DATE NULL,
         expected_duration_days INT NULL,
@@ -121,6 +134,85 @@ function catn8_build_wizard_tables_ensure(): void
     if (!$hasCaption) {
         Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN caption VARCHAR(255) NULL AFTER file_size_bytes');
     }
+
+    $stepColumns = [
+        'step_type' => "ALTER TABLE build_wizard_steps ADD COLUMN step_type VARCHAR(32) NOT NULL DEFAULT 'construction' AFTER phase_key",
+        'permit_authority' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_authority VARCHAR(191) NULL AFTER permit_name",
+        'permit_status' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_status VARCHAR(32) NULL AFTER permit_authority",
+        'permit_application_url' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_application_url VARCHAR(500) NULL AFTER permit_status",
+        'purchase_category' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_category VARCHAR(120) NULL AFTER permit_application_url",
+        'purchase_brand' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_brand VARCHAR(120) NULL AFTER purchase_category",
+        'purchase_model' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_model VARCHAR(191) NULL AFTER purchase_brand",
+        'purchase_sku' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_sku VARCHAR(120) NULL AFTER purchase_model",
+        'purchase_unit' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_unit VARCHAR(32) NULL AFTER purchase_sku",
+        'purchase_qty' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_qty DECIMAL(10,2) NULL AFTER purchase_unit",
+        'purchase_unit_price' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_unit_price DECIMAL(10,2) NULL AFTER purchase_qty",
+        'purchase_vendor' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_vendor VARCHAR(191) NULL AFTER purchase_unit_price",
+        'purchase_url' => "ALTER TABLE build_wizard_steps ADD COLUMN purchase_url VARCHAR(500) NULL AFTER purchase_vendor",
+    ];
+    foreach ($stepColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_steps', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
+    }
+}
+
+function catn8_build_wizard_step_type(string $value): string
+{
+    $t = strtolower(trim($value));
+    return match ($t) {
+        'permit', 'purchase', 'inspection', 'documentation', 'construction', 'other' => $t,
+        default => 'construction',
+    };
+}
+
+function catn8_build_wizard_document_kind($value): string
+{
+    $raw = strtolower(trim((string)$value));
+    return match ($raw) {
+        'site_photo', 'home_photo', 'blueprint', 'survey', 'permit', 'receipt', 'spec_sheet', 'progress_photo', 'other' => $raw,
+        default => 'other',
+    };
+}
+
+function catn8_build_wizard_infer_step_type(string $title, string $phaseKey = '', int $permitRequired = 0): string
+{
+    $t = strtolower(trim($title . ' ' . $phaseKey));
+    if ($permitRequired === 1 || str_contains($t, 'permit') || str_contains($t, 'approval') || str_contains($t, 'application')) {
+        return 'permit';
+    }
+    if (str_contains($t, 'inspect')) {
+        return 'inspection';
+    }
+    if (str_contains($t, 'purchase') || str_contains($t, 'buy') || str_contains($t, 'order') || str_contains($t, 'material')) {
+        return 'purchase';
+    }
+    if (str_contains($t, 'document') || str_contains($t, 'packet') || str_contains($t, 'plans') || str_contains($t, 'plat')) {
+        return 'documentation';
+    }
+    if (
+        str_contains($t, 'install') || str_contains($t, 'frame') || str_contains($t, 'pour') || str_contains($t, 'rough')
+        || str_contains($t, 'grade') || str_contains($t, 'slab') || str_contains($t, 'excavat') || str_contains($t, 'finish')
+    ) {
+        return 'construction';
+    }
+    return 'other';
+}
+
+function catn8_build_wizard_text_or_null($value, int $maxLen = 500): ?string
+{
+    $v = trim((string)$value);
+    if ($v === '') {
+        return null;
+    }
+    if (strlen($v) > $maxLen) {
+        $v = substr($v, 0, $maxLen);
+    }
+    return $v;
 }
 
 function catn8_build_wizard_default_questions(): array
@@ -211,6 +303,42 @@ function catn8_build_wizard_normalize_phase_key($value): string
     return $raw;
 }
 
+function catn8_build_wizard_default_phase_for_kind(string $kind): string
+{
+    return match (catn8_build_wizard_document_kind($kind)) {
+        'survey' => 'land_due_diligence',
+        'permit' => 'dawson_county_permits',
+        'blueprint', 'spec_sheet' => 'design_preconstruction',
+        'site_photo', 'home_photo', 'progress_photo' => 'site_preparation',
+        default => 'general',
+    };
+}
+
+function catn8_build_wizard_pick_step_for_phase(int $projectId, string $phaseKey): ?int
+{
+    if ($projectId <= 0) {
+        return null;
+    }
+
+    $normalized = catn8_build_wizard_normalize_phase_key($phaseKey);
+    $params = [$projectId];
+    $sql = 'SELECT id
+            FROM build_wizard_steps
+            WHERE project_id = ?';
+    if ($normalized !== '' && $normalized !== 'general') {
+        $sql .= ' AND phase_key = ?';
+        $params[] = $normalized;
+    }
+    $sql .= ' ORDER BY is_completed ASC, step_order ASC, id ASC LIMIT 1';
+
+    $row = Database::queryOne($sql, $params);
+    if (!$row) {
+        return null;
+    }
+    $stepId = (int)($row['id'] ?? 0);
+    return $stepId > 0 ? $stepId : null;
+}
+
 function catn8_build_wizard_resequence_step_orders(int $projectId): void
 {
     if ($projectId <= 0) {
@@ -283,12 +411,13 @@ function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $ski
 
         Database::execute(
             'INSERT INTO build_wizard_steps
-                (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+                (project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
             [
                 $projectId,
                 $stepOrder,
-                catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
+                $phaseKey = catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
+                catn8_build_wizard_step_type((string)($s['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, !empty($s['permit_required']) ? 1 : 0))),
                 $title,
                 trim((string)($s['description'] ?? '')),
                 !empty($s['permit_required']) ? 1 : 0,
@@ -514,7 +643,9 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
 function catn8_build_wizard_steps_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
+        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+                purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
+                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
          WHERE project_id = ?
          ORDER BY step_order ASC, id ASC',
@@ -532,10 +663,23 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_order' => (int)($r['step_order'] ?? 0),
             'phase_key' => (string)($r['phase_key'] ?? ''),
+            'step_type' => catn8_build_wizard_step_type((string)($r['step_type'] ?? '')),
             'title' => (string)($r['title'] ?? ''),
             'description' => (string)($r['description'] ?? ''),
             'permit_required' => (int)($r['permit_required'] ?? 0),
             'permit_name' => $r['permit_name'] !== null ? (string)$r['permit_name'] : null,
+            'permit_authority' => $r['permit_authority'] !== null ? (string)$r['permit_authority'] : null,
+            'permit_status' => $r['permit_status'] !== null ? (string)$r['permit_status'] : null,
+            'permit_application_url' => $r['permit_application_url'] !== null ? (string)$r['permit_application_url'] : null,
+            'purchase_category' => $r['purchase_category'] !== null ? (string)$r['purchase_category'] : null,
+            'purchase_brand' => $r['purchase_brand'] !== null ? (string)$r['purchase_brand'] : null,
+            'purchase_model' => $r['purchase_model'] !== null ? (string)$r['purchase_model'] : null,
+            'purchase_sku' => $r['purchase_sku'] !== null ? (string)$r['purchase_sku'] : null,
+            'purchase_unit' => $r['purchase_unit'] !== null ? (string)$r['purchase_unit'] : null,
+            'purchase_qty' => $r['purchase_qty'] !== null ? (float)$r['purchase_qty'] : null,
+            'purchase_unit_price' => $r['purchase_unit_price'] !== null ? (float)$r['purchase_unit_price'] : null,
+            'purchase_vendor' => $r['purchase_vendor'] !== null ? (string)$r['purchase_vendor'] : null,
+            'purchase_url' => $r['purchase_url'] !== null ? (string)$r['purchase_url'] : null,
             'expected_start_date' => $r['expected_start_date'] !== null ? (string)$r['expected_start_date'] : null,
             'expected_end_date' => $r['expected_end_date'] !== null ? (string)$r['expected_end_date'] : null,
             'expected_duration_days' => $r['expected_duration_days'] !== null ? (int)$r['expected_duration_days'] : null,
@@ -555,9 +699,11 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
 function catn8_build_wizard_documents_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT d.id, d.project_id, d.step_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
+        'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
                 CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
          FROM build_wizard_documents d
+         LEFT JOIN build_wizard_steps s ON s.id = d.step_id
          LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
          WHERE d.project_id = ?
          ORDER BY d.uploaded_at DESC, d.id DESC',
@@ -572,6 +718,8 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
             'id' => $docId,
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_id' => $r['step_id'] !== null ? (int)$r['step_id'] : null,
+            'step_phase_key' => $r['step_phase_key'] !== null ? (string)$r['step_phase_key'] : null,
+            'step_title' => $r['step_title'] !== null ? (string)$r['step_title'] : null,
             'kind' => (string)($r['kind'] ?? ''),
             'original_name' => (string)($r['original_name'] ?? ''),
             'mime_type' => $mimeType,
@@ -827,10 +975,180 @@ function catn8_build_wizard_normalize_upload_files(string $field): array
     return $out;
 }
 
+function catn8_build_wizard_filename_parts(string $name): array
+{
+    $trimmed = trim($name);
+    $lower = strtolower($trimmed);
+    $ext = strtolower((string)pathinfo($trimmed, PATHINFO_EXTENSION));
+    $stem = strtolower((string)pathinfo($trimmed, PATHINFO_FILENAME));
+    $canonical = preg_replace('/[^a-z0-9]+/', '', $lower);
+    if (!is_string($canonical)) {
+        $canonical = '';
+    }
+    $stemCanonical = preg_replace('/[^a-z0-9]+/', '', $stem);
+    if (!is_string($stemCanonical)) {
+        $stemCanonical = '';
+    }
+    return [
+        'raw' => $trimmed,
+        'lower' => $lower,
+        'ext' => $ext,
+        'stem' => $stem,
+        'canonical' => $canonical,
+        'stem_canonical' => $stemCanonical,
+    ];
+}
+
+function catn8_build_wizard_filename_match_score(string $targetName, string $candidateName): int
+{
+    $t = catn8_build_wizard_filename_parts($targetName);
+    $c = catn8_build_wizard_filename_parts($candidateName);
+
+    if ($t['lower'] !== '' && $t['lower'] === $c['lower']) {
+        return 100;
+    }
+    if ($t['ext'] !== '' && $t['ext'] === $c['ext'] && $t['canonical'] !== '' && $t['canonical'] === $c['canonical']) {
+        return 90;
+    }
+    if ($t['ext'] !== '' && $t['ext'] === $c['ext'] && $t['stem_canonical'] !== '' && $t['stem_canonical'] === $c['stem_canonical']) {
+        return 80;
+    }
+    if ($t['ext'] !== '' && $t['ext'] === $c['ext']) {
+        $a = (string)$t['stem_canonical'];
+        $b = (string)$c['stem_canonical'];
+        if ($a !== '' && $b !== '') {
+            if (function_exists('levenshtein')) {
+                $dist = levenshtein($a, $b);
+                if ($dist >= 0 && $dist <= 2) {
+                    return 60 - ($dist * 5);
+                }
+            }
+            if (str_contains($a, $b) || str_contains($b, $a)) {
+                return 52;
+            }
+        }
+    }
+
+    return 0;
+}
+
+function catn8_build_wizard_additional_source_roots(): array
+{
+    $projectRoot = dirname(__DIR__);
+    $roots = [
+        $projectRoot . '/.local/state/build_wizard_import/stage_docs',
+        '/Users/jongraves/Documents/Home/91 Singletree Ln',
+    ];
+
+    $envRoots = trim((string)getenv('BUILD_WIZARD_BLOB_SOURCE_ROOTS'));
+    if ($envRoots !== '') {
+        foreach (explode(',', $envRoots) as $raw) {
+            $candidate = trim($raw);
+            if ($candidate !== '') {
+                $roots[] = $candidate;
+            }
+        }
+    }
+
+    $out = [];
+    foreach ($roots as $r) {
+        $path = trim((string)$r);
+        if ($path === '' || !is_dir($path)) {
+            continue;
+        }
+        if (!in_array($path, $out, true)) {
+            $out[] = $path;
+        }
+    }
+    return $out;
+}
+
+function catn8_build_wizard_collect_source_files(array $roots, int $maxFiles = 10000): array
+{
+    $files = [];
+    $seen = [];
+    foreach ($roots as $root) {
+        $r = trim((string)$root);
+        if ($r === '' || !is_dir($r)) {
+            continue;
+        }
+        try {
+            $iter = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($r, FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iter as $info) {
+                if (count($files) >= $maxFiles) {
+                    break 2;
+                }
+                if (!$info instanceof SplFileInfo || !$info->isFile()) {
+                    continue;
+                }
+                $path = $info->getPathname();
+                if ($path === '' || isset($seen[$path])) {
+                    continue;
+                }
+                $seen[$path] = true;
+                $files[] = [
+                    'path' => $path,
+                    'name' => $info->getBasename(),
+                ];
+            }
+        } catch (Throwable $e) {
+            error_log('[build_wizard] source scan skipped: ' . $e->getMessage());
+        }
+    }
+    return $files;
+}
+
+function catn8_build_wizard_find_source_file_path_for_name(string $originalName): string
+{
+    static $cachedFiles = null;
+    if ($cachedFiles === null) {
+        $cachedFiles = catn8_build_wizard_collect_source_files(catn8_build_wizard_additional_source_roots(), 12000);
+    }
+
+    $target = trim($originalName);
+    if ($target === '' || !is_array($cachedFiles) || !$cachedFiles) {
+        return '';
+    }
+
+    $bestScore = 0;
+    $bestPath = '';
+    $tieCount = 0;
+    foreach ($cachedFiles as $sf) {
+        $candidateName = (string)($sf['name'] ?? '');
+        $candidatePath = (string)($sf['path'] ?? '');
+        if ($candidateName === '' || $candidatePath === '') {
+            continue;
+        }
+        $score = catn8_build_wizard_filename_match_score($target, $candidateName);
+        if ($score <= 0) {
+            continue;
+        }
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestPath = $candidatePath;
+            $tieCount = 1;
+        } elseif ($score === $bestScore) {
+            $tieCount++;
+        }
+    }
+
+    if ($bestScore < 70) {
+        return '';
+    }
+    if ($bestScore < 90 && $tieCount > 1) {
+        return '';
+    }
+    return (is_file($bestPath) ? $bestPath : '');
+}
+
 function catn8_build_wizard_step_by_id(int $stepId): ?array
 {
     $row = Database::queryOne(
-        'SELECT id, project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
+        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+                purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
+                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
          WHERE id = ?
          LIMIT 1',
@@ -847,10 +1165,23 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
         'project_id' => (int)($row['project_id'] ?? 0),
         'step_order' => (int)($row['step_order'] ?? 0),
         'phase_key' => (string)($row['phase_key'] ?? ''),
+        'step_type' => catn8_build_wizard_step_type((string)($row['step_type'] ?? '')),
         'title' => (string)($row['title'] ?? ''),
         'description' => (string)($row['description'] ?? ''),
         'permit_required' => (int)($row['permit_required'] ?? 0),
         'permit_name' => $row['permit_name'] !== null ? (string)$row['permit_name'] : null,
+        'permit_authority' => $row['permit_authority'] !== null ? (string)$row['permit_authority'] : null,
+        'permit_status' => $row['permit_status'] !== null ? (string)$row['permit_status'] : null,
+        'permit_application_url' => $row['permit_application_url'] !== null ? (string)$row['permit_application_url'] : null,
+        'purchase_category' => $row['purchase_category'] !== null ? (string)$row['purchase_category'] : null,
+        'purchase_brand' => $row['purchase_brand'] !== null ? (string)$row['purchase_brand'] : null,
+        'purchase_model' => $row['purchase_model'] !== null ? (string)$row['purchase_model'] : null,
+        'purchase_sku' => $row['purchase_sku'] !== null ? (string)$row['purchase_sku'] : null,
+        'purchase_unit' => $row['purchase_unit'] !== null ? (string)$row['purchase_unit'] : null,
+        'purchase_qty' => $row['purchase_qty'] !== null ? (float)$row['purchase_qty'] : null,
+        'purchase_unit_price' => $row['purchase_unit_price'] !== null ? (float)$row['purchase_unit_price'] : null,
+        'purchase_vendor' => $row['purchase_vendor'] !== null ? (string)$row['purchase_vendor'] : null,
+        'purchase_url' => $row['purchase_url'] !== null ? (string)$row['purchase_url'] : null,
         'expected_start_date' => $row['expected_start_date'] !== null ? (string)$row['expected_start_date'] : null,
         'expected_end_date' => $row['expected_end_date'] !== null ? (string)$row['expected_end_date'] : null,
         'expected_duration_days' => $row['expected_duration_days'] !== null ? (int)$row['expected_duration_days'] : null,
@@ -1131,6 +1462,154 @@ function catn8_build_wizard_ai_generate_json(array $cfg, string $systemPrompt, s
     return $decoded;
 }
 
+function catn8_build_wizard_safe_external_url(?string $url): ?string
+{
+    $u = trim((string)$url);
+    if ($u === '' || strlen($u) > 1000) {
+        return null;
+    }
+    if (!preg_match('#^https?://#i', $u)) {
+        return null;
+    }
+    $parts = parse_url($u);
+    if (!is_array($parts) || empty($parts['host'])) {
+        return null;
+    }
+    return $u;
+}
+
+function catn8_build_wizard_http_get_text(string $url, int $timeout = 15): string
+{
+    $ctx = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => $timeout,
+            'follow_location' => 1,
+            'max_redirects' => 5,
+            'header' => "User-Agent: catn8-build-wizard/1.0\r\nAccept: text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8\r\n",
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ],
+    ]);
+    $raw = @file_get_contents($url, false, $ctx);
+    if (!is_string($raw) || $raw === '') {
+        return '';
+    }
+    if (strlen($raw) > 1_500_000) {
+        $raw = substr($raw, 0, 1_500_000);
+    }
+    return $raw;
+}
+
+function catn8_build_wizard_html_to_text(string $html, int $maxLen = 8000): string
+{
+    if ($html === '') {
+        return '';
+    }
+    $txt = preg_replace('#<script[^>]*>.*?</script>#is', ' ', $html);
+    if (!is_string($txt)) {
+        $txt = $html;
+    }
+    $txt = preg_replace('#<style[^>]*>.*?</style>#is', ' ', $txt);
+    if (!is_string($txt)) {
+        $txt = $html;
+    }
+    $txt = html_entity_decode(strip_tags($txt), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $txt = preg_replace('/\s+/u', ' ', $txt);
+    if (!is_string($txt)) {
+        return '';
+    }
+    $txt = trim($txt);
+    if ($txt === '') {
+        return '';
+    }
+    if (strlen($txt) > $maxLen) {
+        $txt = substr($txt, 0, $maxLen);
+    }
+    return $txt;
+}
+
+function catn8_build_wizard_extract_html_title(string $html): string
+{
+    if (preg_match('#<title[^>]*>(.*?)</title>#is', $html, $m) && isset($m[1])) {
+        $title = html_entity_decode(trim(strip_tags((string)$m[1])), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim($title);
+    }
+    return '';
+}
+
+function catn8_build_wizard_decode_duckduckgo_href(string $href): string
+{
+    $h = html_entity_decode(trim($href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($h === '') {
+        return '';
+    }
+    if (str_starts_with($h, '//')) {
+        $h = 'https:' . $h;
+    }
+    if (preg_match('#^https?://duckduckgo\.com/l/\?(.+)$#i', $h, $m)) {
+        parse_str($m[1], $params);
+        $uddg = isset($params['uddg']) ? urldecode((string)$params['uddg']) : '';
+        if ($uddg !== '') {
+            return $uddg;
+        }
+    }
+    return $h;
+}
+
+function catn8_build_wizard_search_shopping_options(string $query, int $limit = 6): array
+{
+    $q = trim($query);
+    if ($q === '') {
+        return [];
+    }
+    $url = 'https://duckduckgo.com/html/?q=' . rawurlencode($q);
+    $html = catn8_build_wizard_http_get_text($url, 15);
+    if ($html === '') {
+        return [];
+    }
+
+    $results = [];
+    if (preg_match_all('#<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>#is', $html, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $m) {
+            $href = catn8_build_wizard_decode_duckduckgo_href((string)($m[1] ?? ''));
+            if ($href === '' || !preg_match('#^https?://#i', $href)) {
+                continue;
+            }
+            $title = trim(html_entity_decode(strip_tags((string)($m[2] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($title === '') {
+                continue;
+            }
+            $results[] = [
+                'title' => $title,
+                'url' => $href,
+                'snippet' => '',
+            ];
+            if (count($results) >= $limit) {
+                break;
+            }
+        }
+    }
+    return $results;
+}
+
+function catn8_build_wizard_step_for_owner(int $stepId, int $uid): ?array
+{
+    if ($stepId <= 0) {
+        return null;
+    }
+    return Database::queryOne(
+        'SELECT s.*
+         FROM build_wizard_steps s
+         INNER JOIN build_wizard_projects p ON p.id = s.project_id
+         WHERE s.id = ? AND p.owner_user_id = ?
+         LIMIT 1',
+        [$stepId, $uid]
+    );
+}
+
 function catn8_build_wizard_normalize_ai_steps($steps): array
 {
     if (!is_array($steps)) {
@@ -1162,7 +1641,8 @@ function catn8_build_wizard_normalize_ai_steps($steps): array
 
         $normalized[] = [
             'step_order' => $stepOrder,
-            'phase_key' => catn8_build_wizard_normalize_phase_key($step['phase_key'] ?? 'general'),
+            'phase_key' => $phaseKey = catn8_build_wizard_normalize_phase_key($step['phase_key'] ?? 'general'),
+            'step_type' => catn8_build_wizard_step_type((string)($step['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, !empty($step['permit_required']) ? 1 : 0))),
             'title' => $title,
             'description' => trim((string)($step['description'] ?? '')),
             'permit_required' => !empty($step['permit_required']) ? 1 : 0,
@@ -1201,10 +1681,11 @@ function catn8_build_wizard_upsert_ai_steps(int $projectId, array $normalizedSte
         if ($existing) {
             Database::execute(
                 'UPDATE build_wizard_steps
-                 SET phase_key = ?, title = ?, description = ?, permit_required = ?, permit_name = ?, expected_start_date = ?, expected_end_date = ?, expected_duration_days = ?, estimated_cost = ?, ai_generated = 1, source_ref = ?
+                 SET phase_key = ?, step_type = ?, title = ?, description = ?, permit_required = ?, permit_name = ?, expected_start_date = ?, expected_end_date = ?, expected_duration_days = ?, estimated_cost = ?, ai_generated = 1, source_ref = ?
                  WHERE id = ?',
                 [
                     $s['phase_key'],
+                    $s['step_type'],
                     $s['title'],
                     $s['description'],
                     $s['permit_required'],
@@ -1221,12 +1702,13 @@ function catn8_build_wizard_upsert_ai_steps(int $projectId, array $normalizedSte
         } else {
             Database::execute(
                 'INSERT INTO build_wizard_steps
-                    (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 1, ?)',
+                    (project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 1, ?)',
                 [
                     $projectId,
                     (int)$s['step_order'],
                     $s['phase_key'],
+                    $s['step_type'],
                     $s['title'],
                     $s['description'],
                     $s['permit_required'],
@@ -1308,6 +1790,28 @@ try {
         }
 
         $path = catn8_build_wizard_resolve_document_path((string)($doc['storage_path'] ?? ''));
+        if ($path === '') {
+            $sourcePath = catn8_build_wizard_find_source_file_path_for_name((string)($doc['original_name'] ?? ''));
+            if ($sourcePath !== '') {
+                $recoveredBytes = @file_get_contents($sourcePath);
+                if (is_string($recoveredBytes) && $recoveredBytes !== '') {
+                    $recoveredMime = trim((string)($doc['mime_type'] ?? 'application/octet-stream'));
+                    if ($recoveredMime === '') {
+                        $recoveredMime = 'application/octet-stream';
+                    }
+                    catn8_build_wizard_upsert_document_blob((int)($doc['id'] ?? 0), $recoveredMime, $recoveredBytes);
+                    $safeName = str_replace(["\r", "\n", '"'], [' ', ' ', "'"], trim((string)($doc['original_name'] ?? 'download')) ?: 'download');
+                    header('Content-Type: ' . $recoveredMime);
+                    if ($download) {
+                        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+                    }
+                    header('Content-Length: ' . strlen($recoveredBytes));
+                    header('Cache-Control: private, max-age=600');
+                    echo $recoveredBytes;
+                    exit;
+                }
+            }
+        }
         if ($path === '') {
             http_response_code(404);
             header('Content-Type: text/plain; charset=UTF-8');
@@ -1441,6 +1945,10 @@ try {
             $updates[] = 'phase_key = ?';
             $params[] = catn8_build_wizard_normalize_phase_key($body['phase_key']);
         }
+        if (array_key_exists('step_type', $body)) {
+            $updates[] = 'step_type = ?';
+            $params[] = catn8_build_wizard_step_type((string)($body['step_type'] ?? 'construction'));
+        }
 
         if (array_key_exists('title', $body)) {
             $title = trim((string)($body['title'] ?? ''));
@@ -1465,6 +1973,54 @@ try {
             $permitName = trim((string)($body['permit_name'] ?? ''));
             $updates[] = 'permit_name = ?';
             $params[] = ($permitName !== '' ? $permitName : null);
+        }
+        if (array_key_exists('permit_authority', $body)) {
+            $updates[] = 'permit_authority = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['permit_authority'] ?? null, 191);
+        }
+        if (array_key_exists('permit_status', $body)) {
+            $updates[] = 'permit_status = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['permit_status'] ?? null, 32);
+        }
+        if (array_key_exists('permit_application_url', $body)) {
+            $updates[] = 'permit_application_url = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['permit_application_url'] ?? null, 500);
+        }
+        if (array_key_exists('purchase_category', $body)) {
+            $updates[] = 'purchase_category = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_category'] ?? null, 120);
+        }
+        if (array_key_exists('purchase_brand', $body)) {
+            $updates[] = 'purchase_brand = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_brand'] ?? null, 120);
+        }
+        if (array_key_exists('purchase_model', $body)) {
+            $updates[] = 'purchase_model = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_model'] ?? null, 191);
+        }
+        if (array_key_exists('purchase_sku', $body)) {
+            $updates[] = 'purchase_sku = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_sku'] ?? null, 120);
+        }
+        if (array_key_exists('purchase_unit', $body)) {
+            $updates[] = 'purchase_unit = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_unit'] ?? null, 32);
+        }
+        if (array_key_exists('purchase_qty', $body)) {
+            $updates[] = 'purchase_qty = ?';
+            $params[] = catn8_build_wizard_to_decimal_or_null($body['purchase_qty'] ?? null);
+        }
+        if (array_key_exists('purchase_unit_price', $body)) {
+            $updates[] = 'purchase_unit_price = ?';
+            $params[] = catn8_build_wizard_to_decimal_or_null($body['purchase_unit_price'] ?? null);
+        }
+        if (array_key_exists('purchase_vendor', $body)) {
+            $updates[] = 'purchase_vendor = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_vendor'] ?? null, 191);
+        }
+        if (array_key_exists('purchase_url', $body)) {
+            $updates[] = 'purchase_url = ?';
+            $params[] = catn8_build_wizard_text_or_null($body['purchase_url'] ?? null, 500);
         }
 
         if (array_key_exists('expected_start_date', $body)) {
@@ -1530,6 +2086,141 @@ try {
         catn8_json_response(['success' => true, 'step' => $step]);
     }
 
+    if ($action === 'find_purchase_options') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        if ($stepId <= 0) {
+            throw new RuntimeException('Missing step_id');
+        }
+
+        $step = catn8_build_wizard_step_for_owner($stepId, $viewerId);
+        if (!$step) {
+            throw new RuntimeException('Step not found or not authorized');
+        }
+
+        $stepType = catn8_build_wizard_step_type((string)($step['step_type'] ?? ''));
+        if ($stepType !== 'purchase') {
+            throw new RuntimeException('Find is only available for purchase steps');
+        }
+
+        $providedUrl = catn8_build_wizard_safe_external_url((string)($body['product_url'] ?? ($step['purchase_url'] ?? '')));
+        $urlDetails = null;
+        if ($providedUrl !== null) {
+            $html = catn8_build_wizard_http_get_text($providedUrl, 15);
+            if ($html !== '') {
+                $title = catn8_build_wizard_extract_html_title($html);
+                $text = catn8_build_wizard_html_to_text($html, 4000);
+                $brandGuess = null;
+                if (is_string($text) && preg_match('/\b(Brand|Manufacturer)\b[:\s-]{1,8}([A-Za-z0-9 ._-]{2,50})/i', $text, $bm) && isset($bm[2])) {
+                    $brandGuess = trim((string)$bm[2]);
+                }
+                $priceGuess = null;
+                if (preg_match('/\\$\\s*([0-9]{1,5}(?:\\.[0-9]{2})?)/', $text, $pm) && isset($pm[1]) && is_numeric($pm[1])) {
+                    $priceGuess = (float)$pm[1];
+                }
+                $urlDetails = [
+                    'title' => $title !== '' ? $title : (string)($step['title'] ?? ''),
+                    'url' => $providedUrl,
+                    'brand' => $brandGuess,
+                    'model' => catn8_build_wizard_text_or_null((string)($step['purchase_model'] ?? ''), 191),
+                    'vendor' => parse_url($providedUrl, PHP_URL_HOST) ?: null,
+                    'unit_price' => $priceGuess,
+                    'summary' => substr($text, 0, 280),
+                ];
+
+                Database::execute(
+                    'UPDATE build_wizard_steps
+                     SET purchase_url = COALESCE(NULLIF(?, \'\'), purchase_url),
+                         purchase_brand = COALESCE(NULLIF(?, \'\'), purchase_brand),
+                         purchase_vendor = COALESCE(NULLIF(?, \'\'), purchase_vendor),
+                         purchase_unit_price = COALESCE(?, purchase_unit_price)
+                     WHERE id = ?',
+                    [
+                        $providedUrl,
+                        (string)($urlDetails['brand'] ?? ''),
+                        (string)($urlDetails['vendor'] ?? ''),
+                        (isset($urlDetails['unit_price']) && is_numeric($urlDetails['unit_price'])) ? catn8_build_wizard_to_decimal_or_null($urlDetails['unit_price']) : null,
+                        $stepId,
+                    ]
+                );
+            }
+        }
+
+        $queryParts = [
+            (string)($step['title'] ?? ''),
+            (string)($step['purchase_category'] ?? ''),
+            (string)($step['purchase_brand'] ?? ''),
+            (string)($step['purchase_model'] ?? ''),
+            (string)($step['purchase_sku'] ?? ''),
+            (string)($step['description'] ?? ''),
+        ];
+        if ($urlDetails && !empty($urlDetails['title'])) {
+            $queryParts[] = (string)$urlDetails['title'];
+        }
+        $query = trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($queryParts, static fn($x) => trim((string)$x) !== ''))) ?? '');
+        if ($query === '') {
+            $query = 'home building material purchase';
+        }
+
+        $rawOptions = catn8_build_wizard_search_shopping_options($query . ' buy', 8);
+        $options = [];
+        if (is_array($urlDetails)) {
+            $options[] = [
+                'title' => (string)($urlDetails['title'] ?? ''),
+                'url' => (string)($urlDetails['url'] ?? ''),
+                'vendor' => $urlDetails['vendor'] ?? null,
+                'unit_price' => $urlDetails['unit_price'] ?? null,
+                'summary' => (string)($urlDetails['summary'] ?? 'Extracted from provided URL'),
+                'source' => 'provided_url',
+            ];
+        }
+        foreach ($rawOptions as $opt) {
+            if (!is_array($opt)) {
+                continue;
+            }
+            $u = catn8_build_wizard_safe_external_url((string)($opt['url'] ?? ''));
+            if ($u === null) {
+                continue;
+            }
+            $title = trim((string)($opt['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $dup = false;
+            foreach ($options as $e) {
+                if (isset($e['url']) && (string)$e['url'] === $u) {
+                    $dup = true;
+                    break;
+                }
+            }
+            if ($dup) {
+                continue;
+            }
+            $options[] = [
+                'title' => $title,
+                'url' => $u,
+                'vendor' => parse_url($u, PHP_URL_HOST) ?: null,
+                'unit_price' => null,
+                'summary' => (string)($opt['snippet'] ?? ''),
+                'source' => 'web_search',
+            ];
+            if (count($options) >= 3) {
+                break;
+            }
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'step_id' => $stepId,
+            'step_type' => $stepType,
+            'query' => $query,
+            'options' => array_slice($options, 0, 3),
+            'step' => catn8_build_wizard_step_by_id($stepId),
+        ]);
+    }
+
     if ($action === 'add_step') {
         catn8_require_method('POST');
 
@@ -1543,8 +2234,9 @@ try {
             $title = 'New Step';
         }
 
-        $description = trim((string)($body['description'] ?? ''));
         $permitRequired = ((int)($body['permit_required'] ?? 0) === 1) ? 1 : 0;
+        $description = trim((string)($body['description'] ?? ''));
+        $stepType = catn8_build_wizard_step_type((string)($body['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, $permitRequired)));
         $permitName = trim((string)($body['permit_name'] ?? ''));
         $duration = (isset($body['expected_duration_days']) && is_numeric($body['expected_duration_days']))
             ? (int)$body['expected_duration_days']
@@ -1558,16 +2250,31 @@ try {
 
         Database::execute(
             'INSERT INTO build_wizard_steps
-                (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+                (project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
+                 expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
             [
                 $projectId,
                 $nextOrder,
                 $phaseKey,
+                $stepType,
                 $title,
                 $description,
                 $permitRequired,
                 ($permitName !== '' ? $permitName : null),
+                catn8_build_wizard_text_or_null($body['permit_authority'] ?? null, 191),
+                catn8_build_wizard_text_or_null($body['permit_status'] ?? null, 32),
+                catn8_build_wizard_text_or_null($body['permit_application_url'] ?? null, 500),
+                catn8_build_wizard_text_or_null($body['purchase_category'] ?? null, 120),
+                catn8_build_wizard_text_or_null($body['purchase_brand'] ?? null, 120),
+                catn8_build_wizard_text_or_null($body['purchase_model'] ?? null, 191),
+                catn8_build_wizard_text_or_null($body['purchase_sku'] ?? null, 120),
+                catn8_build_wizard_text_or_null($body['purchase_unit'] ?? null, 32),
+                catn8_build_wizard_to_decimal_or_null($body['purchase_qty'] ?? null),
+                catn8_build_wizard_to_decimal_or_null($body['purchase_unit_price'] ?? null),
+                catn8_build_wizard_text_or_null($body['purchase_vendor'] ?? null, 191),
+                catn8_build_wizard_text_or_null($body['purchase_url'] ?? null, 500),
                 catn8_build_wizard_parse_date_or_null($body['expected_start_date'] ?? null),
                 catn8_build_wizard_parse_date_or_null($body['expected_end_date'] ?? null),
                 $duration,
@@ -1669,6 +2376,7 @@ try {
         $projectId = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
         catn8_build_wizard_require_project_access($projectId, $viewerId);
         $stepId = isset($_POST['step_id']) ? (int)$_POST['step_id'] : 0;
+        $phaseKey = catn8_build_wizard_normalize_phase_key($_POST['phase_key'] ?? '');
         if ($stepId > 0) {
             $stepRow = Database::queryOne(
                 'SELECT id FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
@@ -1681,9 +2389,15 @@ try {
             $stepId = 0;
         }
 
-        $kind = trim((string)($_POST['kind'] ?? 'other'));
-        if ($kind === '') {
-            $kind = 'other';
+        $kind = catn8_build_wizard_document_kind($_POST['kind'] ?? 'other');
+        if ($stepId <= 0) {
+            if ($phaseKey === 'general') {
+                $phaseKey = catn8_build_wizard_default_phase_for_kind($kind);
+            }
+            $inferredStepId = catn8_build_wizard_pick_step_for_phase($projectId, $phaseKey);
+            if ($inferredStepId !== null && $inferredStepId > 0) {
+                $stepId = $inferredStepId;
+            }
         }
         $caption = trim((string)($_POST['caption'] ?? ''));
         if ($caption === '') {
@@ -1761,7 +2475,14 @@ try {
             );
         }
 
-        $doc = Database::queryOne('SELECT id, project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, uploaded_at FROM build_wizard_documents WHERE id = ?', [$docId]);
+        $doc = Database::queryOne(
+            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+             FROM build_wizard_documents d
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             WHERE d.id = ?',
+            [$docId]
+        );
         if (!$doc) {
             throw new RuntimeException('Saved document not found');
         }
@@ -1770,6 +2491,117 @@ try {
         $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
         $doc['is_image'] = (strpos(strtolower((string)($doc['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
         catn8_json_response(['success' => true, 'document' => $doc]);
+    }
+
+    if ($action === 'update_document') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $documentId = isset($body['document_id']) ? (int)$body['document_id'] : 0;
+        if ($documentId <= 0) {
+            throw new RuntimeException('Missing document_id');
+        }
+
+        $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
+        if (!$doc) {
+            throw new RuntimeException('Document not found or not authorized');
+        }
+        $projectId = (int)($doc['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            throw new RuntimeException('Invalid document project');
+        }
+
+        $updates = [];
+        $params = [];
+
+        if (array_key_exists('kind', $body)) {
+            $updates[] = 'kind = ?';
+            $params[] = catn8_build_wizard_document_kind($body['kind'] ?? 'other');
+        }
+
+        if (array_key_exists('caption', $body)) {
+            $caption = trim((string)($body['caption'] ?? ''));
+            $updates[] = 'caption = ?';
+            $params[] = ($caption !== '' ? substr($caption, 0, 255) : null);
+        }
+
+        if (array_key_exists('step_id', $body)) {
+            $nextStepId = (int)($body['step_id'] ?? 0);
+            if ($nextStepId > 0) {
+                $stepRow = Database::queryOne(
+                    'SELECT id FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+                    [$nextStepId, $projectId]
+                );
+                if (!$stepRow) {
+                    throw new RuntimeException('Invalid step_id for this project');
+                }
+                $updates[] = 'step_id = ?';
+                $params[] = $nextStepId;
+            } else {
+                $updates[] = 'step_id = NULL';
+            }
+        }
+
+        if (!$updates) {
+            throw new RuntimeException('No document fields provided');
+        }
+
+        $params[] = $documentId;
+        Database::execute('UPDATE build_wizard_documents SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
+
+        $updated = Database::queryOne(
+            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+             FROM build_wizard_documents d
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             WHERE d.id = ? LIMIT 1',
+            [$documentId]
+        );
+        if (!$updated) {
+            throw new RuntimeException('Updated document not found');
+        }
+        $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
+        $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
+        $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+
+        catn8_json_response(['success' => true, 'document' => $updated]);
+    }
+
+    if ($action === 'delete_document') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $documentId = isset($body['document_id']) ? (int)$body['document_id'] : 0;
+        if ($documentId <= 0) {
+            throw new RuntimeException('Missing document_id');
+        }
+
+        $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
+        if (!$doc) {
+            throw new RuntimeException('Document not found or not authorized');
+        }
+
+        $projectId = (int)($doc['project_id'] ?? 0);
+        $storagePath = trim((string)($doc['storage_path'] ?? ''));
+        Database::execute('DELETE FROM build_wizard_documents WHERE id = ?', [$documentId]);
+
+        if ($storagePath !== '' && is_file($storagePath)) {
+            $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+            $realStoragePath = realpath($storagePath);
+            if (
+                $uploadRoot !== false
+                && $realStoragePath !== false
+                && str_starts_with($realStoragePath, $uploadRoot . DIRECTORY_SEPARATOR)
+            ) {
+                @unlink($realStoragePath);
+            }
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'deleted_document_id' => $documentId,
+            'documents' => ($projectId > 0 ? catn8_build_wizard_documents_for_project($projectId) : []),
+        ]);
     }
 
     if ($action === 'backfill_document_blobs') {
@@ -1818,16 +2650,12 @@ try {
         }
         $rows = Database::queryAll($sql . ' ORDER BY d.id ASC', $params);
 
-        $byName = [];
+        $remainingRows = [];
         foreach ($rows as $r) {
-            $nameKey = strtolower(trim((string)($r['original_name'] ?? '')));
-            if ($nameKey === '') {
-                continue;
+            $docId = (int)($r['id'] ?? 0);
+            if ($docId > 0) {
+                $remainingRows[$docId] = $r;
             }
-            if (!isset($byName[$nameKey]) || !is_array($byName[$nameKey])) {
-                $byName[$nameKey] = [];
-            }
-            $byName[$nameKey][] = $r;
         }
 
         $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
@@ -1835,6 +2663,7 @@ try {
         $matched = 0;
         $written = 0;
         $unmatched = [];
+        $ambiguous = [];
 
         foreach ($files as $file) {
             $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
@@ -1849,9 +2678,22 @@ try {
             }
             $processed++;
 
-            $key = strtolower($origName);
-            $targets = $byName[$key] ?? [];
-            if (!$targets) {
+            $bestScore = 0;
+            $candidateIds = [];
+            foreach ($remainingRows as $rowDocId => $row) {
+                $score = catn8_build_wizard_filename_match_score((string)($row['original_name'] ?? ''), $origName);
+                if ($score <= 0) {
+                    continue;
+                }
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $candidateIds = [$rowDocId];
+                } elseif ($score === $bestScore) {
+                    $candidateIds[] = $rowDocId;
+                }
+            }
+
+            if ($bestScore < 70 || !$candidateIds) {
                 $unmatched[] = $origName;
                 continue;
             }
@@ -1867,8 +2709,17 @@ try {
                 $uploadMime = 'application/octet-stream';
             }
 
-            $matched += count($targets);
-            foreach ($targets as $target) {
+            if ($bestScore < 90 && count($candidateIds) > 1) {
+                $ambiguous[] = $origName;
+                continue;
+            }
+
+            $matched += count($candidateIds);
+            foreach ($candidateIds as $rowDocId) {
+                $target = $remainingRows[$rowDocId] ?? null;
+                if (!is_array($target)) {
+                    continue;
+                }
                 $docId = (int)($target['id'] ?? 0);
                 if ($docId <= 0) {
                     continue;
@@ -1876,8 +2727,8 @@ try {
                 $targetMime = trim((string)($target['mime_type'] ?? ''));
                 catn8_build_wizard_upsert_document_blob($docId, $targetMime !== '' ? $targetMime : $uploadMime, $bytes);
                 $written++;
+                unset($remainingRows[$rowDocId]);
             }
-            unset($byName[$key]);
         }
 
         if ($finfo) {
@@ -1890,6 +2741,107 @@ try {
             'matched_documents' => $matched,
             'written_blobs' => $written,
             'unmatched_filenames' => array_values(array_unique($unmatched)),
+            'ambiguous_filenames' => array_values(array_unique($ambiguous)),
+        ]);
+    }
+
+    if ($action === 'hydrate_missing_document_blobs_from_sources') {
+        catn8_require_method('POST');
+        catn8_require_admin();
+
+        $body = catn8_read_json_body();
+        $requestedProjectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        $projectId = $requestedProjectId > 0 ? $requestedProjectId : null;
+        $scanLimit = isset($body['scan_limit']) ? (int)$body['scan_limit'] : 10000;
+        if ($scanLimit <= 0) {
+            $scanLimit = 10000;
+        }
+        if ($scanLimit > 25000) {
+            $scanLimit = 25000;
+        }
+
+        $params = [];
+        $sql = 'SELECT d.id, d.project_id, d.original_name, d.mime_type
+                FROM build_wizard_documents d
+                LEFT JOIN build_wizard_document_blobs b ON b.document_id = d.id
+                WHERE b.document_id IS NULL';
+        if ($projectId !== null) {
+            $sql .= ' AND d.project_id = ?';
+            $params[] = $projectId;
+        }
+        $rows = Database::queryAll($sql . ' ORDER BY d.id ASC', $params);
+        $remainingRows = [];
+        foreach ($rows as $r) {
+            $docId = (int)($r['id'] ?? 0);
+            if ($docId > 0) {
+                $remainingRows[$docId] = $r;
+            }
+        }
+
+        $roots = catn8_build_wizard_additional_source_roots();
+        $sourceFiles = catn8_build_wizard_collect_source_files($roots, $scanLimit);
+        $matched = 0;
+        $written = 0;
+        $ambiguousDocs = [];
+
+        foreach ($remainingRows as $rowDocId => $row) {
+            $targetName = (string)($row['original_name'] ?? '');
+            $bestScore = 0;
+            $bestPaths = [];
+            foreach ($sourceFiles as $sf) {
+                $candidateName = (string)($sf['name'] ?? '');
+                $score = catn8_build_wizard_filename_match_score($targetName, $candidateName);
+                if ($score <= 0) {
+                    continue;
+                }
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $bestPaths = [(string)($sf['path'] ?? '')];
+                } elseif ($score === $bestScore) {
+                    $bestPaths[] = (string)($sf['path'] ?? '');
+                }
+            }
+
+            if ($bestScore < 70 || !$bestPaths) {
+                continue;
+            }
+            $bestPaths = array_values(array_filter(array_unique($bestPaths), static fn($p) => $p !== ''));
+            if ($bestScore < 90 && count($bestPaths) > 1) {
+                if (count($ambiguousDocs) < 25) {
+                    $ambiguousDocs[] = [
+                        'document_id' => $rowDocId,
+                        'original_name' => $targetName,
+                    ];
+                }
+                continue;
+            }
+
+            $pickedPath = $bestPaths[0] ?? '';
+            if ($pickedPath === '' || !is_file($pickedPath)) {
+                continue;
+            }
+
+            $bytes = @file_get_contents($pickedPath);
+            if (!is_string($bytes) || $bytes === '') {
+                continue;
+            }
+            $mime = trim((string)($row['mime_type'] ?? ''));
+            if ($mime === '') {
+                $mime = 'application/octet-stream';
+            }
+            catn8_build_wizard_upsert_document_blob($rowDocId, $mime, $bytes);
+            $matched++;
+            $written++;
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'source_roots' => $roots,
+            'source_files_scanned' => count($sourceFiles),
+            'missing_documents_considered' => count($remainingRows),
+            'matched_documents' => $matched,
+            'written_blobs' => $written,
+            'ambiguous_documents' => $ambiguousDocs,
         ]);
     }
 

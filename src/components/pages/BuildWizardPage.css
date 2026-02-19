@@ -192,7 +192,7 @@
 
 .build-wizard-step-header-left {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 14px;
   flex-wrap: wrap;
 }
@@ -209,7 +209,7 @@
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  min-width: 130px;
+  min-width: 120px;
   font-size: 0.85rem;
 }
 
@@ -219,6 +219,22 @@
   color: #3d4d63;
 }
 
+.build-wizard-inline-metrics {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.build-wizard-date-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: 160px;
+  font-size: 0.85rem;
+}
+
 .build-wizard-meta-chip {
   font-size: 0.9rem;
   color: #4f6076;
@@ -226,7 +242,7 @@
 
 .build-wizard-step-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(200px, 1fr)) minmax(0, 1fr) repeat(2, minmax(190px, 220px));
+  grid-template-columns: repeat(3, minmax(200px, 1fr)) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -559,6 +575,10 @@
     flex-direction: column;
   }
 
+  .build-wizard-inline-metrics {
+    width: 100%;
+  }
+
   .build-wizard-step-grid {
     grid-template-columns: 1fr;
   }
@@ -574,5 +594,10 @@
 
   .build-wizard-duration-inline input {
     width: 100%;
+  }
+
+  .build-wizard-date-inline {
+    width: 100%;
+    min-width: 0;
   }
 }

@@ -437,10 +437,62 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     />
                     <span>#{step.step_order} Completed</span>
                   </label>
-                  <label className="build-wizard-duration-inline">
-                    Duration (Days)
-                    <input type="number" value={durationDays ?? ''} readOnly />
-                  </label>
+                  <div className="build-wizard-inline-metrics">
+                    <label className="build-wizard-duration-inline">
+                      Duration (Days)
+                      <input type="number" value={durationDays ?? ''} readOnly />
+                    </label>
+                    <label className="build-wizard-date-inline">
+                      Start
+                      <input
+                        type="date"
+                        value={draft.expected_start_date || ''}
+                        onChange={(e) => {
+                          const nextStartDate = toStringOrNull(e.target.value);
+                          const nextDuration = calculateDurationDays(nextStartDate, draft.expected_end_date) ?? draft.expected_duration_days;
+                          updateStepDraft(step.id, {
+                            expected_start_date: nextStartDate,
+                            expected_duration_days: nextDuration,
+                          });
+                        }}
+                        onBlur={() => {
+                          const nextDraft = stepDrafts[step.id] || step;
+                          const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
+                          const nextDuration = calculateDurationDays(nextStartDate, nextDraft.expected_end_date)
+                            ?? (nextDraft.expected_duration_days ?? null);
+                          void commitStep(step.id, {
+                            expected_start_date: nextStartDate,
+                            expected_duration_days: nextDuration,
+                          });
+                        }}
+                      />
+                    </label>
+                    <label className="build-wizard-date-inline">
+                      End
+                      <input
+                        type="date"
+                        value={draft.expected_end_date || ''}
+                        onChange={(e) => {
+                          const nextEndDate = toStringOrNull(e.target.value);
+                          const nextDuration = calculateDurationDays(draft.expected_start_date, nextEndDate) ?? draft.expected_duration_days;
+                          updateStepDraft(step.id, {
+                            expected_end_date: nextEndDate,
+                            expected_duration_days: nextDuration,
+                          });
+                        }}
+                        onBlur={() => {
+                          const nextDraft = stepDrafts[step.id] || step;
+                          const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
+                          const nextDuration = calculateDurationDays(nextDraft.expected_start_date, nextEndDate)
+                            ?? (nextDraft.expected_duration_days ?? null);
+                          void commitStep(step.id, {
+                            expected_end_date: nextEndDate,
+                            expected_duration_days: nextDuration,
+                          });
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
                 <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
               </div>
@@ -476,56 +528,6 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     value={draft.permit_name || ''}
                     onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
                     onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
-                  />
-                </label>
-                <label>
-                  Expected Start
-                  <input
-                    type="date"
-                    value={draft.expected_start_date || ''}
-                    onChange={(e) => {
-                      const nextStartDate = toStringOrNull(e.target.value);
-                      const nextDuration = calculateDurationDays(nextStartDate, draft.expected_end_date) ?? draft.expected_duration_days;
-                      updateStepDraft(step.id, {
-                        expected_start_date: nextStartDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
-                    onBlur={() => {
-                      const nextDraft = stepDrafts[step.id] || step;
-                      const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
-                      const nextDuration = calculateDurationDays(nextStartDate, nextDraft.expected_end_date)
-                        ?? (nextDraft.expected_duration_days ?? null);
-                      void commitStep(step.id, {
-                        expected_start_date: nextStartDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  Expected End
-                  <input
-                    type="date"
-                    value={draft.expected_end_date || ''}
-                    onChange={(e) => {
-                      const nextEndDate = toStringOrNull(e.target.value);
-                      const nextDuration = calculateDurationDays(draft.expected_start_date, nextEndDate) ?? draft.expected_duration_days;
-                      updateStepDraft(step.id, {
-                        expected_end_date: nextEndDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
-                    onBlur={() => {
-                      const nextDraft = stepDrafts[step.id] || step;
-                      const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
-                      const nextDuration = calculateDurationDays(nextDraft.expected_start_date, nextEndDate)
-                        ?? (nextDraft.expected_duration_days ?? null);
-                      void commitStep(step.id, {
-                        expected_end_date: nextEndDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
                   />
                 </label>
                 <div className="build-wizard-step-grid-spacer" aria-hidden="true" />

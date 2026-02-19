@@ -15,6 +15,33 @@ function catn8_users_table_ensure(): void
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $hasColumn = static function (string $column): bool {
+        $row = Database::queryOne(
+            "SELECT 1
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'users'
+               AND COLUMN_NAME = ?
+             LIMIT 1",
+            [$column]
+        );
+        return (bool)$row;
+    };
+
+    // Live environments may have a legacy users schema; heal missing auth columns in-place.
+    if (!$hasColumn('is_admin')) {
+        Database::execute("ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0");
+    }
+    if (!$hasColumn('is_active')) {
+        Database::execute("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+    }
+    if (!$hasColumn('email_verified')) {
+        Database::execute("ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
+    }
+    if (!$hasColumn('updated_at')) {
+        Database::execute("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    }
 }
 
 function catn8_groups_table_ensure(): void

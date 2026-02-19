@@ -1,4 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/react_shell.php';
-catn8_render_react_shell('login', 'Login - catn8.us');
-exit;
+declare(strict_types=1);
+
+header('Content-Type: text/html; charset=UTF-8');
+readfile(__DIR__ . '/index.html');

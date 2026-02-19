@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 require_once __DIR__ . '/api/bootstrap.php';
 
@@ -14,6 +15,5 @@ if (!catn8_user_is_admin($uid) && !catn8_user_in_group($uid, 'mystery-game-users
     exit;
 }
 
-require_once __DIR__ . '/includes/react_shell.php';
-catn8_render_react_shell('sheriff_station', 'Sheriff Station - catn8.us');
-exit;
+header('Content-Type: text/html; charset=UTF-8');
+readfile(__DIR__ . '/index.html');

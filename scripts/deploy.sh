@@ -23,6 +23,30 @@ fi
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/secrets/env_or_keychain.sh"
 
+usage() {
+  cat <<'USAGE'
+Usage: scripts/deploy.sh [--lite|--full|--dist-only|--env-only] [options]
+
+Fast file deploy to LIVE via SFTP mirror + HTTP verification.
+
+Required config (.env.local/.env or exported env):
+  CATN8_DEPLOY_HOST
+  CATN8_DEPLOY_USER
+
+Required secret (env or macOS Keychain):
+  CATN8_DEPLOY_PASS
+
+Common options:
+  --lite           Default mode (incremental deploy)
+  --full           Full-replace mode
+  --dist-only      Deploy dist assets only
+  --env-only       Deploy .env.live only
+  --purge          Purge managed remote directories before deploy
+  --skip-build     Skip release build step
+  --help           Show this help
+USAGE
+}
+
 # Configuration (prefer environment variables for CI/secrets managers)
 HOST="${CATN8_DEPLOY_HOST:-}"
 USER="${CATN8_DEPLOY_USER:-}"
@@ -55,6 +79,10 @@ CODE_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     --code-only)
       CODE_ONLY=1
       shift
@@ -694,8 +722,8 @@ if [ "$MODE" != "env-only" ]; then
 
   # Extract one JS and one CSS asset from homepage HTML and verify when present.
   # Some pages load assets dynamically from Vite manifest, so missing static tags is not fatal.
-  APP_JS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']+\\.js" | head -n1)
-  MAIN_CSS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']*public-core[^\"']+\\.css" | head -n1)
+  APP_JS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']+\\.js" | head -n1 || true)
+  MAIN_CSS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']*public-core[^\"']+\\.css" | head -n1 || true)
   if [ -n "$APP_JS" ]; then
     CODE_JS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$APP_JS")
     echo -e "  • JS $APP_JS -> HTTP $CODE_JS"

@@ -10,10 +10,11 @@ export interface IBuildWizardStep {
   project_id: number;
   step_order: number;
   phase_key: string;
-  step_type: 'permit' | 'purchase' | 'inspection' | 'documentation' | 'construction' | 'other';
+  step_type: 'permit' | 'purchase' | 'inspection' | 'documentation' | 'construction' | 'photos' | 'blueprints' | 'utility' | 'delivery' | 'milestone' | 'closeout' | 'other';
   title: string;
   description: string;
   permit_required: number;
+  permit_document_id: number | null;
   permit_name: string | null;
   permit_authority: string | null;
   permit_status: string | null;
@@ -72,6 +73,7 @@ export interface IBuildWizardProject {
   target_completion_date: string | null;
   wizard_notes: string;
   blueprint_document_id: number | null;
+  primary_photo_document_id: number | null;
   ai_prompt_text: string;
   ai_payload_json: string;
   created_at: string;
@@ -86,6 +88,10 @@ export interface IBuildWizardProjectSummary {
   updated_at: string;
   step_count: number;
   completed_step_count: number;
+  blueprint_document_id: number | null;
+  primary_photo_document_id: number | null;
+  primary_blueprint_thumbnail_url: string | null;
+  primary_photo_thumbnail_url: string | null;
 }
 
 export interface IBuildWizardQuestionnaire {

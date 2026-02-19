@@ -192,7 +192,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [projectId, questionnaire, onToast, refreshCurrentProject]);
 
-  const updateProject = React.useCallback(async (patch: Partial<IBuildWizardQuestionnaire>) => {
+  const updateProject = React.useCallback(async (patch: Partial<IBuildWizardQuestionnaire & IBuildWizardProject>) => {
     if (projectId <= 0) {
       return;
     }
@@ -232,6 +232,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       'title',
       'description',
       'permit_required',
+      'permit_document_id',
       'permit_name',
       'permit_authority',
       'permit_status',

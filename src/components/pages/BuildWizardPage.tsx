@@ -59,6 +59,12 @@ const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
 
 const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
   { value: 'construction', label: 'Construction' },
+  { value: 'photos', label: 'Photos' },
+  { value: 'blueprints', label: 'Blueprints' },
+  { value: 'utility', label: 'Utility' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'milestone', label: 'Milestone' },
+  { value: 'closeout', label: 'Closeout' },
   { value: 'purchase', label: 'Purchase' },
   { value: 'inspection', label: 'Inspection' },
   { value: 'permit', label: 'Permit' },
@@ -70,6 +76,7 @@ const PERMIT_STATUS_OPTIONS = ['', 'not_started', 'drafting', 'submitted', 'appr
 const PURCHASE_UNIT_OPTIONS = ['', 'ea', 'ft', 'sqft', 'cuft', 'gal', 'lb', 'box', 'bundle', 'set', 'roll'];
 
 const DOC_KIND_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'photo', label: 'Photo' },
   { value: 'site_photo', label: 'Site Photo' },
   { value: 'home_photo', label: 'Home Photo' },
   { value: 'blueprint', label: 'Blueprint' },
@@ -643,6 +650,33 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
   }, [documents]);
 
+  const permitDocuments = React.useMemo(() => {
+    return documents.filter((d) => String(d.kind || '') === 'permit');
+  }, [documents]);
+
+  const permitUsageByDocumentId = React.useMemo(() => {
+    const usage = new Map<number, number>();
+    steps.forEach((step) => {
+      const permitDocumentId = Number(step.permit_document_id || 0);
+      if (permitDocumentId <= 0) {
+        return;
+      }
+      usage.set(permitDocumentId, (usage.get(permitDocumentId) || 0) + 1);
+    });
+    return usage;
+  }, [steps]);
+
+  const primaryPhotoChoices = React.useMemo(() => {
+    return documents.filter((doc) => {
+      const kind = String(doc.kind || '');
+      return Number(doc.is_image) === 1 && (kind === 'photo' || kind === 'site_photo' || kind === 'home_photo' || kind === 'progress_photo');
+    });
+  }, [documents]);
+
+  const primaryBlueprintChoices = React.useMemo(() => {
+    return documents.filter((doc) => String(doc.kind || '') === 'blueprint');
+  }, [documents]);
+
   const phaseOptions = React.useMemo(() => {
     const seen = new Set<string>();
     const options: Array<{ value: string; label: string }> = [{ value: 'general', label: 'General' }];
@@ -1043,10 +1077,47 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                         value={(draft.step_type || 'construction') as StepType}
                         onChange={(e) => {
                           const nextType = e.target.value as StepType;
+                          const previousSameType = [...steps]
+                            .filter((candidate) => candidate.id !== step.id && ((stepDrafts[candidate.id]?.step_type || candidate.step_type) === nextType))
+                            .sort((a, b) => {
+                              if (a.step_order !== b.step_order) {
+                                return b.step_order - a.step_order;
+                              }
+                              return b.id - a.id;
+                            })[0];
+                          const previousDraft = previousSameType ? (stepDrafts[previousSameType.id] || previousSameType) : null;
                           const nextPatch: Partial<IBuildWizardStep> = {
                             step_type: nextType,
-                            permit_required: nextType === 'permit' ? 1 : draft.permit_required,
                           };
+                          if (previousDraft) {
+                            if (nextType === 'construction') {
+                              nextPatch.permit_required = Number(previousDraft.permit_required) === 1 ? 1 : 0;
+                              nextPatch.permit_document_id = previousDraft.permit_document_id ?? null;
+                              nextPatch.permit_name = previousDraft.permit_name ?? null;
+                              nextPatch.permit_authority = previousDraft.permit_authority ?? null;
+                              nextPatch.permit_status = previousDraft.permit_status ?? null;
+                              nextPatch.permit_application_url = previousDraft.permit_application_url ?? null;
+                            } else if (nextType === 'purchase') {
+                              nextPatch.purchase_category = previousDraft.purchase_category ?? null;
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.purchase_unit = previousDraft.purchase_unit ?? null;
+                            } else if (nextType === 'utility') {
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.purchase_url = previousDraft.purchase_url ?? null;
+                              nextPatch.source_ref = previousDraft.source_ref ?? null;
+                            } else if (nextType === 'delivery') {
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.source_ref = previousDraft.source_ref ?? null;
+                            }
+                          }
+                          if (nextType !== 'construction') {
+                            nextPatch.permit_required = 0;
+                            nextPatch.permit_document_id = null;
+                            nextPatch.permit_name = null;
+                            nextPatch.permit_authority = null;
+                            nextPatch.permit_status = null;
+                            nextPatch.permit_application_url = null;
+                          }
                           updateStepDraft(step.id, nextPatch);
                           void commitStep(step.id, nextPatch);
                         }}
@@ -1091,31 +1162,66 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                     onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
                   />
                 </label>
-                <label>
-                  Permit Required
-                  <select
-                    value={Number(draft.permit_required) === 1 ? '1' : '0'}
-                    onChange={(e) => {
-                      const next = e.target.value === '1' ? 1 : 0;
-                      updateStepDraft(step.id, { permit_required: next });
-                      void commitStep(step.id, { permit_required: next });
-                    }}
-                  >
-                    <option value="0">No</option>
-                    <option value="1">Yes</option>
-                  </select>
-                </label>
-                {draft.step_type === 'permit' ? (
+                {draft.step_type === 'construction' ? (
+                  <label>
+                    Permit Required
+                    <select
+                      value={Number(draft.permit_required) === 1 ? '1' : '0'}
+                      onChange={(e) => {
+                        const next = e.target.value === '1' ? 1 : 0;
+                        const nextPatch: Partial<IBuildWizardStep> = { permit_required: next };
+                        if (next !== 1) {
+                          nextPatch.permit_document_id = null;
+                          nextPatch.permit_name = null;
+                          nextPatch.permit_authority = null;
+                          nextPatch.permit_status = null;
+                          nextPatch.permit_application_url = null;
+                        }
+                        updateStepDraft(step.id, nextPatch);
+                        void commitStep(step.id, nextPatch);
+                      }}
+                    >
+                      <option value="0">No</option>
+                      <option value="1">Yes</option>
+                    </select>
+                  </label>
+                ) : null}
+                {draft.step_type === 'construction' && Number(draft.permit_required) === 1 ? (
                   <>
                     <label>
-                      Permit Name
-                      <input
-                        type="text"
-                        value={draft.permit_name || ''}
-                        onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
-                      />
+                      Saved Permit
+                      <select
+                        value={Number(draft.permit_document_id || 0) > 0 ? String(draft.permit_document_id) : ''}
+                        onChange={(e) => {
+                          const permitDocumentId = Number(e.target.value || '0');
+                          const selectedPermitDoc = permitDocuments.find((doc) => doc.id === permitDocumentId);
+                          const nextPatch: Partial<IBuildWizardStep> = {
+                            permit_document_id: permitDocumentId > 0 ? permitDocumentId : null,
+                            permit_name: permitDocumentId > 0 ? (selectedPermitDoc?.original_name || draft.permit_name || null) : null,
+                            permit_application_url: permitDocumentId > 0 ? (selectedPermitDoc?.public_url || draft.permit_application_url || null) : null,
+                          };
+                          updateStepDraft(step.id, nextPatch);
+                          void commitStep(step.id, nextPatch);
+                        }}
+                      >
+                        <option value="">Select permit</option>
+                        {permitDocuments.map((doc) => {
+                          const usageCount = permitUsageByDocumentId.get(doc.id) || 0;
+                          const currentDocId = Number(draft.permit_document_id || 0);
+                          const usedElsewhere = usageCount > 0 && currentDocId !== doc.id;
+                          return (
+                            <option key={doc.id} value={doc.id}>
+                              {usedElsewhere ? '✓ ' : ''}{doc.original_name}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </label>
+                    {permitDocuments.length ? (
+                      <div className="build-wizard-permit-usage-note">✓ means this permit is already linked to another step.</div>
+                    ) : (
+                      <div className="build-wizard-permit-usage-note">Upload permit documents first to pick from saved permits.</div>
+                    )}
                     <label>
                       Authority
                       <input
@@ -1238,26 +1344,95 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                     </label>
                   </>
                 ) : null}
-                <label>
-                  Estimated Cost
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={draft.estimated_cost ?? ''}
-                    onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
-                    onBlur={() => void commitStep(step.id, { estimated_cost: toNumberOrNull(String(stepDrafts[step.id]?.estimated_cost ?? '')) })}
-                  />
-                </label>
-                <label>
-                  Actual Cost
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={draft.actual_cost ?? ''}
-                    onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
-                    onBlur={() => void commitStep(step.id, { actual_cost: toNumberOrNull(String(stepDrafts[step.id]?.actual_cost ?? '')) })}
-                  />
-                </label>
+                {draft.step_type === 'utility' ? (
+                  <>
+                    <label>
+                      Utility Provider
+                      <input
+                        type="text"
+                        value={draft.purchase_vendor || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
+                      />
+                    </label>
+                    <label>
+                      Utility Account / Ref
+                      <input
+                        type="text"
+                        value={draft.source_ref || ''}
+                        onChange={(e) => updateStepDraft(step.id, { source_ref: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { source_ref: toStringOrNull(stepDrafts[step.id]?.source_ref || '') })}
+                      />
+                    </label>
+                    <label>
+                      Utility Portal URL
+                      <input
+                        type="url"
+                        value={draft.purchase_url || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_url: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_url: toStringOrNull(stepDrafts[step.id]?.purchase_url || '') })}
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {draft.step_type === 'delivery' ? (
+                  <>
+                    <label>
+                      Delivery Vendor
+                      <input
+                        type="text"
+                        value={draft.purchase_vendor || ''}
+                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
+                      />
+                    </label>
+                    <label>
+                      Delivery Ref / Tracking
+                      <input
+                        type="text"
+                        value={draft.source_ref || ''}
+                        onChange={(e) => updateStepDraft(step.id, { source_ref: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { source_ref: toStringOrNull(stepDrafts[step.id]?.source_ref || '') })}
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {draft.step_type === 'photos' ? (
+                  <div className="build-wizard-type-note">Photos step: upload site/progress images and keep notes minimal.</div>
+                ) : null}
+                {draft.step_type === 'blueprints' ? (
+                  <div className="build-wizard-type-note">Blueprints step: upload plans/specs and mark a primary blueprint on the Start tab.</div>
+                ) : null}
+                {draft.step_type === 'milestone' ? (
+                  <div className="build-wizard-type-note">Milestone step: keep title/date simple and mark complete when achieved.</div>
+                ) : null}
+                {draft.step_type === 'closeout' ? (
+                  <div className="build-wizard-type-note">Closeout step: final docs, warranties, and handoff items.</div>
+                ) : null}
+                {['construction', 'purchase', 'inspection', 'permit', 'documentation', 'utility', 'delivery'].includes(draft.step_type) ? (
+                  <>
+                    <label>
+                      Estimated Cost
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={draft.estimated_cost ?? ''}
+                        onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
+                        onBlur={() => void commitStep(step.id, { estimated_cost: toNumberOrNull(String(stepDrafts[step.id]?.estimated_cost ?? '')) })}
+                      />
+                    </label>
+                    <label>
+                      Actual Cost
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={draft.actual_cost ?? ''}
+                        onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
+                        onBlur={() => void commitStep(step.id, { actual_cost: toNumberOrNull(String(stepDrafts[step.id]?.actual_cost ?? '')) })}
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
 
               <label className="build-wizard-notes-field">
@@ -1294,7 +1469,10 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                     onChange={(e) => {
                       const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
                       if (file) {
-                        void uploadDocument('progress_photo', file, step.id, step.title, step.phase_key);
+                        const uploadKind = draft.step_type === 'blueprints'
+                          ? 'blueprint'
+                          : (draft.step_type === 'photos' ? 'photo' : 'progress_photo');
+                        void uploadDocument(uploadKind, file, step.id, step.title, step.phase_key);
                       }
                       e.currentTarget.value = '';
                     }}
@@ -1449,9 +1627,21 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 onClick={() => void openBuild(p.id)}
                 title={`Open ${p.title}`}
               >
-                <div className="build-wizard-thumb">
-                  <div className="build-wizard-thumb-roof" />
-                  <div className="build-wizard-thumb-body" />
+                <div className="build-wizard-thumb build-wizard-thumb-media">
+                  <div className="build-wizard-thumb-media-main">
+                    {p.primary_photo_thumbnail_url ? (
+                      <WebpImage src={p.primary_photo_thumbnail_url} alt={`${p.title} primary photo`} className="build-wizard-thumb-media-image" />
+                    ) : (
+                      <div className="build-wizard-thumb-fallback">Photo</div>
+                    )}
+                  </div>
+                  <div className="build-wizard-thumb-media-overlay">
+                    {p.primary_blueprint_thumbnail_url ? (
+                      <WebpImage src={p.primary_blueprint_thumbnail_url} alt={`${p.title} primary blueprint`} className="build-wizard-thumb-media-image" />
+                    ) : (
+                      <div className="build-wizard-thumb-fallback is-blueprint">Blueprint</div>
+                    )}
+                  </div>
                 </div>
                 <span className="build-wizard-launch-title">{p.title}</span>
               </button>
@@ -1483,48 +1673,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
-            {isAdmin ? (
-              <>
-                <button
-                  className="btn btn-outline-success btn-sm"
-                  onClick={() => recoveryUploadInputRef.current?.click()}
-                  disabled={recoveryUploadBusy}
-                  title="Upload Singletree source files to server staging"
-                >
-                  {recoveryUploadBusy ? 'Uploading...' : 'Upload Source Files'}
-                </button>
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => void onRunSingletreeRecovery(false)}
-                  disabled={recoveryBusy}
-                  title="Dry-run document recovery for Cabin - 91 Singletree Ln"
-                >
-                  {recoveryBusy ? 'Running...' : 'Singletree Recovery (Dry Run)'}
-                </button>
-                <button
-                  className="btn btn-outline-danger btn-sm"
-                  onClick={() => void onRunSingletreeRecovery(true)}
-                  disabled={recoveryBusy}
-                  title="Apply document recovery for Cabin - 91 Singletree Ln"
-                >
-                  {recoveryBusy ? 'Running...' : 'Singletree Recovery (Apply)'}
-                </button>
-                <button
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={() => setRecoveryReportOpen(true)}
-                  title="View last Singletree recovery report"
-                >
-                  Recovery Report
-                </button>
-                <input
-                  ref={recoveryUploadInputRef}
-                  type="file"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={(e) => void onUploadRecoveryFiles(e.target.files)}
-                />
-              </>
-            ) : null}
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
           </div>
         </div>
@@ -1689,6 +1837,38 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   e.currentTarget.value = '';
                 }}
               />
+            </div>
+            <div className="build-wizard-upload-row build-wizard-primary-row">
+              <label>
+                Primary Project Photo
+                <select
+                  value={Number(project?.primary_photo_document_id || 0) > 0 ? String(project?.primary_photo_document_id) : ''}
+                  onChange={(e) => {
+                    const nextId = Number(e.target.value || '0');
+                    void updateProject({ primary_photo_document_id: nextId > 0 ? nextId : null });
+                  }}
+                >
+                  <option value="">No primary photo</option>
+                  {primaryPhotoChoices.map((doc) => (
+                    <option key={doc.id} value={doc.id}>{doc.original_name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Primary Blueprint
+                <select
+                  value={Number(project?.blueprint_document_id || 0) > 0 ? String(project?.blueprint_document_id) : ''}
+                  onChange={(e) => {
+                    const nextId = Number(e.target.value || '0');
+                    void updateProject({ blueprint_document_id: nextId > 0 ? nextId : null });
+                  }}
+                >
+                  <option value="">No primary blueprint</option>
+                  {primaryBlueprintChoices.map((doc) => (
+                    <option key={doc.id} value={doc.id}>{doc.original_name}</option>
+                  ))}
+                </select>
+              </label>
             </div>
             {renderDocumentGallery(projectDocuments, 'No project media yet.')}
           </div>
@@ -1880,6 +2060,22 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                         <div className="build-wizard-doc-manager-actions">
                           <a className="btn btn-outline-primary btn-sm" href={doc.public_url} target="_blank" rel="noreferrer">Open</a>
                           <a className="btn btn-outline-secondary btn-sm" href={withDownloadFlag(doc.public_url)}>Download</a>
+                          {Number(doc.is_image) === 1 ? (
+                            <button
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => void updateProject({ primary_photo_document_id: doc.id })}
+                            >
+                              {Number(project?.primary_photo_document_id || 0) === doc.id ? 'Primary Photo' : 'Set Primary Photo'}
+                            </button>
+                          ) : null}
+                          {String(doc.kind || '') === 'blueprint' ? (
+                            <button
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => void updateProject({ blueprint_document_id: doc.id })}
+                            >
+                              {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
+                            </button>
+                          ) : null}
                           <button
                             className="btn btn-success btn-sm"
                             onClick={() => void onSaveDocumentDraft(doc)}

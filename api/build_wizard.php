@@ -23,6 +23,7 @@ function catn8_build_wizard_tables_ensure(): void
         target_completion_date DATE NULL,
         wizard_notes TEXT NULL,
         blueprint_document_id INT NULL,
+        primary_photo_document_id INT NULL,
         ai_prompt_text LONGTEXT NULL,
         ai_payload_json LONGTEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -79,6 +80,7 @@ function catn8_build_wizard_tables_ensure(): void
         title VARCHAR(255) NOT NULL,
         description TEXT NULL,
         permit_required TINYINT(1) NOT NULL DEFAULT 0,
+        permit_document_id INT NULL,
         permit_name VARCHAR(191) NULL,
         permit_authority VARCHAR(191) NULL,
         permit_status VARCHAR(32) NULL,
@@ -135,8 +137,17 @@ function catn8_build_wizard_tables_ensure(): void
         Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN caption VARCHAR(255) NULL AFTER file_size_bytes');
     }
 
+    $hasPrimaryPhotoDocumentId = Database::queryOne(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+        ['build_wizard_projects', 'primary_photo_document_id']
+    );
+    if (!$hasPrimaryPhotoDocumentId) {
+        Database::execute('ALTER TABLE build_wizard_projects ADD COLUMN primary_photo_document_id INT NULL AFTER blueprint_document_id');
+    }
+
     $stepColumns = [
         'step_type' => "ALTER TABLE build_wizard_steps ADD COLUMN step_type VARCHAR(32) NOT NULL DEFAULT 'construction' AFTER phase_key",
+        'permit_document_id' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_document_id INT NULL AFTER permit_required",
         'permit_authority' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_authority VARCHAR(191) NULL AFTER permit_name",
         'permit_status' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_status VARCHAR(32) NULL AFTER permit_authority",
         'permit_application_url' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_application_url VARCHAR(500) NULL AFTER permit_status",
@@ -165,7 +176,7 @@ function catn8_build_wizard_step_type(string $value): string
 {
     $t = strtolower(trim($value));
     return match ($t) {
-        'permit', 'purchase', 'inspection', 'documentation', 'construction', 'other' => $t,
+        'permit', 'purchase', 'inspection', 'documentation', 'construction', 'photos', 'blueprints', 'utility', 'delivery', 'milestone', 'closeout', 'other' => $t,
         default => 'construction',
     };
 }
@@ -174,7 +185,7 @@ function catn8_build_wizard_document_kind($value): string
 {
     $raw = strtolower(trim((string)$value));
     return match ($raw) {
-        'site_photo', 'home_photo', 'blueprint', 'survey', 'permit', 'receipt', 'spec_sheet', 'progress_photo', 'other' => $raw,
+        'photo', 'site_photo', 'home_photo', 'blueprint', 'survey', 'permit', 'receipt', 'spec_sheet', 'progress_photo', 'other' => $raw,
         default => 'other',
     };
 }
@@ -182,6 +193,24 @@ function catn8_build_wizard_document_kind($value): string
 function catn8_build_wizard_infer_step_type(string $title, string $phaseKey = '', int $permitRequired = 0): string
 {
     $t = strtolower(trim($title . ' ' . $phaseKey));
+    if (str_contains($t, 'blueprint') || str_contains($t, 'plan set') || str_contains($t, 'architect')) {
+        return 'blueprints';
+    }
+    if (str_contains($t, 'photo') || str_contains($t, 'images') || str_contains($t, 'gallery')) {
+        return 'photos';
+    }
+    if (str_contains($t, 'utility') || str_contains($t, 'power') || str_contains($t, 'water') || str_contains($t, 'gas')) {
+        return 'utility';
+    }
+    if (str_contains($t, 'delivery') || str_contains($t, 'dropoff') || str_contains($t, 'shipment')) {
+        return 'delivery';
+    }
+    if (str_contains($t, 'closeout') || str_contains($t, 'warranty') || str_contains($t, 'handoff')) {
+        return 'closeout';
+    }
+    if (str_contains($t, 'milestone')) {
+        return 'milestone';
+    }
     if ($permitRequired === 1 || str_contains($t, 'permit') || str_contains($t, 'approval') || str_contains($t, 'application')) {
         return 'permit';
     }
@@ -309,7 +338,7 @@ function catn8_build_wizard_default_phase_for_kind(string $kind): string
         'survey' => 'land_due_diligence',
         'permit' => 'dawson_county_permits',
         'blueprint', 'spec_sheet' => 'design_preconstruction',
-        'site_photo', 'home_photo', 'progress_photo' => 'site_preparation',
+        'photo', 'site_photo', 'home_photo', 'progress_photo' => 'site_preparation',
         default => 'general',
     };
 }
@@ -506,12 +535,13 @@ function catn8_build_wizard_list_projects(int $uid): array
 {
     $rows = Database::queryAll(
         'SELECT p.id, p.title, p.status, p.created_at, p.updated_at,
+                p.blueprint_document_id, p.primary_photo_document_id,
                 COUNT(s.id) AS step_count,
                 SUM(CASE WHEN s.is_completed = 1 THEN 1 ELSE 0 END) AS completed_step_count
          FROM build_wizard_projects p
          LEFT JOIN build_wizard_steps s ON s.project_id = p.id
          WHERE p.owner_user_id = ?
-         GROUP BY p.id, p.title, p.status, p.created_at, p.updated_at
+         GROUP BY p.id, p.title, p.status, p.created_at, p.updated_at, p.blueprint_document_id, p.primary_photo_document_id
          ORDER BY p.updated_at DESC, p.id DESC',
         [$uid]
     );
@@ -526,6 +556,14 @@ function catn8_build_wizard_list_projects(int $uid): array
             'updated_at' => (string)($r['updated_at'] ?? ''),
             'step_count' => (int)($r['step_count'] ?? 0),
             'completed_step_count' => (int)($r['completed_step_count'] ?? 0),
+            'blueprint_document_id' => isset($r['blueprint_document_id']) && $r['blueprint_document_id'] !== null ? (int)$r['blueprint_document_id'] : null,
+            'primary_photo_document_id' => isset($r['primary_photo_document_id']) && $r['primary_photo_document_id'] !== null ? (int)$r['primary_photo_document_id'] : null,
+            'primary_blueprint_thumbnail_url' => isset($r['blueprint_document_id']) && (int)$r['blueprint_document_id'] > 0
+                ? '/api/build_wizard.php?action=get_document&document_id=' . (int)$r['blueprint_document_id'] . '&thumb=1'
+                : null,
+            'primary_photo_thumbnail_url' => isset($r['primary_photo_document_id']) && (int)$r['primary_photo_document_id'] > 0
+                ? '/api/build_wizard.php?action=get_document&document_id=' . (int)$r['primary_photo_document_id'] . '&thumb=1'
+                : null,
         ];
     }
 
@@ -643,7 +681,7 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
 function catn8_build_wizard_steps_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                 expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
@@ -667,6 +705,7 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'title' => (string)($r['title'] ?? ''),
             'description' => (string)($r['description'] ?? ''),
             'permit_required' => (int)($r['permit_required'] ?? 0),
+            'permit_document_id' => $r['permit_document_id'] !== null ? (int)$r['permit_document_id'] : null,
             'permit_name' => $r['permit_name'] !== null ? (string)$r['permit_name'] : null,
             'permit_authority' => $r['permit_authority'] !== null ? (string)$r['permit_authority'] : null,
             'permit_status' => $r['permit_status'] !== null ? (string)$r['permit_status'] : null,
@@ -1146,7 +1185,7 @@ function catn8_build_wizard_find_source_file_path_for_name(string $originalName)
 function catn8_build_wizard_step_by_id(int $stepId): ?array
 {
     $row = Database::queryOne(
-        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+        'SELECT id, project_id, step_order, phase_key, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                 expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
@@ -1169,6 +1208,7 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
         'title' => (string)($row['title'] ?? ''),
         'description' => (string)($row['description'] ?? ''),
         'permit_required' => (int)($row['permit_required'] ?? 0),
+        'permit_document_id' => $row['permit_document_id'] !== null ? (int)$row['permit_document_id'] : null,
         'permit_name' => $row['permit_name'] !== null ? (string)$row['permit_name'] : null,
         'permit_authority' => $row['permit_authority'] !== null ? (string)$row['permit_authority'] : null,
         'permit_status' => $row['permit_status'] !== null ? (string)$row['permit_status'] : null,
@@ -2013,9 +2053,55 @@ try {
             $status = 'planning';
         }
 
+        $blueprintDocumentId = null;
+        if (array_key_exists('blueprint_document_id', $body)) {
+            $nextBlueprintId = (int)($body['blueprint_document_id'] ?? 0);
+            if ($nextBlueprintId > 0) {
+                $docRow = Database::queryOne(
+                    'SELECT id, kind FROM build_wizard_documents WHERE id = ? AND project_id = ? LIMIT 1',
+                    [$nextBlueprintId, $projectId]
+                );
+                if (!$docRow || strtolower(trim((string)($docRow['kind'] ?? ''))) !== 'blueprint') {
+                    throw new RuntimeException('Invalid blueprint_document_id for this project');
+                }
+                $blueprintDocumentId = $nextBlueprintId;
+            }
+        } else {
+            $existingBlueprint = Database::queryOne('SELECT blueprint_document_id FROM build_wizard_projects WHERE id = ? LIMIT 1', [$projectId]);
+            $blueprintDocumentId = isset($existingBlueprint['blueprint_document_id']) && $existingBlueprint['blueprint_document_id'] !== null
+                ? (int)$existingBlueprint['blueprint_document_id']
+                : null;
+        }
+
+        $primaryPhotoDocumentId = null;
+        if (array_key_exists('primary_photo_document_id', $body)) {
+            $nextPhotoId = (int)($body['primary_photo_document_id'] ?? 0);
+            if ($nextPhotoId > 0) {
+                $docRow = Database::queryOne(
+                    'SELECT id, kind, mime_type FROM build_wizard_documents WHERE id = ? AND project_id = ? LIMIT 1',
+                    [$nextPhotoId, $projectId]
+                );
+                if (!$docRow) {
+                    throw new RuntimeException('Invalid primary_photo_document_id for this project');
+                }
+                $docKind = strtolower(trim((string)($docRow['kind'] ?? '')));
+                $docMime = strtolower(trim((string)($docRow['mime_type'] ?? '')));
+                $allowedKinds = ['photo', 'site_photo', 'home_photo', 'progress_photo'];
+                if (!in_array($docKind, $allowedKinds, true) || strpos($docMime, 'image/') !== 0) {
+                    throw new RuntimeException('Primary photo must be an image from a photo kind');
+                }
+                $primaryPhotoDocumentId = $nextPhotoId;
+            }
+        } else {
+            $existingPhoto = Database::queryOne('SELECT primary_photo_document_id FROM build_wizard_projects WHERE id = ? LIMIT 1', [$projectId]);
+            $primaryPhotoDocumentId = isset($existingPhoto['primary_photo_document_id']) && $existingPhoto['primary_photo_document_id'] !== null
+                ? (int)$existingPhoto['primary_photo_document_id']
+                : null;
+        }
+
         Database::execute(
             'UPDATE build_wizard_projects
-             SET title = ?, status = ?, square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?
+             SET title = ?, status = ?, square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?, blueprint_document_id = ?, primary_photo_document_id = ?
              WHERE id = ?',
             [
                 trim((string)($body['title'] ?? 'Build Wizard Project')),
@@ -2029,6 +2115,8 @@ try {
                 catn8_build_wizard_parse_date_or_null($body['target_start_date'] ?? null),
                 catn8_build_wizard_parse_date_or_null($body['target_completion_date'] ?? null),
                 trim((string)($body['wizard_notes'] ?? '')),
+                $blueprintDocumentId,
+                $primaryPhotoDocumentId,
                 $projectId,
             ]
         );
@@ -2114,7 +2202,7 @@ try {
         }
 
         $stepRow = Database::queryOne(
-            'SELECT s.id, s.project_id
+            'SELECT s.id, s.project_id, s.step_type
              FROM build_wizard_steps s
              INNER JOIN build_wizard_projects p ON p.id = s.project_id
              WHERE s.id = ? AND p.owner_user_id = ?
@@ -2136,6 +2224,9 @@ try {
             $updates[] = 'step_type = ?';
             $params[] = catn8_build_wizard_step_type((string)($body['step_type'] ?? 'construction'));
         }
+        $effectiveStepType = array_key_exists('step_type', $body)
+            ? catn8_build_wizard_step_type((string)($body['step_type'] ?? 'construction'))
+            : catn8_build_wizard_step_type((string)($stepRow['step_type'] ?? 'construction'));
 
         if (array_key_exists('title', $body)) {
             $title = trim((string)($body['title'] ?? ''));
@@ -2154,6 +2245,33 @@ try {
         if (array_key_exists('permit_required', $body)) {
             $updates[] = 'permit_required = ?';
             $params[] = ((int)$body['permit_required'] === 1) ? 1 : 0;
+            if (((int)$body['permit_required'] !== 1)) {
+                $updates[] = 'permit_document_id = NULL';
+                $updates[] = 'permit_name = NULL';
+                $updates[] = 'permit_authority = NULL';
+                $updates[] = 'permit_status = NULL';
+                $updates[] = 'permit_application_url = NULL';
+            }
+        }
+
+        if (array_key_exists('permit_document_id', $body)) {
+            $permitDocumentId = (int)($body['permit_document_id'] ?? 0);
+            if ($permitDocumentId > 0) {
+                $docRow = Database::queryOne(
+                    'SELECT id, kind
+                     FROM build_wizard_documents
+                     WHERE id = ? AND project_id = ?
+                     LIMIT 1',
+                    [$permitDocumentId, (int)$stepRow['project_id']]
+                );
+                if (!$docRow || strtolower(trim((string)($docRow['kind'] ?? ''))) !== 'permit') {
+                    throw new RuntimeException('Invalid permit_document_id for this project');
+                }
+                $updates[] = 'permit_document_id = ?';
+                $params[] = $permitDocumentId;
+            } else {
+                $updates[] = 'permit_document_id = NULL';
+            }
         }
 
         if (array_key_exists('permit_name', $body)) {
@@ -2172,6 +2290,15 @@ try {
         if (array_key_exists('permit_application_url', $body)) {
             $updates[] = 'permit_application_url = ?';
             $params[] = catn8_build_wizard_text_or_null($body['permit_application_url'] ?? null, 500);
+        }
+
+        if ($effectiveStepType !== 'construction') {
+            $updates[] = 'permit_required = 0';
+            $updates[] = 'permit_document_id = NULL';
+            $updates[] = 'permit_name = NULL';
+            $updates[] = 'permit_authority = NULL';
+            $updates[] = 'permit_status = NULL';
+            $updates[] = 'permit_application_url = NULL';
         }
         if (array_key_exists('purchase_category', $body)) {
             $updates[] = 'purchase_category = ?';
@@ -2427,6 +2554,24 @@ try {
         $description = trim((string)($body['description'] ?? ''));
         $stepType = catn8_build_wizard_step_type((string)($body['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, $permitRequired)));
         $permitName = trim((string)($body['permit_name'] ?? ''));
+        $permitDocumentId = (int)($body['permit_document_id'] ?? 0);
+        if ($stepType !== 'construction') {
+            $permitRequired = 0;
+            $permitDocumentId = 0;
+            $permitName = '';
+        }
+        if ($permitDocumentId > 0) {
+            $permitDocRow = Database::queryOne(
+                'SELECT id, kind
+                 FROM build_wizard_documents
+                 WHERE id = ? AND project_id = ?
+                 LIMIT 1',
+                [$permitDocumentId, $projectId]
+            );
+            if (!$permitDocRow || strtolower(trim((string)($permitDocRow['kind'] ?? ''))) !== 'permit') {
+                throw new RuntimeException('Invalid permit_document_id for this project');
+            }
+        }
         $duration = (isset($body['expected_duration_days']) && is_numeric($body['expected_duration_days']))
             ? (int)$body['expected_duration_days']
             : null;
@@ -2439,10 +2584,10 @@ try {
 
         Database::execute(
             'INSERT INTO build_wizard_steps
-                (project_id, step_order, phase_key, step_type, title, description, permit_required, permit_name, permit_authority, permit_status, permit_application_url,
+                (project_id, step_order, phase_key, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                  purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                  expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
             [
                 $projectId,
                 $nextOrder,
@@ -2451,6 +2596,7 @@ try {
                 $title,
                 $description,
                 $permitRequired,
+                ($permitDocumentId > 0 ? $permitDocumentId : null),
                 ($permitName !== '' ? $permitName : null),
                 catn8_build_wizard_text_or_null($body['permit_authority'] ?? null, 191),
                 catn8_build_wizard_text_or_null($body['permit_status'] ?? null, 32),
@@ -2643,7 +2789,12 @@ try {
 
         $docId = (int)Database::lastInsertId();
         if ($kind === 'blueprint') {
-            Database::execute('UPDATE build_wizard_projects SET blueprint_document_id = ? WHERE id = ?', [$docId, $projectId]);
+            Database::execute(
+                'UPDATE build_wizard_projects
+                 SET blueprint_document_id = COALESCE(blueprint_document_id, ?)
+                 WHERE id = ?',
+                [$docId, $projectId]
+            );
         }
 
         $bytes = file_get_contents($destPath);
@@ -2662,6 +2813,15 @@ try {
                  ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), image_blob = VALUES(image_blob), width_px = VALUES(width_px), height_px = VALUES(height_px), file_size_bytes = VALUES(file_size_bytes)',
                 [$docId, $mime, $bytes, $width, $height, strlen($bytes)]
             );
+
+            if (in_array($kind, ['photo', 'site_photo', 'home_photo', 'progress_photo'], true)) {
+                Database::execute(
+                    'UPDATE build_wizard_projects
+                     SET primary_photo_document_id = COALESCE(primary_photo_document_id, ?)
+                     WHERE id = ?',
+                    [$docId, $projectId]
+                );
+            }
         }
 
         $doc = Database::queryOne(
@@ -2773,6 +2933,15 @@ try {
         $projectId = (int)($doc['project_id'] ?? 0);
         $storagePath = trim((string)($doc['storage_path'] ?? ''));
         Database::execute('DELETE FROM build_wizard_documents WHERE id = ?', [$documentId]);
+        if ($projectId > 0) {
+            Database::execute(
+                'UPDATE build_wizard_projects
+                 SET blueprint_document_id = CASE WHEN blueprint_document_id = ? THEN NULL ELSE blueprint_document_id END,
+                     primary_photo_document_id = CASE WHEN primary_photo_document_id = ? THEN NULL ELSE primary_photo_document_id END
+                 WHERE id = ?',
+                [$documentId, $documentId, $projectId]
+            );
+        }
 
         if ($storagePath !== '' && is_file($storagePath)) {
             $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');

@@ -29,6 +29,8 @@ const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
   { id: 'completed', label: '9. Completed' },
 ];
 
+const PHASE_PROGRESS_ORDER: BuildTabId[] = ['land', 'permits', 'site', 'framing', 'mep', 'finishes', 'desk'];
+
 const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
   start: '#5b6f87',
   land: '#4c9f70',
@@ -130,6 +132,18 @@ function calculateDurationDays(startDate: string | null | undefined, endDate: st
   const msDiff = end.getTime() - start.getTime();
   const days = Math.round(msDiff / 86400000) + 1;
   return Math.max(1, days);
+}
+
+function stepCostTotal(step: IBuildWizardStep): number {
+  const actual = Number(step.actual_cost);
+  if (Number.isFinite(actual) && actual > 0) {
+    return actual;
+  }
+  const estimated = Number(step.estimated_cost);
+  if (Number.isFinite(estimated) && estimated > 0) {
+    return estimated;
+  }
+  return 0;
 }
 
 function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
@@ -429,8 +443,6 @@ function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRa
 
 export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const {
-    loading,
-    saving,
     aiBusy,
     projectId,
     projects,
@@ -521,6 +533,25 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     }
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
   }, [steps, activeTab]);
+
+  const phaseTotals = React.useMemo(() => {
+    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
+      return { phaseTotal: 0, projectToDateTotal: 0 };
+    }
+
+    const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
+    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + stepCostTotal(step), 0);
+    const projectToDateTotal = steps.reduce((sum, step) => {
+      const stepPhase = stepPhaseBucket(step);
+      const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhase);
+      if (stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex) {
+        return sum + stepCostTotal(step);
+      }
+      return sum;
+    }, 0);
+
+    return { phaseTotal, projectToDateTotal };
+  }, [activeTab, filteredTabSteps, steps]);
 
   const footerTimelineSteps = React.useMemo(() => {
     if (activeTab === 'start' || activeTab === 'completed') {
@@ -690,7 +721,11 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                       }
                     }}
                   >
-                    x
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
                   </button>
                   <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
                 </div>
@@ -1070,6 +1105,10 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
           <div className="build-wizard-card">
             <div className="build-wizard-phase-head">
               <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
+              <div className="build-wizard-phase-totals">
+                <span>Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.phaseTotal)}</span></span>
+                <span>Project Total To Date: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.projectToDateTotal)}</span></span>
+              </div>
               <button
                 type="button"
                 className="build-wizard-phase-add"
@@ -1165,30 +1204,6 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
 
       <footer className="build-wizard-footer-chart">
         <div className="build-wizard-footer-inner">
-          <div className="build-wizard-footer-controls">
-            <label>
-              Range Start
-              <input
-                type="date"
-                value={footerRange.start}
-                onChange={(e) => setFooterRange((prev) => ({ ...prev, start: e.target.value }))}
-              />
-            </label>
-            <label>
-              Range End
-              <input
-                type="date"
-                value={footerRange.end}
-                onChange={(e) => setFooterRange((prev) => ({ ...prev, end: e.target.value }))}
-              />
-            </label>
-            <div className="build-wizard-footer-meta">
-              Viewing: {BUILD_TABS.find((t) => t.id === activeTab)?.label}
-            </div>
-            <div className="build-wizard-footer-meta">
-              Saving: {saving || loading ? 'Yes' : 'No'}
-            </div>
-          </div>
           <FooterPhaseTimeline steps={footerTimelineSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
         </div>
       </footer>

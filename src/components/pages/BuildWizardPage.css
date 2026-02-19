@@ -271,13 +271,24 @@
 .build-wizard-step-delete {
   width: 26px;
   height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #d0dae9;
   border-radius: 999px;
   background: #fff;
   color: #7f1228;
-  font-weight: 700;
-  line-height: 1;
   padding: 0;
+}
+
+.build-wizard-step-delete svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .build-wizard-step-delete:hover {
@@ -292,7 +303,8 @@
 }
 
 .build-wizard-phase-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -300,9 +312,29 @@
 
 .build-wizard-phase-head h2 {
   margin: 0;
+  justify-self: start;
+}
+
+.build-wizard-phase-totals {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 1.5rem;
+  color: #3f536e;
+  white-space: nowrap;
+}
+
+.build-wizard-phase-totals span {
+  font-weight: 600;
+}
+
+.build-wizard-phase-total-value {
+  color: #b91c1c;
 }
 
 .build-wizard-phase-add {
+  justify-self: end;
   width: 30px;
   height: 30px;
   border: 1px solid #b8cbe6;
@@ -632,27 +664,6 @@
   padding: 10px 24px 14px;
 }
 
-.build-wizard-footer-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: flex-end;
-  margin-bottom: 8px;
-}
-
-.build-wizard-footer-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-  color: #425369;
-}
-
-.build-wizard-footer-meta {
-  color: #425369;
-  font-size: 0.9rem;
-}
-
 .build-wizard-lightbox {
   position: fixed;
   inset: 0;
@@ -779,5 +790,22 @@
 
   .build-wizard-phase-ticks .is-mid {
     display: none;
+  }
+
+  .build-wizard-phase-head {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .build-wizard-phase-totals {
+    justify-self: start;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    white-space: normal;
+  }
+
+  .build-wizard-phase-add {
+    justify-self: end;
   }
 }

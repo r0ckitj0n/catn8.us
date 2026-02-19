@@ -1,0 +1,151 @@
+.build-wizard-page {
+  color: #1f2a37;
+}
+
+.build-wizard-hero {
+  background: linear-gradient(130deg, #e8f7ea 0%, #fff4df 100%);
+  border: 1px solid #cfe5d2;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.build-wizard-hero h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.build-wizard-card {
+  background: #ffffff;
+  border: 1px solid #d8dee8;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 18px rgba(31, 42, 55, 0.08);
+}
+
+.build-wizard-muted {
+  color: #4e5d70;
+  margin-bottom: 10px;
+}
+
+.build-wizard-leading-questions {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.build-wizard-question-item {
+  background: #f4f8ff;
+  border: 1px solid #d3e3ff;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.build-wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.build-wizard-grid label,
+.build-wizard-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.build-wizard-grid input,
+.build-wizard-card input,
+.build-wizard-card select,
+.build-wizard-card textarea {
+  border: 1px solid #bdc8d8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 400;
+}
+
+.build-wizard-notes-field {
+  margin-top: 12px;
+}
+
+.build-wizard-upload-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.build-wizard-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.build-wizard-ai-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.build-wizard-step-list {
+  display: grid;
+  gap: 12px;
+}
+
+.build-wizard-step {
+  border: 1px solid #d5dce6;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.build-wizard-step-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.build-wizard-step-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.build-wizard-step-meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #445166;
+  font-size: 0.92rem;
+}
+
+.build-wizard-step-desc {
+  margin-top: 8px;
+}
+
+.build-wizard-note-row {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.build-wizard-note-row input {
+  flex: 1;
+}
+
+.build-wizard-note-list {
+  margin-top: 8px;
+  border-top: 1px dashed #c8d3e2;
+  padding-top: 8px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}

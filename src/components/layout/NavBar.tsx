@@ -23,6 +23,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     { key: 'games', href: 'games.php', label: 'Games' },
     { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
     { key: 'activities', href: 'activities.php', label: 'Activities' },
+    { key: 'build_wizard', href: 'build-wizard.php', label: 'Build Wizard' },
     ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'Word Search' }] : []),
   ];
 

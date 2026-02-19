@@ -29,6 +29,7 @@ import { StoriesPage } from '../components/pages/StoriesPage';
 import { ArcadePage } from '../components/pages/ArcadePage';
 import { GamesPage } from '../components/pages/GamesPage';
 import { ActivitiesPage } from '../components/pages/ActivitiesPage';
+import { BuildWizardPage } from '../components/pages/BuildWizardPage';
 import { VerifyPage } from '../components/pages/VerifyPage';
 import { ResetPage } from '../components/pages/ResetPage';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
@@ -208,6 +209,7 @@ function App({ page }) {
   if (page === 'games') content = <GamesPage {...layoutProps} />;
   if (page === 'arcade') content = <ArcadePage {...layoutProps} />;
   if (page === 'activities') content = <ActivitiesPage {...layoutProps} />;
+  if (page === 'build_wizard') content = <BuildWizardPage {...layoutProps} onToast={showToast} />;
   if (page === 'login') content = <HomePage {...layoutProps} />;
   if (page === 'mystery') content = (
     <MysteryPage 

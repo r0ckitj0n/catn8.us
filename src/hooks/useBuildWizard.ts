@@ -1,6 +1,7 @@
 import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
+  IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
   IBuildWizardDocument,
   IBuildWizardProject,
@@ -371,6 +372,24 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [projectId, onToast, refreshCurrentProject]);
 
+  const backfillDocumentBlobs = React.useCallback(async (apply: boolean, targetProjectId?: number, limit: number = 0) => {
+    try {
+      const res = await ApiClient.post<IBuildWizardDocumentBlobBackfillResponse>('/api/build_wizard.php?action=backfill_document_blobs', {
+        apply: apply ? 1 : 0,
+        project_id: (targetProjectId && targetProjectId > 0) ? targetProjectId : undefined,
+        limit: Number.isFinite(limit) ? Math.max(0, Math.min(5000, Math.trunc(limit))) : 0,
+      });
+      const report = res?.report;
+      if (!report) {
+        throw new Error('Missing backfill report');
+      }
+      return report;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to backfill Build Wizard file blobs' });
+      return null;
+    }
+  }, [onToast]);
+
   return {
     loading,
     saving,
@@ -397,5 +416,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     uploadDocument,
     packageForAi,
     generateStepsFromAi,
+    backfillDocumentBlobs,
   };
 }

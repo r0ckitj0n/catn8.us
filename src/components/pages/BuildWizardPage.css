@@ -98,6 +98,13 @@
   font-weight: 700;
 }
 
+.build-wizard-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .build-wizard-tabs {
   display: grid;
   grid-template-columns: repeat(9, minmax(120px, 1fr));

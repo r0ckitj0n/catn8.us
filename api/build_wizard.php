@@ -59,6 +59,17 @@ function catn8_build_wizard_tables_ensure(): void
         CONSTRAINT fk_build_wizard_document_images_document FOREIGN KEY (document_id) REFERENCES build_wizard_documents(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_document_blobs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        document_id INT NOT NULL,
+        mime_type VARCHAR(120) NOT NULL DEFAULT 'application/octet-stream',
+        file_blob LONGBLOB NOT NULL,
+        file_size_bytes INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_document_id (document_id),
+        CONSTRAINT fk_build_wizard_document_blobs_document FOREIGN KEY (document_id) REFERENCES build_wizard_documents(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_steps (
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
@@ -584,9 +595,11 @@ function catn8_build_wizard_document_for_user(int $documentId, int $uid): ?array
 
     return Database::queryOne(
         'SELECT d.id, d.project_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
+                db.file_blob, db.mime_type AS file_blob_mime_type,
                 bi.image_blob, bi.mime_type AS blob_mime_type
          FROM build_wizard_documents d
          INNER JOIN build_wizard_projects p ON p.id = d.project_id
+         LEFT JOIN build_wizard_document_blobs db ON db.document_id = d.id
          LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
          WHERE d.id = ? AND p.owner_user_id = ?
          LIMIT 1',
@@ -608,6 +621,7 @@ function catn8_build_wizard_resolve_document_path(string $storagePath): string
     $normalized = str_replace('\\', '/', $rawPath);
     $projectRoot = dirname(__DIR__);
     $uploadRoot = $projectRoot . '/uploads/build-wizard';
+    $importStageRoot = $projectRoot . '/.local/state/build_wizard_import/stage_docs';
 
     if ($normalized !== '' && $normalized[0] !== '/') {
         $candidate = $projectRoot . '/' . ltrim($normalized, '/');
@@ -628,15 +642,142 @@ function catn8_build_wizard_resolve_document_path(string $storagePath): string
         }
     }
 
+    $importStageMarker = '/.local/state/build_wizard_import/stage_docs/';
+    $stagePos = strpos($normalized, $importStageMarker);
+    if ($stagePos !== false) {
+        $relativeFromStage = substr($normalized, $stagePos + 1); // remove leading slash
+        if (is_string($relativeFromStage) && $relativeFromStage !== '') {
+            $candidate = $projectRoot . '/' . $relativeFromStage;
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+
     $baseName = basename($normalized);
     if ($baseName !== '' && $baseName !== '.' && $baseName !== '..') {
-        $candidate = $uploadRoot . '/' . $baseName;
-        if (is_file($candidate)) {
-            return $candidate;
+        foreach ([$uploadRoot, $importStageRoot] as $root) {
+            $candidate = $root . '/' . $baseName;
+            if (is_file($candidate)) {
+                return $candidate;
+            }
         }
     }
 
     return '';
+}
+
+function catn8_build_wizard_backfill_document_blobs(bool $apply, ?int $projectId = null, int $limit = 0): array
+{
+    $effectiveProjectId = ($projectId !== null && $projectId > 0) ? $projectId : null;
+    $effectiveLimit = max(0, min(5000, $limit));
+
+    $sql = 'SELECT d.id, d.project_id, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
+                   b.document_id AS has_blob,
+                   bi.image_blob, bi.mime_type AS image_blob_mime_type
+            FROM build_wizard_documents d
+            LEFT JOIN build_wizard_document_blobs b ON b.document_id = d.id
+            LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id';
+    $params = [];
+    if ($effectiveProjectId !== null) {
+        $sql .= ' WHERE d.project_id = ?';
+        $params[] = $effectiveProjectId;
+    }
+    $sql .= ' ORDER BY d.id ASC';
+    if ($effectiveLimit > 0) {
+        $sql .= ' LIMIT ' . $effectiveLimit;
+    }
+
+    $rows = Database::queryAll($sql, $params);
+
+    $total = count($rows);
+    $alreadyBlob = 0;
+    $fromImageBlob = 0;
+    $fromFilePath = 0;
+    $missing = 0;
+    $written = 0;
+    $missingDocs = [];
+
+    foreach ($rows as $row) {
+        $docId = (int)($row['id'] ?? 0);
+        if ($docId <= 0) {
+            continue;
+        }
+        if (!empty($row['has_blob'])) {
+            $alreadyBlob++;
+            continue;
+        }
+
+        $bytes = null;
+        $mime = trim((string)($row['mime_type'] ?? 'application/octet-stream'));
+        if ($mime === '') {
+            $mime = 'application/octet-stream';
+        }
+        $source = '';
+
+        $imageBlob = $row['image_blob'] ?? null;
+        if (is_string($imageBlob) && $imageBlob !== '') {
+            $bytes = $imageBlob;
+            $imgMime = trim((string)($row['image_blob_mime_type'] ?? ''));
+            if ($imgMime !== '') {
+                $mime = $imgMime;
+            }
+            $source = 'image_blob';
+        } else {
+            $resolvedPath = catn8_build_wizard_resolve_document_path((string)($row['storage_path'] ?? ''));
+            if ($resolvedPath !== '') {
+                $fileBytes = @file_get_contents($resolvedPath);
+                if (is_string($fileBytes) && $fileBytes !== '') {
+                    $bytes = $fileBytes;
+                    $source = 'file_path';
+                }
+            }
+        }
+
+        if (!is_string($bytes) || $bytes === '') {
+            $missing++;
+            if (count($missingDocs) < 25) {
+                $missingDocs[] = [
+                    'document_id' => $docId,
+                    'project_id' => (int)($row['project_id'] ?? 0),
+                    'original_name' => (string)($row['original_name'] ?? ''),
+                    'storage_path' => (string)($row['storage_path'] ?? ''),
+                ];
+            }
+            continue;
+        }
+
+        if ($source === 'image_blob') {
+            $fromImageBlob++;
+        } else {
+            $fromFilePath++;
+        }
+
+        if (!$apply) {
+            continue;
+        }
+
+        Database::execute(
+            'INSERT INTO build_wizard_document_blobs (document_id, mime_type, file_blob, file_size_bytes)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
+            [$docId, $mime, $bytes, strlen($bytes)]
+        );
+        $written++;
+    }
+
+    return [
+        'project_id' => $effectiveProjectId,
+        'apply' => $apply ? 1 : 0,
+        'limit' => $effectiveLimit,
+        'total' => $total,
+        'already_blob' => $alreadyBlob,
+        'from_image_blob' => $fromImageBlob,
+        'from_file_path' => $fromFilePath,
+        'missing' => $missing,
+        'written' => $written,
+        'missing_docs' => $missingDocs,
+    ];
 }
 
 function catn8_build_wizard_step_by_id(int $stepId): ?array
@@ -1074,6 +1215,27 @@ try {
             http_response_code(404);
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'Document not found';
+            exit;
+        }
+
+        $blob = $doc['file_blob'] ?? null;
+        if (is_string($blob) && $blob !== '') {
+            $mime = trim((string)($doc['file_blob_mime_type'] ?? $doc['mime_type'] ?? 'application/octet-stream'));
+            if ($mime === '') {
+                $mime = 'application/octet-stream';
+            }
+            $originalName = trim((string)($doc['original_name'] ?? 'download'));
+            if ($originalName === '') {
+                $originalName = 'download';
+            }
+            $safeName = str_replace(["\r", "\n", '"'], [' ', ' ', "'"], $originalName);
+            header('Content-Type: ' . $mime);
+            if ($download) {
+                header('Content-Disposition: attachment; filename="' . $safeName . '"');
+            }
+            header('Content-Length: ' . strlen($blob));
+            header('Cache-Control: private, max-age=600');
+            echo $blob;
             exit;
         }
 
@@ -1534,11 +1696,18 @@ try {
             Database::execute('UPDATE build_wizard_projects SET blueprint_document_id = ? WHERE id = ?', [$docId, $projectId]);
         }
 
+        $bytes = file_get_contents($destPath);
+        if (!is_string($bytes) || $bytes === '') {
+            throw new RuntimeException('Failed to read uploaded file');
+        }
+        Database::execute(
+            'INSERT INTO build_wizard_document_blobs (document_id, mime_type, file_blob, file_size_bytes)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
+            [$docId, $mime, $bytes, strlen($bytes)]
+        );
+
         if (strpos(strtolower($mime), 'image/') === 0) {
-            $bytes = file_get_contents($destPath);
-            if (!is_string($bytes) || $bytes === '') {
-                throw new RuntimeException('Failed to read uploaded image');
-            }
             $sizeInfo = @getimagesize($destPath);
             $width = is_array($sizeInfo) && isset($sizeInfo[0]) ? (int)$sizeInfo[0] : null;
             $height = is_array($sizeInfo) && isset($sizeInfo[1]) ? (int)$sizeInfo[1] : null;
@@ -1559,6 +1728,29 @@ try {
         $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
         $doc['is_image'] = (strpos(strtolower((string)($doc['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
         catn8_json_response(['success' => true, 'document' => $doc]);
+    }
+
+    if ($action === 'backfill_document_blobs') {
+        catn8_require_method('POST');
+        catn8_require_admin();
+
+        $body = catn8_read_json_body();
+        $apply = ((int)($body['apply'] ?? 0) === 1);
+        $requestedProjectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        $limit = isset($body['limit']) ? (int)$body['limit'] : 0;
+        if ($limit < 0) {
+            $limit = 0;
+        }
+        if ($limit > 5000) {
+            $limit = 5000;
+        }
+
+        $projectIdForRun = $requestedProjectId > 0 ? $requestedProjectId : null;
+        $report = catn8_build_wizard_backfill_document_blobs($apply, $projectIdForRun, $limit);
+        catn8_json_response([
+            'success' => true,
+            'report' => $report,
+        ]);
     }
 
     if ($action === 'build_ai_payload') {

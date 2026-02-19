@@ -96,3 +96,28 @@ export interface IBuildWizardBootstrapResponse {
   documents: IBuildWizardDocument[];
   leading_questions: string[];
 }
+
+export interface IBuildWizardMissingDocumentRef {
+  document_id: number;
+  project_id: number;
+  original_name: string;
+  storage_path: string;
+}
+
+export interface IBuildWizardDocumentBlobBackfillReport {
+  project_id: number | null;
+  apply: number;
+  limit: number;
+  total: number;
+  already_blob: number;
+  from_image_blob: number;
+  from_file_path: number;
+  missing: number;
+  written: number;
+  missing_docs: IBuildWizardMissingDocumentRef[];
+}
+
+export interface IBuildWizardDocumentBlobBackfillResponse {
+  success: boolean;
+  report: IBuildWizardDocumentBlobBackfillReport;
+}

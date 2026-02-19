@@ -443,7 +443,7 @@ function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRa
   );
 }
 
-export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
+export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPageProps) {
   const {
     aiBusy,
     projectId,
@@ -465,6 +465,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     uploadDocument,
     packageForAi,
     generateStepsFromAi,
+    backfillDocumentBlobs,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -477,6 +478,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
+  const [repairBusy, setRepairBusy] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -597,6 +599,28 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
       setActiveTab('start');
       setView('build');
       pushUrlState('build', nextId);
+    }
+  };
+
+  const onRepairDocumentBlobs = async () => {
+    if (!isAdmin || repairBusy) {
+      return;
+    }
+    const shouldRun = window.confirm('Backfill Build Wizard file blobs into the database now?');
+    if (!shouldRun) {
+      return;
+    }
+    setRepairBusy(true);
+    try {
+      const report = await backfillDocumentBlobs(true, projectId > 0 ? projectId : undefined, 0);
+      if (!report) {
+        return;
+      }
+      const message = `Blob repair complete: wrote ${report.written}, already ${report.already_blob}, missing ${report.missing}.`;
+      onToast?.({ tone: report.missing > 0 ? 'warning' : 'success', message });
+      await openProject(projectId);
+    } finally {
+      setRepairBusy(false);
     }
   };
 
@@ -943,6 +967,13 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
         <div className="build-wizard-topbar">
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
+          {isAdmin ? (
+            <div className="build-wizard-topbar-actions">
+              <button className="btn btn-outline-primary btn-sm" onClick={() => void onRepairDocumentBlobs()} disabled={repairBusy}>
+                {repairBusy ? 'Repairing Files...' : 'Repair File Blobs'}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="build-wizard-tabs">

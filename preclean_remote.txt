@@ -1,8 +1,0 @@
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit no
-open sftp://acc133498969:Palz2516!@home419172903.1and1-data.host
-rm -f .tmp* ".tmp2 *" *.bak *.bak.*
-rm -f src/.tmp* src/".tmp2 *" src/*.bak src/*.bak.*
-
-bye

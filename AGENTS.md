@@ -17,14 +17,16 @@
 ## 3. Critical Architecture Protocols
 
 ### The "Shared Types" Protocol
-1. **Centralized Storage:** API/data interfaces should live in `src/types/`.
-2. **Workflow:** Define shared request/response types in `src/types/` first, then use in frontend and backend.
-3. **Prohibition:** Do not duplicate API response shapes inside multiple components/hooks.
+1. **Centralized Storage:** All API/data interfaces MUST reside in `src/types/`.
+2. **Workflow:** Define request/response interfaces in `src/types/` first, then import into both frontend hooks/components and PHP endpoints.
+3. **Prohibition:** Never duplicate API response/request shapes inside multiple components/hooks.
 
-### App Composition
+### The "Conductor" Pattern
+- **Page-Level Components:** Keep page files focused on composition and orchestration; move dense logic into `src/hooks/` and reusable view blocks into `src/components/`.
+- **Component Limit:** React component files over **300 lines** must be refactored.
+- **Hook/Utility Limit:** Hooks or utility modules over **220 lines** should be split by concern.
 - **Entry shell:** `index.html` is the frontend entry shell.
 - **React mount:** React mounts into `#catn8-app`.
-- **Component size:** Large React components should be refactored into `src/components/` and `src/hooks/`.
 
 ### Database & Error Handling
 - **Transparency Mandate:** Silent `catch` blocks are prohibited for database/API failures.
@@ -37,6 +39,7 @@
 - Keep accessibility and semantic HTML standards.
 
 ## 5. Repository Hygiene
-- Verify changes with browser preview or `curl` when applicable.
+- **Runtime State Convention:** Script/runtime state artifacts must be written under `/.local/state/` and never tracked in git.
+- **Verification:** Verify changes via browser preview or `curl` when applicable.
 - Keep runtime artifacts under ignored directories and never commit generated logs/secrets.
 - Do not commit `.env` secrets or private keys.

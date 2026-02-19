@@ -1,0 +1,33 @@
+node_modules/
+vendor/
+dist/
+backups/
+logs/
+.git/
+*.log
+*.sqlite
+src_files.txt
+tsc_output.txt
+backup_css_counts.txt
+current_css_counts.txt
+.DS_Store
+.idea/
+.vscode/
+*.swp
+/reports/
+!reports/.htaccess
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Local tooling/cache noise
+.cache/
+.agent/
+.local/
+tmp/
+coverage/
+*.map

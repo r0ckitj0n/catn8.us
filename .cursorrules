@@ -1,40 +1,579 @@
-# .cursorrules (catn8.us)
+# .cursorrules (Whimsical Frog)
 
 ## Environment Information (Persistent)
-- **Dev Site (Vite):** http://localhost:5178
-- **Dev Site (Backend):** http://localhost:8888
-- **Live Site:** https://catn8.us
+- **Dev Site (Vite):** http://localhost:5176
+- **Dev Site (Backend):** http://localhost:8080
+- **Live Site:** https://whimsicalfrog.us
+- **Legacy Backup:** /Volumes/Media/~Archives/Websites/WhimsicalFrog - Backups/2026-01-01
 - **Credentials:** Never store plaintext credentials in repo rules. Use `.env` and local secret stores only.
 
+This is the consolidated **portable** ruleset for the Whimsical Frog repository.
+
+
 ## Tech Stack
-- PHP (API endpoints in `/api`, shared libraries in `/includes`)
-- TypeScript + React (Vite-built frontend)
-- JavaScript (tooling scripts)
-- CSS (Vite-managed)
 
-## Front-end / Build
-- Vite `^7.x` (build output to `dist/`, manifest enabled)
+### Languages & Styling
+- PHP (API endpoints in `/api`, libraries in `/includes`)
+- TypeScript (ES modules; Vite-built React front-end)
+- JavaScript (ES modules; tooling/scripts and any non-TS legacy code)
+- **Tailwind CSS (Primary)** (Utility-first styling)
+- CSS (Vite-managed; use sparingly for custom styles/variables)
+
+### Front-end / Build
+- Vite `^7.0.6` (build to `dist/`, `manifest: true`, entry points in `src/entries/`)
 - React `^18`
-- React Router dependency is available if route-level React navigation is needed
+- React Router `^6.26.2`
+- Chart.js `^4.5.0`
+- SortableJS `^1.15.6`
 
-## Server / Runtime
-- Local development database is **MySQL**
-- PHP endpoints should use centralized config/bootstrap files
+### Server / Runtime
+- PHP dependencies via Composer:
+  - `phpmailer/phpmailer` `^6.9`
+  - `phpunit/phpunit` `^12.2` (dev)
+- Local MySQL config exists in `config/my.cnf` (utf8mb4 / `utf8mb4_unicode_ci`)
+- Local development database is **MySQL**; site accounts/auth data is stored in MySQL.
+- PHP `/api/*` endpoints connect to MySQL using `WF_DB_LOCAL_*` variables from `.env`.
+> [!IMPORTANT]
+> The project uses **MySQL** as the single source of truth. Do NOT use or assume SQLite.
+- Node-side DB tooling present:
+  - `drizzle-orm` `^0.44.7`
+  - `@neondatabase/serverless` `^1.0.2`
 
-## Security Baseline
-- Every mutating endpoint must enforce explicit auth
-- Mutating actions must use `POST`/`PUT`/`DELETE`, not `GET`
-- Validate and normalize all external input at endpoint boundaries
-- Parameterize all untrusted SQL values
-- Never commit secrets or raw private keys
+### Tooling
+- Repo rules are documented here and synced into `.windsurfrules` by `scripts/dev.sh`.
+
+## Database Schema Sync Protocol (Local -> Live)
+
+> **MANDATE:** Any change that adds a table/column/index to local MySQL must be synced to live MySQL immediately using add-only schema sync, without full DB overwrite.
+
+### Required workflow for schema changes
+1. Apply and validate schema change locally.
+2. Run local hygiene/tests.
+3. Run add-only live sync dry run for impacted table(s):
+   - `php scripts/db/sync_local_schema_to_live.php --table=<table_name>`
+4. Apply live sync for impacted table(s):
+   - `php scripts/db/sync_local_schema_to_live.php --table=<table_name> --apply`
+5. Verify on live by checking table structure and endpoint behavior.
+
+### Guardrails
+- Never use full database restore to push routine schema additions.
+- Sync script is add-only:
+  - Allowed: `CREATE TABLE` (if missing), `ADD COLUMN`, `ADD INDEX`.
+  - Not allowed: drop/rename/overwrite existing columns or destructive schema changes.
+- If live DB host credentials are unreachable, stop and surface the exact connection error, then request corrected live DB access details before proceeding.
+
+### Live DB Access Constraint (Whimsical Frog)
+- This environment may block direct DB connections from non-server sources.
+- When direct local->live DB connectivity fails or is restricted, schema patches MUST be executed server-side via website API endpoints.
+- Required server-side method:
+  1. Build SQL patch file locally.
+  2. Execute via `POST /api/database_maintenance.php?action=restore_database` with multipart `backup_file` and `admin_token`.
+  3. Prefer idempotent SQL (information_schema checks + conditional ALTER) so reruns are safe.
+- Preferred command for email logs patch:
+  - `bash scripts/db/deploy_email_logs_schema_patch.sh`
+
+## Security Baseline (Non-Negotiable)
+
+### Endpoint Security
+- Every mutating endpoint MUST require explicit auth (`requireAdmin(true)` for admin writes, `requireLogin()` for user writes) unless it is intentionally public.
+- Public-write endpoints (registration/newsletter/contact) MUST use strict payload validation, abuse controls, and clear allowlisted behavior.
+- Mutating actions MUST be `POST` (or `PUT`/`DELETE`) only. `GET` MUST be read-only.
+- Every endpoint with actions MUST enforce an explicit action allowlist.
+- Never keep localhost/dev auth bypass code paths in production endpoint logic.
+
+### Input Validation
+- Validate and normalize all external input at endpoint boundaries.
+- Enforce identifier patterns (e.g., SKU/order/table IDs) with strict regex allowlists.
+- Enforce enum allowlists for status/type/provider fields.
+- Clamp numeric bounds and enforce length limits on strings/JSON payloads.
+- Reject invalid JSON and unsupported content types with explicit 4xx responses.
+
+### SQL Safety
+- Parameterize all untrusted values in SQL.
+- Dynamic SQL identifiers (table/column/order direction) are prohibited unless validated against strict allowlists.
+- Never concatenate raw request data into SQL, including `ORDER BY`, `LIMIT`, table names, and column names.
+- Prefer `information_schema` checks for table existence over string-built `SHOW TABLES LIKE` where applicable.
+
+### File and Path Safety
+- For any file operation, enforce `realpath` containment in approved base directories.
+- Validate filenames with allowlists and block traversal patterns.
+- Restrict upload types by MIME + extension, and set explicit max sizes.
+- Store runtime artifacts under `/.local/state/` and never commit them.
+
+### CSRF, Session, and Cookie Policy
+- Admin/browser-session mutating endpoints MUST enforce CSRF tokens.
+- Session cookies must remain `HttpOnly`, `Secure` (HTTPS), and `SameSite=Lax` or stricter.
+- Regenerate session ID after login and privilege elevation.
+
+### CORS and Headers
+- Do not use wildcard CORS for privileged endpoints.
+- CORS origin allowlists must be explicit for non-public APIs.
+- Prefer security headers (`X-Content-Type-Options`, `X-Frame-Options`/`frame-ancestors`, `Referrer-Policy`, CSP where feasible).
+
+### Secrets and Crypto
+- API keys/tokens/secrets MUST be stored in secret store or environment variables; never in source.
+- Passwords MUST be hashed with `password_hash`/`password_verify`; no plaintext or reversible storage.
+- Never log secrets, full tokens, or sensitive personal data.
+
+### Error Handling and Logging
+- Return safe, structured error messages to clients; keep sensitive stack details in server logs only.
+- Log auth failures, access denials, validation failures, and destructive admin actions with actor + timestamp.
+- Silent catch blocks are prohibited except explicitly non-critical paths with clear rationale.
+
+### Change Validation
+- For endpoint/security changes, run: PHP lint, TypeScript check, and repository hygiene before completion.
+- Security-impacting migrations must include rollback notes and verification steps.
 
 ## Coding Guidelines
-- Keep shared API/data interfaces in `src/types/`
-- Avoid explicit `any` where practical
-- Use semantic interactive HTML elements (`button`, `a`)
-- Keep console/debug noise out of committed code
 
-## Critical Constraints
-- Use `src/core/ApiClient.ts` for frontend API requests
-- Keep `index.html` as the frontend entry shell
-- Do not add silent fallbacks that hide backend errors
+### Type Safety (Required)
+- **No Explicit Any:** Avoid using `any` in TypeScript. Define interfaces in `src/types/`.
+- **Strict Interfaces:** Core entities (Items, Orders) must have strict definitions.
+- **Type Definitions:** Maintain strict interfaces in `src/types/`.
+
+### 🛡️ Data Consistency & Type Safety: The "Shared Types" Protocol
+> **Goal:** Prevent frontend/backend mismatches (mimicking "Contract Testing").
+> **Constraint:** NEVER define an interface for API data inside a component or a hook file.
+
+#### The Protocol:
+1. **Centralized Type Storage:** All API/data interfaces MUST reside in `src/types/`.
+   - Use domain-specific files: `inventory.ts`, `orders.ts`, `admin.ts`, `auth.ts`, etc.
+   - Create new files for new domains (e.g., `newsletter.ts`, `ai.ts`).
+   
+2. **Workflow for New Endpoints:**
+   - **FIRST:** Define the request/response interface in `src/types/[domain].ts`.
+   - **SECOND:** Import that interface into both the frontend hook AND the PHP endpoint.
+   - **THIRD:** Implement the feature.
+
+3. **Changing Data Fields:**
+   - When renaming/adding/removing a field, **update the shared type definition FIRST**.
+   - Then fix all TypeScript errors in both frontend and backend.
+
+#### What IS Allowed Locally:
+- `*Props` interfaces (component props are NOT API contracts)
+- `*State` interfaces (React local state)
+- Internal helper types (`type TabType = 'a' | 'b'`)
+
+#### What is NOT Allowed Locally:
+- API response shapes (e.g., `interface IUserResponse { ... }`)
+- Entity definitions (e.g., `interface ICartItem { sku: string; ... }`)
+- Anything that mirrors database tables or API payloads
+
+### Constants & Magic Values (Strict)
+- **No Magic Strings:** Do not use hardcoded string literals for status or types (e.g., `order_status === "shipped"`).
+  - **Requirement:** Define constants in `src/core/constants.ts` or enums in `src/types/` (e.g., `ORDER_STATUS.SHIPPED`).
+- **No Magic Numbers:** Replace unexplained numbers with named constants.
+
+### Semantic HTML & Accessibility
+- **Interactive Elements:** Use `<button>` for actions and `<a>` for links. Do NOT use `<div>` or `<span>` with `onClick`.
+- **Images:** All `<img>` tags must have an `alt` attribute. Use `loading="lazy"` for any image below the fold.
+
+### JavaScript / Modules
+- **Use ES modules** (`import`/`export`).
+- **No raw HTTP calls**. Use `ApiClient` only.
+- **Console Hygiene:** Do not commit `console.log` statements. Use a dedicated logger or remove debug logs before finishing a task.
+
+## Critical Constraints (Never Do)
+- **No Direct Fetch:** Never use `fetch()` or `axios` in UI components; use `src/core/ApiClient.ts`.
+- **No Inline Styles:** Avoid `style={{...}}`. **Note:** Tailwind classes are NOT inline styles and ARE the preferred way to style.
+- **No Raw CSS where Tailwind suffices:** Do not write custom CSS classes if Tailwind utilities can achieve the same result.
+- **No Hardcoded IDs:** Do not hardcode MySQL IDs in front-end logic.
+- **No Logic in App.tsx:** `App.tsx` is for composition only.
+
+## Error Handling & Transparency Mandate (Strict)
+
+> **ANTI-FALLBACK PRINCIPLE:** Database and API errors MUST surface to the user. Silent fallbacks are prohibited.
+
+### The Rule
+Never use empty `catch` blocks or fallback patterns that conceal database/API failures. If an operation fails, the error MUST propagate so users can identify and fix the underlying issue.
+
+### Prohibited Patterns
+
+```php
+// ❌ WRONG: Silent error swallowing
+try {
+    $rows = Database::queryAll("SELECT * FROM categories");
+} catch (Exception $e) {
+    // Empty catch - error is hidden
+}
+
+// ❌ WRONG: Fallback that masks failures
+try {
+    $categories = Database::queryAll("SELECT * FROM categories");
+} catch (Exception $e) {
+    $categories = []; // Silent fallback conceals the database problem
+}
+```
+
+### Required Patterns
+
+```php
+// ✅ CORRECT: Let errors propagate
+$categories = Database::queryAll("SELECT * FROM categories");
+// If this fails, the outer try/catch returns a proper error response
+
+// ✅ CORRECT: Explicit error handling with notification
+try {
+    $categories = Database::queryAll("SELECT * FROM categories");
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    exit;
+}
+```
+
+### Exceptions (Use Sparingly)
+- **Non-critical operations** (e.g., analytics logging, optional metadata) may use silent catches if clearly documented
+- **Graceful degradation** is allowed ONLY when the fallback is explicitly visible to the user (e.g., "Categories unavailable" message)
+
+### TypeScript/Frontend
+```typescript
+// ❌ WRONG: Silent catch
+try {
+    const res = await ApiClient.get('/api/categories');
+    setCategories(res);
+} catch (e) {
+    // Silent - user has no idea there's a problem
+}
+
+// ✅ CORRECT: Surface the error
+try {
+    const res = await ApiClient.get('/api/categories');
+    setCategories(res);
+} catch (e) {
+    logger.error('[useInventory] fetchCategories failed', e);
+    if (window.WFToast) window.WFToast.error('Failed to load categories');
+}
+```
+
+## Repository Hygiene & Cleanup Mandate (Strict)
+
+> **GOAL:** Maintain a zero-orphan, clean-file repository. Prevent "code rot" and rogue files.
+
+### 1. The "Clean as You Code" Rule
+- **Check Before Completion:** Before marking any task as complete, agents MUST run the repository hygiene script (`scripts/repo_hygiene.mjs`) to check for orphaned files.
+- **Immediate Archival:** If a file is orphaned by a refactor (e.g., a component moved or a function replaced), it must be moved to the `backups/` directory immediately. **Do NOT leave dead files in the source tree.**
+- **Asset Cleanup:** If a database feature is removed, ensure any associated images or flat-file logs are also identified and archived.
+
+### 2. Whitelist Protocol
+- Files that are intentionally unreferenced by code (e.g., dynamic entry points, temporary diagnostic tools) must be added to `scripts/orphan_whitelist.json`.
+- **Whitelisting Requirement:** Whitelisting requires a `@reason` field in the JSON entry explaining why the file is a "False Orphan."
+
+### 3. Verification of Archival
+- Every archival action must be followed by `npm run build` and `npx tsc --noEmit` to ensure no accidental breakage of the dependency graph.
+
+## Component Architecture & File Limits (Strict)
+
+### The "Conductor" Pattern
+- **App.tsx Limitation:** `App.tsx` must act **only** as a composition layer.
+- **Refactor Trigger:** If a React component file exceeds **300 lines**, it must be proactively refactored:
+  - Extract UI sub-sections into `src/components/`.
+  - Extract state logic into custom hooks in `src/hooks/`.
+
+### Modal Architecture
+- **Isolation:** Every Modal must reside in its own file in `src/components/modals/`.
+- **Props vs Context:** Avoid prop-drilling > 2 levels. Use `AppContext` for deep data.
+
+### Admin Modal Header Standards (Required)
+
+> **DIRTY SAVE BUTTON MANDATE**
+> All admin setting modals that edit a single configuration state MUST include:
+> 1. A dirty save button (`btn-icon--save`) in the modal header
+> 2. The `is-dirty` class applied when there are unsaved changes
+> 3. The button must be disabled when there are no changes
+
+**Pattern:**
+```tsx
+const isDirty = JSON.stringify(editState) !== JSON.stringify(initialState);
+
+<button
+    onClick={handleSave}
+    disabled={isLoading || !isDirty}
+    className={`admin-action-btn btn-icon--save ${isDirty ? 'is-dirty' : ''}`}
+    title="Save Changes"
+/>
+```
+
+**Exceptions:**
+- **CRUD list modals** (e.g., CouponsManager, NewsletterManager) where each item has its own editor sub-modal with its own dirty tracking
+- **Read-only modals** (e.g., LogViewer, EmailHistory) that do not perform edits
+
+### 🛡️ Help & Tooltip Mandate (Jan 2026)
+
+> **Goal:** All interactive elements in admin/settings components MUST have database-driven "snarky" tooltips.
+> **Constraint:** DO NOT hardcode `title` attributes in JSX. Use the registry.
+
+#### The Protocol:
+1. **Source of Truth:** All tooltip content must reside in the `help_tooltips` MySQL table.
+2. **Dynamic Binding:**
+   - Use the `useTooltips.ts` hook to fetch contextual help data.
+   - Bind tooltips to elements using the `data-help-id` attribute.
+3. **Element Selection:** `TooltipManager.tsx` scans for elements matching the `element_id` from the database. It prioritizes:
+   - `id` -> `[data-action]` -> `[data-help-id]` (Preferred)
+4. **Tone & Voice:** Tooltips must adhere to the "Whimsical Frog" snarky brand voice—humorous, slightly cynical, explanatory content (~2-3 sentences).
+5. **Contextual Architecture:**
+   - Tooltips are fetched for `admin` (common) and `admin/[section]` (context-specific) contexts.
+   - **Reuse Common IDs:** Use `common-refresh`, `common-save`, `common-close`, `common-delete` for standard header/footer actions.
+
+#### Example Pattern:
+```tsx
+<button
+    onClick={handleSave}
+    className="admin-action-btn btn-icon--save"
+    data-help-id="common-save" 
+/>
+```
+
+### Feature Creation Workflow
+- **First:** Create the file (e.g., `src/components/tools/NewTool.tsx`).
+- **Second:** Import it into `App.tsx`.
+- **Never:** Write code inline in `App.tsx`.
+
+## CSS Architecture & Styling (Strict)
+
+- **Tailwind CSS Priority:**
+  - Use Tailwind utility classes for all styling.
+  - Prioritize `hover:`, `focus:`, `sm:`, `md:`, `lg:`, `dark:` etc. modifiers.
+- **Custom CSS Policy (Use Sparingly):**
+  - Only create custom `.css` files for complex animations or legacy support.
+  - **Limit:** 100 lines per custom file.
+- **Global Styles (`src/styles/main.css`):**
+  - **Limit:** 300 lines. Content restricted to `@tailwind` directives, Global Variables, and Font face declarations.
+- **Theme Tokens (Whimsical Frog):**
+- Use `var(--wf-color-...)` variables (integrate into `tailwind.config.js`).
+  - **Primary:** `--brand-primary` (#87ac3a), **Secondary:** `--brand-secondary` (#bf5700)
+
+### Mobile-First & Responsive Design (Required)
+- **Viewport Meta:** All shell pages must include `<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />`.
+- **Overflow Control:** Horizontal scrollbars are strictly prohibited. Use `overflow-x: hidden !important` on `html` and `body`.
+- **Responsive Layouts:** Always provide mobile-friendly overrides using media queries (e.g., `@media (max-width: 768px)`).
+- **Flexible Modals:** Modals and containers should use fluid widths (e.g., `width: 100%`) on smaller screens.
+- **Example Pattern:**
+  ```css
+  .modal-content {
+    width: 800px; /* Desktop default */
+  }
+
+  @media (max-width: 768px) {
+    .modal-content {
+      width: 100%; /* Mobile override */
+      padding: 10px;
+    }
+  }
+  ```
+
+### Button Hover Behavior Standards (Universal)
+
+> **SINGLE SOURCE OF TRUTH:** All button hover behaviors are defined in:
+> `src/styles/components/buttons/buttons-hover.css`
+> 
+> Do NOT duplicate hover rules in page/component CSS files.
+
+#### Universal Rule: Reciprocal Color Inversion
+
+| Button Type | Default Color | Hover Color |
+|-------------|---------------|-------------|
+| Primary buttons (`.btn`, `.btn-primary`, `.btn-brand`) | `--brand-primary` (green) | `--brand-secondary` (orange) |
+| Secondary buttons (`.btn-secondary`) | `--brand-secondary` (orange) | `--brand-primary` (green) |
+| Outline buttons (`.btn-outline`) | transparent + secondary border | fills with `--brand-secondary` |
+| Ghost/Link buttons | transparent + primary text | text changes to `--brand-secondary` |
+| Danger buttons (`.btn-danger`) | red (#ef4444) | darker red (#dc2626) ⚠️ Exception |
+
+#### Example CSS
+```css
+/* Primary → Secondary on hover */
+.btn-primary:hover {
+  background-color: var(--brand-secondary) !important;
+}
+
+/* Secondary → Primary on hover */
+.btn-secondary:hover {
+  background-color: var(--brand-primary) !important;
+}
+```
+
+#### Centralized File Structure
+
+| File | Purpose |
+|------|---------|
+| `buttons-hover.css` | **All hover behaviors (single source)** |
+| `buttons-base.css` | Layout, typography, transitions |
+| `buttons-variants.css` | Variant base colors (no hover rules) |
+| `emojis.css` | Icon button styling (scale + color change) |
+
+#### Documented Exceptions
+
+| Exception | Behavior | Location |
+|-----------|----------|----------|
+| `.btn-danger` | Stays red (safety feedback) | `buttons-hover.css` |
+| Card-theme buttons | Use card theme colors | `settings-components.css` |
+| Table action buttons | Subtle gray hover | `buttons-hover.css` |
+| Nav arrows | Darker overlay | `inventory-navigation.css` |
+
+#### When Adding New Buttons
+
+1. **Use standard classes** — they inherit from `buttons-hover.css` automatically
+2. **If exception needed:** Add to `buttons-hover.css` with comment
+3. **Never add redundant hover rules** — add comment: `/* Hover: buttons-hover.css */`
+
+#### Token Reference
+- **Primary:** `--brand-primary` (#87ac3a / green)
+- **Secondary:** `--brand-secondary` (#bf5700 / burnt orange)
+
+### Brand Color Text Rules (Universal)
+
+> **TEXT COLOR HIERARCHY**
+> When using brand-colored backgrounds, follow these rules for text color:
+
+#### Rule 1: White is the Primary Text Color
+On any solid brand-colored background (primary or secondary), the default text color MUST be white (#fff).
+
+```css
+/* Primary background → white text */
+.btn-primary, .bg-brand-primary {
+  background-color: var(--brand-primary);
+  color: #fff !important;
+}
+
+/* Secondary background → white text */
+.btn-secondary, .bg-brand-secondary {
+  background-color: var(--brand-secondary);
+  color: #fff !important;
+}
+```
+
+#### Rule 2: Inverse Brand Color as Alternate Text
+When text CANNOT be white (e.g., on light tinted backgrounds, accent text, or for visual hierarchy), use the INVERSE brand color:
+
+| Background Theme | Non-White Text Color |
+|------------------|----------------------|
+| Primary theme (green tint) | Secondary color (orange) |
+| Secondary theme (orange tint) | Primary color (green) |
+
+```css
+/* Primary-themed section with accent text */
+.section-primary .accent-text {
+  color: var(--brand-secondary); /* Orange accent on green theme */
+}
+
+/* Secondary-themed section with accent text */
+.section-secondary .accent-text {
+  color: var(--brand-primary); /* Green accent on orange theme */
+}
+```
+
+#### Rule 3: Consistency in Themed Sections
+When a section/card uses a brand color theme:
+- **Main values/headings:** Use the theme's brand color (e.g., green heading in green-themed section)
+- **Secondary labels/accents:** Use the inverse brand color
+- **Buttons:** Follow the button variant rules (primary btn on green section, secondary btn on orange section)
+
+#### Example: Two-Theme Column Layout
+```tsx
+{/* Green/Primary themed column */}
+<div style={{ backgroundColor: '#f0fdf4' }}> {/* Light green bg */}
+  <h3 style={{ color: 'var(--brand-primary)' }}>Main Heading</h3>
+  <span style={{ color: 'var(--brand-secondary)' }}>Accent text</span>
+  <button className="btn btn-primary">Action</button>
+</div>
+
+{/* Orange/Secondary themed column */}
+<div style={{ backgroundColor: '#fff7ed' }}> {/* Light orange bg */}
+  <h3 style={{ color: 'var(--brand-secondary)' }}>Main Heading</h3>
+  <span style={{ color: 'var(--brand-primary)' }}>Accent text</span>
+  <button className="btn btn-secondary">Action</button>
+</div>
+```
+
+### Z-Index & Stacking Hierarchy (Strict)
+- **No Magic Numbers:** Usage of raw integer values (e.g., `z-index: 99`) is strictly prohibited.
+- **Approved Tokens:** Use `var(--wf-z-...)` defined in `main.css`:
+  - `--wf-z-negative`: -1 (Background)
+  - `--wf-z-base`: 0 (Default)
+  - `--wf-z-elevated`: 10 (Cards/Hover)
+  - `--wf-z-sticky`: 100 (Headers)
+  - `--wf-z-backdrop`: 200 (Dimmer)
+  - `--wf-z-modal`: 300 (Active Modal)
+  - `--wf-z-toast`: 400 (Notifications)
+  - `--wf-z-cursor`: 999 (Drag Proxy)
+- **Stacking Context:** Do not increase z-index arbitrarily. Check parent stacking contexts first.
+- **Debugging Protocol:**
+  - If a Z-Index token appears to fail (e.g., a Modal is hidden), DO NOT arbitrarily increase the token value.
+  - **Action:** Check the parent container for properties that create a new Stacking Context (`opacity`, `transform`, `filter`, `perspective`, `will-change`).
+  - **Fix:** Move the element outside of the trapping container to the root (`document.body`) using a React Portal if necessary.
+
+## Testing & Quality Assurance (Strict)
+- **Browser-First Verification:** Before marking any task as completed, you MUST verify all changes using the browser preview tool. 
+- **Curl Fallback:** If the browser preview is unavailable or the change is purely backend (API), use `curl` to verify the response and status codes.
+- **Full Verification Required:** Before marking a task as completed, you must verify all changes in the target environment (local or preview).
+- **Iterative Repair:** If a test fails, you must continue attempting repairs until the desired outcome is achieved. Do not report a task as "Completed" if the underlying issues persist.
+- **No Unchecked Assertions:** Never claim a fix works without verifying it through logs, terminal output, or browser preview.
+- **Regression Testing:** Ensure that new fixes do not break existing functionality.
+
+## Native React Project Architecture (Strict)
+
+- **UI Entry Point:** `index.html` in the root is the **only** valid UI entry point. It is built by Vite to `dist/index.html`.
+- **Backend structure:**
+    - `/api/`: PHP REST endpoints.
+    - `/includes/`: Core PHP logic, classes, and helpers.
+    - `/functions/`: Auxiliary PHP processing logic.
+    - `/images/`: Static image assets (served directly via `.htaccess`).
+    - `/scripts/`: Project automation, maintenance, and deployment scripts.
+
+- **File Size Triggers:**
+  - **API Endpoints (`/api/*.php`):** Limit **400 lines**.
+  - **Classes (`/includes/*.php`):** Limit **500 lines**.
+  - **Automation (`/scripts/`):** Limit **500 lines**.
+
+## Database Standards & Naming (Strict)
+
+- **Table Names:** Must be **plural snake_case** (e.g., `orders`, `order_items`, `item_categories`).
+- **Column Names:** Must be **snake_case** (e.g., `is_active`, `created_at`, `customer_id`).
+- **Foreign Keys:** Must follow the pattern `[singular_table]_id` (e.g., `order_id` references `orders.id`).
+- **Primary Keys:** Use `id INT AUTO_INCREMENT PRIMARY KEY` unless a natural key (like `sku`) is required by business logic.
+- **Booleans:** Use `TINYINT(1)` for booleans. Prefix columns with `is_` or `has_` (e.g., `is_taxable`, `has_shipped`).
+- **Currency (Critical):** Store monetary values as `DECIMAL(10, 2)` or `INT` (cents). **Never** use `FLOAT` or `DOUBLE` for prices to prevent rounding errors.
+- **Dates:** Use `DATETIME` or `TIMESTAMP`. Standardize on `created_at` and `updated_at` for tracking rows.
+
+## Data & AI Architecture (Required)
+- **Single Source of Truth:** All core business data must be stored in MySQL.
+- **AI Abstraction:** All calls to external AI services must go through `src/core/ai/*`.
+- **Schema Maintenance:** Immediately update `documentation/architecture/database-schema.md` when DB structure changes.
+
+## Codebase Navigation & Map (Context Guide)
+
+### Directory Responsibilities
+- **`src/entries/`**: The "Entry Points." Contains `App.tsx` (The Conductor) and global styles.
+- **`src/components/modals/`**: The "Major Views." Each file here represents a full-screen interface.
+- **`src/components/ui/`**: "Dumb Components" (buttons, inputs) with no logic.
+- **`src/hooks/`**: "The Brains." All state logic lives here.
+- **`src/core/`**: "The Plumbing." Static utilities and API wrappers (`ApiClient.ts`).
+- **`src/types/`**: "The Dictionary." TypeScript definitions.
+- **`documentation/architecture/database-schema.md`**: **SQL Truth.** The authoritative definition of all MySQL tables. Read this before writing SQL.
+
+### Key Architectural Flows
+1.  **App State:** `AppContext` flows *down* from `App.tsx`.
+2.  **API Requests:** UI Components -> `ApiClient` -> PHP Endpoints -> MySQL.
+3.  **Data Persistence:** Frontend State -> `ApiClient` -> PHP Endpoints -> MySQL.
+
+## Documentation Standards (Strict)
+
+- **Centralized Storage:** All project documentation must reside in the `documentation/` directory.
+- **Categorization:** Documentation must be sorted into the following subdirectories:
+  - `architecture/`: Technical specifications, system design, and the SQL schema.
+  - `guides/`: Instructional material and markup standards.
+  - `routines/`: Procedural workflows and maintenance routines.
+  - `plans/`: Roadmaps and refactor plans.
+  - `handoffs/`: Agent communication and historical context.
+  - `audits/`: Compliance reports and validation results.
+- **File Naming:** Filenames must be `kebab-case` (lowercase with dashes), e.g., `master-refactor-plan.md`.
+- **Primary Schema:** The authoritative database definition is `documentation/architecture/database-schema.md`.
+- **Knowledge Catalog:** All major tasks and their walkthroughs must be indexed in `KNOWLEDGE_CATALOG.md` in the root.
+
+## Historical Context & Knowledge Retrieval (Strict)
+
+- **AI Agent Persistence:** AI agents generate `walkthrough.md` and `implementation_plan.md` artifacts in `/Users/jongraves/.gemini/antigravity/brain/<conv_id>/`.
+- **Knowledge Lookup:** Before starting a complex task, agents MUST query the MySQL table `agent_knowledge_catalog` to check for relevant past work.
+- **Cataloging Requirement:** After completing a major task and generating a `walkthrough.md`, agents MUST index it using `scripts/catalog-task.php`.
+  - **Usage:** `php scripts/catalog-task.php "<conversation_id>" "<task_name>" "<summary>" "<artifact_path>"`
+- **Human-Readable Index:** Refer to `KNOWLEDGE_CATALOG.md` for a quick overview of documented historical changes.

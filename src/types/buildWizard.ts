@@ -59,7 +59,19 @@ export interface IBuildWizardProject {
   updated_at: string;
 }
 
+export interface IBuildWizardProjectSummary {
+  id: number;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  step_count: number;
+  completed_step_count: number;
+}
+
 export interface IBuildWizardQuestionnaire {
+  title: string;
+  status: string;
   square_feet: number | null;
   home_style: string;
   room_count: number | null;
@@ -73,6 +85,8 @@ export interface IBuildWizardQuestionnaire {
 
 export interface IBuildWizardBootstrapResponse {
   success: boolean;
+  selected_project_id: number;
+  projects: IBuildWizardProjectSummary[];
   project: IBuildWizardProject;
   steps: IBuildWizardStep[];
   documents: IBuildWizardDocument[];

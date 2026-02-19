@@ -82,18 +82,43 @@ function catn8_build_wizard_tables_ensure(): void
 function catn8_build_wizard_default_questions(): array
 {
     return [
-        'How many square feet is the home?',
-        'What style of home is this (ranch, modern, cabin, farmhouse, etc.)?',
-        'How many bedrooms and bathrooms are planned?',
-        'How many floors/stories will be built?',
-        'What start date and target completion date do you want?',
-        'Upload blueprint and any permit/survey/specification documents.',
+        'What is the parcel and lot status (owned, under contract, or pending)?',
+        'Has the land survey been completed and boundary pins verified?',
+        'How many square feet, bedrooms, bathrooms, and stories are planned?',
+        'Will this build use septic, well, or public utility connections?',
+        'Upload blueprint, survey, and permitting documents required for Dawson County review.',
+        'Track required inspections through final certificate of occupancy.',
     ];
 }
 
 function catn8_build_wizard_seed_data_path(): string
 {
     return dirname(__DIR__) . '/Build Wizard/seed/build_wizard_seed.json';
+}
+
+function catn8_build_wizard_dawsonville_template_steps(): array
+{
+    return [
+        ['phase_key' => 'land_due_diligence', 'title' => 'Secure land purchase contract and title review', 'description' => 'Confirm deed restrictions, easements, access rights, and legal parcel description before construction planning.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 14],
+        ['phase_key' => 'land_due_diligence', 'title' => 'Complete boundary and topographic land survey', 'description' => 'Establish boundary pins, elevations, and site constraints for house placement, drainage, and utilities.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 10],
+        ['phase_key' => 'land_due_diligence', 'title' => 'Perform soil/percolation evaluation and utility feasibility', 'description' => 'Verify septic feasibility or sewer availability, power access, and water source planning before final design.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 14],
+        ['phase_key' => 'design_preconstruction', 'title' => 'Finalize house plans and engineered documents', 'description' => 'Prepare stamped plans, framing details, and supporting documents for permit submittals.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 21],
+        ['phase_key' => 'dawson_county_permits', 'title' => 'Submit Dawson County residential building permit application', 'description' => 'Submit site plan, construction drawings, and permit packet to Dawson County for review and approval.', 'permit_required' => 1, 'permit_name' => 'Dawson County Residential Building Permit', 'expected_duration_days' => 21],
+        ['phase_key' => 'dawson_county_permits', 'title' => 'Obtain erosion-control or land disturbance approval (if required)', 'description' => 'Secure grading/erosion authorization before significant site disturbance and install required controls.', 'permit_required' => 1, 'permit_name' => 'Land Disturbance / Erosion Control', 'expected_duration_days' => 14],
+        ['phase_key' => 'dawson_county_permits', 'title' => 'Obtain driveway access approval', 'description' => 'Coordinate county road driveway permit or state-route encroachment permit where applicable.', 'permit_required' => 1, 'permit_name' => 'Driveway Permit / Encroachment', 'expected_duration_days' => 14],
+        ['phase_key' => 'dawson_county_permits', 'title' => 'Obtain septic permit or sewer utility approval', 'description' => 'Coordinate with Environmental Health for septic permit and final approval, or utility provider for sewer service acceptance.', 'permit_required' => 1, 'permit_name' => 'Septic Permit or Sewer Approval', 'expected_duration_days' => 21],
+        ['phase_key' => 'site_preparation', 'title' => 'Install erosion controls and clear/grade homesite', 'description' => 'Install approved controls, clear vegetation, and grade the site to approved elevations.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 10],
+        ['phase_key' => 'foundation', 'title' => 'Excavate footings and complete footing inspection', 'description' => 'Complete footing excavation, rebar placement, and required inspection prior to concrete placement.', 'permit_required' => 1, 'permit_name' => 'Footing Inspection', 'expected_duration_days' => 7],
+        ['phase_key' => 'foundation', 'title' => 'Complete foundation/slab and foundation inspection', 'description' => 'Install slab/foundation components and pass foundation inspection before framing.', 'permit_required' => 1, 'permit_name' => 'Foundation Inspection', 'expected_duration_days' => 10],
+        ['phase_key' => 'framing_shell', 'title' => 'Frame structure and dry-in exterior envelope', 'description' => 'Complete framing, roof sheathing, and weatherproofing to prepare for rough-ins.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 21],
+        ['phase_key' => 'framing_shell', 'title' => 'Pass framing inspection', 'description' => 'Schedule and pass framing inspection prior to insulation and finish work.', 'permit_required' => 1, 'permit_name' => 'Framing Inspection', 'expected_duration_days' => 3],
+        ['phase_key' => 'mep_rough_in', 'title' => 'Complete rough electrical/plumbing/mechanical and inspections', 'description' => 'Install MEP rough-ins and pass required rough inspections before insulation and drywall.', 'permit_required' => 1, 'permit_name' => 'Rough MEP Inspections', 'expected_duration_days' => 14],
+        ['phase_key' => 'interior_finishes', 'title' => 'Install insulation and drywall after approval', 'description' => 'Complete insulation inspection if required, then hang and finish drywall.', 'permit_required' => 1, 'permit_name' => 'Insulation Inspection', 'expected_duration_days' => 10],
+        ['phase_key' => 'interior_finishes', 'title' => 'Complete interior and exterior finishes', 'description' => 'Install flooring, cabinetry, trim, fixtures, and exterior finish scope.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 30],
+        ['phase_key' => 'inspections_closeout', 'title' => 'Pass final building and trade inspections', 'description' => 'Complete punch list and pass final county inspections for all applicable trades.', 'permit_required' => 1, 'permit_name' => 'Final Inspections', 'expected_duration_days' => 7],
+        ['phase_key' => 'inspections_closeout', 'title' => 'Receive certificate of occupancy', 'description' => 'Obtain final occupancy approval before move-in.', 'permit_required' => 1, 'permit_name' => 'Certificate of Occupancy', 'expected_duration_days' => 3],
+        ['phase_key' => 'move_in', 'title' => 'Complete move-in and warranty documentation', 'description' => 'Transfer utility accounts, finalize lien waivers, and store closeout/warranty documents.', 'permit_required' => 0, 'permit_name' => null, 'expected_duration_days' => 5],
+    ];
 }
 
 function catn8_build_wizard_parse_date_or_null($value): ?string
@@ -142,6 +167,77 @@ function catn8_build_wizard_normalize_phase_key($value): string
     return $raw;
 }
 
+function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $skipExistingTitles = false): int
+{
+    if ($projectId <= 0 || !$steps) {
+        return 0;
+    }
+
+    $maxOrderRow = Database::queryOne('SELECT MAX(step_order) AS max_order FROM build_wizard_steps WHERE project_id = ?', [$projectId]);
+    $stepOrder = (int)($maxOrderRow['max_order'] ?? 0);
+    $inserted = 0;
+
+    $existingTitles = [];
+    if ($skipExistingTitles) {
+        $rows = Database::queryAll('SELECT title FROM build_wizard_steps WHERE project_id = ?', [$projectId]);
+        foreach ($rows as $r) {
+            $key = strtolower(trim((string)($r['title'] ?? '')));
+            if ($key !== '') {
+                $existingTitles[$key] = true;
+            }
+        }
+    }
+
+    foreach ($steps as $s) {
+        if (!is_array($s)) {
+            continue;
+        }
+
+        $title = trim((string)($s['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+
+        if ($skipExistingTitles && isset($existingTitles[strtolower($title)])) {
+            continue;
+        }
+
+        $stepOrder++;
+        $duration = isset($s['expected_duration_days']) && is_numeric($s['expected_duration_days'])
+            ? (int)$s['expected_duration_days']
+            : null;
+
+        Database::execute(
+            'INSERT INTO build_wizard_steps
+                (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+            [
+                $projectId,
+                $stepOrder,
+                catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
+                $title,
+                trim((string)($s['description'] ?? '')),
+                !empty($s['permit_required']) ? 1 : 0,
+                isset($s['permit_name']) ? trim((string)$s['permit_name']) : null,
+                catn8_build_wizard_parse_date_or_null($s['expected_start_date'] ?? null),
+                catn8_build_wizard_parse_date_or_null($s['expected_end_date'] ?? null),
+                $duration,
+                catn8_build_wizard_to_decimal_or_null($s['estimated_cost'] ?? null),
+                trim((string)($s['source_ref'] ?? 'Dawson County residential template')),
+            ]
+        );
+        $inserted++;
+    }
+
+    return $inserted;
+}
+
+function catn8_build_wizard_seed_dawsonville_checklist(int $projectId): void
+{
+    $templateSteps = catn8_build_wizard_dawsonville_template_steps();
+    catn8_build_wizard_insert_steps($projectId, $templateSteps, true);
+}
+
 function catn8_build_wizard_seed_project_from_file(int $projectId): void
 {
     $seedPath = catn8_build_wizard_seed_data_path();
@@ -187,59 +283,105 @@ function catn8_build_wizard_seed_project_from_file(int $projectId): void
         return;
     }
 
+    $normalizedSeedSteps = [];
     foreach ($steps as $s) {
         if (!is_array($s)) {
             continue;
         }
-
-        $stepOrder = isset($s['step_order']) && is_numeric($s['step_order']) ? (int)$s['step_order'] : 0;
         $title = trim((string)($s['title'] ?? ''));
-        if ($stepOrder <= 0 || $title === '') {
+        if ($title === '') {
             continue;
         }
-
-        Database::execute(
-            'INSERT INTO build_wizard_steps
-                (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
-            [
-                $projectId,
-                $stepOrder,
-                catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
-                $title,
-                trim((string)($s['description'] ?? '')),
-                !empty($s['permit_required']) ? 1 : 0,
-                isset($s['permit_name']) ? trim((string)$s['permit_name']) : null,
-                catn8_build_wizard_parse_date_or_null($s['expected_start_date'] ?? null),
-                catn8_build_wizard_parse_date_or_null($s['expected_end_date'] ?? null),
-                isset($s['expected_duration_days']) && is_numeric($s['expected_duration_days']) ? (int)$s['expected_duration_days'] : null,
-                catn8_build_wizard_to_decimal_or_null($s['estimated_cost'] ?? null),
-                trim((string)($s['source_ref'] ?? '')),
-            ]
-        );
+        $normalizedSeedSteps[] = $s;
     }
+
+    catn8_build_wizard_insert_steps($projectId, $normalizedSeedSteps, false);
+    catn8_build_wizard_seed_dawsonville_checklist($projectId);
 }
 
-function catn8_build_wizard_get_or_create_project(int $uid): array
+function catn8_build_wizard_list_projects(int $uid): array
 {
-    $row = Database::queryOne('SELECT * FROM build_wizard_projects WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1', [$uid]);
-    if ($row) {
-        return $row;
+    $rows = Database::queryAll(
+        'SELECT p.id, p.title, p.status, p.created_at, p.updated_at,
+                COUNT(s.id) AS step_count,
+                SUM(CASE WHEN s.is_completed = 1 THEN 1 ELSE 0 END) AS completed_step_count
+         FROM build_wizard_projects p
+         LEFT JOIN build_wizard_steps s ON s.project_id = p.id
+         WHERE p.owner_user_id = ?
+         GROUP BY p.id, p.title, p.status, p.created_at, p.updated_at
+         ORDER BY p.updated_at DESC, p.id DESC',
+        [$uid]
+    );
+
+    $list = [];
+    foreach ($rows as $r) {
+        $list[] = [
+            'id' => (int)($r['id'] ?? 0),
+            'title' => (string)($r['title'] ?? ''),
+            'status' => (string)($r['status'] ?? 'planning'),
+            'created_at' => (string)($r['created_at'] ?? ''),
+            'updated_at' => (string)($r['updated_at'] ?? ''),
+            'step_count' => (int)($r['step_count'] ?? 0),
+            'completed_step_count' => (int)($r['completed_step_count'] ?? 0),
+        ];
+    }
+
+    return $list;
+}
+
+function catn8_build_wizard_create_project(int $uid, string $title, bool $seedFromSpreadsheet): array
+{
+    $cleanTitle = trim($title);
+    if ($cleanTitle === '') {
+        $cleanTitle = 'Build Wizard Project';
     }
 
     Database::execute(
         'INSERT INTO build_wizard_projects (owner_user_id, title, status, home_style, lot_address, wizard_notes) VALUES (?, ?, ?, ?, ?, ?)',
-        [$uid, 'Build Wizard Project', 'planning', '', '', '']
+        [$uid, $cleanTitle, 'planning', '', '', '']
     );
     $id = (int)Database::lastInsertId();
+    if ($id <= 0) {
+        throw new RuntimeException('Failed to create build project');
+    }
 
-    catn8_build_wizard_seed_project_from_file($id);
+    if ($seedFromSpreadsheet) {
+        catn8_build_wizard_seed_project_from_file($id);
+    } else {
+        catn8_build_wizard_insert_steps($id, catn8_build_wizard_dawsonville_template_steps(), false);
+    }
 
     $created = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$id]);
     if (!$created) {
-        throw new RuntimeException('Failed to create build wizard project');
+        throw new RuntimeException('Failed to load created project');
     }
     return $created;
+}
+
+function catn8_build_wizard_get_or_create_project(int $uid, ?int $requestedProjectId = null): array
+{
+    $list = catn8_build_wizard_list_projects($uid);
+    if (!$list) {
+        return catn8_build_wizard_create_project($uid, 'Cabin Build Wizard (Seed)', true);
+    }
+
+    if ($requestedProjectId !== null && $requestedProjectId > 0) {
+        $requested = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ? AND owner_user_id = ? LIMIT 1', [$requestedProjectId, $uid]);
+        if ($requested) {
+            return $requested;
+        }
+    }
+
+    $firstId = (int)($list[0]['id'] ?? 0);
+    if ($firstId <= 0) {
+        throw new RuntimeException('No build projects available');
+    }
+
+    $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ? AND owner_user_id = ? LIMIT 1', [$firstId, $uid]);
+    if (!$project) {
+        throw new RuntimeException('Build project not found');
+    }
+    return $project;
 }
 
 function catn8_build_wizard_require_project_access(int $projectId, int $uid): array
@@ -794,7 +936,8 @@ try {
     if ($action === 'bootstrap') {
         catn8_require_method('GET');
 
-        $project = catn8_build_wizard_get_or_create_project($viewerId);
+        $requestedProjectId = isset($_GET['project_id']) ? (int)$_GET['project_id'] : null;
+        $project = catn8_build_wizard_get_or_create_project($viewerId, $requestedProjectId);
         $projectId = (int)($project['id'] ?? 0);
         if ($projectId <= 0) {
             throw new RuntimeException('Build wizard project missing id');
@@ -804,15 +947,37 @@ try {
         if ((int)($stepCount['c'] ?? 0) <= 0) {
             catn8_build_wizard_seed_project_from_file($projectId);
         }
+        catn8_build_wizard_seed_dawsonville_checklist($projectId);
 
         $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]) ?: $project;
 
         catn8_json_response([
             'success' => true,
+            'selected_project_id' => $projectId,
+            'projects' => catn8_build_wizard_list_projects($viewerId),
             'project' => $project,
             'steps' => catn8_build_wizard_steps_for_project($projectId),
             'documents' => catn8_build_wizard_documents_for_project($projectId),
             'leading_questions' => catn8_build_wizard_default_questions(),
+        ]);
+    }
+
+    if ($action === 'create_project') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $title = trim((string)($body['title'] ?? ''));
+
+        $projectCountRow = Database::queryOne('SELECT COUNT(*) AS c FROM build_wizard_projects WHERE owner_user_id = ?', [$viewerId]);
+        $isFirstProject = ((int)($projectCountRow['c'] ?? 0) <= 0);
+
+        $project = catn8_build_wizard_create_project($viewerId, $title, $isFirstProject);
+        $projectId = (int)($project['id'] ?? 0);
+
+        catn8_json_response([
+            'success' => true,
+            'project_id' => $projectId,
+            'project' => $project,
         ]);
     }
 
@@ -822,12 +987,19 @@ try {
         $body = catn8_read_json_body();
         $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
         catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $status = trim((string)($body['status'] ?? 'planning'));
+        $allowedStatuses = ['planning', 'active', 'on_hold', 'completed'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            $status = 'planning';
+        }
 
         Database::execute(
             'UPDATE build_wizard_projects
-             SET square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?
+             SET title = ?, status = ?, square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?
              WHERE id = ?',
             [
+                trim((string)($body['title'] ?? 'Build Wizard Project')),
+                $status,
                 isset($body['square_feet']) && is_numeric($body['square_feet']) ? (int)$body['square_feet'] : null,
                 trim((string)($body['home_style'] ?? '')),
                 isset($body['room_count']) && is_numeric($body['room_count']) ? (int)$body['room_count'] : null,
@@ -868,6 +1040,68 @@ try {
 
         $updates = [];
         $params = [];
+
+        if (array_key_exists('phase_key', $body)) {
+            $updates[] = 'phase_key = ?';
+            $params[] = catn8_build_wizard_normalize_phase_key($body['phase_key']);
+        }
+
+        if (array_key_exists('title', $body)) {
+            $title = trim((string)($body['title'] ?? ''));
+            if ($title === '') {
+                throw new RuntimeException('Step title is required');
+            }
+            $updates[] = 'title = ?';
+            $params[] = $title;
+        }
+
+        if (array_key_exists('description', $body)) {
+            $updates[] = 'description = ?';
+            $params[] = trim((string)($body['description'] ?? ''));
+        }
+
+        if (array_key_exists('permit_required', $body)) {
+            $updates[] = 'permit_required = ?';
+            $params[] = ((int)$body['permit_required'] === 1) ? 1 : 0;
+        }
+
+        if (array_key_exists('permit_name', $body)) {
+            $permitName = trim((string)($body['permit_name'] ?? ''));
+            $updates[] = 'permit_name = ?';
+            $params[] = ($permitName !== '' ? $permitName : null);
+        }
+
+        if (array_key_exists('expected_start_date', $body)) {
+            $updates[] = 'expected_start_date = ?';
+            $params[] = catn8_build_wizard_parse_date_or_null($body['expected_start_date'] ?? null);
+        }
+
+        if (array_key_exists('expected_end_date', $body)) {
+            $updates[] = 'expected_end_date = ?';
+            $params[] = catn8_build_wizard_parse_date_or_null($body['expected_end_date'] ?? null);
+        }
+
+        if (array_key_exists('expected_duration_days', $body)) {
+            $duration = (isset($body['expected_duration_days']) && is_numeric($body['expected_duration_days']))
+                ? (int)$body['expected_duration_days']
+                : null;
+            if ($duration !== null && ($duration < 1 || $duration > 3650)) {
+                $duration = null;
+            }
+            $updates[] = 'expected_duration_days = ?';
+            $params[] = $duration;
+        }
+
+        if (array_key_exists('estimated_cost', $body)) {
+            $updates[] = 'estimated_cost = ?';
+            $params[] = catn8_build_wizard_to_decimal_or_null($body['estimated_cost']);
+        }
+
+        if (array_key_exists('source_ref', $body)) {
+            $sourceRef = trim((string)($body['source_ref'] ?? ''));
+            $updates[] = 'source_ref = ?';
+            $params[] = ($sourceRef !== '' ? $sourceRef : null);
+        }
 
         if (array_key_exists('is_completed', $body)) {
             $isCompleted = ((int)$body['is_completed'] === 1) ? 1 : 0;

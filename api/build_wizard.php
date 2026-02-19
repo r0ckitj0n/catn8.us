@@ -594,6 +594,51 @@ function catn8_build_wizard_document_for_user(int $documentId, int $uid): ?array
     );
 }
 
+function catn8_build_wizard_resolve_document_path(string $storagePath): string
+{
+    $rawPath = trim($storagePath);
+    if ($rawPath === '') {
+        return '';
+    }
+
+    if (is_file($rawPath)) {
+        return $rawPath;
+    }
+
+    $normalized = str_replace('\\', '/', $rawPath);
+    $projectRoot = dirname(__DIR__);
+    $uploadRoot = $projectRoot . '/uploads/build-wizard';
+
+    if ($normalized !== '' && $normalized[0] !== '/') {
+        $candidate = $projectRoot . '/' . ltrim($normalized, '/');
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    $uploadsMarker = '/uploads/build-wizard/';
+    $markerPos = strpos($normalized, $uploadsMarker);
+    if ($markerPos !== false) {
+        $relativeFromUploads = substr($normalized, $markerPos + 1); // remove leading slash
+        if (is_string($relativeFromUploads) && $relativeFromUploads !== '') {
+            $candidate = $projectRoot . '/' . $relativeFromUploads;
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+
+    $baseName = basename($normalized);
+    if ($baseName !== '' && $baseName !== '.' && $baseName !== '..') {
+        $candidate = $uploadRoot . '/' . $baseName;
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return '';
+}
+
 function catn8_build_wizard_step_by_id(int $stepId): ?array
 {
     $row = Database::queryOne(
@@ -1053,8 +1098,8 @@ try {
             exit;
         }
 
-        $path = (string)($doc['storage_path'] ?? '');
-        if ($path === '' || !is_file($path)) {
+        $path = catn8_build_wizard_resolve_document_path((string)($doc['storage_path'] ?? ''));
+        if ($path === '') {
             http_response_code(404);
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'Document file missing';

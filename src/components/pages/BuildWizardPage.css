@@ -786,6 +786,10 @@
   font-weight: 600;
 }
 
+.build-wizard-phase-ticks .is-start {
+  transform: none;
+}
+
 .build-wizard-phase-ticks .is-end {
   transform: translateX(-100%);
 }
@@ -944,6 +948,12 @@
   font-size: 12px;
   line-height: 1.4;
   white-space: pre;
+}
+
+.build-wizard-recovery-status {
+  margin-bottom: 8px;
+  color: #2b415c;
+  font-size: 0.85rem;
 }
 
 .build-wizard-lightbox-inner {

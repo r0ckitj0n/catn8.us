@@ -397,7 +397,7 @@ function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProp
         ))}
       </div>
       <div className="build-wizard-phase-ticks">
-        <span className="is-edge" style={{ left: '0%' }}>{formatTimelineDate(rangeStart)}</span>
+        <span className="is-edge is-start" style={{ left: '0%' }}>{formatTimelineDate(rangeStart)}</span>
         <span className="is-mid" style={{ left: '25%' }}>{formatTimelineDate(quarterDate)}</span>
         <span className="is-mid" style={{ left: '50%' }}>{formatTimelineDate(midDate)}</span>
         <span className="is-mid" style={{ left: '75%' }}>{formatTimelineDate(threeQuarterDate)}</span>
@@ -504,6 +504,8 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     packageForAi,
     generateStepsFromAi,
     recoverSingletreeDocuments,
+    fetchSingletreeRecoveryStatus,
+    stageSingletreeSourceFiles,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -527,6 +529,14 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [purchaseOptionsByStep, setPurchaseOptionsByStep] = React.useState<Record<number, Array<any>>>({});
   const [recoveryReportOpen, setRecoveryReportOpen] = React.useState<boolean>(false);
   const [recoveryReportJson, setRecoveryReportJson] = React.useState<string>('');
+  const [recoveryJobId, setRecoveryJobId] = React.useState<string>('');
+  const [recoveryStatus, setRecoveryStatus] = React.useState<string>('');
+  const [recoveryPolling, setRecoveryPolling] = React.useState<boolean>(false);
+  const [recoveryUploadBusy, setRecoveryUploadBusy] = React.useState<boolean>(false);
+  const [recoveryUploadToken, setRecoveryUploadToken] = React.useState<string>('');
+  const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
+  const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
+  const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -774,16 +784,90 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
         return;
       }
     }
+    const host = (typeof window !== 'undefined') ? String(window.location.hostname || '').toLowerCase() : '';
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
+    if (!isLocalHost && !recoveryStagedRoot) {
+      onToast?.({
+        tone: 'error',
+        message: 'Upload source files to server first, then run recovery.',
+      });
+      setRecoveryReportOpen(true);
+      return;
+    }
+
     const res = await recoverSingletreeDocuments(apply, {
       db_env: 'live',
       project_title: 'Cabin - 91 Singletree Ln',
-      source_root: '/Users/jongraves/Documents/Home/91 Singletree Ln',
+      source_root: (isLocalHost ? '/Users/jongraves/Documents/Home/91 Singletree Ln' : recoveryStagedRoot),
     });
     if (res) {
       setRecoveryReportJson(JSON.stringify(res, null, 2));
+      setRecoveryJobId(String(res.job_id || ''));
+      setRecoveryStatus(String(res.status || 'queued'));
       setRecoveryReportOpen(true);
     }
   };
+
+  const onUploadRecoveryFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || recoveryUploadBusy) {
+      return;
+    }
+    setRecoveryUploadBusy(true);
+    try {
+      const fileArray = Array.from(files);
+      const res = await stageSingletreeSourceFiles(fileArray, recoveryUploadToken || undefined);
+      if (res?.success) {
+        setRecoveryUploadToken(String(res.upload_token || ''));
+        setRecoveryStagedRoot(String(res.staged_root || ''));
+        setRecoveryStagedCount((prev) => prev + Number(res.files_saved || 0));
+        setRecoveryReportOpen(true);
+      }
+    } finally {
+      setRecoveryUploadBusy(false);
+      if (recoveryUploadInputRef.current) {
+        recoveryUploadInputRef.current.value = '';
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    if (!recoveryJobId) {
+      return;
+    }
+    if (recoveryStatus === 'completed' || recoveryStatus === 'failed') {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      if (cancelled) {
+        return;
+      }
+      if (recoveryPolling) {
+        return;
+      }
+      setRecoveryPolling(true);
+      try {
+        const status = await fetchSingletreeRecoveryStatus(recoveryJobId);
+        if (!status) {
+          return;
+        }
+        setRecoveryStatus(String(status.status || ''));
+        setRecoveryReportJson(JSON.stringify(status, null, 2));
+        if (Number(status.completed || 0) === 1 || status.status === 'completed' || status.status === 'failed') {
+          setRecoveryJobId('');
+        }
+      } finally {
+        if (!cancelled) {
+          setRecoveryPolling(false);
+        }
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [recoveryJobId, recoveryStatus, recoveryPolling, fetchSingletreeRecoveryStatus]);
 
   const onSaveDocument = async (documentId: number, patch: { kind?: string; caption?: string | null; step_id?: number | null }) => {
     if (documentSavingId === documentId) {
@@ -1817,6 +1901,37 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               <h3>Singletree Recovery Report</h3>
               <div className="build-wizard-doc-manager-actions">
                 <button
+                  className="btn btn-outline-success btn-sm"
+                  onClick={() => recoveryUploadInputRef.current?.click()}
+                  disabled={recoveryUploadBusy}
+                >
+                  {recoveryUploadBusy ? 'Uploading...' : 'Upload Source Files'}
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={async () => {
+                    if (!recoveryJobId || recoveryPolling) {
+                      return;
+                    }
+                    setRecoveryPolling(true);
+                    try {
+                      const status = await fetchSingletreeRecoveryStatus(recoveryJobId);
+                      if (status) {
+                        setRecoveryStatus(String(status.status || ''));
+                        setRecoveryReportJson(JSON.stringify(status, null, 2));
+                        if (Number(status.completed || 0) === 1 || status.status === 'completed' || status.status === 'failed') {
+                          setRecoveryJobId('');
+                        }
+                      }
+                    } finally {
+                      setRecoveryPolling(false);
+                    }
+                  }}
+                  disabled={!recoveryJobId || recoveryPolling}
+                >
+                  {recoveryPolling ? 'Checking...' : 'Refresh Status'}
+                </button>
+                <button
                   className="btn btn-outline-secondary btn-sm"
                   onClick={async () => {
                     try {
@@ -1833,6 +1948,27 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => setRecoveryReportOpen(false)}>Close</button>
               </div>
             </div>
+            <input
+              ref={recoveryUploadInputRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => void onUploadRecoveryFiles(e.target.files)}
+            />
+            {recoveryStagedRoot ? (
+              <div className="build-wizard-recovery-status">
+                Staged Files: {recoveryStagedCount} | Source Root: {recoveryStagedRoot}
+              </div>
+            ) : (
+              <div className="build-wizard-recovery-status">
+                No staged files yet. Upload source files from your Mac, then run Dry Run/Apply.
+              </div>
+            )}
+            {recoveryStatus ? (
+              <div className="build-wizard-recovery-status">
+                Status: {recoveryStatus}{recoveryJobId ? ` (job ${recoveryJobId})` : ''}
+              </div>
+            ) : null}
             {recoveryReportJson ? (
               <pre className="build-wizard-recovery-json">{recoveryReportJson}</pre>
             ) : (

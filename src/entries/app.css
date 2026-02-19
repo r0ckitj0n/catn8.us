@@ -30,20 +30,16 @@ body {
   position: relative;
 }
 
-body::before {
-  content: '';
+.catn8-background-image-layer {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: url('/images/homepage_friends.jpg') center/cover no-repeat fixed;
-  background-image: image-set(
-    url('/images/homepage_friends.webp') type('image/webp'),
-    url('/images/homepage_friends.jpg') type('image/jpeg')
-  );
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   opacity: 0.1;
   z-index: -1;
+  pointer-events: none;
 }
 
 /* Global "Noir Mode" Class - Forces Pitch Black Backdrops */

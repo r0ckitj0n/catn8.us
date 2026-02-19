@@ -202,6 +202,10 @@ function App({ page }) {
   const handleCloseAiConfig = React.useCallback(() => setAiOpen(false), []);
   const handleCloseAiVoiceConfig = React.useCallback(() => setAiVoiceOpen(false), []);
   const handleCloseToast = React.useCallback(() => setToast(null), []);
+  const backgroundLayerStyle = React.useMemo<React.CSSProperties>(() => ({
+    background: 'url("/images/homepage_friends.jpg") center / cover no-repeat fixed',
+    backgroundImage: 'image-set(url("/images/homepage_friends.webp") type("image/webp"), url("/images/homepage_friends.jpg") type("image/jpeg"))',
+  }), []);
 
   let content = <HomePage {...layoutProps} />;
   if (page === 'about') content = <AboutPage {...layoutProps} />;
@@ -252,6 +256,7 @@ function App({ page }) {
 
   return (
     <>
+      <div className="catn8-background-image-layer" style={backgroundLayerStyle} aria-hidden="true" />
       {content}
       <LoginModal open={loginOpen} onClose={handleCloseLogin} onLoggedIn={refreshViewer} onToast={showToast} />
       <AccountModal open={accountOpen} onClose={handleCloseAccount} viewer={viewer} onChanged={refreshViewer} onToast={showToast} />

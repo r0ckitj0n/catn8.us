@@ -12,6 +12,7 @@ import {
   IBuildWizardProjectSummary,
   IBuildWizardQuestionnaire,
   IBuildWizardSingletreeRecoverResponse,
+  IBuildWizardSingletreeStageUploadResponse,
   IBuildWizardStep,
 } from '../types/buildWizard';
 
@@ -621,49 +622,71 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       }
 
       onToast?.({ tone: 'info', message: `${apply ? 'Apply' : 'Dry run'} recovery started...` });
-
-      let res: IBuildWizardSingletreeRecoverResponse | null = null;
-      const startedAt = Date.now();
-      const timeoutMs = 12 * 60 * 1000;
-      while (Date.now() - startedAt < timeoutMs) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        const status = await ApiClient.get<IBuildWizardSingletreeRecoverResponse>(
-          `/api/build_wizard_recover_singletree.php?job_id=${encodeURIComponent(jobId)}`,
-        );
-        if (Number(status?.completed || 0) === 1 || status?.status === 'failed') {
-          res = status;
-          break;
-        }
-      }
-
-      if (!res) {
-        throw new Error('Recovery is still running. Please check Recovery Report shortly.');
-      }
-      if (!res.success) {
-        throw new Error(String(res.error || 'Recovery failed'));
-      }
-
-      const result = (typeof res?.result === 'object' && res?.result !== null) ? res.result : null;
-      const summary = result?.summary;
-      if (summary) {
-        const verb = apply ? 'Recovery applied' : 'Recovery dry-run complete';
-        onToast?.({
-          tone: 'success',
-          message: `${verb}: matched ${summary.matched_existing}, inserted ${summary.inserted_documents}, mapped ${summary.updated_mappings}, blobs ${summary.blob_backfilled}.`,
-        });
-      } else {
-        onToast?.({ tone: 'success', message: apply ? 'Recovery applied.' : 'Recovery dry-run complete.' });
-      }
-
-      await refreshCurrentProject();
-      return res;
+      return queued;
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to run Singletree recovery' });
       return null;
     } finally {
       setRecoveryBusy(false);
     }
+  }, [onToast]);
+
+  const fetchSingletreeRecoveryStatus = React.useCallback(async (jobId: string) => {
+    const cleanJobId = String(jobId || '').trim();
+    if (!cleanJobId) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.get<IBuildWizardSingletreeRecoverResponse>(
+        `/api/build_wizard_recover_singletree.php?job_id=${encodeURIComponent(cleanJobId)}`,
+      );
+
+      if (Number(res?.completed || 0) === 1 && res.success) {
+        const result = (typeof res?.result === 'object' && res?.result !== null) ? res.result : null;
+        const summary = result?.summary;
+        if (summary) {
+          onToast?.({
+            tone: 'success',
+            message: `Recovery complete: matched ${summary.matched_existing}, inserted ${summary.inserted_documents}, mapped ${summary.updated_mappings}, blobs ${summary.blob_backfilled}.`,
+          });
+        } else {
+          onToast?.({ tone: 'success', message: 'Recovery complete.' });
+        }
+        await refreshCurrentProject();
+      } else if (Number(res?.completed || 0) === 1 && !res.success) {
+        onToast?.({ tone: 'error', message: String(res.error || 'Recovery failed') });
+      }
+
+      return res;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to fetch recovery status' });
+      return null;
+    }
   }, [onToast, refreshCurrentProject]);
+
+  const stageSingletreeSourceFiles = React.useCallback(async (files: File[], uploadToken?: string) => {
+    if (!Array.isArray(files) || files.length === 0) {
+      return null;
+    }
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files[]', file));
+    if (uploadToken && String(uploadToken).trim() !== '') {
+      formData.append('upload_token', String(uploadToken).trim());
+    }
+    try {
+      const res = await ApiClient.postFormData<IBuildWizardSingletreeStageUploadResponse>('/api/build_wizard_recover_stage_upload.php', formData);
+      if (res?.success) {
+        onToast?.({
+          tone: 'success',
+          message: `Uploaded ${res.files_saved}/${res.files_total} files to server staging.`,
+        });
+      }
+      return res || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to upload recovery source files' });
+      return null;
+    }
+  }, [onToast]);
 
   return {
     loading,
@@ -700,5 +723,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     hydrateMissingDocumentBlobs,
     hydrateMissingDocumentBlobsFromSources,
     recoverSingletreeDocuments,
+    fetchSingletreeRecoveryStatus,
+    stageSingletreeSourceFiles,
   };
 }

@@ -214,3 +214,13 @@ export interface IBuildWizardSingletreeRecoverResponse {
   command?: string;
   error?: string;
 }
+
+export interface IBuildWizardSingletreeStageUploadResponse {
+  success: boolean;
+  upload_token: string;
+  staged_root: string;
+  files_total: number;
+  files_saved: number;
+  files_skipped: number;
+  saved_files: string[];
+}

@@ -16,6 +16,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isAdministrator = isAdmin;
   const isMysteryGameUser = Number(viewer?.is_mystery_game_user || 0) === 1;
   const isWordsearchUser = Number(viewer?.is_wordsearch_user || 0) === 1;
+  const isBuildWizardUser = Number(viewer?.is_build_wizard_user || 0) === 1;
 
   const links = [
     { key: 'about', href: 'about.php', label: 'About' },
@@ -23,7 +24,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     { key: 'games', href: 'games.php', label: 'Games' },
     { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
     { key: 'activities', href: 'activities.php', label: 'Activities' },
-    { key: 'build_wizard', href: 'build-wizard.php', label: 'Build Wizard' },
+    ...(isAuthed && (isAdministrator || isBuildWizardUser) ? [{ key: 'build_wizard', href: 'build-wizard.php', label: 'Build Wizard' }] : []),
     ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'Word Search' }] : []),
   ];
 

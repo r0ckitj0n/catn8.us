@@ -106,6 +106,7 @@ function catn8_groups_seed_core(): void
     $adminsGroupId = catn8_group_ensure('administrators', 'Administrators');
     catn8_group_ensure('wordsearch-users', 'Wordsearch Users');
     catn8_group_ensure('mystery-game-users', 'Mystery Game Users');
+    catn8_group_ensure('build-wizard-users', 'Build Wizard Users');
 
     $adminUsers = Database::queryAll('SELECT id FROM users WHERE is_admin = 1');
     foreach ($adminUsers as $r) {

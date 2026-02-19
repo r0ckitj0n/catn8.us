@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/settings/ai_test_functions.php';
+require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
 function catn8_build_wizard_tables_ensure(): void
 {
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_projects (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        owner_user_id INT NULL,
+        owner_user_id INT NOT NULL,
         title VARCHAR(191) NOT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'planning',
         square_feet INT NULL,
@@ -120,6 +122,26 @@ function catn8_build_wizard_to_decimal_or_null($value): ?string
     return number_format((float)$value, 2, '.', '');
 }
 
+function catn8_build_wizard_normalize_phase_key($value): string
+{
+    $raw = strtolower(trim((string)$value));
+    if ($raw === '') {
+        return 'general';
+    }
+    $raw = preg_replace('/[^a-z0-9_ -]+/', '', $raw);
+    if (!is_string($raw)) {
+        return 'general';
+    }
+    $raw = str_replace(' ', '_', trim($raw));
+    if ($raw === '') {
+        return 'general';
+    }
+    if (strlen($raw) > 64) {
+        $raw = substr($raw, 0, 64);
+    }
+    return $raw;
+}
+
 function catn8_build_wizard_seed_project_from_file(int $projectId): void
 {
     $seedPath = catn8_build_wizard_seed_data_path();
@@ -183,7 +205,7 @@ function catn8_build_wizard_seed_project_from_file(int $projectId): void
             [
                 $projectId,
                 $stepOrder,
-                trim((string)($s['phase_key'] ?? 'general')),
+                catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
                 $title,
                 trim((string)($s['description'] ?? '')),
                 !empty($s['permit_required']) ? 1 : 0,
@@ -198,16 +220,9 @@ function catn8_build_wizard_seed_project_from_file(int $projectId): void
     }
 }
 
-function catn8_build_wizard_get_or_create_project(?int $uid): array
+function catn8_build_wizard_get_or_create_project(int $uid): array
 {
-    if ($uid !== null) {
-        $row = Database::queryOne('SELECT * FROM build_wizard_projects WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1', [$uid]);
-        if ($row) {
-            return $row;
-        }
-    }
-
-    $row = Database::queryOne('SELECT * FROM build_wizard_projects WHERE owner_user_id IS NULL ORDER BY id ASC LIMIT 1');
+    $row = Database::queryOne('SELECT * FROM build_wizard_projects WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1', [$uid]);
     if ($row) {
         return $row;
     }
@@ -225,6 +240,18 @@ function catn8_build_wizard_get_or_create_project(?int $uid): array
         throw new RuntimeException('Failed to create build wizard project');
     }
     return $created;
+}
+
+function catn8_build_wizard_require_project_access(int $projectId, int $uid): array
+{
+    if ($projectId <= 0) {
+        throw new RuntimeException('Missing project_id');
+    }
+    $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ? AND owner_user_id = ?', [$projectId, $uid]);
+    if (!$project) {
+        throw new RuntimeException('Project not found or not authorized');
+    }
+    return $project;
 }
 
 function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
@@ -375,17 +402,399 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
     ];
 }
 
+function catn8_build_wizard_build_ai_package(array $project, array $steps, array $documents): array
+{
+    $projectId = (int)($project['id'] ?? 0);
+
+    $payload = [
+        'context' => [
+            'generated_at' => gmdate('c'),
+            'project_id' => $projectId,
+            'source' => 'catn8_build_wizard_framework_v2',
+        ],
+        'project_profile' => [
+            'title' => (string)($project['title'] ?? ''),
+            'status' => (string)($project['status'] ?? ''),
+            'square_feet' => $project['square_feet'] !== null ? (int)$project['square_feet'] : null,
+            'home_style' => (string)($project['home_style'] ?? ''),
+            'room_count' => $project['room_count'] !== null ? (int)$project['room_count'] : null,
+            'bathroom_count' => $project['bathroom_count'] !== null ? (int)$project['bathroom_count'] : null,
+            'stories_count' => $project['stories_count'] !== null ? (int)$project['stories_count'] : null,
+            'lot_address' => (string)($project['lot_address'] ?? ''),
+            'target_start_date' => $project['target_start_date'] !== null ? (string)$project['target_start_date'] : null,
+            'target_completion_date' => $project['target_completion_date'] !== null ? (string)$project['target_completion_date'] : null,
+            'wizard_notes' => (string)($project['wizard_notes'] ?? ''),
+        ],
+        'documents' => $documents,
+        'timeline_steps' => $steps,
+        'leading_questions' => catn8_build_wizard_default_questions(),
+        'instructions_for_ai' => [
+            'Generate/optimize the full house-build timeline including permits and inspections.',
+            'Return strict JSON only.',
+            'Keep step_order contiguous from 1..N.',
+            'Each step should include expected dates, duration, and estimated cost where possible.',
+        ],
+    ];
+
+    $promptText = 'Analyze this house build package and return an optimized construction timeline including permits, inspections, prerequisites, expected durations, and budget by step. Respond with JSON only.';
+
+    return [$promptText, $payload];
+}
+
+function catn8_build_wizard_extract_json_from_text(string $text): string
+{
+    $raw = trim($text);
+    if ($raw === '') {
+        return '';
+    }
+
+    $start = strpos($raw, '{');
+    $end = strrpos($raw, '}');
+    if ($start !== false && $end !== false && $end > $start) {
+        $candidate = substr($raw, $start, $end - $start + 1);
+        $decoded = json_decode($candidate, true);
+        if (is_array($decoded)) {
+            return $candidate;
+        }
+    }
+
+    return '';
+}
+
+function catn8_build_wizard_ai_generate_text(array $cfg, string $systemPrompt, string $userPrompt): string
+{
+    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $model = trim((string)($cfg['model'] ?? 'gpt-4o-mini'));
+    $baseUrl = trim((string)($cfg['base_url'] ?? ''));
+    $location = trim((string)($cfg['location'] ?? 'us-central1'));
+    $providerConfig = is_array($cfg['provider_config'] ?? null) ? $cfg['provider_config'] : [];
+
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        if (!is_string($saJson) || trim($saJson) === '') {
+            throw new RuntimeException('Missing AI service account JSON (google_vertex_ai)');
+        }
+        $sa = json_decode((string)$saJson, true);
+        if (!is_array($sa)) {
+            throw new RuntimeException('AI Vertex service account JSON is invalid');
+        }
+        $projectId = trim((string)($sa['project_id'] ?? ''));
+        if ($projectId === '') {
+            throw new RuntimeException('AI Vertex service account missing project_id');
+        }
+        if ($model === '') {
+            $model = 'gemini-1.5-pro';
+        }
+
+        return catn8_vertex_ai_gemini_generate_text([
+            'service_account_json' => (string)$saJson,
+            'project_id' => $projectId,
+            'location' => ($location !== '' ? $location : 'us-central1'),
+            'model' => $model,
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'temperature' => 0.1,
+            'max_output_tokens' => 4096,
+        ]);
+    }
+
+    if ($provider === 'openai') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (openai)');
+        }
+
+        $factory = OpenAI::factory()->withApiKey(trim((string)$apiKey));
+        if ($baseUrl !== '') {
+            $factory = $factory->withBaseUri(catn8_validate_external_base_url($baseUrl));
+        }
+        $client = $factory->make();
+
+        $resp = $client->chat()->create([
+            'model' => ($model !== '' ? $model : 'gpt-4o-mini'),
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+            'temperature' => 0.1,
+            'max_tokens' => 4096,
+            'response_format' => ['type' => 'json_object'],
+        ]);
+
+        return (string)($resp->choices[0]->message->content ?? '');
+    }
+
+    if ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+        if ($model === '') {
+            throw new RuntimeException('Missing Google AI Studio model in AI config');
+        }
+
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
+        $res = catn8_http_json_with_status('POST', $url, ['x-goog-api-key' => trim((string)$apiKey)], [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $userPrompt]]],
+            ],
+            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            'generationConfig' => [
+                'temperature' => 0.1,
+            ],
+        ], 10, 60);
+
+        $status = (int)($res['status'] ?? 0);
+        $json = $res['json'] ?? null;
+        if ($status < 200 || $status >= 300 || !is_array($json)) {
+            throw new RuntimeException('AI request failed for google_ai_studio');
+        }
+
+        return (string)($json['candidates'][0]['content']['parts'][0]['text'] ?? '');
+    }
+
+    if ($provider === 'anthropic') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (anthropic)');
+        }
+        if ($model === '') {
+            throw new RuntimeException('Missing Anthropic model in AI config');
+        }
+
+        $res = catn8_http_json_with_status('POST', 'https://api.anthropic.com/v1/messages', [
+            'x-api-key' => trim((string)$apiKey),
+            'anthropic-version' => '2023-06-01',
+            'Content-Type' => 'application/json',
+        ], [
+            'model' => $model,
+            'max_tokens' => 4096,
+            'temperature' => 0.1,
+            'system' => $systemPrompt,
+            'messages' => [
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+        ], 10, 60);
+
+        $status = (int)($res['status'] ?? 0);
+        $json = $res['json'] ?? null;
+        if ($status < 200 || $status >= 300 || !is_array($json)) {
+            throw new RuntimeException('AI request failed for anthropic');
+        }
+
+        return (string)($json['content'][0]['text'] ?? '');
+    }
+
+    if ($provider === 'azure_openai') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (azure_openai)');
+        }
+
+        $endpoint = trim((string)($providerConfig['azure_endpoint'] ?? ''));
+        $deployment = trim((string)($providerConfig['azure_deployment'] ?? ''));
+        $apiVersion = trim((string)($providerConfig['azure_api_version'] ?? ''));
+        if ($endpoint === '' || $deployment === '' || $apiVersion === '') {
+            throw new RuntimeException('Azure OpenAI provider_config is incomplete');
+        }
+
+        $endpoint = rtrim(catn8_validate_external_base_url($endpoint), '/');
+        $url = $endpoint . '/openai/deployments/' . rawurlencode($deployment) . '/chat/completions?api-version=' . rawurlencode($apiVersion);
+
+        $res = catn8_http_json_with_status('POST', $url, ['api-key' => trim((string)$apiKey)], [
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+            'temperature' => 0.1,
+            'max_tokens' => 4096,
+        ], 10, 60);
+
+        $status = (int)($res['status'] ?? 0);
+        $json = $res['json'] ?? null;
+        if ($status < 200 || $status >= 300 || !is_array($json)) {
+            throw new RuntimeException('AI request failed for azure_openai');
+        }
+
+        return (string)($json['choices'][0]['message']['content'] ?? '');
+    }
+
+    if (in_array($provider, ['together_ai', 'fireworks_ai', 'huggingface'], true)) {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (' . $provider . ')');
+        }
+        if ($baseUrl === '') {
+            throw new RuntimeException('Missing base_url in AI config for provider ' . $provider);
+        }
+
+        $root = rtrim(catn8_validate_external_base_url($baseUrl), '/');
+        $url = preg_match('#/v1$#', $root) ? ($root . '/chat/completions') : ($root . '/v1/chat/completions');
+
+        $res = catn8_http_json_with_status('POST', $url, ['Authorization' => 'Bearer ' . trim((string)$apiKey)], [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+            'temperature' => 0.1,
+            'max_tokens' => 4096,
+        ], 10, 60);
+
+        $status = (int)($res['status'] ?? 0);
+        $json = $res['json'] ?? null;
+        if ($status < 200 || $status >= 300 || !is_array($json)) {
+            throw new RuntimeException('AI request failed for ' . $provider);
+        }
+
+        return (string)($json['choices'][0]['message']['content'] ?? '');
+    }
+
+    throw new RuntimeException('Unsupported AI provider: ' . $provider);
+}
+
+function catn8_build_wizard_ai_generate_json(array $cfg, string $systemPrompt, string $userPrompt): array
+{
+    $raw = catn8_build_wizard_ai_generate_text($cfg, $systemPrompt, $userPrompt);
+    $jsonText = catn8_build_wizard_extract_json_from_text($raw);
+    if ($jsonText === '') {
+        throw new RuntimeException('AI returned non-JSON content');
+    }
+
+    $decoded = json_decode($jsonText, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('AI returned invalid JSON');
+    }
+
+    return $decoded;
+}
+
+function catn8_build_wizard_normalize_ai_steps($steps): array
+{
+    if (!is_array($steps)) {
+        return [];
+    }
+
+    $normalized = [];
+    $order = 1;
+    foreach ($steps as $step) {
+        if (!is_array($step)) {
+            continue;
+        }
+        $title = trim((string)($step['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+
+        $stepOrder = isset($step['step_order']) && is_numeric($step['step_order']) ? (int)$step['step_order'] : $order;
+        if ($stepOrder <= 0) {
+            $stepOrder = $order;
+        }
+
+        $duration = isset($step['expected_duration_days']) && is_numeric($step['expected_duration_days'])
+            ? (int)$step['expected_duration_days']
+            : null;
+        if ($duration !== null && ($duration < 1 || $duration > 3650)) {
+            $duration = null;
+        }
+
+        $normalized[] = [
+            'step_order' => $stepOrder,
+            'phase_key' => catn8_build_wizard_normalize_phase_key($step['phase_key'] ?? 'general'),
+            'title' => $title,
+            'description' => trim((string)($step['description'] ?? '')),
+            'permit_required' => !empty($step['permit_required']) ? 1 : 0,
+            'permit_name' => (($step['permit_name'] ?? null) !== null) ? trim((string)$step['permit_name']) : null,
+            'expected_start_date' => catn8_build_wizard_parse_date_or_null($step['expected_start_date'] ?? null),
+            'expected_end_date' => catn8_build_wizard_parse_date_or_null($step['expected_end_date'] ?? null),
+            'expected_duration_days' => $duration,
+            'estimated_cost' => catn8_build_wizard_to_decimal_or_null($step['estimated_cost'] ?? null),
+        ];
+
+        $order++;
+    }
+
+    usort($normalized, static fn(array $a, array $b): int => ($a['step_order'] <=> $b['step_order']));
+
+    $reordered = [];
+    foreach ($normalized as $idx => $row) {
+        $row['step_order'] = $idx + 1;
+        $reordered[] = $row;
+    }
+
+    return $reordered;
+}
+
+function catn8_build_wizard_upsert_ai_steps(int $projectId, array $normalizedSteps, string $sourceRef): array
+{
+    $inserted = 0;
+    $updated = 0;
+
+    foreach ($normalizedSteps as $s) {
+        $existing = Database::queryOne(
+            'SELECT id FROM build_wizard_steps WHERE project_id = ? AND step_order = ? LIMIT 1',
+            [$projectId, (int)$s['step_order']]
+        );
+
+        if ($existing) {
+            Database::execute(
+                'UPDATE build_wizard_steps
+                 SET phase_key = ?, title = ?, description = ?, permit_required = ?, permit_name = ?, expected_start_date = ?, expected_end_date = ?, expected_duration_days = ?, estimated_cost = ?, ai_generated = 1, source_ref = ?
+                 WHERE id = ?',
+                [
+                    $s['phase_key'],
+                    $s['title'],
+                    $s['description'],
+                    $s['permit_required'],
+                    $s['permit_name'],
+                    $s['expected_start_date'],
+                    $s['expected_end_date'],
+                    $s['expected_duration_days'],
+                    $s['estimated_cost'],
+                    $sourceRef,
+                    (int)$existing['id'],
+                ]
+            );
+            $updated++;
+        } else {
+            Database::execute(
+                'INSERT INTO build_wizard_steps
+                    (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 1, ?)',
+                [
+                    $projectId,
+                    (int)$s['step_order'],
+                    $s['phase_key'],
+                    $s['title'],
+                    $s['description'],
+                    $s['permit_required'],
+                    $s['permit_name'],
+                    $s['expected_start_date'],
+                    $s['expected_end_date'],
+                    $s['expected_duration_days'],
+                    $s['estimated_cost'],
+                    $sourceRef,
+                ]
+            );
+            $inserted++;
+        }
+    }
+
+    return ['inserted' => $inserted, 'updated' => $updated];
+}
+
 try {
     catn8_build_wizard_tables_ensure();
 
+    catn8_session_start();
+    $viewerId = catn8_require_group_or_admin('build-wizard-users');
+
     $action = trim((string)($_GET['action'] ?? 'bootstrap'));
-    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-    $uid = catn8_auth_user_id();
 
     if ($action === 'bootstrap') {
         catn8_require_method('GET');
 
-        $project = catn8_build_wizard_get_or_create_project($uid);
+        $project = catn8_build_wizard_get_or_create_project($viewerId);
         $projectId = (int)($project['id'] ?? 0);
         if ($projectId <= 0) {
             throw new RuntimeException('Build wizard project missing id');
@@ -412,9 +821,7 @@ try {
 
         $body = catn8_read_json_body();
         $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
-        if ($projectId <= 0) {
-            throw new RuntimeException('Missing project_id');
-        }
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
 
         Database::execute(
             'UPDATE build_wizard_projects
@@ -445,6 +852,18 @@ try {
         $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
         if ($stepId <= 0) {
             throw new RuntimeException('Missing step_id');
+        }
+
+        $stepRow = Database::queryOne(
+            'SELECT s.id, s.project_id
+             FROM build_wizard_steps s
+             INNER JOIN build_wizard_projects p ON p.id = s.project_id
+             WHERE s.id = ? AND p.owner_user_id = ?
+             LIMIT 1',
+            [$stepId, $viewerId]
+        );
+        if (!$stepRow) {
+            throw new RuntimeException('Step not found or not authorized');
         }
 
         $updates = [];
@@ -494,6 +913,18 @@ try {
             throw new RuntimeException('Missing note_text');
         }
 
+        $stepRow = Database::queryOne(
+            'SELECT s.id
+             FROM build_wizard_steps s
+             INNER JOIN build_wizard_projects p ON p.id = s.project_id
+             WHERE s.id = ? AND p.owner_user_id = ?
+             LIMIT 1',
+            [$stepId, $viewerId]
+        );
+        if (!$stepRow) {
+            throw new RuntimeException('Step not found or not authorized');
+        }
+
         Database::execute(
             'INSERT INTO build_wizard_step_notes (step_id, note_text) VALUES (?, ?)',
             [$stepId, $noteText]
@@ -511,10 +942,9 @@ try {
         catn8_require_method('POST');
 
         $projectId = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
         $kind = trim((string)($_POST['kind'] ?? 'other'));
-        if ($projectId <= 0) {
-            throw new RuntimeException('Missing project_id');
-        }
         if ($kind === '') {
             $kind = 'other';
         }
@@ -578,48 +1008,11 @@ try {
 
         $body = catn8_read_json_body();
         $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
-        if ($projectId <= 0) {
-            throw new RuntimeException('Missing project_id');
-        }
-
-        $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]);
-        if (!$project) {
-            throw new RuntimeException('Project not found');
-        }
+        $project = catn8_build_wizard_require_project_access($projectId, $viewerId);
 
         $steps = catn8_build_wizard_steps_for_project($projectId);
         $documents = catn8_build_wizard_documents_for_project($projectId);
-
-        $payload = [
-            'context' => [
-                'generated_at' => gmdate('c'),
-                'project_id' => $projectId,
-                'source' => 'catn8_build_wizard_framework_v1',
-            ],
-            'project_profile' => [
-                'title' => (string)($project['title'] ?? ''),
-                'status' => (string)($project['status'] ?? ''),
-                'square_feet' => $project['square_feet'] !== null ? (int)$project['square_feet'] : null,
-                'home_style' => (string)($project['home_style'] ?? ''),
-                'room_count' => $project['room_count'] !== null ? (int)$project['room_count'] : null,
-                'bathroom_count' => $project['bathroom_count'] !== null ? (int)$project['bathroom_count'] : null,
-                'stories_count' => $project['stories_count'] !== null ? (int)$project['stories_count'] : null,
-                'lot_address' => (string)($project['lot_address'] ?? ''),
-                'target_start_date' => $project['target_start_date'] !== null ? (string)$project['target_start_date'] : null,
-                'target_completion_date' => $project['target_completion_date'] !== null ? (string)$project['target_completion_date'] : null,
-                'wizard_notes' => (string)($project['wizard_notes'] ?? ''),
-            ],
-            'documents' => $documents,
-            'timeline_steps' => $steps,
-            'leading_questions' => catn8_build_wizard_default_questions(),
-            'instructions_for_ai' => [
-                'Use permit and inspection dependencies to reorder steps if needed.',
-                'Fill missing dates, durations, and costs with realistic estimates for the specified house profile.',
-                'Return machine-readable steps with dependencies and rationale for each phase.',
-            ],
-        ];
-
-        $promptText = "Analyze this house build package and return an optimized construction timeline including permits, inspections, prerequisites, expected durations, and budget by step. Use the provided blueprint/docs and keep output machine-readable for ingestion by catn8 Build Wizard.";
+        [$promptText, $payload] = catn8_build_wizard_build_ai_package($project, $steps, $documents);
 
         Database::execute(
             'UPDATE build_wizard_projects SET ai_prompt_text = ?, ai_payload_json = ? WHERE id = ?',
@@ -631,6 +1024,79 @@ try {
             'prompt_text' => $promptText,
             'payload' => $payload,
         ]);
+    }
+
+    if ($action === 'generate_steps_from_ai') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        $project = catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $steps = catn8_build_wizard_steps_for_project($projectId);
+        $documents = catn8_build_wizard_documents_for_project($projectId);
+        [$promptText, $payload] = catn8_build_wizard_build_ai_package($project, $steps, $documents);
+
+        $cfg = catn8_settings_ai_get_config();
+        $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+        $model = trim((string)($cfg['model'] ?? ''));
+
+        $systemPrompt = 'You are an expert home construction planner. Return strict JSON only. Shape: {"project_updates":{},"steps":[{"step_order":1,"phase_key":"permits","title":"...","description":"...","permit_required":true,"permit_name":"...","expected_start_date":"YYYY-MM-DD or null","expected_end_date":"YYYY-MM-DD or null","expected_duration_days":number or null,"estimated_cost":number or null}]}. No markdown.';
+        $userPrompt = $promptText . "\n\nBUILD PACKAGE JSON:\n" . json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+        $aiJson = catn8_build_wizard_ai_generate_json($cfg, $systemPrompt, $userPrompt);
+        $normalizedSteps = catn8_build_wizard_normalize_ai_steps($aiJson['steps'] ?? []);
+        if (!$normalizedSteps) {
+            throw new RuntimeException('AI did not return usable steps');
+        }
+
+        Database::beginTransaction();
+        try {
+            $projectUpdates = is_array($aiJson['project_updates'] ?? null) ? $aiJson['project_updates'] : [];
+            if ($projectUpdates) {
+                Database::execute(
+                    'UPDATE build_wizard_projects
+                     SET home_style = ?, square_feet = ?, room_count = ?, bathroom_count = ?, stories_count = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = CONCAT(COALESCE(wizard_notes, ""), ?)
+                     WHERE id = ?',
+                    [
+                        trim((string)($projectUpdates['home_style'] ?? ($project['home_style'] ?? ''))),
+                        isset($projectUpdates['square_feet']) && is_numeric($projectUpdates['square_feet']) ? (int)$projectUpdates['square_feet'] : ($project['square_feet'] !== null ? (int)$project['square_feet'] : null),
+                        isset($projectUpdates['room_count']) && is_numeric($projectUpdates['room_count']) ? (int)$projectUpdates['room_count'] : ($project['room_count'] !== null ? (int)$project['room_count'] : null),
+                        isset($projectUpdates['bathroom_count']) && is_numeric($projectUpdates['bathroom_count']) ? (int)$projectUpdates['bathroom_count'] : ($project['bathroom_count'] !== null ? (int)$project['bathroom_count'] : null),
+                        isset($projectUpdates['stories_count']) && is_numeric($projectUpdates['stories_count']) ? (int)$projectUpdates['stories_count'] : ($project['stories_count'] !== null ? (int)$project['stories_count'] : null),
+                        catn8_build_wizard_parse_date_or_null($projectUpdates['target_start_date'] ?? ($project['target_start_date'] ?? null)),
+                        catn8_build_wizard_parse_date_or_null($projectUpdates['target_completion_date'] ?? ($project['target_completion_date'] ?? null)),
+                        "\n\n[AI update " . gmdate('c') . "] " . trim((string)($projectUpdates['wizard_notes_append'] ?? '')),
+                        $projectId,
+                    ]
+                );
+            }
+
+            $sourceRef = 'AI generated (' . $provider . ($model !== '' ? ':' . $model : '') . ') ' . gmdate('c');
+            $changes = catn8_build_wizard_upsert_ai_steps($projectId, $normalizedSteps, $sourceRef);
+
+            Database::execute(
+                'UPDATE build_wizard_projects SET ai_prompt_text = ?, ai_payload_json = ? WHERE id = ?',
+                [$promptText, json_encode($payload, JSON_UNESCAPED_SLASHES), $projectId]
+            );
+
+            Database::commit();
+
+            catn8_json_response([
+                'success' => true,
+                'provider' => $provider,
+                'model' => $model,
+                'parsed_step_count' => count($normalizedSteps),
+                'inserted_count' => (int)$changes['inserted'],
+                'updated_count' => (int)$changes['updated'],
+                'steps' => catn8_build_wizard_steps_for_project($projectId),
+            ]);
+        } catch (Throwable $txe) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $txe;
+        }
     }
 
     catn8_json_response(['success' => false, 'error' => 'Unknown action'], 404);

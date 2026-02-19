@@ -13,9 +13,20 @@ type BuildWizardPayloadResponse = {
   payload: Record<string, unknown>;
 };
 
+type BuildWizardAiGenerateResponse = {
+  success: boolean;
+  provider: string;
+  model: string;
+  parsed_step_count: number;
+  inserted_count: number;
+  updated_count: number;
+  steps: IBuildWizardStep[];
+};
+
 export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
+  const [aiBusy, setAiBusy] = React.useState<boolean>(false);
   const [projectId, setProjectId] = React.useState<number>(0);
   const [questions, setQuestions] = React.useState<string[]>([]);
   const [questionnaire, setQuestionnaire] = React.useState<IBuildWizardQuestionnaire>({
@@ -144,9 +155,30 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [projectId, onToast]);
 
+  const generateStepsFromAi = React.useCallback(async () => {
+    setAiBusy(true);
+    try {
+      const res = await ApiClient.post<BuildWizardAiGenerateResponse>('/api/build_wizard.php?action=generate_steps_from_ai', {
+        project_id: projectId,
+      });
+      if (Array.isArray(res?.steps)) {
+        setSteps(res.steps);
+      }
+      onToast?.({
+        tone: 'success',
+        message: `AI step ingestion complete (${res?.inserted_count || 0} inserted, ${res?.updated_count || 0} updated).`,
+      });
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to generate steps from AI' });
+    } finally {
+      setAiBusy(false);
+    }
+  }, [projectId, onToast]);
+
   return {
     loading,
     saving,
+    aiBusy,
     questions,
     questionnaire,
     setQuestionnaire,
@@ -159,5 +191,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     addStepNote,
     uploadDocument,
     packageForAi,
+    generateStepsFromAi,
   };
 }

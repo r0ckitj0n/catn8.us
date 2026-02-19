@@ -40,6 +40,7 @@ export function BuildWizardPage({
   const {
     loading,
     saving,
+    aiBusy,
     questions,
     questionnaire,
     setQuestionnaire,
@@ -52,6 +53,7 @@ export function BuildWizardPage({
     addStepNote,
     uploadDocument,
     packageForAi,
+    generateStepsFromAi,
   } = useBuildWizard(onToast);
 
   const [docKind, setDocKind] = React.useState<string>('blueprint');
@@ -195,7 +197,12 @@ export function BuildWizardPage({
                 <h2>3) Package for AI Analysis</h2>
                 <p className="build-wizard-muted">Builds a structured payload from profile + docs + timeline for your existing catn8 AI agent.</p>
               </div>
-              <button className="btn btn-success" onClick={() => void packageForAi()}>Build AI Package</button>
+              <div className="build-wizard-ai-actions">
+                <button className="btn btn-success" disabled={aiBusy} onClick={() => void packageForAi()}>Build AI Package</button>
+                <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi()}>
+                  {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest Steps'}
+                </button>
+              </div>
             </div>
 
             <label>

@@ -91,6 +91,12 @@
   margin-bottom: 12px;
 }
 
+.build-wizard-ai-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .build-wizard-step-list {
   display: grid;
   gap: 12px;

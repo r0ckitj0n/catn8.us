@@ -1,5 +1,4 @@
 import React from 'react';
-import { PageLayout } from '../layout/PageLayout';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardStep } from '../../types/buildWizard';
 import './BuildWizardPage.css';
@@ -14,7 +13,21 @@ interface BuildWizardPageProps {
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
 
+type WizardView = 'launcher' | 'build';
+type BuildTabId = 'start' | 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes' | 'desk' | 'completed';
 type StepDraftMap = Record<number, IBuildWizardStep>;
+
+const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
+  { id: 'start', label: '1. Start' },
+  { id: 'land', label: '2. Land & Survey' },
+  { id: 'permits', label: '3. Permits' },
+  { id: 'site', label: '4. Site & Foundation' },
+  { id: 'framing', label: '5. Framing & Shell' },
+  { id: 'mep', label: '6. MEP & Inspections' },
+  { id: 'finishes', label: '7. Finishes' },
+  { id: 'desk', label: '8. Project Desk' },
+  { id: 'completed', label: '9. Completed' },
+];
 
 function formatCurrency(value: number | null): string {
   if (value === null || Number.isNaN(Number(value))) {
@@ -23,16 +36,32 @@ function formatCurrency(value: number | null): string {
   return Number(value).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
-function formatDate(value: string | null): string {
-  return value || '-';
+function parseDate(input: string | null | undefined): Date | null {
+  if (!input) {
+    return null;
+  }
+  const str = String(input).trim();
+  if (!str) {
+    return null;
+  }
+  const normalized = str.length > 10 ? str.slice(0, 10) : str;
+  const d = new Date(`${normalized}T00:00:00`);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return d;
 }
 
-function phaseLabel(phaseKey: string): string {
-  return String(phaseKey || 'general')
-    .split('_')
-    .filter(Boolean)
-    .map((p) => p[0]?.toUpperCase() + p.slice(1))
-    .join(' ');
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatDate(input: string | null | undefined): string {
+  const d = parseDate(input);
+  return d ? toIsoDate(d) : '-';
 }
 
 function toNumberOrNull(value: string): number | null {
@@ -49,15 +78,164 @@ function toStringOrNull(value: string): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-export function BuildWizardPage({
-  viewer,
-  isAdmin = false,
-  onLoginClick,
-  onLogout,
-  onAccountClick,
-  mysteryTitle,
-  onToast,
-}: BuildWizardPageProps) {
+function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
+  const key = String(step.phase_key || '').toLowerCase();
+
+  if (key.includes('land') || key.includes('survey') || key.includes('due_diligence') || key.includes('purchase')) {
+    return 'land';
+  }
+  if (key.includes('permit') || key.includes('approval')) {
+    return 'permits';
+  }
+  if (key.includes('site') || key.includes('foundation') || key.includes('grading') || key.includes('excav')) {
+    return 'site';
+  }
+  if (key.includes('framing') || key.includes('enclosure') || key.includes('roof') || key.includes('shell')) {
+    return 'framing';
+  }
+  if (key.includes('plumb') || key.includes('elect') || key.includes('mechanical') || key.includes('hvac') || key.includes('mep') || key.includes('inspection')) {
+    return 'mep';
+  }
+  if (key.includes('finish') || key.includes('interior') || key.includes('paint') || key.includes('cabinet') || key.includes('floor')) {
+    return 'finishes';
+  }
+  return 'desk';
+}
+
+function stepDateRange(step: IBuildWizardStep): { start: Date | null; end: Date | null } {
+  const start = parseDate(step.expected_start_date) || parseDate(step.completed_at) || parseDate(step.expected_end_date);
+  const end = parseDate(step.expected_end_date) || parseDate(step.completed_at) || parseDate(step.expected_start_date);
+
+  if (!start && !end) {
+    return { start: null, end: null };
+  }
+  if (start && end && end.getTime() < start.getTime()) {
+    return { start: end, end: start };
+  }
+  return {
+    start: start || end,
+    end: end || start,
+  };
+}
+
+function getDefaultRange(steps: IBuildWizardStep[]): { start: string; end: string } {
+  const allDates: Date[] = [];
+  steps.forEach((step) => {
+    const r = stepDateRange(step);
+    if (r.start) {
+      allDates.push(r.start);
+    }
+    if (r.end) {
+      allDates.push(r.end);
+    }
+  });
+
+  if (!allDates.length) {
+    const today = new Date();
+    return { start: toIsoDate(today), end: toIsoDate(today) };
+  }
+
+  allDates.sort((a, b) => a.getTime() - b.getTime());
+  return {
+    start: toIsoDate(allDates[0]),
+    end: toIsoDate(allDates[allDates.length - 1]),
+  };
+}
+
+function parseUrlState(): { view: WizardView; projectId: number | null } {
+  if (typeof window === 'undefined') {
+    return { view: 'launcher', projectId: null };
+  }
+  const url = new URL(window.location.href);
+  const viewParam = String(url.searchParams.get('view') || '').toLowerCase();
+  const projectIdParam = Number(url.searchParams.get('project_id') || '0');
+  return {
+    view: (viewParam === 'build' ? 'build' : 'launcher'),
+    projectId: Number.isFinite(projectIdParam) && projectIdParam > 0 ? projectIdParam : null,
+  };
+}
+
+function pushUrlState(view: WizardView, projectId: number | null): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const url = new URL(window.location.href);
+
+  if (view === 'build' && projectId && projectId > 0) {
+    url.searchParams.set('view', 'build');
+    url.searchParams.set('project_id', String(projectId));
+  } else {
+    url.searchParams.delete('view');
+    url.searchParams.delete('project_id');
+  }
+
+  window.history.pushState({ view, projectId }, '', url.toString());
+}
+
+type DateRangeChartProps = {
+  steps: IBuildWizardStep[];
+  rangeStart: string;
+  rangeEnd: string;
+  compact?: boolean;
+};
+
+function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRangeChartProps) {
+  const startDate = parseDate(rangeStart);
+  const endDate = parseDate(rangeEnd);
+
+  if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
+    return <div className="build-wizard-muted">Invalid date range.</div>;
+  }
+
+  const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+
+  const rows = steps
+    .map((step) => {
+      const range = stepDateRange(step);
+      if (!range.start || !range.end) {
+        return null;
+      }
+
+      if (range.end.getTime() < startDate.getTime() || range.start.getTime() > endDate.getTime()) {
+        return null;
+      }
+
+      const clampedStartMs = Math.max(range.start.getTime(), startDate.getTime());
+      const clampedEndMs = Math.min(range.end.getTime(), endDate.getTime());
+
+      const leftDays = Math.round((clampedStartMs - startDate.getTime()) / 86400000);
+      const widthDays = Math.max(1, Math.round((clampedEndMs - clampedStartMs) / 86400000) + 1);
+
+      return {
+        step,
+        leftPercent: (leftDays / totalDays) * 100,
+        widthPercent: (widthDays / totalDays) * 100,
+      };
+    })
+    .filter(Boolean) as Array<{ step: IBuildWizardStep; leftPercent: number; widthPercent: number }>;
+
+  if (!rows.length) {
+    return <div className="build-wizard-muted">No step dates in selected range.</div>;
+  }
+
+  return (
+    <div className={`build-wizard-chart ${compact ? 'is-compact' : ''}`}>
+      {rows.map((row) => (
+        <div key={row.step.id} className="build-wizard-chart-row">
+          <div className="build-wizard-chart-label">#{row.step.step_order} {row.step.title}</div>
+          <div className="build-wizard-chart-track">
+            <div
+              className="build-wizard-chart-bar"
+              style={{ left: `${row.leftPercent}%`, width: `${row.widthPercent}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const {
     loading,
     saving,
@@ -65,7 +243,6 @@ export function BuildWizardPage({
     projectId,
     projects,
     project,
-    questions,
     questionnaire,
     updateProject,
     steps,
@@ -82,12 +259,33 @@ export function BuildWizardPage({
     generateStepsFromAi,
   } = useBuildWizard(onToast);
 
+  const initialUrlState = React.useMemo(() => parseUrlState(), []);
+  const [view, setView] = React.useState<WizardView>(initialUrlState.view);
+  const [activeTab, setActiveTab] = React.useState<BuildTabId>('start');
   const [docKind, setDocKind] = React.useState<string>('blueprint');
-  const [newBuildTitle, setNewBuildTitle] = React.useState<string>('New Dawsonville Residential Build');
-  const [activePhase, setActivePhase] = React.useState<string>('');
-  const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
-  const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
+  const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
+  const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
+  const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
+
+  React.useEffect(() => {
+    if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
+      void openProject(initialUrlState.projectId);
+    }
+  }, [initialUrlState.view, initialUrlState.projectId, projectId, openProject]);
+
+  React.useEffect(() => {
+    const onPopState = () => {
+      const state = parseUrlState();
+      setView(state.view);
+      if (state.view === 'build' && state.projectId && state.projectId !== projectId) {
+        void openProject(state.projectId);
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [openProject, projectId]);
 
   React.useEffect(() => {
     setProjectDraft(questionnaire);
@@ -97,80 +295,84 @@ export function BuildWizardPage({
     setStepDrafts((prev) => {
       const next: StepDraftMap = { ...prev };
       const validIds = new Set<number>();
-
       steps.forEach((s) => {
         validIds.add(s.id);
-        if (!next[s.id]) {
-          next[s.id] = { ...s };
+        next[s.id] = { ...s };
+      });
+      Object.keys(next).forEach((idText) => {
+        const n = Number(idText);
+        if (!validIds.has(n)) {
+          delete next[n];
         }
       });
-
-      Object.keys(next).forEach((k) => {
-        const id = Number(k);
-        if (!validIds.has(id)) {
-          delete next[id];
-        }
-      });
-
       return next;
     });
   }, [steps]);
 
-  const phases = React.useMemo(() => {
-    const map = new Map<string, { firstOrder: number; steps: IBuildWizardStep[] }>();
-    steps.forEach((s) => {
-      const key = s.phase_key || 'general';
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, { firstOrder: s.step_order, steps: [s] });
-      } else {
-        existing.firstOrder = Math.min(existing.firstOrder, s.step_order);
-        existing.steps.push(s);
-      }
-    });
-
-    return Array.from(map.entries())
-      .map(([phaseKey, value]) => ({ phaseKey, firstOrder: value.firstOrder, steps: value.steps }))
-      .sort((a, b) => a.firstOrder - b.firstOrder);
+  const completedSteps = React.useMemo(() => {
+    return steps
+      .filter((s) => Number(s.is_completed) === 1)
+      .sort((a, b) => {
+        const ad = parseDate(a.completed_at)?.getTime() || 0;
+        const bd = parseDate(b.completed_at)?.getTime() || 0;
+        return bd - ad;
+      });
   }, [steps]);
 
+  const filteredTabSteps = React.useMemo(() => {
+    if (activeTab === 'completed' || activeTab === 'start') {
+      return [] as IBuildWizardStep[];
+    }
+    return steps.filter((step) => stepPhaseBucket(step) === activeTab);
+  }, [steps, activeTab]);
+
+  const footerSteps = React.useMemo(() => {
+    if (activeTab === 'completed') {
+      return completedSteps;
+    }
+    if (activeTab === 'start') {
+      return steps;
+    }
+    return filteredTabSteps;
+  }, [activeTab, completedSteps, steps, filteredTabSteps]);
+
   React.useEffect(() => {
-    if (!phases.length) {
-      setActivePhase('');
-      return;
-    }
-    if (!activePhase || !phases.some((p) => p.phaseKey === activePhase)) {
-      setActivePhase(phases[0].phaseKey);
-    }
-  }, [phases, activePhase]);
+    const next = getDefaultRange(footerSteps);
+    setFooterRange(next);
+  }, [activeTab, footerSteps]);
 
-  const activePhaseSteps = React.useMemo(() => {
-    return phases.find((p) => p.phaseKey === activePhase)?.steps || [];
-  }, [phases, activePhase]);
-
-  const projectProgress = React.useMemo(() => {
-    const totalSteps = steps.length;
-    const completedSteps = steps.filter((s) => Number(s.is_completed) === 1).length;
-    const completionPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
-    const totalEstimatedCost = steps.reduce((sum, s) => sum + (Number(s.estimated_cost) || 0), 0);
-    const totalActualCost = steps.reduce((sum, s) => sum + (Number(s.actual_cost) || 0), 0);
-
+  const projectTotals = React.useMemo(() => {
+    const totalEstimated = steps.reduce((sum, s) => sum + (Number(s.estimated_cost) || 0), 0);
+    const totalActual = steps.reduce((sum, s) => sum + (Number(s.actual_cost) || 0), 0);
+    const doneCount = steps.filter((s) => Number(s.is_completed) === 1).length;
     return {
-      totalSteps,
-      completedSteps,
-      completionPct,
-      totalEstimatedCost,
-      totalActualCost,
+      totalEstimated,
+      totalActual,
+      doneCount,
+      totalCount: steps.length,
     };
   }, [steps]);
 
-  const onNoteSubmit = async (step: IBuildWizardStep) => {
-    const draft = String(noteDraftByStep[step.id] || '').trim();
-    if (!draft) {
-      return;
+  const openBuild = async (nextProjectId: number) => {
+    await openProject(nextProjectId);
+    setActiveTab('start');
+    setView('build');
+    pushUrlState('build', nextProjectId);
+  };
+
+  const onCreateNewBuild = async () => {
+    const today = toIsoDate(new Date());
+    const nextId = await createProject(`New Home Plan ${today}`, 'blank');
+    if (nextId > 0) {
+      setActiveTab('start');
+      setView('build');
+      pushUrlState('build', nextId);
     }
-    await addStepNote(step.id, draft);
-    setNoteDraftByStep((prev) => ({ ...prev, [step.id]: '' }));
+  };
+
+  const onBackToLauncher = () => {
+    setView('launcher');
+    pushUrlState('launcher', null);
   };
 
   const updateStepDraft = (stepId: number, patch: Partial<IBuildWizardStep>) => {
@@ -183,426 +385,449 @@ export function BuildWizardPage({
     }));
   };
 
-  const commitStepPatch = async (step: IBuildWizardStep, patch: Partial<IBuildWizardStep>) => {
-    await updateStep(step.id, patch);
+  const commitStep = async (stepId: number, patch: Partial<IBuildWizardStep>) => {
+    await updateStep(stepId, patch);
   };
 
-  const openSummary = (
-    <div className="build-wizard-card">
-      <h2>Build Launcher</h2>
-      <p className="build-wizard-muted">Start a new build or open an existing one.</p>
+  const onSubmitNote = async (step: IBuildWizardStep) => {
+    const draft = String(noteDraftByStep[step.id] || '').trim();
+    if (!draft) {
+      return;
+    }
+    await addStepNote(step.id, draft);
+    setNoteDraftByStep((prev) => ({ ...prev, [step.id]: '' }));
+  };
 
-      <div className="build-wizard-project-create">
-        <input
-          type="text"
-          value={newBuildTitle}
-          onChange={(e) => setNewBuildTitle(e.target.value)}
-          placeholder="Build name"
-        />
-        <button
-          className="btn btn-primary"
-          disabled={loading}
-          onClick={() => void createProject(newBuildTitle)}
-        >
-          Start New Build
-        </button>
-      </div>
+  const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
+    if (!tabSteps.length) {
+      return <div className="build-wizard-muted">No steps in this tab yet.</div>;
+    }
 
-      <div className="build-wizard-project-list">
-        {projects.length ? projects.map((p) => {
-          const isActive = Number(p.id) === Number(projectId);
+    return (
+      <div className="build-wizard-step-list">
+        {tabSteps.map((step) => {
+          const draft = stepDrafts[step.id] || step;
           return (
+            <div className="build-wizard-step" key={step.id}>
+              <div className="build-wizard-step-header">
+                <label className="build-wizard-inline-check">
+                  <input
+                    type="checkbox"
+                    checked={Number(step.is_completed) === 1}
+                    onChange={(e) => void toggleStep(step, e.target.checked)}
+                  />
+                  <span>#{step.step_order} Completed</span>
+                </label>
+                <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
+              </div>
+
+              <div className="build-wizard-grid">
+                <label>
+                  Step Title
+                  <input
+                    type="text"
+                    value={draft.title || ''}
+                    onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
+                    onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
+                  />
+                </label>
+                <label>
+                  Permit Required
+                  <select
+                    value={Number(draft.permit_required) === 1 ? '1' : '0'}
+                    onChange={(e) => {
+                      const next = e.target.value === '1' ? 1 : 0;
+                      updateStepDraft(step.id, { permit_required: next });
+                      void commitStep(step.id, { permit_required: next });
+                    }}
+                  >
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                  </select>
+                </label>
+                <label>
+                  Permit Name
+                  <input
+                    type="text"
+                    value={draft.permit_name || ''}
+                    onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
+                    onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
+                  />
+                </label>
+                <label>
+                  Expected Start
+                  <input
+                    type="date"
+                    value={draft.expected_start_date || ''}
+                    onChange={(e) => updateStepDraft(step.id, { expected_start_date: toStringOrNull(e.target.value) })}
+                    onBlur={() => void commitStep(step.id, { expected_start_date: toStringOrNull(stepDrafts[step.id]?.expected_start_date || '') })}
+                  />
+                </label>
+                <label>
+                  Expected End
+                  <input
+                    type="date"
+                    value={draft.expected_end_date || ''}
+                    onChange={(e) => updateStepDraft(step.id, { expected_end_date: toStringOrNull(e.target.value) })}
+                    onBlur={() => void commitStep(step.id, { expected_end_date: toStringOrNull(stepDrafts[step.id]?.expected_end_date || '') })}
+                  />
+                </label>
+                <label>
+                  Duration (Days)
+                  <input
+                    type="number"
+                    value={draft.expected_duration_days ?? ''}
+                    onChange={(e) => updateStepDraft(step.id, { expected_duration_days: toNumberOrNull(e.target.value) })}
+                    onBlur={() => void commitStep(step.id, { expected_duration_days: toNumberOrNull(String(stepDrafts[step.id]?.expected_duration_days ?? '')) })}
+                  />
+                </label>
+                <label>
+                  Estimated Cost
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={draft.estimated_cost ?? ''}
+                    onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
+                    onBlur={() => void commitStep(step.id, { estimated_cost: toNumberOrNull(String(stepDrafts[step.id]?.estimated_cost ?? '')) })}
+                  />
+                </label>
+                <label>
+                  Actual Cost
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={draft.actual_cost ?? ''}
+                    onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
+                    onBlur={() => void commitStep(step.id, { actual_cost: toNumberOrNull(String(stepDrafts[step.id]?.actual_cost ?? '')) })}
+                  />
+                </label>
+              </div>
+
+              <label className="build-wizard-notes-field">
+                Step Description
+                <textarea
+                  rows={2}
+                  value={draft.description || ''}
+                  onChange={(e) => updateStepDraft(step.id, { description: e.target.value })}
+                  onBlur={() => void commitStep(step.id, { description: String(stepDrafts[step.id]?.description || '') })}
+                />
+              </label>
+
+              <div className="build-wizard-note-row">
+                <input
+                  type="text"
+                  placeholder="Add step note"
+                  value={noteDraftByStep[step.id] || ''}
+                  onChange={(e) => setNoteDraftByStep((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                />
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => void onSubmitNote(step)}>Add Note</button>
+              </div>
+
+              {step.notes.length > 0 ? (
+                <div className="build-wizard-note-list">
+                  {step.notes.map((n) => (
+                    <div key={n.id}><strong>{n.created_at}</strong>: {n.note_text}</div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderLauncher = () => (
+    <div className="build-wizard-shell">
+      <div className="build-wizard-launcher">
+        <h1>Build Launcher</h1>
+        <p>Choose an existing home build or start a new home plan.</p>
+
+        <div className="build-wizard-launcher-grid">
+          <button className="build-wizard-launch-card is-new" onClick={() => void onCreateNewBuild()}>
+            <div className="build-wizard-thumb">
+              <div className="build-wizard-thumb-roof" />
+              <div className="build-wizard-thumb-body" />
+            </div>
+            <span className="build-wizard-launch-title">Build a New Home</span>
+          </button>
+
+          {projects.map((p) => (
             <button
               key={p.id}
-              className={`build-wizard-project-pill${isActive ? ' is-active' : ''}`}
-              onClick={() => void openProject(p.id)}
+              className="build-wizard-launch-card"
+              style={{ ['--thumb-tone' as any]: `${(p.id * 37) % 360}deg` }}
+              onClick={() => void openBuild(p.id)}
             >
-              <span className="build-wizard-project-title">{p.title}</span>
-              <span>{p.completed_step_count}/{p.step_count} complete</span>
+              <div className="build-wizard-thumb">
+                <div className="build-wizard-thumb-roof" />
+                <div className="build-wizard-thumb-body" />
+              </div>
+              <span className="build-wizard-launch-title">{p.title}</span>
             </button>
-          );
-        }) : <div className="build-wizard-muted">No builds yet.</div>}
+          ))}
+        </div>
       </div>
     </div>
   );
 
-  return (
-    <PageLayout
-      page="build_wizard"
-      title="Build Wizard"
-      viewer={viewer}
-      isAdmin={isAdmin}
-      onLoginClick={onLoginClick}
-      onLogout={onLogout}
-      onAccountClick={onAccountClick}
-      mysteryTitle={mysteryTitle}
-    >
-      <section className="build-wizard-page section">
-        <div className="container">
-          <div className="build-wizard-hero">
-            <h1>Build Wizard</h1>
-            <p>Dawsonville, GA focused planning workspace with phase tabs, permit checkpoints, and inline-editable build data.</p>
+  const renderBuildWorkspace = () => (
+    <div className="build-wizard-shell build-wizard-has-footer-space">
+      <div className="build-wizard-workspace">
+        <div className="build-wizard-topbar">
+          <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
+          <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
+        </div>
+
+        <div className="build-wizard-tabs">
+          {BUILD_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'start' ? (
+          <div className="build-wizard-card">
+            <h2>Initial Home Information</h2>
+            <div className="build-wizard-grid">
+              <label>
+                Home Name
+                <input
+                  type="text"
+                  value={projectDraft.title || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, title: e.target.value }))}
+                  onBlur={() => void updateProject({ title: projectDraft.title || '' })}
+                />
+              </label>
+              <label>
+                Status
+                <select
+                  value={projectDraft.status || 'planning'}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, status: e.target.value }))}
+                  onBlur={() => void updateProject({ status: projectDraft.status || 'planning' })}
+                >
+                  <option value="planning">Planning</option>
+                  <option value="active">Active</option>
+                  <option value="on_hold">On Hold</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </label>
+              <label>
+                Lot Address
+                <input
+                  type="text"
+                  value={projectDraft.lot_address || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_address: e.target.value }))}
+                  onBlur={() => void updateProject({ lot_address: projectDraft.lot_address || '' })}
+                />
+              </label>
+              <label>
+                Square Feet
+                <input
+                  type="number"
+                  value={projectDraft.square_feet ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, square_feet: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ square_feet: projectDraft.square_feet })}
+                />
+              </label>
+              <label>
+                Home Style
+                <input
+                  type="text"
+                  value={projectDraft.home_style || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, home_style: e.target.value }))}
+                  onBlur={() => void updateProject({ home_style: projectDraft.home_style || '' })}
+                />
+              </label>
+              <label>
+                Number of Rooms
+                <input
+                  type="number"
+                  value={projectDraft.room_count ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, room_count: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ room_count: projectDraft.room_count })}
+                />
+              </label>
+              <label>
+                Number of Bathrooms
+                <input
+                  type="number"
+                  value={projectDraft.bathroom_count ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, bathroom_count: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ bathroom_count: projectDraft.bathroom_count })}
+                />
+              </label>
+              <label>
+                Stories
+                <input
+                  type="number"
+                  value={projectDraft.stories_count ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, stories_count: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ stories_count: projectDraft.stories_count })}
+                />
+              </label>
+              <label>
+                Target Start Date
+                <input
+                  type="date"
+                  value={projectDraft.target_start_date || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_start_date: toStringOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ target_start_date: toStringOrNull(projectDraft.target_start_date || '') })}
+                />
+              </label>
+              <label>
+                Target Completion Date
+                <input
+                  type="date"
+                  value={projectDraft.target_completion_date || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_completion_date: toStringOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ target_completion_date: toStringOrNull(projectDraft.target_completion_date || '') })}
+                />
+              </label>
+            </div>
+
+            <label className="build-wizard-notes-field">
+              Home Notes
+              <textarea
+                rows={5}
+                value={projectDraft.wizard_notes || ''}
+                onChange={(e) => setProjectDraft((prev) => ({ ...prev, wizard_notes: e.target.value }))}
+                onBlur={() => void updateProject({ wizard_notes: projectDraft.wizard_notes || '' })}
+              />
+            </label>
+
+            <div className="build-wizard-stats-row">
+              <span>Completed Steps: {projectTotals.doneCount}/{projectTotals.totalCount}</span>
+              <span>Estimated Total: {formatCurrency(projectTotals.totalEstimated)}</span>
+              <span>Actual Total: {formatCurrency(projectTotals.totalActual)}</span>
+            </div>
           </div>
+        ) : null}
 
-          {openSummary}
+        {activeTab !== 'start' && activeTab !== 'completed' ? (
+          <div className="build-wizard-card">
+            <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
 
-          {!project ? null : (
-            <>
-              <div className="build-wizard-card">
-                <h2>Build Profile (Inline Editable)</h2>
-                <p className="build-wizard-muted">All profile fields update in place when you leave each field.</p>
-                <div className="build-wizard-grid">
-                  <label>
-                    Build Name
-                    <input
-                      type="text"
-                      value={projectDraft.title || ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, title: e.target.value }))}
-                      onBlur={() => void updateProject({ title: projectDraft.title || '' })}
-                    />
-                  </label>
-                  <label>
-                    Status
-                    <select
-                      value={projectDraft.status || 'planning'}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, status: e.target.value }))}
-                      onBlur={() => void updateProject({ status: projectDraft.status || 'planning' })}
-                    >
-                      <option value="planning">Planning</option>
-                      <option value="active">Active</option>
-                      <option value="on_hold">On Hold</option>
-                      <option value="completed">Completed</option>
+            {activeTab === 'desk' ? (
+              <div className="build-wizard-desk-grid">
+                <div>
+                  <h3>Documents</h3>
+                  <div className="build-wizard-upload-row">
+                    <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+                      <option value="blueprint">Blueprint</option>
+                      <option value="permit">Permit Document</option>
+                      <option value="survey">Survey</option>
+                      <option value="spec_sheet">Spec Sheet</option>
+                      <option value="other">Other</option>
                     </select>
-                  </label>
-                  <label>
-                    Square Feet
                     <input
-                      type="number"
-                      value={projectDraft.square_feet ?? ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, square_feet: toNumberOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ square_feet: projectDraft.square_feet })}
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                        if (file) {
+                          void uploadDocument(docKind, file);
+                        }
+                        e.currentTarget.value = '';
+                      }}
                     />
-                  </label>
-                  <label>
-                    Style of Home
-                    <input
-                      type="text"
-                      value={projectDraft.home_style || ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, home_style: e.target.value }))}
-                      onBlur={() => void updateProject({ home_style: projectDraft.home_style || '' })}
-                    />
-                  </label>
-                  <label>
-                    Number of Rooms
-                    <input
-                      type="number"
-                      value={projectDraft.room_count ?? ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, room_count: toNumberOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ room_count: projectDraft.room_count })}
-                    />
-                  </label>
-                  <label>
-                    Number of Bathrooms
-                    <input
-                      type="number"
-                      value={projectDraft.bathroom_count ?? ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, bathroom_count: toNumberOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ bathroom_count: projectDraft.bathroom_count })}
-                    />
-                  </label>
-                  <label>
-                    Stories
-                    <input
-                      type="number"
-                      value={projectDraft.stories_count ?? ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, stories_count: toNumberOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ stories_count: projectDraft.stories_count })}
-                    />
-                  </label>
-                  <label>
-                    Lot Address
-                    <input
-                      type="text"
-                      value={projectDraft.lot_address || ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_address: e.target.value }))}
-                      onBlur={() => void updateProject({ lot_address: projectDraft.lot_address || '' })}
-                    />
-                  </label>
-                  <label>
-                    Target Start Date
-                    <input
-                      type="date"
-                      value={projectDraft.target_start_date || ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_start_date: toStringOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ target_start_date: toStringOrNull(projectDraft.target_start_date || '') })}
-                    />
-                  </label>
-                  <label>
-                    Target Completion Date
-                    <input
-                      type="date"
-                      value={projectDraft.target_completion_date || ''}
-                      onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_completion_date: toStringOrNull(e.target.value) }))}
-                      onBlur={() => void updateProject({ target_completion_date: toStringOrNull(projectDraft.target_completion_date || '') })}
-                    />
-                  </label>
-                </div>
-
-                <label className="build-wizard-notes-field">
-                  House Specifications Notes
-                  <textarea
-                    value={projectDraft.wizard_notes || ''}
-                    onChange={(e) => setProjectDraft((prev) => ({ ...prev, wizard_notes: e.target.value }))}
-                    onBlur={() => void updateProject({ wizard_notes: projectDraft.wizard_notes || '' })}
-                    rows={4}
-                  />
-                </label>
-
-                {saving ? <div className="build-wizard-muted">Saving updates...</div> : null}
-              </div>
-
-              <div className="build-wizard-card">
-                <h2>Dawson County Permit & Approval Checklist</h2>
-                <div className="build-wizard-checklist">
-                  <div>Residential building permit with site plan / construction plans.</div>
-                  <div>Land disturbance or erosion-control approval before grading (if required by scope).</div>
-                  <div>Driveway approval for county roads or encroachment permit for state-route access (as applicable).</div>
-                  <div>Environmental Health septic permit (or sewer utility approval) before permit closeout.</div>
-                  <div>Electrical, plumbing, and mechanical rough/final inspections and certificate of occupancy.</div>
-                </div>
-              </div>
-
-              <div className="build-wizard-card">
-                <h2>Phase Tabs</h2>
-                <div className="build-wizard-stats-row">
-                  <span>Progress: {projectProgress.completedSteps}/{projectProgress.totalSteps} ({projectProgress.completionPct}%)</span>
-                  <span>Estimated Budget: {formatCurrency(projectProgress.totalEstimatedCost)}</span>
-                  <span>Actual Cost: {formatCurrency(projectProgress.totalActualCost)}</span>
-                </div>
-
-                <div className="build-wizard-phase-tabs">
-                  {phases.map((p) => (
-                    <button
-                      key={p.phaseKey}
-                      className={`build-wizard-phase-tab${activePhase === p.phaseKey ? ' is-active' : ''}`}
-                      onClick={() => setActivePhase(p.phaseKey)}
-                    >
-                      {phaseLabel(p.phaseKey)}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="build-wizard-step-table-wrap">
-                  <table className="build-wizard-step-table">
-                    <thead>
-                      <tr>
-                        <th>Done</th>
-                        <th>Step</th>
-                        <th>Description</th>
-                        <th>Permit?</th>
-                        <th>Permit Name</th>
-                        <th>Start</th>
-                        <th>End</th>
-                        <th>Days</th>
-                        <th>Est. Cost</th>
-                        <th>Actual Cost</th>
-                        <th>Completed At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activePhaseSteps.map((step) => {
-                        const draft = stepDrafts[step.id] || step;
-                        return (
-                          <tr key={step.id}>
-                            <td>
-                              <input
-                                type="checkbox"
-                                checked={Number(step.is_completed) === 1}
-                                onChange={(e) => void toggleStep(step, e.target.checked)}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                value={draft.title || ''}
-                                onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
-                                onBlur={() => void commitStepPatch(step, { title: (stepDrafts[step.id]?.title || '').trim() })}
-                              />
-                            </td>
-                            <td>
-                              <textarea
-                                rows={2}
-                                value={draft.description || ''}
-                                onChange={(e) => updateStepDraft(step.id, { description: e.target.value })}
-                                onBlur={() => void commitStepPatch(step, { description: stepDrafts[step.id]?.description || '' })}
-                              />
-                            </td>
-                            <td>
-                              <select
-                                value={Number(draft.permit_required) === 1 ? '1' : '0'}
-                                onChange={(e) => {
-                                  const next = e.target.value === '1' ? 1 : 0;
-                                  updateStepDraft(step.id, { permit_required: next });
-                                  void commitStepPatch(step, { permit_required: next });
-                                }}
-                              >
-                                <option value="0">No</option>
-                                <option value="1">Yes</option>
-                              </select>
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                value={draft.permit_name || ''}
-                                onChange={(e) => updateStepDraft(step.id, { permit_name: e.target.value })}
-                                onBlur={() => void commitStepPatch(step, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="date"
-                                value={draft.expected_start_date || ''}
-                                onChange={(e) => updateStepDraft(step.id, { expected_start_date: toStringOrNull(e.target.value) })}
-                                onBlur={() => void commitStepPatch(step, { expected_start_date: toStringOrNull(stepDrafts[step.id]?.expected_start_date || '') })}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="date"
-                                value={draft.expected_end_date || ''}
-                                onChange={(e) => updateStepDraft(step.id, { expected_end_date: toStringOrNull(e.target.value) })}
-                                onBlur={() => void commitStepPatch(step, { expected_end_date: toStringOrNull(stepDrafts[step.id]?.expected_end_date || '') })}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                value={draft.expected_duration_days ?? ''}
-                                onChange={(e) => updateStepDraft(step.id, { expected_duration_days: toNumberOrNull(e.target.value) })}
-                                onBlur={() => void commitStepPatch(step, { expected_duration_days: toNumberOrNull(String(stepDrafts[step.id]?.expected_duration_days ?? '')) })}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={draft.estimated_cost ?? ''}
-                                onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
-                                onBlur={() => void commitStepPatch(step, { estimated_cost: toNumberOrNull(String(stepDrafts[step.id]?.estimated_cost ?? '')) })}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={draft.actual_cost ?? ''}
-                                onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
-                                onBlur={() => void commitStepPatch(step, { actual_cost: toNumberOrNull(String(stepDrafts[step.id]?.actual_cost ?? '')) })}
-                              />
-                            </td>
-                            <td>{formatDate(step.completed_at)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="build-wizard-card">
-                <h2>Step Notes</h2>
-                <div className="build-wizard-step-list">
-                  {activePhaseSteps.map((step) => (
-                    <div className="build-wizard-step" key={step.id}>
-                      <div className="build-wizard-step-top">
-                        <strong>#{step.step_order} {step.title}</strong>
-                        <span>{phaseLabel(step.phase_key)}</span>
-                      </div>
-                      <div className="build-wizard-note-row">
-                        <input
-                          type="text"
-                          placeholder="Add step note..."
-                          value={noteDraftByStep[step.id] || ''}
-                          onChange={(e) => setNoteDraftByStep((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                        />
-                        <button className="btn btn-outline-secondary btn-sm" onClick={() => void onNoteSubmit(step)}>Add Note</button>
-                      </div>
-                      {Array.isArray(step.notes) && step.notes.length ? (
-                        <div className="build-wizard-note-list">
-                          {step.notes.map((n) => (
-                            <div key={n.id}><strong>{n.created_at}</strong>: {n.note_text}</div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="build-wizard-card">
-                <h2>Documents</h2>
-                <div className="build-wizard-upload-row">
-                  <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                    <option value="blueprint">Blueprint</option>
-                    <option value="permit">Permit Document</option>
-                    <option value="survey">Survey</option>
-                    <option value="spec_sheet">Spec Sheet</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <input
-                    type="file"
-                    onChange={(e) => {
-                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                      if (file) {
-                        void uploadDocument(docKind, file);
-                      }
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </div>
-                <div className="build-wizard-doc-list">
-                  {documents.length ? documents.map((doc) => (
-                    <a key={doc.id} href={doc.public_url} target="_blank" rel="noreferrer">
-                      {doc.kind}: {doc.original_name}
-                    </a>
-                  )) : <div className="build-wizard-muted">No documents uploaded yet.</div>}
-                </div>
-              </div>
-
-              <div className="build-wizard-card">
-                <div className="build-wizard-ai-header">
-                  <div>
-                    <h2>AI Package</h2>
-                    <p className="build-wizard-muted">Builds structured JSON from profile + documents + phase steps.</p>
                   </div>
+                  <div className="build-wizard-doc-list">
+                    {documents.length ? documents.map((doc) => (
+                      <a key={doc.id} href={doc.public_url} target="_blank" rel="noreferrer">{doc.kind}: {doc.original_name}</a>
+                    )) : <div className="build-wizard-muted">No documents uploaded yet.</div>}
+                  </div>
+                </div>
+                <div>
+                  <h3>AI Package</h3>
                   <div className="build-wizard-ai-actions">
                     <button className="btn btn-success" disabled={aiBusy} onClick={() => void packageForAi()}>Build AI Package</button>
                     <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi()}>
-                      {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest Steps'}
+                      {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest'}
                     </button>
                   </div>
+                  <label>
+                    Prompt Text
+                    <textarea value={aiPromptText || ''} readOnly rows={4} />
+                  </label>
+                  <label>
+                    Payload JSON
+                    <textarea value={aiPayloadJson || ''} readOnly rows={6} />
+                  </label>
                 </div>
-
-                <label>
-                  Prompt Text
-                  <textarea value={aiPromptText || ''} readOnly rows={4} />
-                </label>
-                <label>
-                  Payload JSON
-                  <textarea value={aiPayloadJson || ''} readOnly rows={10} />
-                </label>
               </div>
+            ) : null}
 
-              <div className="build-wizard-muted">Leading questions used for this workflow:</div>
-              <div className="build-wizard-leading-questions">
-                {questions.map((q) => (
-                  <div key={q} className="build-wizard-question-item">{q}</div>
-                ))}
+            {renderEditableStepCards(filteredTabSteps)}
+          </div>
+        ) : null}
+
+        {activeTab === 'completed' ? (
+          <div className="build-wizard-card">
+            <h2>Completed Steps</h2>
+            <div className="build-wizard-completed-layout">
+              <div className="build-wizard-completed-list">
+                {completedSteps.length ? completedSteps.map((step) => (
+                  <div className="build-wizard-completed-item" key={step.id}>
+                    <div className="build-wizard-completed-head">
+                      <strong>#{step.step_order} {step.title}</strong>
+                      <span>{formatCurrency(step.actual_cost !== null ? step.actual_cost : step.estimated_cost)}</span>
+                    </div>
+                    <div className="build-wizard-completed-date">Date: {formatDate(step.completed_at || step.expected_end_date || step.expected_start_date)}</div>
+                    {step.notes.length ? (
+                      <div className="build-wizard-completed-notes">
+                        {step.notes.map((note) => (
+                          <div key={note.id}><strong>{note.created_at}</strong>: {note.note_text}</div>
+                        ))}
+                      </div>
+                    ) : <div className="build-wizard-muted">No notes on this step.</div>}
+                  </div>
+                )) : <div className="build-wizard-muted">No completed steps yet.</div>}
               </div>
-            </>
-          )}
+              <aside className="build-wizard-completed-chart">
+                <h3>Date Graph</h3>
+                <DateRangeChart steps={completedSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
+              </aside>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <footer className="build-wizard-footer-chart">
+        <div className="build-wizard-footer-inner">
+          <div className="build-wizard-footer-controls">
+            <label>
+              Range Start
+              <input
+                type="date"
+                value={footerRange.start}
+                onChange={(e) => setFooterRange((prev) => ({ ...prev, start: e.target.value }))}
+              />
+            </label>
+            <label>
+              Range End
+              <input
+                type="date"
+                value={footerRange.end}
+                onChange={(e) => setFooterRange((prev) => ({ ...prev, end: e.target.value }))}
+              />
+            </label>
+            <div className="build-wizard-footer-meta">
+              Viewing: {BUILD_TABS.find((t) => t.id === activeTab)?.label}
+            </div>
+            <div className="build-wizard-footer-meta">
+              Saving: {saving || loading ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <DateRangeChart steps={footerSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} compact />
         </div>
-      </section>
-    </PageLayout>
+      </footer>
+    </div>
   );
+
+  return view === 'launcher' ? renderLauncher() : renderBuildWorkspace();
 }

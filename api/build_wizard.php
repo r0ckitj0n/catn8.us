@@ -967,11 +967,12 @@ try {
 
         $body = catn8_read_json_body();
         $title = trim((string)($body['title'] ?? ''));
+        $seedMode = strtolower(trim((string)($body['seed_mode'] ?? 'blank')));
+        if (!in_array($seedMode, ['blank', 'spreadsheet'], true)) {
+            $seedMode = 'blank';
+        }
 
-        $projectCountRow = Database::queryOne('SELECT COUNT(*) AS c FROM build_wizard_projects WHERE owner_user_id = ?', [$viewerId]);
-        $isFirstProject = ((int)($projectCountRow['c'] ?? 0) <= 0);
-
-        $project = catn8_build_wizard_create_project($viewerId, $title, $isFirstProject);
+        $project = catn8_build_wizard_create_project($viewerId, $title, $seedMode === 'spreadsheet');
         $projectId = (int)($project['id'] ?? 0);
 
         catn8_json_response([

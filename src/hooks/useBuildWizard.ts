@@ -115,18 +115,21 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     await load(nextProjectId);
   }, [load]);
 
-  const createProject = React.useCallback(async (title: string) => {
+  const createProject = React.useCallback(async (title: string, seedMode: 'blank' | 'spreadsheet' = 'blank') => {
     try {
       const res = await ApiClient.post<CreateProjectResponse>('/api/build_wizard.php?action=create_project', {
         title,
+        seed_mode: seedMode,
       });
       const nextId = Number(res?.project_id || 0);
       if (nextId > 0) {
         await load(nextId);
       }
       onToast?.({ tone: 'success', message: 'New build created.' });
+      return nextId;
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to create build' });
+      return 0;
     }
   }, [load, onToast]);
 

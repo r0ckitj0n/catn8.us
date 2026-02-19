@@ -166,6 +166,8 @@ export interface IBuildWizardPurchaseOption {
   unit_price: number | null;
   summary: string;
   source: 'provided_url' | 'web_search';
+  tier: 'conservative' | 'standard' | 'premium';
+  tier_label: 'Conservative' | 'Standard' | 'Premium';
 }
 
 export interface IBuildWizardFindPurchaseOptionsResponse {
@@ -175,4 +177,35 @@ export interface IBuildWizardFindPurchaseOptionsResponse {
   query: string;
   options: IBuildWizardPurchaseOption[];
   step: IBuildWizardStep;
+}
+
+export interface IBuildWizardSingletreeRecoverSummary {
+  project_id: number;
+  project_title: string;
+  apply: number;
+  source_root: string;
+  source_files_considered: number;
+  existing_documents_before: number;
+  matched_existing: number;
+  inserted_documents: number;
+  updated_mappings: number;
+  blob_backfilled: number;
+  image_blob_backfilled: number;
+  skipped_duplicates: number;
+  blueprint_document_id_set: number;
+  existing_documents_after: number;
+}
+
+export interface IBuildWizardSingletreeRecoverResult {
+  success?: boolean;
+  summary?: IBuildWizardSingletreeRecoverSummary;
+  preview_sample?: Array<Record<string, unknown>>;
+}
+
+export interface IBuildWizardSingletreeRecoverResponse {
+  success: boolean;
+  exit_code: number;
+  result: IBuildWizardSingletreeRecoverResult | string;
+  stderr?: string;
+  command?: string;
 }

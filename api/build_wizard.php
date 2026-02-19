@@ -1595,6 +1595,126 @@ function catn8_build_wizard_search_shopping_options(string $query, int $limit = 
     return $results;
 }
 
+function catn8_build_wizard_extract_price_guess(string $text): ?float
+{
+    if ($text === '') {
+        return null;
+    }
+    if (preg_match('/\\$\\s*([0-9]{1,6}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/', $text, $m) && isset($m[1])) {
+        $raw = str_replace(',', '', (string)$m[1]);
+        if ($raw !== '' && is_numeric($raw)) {
+            $value = (float)$raw;
+            if ($value > 0) {
+                return $value;
+            }
+        }
+    }
+    return null;
+}
+
+function catn8_build_wizard_apply_option_tiers(array $options): array
+{
+    if (!$options) {
+        return [];
+    }
+
+    $indexed = [];
+    foreach ($options as $i => $opt) {
+        if (!is_array($opt)) {
+            continue;
+        }
+        $price = null;
+        if (isset($opt['unit_price']) && is_numeric($opt['unit_price'])) {
+            $p = (float)$opt['unit_price'];
+            if ($p > 0) {
+                $price = $p;
+            }
+        }
+        $opt['unit_price'] = $price;
+        $indexed[] = [
+            'index' => $i,
+            'option' => $opt,
+        ];
+    }
+    if (!$indexed) {
+        return [];
+    }
+
+    $priced = array_values(array_filter($indexed, static function ($row): bool {
+        return isset($row['option']['unit_price']) && is_numeric($row['option']['unit_price']) && (float)$row['option']['unit_price'] > 0;
+    }));
+
+    usort($priced, static function (array $a, array $b): int {
+        $pa = (float)($a['option']['unit_price'] ?? 0);
+        $pb = (float)($b['option']['unit_price'] ?? 0);
+        if ($pa === $pb) {
+            return ($a['index'] <=> $b['index']);
+        }
+        return ($pa <=> $pb);
+    });
+
+    $pickByIndex = static function (array $rows, int $idx): ?array {
+        if (!isset($rows[$idx]) || !is_array($rows[$idx]) || !isset($rows[$idx]['option']) || !is_array($rows[$idx]['option'])) {
+            return null;
+        }
+        return $rows[$idx];
+    };
+
+    $conservative = null;
+    $premium = null;
+    $standard = null;
+
+    if (count($priced) >= 1) {
+        $conservative = $pickByIndex($priced, 0);
+        $premium = $pickByIndex($priced, count($priced) - 1);
+        $standard = $pickByIndex($priced, intdiv(count($priced) - 1, 2));
+    }
+
+    if ($conservative === null) {
+        $conservative = $indexed[0];
+    }
+    if ($premium === null) {
+        $premium = $indexed[count($indexed) - 1];
+    }
+
+    if ($standard === null || (($standard['index'] ?? -1) === ($conservative['index'] ?? -2)) || (($standard['index'] ?? -1) === ($premium['index'] ?? -3))) {
+        foreach ($indexed as $row) {
+            $idx = (int)($row['index'] ?? -1);
+            if ($idx !== (int)($conservative['index'] ?? -1) && $idx !== (int)($premium['index'] ?? -1)) {
+                $standard = $row;
+                break;
+            }
+        }
+        if ($standard === null) {
+            $standard = $conservative;
+        }
+    }
+
+    $tierRows = [
+        'conservative' => $conservative,
+        'standard' => $standard,
+        'premium' => $premium,
+    ];
+    $labels = [
+        'conservative' => 'Conservative',
+        'standard' => 'Standard',
+        'premium' => 'Premium',
+    ];
+
+    $out = [];
+    foreach ($tierRows as $tier => $row) {
+        if (!is_array($row) || !isset($row['option']) || !is_array($row['option'])) {
+            continue;
+        }
+        $opt = $row['option'];
+        $opt['tier'] = $tier;
+        $opt['tier_label'] = $labels[$tier] ?? ucfirst($tier);
+        $out[] = $opt;
+    }
+
+    return $out;
+}
+
 function catn8_build_wizard_step_for_owner(int $stepId, int $uid): ?array
 {
     if ($stepId <= 0) {
@@ -1917,6 +2037,73 @@ try {
         catn8_json_response(['success' => true, 'project' => $project]);
     }
 
+    if ($action === 'delete_project') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        if ($projectId <= 0) {
+            throw new RuntimeException('Missing project_id');
+        }
+
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $docRows = Database::queryAll('SELECT storage_path FROM build_wizard_documents WHERE project_id = ?', [$projectId]);
+
+        $paths = [];
+        foreach ($docRows as $row) {
+            $storagePath = trim((string)($row['storage_path'] ?? ''));
+            if ($storagePath !== '') {
+                $paths[$storagePath] = true;
+            }
+        }
+
+        Database::beginTransaction();
+        try {
+            Database::execute('DELETE FROM build_wizard_projects WHERE id = ? AND owner_user_id = ? LIMIT 1', [$projectId, $viewerId]);
+            Database::commit();
+        } catch (Throwable $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
+
+        $deletedFileCount = 0;
+        $fileDeleteErrorCount = 0;
+        $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+        if ($uploadRoot !== false) {
+            foreach (array_keys($paths) as $storagePath) {
+                if (!is_file($storagePath)) {
+                    continue;
+                }
+                $realStoragePath = realpath($storagePath);
+                if (
+                    $realStoragePath === false
+                    || !str_starts_with($realStoragePath, $uploadRoot . DIRECTORY_SEPARATOR)
+                ) {
+                    continue;
+                }
+                if (@unlink($realStoragePath)) {
+                    $deletedFileCount++;
+                } else {
+                    $fileDeleteErrorCount++;
+                }
+            }
+        }
+
+        $projects = catn8_build_wizard_list_projects($viewerId);
+        $selectedProjectId = (int)($projects[0]['id'] ?? 0);
+
+        catn8_json_response([
+            'success' => true,
+            'deleted_project_id' => $projectId,
+            'deleted_file_count' => $deletedFileCount,
+            'file_delete_error_count' => $fileDeleteErrorCount,
+            'projects' => $projects,
+            'selected_project_id' => $selectedProjectId > 0 ? $selectedProjectId : null,
+        ]);
+    }
+
     if ($action === 'update_step') {
         catn8_require_method('POST');
 
@@ -2202,21 +2389,23 @@ try {
                 'title' => $title,
                 'url' => $u,
                 'vendor' => parse_url($u, PHP_URL_HOST) ?: null,
-                'unit_price' => null,
+                'unit_price' => catn8_build_wizard_extract_price_guess(trim((string)($title . ' ' . ((string)($opt['snippet'] ?? ''))))),
                 'summary' => (string)($opt['snippet'] ?? ''),
                 'source' => 'web_search',
             ];
-            if (count($options) >= 3) {
+            if (count($options) >= 10) {
                 break;
             }
         }
+
+        $tieredOptions = catn8_build_wizard_apply_option_tiers($options);
 
         catn8_json_response([
             'success' => true,
             'step_id' => $stepId,
             'step_type' => $stepType,
             'query' => $query,
-            'options' => array_slice($options, 0, 3),
+            'options' => array_slice($tieredOptions, 0, 3),
             'step' => catn8_build_wizard_step_by_id($stepId),
         ]);
     }

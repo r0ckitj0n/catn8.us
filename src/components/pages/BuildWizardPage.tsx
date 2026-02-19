@@ -476,9 +476,10 @@ function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRa
   );
 }
 
-export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
+export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
+    recoveryBusy,
     projectId,
     projects,
     project,
@@ -494,6 +495,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     updateStep,
     addStep,
     deleteStep,
+    deleteProject,
     addStepNote,
     uploadDocument,
     deleteDocument,
@@ -501,6 +503,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
+    recoverSingletreeDocuments,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -519,8 +522,11 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
+  const [deletingProjectId, setDeletingProjectId] = React.useState<number>(0);
   const [findingStepId, setFindingStepId] = React.useState<number>(0);
   const [purchaseOptionsByStep, setPurchaseOptionsByStep] = React.useState<Record<number, Array<any>>>({});
+  const [recoveryReportOpen, setRecoveryReportOpen] = React.useState<boolean>(false);
+  const [recoveryReportJson, setRecoveryReportJson] = React.useState<string>('');
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -732,6 +738,50 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
       await deleteDocument(docId);
     } finally {
       setDeletingDocumentId(0);
+    }
+  };
+
+  const onDeleteProject = async (projectSummary: { id: number; title: string }) => {
+    if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete "${projectSummary.title}"?\n\nThis will permanently purge this project and all related records from the database.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingProjectId(projectSummary.id);
+    try {
+      await deleteProject(projectSummary.id);
+    } finally {
+      setDeletingProjectId(0);
+    }
+  };
+
+  const onRunSingletreeRecovery = async (apply: boolean) => {
+    if (!isAdmin) {
+      return;
+    }
+    if (recoveryBusy) {
+      return;
+    }
+    if (apply) {
+      const confirmed = window.confirm(
+        'Apply Singletree recovery now?\n\nThis will write document mappings/blobs for "Cabin - 91 Singletree Ln".',
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    const res = await recoverSingletreeDocuments(apply, {
+      db_env: 'live',
+      project_title: 'Cabin - 91 Singletree Ln',
+      source_root: '/Users/jongraves/Documents/Home/91 Singletree Ln',
+    });
+    if (res) {
+      setRecoveryReportJson(JSON.stringify(res, null, 2));
+      setRecoveryReportOpen(true);
     }
   };
 
@@ -1182,7 +1232,12 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                 <div className="build-wizard-purchase-options">
                   {(purchaseOptionsByStep[step.id] || []).map((opt: any, idx: number) => (
                     <div className="build-wizard-purchase-option" key={`${step.id}-opt-${idx}`}>
-                      <div className="build-wizard-purchase-option-title">{opt.title}</div>
+                      <div className="build-wizard-purchase-option-title">
+                        <span>{opt.title}</span>
+                        <span className={`build-wizard-purchase-tier is-${String(opt.tier || '').toLowerCase() || 'standard'}`}>
+                          {opt.tier_label || 'Standard'}
+                        </span>
+                      </div>
                       <div className="build-wizard-purchase-option-meta">
                         <span>{opt.vendor || 'Unknown vendor'}</span>
                         <span>{typeof opt.unit_price === 'number' ? formatCurrency(opt.unit_price) : '-'}</span>
@@ -1278,18 +1333,38 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
           </button>
 
           {projects.map((p) => (
-            <button
+            <div
               key={p.id}
-              className="build-wizard-launch-card"
+              className="build-wizard-launch-card build-wizard-launch-card-with-delete"
               style={{ ['--thumb-tone' as any]: `${(p.id * 37) % 360}deg` }}
-              onClick={() => void openBuild(p.id)}
             >
-              <div className="build-wizard-thumb">
-                <div className="build-wizard-thumb-roof" />
-                <div className="build-wizard-thumb-body" />
-              </div>
-              <span className="build-wizard-launch-title">{p.title}</span>
-            </button>
+              <button
+                type="button"
+                className="build-wizard-launch-card-open"
+                onClick={() => void openBuild(p.id)}
+                title={`Open ${p.title}`}
+              >
+                <div className="build-wizard-thumb">
+                  <div className="build-wizard-thumb-roof" />
+                  <div className="build-wizard-thumb-body" />
+                </div>
+                <span className="build-wizard-launch-title">{p.title}</span>
+              </button>
+              <button
+                type="button"
+                className="build-wizard-launch-card-delete"
+                aria-label={`Delete ${p.title}`}
+                title={`Delete ${p.title}`}
+                onClick={() => void onDeleteProject({ id: p.id, title: p.title })}
+                disabled={deletingProjectId === p.id}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -1303,6 +1378,34 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
+            {isAdmin ? (
+              <>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => void onRunSingletreeRecovery(false)}
+                  disabled={recoveryBusy}
+                  title="Dry-run document recovery for Cabin - 91 Singletree Ln"
+                >
+                  {recoveryBusy ? 'Running...' : 'Singletree Recovery (Dry Run)'}
+                </button>
+                <button
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => void onRunSingletreeRecovery(true)}
+                  disabled={recoveryBusy}
+                  title="Apply document recovery for Cabin - 91 Singletree Ln"
+                >
+                  {recoveryBusy ? 'Running...' : 'Singletree Recovery (Apply)'}
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => setRecoveryReportOpen(true)}
+                  disabled={!recoveryReportJson}
+                  title="View last Singletree recovery report"
+                >
+                  Recovery Report
+                </button>
+              </>
+            ) : null}
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
           </div>
         </div>
@@ -1703,6 +1806,38 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
             </div>
             <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {recoveryReportOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setRecoveryReportOpen(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Singletree Recovery Report</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(recoveryReportJson || '');
+                      onToast?.({ tone: 'success', message: 'Recovery report copied.' });
+                    } catch (_) {
+                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
+                    }
+                  }}
+                  disabled={!recoveryReportJson}
+                >
+                  Copy JSON
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setRecoveryReportOpen(false)}>Close</button>
+              </div>
+            </div>
+            {recoveryReportJson ? (
+              <pre className="build-wizard-recovery-json">{recoveryReportJson}</pre>
+            ) : (
+              <div className="build-wizard-muted">No recovery report yet. Run Dry Run or Apply first.</div>
+            )}
           </div>
         </div>
       ) : null}

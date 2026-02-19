@@ -11,6 +11,7 @@ import {
   IBuildWizardProject,
   IBuildWizardProjectSummary,
   IBuildWizardQuestionnaire,
+  IBuildWizardSingletreeRecoverResponse,
   IBuildWizardStep,
 } from '../types/buildWizard';
 
@@ -57,6 +58,13 @@ type DeleteDocumentResponse = {
   documents: IBuildWizardDocument[];
 };
 
+type DeleteProjectResponse = {
+  success: boolean;
+  deleted_project_id: number;
+  selected_project_id: number | null;
+  projects: IBuildWizardProjectSummary[];
+};
+
 type UpdateDocumentResponse = {
   success: boolean;
   document: IBuildWizardDocument;
@@ -66,6 +74,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
   const [aiBusy, setAiBusy] = React.useState<boolean>(false);
+  const [recoveryBusy, setRecoveryBusy] = React.useState<boolean>(false);
   const [projectId, setProjectId] = React.useState<number>(0);
   const [projects, setProjects] = React.useState<IBuildWizardProjectSummary[]>([]);
   const [project, setProject] = React.useState<IBuildWizardProject | null>(null);
@@ -334,6 +343,57 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast, refreshCurrentProject]);
 
+  const deleteProject = React.useCallback(async (targetProjectId: number) => {
+    if (targetProjectId <= 0) {
+      return false;
+    }
+    try {
+      const res = await ApiClient.post<DeleteProjectResponse>('/api/build_wizard.php?action=delete_project', {
+        project_id: targetProjectId,
+      });
+      const deletedProjectId = Number(res?.deleted_project_id || 0);
+      const nextProjects = Array.isArray(res?.projects) ? res.projects : [];
+      setProjects(nextProjects);
+
+      const deletedCurrent = deletedProjectId > 0 && deletedProjectId === projectId;
+      if (!deletedCurrent) {
+        onToast?.({ tone: 'success', message: 'Project deleted.' });
+        return true;
+      }
+
+      const fallbackProjectId = Number(res?.selected_project_id || 0);
+      if (fallbackProjectId > 0) {
+        await load(fallbackProjectId);
+      } else {
+        setProjectId(0);
+        setProject(null);
+        setQuestionnaire({
+          title: '',
+          status: 'planning',
+          square_feet: null,
+          home_style: '',
+          room_count: null,
+          bathroom_count: null,
+          stories_count: null,
+          lot_address: '',
+          target_start_date: null,
+          target_completion_date: null,
+          wizard_notes: '',
+        });
+        setSteps([]);
+        setDocuments([]);
+        setAiPromptText('');
+        setAiPayloadJson('');
+      }
+      onToast?.({ tone: 'success', message: 'Project deleted.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to delete project' });
+      await refreshCurrentProject();
+      return false;
+    }
+  }, [load, onToast, projectId, refreshCurrentProject]);
+
   const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string, phaseKey?: string) => {
     if (!file || projectId <= 0) {
       return;
@@ -534,10 +594,54 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const recoverSingletreeDocuments = React.useCallback(async (
+    apply: boolean,
+    options?: {
+      db_env?: 'live' | 'local';
+      project_title?: string;
+      source_root?: string;
+      owner_user_id?: number;
+      include_archives?: boolean;
+    },
+  ) => {
+    setRecoveryBusy(true);
+    try {
+      const res = await ApiClient.post<IBuildWizardSingletreeRecoverResponse>('/api/build_wizard_recover_singletree.php', {
+        apply: apply ? 1 : 0,
+        db_env: options?.db_env || 'live',
+        project_title: options?.project_title || 'Cabin - 91 Singletree Ln',
+        source_root: options?.source_root || '/Users/jongraves/Documents/Home/91 Singletree Ln',
+        owner_user_id: options?.owner_user_id && options.owner_user_id > 0 ? options.owner_user_id : undefined,
+        include_archives: options?.include_archives ? 1 : 0,
+      });
+
+      const result = (typeof res?.result === 'object' && res?.result !== null) ? res.result : null;
+      const summary = result?.summary;
+      if (summary) {
+        const verb = apply ? 'Recovery applied' : 'Recovery dry-run complete';
+        onToast?.({
+          tone: 'success',
+          message: `${verb}: matched ${summary.matched_existing}, inserted ${summary.inserted_documents}, mapped ${summary.updated_mappings}, blobs ${summary.blob_backfilled}.`,
+        });
+      } else {
+        onToast?.({ tone: 'success', message: apply ? 'Recovery applied.' : 'Recovery dry-run complete.' });
+      }
+
+      await refreshCurrentProject();
+      return res;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to run Singletree recovery' });
+      return null;
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }, [onToast, refreshCurrentProject]);
+
   return {
     loading,
     saving,
     aiBusy,
+    recoveryBusy,
     projectId,
     projects,
     project,
@@ -556,6 +660,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     toggleStep,
     addStep,
     deleteStep,
+    deleteProject,
     addStepNote,
     uploadDocument,
     deleteDocument,
@@ -566,5 +671,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     backfillDocumentBlobs,
     hydrateMissingDocumentBlobs,
     hydrateMissingDocumentBlobsFromSources,
+    recoverSingletreeDocuments,
   };
 }

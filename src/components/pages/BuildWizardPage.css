@@ -48,6 +48,63 @@
   box-shadow: 0 6px 22px rgba(31, 42, 55, 0.08);
 }
 
+.build-wizard-launch-card-with-delete {
+  position: relative;
+}
+
+.build-wizard-launch-card-open {
+  all: unset;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  cursor: pointer;
+  padding: 14px;
+  padding-bottom: 30px;
+  border-radius: 16px;
+}
+
+.build-wizard-launch-card-delete {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d0dae9;
+  border-radius: 999px;
+  background: #fff;
+  color: #7f1228;
+  padding: 0;
+  z-index: 1;
+}
+
+.build-wizard-launch-card-delete svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.build-wizard-launch-card-delete:hover:not(:disabled) {
+  background: #fff1f3;
+  border-color: #c54a66;
+}
+
+.build-wizard-launch-card-delete:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .build-wizard-launch-card.is-new {
   border-color: #2868c8;
   background: #edf4ff;
@@ -541,6 +598,40 @@
 .build-wizard-purchase-option-title {
   font-weight: 700;
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.build-wizard-purchase-tier {
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid #c6d3e8;
+  background: #eef4ff;
+  color: #234064;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.build-wizard-purchase-tier.is-conservative {
+  border-color: #b5d9c0;
+  background: #edf9f1;
+  color: #1f5e34;
+}
+
+.build-wizard-purchase-tier.is-standard {
+  border-color: #c6d3e8;
+  background: #eef4ff;
+  color: #234064;
+}
+
+.build-wizard-purchase-tier.is-premium {
+  border-color: #e4cda5;
+  background: #fff6e6;
+  color: #80510f;
 }
 
 .build-wizard-purchase-option-meta {
@@ -835,6 +926,24 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.build-wizard-recovery-modal {
+  width: min(960px, 100%);
+}
+
+.build-wizard-recovery-json {
+  margin: 0;
+  border: 1px solid #d5dce6;
+  border-radius: 8px;
+  background: #f7fafc;
+  color: #1f2f43;
+  padding: 10px;
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre;
 }
 
 .build-wizard-lightbox-inner {

@@ -37,6 +37,22 @@ function bw_stage_normalize_uploads(string $field): array
     return $out;
 }
 
+function bw_stage_ini_bytes(string $value): int
+{
+    $raw = trim($value);
+    if ($raw === '') {
+        return 0;
+    }
+    $last = strtolower($raw[strlen($raw) - 1]);
+    $num = (float)$raw;
+    return match ($last) {
+        'g' => (int)round($num * 1024 * 1024 * 1024),
+        'm' => (int)round($num * 1024 * 1024),
+        'k' => (int)round($num * 1024),
+        default => (int)round($num),
+    };
+}
+
 function bw_stage_token(string $raw): string
 {
     $v = strtolower(trim($raw));
@@ -73,7 +89,21 @@ function bw_stage_safe_basename(string $name): string
 
 $files = bw_stage_normalize_uploads('files');
 if (!$files) {
-    catn8_json_response(['success' => false, 'error' => 'No files uploaded'], 400);
+    $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $postMax = (string)ini_get('post_max_size');
+    $uploadMax = (string)ini_get('upload_max_filesize');
+    $postMaxBytes = bw_stage_ini_bytes($postMax);
+    $likelyTooLarge = ($contentLength > 0 && $postMaxBytes > 0 && $contentLength > $postMaxBytes);
+    $hint = $likelyTooLarge
+        ? 'Upload payload exceeded server post_max_size. Try smaller batches.'
+        : 'No files uploaded. Select files and retry.';
+    catn8_json_response([
+        'success' => false,
+        'error' => $hint,
+        'content_length' => $contentLength,
+        'post_max_size' => $postMax,
+        'upload_max_filesize' => $uploadMax,
+    ], 400);
 }
 
 $token = bw_stage_token((string)($_POST['upload_token'] ?? ''));
@@ -140,4 +170,3 @@ catn8_json_response([
     'files_skipped' => $skipped,
     'saved_files' => $savedFiles,
 ]);
-

@@ -815,11 +815,30 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     setRecoveryUploadBusy(true);
     try {
       const fileArray = Array.from(files);
-      const res = await stageSingletreeSourceFiles(fileArray, recoveryUploadToken || undefined);
-      if (res?.success) {
-        setRecoveryUploadToken(String(res.upload_token || ''));
-        setRecoveryStagedRoot(String(res.staged_root || ''));
-        setRecoveryStagedCount((prev) => prev + Number(res.files_saved || 0));
+      const batchSize = 12;
+      let token = recoveryUploadToken || '';
+      let totalSaved = 0;
+      let stagedRoot = recoveryStagedRoot || '';
+
+      for (let i = 0; i < fileArray.length; i += batchSize) {
+        const batch = fileArray.slice(i, i + batchSize);
+        const res = await stageSingletreeSourceFiles(batch, token || undefined);
+        if (!res?.success) {
+          break;
+        }
+        token = String(res.upload_token || token);
+        stagedRoot = String(res.staged_root || stagedRoot);
+        totalSaved += Number(res.files_saved || 0);
+      }
+
+      if (token) {
+        setRecoveryUploadToken(token);
+      }
+      if (stagedRoot) {
+        setRecoveryStagedRoot(stagedRoot);
+      }
+      if (totalSaved > 0) {
+        setRecoveryStagedCount((prev) => prev + totalSaved);
         setRecoveryReportOpen(true);
       }
     } finally {
@@ -1465,6 +1484,14 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             {isAdmin ? (
               <>
                 <button
+                  className="btn btn-outline-success btn-sm"
+                  onClick={() => recoveryUploadInputRef.current?.click()}
+                  disabled={recoveryUploadBusy}
+                  title="Upload Singletree source files to server staging"
+                >
+                  {recoveryUploadBusy ? 'Uploading...' : 'Upload Source Files'}
+                </button>
+                <button
                   className="btn btn-outline-secondary btn-sm"
                   onClick={() => void onRunSingletreeRecovery(false)}
                   disabled={recoveryBusy}
@@ -1483,11 +1510,17 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 <button
                   className="btn btn-outline-primary btn-sm"
                   onClick={() => setRecoveryReportOpen(true)}
-                  disabled={!recoveryReportJson}
                   title="View last Singletree recovery report"
                 >
                   Recovery Report
                 </button>
+                <input
+                  ref={recoveryUploadInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => void onUploadRecoveryFiles(e.target.files)}
+                />
               </>
             ) : null}
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
@@ -1901,13 +1934,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               <h3>Singletree Recovery Report</h3>
               <div className="build-wizard-doc-manager-actions">
                 <button
-                  className="btn btn-outline-success btn-sm"
-                  onClick={() => recoveryUploadInputRef.current?.click()}
-                  disabled={recoveryUploadBusy}
-                >
-                  {recoveryUploadBusy ? 'Uploading...' : 'Upload Source Files'}
-                </button>
-                <button
                   className="btn btn-outline-primary btn-sm"
                   onClick={async () => {
                     if (!recoveryJobId || recoveryPolling) {
@@ -1948,13 +1974,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => setRecoveryReportOpen(false)}>Close</button>
               </div>
             </div>
-            <input
-              ref={recoveryUploadInputRef}
-              type="file"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => void onUploadRecoveryFiles(e.target.files)}
-            />
             {recoveryStagedRoot ? (
               <div className="build-wizard-recovery-status">
                 Staged Files: {recoveryStagedCount} | Source Root: {recoveryStagedRoot}

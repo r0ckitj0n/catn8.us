@@ -107,18 +107,19 @@
 }
 
 .build-wizard-tab {
-  border: 1px solid #c9d5e5;
+  border: 1px solid color-mix(in srgb, var(--tab-phase-color, #c9d5e5) 55%, #ffffff);
   border-radius: 10px;
-  background: #f7faff;
-  color: #213247;
+  background: color-mix(in srgb, var(--tab-phase-color, #f7faff) 18%, #ffffff);
+  color: #1f2f43;
   font-weight: 600;
   padding: 10px;
   white-space: nowrap;
 }
 
 .build-wizard-tab.is-active {
-  background: #eaf3ff;
-  border-color: #2f75d8;
+  background: color-mix(in srgb, var(--tab-phase-color, #2f75d8) 30%, #ffffff);
+  border-color: var(--tab-phase-color, #2f75d8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-phase-color, #2f75d8) 40%, #ffffff);
 }
 
 .build-wizard-card {
@@ -190,6 +191,12 @@
   margin-bottom: 8px;
 }
 
+.build-wizard-step-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .build-wizard-step-header-left {
   display: flex;
   align-items: center;
@@ -240,10 +247,56 @@
   color: #4f6076;
 }
 
+.build-wizard-step-delete {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d0dae9;
+  border-radius: 999px;
+  background: #fff;
+  color: #7f1228;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+}
+
+.build-wizard-step-delete:hover {
+  background: #fff1f3;
+  border-color: #c54a66;
+}
+
 .build-wizard-step-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1.6fr) minmax(180px, 1fr) minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr);
   gap: 10px;
+}
+
+.build-wizard-phase-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.build-wizard-phase-head h2 {
+  margin: 0;
+}
+
+.build-wizard-phase-add {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #b8cbe6;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #16427f;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  font-weight: 700;
+}
+
+.build-wizard-phase-add:hover {
+  background: #e0edff;
+  border-color: #7ba3d9;
 }
 
 .build-wizard-step-actions {
@@ -468,6 +521,53 @@
   background: linear-gradient(90deg, #4f8ed8 0%, #2c67be 100%);
 }
 
+.build-wizard-phase-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-phase-range {
+  font-size: 0.82rem;
+  color: #3f4f64;
+}
+
+.build-wizard-phase-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: #e8eef7;
+  overflow: hidden;
+  border: 1px solid #cfdae9;
+}
+
+.build-wizard-phase-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.build-wizard-phase-ticks {
+  position: relative;
+  min-height: 16px;
+}
+
+.build-wizard-phase-ticks span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 0.73rem;
+  color: #54647a;
+  white-space: nowrap;
+}
+
+.build-wizard-phase-ticks .is-edge {
+  font-weight: 600;
+}
+
+.build-wizard-phase-ticks .is-end {
+  transform: translateX(-100%);
+}
+
 .build-wizard-footer-chart {
   position: fixed;
   left: 0;
@@ -599,5 +699,9 @@
   .build-wizard-date-inline {
     width: 100%;
     min-width: 0;
+  }
+
+  .build-wizard-phase-ticks .is-mid {
+    display: none;
   }
 }

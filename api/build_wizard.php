@@ -200,6 +200,36 @@ function catn8_build_wizard_normalize_phase_key($value): string
     return $raw;
 }
 
+function catn8_build_wizard_resequence_step_orders(int $projectId): void
+{
+    if ($projectId <= 0) {
+        return;
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, step_order
+         FROM build_wizard_steps
+         WHERE project_id = ?
+         ORDER BY step_order ASC, id ASC',
+        [$projectId]
+    );
+
+    foreach ($rows as $idx => $r) {
+        $stepId = (int)($r['id'] ?? 0);
+        if ($stepId <= 0) {
+            continue;
+        }
+        $nextOrder = $idx + 1;
+        $currentOrder = (int)($r['step_order'] ?? 0);
+        if ($currentOrder !== $nextOrder) {
+            Database::execute(
+                'UPDATE build_wizard_steps SET step_order = ? WHERE id = ?',
+                [$nextOrder, $stepId]
+            );
+        }
+    }
+}
+
 function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $skipExistingTitles = false): int
 {
     if ($projectId <= 0 || !$steps) {
@@ -1043,12 +1073,6 @@ try {
             throw new RuntimeException('Build wizard project missing id');
         }
 
-        $stepCount = Database::queryOne('SELECT COUNT(*) AS c FROM build_wizard_steps WHERE project_id = ?', [$projectId]);
-        if ((int)($stepCount['c'] ?? 0) <= 0) {
-            catn8_build_wizard_seed_project_from_file($projectId);
-        }
-        catn8_build_wizard_seed_dawsonville_checklist($projectId);
-
         $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]) ?: $project;
 
         catn8_json_response([
@@ -1233,6 +1257,101 @@ try {
         }
 
         catn8_json_response(['success' => true, 'step' => $step]);
+    }
+
+    if ($action === 'add_step') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $phaseKey = catn8_build_wizard_normalize_phase_key($body['phase_key'] ?? 'general');
+        $title = trim((string)($body['title'] ?? ''));
+        if ($title === '') {
+            $title = 'New Step';
+        }
+
+        $description = trim((string)($body['description'] ?? ''));
+        $permitRequired = ((int)($body['permit_required'] ?? 0) === 1) ? 1 : 0;
+        $permitName = trim((string)($body['permit_name'] ?? ''));
+        $duration = (isset($body['expected_duration_days']) && is_numeric($body['expected_duration_days']))
+            ? (int)$body['expected_duration_days']
+            : null;
+        if ($duration !== null && ($duration < 1 || $duration > 3650)) {
+            $duration = null;
+        }
+
+        $maxOrderRow = Database::queryOne('SELECT MAX(step_order) AS max_order FROM build_wizard_steps WHERE project_id = ?', [$projectId]);
+        $nextOrder = (int)($maxOrderRow['max_order'] ?? 0) + 1;
+
+        Database::execute(
+            'INSERT INTO build_wizard_steps
+                (project_id, step_order, phase_key, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, is_completed, completed_at, ai_generated, source_ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+            [
+                $projectId,
+                $nextOrder,
+                $phaseKey,
+                $title,
+                $description,
+                $permitRequired,
+                ($permitName !== '' ? $permitName : null),
+                catn8_build_wizard_parse_date_or_null($body['expected_start_date'] ?? null),
+                catn8_build_wizard_parse_date_or_null($body['expected_end_date'] ?? null),
+                $duration,
+                catn8_build_wizard_to_decimal_or_null($body['estimated_cost'] ?? null),
+                'user_added_step',
+            ]
+        );
+
+        $stepId = (int)Database::lastInsertId();
+        $step = catn8_build_wizard_step_by_id($stepId);
+        if (!$step) {
+            throw new RuntimeException('Step not found after insert');
+        }
+
+        catn8_json_response(['success' => true, 'step' => $step]);
+    }
+
+    if ($action === 'delete_step') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        if ($stepId <= 0) {
+            throw new RuntimeException('Missing step_id');
+        }
+
+        $stepRow = Database::queryOne(
+            'SELECT s.id, s.project_id, s.source_ref
+             FROM build_wizard_steps s
+             INNER JOIN build_wizard_projects p ON p.id = s.project_id
+             WHERE s.id = ? AND p.owner_user_id = ?
+             LIMIT 1',
+            [$stepId, $viewerId]
+        );
+        if (!$stepRow) {
+            throw new RuntimeException('Step not found or not authorized');
+        }
+        $projectId = (int)($stepRow['project_id'] ?? 0);
+        Database::beginTransaction();
+        try {
+            Database::execute('DELETE FROM build_wizard_steps WHERE id = ?', [$stepId]);
+            catn8_build_wizard_resequence_step_orders($projectId);
+            Database::commit();
+        } catch (Throwable $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'deleted_step_id' => $stepId,
+            'steps' => catn8_build_wizard_steps_for_project($projectId),
+        ]);
     }
 
     if ($action === 'add_step_note') {

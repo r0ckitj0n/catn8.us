@@ -35,6 +35,17 @@ type UpdateProjectResponse = {
   project: IBuildWizardProject;
 };
 
+type AddStepResponse = {
+  success: boolean;
+  step: IBuildWizardStep;
+};
+
+type DeleteStepResponse = {
+  success: boolean;
+  deleted_step_id: number;
+  steps: IBuildWizardStep[];
+};
+
 export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
@@ -245,6 +256,55 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const addStep = React.useCallback(async (phaseKey: string) => {
+    if (projectId <= 0) {
+      return;
+    }
+    try {
+      const res = await ApiClient.post<AddStepResponse>('/api/build_wizard.php?action=add_step', {
+        project_id: projectId,
+        phase_key: phaseKey,
+      });
+      if (res?.step) {
+        setSteps((prev) => {
+          const next = [...prev, res.step];
+          next.sort((a, b) => {
+            if (a.step_order !== b.step_order) {
+              return a.step_order - b.step_order;
+            }
+            return a.id - b.id;
+          });
+          return next;
+        });
+      } else {
+        await refreshCurrentProject();
+      }
+      onToast?.({ tone: 'success', message: 'Step added.' });
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to add step' });
+    }
+  }, [projectId, onToast, refreshCurrentProject]);
+
+  const deleteStep = React.useCallback(async (stepId: number) => {
+    if (stepId <= 0) {
+      return;
+    }
+    try {
+      const res = await ApiClient.post<DeleteStepResponse>('/api/build_wizard.php?action=delete_step', {
+        step_id: stepId,
+      });
+      if (Array.isArray(res?.steps)) {
+        setSteps(res.steps);
+      } else {
+        setSteps((prev) => prev.filter((s) => s.id !== stepId));
+      }
+      onToast?.({ tone: 'success', message: 'Step deleted.' });
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to delete step' });
+      await refreshCurrentProject();
+    }
+  }, [onToast, refreshCurrentProject]);
+
   const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string) => {
     if (!file || projectId <= 0) {
       return;
@@ -331,6 +391,8 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     updateProject,
     updateStep,
     toggleStep,
+    addStep,
+    deleteStep,
     addStepNote,
     uploadDocument,
     packageForAi,

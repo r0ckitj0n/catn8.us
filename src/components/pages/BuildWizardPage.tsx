@@ -29,6 +29,28 @@ const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
   { id: 'completed', label: '9. Completed' },
 ];
 
+const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
+  start: '#5b6f87',
+  land: '#4c9f70',
+  permits: '#c3833a',
+  site: '#d4635c',
+  framing: '#5b7bd5',
+  mep: '#7d5cc8',
+  finishes: '#3ca6ac',
+  desk: '#6a7a8f',
+  completed: '#2f8a4a',
+};
+
+const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
+  land: 'land_due_diligence',
+  permits: 'dawson_county_permits',
+  site: 'site_preparation',
+  framing: 'framing_shell',
+  mep: 'mep_rough_in',
+  finishes: 'interior_finishes',
+  desk: 'general',
+};
+
 function formatCurrency(value: number | null): string {
   if (value === null || Number.isNaN(Number(value))) {
     return '-';
@@ -62,6 +84,14 @@ function toIsoDate(d: Date): string {
 function formatDate(input: string | null | undefined): string {
   const d = parseDate(input);
   return d ? toIsoDate(d) : '-';
+}
+
+function formatTimelineDate(input: string | null | undefined): string {
+  const d = parseDate(input);
+  if (!d) {
+    return '-';
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function toNumberOrNull(value: string): number | null {
@@ -190,6 +220,114 @@ type DateRangeChartProps = {
   compact?: boolean;
 };
 
+type FooterTimelineProps = {
+  steps: IBuildWizardStep[];
+  rangeStart: string;
+  rangeEnd: string;
+};
+
+function segmentBackground(colors: string[]): string {
+  if (colors.length <= 1) {
+    return colors[0] || '#9fb0c7';
+  }
+  const stripeWidth = 8;
+  const stops = colors
+    .map((color, i) => {
+      const start = i * stripeWidth;
+      const end = (i + 1) * stripeWidth;
+      return `${color} ${start}px ${end}px`;
+    })
+    .join(', ');
+  return `repeating-linear-gradient(135deg, ${stops})`;
+}
+
+function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProps) {
+  const startDate = parseDate(rangeStart);
+  const endDate = parseDate(rangeEnd);
+
+  if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
+    return <div className="build-wizard-muted">Invalid date range.</div>;
+  }
+
+  const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+  const phaseByDay: Array<Set<BuildTabId>> = Array.from({ length: totalDays }, () => new Set<BuildTabId>());
+
+  steps.forEach((step) => {
+    const range = stepDateRange(step);
+    if (!range.start || !range.end) {
+      return;
+    }
+    if (range.end.getTime() < startDate.getTime() || range.start.getTime() > endDate.getTime()) {
+      return;
+    }
+    const clampedStartMs = Math.max(range.start.getTime(), startDate.getTime());
+    const clampedEndMs = Math.min(range.end.getTime(), endDate.getTime());
+    const startOffset = Math.max(0, Math.round((clampedStartMs - startDate.getTime()) / 86400000));
+    const endOffset = Math.min(totalDays - 1, Math.round((clampedEndMs - startDate.getTime()) / 86400000));
+    const phase = stepPhaseBucket(step);
+    for (let day = startOffset; day <= endOffset; day += 1) {
+      phaseByDay[day].add(phase);
+    }
+  });
+
+  const segments: Array<{ leftPercent: number; widthPercent: number; colors: string[]; key: string }> = [];
+  let idx = 0;
+  while (idx < totalDays) {
+    const phaseIds = Array.from(phaseByDay[idx]).sort() as BuildTabId[];
+    const key = phaseIds.join('|');
+    let endIdx = idx;
+    while (endIdx + 1 < totalDays) {
+      const nextIds = Array.from(phaseByDay[endIdx + 1]).sort().join('|');
+      if (nextIds !== key) {
+        break;
+      }
+      endIdx += 1;
+    }
+    if (phaseIds.length > 0) {
+      const runLen = (endIdx - idx) + 1;
+      segments.push({
+        key: `${idx}-${key}`,
+        leftPercent: (idx / totalDays) * 100,
+        widthPercent: (runLen / totalDays) * 100,
+        colors: phaseIds.map((phaseId) => TAB_PHASE_COLORS[phaseId]),
+      });
+    }
+    idx = endIdx + 1;
+  }
+
+  const quarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.25)));
+  const midDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.5)));
+  const threeQuarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.75)));
+
+  return (
+    <div className="build-wizard-phase-timeline">
+      <div className="build-wizard-phase-range">
+        {formatTimelineDate(rangeStart)} - {formatTimelineDate(rangeEnd)}
+      </div>
+      <div className="build-wizard-phase-track">
+        {segments.map((segment) => (
+          <div
+            key={segment.key}
+            className="build-wizard-phase-segment"
+            style={{
+              left: `${segment.leftPercent}%`,
+              width: `${segment.widthPercent}%`,
+              background: segmentBackground(segment.colors),
+            }}
+          />
+        ))}
+      </div>
+      <div className="build-wizard-phase-ticks">
+        <span className="is-edge" style={{ left: '0%' }}>{formatTimelineDate(rangeStart)}</span>
+        <span className="is-mid" style={{ left: '25%' }}>{formatTimelineDate(quarterDate)}</span>
+        <span className="is-mid" style={{ left: '50%' }}>{formatTimelineDate(midDate)}</span>
+        <span className="is-mid" style={{ left: '75%' }}>{formatTimelineDate(threeQuarterDate)}</span>
+        <span className="is-edge is-end" style={{ left: '100%' }}>{formatTimelineDate(rangeEnd)}</span>
+      </div>
+    </div>
+  );
+}
+
 function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRangeChartProps) {
   const startDate = parseDate(rangeStart);
   const endDate = parseDate(rangeEnd);
@@ -264,6 +402,8 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     createProject,
     toggleStep,
     updateStep,
+    addStep,
+    deleteStep,
     addStepNote,
     uploadDocument,
     packageForAi,
@@ -339,20 +479,10 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
   }, [steps, activeTab]);
 
-  const footerSteps = React.useMemo(() => {
-    if (activeTab === 'completed') {
-      return completedSteps;
-    }
-    if (activeTab === 'start') {
-      return steps;
-    }
-    return filteredTabSteps;
-  }, [activeTab, completedSteps, steps, filteredTabSteps]);
-
   React.useEffect(() => {
-    const next = getDefaultRange(footerSteps);
+    const next = getDefaultRange(steps);
     setFooterRange(next);
-  }, [activeTab, footerSteps]);
+  }, [steps]);
 
   const projectTotals = React.useMemo(() => {
     const totalEstimated = steps.reduce((sum, s) => sum + (Number(s.estimated_cost) || 0), 0);
@@ -496,7 +626,23 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     </label>
                   </div>
                 </div>
-                <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
+                <div className="build-wizard-step-header-right">
+                  <button
+                    type="button"
+                    className="build-wizard-step-delete"
+                    aria-label="Delete step"
+                    title="Delete step"
+                    onClick={() => {
+                      const ok = window.confirm('Delete this step?');
+                      if (ok) {
+                        void deleteStep(step.id);
+                      }
+                    }}
+                  >
+                    x
+                  </button>
+                  <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
+                </div>
               </div>
 
               <div className="build-wizard-step-grid">
@@ -716,6 +862,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
             <button
               key={tab.id}
               className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
+              style={{ ['--tab-phase-color' as string]: TAB_PHASE_COLORS[tab.id] }}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
@@ -869,7 +1016,18 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
 
         {activeTab !== 'start' && activeTab !== 'completed' ? (
           <div className="build-wizard-card">
-            <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
+            <div className="build-wizard-phase-head">
+              <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
+              <button
+                type="button"
+                className="build-wizard-phase-add"
+                title="Add step"
+                aria-label="Add step"
+                onClick={() => void addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general')}
+              >
+                +
+              </button>
+            </div>
 
             {activeTab === 'desk' ? (
               <div className="build-wizard-desk-grid">
@@ -979,7 +1137,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
               Saving: {saving || loading ? 'Yes' : 'No'}
             </div>
           </div>
-          <DateRangeChart steps={footerSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} compact />
+          <FooterPhaseTimeline steps={steps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
         </div>
       </footer>
 

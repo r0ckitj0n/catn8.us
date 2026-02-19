@@ -10,7 +10,8 @@
 
 .build-wizard-launcher,
 .build-wizard-workspace {
-  max-width: 1320px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 24px;
 }
@@ -342,7 +343,8 @@
 }
 
 .build-wizard-footer-inner {
-  max-width: 1320px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 10px 24px 14px;
 }

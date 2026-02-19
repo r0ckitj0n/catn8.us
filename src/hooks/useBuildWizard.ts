@@ -637,9 +637,28 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       return null;
     }
     try {
-      const res = await ApiClient.get<IBuildWizardSingletreeRecoverResponse>(
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(
         `/api/build_wizard_recover_singletree.php?job_id=${encodeURIComponent(cleanJobId)}`,
+        {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        },
       );
+      window.clearTimeout(timeout);
+      const text = await response.text();
+      let res: IBuildWizardSingletreeRecoverResponse | null = null;
+      try {
+        res = text ? JSON.parse(text) : null;
+      } catch (_) {
+        res = null;
+      }
+      if (!response.ok || !res) {
+        throw new Error((res as any)?.error || `Status check failed (${response.status})`);
+      }
 
       if (Number(res?.completed || 0) === 1 && res.success) {
         const result = (typeof res?.result === 'object' && res?.result !== null) ? res.result : null;

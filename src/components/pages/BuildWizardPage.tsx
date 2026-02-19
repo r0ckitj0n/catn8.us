@@ -786,7 +786,9 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     }
     const host = (typeof window !== 'undefined') ? String(window.location.hostname || '').toLowerCase() : '';
     const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
-    if (!isLocalHost && !recoveryStagedRoot) {
+    const sourceRootToUse = String(recoveryStagedRoot || '').trim() || '/Users/jongraves/Documents/Home/91 Singletree Ln';
+
+    if (!isLocalHost && !String(recoveryStagedRoot || '').trim()) {
       onToast?.({
         tone: 'error',
         message: 'Upload source files to server first, then run recovery.',
@@ -798,7 +800,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     const res = await recoverSingletreeDocuments(apply, {
       db_env: 'live',
       project_title: 'Cabin - 91 Singletree Ln',
-      source_root: (isLocalHost ? '/Users/jongraves/Documents/Home/91 Singletree Ln' : recoveryStagedRoot),
+      source_root: sourceRootToUse,
     });
     if (res) {
       setRecoveryReportJson(JSON.stringify(res, null, 2));

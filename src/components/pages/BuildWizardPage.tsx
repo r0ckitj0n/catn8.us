@@ -94,6 +94,11 @@ function formatTimelineDate(input: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function tabLabelShort(tabId: BuildTabId): string {
+  const label = BUILD_TABS.find((t) => t.id === tabId)?.label || tabId;
+  return label.replace(/^\d+\.\s*/, '');
+}
+
 function withDownloadFlag(url: string): string {
   const clean = String(url || '').trim();
   if (!clean) {
@@ -306,6 +311,23 @@ function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProp
   const quarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.25)));
   const midDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.5)));
   const threeQuarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.75)));
+  const phaseStatus = new Map<BuildTabId, { total: number; done: number }>();
+
+  steps.forEach((step) => {
+    const phaseId = stepPhaseBucket(step);
+    if (!phaseStatus.has(phaseId)) {
+      phaseStatus.set(phaseId, { total: 0, done: 0 });
+    }
+    const stat = phaseStatus.get(phaseId)!;
+    stat.total += 1;
+    if (Number(step.is_completed) === 1) {
+      stat.done += 1;
+    }
+  });
+
+  const orderedStatusPhases = BUILD_TABS
+    .map((t) => t.id)
+    .filter((id): id is BuildTabId => id !== 'start' && id !== 'completed' && (phaseStatus.get(id)?.total || 0) > 0);
 
   return (
     <div className="build-wizard-phase-timeline">
@@ -332,6 +354,19 @@ function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProp
         <span className="is-mid" style={{ left: '75%' }}>{formatTimelineDate(threeQuarterDate)}</span>
         <span className="is-edge is-end" style={{ left: '100%' }}>{formatTimelineDate(rangeEnd)}</span>
       </div>
+      {orderedStatusPhases.length ? (
+        <div className="build-wizard-phase-status">
+          {orderedStatusPhases.map((phaseId) => {
+            const stat = phaseStatus.get(phaseId)!;
+            return (
+              <div key={phaseId} className="build-wizard-phase-status-chip">
+                <span className="build-wizard-phase-status-swatch" style={{ background: TAB_PHASE_COLORS[phaseId] }} />
+                <span>{tabLabelShort(phaseId)}: {stat.done}/{stat.total}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -487,10 +522,17 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
   }, [steps, activeTab]);
 
+  const footerTimelineSteps = React.useMemo(() => {
+    if (activeTab === 'start' || activeTab === 'completed') {
+      return steps;
+    }
+    return filteredTabSteps;
+  }, [activeTab, steps, filteredTabSteps]);
+
   React.useEffect(() => {
-    const next = getDefaultRange(steps);
+    const next = getDefaultRange(footerTimelineSteps.length ? footerTimelineSteps : steps);
     setFooterRange(next);
-  }, [steps]);
+  }, [steps, footerTimelineSteps]);
 
   const projectTotals = React.useMemo(() => {
     const totalEstimated = steps.reduce((sum, s) => sum + (Number(s.estimated_cost) || 0), 0);
@@ -567,6 +609,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
             ?? (draft.expected_duration_days ?? null);
           return (
             <div className="build-wizard-step" key={step.id}>
+              <div className="build-wizard-step-phase-accent" style={{ background: TAB_PHASE_COLORS[stepPhaseBucket(step)] }} />
               <div className="build-wizard-step-header">
                 <div className="build-wizard-step-header-left">
                   <label className="build-wizard-inline-check">
@@ -873,7 +916,8 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
               style={{ ['--tab-phase-color' as string]: TAB_PHASE_COLORS[tab.id] }}
               onClick={() => setActiveTab(tab.id)}
             >
-              {tab.label}
+              <span className="build-wizard-tab-swatch" />
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
@@ -1145,7 +1189,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
               Saving: {saving || loading ? 'Yes' : 'No'}
             </div>
           </div>
-          <FooterPhaseTimeline steps={steps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
+          <FooterPhaseTimeline steps={footerTimelineSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
         </div>
       </footer>
 

@@ -113,6 +113,9 @@
   color: #1f2f43;
   font-weight: 600;
   padding: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   white-space: nowrap;
 }
 
@@ -120,6 +123,14 @@
   background: color-mix(in srgb, var(--tab-phase-color, #2f75d8) 30%, #ffffff);
   border-color: var(--tab-phase-color, #2f75d8);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-phase-color, #2f75d8) 40%, #ffffff);
+}
+
+.build-wizard-tab-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--tab-phase-color, #2f75d8);
+  flex: 0 0 auto;
 }
 
 .build-wizard-card {
@@ -181,6 +192,16 @@
   border-radius: 12px;
   padding: 12px;
   background: #fbfdff;
+  position: relative;
+}
+
+.build-wizard-step-phase-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
 }
 
 .build-wizard-step-header {
@@ -566,6 +587,31 @@
 
 .build-wizard-phase-ticks .is-end {
   transform: translateX(-100%);
+}
+
+.build-wizard-phase-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.build-wizard-phase-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d5dfed;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #30425a;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+}
+
+.build-wizard-phase-status-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: 0 0 auto;
 }
 
 .build-wizard-footer-chart {

@@ -121,3 +121,11 @@ export interface IBuildWizardDocumentBlobBackfillResponse {
   success: boolean;
   report: IBuildWizardDocumentBlobBackfillReport;
 }
+
+export interface IBuildWizardHydrateBlobsResponse {
+  success: boolean;
+  processed_files: number;
+  matched_documents: number;
+  written_blobs: number;
+  unmatched_filenames: string[];
+}

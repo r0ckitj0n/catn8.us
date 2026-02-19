@@ -780,6 +780,53 @@ function catn8_build_wizard_backfill_document_blobs(bool $apply, ?int $projectId
     ];
 }
 
+function catn8_build_wizard_upsert_document_blob(int $documentId, string $mime, string $bytes): void
+{
+    if ($documentId <= 0 || $bytes === '') {
+        return;
+    }
+    $safeMime = trim($mime);
+    if ($safeMime === '') {
+        $safeMime = 'application/octet-stream';
+    }
+    Database::execute(
+        'INSERT INTO build_wizard_document_blobs (document_id, mime_type, file_blob, file_size_bytes)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
+        [$documentId, $safeMime, $bytes, strlen($bytes)]
+    );
+}
+
+function catn8_build_wizard_normalize_upload_files(string $field): array
+{
+    if (!isset($_FILES[$field]) || !is_array($_FILES[$field])) {
+        return [];
+    }
+    $raw = $_FILES[$field];
+    $names = $raw['name'] ?? null;
+    $tmpNames = $raw['tmp_name'] ?? null;
+    $sizes = $raw['size'] ?? null;
+    $types = $raw['type'] ?? null;
+    $errors = $raw['error'] ?? null;
+
+    if (!is_array($names)) {
+        return [$raw];
+    }
+
+    $out = [];
+    $count = count($names);
+    for ($i = 0; $i < $count; $i++) {
+        $out[] = [
+            'name' => (string)($names[$i] ?? ''),
+            'tmp_name' => (string)($tmpNames[$i] ?? ''),
+            'size' => (int)($sizes[$i] ?? 0),
+            'type' => (string)($types[$i] ?? ''),
+            'error' => (int)($errors[$i] ?? UPLOAD_ERR_NO_FILE),
+        ];
+    }
+    return $out;
+}
+
 function catn8_build_wizard_step_by_id(int $stepId): ?array
 {
     $row = Database::queryOne(
@@ -1700,12 +1747,7 @@ try {
         if (!is_string($bytes) || $bytes === '') {
             throw new RuntimeException('Failed to read uploaded file');
         }
-        Database::execute(
-            'INSERT INTO build_wizard_document_blobs (document_id, mime_type, file_blob, file_size_bytes)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
-            [$docId, $mime, $bytes, strlen($bytes)]
-        );
+        catn8_build_wizard_upsert_document_blob($docId, $mime, $bytes);
 
         if (strpos(strtolower($mime), 'image/') === 0) {
             $sizeInfo = @getimagesize($destPath);
@@ -1750,6 +1792,104 @@ try {
         catn8_json_response([
             'success' => true,
             'report' => $report,
+        ]);
+    }
+
+    if ($action === 'hydrate_missing_document_blobs') {
+        catn8_require_method('POST');
+        catn8_require_admin();
+
+        $requestedProjectId = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
+        $projectId = $requestedProjectId > 0 ? $requestedProjectId : null;
+
+        $files = catn8_build_wizard_normalize_upload_files('files');
+        if (!$files) {
+            throw new RuntimeException('No files uploaded');
+        }
+
+        $params = [];
+        $sql = 'SELECT d.id, d.project_id, d.original_name, d.mime_type
+                FROM build_wizard_documents d
+                LEFT JOIN build_wizard_document_blobs b ON b.document_id = d.id
+                WHERE b.document_id IS NULL';
+        if ($projectId !== null) {
+            $sql .= ' AND d.project_id = ?';
+            $params[] = $projectId;
+        }
+        $rows = Database::queryAll($sql . ' ORDER BY d.id ASC', $params);
+
+        $byName = [];
+        foreach ($rows as $r) {
+            $nameKey = strtolower(trim((string)($r['original_name'] ?? '')));
+            if ($nameKey === '') {
+                continue;
+            }
+            if (!isset($byName[$nameKey]) || !is_array($byName[$nameKey])) {
+                $byName[$nameKey] = [];
+            }
+            $byName[$nameKey][] = $r;
+        }
+
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $processed = 0;
+        $matched = 0;
+        $written = 0;
+        $unmatched = [];
+
+        foreach ($files as $file) {
+            $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($err !== UPLOAD_ERR_OK) {
+                continue;
+            }
+            $tmp = (string)($file['tmp_name'] ?? '');
+            $origName = trim((string)($file['name'] ?? ''));
+            $size = (int)($file['size'] ?? 0);
+            if ($tmp === '' || !is_uploaded_file($tmp) || $size <= 0 || $origName === '') {
+                continue;
+            }
+            $processed++;
+
+            $key = strtolower($origName);
+            $targets = $byName[$key] ?? [];
+            if (!$targets) {
+                $unmatched[] = $origName;
+                continue;
+            }
+
+            $bytes = file_get_contents($tmp);
+            if (!is_string($bytes) || $bytes === '') {
+                continue;
+            }
+
+            $detectedMime = $finfo ? finfo_file($finfo, $tmp) : false;
+            $uploadMime = trim((string)($detectedMime ?: ($file['type'] ?? 'application/octet-stream')));
+            if ($uploadMime === '') {
+                $uploadMime = 'application/octet-stream';
+            }
+
+            $matched += count($targets);
+            foreach ($targets as $target) {
+                $docId = (int)($target['id'] ?? 0);
+                if ($docId <= 0) {
+                    continue;
+                }
+                $targetMime = trim((string)($target['mime_type'] ?? ''));
+                catn8_build_wizard_upsert_document_blob($docId, $targetMime !== '' ? $targetMime : $uploadMime, $bytes);
+                $written++;
+            }
+            unset($byName[$key]);
+        }
+
+        if ($finfo) {
+            finfo_close($finfo);
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'processed_files' => $processed,
+            'matched_documents' => $matched,
+            'written_blobs' => $written,
+            'unmatched_filenames' => array_values(array_unique($unmatched)),
         ]);
     }
 

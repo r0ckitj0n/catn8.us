@@ -4,6 +4,7 @@ import {
   IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
   IBuildWizardDocument,
+  IBuildWizardHydrateBlobsResponse,
   IBuildWizardProject,
   IBuildWizardProjectSummary,
   IBuildWizardQuestionnaire,
@@ -390,6 +391,26 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const hydrateMissingDocumentBlobs = React.useCallback(async (files: File[], targetProjectId?: number) => {
+    if (!Array.isArray(files) || files.length === 0) {
+      return null;
+    }
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files[]', file);
+    });
+    if (targetProjectId && targetProjectId > 0) {
+      formData.append('project_id', String(targetProjectId));
+    }
+    try {
+      const res = await ApiClient.postFormData<IBuildWizardHydrateBlobsResponse>('/api/build_wizard.php?action=hydrate_missing_document_blobs', formData);
+      return res || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to hydrate missing file blobs' });
+      return null;
+    }
+  }, [onToast]);
+
   return {
     loading,
     saving,
@@ -417,5 +438,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     packageForAi,
     generateStepsFromAi,
     backfillDocumentBlobs,
+    hydrateMissingDocumentBlobs,
   };
 }

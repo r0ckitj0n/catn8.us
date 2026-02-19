@@ -466,6 +466,7 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
     packageForAi,
     generateStepsFromAi,
     backfillDocumentBlobs,
+    hydrateMissingDocumentBlobs,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -479,6 +480,8 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
   const [repairBusy, setRepairBusy] = React.useState<boolean>(false);
+  const [hydrateBusy, setHydrateBusy] = React.useState<boolean>(false);
+  const hydrateInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -618,9 +621,40 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
       }
       const message = `Blob repair complete: wrote ${report.written}, already ${report.already_blob}, missing ${report.missing}.`;
       onToast?.({ tone: report.missing > 0 ? 'warning' : 'success', message });
+      if (report.missing > 0) {
+        const shouldUpload = window.confirm('Some files are still missing on the server. Upload those original files now to complete repair?');
+        if (shouldUpload) {
+          hydrateInputRef.current?.click();
+        }
+      }
       await openProject(projectId);
     } finally {
       setRepairBusy(false);
+    }
+  };
+
+  const onHydrateFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isAdmin || hydrateBusy) {
+      return;
+    }
+    const picked = Array.from(e.target.files || []);
+    if (!picked.length) {
+      return;
+    }
+    setHydrateBusy(true);
+    try {
+      const res = await hydrateMissingDocumentBlobs(picked, projectId > 0 ? projectId : undefined);
+      if (!res) {
+        return;
+      }
+      const unmatchedCount = Array.isArray(res.unmatched_filenames) ? res.unmatched_filenames.length : 0;
+      const tone = unmatchedCount > 0 ? 'warning' : 'success';
+      const msg = `Uploaded ${res.processed_files} file(s), matched ${res.matched_documents}, wrote ${res.written_blobs} blob(s), unmatched ${unmatchedCount}.`;
+      onToast?.({ tone, message: msg });
+      await openProject(projectId);
+    } finally {
+      e.target.value = '';
+      setHydrateBusy(false);
     }
   };
 
@@ -972,6 +1006,20 @@ export function BuildWizardPage({ onToast, isAdmin = false }: BuildWizardPagePro
               <button className="btn btn-outline-primary btn-sm" onClick={() => void onRepairDocumentBlobs()} disabled={repairBusy}>
                 {repairBusy ? 'Repairing Files...' : 'Repair File Blobs'}
               </button>
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => hydrateInputRef.current?.click()}
+                disabled={hydrateBusy}
+              >
+                {hydrateBusy ? 'Uploading...' : 'Upload Missing Files'}
+              </button>
+              <input
+                ref={hydrateInputRef}
+                type="file"
+                multiple
+                onChange={(e) => void onHydrateFileInputChange(e)}
+                style={{ display: 'none' }}
+              />
             </div>
           ) : null}
         </div>

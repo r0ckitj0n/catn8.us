@@ -75,7 +75,7 @@ $closeStream = static function (array $stream): void {
     @fclose($h);
 };
 
-$streamSqlIntoPdo = static function (PDO $pdo, array $stream): void {
+$streamSqlIntoPdo = static function (PDO $pdo, array $stream) use ($readChunk): void {
     $stmt = '';
 
     $inSingle = false;

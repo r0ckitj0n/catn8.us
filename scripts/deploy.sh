@@ -307,12 +307,12 @@ fi
 require_dist_artifacts
 
 # Image handling:
-# - Default: deploy most files including images (but backgrounds/signs are handled separately).
+# - Default: deploy images with the normal mirror flow.
 # - Preserve mode: do not upload/delete/touch any images/** paths on the server.
 if [ "$PRESERVE_IMAGES" = "1" ]; then
   IMAGE_EXCLUDE_LINES=$'  --exclude-glob "images/**" \\'
 else
-  IMAGE_EXCLUDE_LINES=$'  --exclude-glob "images/backgrounds/**" \\\n  --exclude-glob "images/signs/**" \\'
+  IMAGE_EXCLUDE_LINES=""
 fi
 
 # Create lftp commands for file deployment
@@ -366,8 +366,6 @@ mirror $MIRROR_FLAGS \
   --exclude-glob ".tmp2 *" \
   --exclude-glob deploy_commands.txt \
   --exclude-glob fix_clown_frog_image.sql \
-  --exclude-glob images/.htaccess \
-  --exclude-glob images/items/.htaccess \
 ${IMAGE_EXCLUDE_LINES}
   --exclude-glob config/my.cnf \
   --exclude-glob config/secret.key \
@@ -522,97 +520,8 @@ EOL
   fi
   rm -f deploy_dist.txt
 
-  # Always sync image directory cache-policy files, even in full-replace mode.
-  # This updates runtime media cache behavior without bulk image mirroring.
-  if [ "$MODE" != "dist-only" ]; then
-    echo -e "${GREEN}🧾 Syncing image cache-policy files (.htaccess)...${NC}"
-    cat > deploy_image_htaccess.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-open sftp://$USER:$PASS@$HOST
-put images/backgrounds/.htaccess -o images/backgrounds/.htaccess
-put images/items/.htaccess -o images/items/.htaccess
-put images/signs/.htaccess -o images/signs/.htaccess
-bye
-EOL
-    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-      echo -e "${YELLOW}DRY-RUN: Skipping image .htaccess sync${NC}"
-    elif lftp -f deploy_image_htaccess.txt; then
-      echo -e "${GREEN}✅ Image cache-policy files synced${NC}"
-    else
-      echo -e "${YELLOW}⚠️  Image .htaccess sync failed; continuing${NC}"
-    fi
-    rm -f deploy_image_htaccess.txt
-  fi
-
   # Secondary passes are unnecessary in full-replace mode
   if [ "${CATN8_FULL_REPLACE:-0}" != "1" ]; then
-    if [ "$MODE" != "dist-only" ]; then
-      # Preserve-images mode excludes images/** from the primary mirror so lftp --delete can never
-      # remove remote images. We still upload changed/new images via dedicated passes with no --delete.
-
-      # 1) backgrounds (mtime-based, no delete)
-      echo -e "${GREEN}🖼️  Ensuring background images are updated (mtime-based; no deletes)...${NC}"
-      cat > deploy_backgrounds.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-open sftp://$USER:$PASS@$HOST
-mirror --reverse --verbose --only-newer --no-perms \
-  images/backgrounds images/backgrounds
-bye
-EOL
-      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-        echo -e "${YELLOW}DRY-RUN: Skipping backgrounds sync (mtime-based)${NC}"
-      elif lftp -f deploy_backgrounds.txt; then
-        echo -e "${GREEN}✅ Background images synced (mtime-based)${NC}"
-      else
-        echo -e "${YELLOW}⚠️  Background image sync failed; continuing${NC}"
-      fi
-      rm -f deploy_backgrounds.txt
-
-      # 2) signs (force overwrite, no delete)
-      echo -e "${GREEN}🪧 Ensuring sign images are updated (force overwrite; no deletes)...${NC}"
-      cat > deploy_signs.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-open sftp://$USER:$PASS@$HOST
-mirror --reverse --verbose --overwrite --no-perms \
-  images/signs images/signs
-bye
-EOL
-      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-        echo -e "${YELLOW}DRY-RUN: Skipping sign sync (force overwrite)${NC}"
-      elif lftp -f deploy_signs.txt; then
-        echo -e "${GREEN}✅ Sign images synced (force overwrite)${NC}"
-      else
-        echo -e "${YELLOW}⚠️  Sign image sync failed; continuing${NC}"
-      fi
-      rm -f deploy_signs.txt
-
-      # 3) remaining images (items/logos/etc) without --delete
-      echo -e "${GREEN}🖼️  Syncing other images (no deletes)...${NC}"
-      cat > deploy_images.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-open sftp://$USER:$PASS@$HOST
-mirror --reverse --verbose --only-newer --no-perms \
-  --exclude-glob "backgrounds/**" \
-  --exclude-glob "signs/**" \
-  images images
-bye
-EOL
-      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-        echo -e "${YELLOW}DRY-RUN: Skipping images sync (no deletes)${NC}"
-      elif lftp -f deploy_images.txt; then
-        echo -e "${GREEN}✅ Other images synced (no deletes)${NC}"
-      else
-        echo -e "${YELLOW}⚠️  Image sync failed; continuing${NC}"
-      fi
-      rm -f deploy_images.txt
-    fi
     if [ "$MODE" != "dist-only" ]; then
       # Perform a dedicated sync for includes subdirectories
       # Rationale: PHP include subdirectories like item_sizes/, traits/, helpers/, etc.
@@ -747,8 +656,6 @@ set sftp:auto-confirm yes
 set ssl:verify-certificate no
 open sftp://$USER:$PASS@$HOST
 chmod 755 images/
-chmod 755 images/items/
-chmod 644 images/items/*
 bye
 EOL
 

@@ -13,10 +13,16 @@ interface NavBarProps {
 
 export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAccountClick, mysteryTitle }: NavBarProps) {
   const isAuthed = Boolean(viewer && viewer.id);
-  const isAdministrator = isAdmin;
+  const isAdministrator = (
+    Boolean(isAdmin)
+    || Number(viewer?.is_admin || 0) === 1
+    || Number(viewer?.is_administrator || 0) === 1
+    || String(viewer?.username || '').toLowerCase() === 'admin'
+  );
   const isMysteryGameUser = Number(viewer?.is_mystery_game_user || 0) === 1;
   const isWordsearchUser = Number(viewer?.is_wordsearch_user || 0) === 1;
   const isBuildWizardUser = Number(viewer?.is_build_wizard_user || 0) === 1;
+  const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
 
   const links = [
     { key: 'about', href: 'about.php', label: 'About' },
@@ -24,7 +30,6 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     { key: 'games', href: 'games.php', label: 'Games' },
     { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
     { key: 'activities', href: 'activities.php', label: 'Activities' },
-    ...(isAuthed && (isAdministrator || isBuildWizardUser) ? [{ key: 'build_wizard', href: 'build-wizard.php', label: 'Build Wizard' }] : []),
     ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'Word Search' }] : []),
   ];
 
@@ -56,6 +61,13 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
               <li className="nav-item">
                 <a className={"nav-link" + (active === 'mystery' ? ' active' : '')} href="mystery.php">
                   Mystery Game
+                </a>
+              </li>
+            ) : null}
+            {canUseBuildWizard ? (
+              <li className="nav-item">
+                <a className={"nav-link" + (active === 'build_wizard' ? ' active' : '')} href="build-wizard.php">
+                  Build Wizard
                 </a>
               </li>
             ) : null}

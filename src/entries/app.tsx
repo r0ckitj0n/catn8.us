@@ -62,16 +62,14 @@ function App({ page }) {
     return saved || '';
   });
 
-  const [forceAdmin, setForceAdmin] = React.useState(false);
   const isAdmin = React.useMemo(() => {
-    if (forceAdmin) return true;
     if (!viewer) return false;
     return (
       Number(viewer.is_admin) === 1 || 
       Number(viewer.is_administrator) === 1 ||
       String(viewer.username).toLowerCase() === 'admin'
     );
-  }, [viewer, forceAdmin]);
+  }, [viewer]);
 
   React.useEffect(() => {
     const isNoir = page === 'mystery' || page === 'sheriff_station';
@@ -253,39 +251,6 @@ function App({ page }) {
   return (
     <>
       {content}
-      {/* GLOBAL ADMIN DEBUG BADGE */}
-      {viewer && (
-        <div style={{ position: 'fixed', bottom: 10, left: 10, zIndex: 9999, background: 'rgba(0,0,0,0.95)', color: '#0f0', padding: '15px', fontSize: '12px', border: '3px solid #0f0', borderRadius: '12px', pointerEvents: 'auto', boxShadow: '0 0 30px rgba(0,255,0,0.4)', maxWidth: '300px' }}>
-          <div className="mb-2 fw-bold border-bottom border-success pb-1 d-flex justify-content-between align-items-center">
-            <span>🕵️ SYSTEM DEBUG</span>
-            <button 
-              type="button" 
-              className="btn btn-sm btn-outline-success border-0 p-0" 
-              onClick={() => window.location.reload()}
-              title="Reload Page"
-            >
-              <i className="bi bi-arrow-clockwise"></i>
-            </button>
-          </div>
-          <div className="mb-1">User ID: <span className="text-white fw-bold">{viewer?.id}</span></div>
-          <div className="mb-1">Username: <span className="text-white">{viewer?.username}</span></div>
-          <div className="mb-1">Effective isAdmin: <span className={isAdmin ? 'text-success fw-bold' : 'text-danger fw-bold'}>{isAdmin ? 'YES' : 'NO'}</span></div>
-          <div className="mb-2 small text-muted" style={{ fontSize: '10px' }}>is_admin={String(viewer?.is_admin)}, is_administrator={String(viewer?.is_administrator)}</div>
-          
-          <button 
-            type="button"
-            className={`btn btn-xs ${forceAdmin ? 'btn-danger' : 'btn-success'} w-100 py-1 mb-2`}
-            style={{ fontSize: '10px', fontWeight: 'bold' }}
-            onClick={() => setForceAdmin(!forceAdmin)}
-          >
-            {forceAdmin ? 'STOP FORCING ADMIN' : 'FORCE ADMIN MODE'}
-          </button>
-          
-          <div className="small text-muted border-top border-success mt-2 pt-1" style={{ fontSize: '10px' }}>
-            If "Effective isAdmin" is NO, admin-only tools remain hidden.
-          </div>
-        </div>
-      )}
       <LoginModal open={loginOpen} onClose={handleCloseLogin} onLoggedIn={refreshViewer} onToast={showToast} />
       <AccountModal open={accountOpen} onClose={handleCloseAccount} viewer={viewer} onChanged={refreshViewer} onToast={showToast} />
       <ToastOverlay toast={toast} onClose={handleCloseToast} />

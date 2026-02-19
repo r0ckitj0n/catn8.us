@@ -118,6 +118,7 @@
 ### Cleanup Protocol
 - Run repository hygiene checks before finalizing substantial refactors.
 - Archive genuinely orphaned files to `backups/`.
+- Any duplicate-suffix artifacts matching `* 2*` must be moved to `backups/` (preserve relative paths) instead of being deleted in place.
 - If intentionally unreferenced files are required, document/whitelist with rationale.
 
 ## 9. Documentation Standards

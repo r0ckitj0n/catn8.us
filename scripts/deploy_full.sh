@@ -71,13 +71,22 @@ BASE_URL="${CATN8_DEPLOY_BASE_URL:-https://catn8.us}${CATN8_PUBLIC_BASE:-}"
 # 1a) Require explicit confirmation before overwriting LIVE DB (unless dry-run)
 REQUIRE_CONFIRM="${CATN8_CONFIRM_FULL_DB_OVERWRITE:-1}"
 CONFIRM_FLAG=0
+PURGE_FLAG=0
 for arg in "$@"; do
   case "$arg" in
     --confirm-db-overwrite)
       CONFIRM_FLAG=1
       ;;
+    --purge)
+      PURGE_FLAG=1
+      ;;
   esac
 done
+
+if [[ "${PURGE_FLAG}" == "1" ]]; then
+  echo -e "${RED}⚠️  WARNING: You have requested a COMPLETE PURGE of managed directories on the live server.${NC}"
+  echo -e "   This will delete api/, dist/, images/, etc. before mirroring fresh files."
+fi
 
 if [[ "${CATN8_DRY_RUN:-0}" != "1" && "${REQUIRE_CONFIRM}" != "0" && "${CONFIRM_FLAG}" != "1" ]]; then
   echo -e "${RED}❌ Refusing to overwrite LIVE database without explicit confirmation.${NC}"
@@ -268,14 +277,10 @@ fi
 
 # 5) Deploy files (force full replace + include vendor)
 section "Files: deploying site files to LIVE via scripts/deploy.sh (FULL REPLACE)"
-# Ensure deploy.sh builds correct BASE_URL for HTTP verification
-# and force a full overwrite including vendor/ with remote delete
+PURGE_ARG=""
+if [[ "${PURGE_FLAG}" == "1" ]]; then PURGE_ARG="--purge"; fi
 if CATN8_DRY_RUN=${CATN8_DRY_RUN:-0} \
-   CATN8_FULL_REPLACE=1 \
-   CATN8_INCLUDE_VENDOR=1 \
-   CATN8_UPLOAD_LIVE_ENV=1 \
-   DEPLOY_BASE_URL="${CATN8_DEPLOY_BASE_URL:-https://catn8.us}${CATN8_PUBLIC_BASE:-}" \
-   bash scripts/deploy.sh; then
+   bash scripts/deploy.sh --full ${PURGE_ARG}; then
   echo -e "${GREEN}✅ File deployment completed${NC}"
 else
   echo -e "${RED}❌ File deployment failed${NC}"
@@ -295,4 +300,3 @@ echo -e "  • Vite manifest -> HTTP ${MANIFEST_CODE}"
 echo -e "\n${GREEN}🎉 Full deployment completed successfully!${NC}"
 echo -e "${GREEN}📦 DB: restored from local dump${NC}"
 echo -e "${GREEN}📁 Files: mirrored to live and verified${NC}"
-

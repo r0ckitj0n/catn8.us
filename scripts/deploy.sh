@@ -4,76 +4,119 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}/.."
 
+# Load local env (not committed) for deploy credentials/config.
+ENV_FILE_LOCAL="$(pwd)/.env.local"
+ENV_FILE="$(pwd)/.env"
+if [[ -f "$ENV_FILE_LOCAL" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE_LOCAL"
+  set +a
+elif [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
+# Load secrets from env or macOS Keychain.
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/secrets/env_or_keychain.sh"
 
-usage() {
-  cat <<'USAGE'
-Usage: scripts/deploy.sh
-
-Fast file deploy to LIVE via SFTP mirror + basic HTTP verification.
-
-Required config (in .env/.env.local or exported env):
-  CATN8_DEPLOY_HOST
-  CATN8_DEPLOY_USER
-
-Required secret (env or macOS Keychain via scripts/secrets/env_or_keychain.sh):
-  CATN8_DEPLOY_PASS
-
-Common options (env vars):
-  CATN8_DRY_RUN=1            Skip any mutating remote actions
-  CATN8_SKIP_RELEASE_BUILD=1 Skip scripts/release.sh build step
-  CATN8_FULL_REPLACE=1       Force overwrite uploads (slower but safer for full refresh)
-  CATN8_UPLOAD_LIVE_ENV=1    If .env.live exists, upload it to live as .env
-  CATN8_PUBLIC_BASE=/subdir  If site is deployed under a subdirectory
-  DEPLOY_BASE_URL=https://.. Base URL used for HTTP verification (default https://catn8.us)
-USAGE
-}
-
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-fi
-
- # Load .env.local if present, else .env
- ENV_FILE_LOCAL="${SCRIPT_DIR}/../.env.local"
- ENV_FILE="${SCRIPT_DIR}/../.env"
- if [[ -f "${ENV_FILE_LOCAL}" ]]; then
-   set -a
-   # shellcheck disable=SC1090
-   . "${ENV_FILE_LOCAL}"
-   set +a
- elif [[ -f "${ENV_FILE}" ]]; then
-   set -a
-   # shellcheck disable=SC1090
-   . "${ENV_FILE}"
-   set +a
- fi
-
-# Configuration
-if [[ -z "${CATN8_DEPLOY_HOST:-}" ]]; then
-  echo "[deploy.sh] Error: CATN8_DEPLOY_HOST must be set (in .env/.env.local or exported env)" >&2
-  exit 1
-fi
-if [[ -z "${CATN8_DEPLOY_USER:-}" ]]; then
-  echo "[deploy.sh] Error: CATN8_DEPLOY_USER must be set (in .env/.env.local or exported env)" >&2
-  exit 1
-fi
-catn8_secret_require CATN8_DEPLOY_PASS
-
-HOST="${CATN8_DEPLOY_HOST}"
-USER="${CATN8_DEPLOY_USER}"
-PASS="${CATN8_DEPLOY_PASS}"
+# Configuration (prefer environment variables for CI/secrets managers)
+HOST="${CATN8_DEPLOY_HOST:-}"
+USER="${CATN8_DEPLOY_USER:-}"
+PASS="${CATN8_DEPLOY_PASS:-}"
 REMOTE_PATH="/"
 # Optional public base for sites under a subdirectory (e.g., /wf)
 PUBLIC_BASE="${CATN8_PUBLIC_BASE:-}"
-# Parameterized deployment base URL (protocol+host)
+# Parameterized deployment base URL (protocol+host), fallback to catn8.us
 DEPLOY_BASE_URL="${DEPLOY_BASE_URL:-https://catn8.us}"
 BASE_URL="${DEPLOY_BASE_URL}${PUBLIC_BASE}"
 
-# Deployment modes
-# CATN8_FULL_REPLACE=1 forces a full overwrite of all included files and deletes orphans
-if [ "${CATN8_FULL_REPLACE:-0}" = "1" ]; then
-  MIRROR_FLAGS="--reverse --delete --verbose --no-perms --overwrite"
+require_var() {
+  local key="$1" value="${!1:-}"
+  if [[ -z "$value" ]]; then
+    echo "Error: $key must be set (in environment or .env)." >&2
+    exit 1
+  fi
+}
+
+# Parameter parsing
+MODE="lite"
+SKIP_BUILD="${CATN8_SKIP_RELEASE_BUILD:-0}"
+PURGE="${CATN8_PURGE_REMOTE:-0}"
+STRICT_VERIFY="${CATN8_STRICT_VERIFY:-0}"
+UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
+# Default safety: never delete anything under images/** on the remote.
+PRESERVE_IMAGES=1
+PURGE_IMAGES=0
+CODE_ONLY=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --code-only)
+      CODE_ONLY=1
+      shift
+      ;;
+    --preserve-images|--no-delete-images)
+      PRESERVE_IMAGES=1
+      shift
+      ;;
+    --purge-images)
+      PURGE_IMAGES=1
+      shift
+      ;;
+    --purge)
+      PURGE=1
+      shift
+      ;;
+    --full)
+      MODE="full"
+      export CATN8_FULL_REPLACE=1
+      shift
+      ;;
+    --lite)
+      MODE="lite"
+      shift
+      ;;
+    --dist-only)
+      MODE="dist-only"
+      shift
+      ;;
+    --env-only)
+      MODE="env-only"
+      shift
+      ;;
+    --skip-build)
+      SKIP_BUILD=1
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+require_var CATN8_DEPLOY_HOST
+require_var CATN8_DEPLOY_USER
+catn8_secret_require CATN8_DEPLOY_PASS
+PASS="${CATN8_DEPLOY_PASS}"
+
+if [[ "$CODE_ONLY" == "1" && "$MODE" == "env-only" ]]; then
+  echo "Error: --code-only cannot be combined with --env-only." >&2
+  exit 2
+fi
+if [[ "$CODE_ONLY" == "1" && "$MODE" == "dist-only" ]]; then
+  echo "Error: --code-only cannot be combined with --dist-only (use one or the other)." >&2
+  exit 2
+fi
+
+if [ "$MODE" = "full" ]; then
+  MIRROR_FLAGS="--reverse --delete --verbose --no-perms --overwrite --only-newer"
+elif [ "$MODE" = "dist-only" ]; then
+  # For dist-only, we usually want to ensure assets update even if size is same
+  MIRROR_FLAGS="--reverse --delete --verbose --only-newer --no-perms"
 else
   # Default fast mode: compare by size (ignore mtime) and only upload newer
   MIRROR_FLAGS="--reverse --delete --verbose --only-newer --ignore-time --no-perms"
@@ -85,8 +128,27 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+require_dist_artifacts() {
+  if [ "$MODE" = "env-only" ]; then
+    return 0
+  fi
+
+  if [ ! -s "dist/index.html" ]; then
+    echo -e "${RED}❌ Missing dist/index.html. Refusing to deploy.${NC}"
+    exit 1
+  fi
+  if [ ! -s "dist/.vite/manifest.json" ]; then
+    echo -e "${RED}❌ Missing dist/.vite/manifest.json. Refusing to deploy.${NC}"
+    exit 1
+  fi
+  if ! ls dist/assets/*.js >/dev/null 2>&1; then
+    echo -e "${RED}❌ Missing dist/assets/*.js bundles. Refusing to deploy.${NC}"
+    exit 1
+  fi
+}
+
 # Ensure a fresh frontend build via the shared release orchestrator (build-only)
-if [ "${CATN8_SKIP_RELEASE_BUILD:-0}" != "1" ]; then
+if [ "$SKIP_BUILD" != "1" ] && [ "$MODE" != "env-only" ]; then
   echo -e "${GREEN}🏗  Running release.sh build (no deploy)...${NC}"
   bash scripts/release.sh --no-deploy
 fi
@@ -96,10 +158,16 @@ if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
   echo -e "${YELLOW}DRY-RUN: Skipping live website backup API call${NC}"
 else
   echo -e "${GREEN}💾 Backing up website...${NC}"
-  if [[ -n "${CATN8_ADMIN_TOKEN:-}" ]]; then
-    curl -s -X POST "${BASE_URL}/api/backup_website.php?admin_token=${CATN8_ADMIN_TOKEN}" || echo -e "${YELLOW}⚠️  Website backup failed, continuing deployment...${NC}"
+  BACKUP_URL="${BASE_URL}/api/backup_website.php"
+  BACKUP_TOKEN="${CATN8_ADMIN_TOKEN:-${CATN8_DEPLOY_ADMIN_TOKEN:-}}"
+  if [ -n "$BACKUP_TOKEN" ]; then
+    if curl -fsS -X POST "${BACKUP_URL}?admin_token=${BACKUP_TOKEN}" >/dev/null; then
+      echo -e "${GREEN}✅ Website backup API triggered${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Website backup failed (auth/token or endpoint issue), continuing deployment...${NC}"
+    fi
   else
-    echo -e "${YELLOW}⚠️  CATN8_ADMIN_TOKEN not set; skipping live backup API call${NC}"
+    echo -e "${YELLOW}⏭️  Skipping website backup API (set CATN8_ADMIN_TOKEN or CATN8_DEPLOY_ADMIN_TOKEN to enable)${NC}"
   fi
 fi
 echo -e "${YELLOW}⏭️  Skipping database updates in fast deploy (use deploy_full.sh for DB restore)${NC}"
@@ -146,72 +214,123 @@ done
 
 # Pre-clean common duplicate/backup/tmp files on the remote to avoid slow deletes during mirror
 echo -e "${GREEN}🧽 Pre-cleaning duplicate/backup/tmp files on server...${NC}"
+if [ "$PRESERVE_IMAGES" = "1" ]; then
+  PRECLEAN_IMAGE_LINES=""
+else
+  PRECLEAN_IMAGE_LINES=$'cd images\nrm -f .tmp* ".tmp2 *" *.bak *.bak.*\ncd items\nrm -f .tmp* ".tmp2 *" *.bak *.bak.*\ncd /\n'
+fi
 cat > preclean_remote.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
-set cmd:fail-exit yes
+set cmd:fail-exit no
 open sftp://$USER:$PASS@$HOST
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2 *\ 3 *\ 2.* *\ 3.* || true
-cd src || true
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2 *\ 3 *\ 2.* *\ 3.* || true
-cd styles || true
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2 *\ 3 *\ 2.* *\ 3.* || true
-cd .. || true
-cd js || true
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2 *\ 3 *\ 2.* *\ 3.* || true
-cd / || true
-cd images || true
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2.* *\ 3.* || true
-cd items || true
-rm -f .tmp* ".tmp2 *" *.bak *.bak.* *\ 2.* *\ 3.* || true
-cd / || true
+rm -f .tmp* ".tmp2 *" *.bak *.bak.*
+rm -f src/.tmp* src/".tmp2 *" src/*.bak src/*.bak.*
+${PRECLEAN_IMAGE_LINES}
 bye
 EOL
 
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping lftp pre-clean step${NC}"
-  rm -f preclean_remote.txt
-else
-  lftp -f preclean_remote.txt || true
-  rm -f preclean_remote.txt
+if [ "$MODE" != "env-only" ]; then
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping lftp pre-clean step${NC}"
+    rm -f preclean_remote.txt
+  else
+    lftp -f preclean_remote.txt || true
+    rm -f preclean_remote.txt
+  fi
+fi
+
+# Optional: Purge remote directories before deployment
+if [ "$PURGE" = "1" ]; then
+  echo -e "${RED}🔥 Purging managed directories on LIVE server...${NC}"
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping remote purge${NC}"
+  else
+    PURGE_IMAGE_DIRS=""
+    if [ "$PURGE_IMAGES" = "1" ]; then
+      PURGE_IMAGE_DIRS=" images"
+    fi
+    cat > purge_remote.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit no
+open sftp://$USER:$PASS@$HOST
+rm -r api dist${PURGE_IMAGE_DIRS} includes scripts src documentation Documentation vendor node_modules || true
+rm index.php .htaccess index.html favicon.ico manifest.json package.json package-lock.json || true
+bye
+EOL
+    lftp -f purge_remote.txt || echo -e "${YELLOW}⚠️ Purge had some issues (likely missing dirs), continuing...${NC}"
+    rm purge_remote.txt
+  fi
 fi
 
 # Quarantine any new duplicate files created during build
-echo -e "${GREEN}🧹 Quarantining any duplicate files created during build...${NC}"
-bash scripts/dev/quarantine_duplicates.sh || true
+if [ "$MODE" != "env-only" ]; then
+  echo -e "${GREEN}🧹 Quarantining any duplicate files created during build...${NC}"
+  bash scripts/dev/quarantine_duplicates.sh || true
+
+  if [ -x "./scripts/write_version_metadata.sh" ]; then
+    echo -e "${GREEN}🧾 Updating deploy version metadata...${NC}"
+    ./scripts/write_version_metadata.sh --deployed
+  fi
+fi
+
+# Never deploy if required build artifacts are missing.
+require_dist_artifacts
+
+# Image handling:
+# - Default: deploy most files including images (but backgrounds/signs are handled separately).
+# - Preserve mode: do not upload/delete/touch any images/** paths on the server.
+if [ "$PRESERVE_IMAGES" = "1" ]; then
+  IMAGE_EXCLUDE_LINES=$'  --exclude-glob "images/**" \\'
+else
+  IMAGE_EXCLUDE_LINES=$'  --exclude-glob "images/backgrounds/**" \\\n  --exclude-glob "images/signs/**" \\'
+fi
 
 # Create lftp commands for file deployment
 echo -e "${GREEN}📁 Preparing file deployment...${NC}"
+DOC_HTACCESS_INCLUDE=""
+if [ -f documentation/.htaccess ]; then
+  DOC_HTACCESS_INCLUDE=' --include-glob documentation/.htaccess'
+fi
 cat > deploy_commands.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+# Log sessions to logs/lftp_deploy.log (appends by default)
+debug 3 -o logs/lftp_deploy.log
 open sftp://$USER:$PASS@$HOST
 # Note: SFTP lacks checksums. In full-replace mode we use --overwrite to force upload.
 # In fast mode, we use size-only + only-newer to avoid re-uploading identical files.
 mirror $MIRROR_FLAGS \
   --exclude-glob .git/ \
+  --exclude-glob .git \
   --exclude-glob node_modules/ \
+  --exclude-glob vendor/** \
+  --exclude-glob .local/ \
+  --exclude-glob .cache/ \
+  --exclude-glob .agent/ \
   --exclude-glob .vscode/ \
+  --exclude-glob .DS_Store \
   --exclude-glob hot \
-  --exclude-glob sessions/** \
+  --exclude-glob "**/.DS_Store" \
+  --exclude-glob "sessions/**" \
   --exclude-glob .env \
-  --exclude-glob .env.* \
-  --exclude-glob backups/duplicates/** \
-  --exclude-glob backups/tests/** \
-  --include-glob backups/**/*.sql \
-  --include-glob backups/**/*.sql.gz \
-  --exclude-glob backups/** \
-  --exclude-glob documentation/ \
-  --exclude-glob Documentation/ \
-  --include-glob documentation/.htaccess \
-  --include-glob reports/.htaccess \
-  --exclude-glob *.log \
-  --exclude-glob *.sh \
-  --exclude-glob *.plist \
+  --exclude-glob ".env.*" \
+  --exclude-glob "backups/**" \
+  --exclude-glob "logs/**" \
+  --exclude-glob "reports/**" \
+  --exclude-glob reports/ \
+  --exclude-glob "dist/**" \
+  --exclude-glob "src/**"${DOC_HTACCESS_INCLUDE} \
+  --exclude-glob "*.log" \
+  --exclude-glob "**/*.log" \
+  --exclude-glob "**/*.sh" \
+  --exclude-glob "**/*.plist" \
   --exclude-glob temp_cron.txt \
   --exclude-glob SERVER_MANAGEMENT.md \
   --exclude-glob factory-tutorial/ \
+  --exclude-glob index.html \
   --exclude-glob backup.sql \
   --exclude-glob backup_*.tar.gz \
   --exclude-glob *_backup_*.tar.gz \
@@ -221,6 +340,7 @@ mirror $MIRROR_FLAGS \
   --exclude-glob fix_clown_frog_image.sql \
   --exclude-glob images/.htaccess \
   --exclude-glob images/items/.htaccess \
+${IMAGE_EXCLUDE_LINES}
   --exclude-glob config/my.cnf \
   --exclude-glob config/secret.key \
   --exclude-glob "* [0-9].*" \
@@ -231,20 +351,76 @@ mirror $MIRROR_FLAGS \
 bye
 EOL
 
+# Ensure dev-mode is disabled on production
+export CATN8_VITE_DISABLE_DEV=1
+export CATN8_VITE_MODE=prod
+
 # Run lftp with the commands
-echo -e "${GREEN}🌐 Deploying files to server...${NC}"
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping lftp mirror (file deployment)${NC}"
-  DRY_DEPLOY_SUCCESS=1
-else
-  if lftp -f deploy_commands.txt; then
+DRY_DEPLOY_SUCCESS=1
+if [ "$MODE" != "env-only" ] && [ "$MODE" != "dist-only" ]; then
+  echo -e "${GREEN}🌐 Deploying files to server...${NC}"
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping lftp mirror (file deployment)${NC}"
     DRY_DEPLOY_SUCCESS=1
   else
-    DRY_DEPLOY_SUCCESS=0
+    # Create logs directory if it doesn't exist
+    mkdir -p logs
+    if lftp -f deploy_commands.txt; then
+      DRY_DEPLOY_SUCCESS=1
+    else
+      DRY_DEPLOY_SUCCESS=0
+    fi
   fi
 fi
 if [ "${DRY_DEPLOY_SUCCESS}" = "1" ]; then
   echo -e "${GREEN}✅ Files deployed successfully${NC}"
+  # Safety fallback: publish built dist/index.html at web root as index.html.
+  # This avoids exposing the source root index.html (/src/*) and provides a fallback
+  # when host rewrite rules are bypassed or temporarily inconsistent.
+  if [ "$MODE" != "env-only" ]; then
+    echo -e "${GREEN}🧷 Publishing built index fallback (dist/index.html -> /index.html)...${NC}"
+    cat > upload_root_index.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+put dist/index.html -o index.html
+bye
+EOL
+    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+      echo -e "${YELLOW}DRY-RUN: Skipping root index fallback upload${NC}"
+    elif lftp -f upload_root_index.txt; then
+      echo -e "${GREEN}✅ Root index fallback uploaded${NC}"
+    else
+      echo -e "${RED}❌ Root index fallback upload failed.${NC}"
+      rm -f upload_root_index.txt
+      exit 1
+    fi
+    rm -f upload_root_index.txt
+  fi
+  # Optional: upload Composer vendor tree (off by default to keep deploys lean).
+  if [ "$MODE" != "env-only" ] && [ "${UPLOAD_VENDOR}" = "1" ]; then
+    echo -e "${GREEN}📦 Uploading vendor/ (CATN8_UPLOAD_VENDOR=1)...${NC}"
+    cat > deploy_vendor.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --delete --verbose --only-newer --no-perms \
+  vendor vendor
+bye
+EOL
+    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+      echo -e "${YELLOW}DRY-RUN: Skipping vendor sync${NC}"
+    elif lftp -f deploy_vendor.txt; then
+      echo -e "${GREEN}✅ Vendor synced${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Vendor sync failed; continuing${NC}"
+    fi
+    rm -f deploy_vendor.txt
+  else
+    echo -e "${YELLOW}⏭️  Skipping vendor sync (set CATN8_UPLOAD_VENDOR=1 to enable)${NC}"
+  fi
   # Optional: Upload maintenance utility (disabled by default to avoid mkdir errors on some hosts)
   if [ "${CATN8_UPLOAD_MAINTENANCE:-0}" = "1" ]; then
     echo -e "${GREEN}🧰 Uploading maintenance utilities (prune_sessions.sh)...${NC}"
@@ -269,7 +445,7 @@ EOL
     echo -e "${YELLOW}⏭️  Skipping maintenance upload (set CATN8_UPLOAD_MAINTENANCE=1 to enable)${NC}"
   fi
   # Optional: Upload live environment file (.env.live -> .env) when requested
-  if [ -f ".env.live" ] && [ "${CATN8_UPLOAD_LIVE_ENV:-0}" = "1" ]; then
+  if [ -f ".env.live" ] && ([ "${CATN8_UPLOAD_LIVE_ENV:-0}" = "1" ] || [ "$MODE" = "env-only" ]); then
     echo -e "${GREEN}🔐 Uploading live environment file (.env.live -> .env)...${NC}"
     cat > upload_env.txt << EOL
 set sftp:auto-confirm yes
@@ -290,54 +466,149 @@ EOL
     else
       echo -e "${YELLOW}⚠️  Failed to upload .env.live; continuing without updating live env${NC}"
     fi
-    rm -f upload_env.txt
+  rm -f upload_env.txt
   else
     echo -e "${YELLOW}⏭️  Skipping live .env upload (missing .env.live or CATN8_UPLOAD_LIVE_ENV!=1)${NC}"
   fi
-  # Secondary passes are unnecessary in full-replace mode
-  if [ "${CATN8_FULL_REPLACE:-0}" != "1" ]; then
-    # Perform a second, targeted mirror for images/backgrounds WITHOUT --ignore-time
-    # Rationale: when replacing background files with the same size but different content,
-    # the size-only comparison (from --ignore-time) may skip the upload. This pass uses
-    # mtime to ensure changed files are uploaded.
-    echo -e "${GREEN}🖼️  Ensuring background images are updated (mtime-based)...${NC}"
-    cat > deploy_backgrounds.txt << EOL
+  # Always perform a dedicated dist sync.
+  # Rationale: primary mirror excludes dist/**, so this pass is required in all modes,
+  # including --full (CATN8_FULL_REPLACE=1), to publish the latest frontend bundles.
+  echo -e "${GREEN}📦 Ensuring dist assets & manifest are updated...${NC}"
+  cat > deploy_dist.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
 open sftp://$USER:$PASS@$HOST
-mirror --reverse --delete --verbose --only-newer --no-perms \
-  images/backgrounds images/backgrounds
-bye
-EOL
-    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-      echo -e "${YELLOW}DRY-RUN: Skipping backgrounds sync (mtime-based)${NC}"
-    elif lftp -f deploy_backgrounds.txt; then
-      echo -e "${GREEN}✅ Background images synced (mtime-based)${NC}"
-    else
-      echo -e "${YELLOW}⚠️  Background image sync failed; continuing${NC}"
-    fi
-    rm -f deploy_backgrounds.txt
-    # Perform a second, targeted mirror for dist WITHOUT --ignore-time
-    # Rationale: manifest.json and hashed bundles can change without size changes; ensure they upload
-    echo -e "${GREEN}📦 Ensuring dist assets & manifest are updated (mtime-based)...${NC}"
-    cat > deploy_dist.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-open sftp://$USER:$PASS@$HOST
-mirror --reverse --delete --verbose --only-newer --no-perms \
+mirror --reverse --delete --verbose --overwrite --no-perms \
   dist dist
 bye
 EOL
-    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-      echo -e "${YELLOW}DRY-RUN: Skipping dist sync (mtime-based)${NC}"
-    elif lftp -f deploy_dist.txt; then
-      echo -e "${GREEN}✅ Dist assets & manifest synced (mtime-based)${NC}"
-    else
-      echo -e "${YELLOW}⚠️  Dist sync failed; continuing${NC}"
-    fi
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping dist sync${NC}"
+  elif lftp -f deploy_dist.txt; then
+    echo -e "${GREEN}✅ Dist assets & manifest synced${NC}"
+  else
+    echo -e "${RED}❌ Dist sync failed.${NC}"
     rm -f deploy_dist.txt
+    exit 1
+  fi
+  rm -f deploy_dist.txt
+
+  # Always sync image directory cache-policy files, even in full-replace mode.
+  # This updates runtime media cache behavior without bulk image mirroring.
+  if [ "$MODE" != "dist-only" ]; then
+    echo -e "${GREEN}🧾 Syncing image cache-policy files (.htaccess)...${NC}"
+    cat > deploy_image_htaccess.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+open sftp://$USER:$PASS@$HOST
+put images/backgrounds/.htaccess -o images/backgrounds/.htaccess
+put images/items/.htaccess -o images/items/.htaccess
+put images/signs/.htaccess -o images/signs/.htaccess
+bye
+EOL
+    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+      echo -e "${YELLOW}DRY-RUN: Skipping image .htaccess sync${NC}"
+    elif lftp -f deploy_image_htaccess.txt; then
+      echo -e "${GREEN}✅ Image cache-policy files synced${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Image .htaccess sync failed; continuing${NC}"
+    fi
+    rm -f deploy_image_htaccess.txt
+  fi
+
+  # Secondary passes are unnecessary in full-replace mode
+  if [ "${CATN8_FULL_REPLACE:-0}" != "1" ]; then
+    if [ "$MODE" != "dist-only" ]; then
+      # Preserve-images mode excludes images/** from the primary mirror so lftp --delete can never
+      # remove remote images. We still upload changed/new images via dedicated passes with no --delete.
+
+      # 1) backgrounds (mtime-based, no delete)
+      echo -e "${GREEN}🖼️  Ensuring background images are updated (mtime-based; no deletes)...${NC}"
+      cat > deploy_backgrounds.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --verbose --only-newer --no-perms \
+  images/backgrounds images/backgrounds
+bye
+EOL
+      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+        echo -e "${YELLOW}DRY-RUN: Skipping backgrounds sync (mtime-based)${NC}"
+      elif lftp -f deploy_backgrounds.txt; then
+        echo -e "${GREEN}✅ Background images synced (mtime-based)${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Background image sync failed; continuing${NC}"
+      fi
+      rm -f deploy_backgrounds.txt
+
+      # 2) signs (force overwrite, no delete)
+      echo -e "${GREEN}🪧 Ensuring sign images are updated (force overwrite; no deletes)...${NC}"
+      cat > deploy_signs.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --verbose --overwrite --no-perms \
+  images/signs images/signs
+bye
+EOL
+      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+        echo -e "${YELLOW}DRY-RUN: Skipping sign sync (force overwrite)${NC}"
+      elif lftp -f deploy_signs.txt; then
+        echo -e "${GREEN}✅ Sign images synced (force overwrite)${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Sign image sync failed; continuing${NC}"
+      fi
+      rm -f deploy_signs.txt
+
+      # 3) remaining images (items/logos/etc) without --delete
+      echo -e "${GREEN}🖼️  Syncing other images (no deletes)...${NC}"
+      cat > deploy_images.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --verbose --only-newer --no-perms \
+  --exclude-glob "backgrounds/**" \
+  --exclude-glob "signs/**" \
+  images images
+bye
+EOL
+      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+        echo -e "${YELLOW}DRY-RUN: Skipping images sync (no deletes)${NC}"
+      elif lftp -f deploy_images.txt; then
+        echo -e "${GREEN}✅ Other images synced (no deletes)${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Image sync failed; continuing${NC}"
+      fi
+      rm -f deploy_images.txt
+    fi
+    if [ "$MODE" != "dist-only" ]; then
+      # Perform a dedicated sync for includes subdirectories
+      # Rationale: PHP include subdirectories like item_sizes/, traits/, helpers/, etc.
+      # contain critical dependencies that may be new (never on server) and need force upload.
+      # The main mirror may skip them due to --ignore-time comparisons.
+      echo -e "${GREEN}📁 Ensuring includes subdirectories are synced...${NC}"
+      cat > deploy_includes.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --verbose --only-newer --no-perms \
+  includes includes
+bye
+EOL
+      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+        echo -e "${YELLOW}DRY-RUN: Skipping includes sync${NC}"
+      elif lftp -f deploy_includes.txt; then
+        echo -e "${GREEN}✅ Includes synced${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Backend includes sync failed; continuing${NC}"
+      fi
+      rm -f deploy_includes.txt
+    fi
   fi
 else
   echo -e "${RED}❌ File deployment failed${NC}"
@@ -349,130 +620,126 @@ fi
 rm deploy_commands.txt
 
 # Ensure no Vite hot file exists on the live server (prevents accidental dev mode)
-echo -e "${GREEN}🧹 Removing any stray Vite hot file on server...${NC}"
-cat > cleanup_hot.txt << EOL
+if [ "$MODE" != "env-only" ]; then
+  echo -e "${GREEN}🧹 Enforcing production mode on server (remove dev artifacts)...${NC}"
+  ARCHIVE_TS="$(date '+%Y%m%d-%H%M%S')"
+  VENDOR_PRUNE_CMD="rm -r vendor || true"
+  if [ "${UPLOAD_VENDOR}" = "1" ]; then
+    VENDOR_PRUNE_CMD=":"
+  fi
+  cat > enforce_prod_marker.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
+set cmd:fail-exit yes
 open sftp://$USER:$PASS@$HOST
+lcd .
+put /dev/null -o .disable-vite-dev
+bye
+EOL
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping production marker upload (.disable-vite-dev)${NC}"
+  else
+    lftp -f enforce_prod_marker.txt > /dev/null 2>&1 || true
+  fi
+  rm -f enforce_prod_marker.txt
+
+  cat > cleanup_prod.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit no
+open sftp://$USER:$PASS@$HOST
+mkdir -p backups
+mkdir -p backups/src-archives
+mv src backups/src-archives/src-${ARCHIVE_TS}
 rm -f hot
+rm -r node_modules || true
+${VENDOR_PRUNE_CMD}
+rm -f dist/.htaccess
 bye
 EOL
 
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping remote hot file cleanup${NC}"
-else
-  lftp -f cleanup_hot.txt > /dev/null 2>&1 || true
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping remote cleanup (hot/index.html/src/dist/.htaccess)${NC}"
+  else
+    lftp -f cleanup_prod.txt > /dev/null 2>&1 || true
+  fi
+  rm cleanup_prod.txt
 fi
-rm cleanup_hot.txt
 
 # Verify deployment (HTTP-based, avoids dotfile visibility issues)
-echo -e "${GREEN}🔍 Verifying deployment over HTTP...${NC}"
+if [ "$MODE" != "env-only" ]; then
+  echo -e "${GREEN}🔍 Verifying deployment over HTTP...${NC}"
+  VERIFY_FAILED=0
+  
+  # Check Vite manifest availability (prefer .vite/manifest.json)
+  HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/.vite/manifest.json")
+  if [ "$HTTP_MANIFEST_CODE" != "200" ]; then
+    HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/manifest.json")
+  fi
+  if [ "$HTTP_MANIFEST_CODE" = "200" ]; then
+    echo -e "${GREEN}✅ Vite manifest accessible over HTTP${NC}"
+  else
+    echo -e "${YELLOW}⚠️  Vite manifest not accessible over HTTP (code $HTTP_MANIFEST_CODE)${NC}"
+    VERIFY_FAILED=1
+  fi
+  
+  # Homepage should never reference source paths in production.
+  HOME_HTML=$(curl -s "$BASE_URL/")
+  if echo "$HOME_HTML" | grep -q "/src/"; then
+    echo -e "${YELLOW}⚠️  Homepage still references /src/ paths${NC}"
+    VERIFY_FAILED=1
+  else
+    echo -e "${GREEN}✅ Homepage has no /src/ references${NC}"
+  fi
 
-# Check Vite manifest availability (prefer .vite/manifest.json)
-HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/.vite/manifest.json")
-if [ "$HTTP_MANIFEST_CODE" != "200" ]; then
-  HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/manifest.json")
-fi
-if [ "$HTTP_MANIFEST_CODE" = "200" ]; then
-  echo -e "${GREEN}✅ Vite manifest accessible over HTTP${NC}"
-else
-  echo -e "${YELLOW}⚠️  Vite manifest not accessible over HTTP (code $HTTP_MANIFEST_CODE)${NC}"
-fi
-
-# Extract one JS and one CSS asset from homepage HTML and verify
-HOME_HTML=$(curl -s "$BASE_URL/")
-APP_JS=$(echo "$HOME_HTML" | grep -Eo "/dist/assets/js/app.js-[^\"']+\\.js" | head -n1)
-MAIN_CSS=$(echo "$HOME_HTML" | grep -Eo "/dist/assets/[^\"']+\\.css" | head -n1)
-if [ -n "$APP_JS" ]; then
-  CODE_JS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$APP_JS")
-  echo -e "  • JS $APP_JS -> HTTP $CODE_JS"
-else
-  echo -e "  • JS: ⚠️ Not found in homepage HTML"
-fi
-if [ -n "$MAIN_CSS" ]; then
-  CODE_CSS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$MAIN_CSS")
-  echo -e "  • CSS $MAIN_CSS -> HTTP $CODE_CSS"
-else
-  echo -e "  • CSS: ⚠️ Not found in homepage HTML"
-fi
-
-# Fix permissions automatically after deployment
-echo -e "${GREEN}🔧 Fixing image permissions on server...${NC}"
-# Remove problematic .htaccess files and fix permissions via SFTP
-cat > fix_permissions.txt << EOL
+  # Extract one JS and one CSS asset from homepage HTML and verify when present.
+  # Some pages load assets dynamically from Vite manifest, so missing static tags is not fatal.
+  APP_JS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']+\\.js" | head -n1)
+  MAIN_CSS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']*public-core[^\"']+\\.css" | head -n1)
+  if [ -n "$APP_JS" ]; then
+    CODE_JS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$APP_JS")
+    echo -e "  • JS $APP_JS -> HTTP $CODE_JS"
+    if [ "$CODE_JS" != "200" ]; then VERIFY_FAILED=1; fi
+  else
+    echo -e "  • JS: ℹ️ Not found in homepage HTML (manifest loader may be in use)"
+  fi
+  if [ -n "$MAIN_CSS" ]; then
+    CODE_CSS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$MAIN_CSS")
+    echo -e "  • CSS $MAIN_CSS -> HTTP $CODE_CSS"
+    if [ "$CODE_CSS" != "200" ]; then VERIFY_FAILED=1; fi
+  else
+    echo -e "  • CSS: ℹ️ Not found in homepage HTML (manifest loader may be in use)"
+  fi
+  
+  # Fix permissions automatically after deployment
+  echo -e "${GREEN}🔧 Fixing image permissions on server...${NC}"
+  # Do not delete anything under images/** (you have an admin cleanup button for stale images).
+  cat > fix_permissions.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 open sftp://$USER:$PASS@$HOST
-rm -f images/.htaccess
-rm -f images/items/.htaccess
 chmod 755 images/
 chmod 755 images/items/
 chmod 644 images/items/*
 bye
 EOL
 
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping remote permissions fix${NC}"
-else
-  lftp -f fix_permissions.txt > /dev/null 2>&1 || true
+  if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+    echo -e "${YELLOW}DRY-RUN: Skipping remote permissions fix${NC}"
+  else
+    lftp -f fix_permissions.txt > /dev/null 2>&1 || true
+  fi
+  rm fix_permissions.txt
+  
+  if [ "${STRICT_VERIFY}" = "1" ] && [ "$VERIFY_FAILED" != "0" ]; then
+    echo -e "${RED}❌ Strict verification failed. Deployment is not healthy.${NC}"
+    exit 1
+  fi
 fi
-rm fix_permissions.txt
-
-# List duplicate-suffixed files on server (for visibility)
-echo -e "${GREEN}🧹 Listing duplicate-suffixed files on server (space-number)...${NC}"
-cat > list_server_duplicates.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-open sftp://$USER:$PASS@$HOST
-# images root
-cls -1 images/*\\ 2.* || true
-cls -1 images/*\\ 3.* || true
-# subdirs
-cls -1 images/items/*\\ 2.* || true
-cls -1 images/items/*\\ 3.* || true
-cls -1 images/backgrounds/*\\ 2.* || true
-cls -1 images/backgrounds/*\\ 3.* || true
-cls -1 images/logos/*\\ 2.* || true
-cls -1 images/logos/*\\ 3.* || true
-cls -1 images/signs/*\\ 2.* || true
-cls -1 images/signs/*\\ 3.* || true
-bye
-EOL
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping remote duplicate listing${NC}"
-else
-  lftp -f list_server_duplicates.txt || true
-fi
-rm list_server_duplicates.txt
-
-# Delete duplicate-suffixed files on server
-echo -e "${GREEN}🧽 Removing duplicate-suffixed files on server...${NC}"
-cat > delete_server_duplicates.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-open sftp://$USER:$PASS@$HOST
-rm -f images/*\\ 2.* || true
-rm -f images/*\\ 3.* || true
-rm -f images/items/*\\ 2.* || true
-rm -f images/items/*\\ 3.* || true
-rm -f images/backgrounds/*\\ 2.* || true
-rm -f images/backgrounds/*\\ 3.* || true
-rm -f images/logos/*\\ 2.* || true
-rm -f images/logos/*\\ 3.* || true
-rm -f images/signs/*\\ 2.* || true
-rm -f images/signs/*\\ 3.* || true
-bye
-EOL
-if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
-  echo -e "${YELLOW}DRY-RUN: Skipping remote duplicate deletion${NC}"
-else
-  lftp -f delete_server_duplicates.txt || true
-fi
-rm delete_server_duplicates.txt
 
 # Test image accessibility (use a stable asset; path can be overridden)
 echo -e "${GREEN}🌍 Testing image accessibility...${NC}"
-TEST_LOGO_PATH="${BRAND_LOGO_PATH:-/images/catn8_logo.jpeg}"
+TEST_LOGO_PATH="${BRAND_LOGO_PATH:-/images/logos/logo-catn8.webp}"
 # If TEST_LOGO_PATH is absolute (starts with http), use as-is; otherwise prefix with BASE_URL
 if [[ "$TEST_LOGO_PATH" =~ ^https?:// ]]; then
   TEST_LOGO_URL="$TEST_LOGO_PATH"
@@ -496,7 +763,12 @@ fi
 echo -e "\n${GREEN}📊 Fast Deployment Summary:${NC}"
 echo -e "  • Files: ✅ Deployed to server"
 echo -e "  • Database: ⏭️  Skipped (use deploy_full.sh for database updates)"
-echo -e "  • Images: ✅ Included in deployment"
+if [ "$PRESERVE_IMAGES" = "1" ]; then
+  echo -e "  • Images: ✅ Synced (no deletes under images/**)"
+else
+  echo -e "  • Images: ✅ Included in deployment"
+fi
+[ "$PURGE" = "1" ] && echo -e "  • Remote Purge: 🔥 Performed (managed directories)"
 echo -e "  • Verification: ✅ Completed"
 
 echo -e "\n${GREEN}🎉 Fast deployment completed!${NC}"

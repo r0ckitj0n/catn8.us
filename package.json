@@ -1,0 +1,24 @@
+{
+  "name": "catn8.us",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "VITE_DEV_PORT=5178 VITE_HMR_PORT=5178 printf 'http://localhost:5178' > hot && npm run typecheck && vite --host localhost --port 5178 --strictPort",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host localhost --port 5179",
+    "stop": "rm -f hot",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.6"
+  }
+}

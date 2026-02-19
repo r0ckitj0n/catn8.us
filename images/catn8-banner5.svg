@@ -1,0 +1,64 @@
+<svg viewBox="0 0 470 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Option 6: 3D Puffy Letters -->
+  <g transform="translate(10, 20)">
+    <!-- C -->
+    <ellipse cx="30" cy="53" rx="30" ry="45" fill="#6930C3" />
+    <ellipse cx="32" cy="50" rx="25" ry="40" fill="#8A4FFF" />
+    <path d="M32,50 C45,50 55,50 65,45" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+    
+    <!-- A -->
+    <polygon points="90,10 70,90 110,90" fill="#6930C3" />
+    <polygon points="90,15 75,85 105,85" fill="#FFABE1" />
+    <line x1="82" y1="60" x2="98" y2="60" stroke="white" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- T -->
+    <rect x="120" y="10" width="70" height="15" rx="5" fill="#6930C3" />
+    <rect x="145" y="10" width="20" height="80" rx="5" fill="#6930C3" />
+    <rect x="122" y="12" width="66" height="11" rx="4" fill="#64DFDF" />
+    <rect x="147" y="12" width="16" height="76" rx="4" fill="#64DFDF" />
+    <line x1="155" y1="20" x2="155" y2="35" stroke="white" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- N -->
+    <path d="M200,10 L200,90 L240,10 L240,90" fill="#6930C3" stroke="#6930C3" stroke-width="15" stroke-linejoin="round" />
+    <path d="M202,12 L202,88 L238,12 L238,88" fill="#FFD166" stroke="#FFD166" stroke-width="10" stroke-linejoin="round" />
+    <line x1="202" y1="20" x2="202" y2="35" stroke="white" stroke-width="3" stroke-linecap="round" />
+    <line x1="238" y1="20" x2="238" y2="35" stroke="white" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- 8 -->
+    <ellipse cx="280" cy="35" rx="25" ry="25" fill="#6930C3" />
+    <ellipse cx="280" cy="65" rx="25" ry="25" fill="#6930C3" />
+    <ellipse cx="280" cy="32" rx="20" ry="20" fill="#64DFDF" />
+    <ellipse cx="280" cy="62" rx="20" ry="20" fill="#64DFDF" />
+    <circle cx="272" cy="25" r="5" fill="white" opacity="0.7" />
+    <circle cx="272" cy="55" r="5" fill="white" opacity="0.7" />
+    
+    <!-- . -->
+    <circle cx="320" cy="80" r="10" fill="#6930C3" />
+    <circle cx="322" cy="78" r="7" fill="#FFABE1" />
+    <circle cx="319" cy="75" r="3" fill="white" opacity="0.7" />
+    
+    <!-- U -->
+    <path d="M340,10 L340,60 C340,80 380,80 380,60 L380,10" 
+          fill="#6930C3" stroke="#6930C3" stroke-width="12" stroke-linejoin="round" />
+    <path d="M343,12 L343,60 C343,75 377,75 377,60 L377,12" 
+          fill="#FFABE1" stroke="#FFABE1" stroke-width="6" stroke-linejoin="round" />
+    <line x1="343" y1="20" x2="343" y2="35" stroke="white" stroke-width="3" stroke-linecap="round" />
+    <line x1="377" y1="20" x2="377" y2="35" stroke="white" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- S -->
+    <path d="M410,25 C400,5 430,5 440,15 C450,25 430,45 420,50 C410,55 400,65 410,75 C420,85 450,85 460,65" 
+          fill="#6930C3" stroke="#6930C3" stroke-width="12" stroke-linejoin="round" />
+    <path d="M410,25 C400,8 425,8 435,18 C445,28 425,45 415,50 C405,55 395,65 405,75 C415,85 445,85 455,65" 
+          fill="#8A4FFF" stroke="#8A4FFF" stroke-width="6" stroke-linejoin="round" />
+    <path d="M420,15 C425,10 430,10 435,15" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+    <path d="M410,75 C415,80 420,80 425,75" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+    
+    <!-- Small stars scattered -->
+    <path d="M45,15 L48,22 L55,22 L50,27 L52,35 L45,30 L38,35 L40,27 L35,22 L42,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M220,15 L223,22 L230,22 L225,27 L227,35 L220,30 L213,35 L215,27 L210,22 L217,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M400,15 L403,22 L410,22 L405,27 L407,35 L400,30 L393,35 L395,27 L390,22 L397,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+  </g>
+</svg>

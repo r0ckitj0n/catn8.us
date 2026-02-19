@@ -1,0 +1,9 @@
+[
+  {
+    "badge_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir. I want a color badge photo for sheriff. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 100,
+    "name": "Sheriff Hank Mercer",
+    "birthday": "1967-08-04",
+    "mugshot_prompt": "Sheriff badge photo shot (studio product photo) of a Dawsonville Sheriff badge pinned to a dark navy uniform chest, crisp gold metal texture, engraved text, subtle reflections, centered composition, shallow depth of field, neutral gray background, photorealistic, highly detailed 8k."
+  }
+]

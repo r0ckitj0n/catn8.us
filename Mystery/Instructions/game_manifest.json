@@ -1,0 +1,39 @@
+{
+  "manifest_version": "2.0",
+  "project_name": "The 3-Hour Hold",
+  "author": "Jon Graves",
+  "setting": "Dawsonville, GA",
+  "scenarios": [
+    {
+      "id": "core_01",
+      "title": "Murder at Amicalola",
+      "description": "A high-stakes poisoning at the Sterling Lodge during a stormy New Year's Eve.",
+      "file_paths": {
+        "narrative_core": "scenario_core_01.json",
+        "agent_profiles": "agents_profiles.json",
+        "suspect_clues": "suspect_clues_01.json",
+        "location_assets": "location_image_prompts.json",
+        "motives": "motives_list.json",
+        "weapons": "weapons_list.json"
+      },
+      "difficulty_configs": {
+        "easy": {
+          "file": "config_01_easy.json",
+          "label": "Rookie Detective",
+          "description": "Body and weapon found. Suspects are nervous and talkative."
+        },
+        "medium": {
+          "file": "config_01_medium.json",
+          "label": "Seasoned Investigator",
+          "description": "Weapon is hidden. Suspects are guarded and require specific questions."
+        },
+        "hard": {
+          "file": "config_01_hard.json",
+          "label": "Hardened Sleuth",
+          "description": "Missing Person case. Body buried. Weapon destroyed. Suspects are hostile."
+        }
+      }
+    }
+  ]
+}
+

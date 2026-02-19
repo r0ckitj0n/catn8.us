@@ -1,0 +1,97 @@
+.catn8-take-case-dialog {
+  width: min(96vw, 980px);
+  max-width: min(96vw, 980px);
+}
+
+.catn8-take-case-scroll {
+  max-height: min(70vh, 720px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+
+.catn8-take-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.catn8-take-case-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  height: auto;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(246, 240, 227, 0.95);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.catn8-take-case-tile:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--catn8-color-noir-gold, #d4af37);
+  transform: translateY(-2px);
+}
+
+.catn8-take-case-tile:active {
+  transform: translateY(0);
+}
+
+.catn8-take-case-tile:disabled {
+  opacity: 0.65;
+}
+
+.catn8-take-case-tile-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.12;
+  filter: grayscale(100%) contrast(110%) saturate(70%);
+  pointer-events: none;
+}
+
+.catn8-take-case-tile-inner {
+  position: relative;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.catn8-take-case-title {
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  line-height: 1.15;
+}
+
+.catn8-take-case-subtitle {
+  font-size: 0.82rem;
+  line-height: 1.2;
+  color: rgba(246, 240, 227, 0.7);
+}
+
+.catn8-take-case-briefing {
+  font-size: 0.95rem;
+  line-height: 1.25;
+  color: rgba(246, 240, 227, 0.85);
+  overflow: visible;
+}
+
+.catn8-take-case-briefing--empty {
+  color: rgba(246, 240, 227, 0.6);
+}
+
+@media (max-width: 520px) {
+  .catn8-take-case-grid {
+    grid-template-columns: 1fr;
+  }
+}

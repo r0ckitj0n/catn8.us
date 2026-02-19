@@ -1,0 +1,46 @@
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Let real files and directories resolve directly.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Keep backend/API routes on PHP handlers.
+  RewriteCond %{REQUEST_URI} ^/api/ [NC,OR]
+  RewriteCond %{REQUEST_URI} \.php$ [NC]
+  RewriteRule ^ - [L]
+
+  # SPA fallback.
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(\.env|\.env\.local|\.env\..+)$">
+    Require all denied
+  </FilesMatch>
+  <FilesMatch "^(\.git|\.gitignore|\.githooks|\.windsurfrules|composer\.(json|lock)|package(-lock)?\.json)$">
+    Require all denied
+  </FilesMatch>
+  <FilesMatch "\.key\.json$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^(\.env|\.env\.local|\.env\..+)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+  <FilesMatch "^(\.git|\.gitignore|\.githooks|\.windsurfrules|composer\.(json|lock)|package(-lock)?\.json)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+  <FilesMatch "\.key\.json$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>

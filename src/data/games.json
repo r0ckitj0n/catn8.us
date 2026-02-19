@@ -1,0 +1,92 @@
+[
+  {
+    "section": "Educational Games",
+    "items": [
+      {
+        "title": "PBS Kids Learning Adventure",
+        "description": "Join your favorite PBS Kids characters in fun learning games!",
+        "image": "images/pbs-kids-learning-adventure.jpg"
+      },
+      {
+        "title": "Nick Jr. Character Playground",
+        "description": "Play with your favorite Nick Jr. characters in this fun playground!",
+        "image": "images/nick-jr-character-playground.jpg"
+      },
+      {
+        "title": "Starfall Reading Adventure",
+        "description": "Learn to read with fun interactive stories and games!",
+        "image": "images/starfall-reading-adventure.jpg"
+      },
+      {
+        "title": "Cool Math Puzzle Challenge",
+        "description": "Solve fun math puzzles and improve your skills!",
+        "image": "images/cool-math-puzzle-challenge.jpg"
+      },
+      {
+        "title": "ABCya Elementary Learning",
+        "description": "Fun educational games for elementary school students!",
+        "image": "images/abcya-elementary-learning.jpg"
+      },
+      {
+        "title": "Prodigy Math RPG Adventure",
+        "description": "Embark on an epic math adventure in this RPG game!",
+        "image": "images/prodigy-math-rpg-adventure.jpg"
+      }
+    ]
+  },
+  {
+    "section": "Family Fun Games",
+    "items": [
+      {
+        "title": "Animal Crossing: Island Life",
+        "description": "Create your own island paradise and make new friends!",
+        "image": "images/animal-crossing-island-life.jpg"
+      },
+      {
+        "title": "Stardew Valley: Farm Life",
+        "description": "Build your dream farm and live a peaceful life!",
+        "image": "images/stardew-valley-farm-life.jpg"
+      },
+      {
+        "title": "Overcooked: Kitchen Chaos",
+        "description": "Work together to create delicious meals in this fun cooking game!",
+        "image": "images/overcooked-kitchen-chaos.jpg"
+      },
+      {
+        "title": "Minecraft: Blocky World",
+        "description": "Build, explore, and create in this amazing blocky world!",
+        "image": "images/minecraft-blocky-world.jpg"
+      },
+      {
+        "title": "Roblox: Social Gaming",
+        "description": "Play with friends in this creative social gaming platform!",
+        "image": "images/roblox-social-gaming.jpg"
+      },
+      {
+        "title": "LEGO Fun Adventures",
+        "description": "Build and play with LEGO in exciting virtual worlds!",
+        "image": "images/lego-fun-adventures.jpg"
+      }
+    ]
+  },
+  {
+    "section": "Strategy Games",
+    "items": [
+      {
+        "title": "Civilization: Ancient Times",
+        "description": "Build your own civilization and lead it to greatness!",
+        "image": "images/civilization-ancient-times.jpg"
+      },
+      {
+        "title": "The Sims: Life Simulation",
+        "description": "Create and control your own virtual family!",
+        "image": "images/the-sims-life-simulation.jpg"
+      },
+      {
+        "title": "Grand Theft Auto V: Open World",
+        "description": "Explore a vast open world in this action-packed game!",
+        "image": "images/grand-theft-auto-v-open-world.jpg"
+      }
+    ]
+  }
+]

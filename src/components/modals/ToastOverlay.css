@@ -1,0 +1,71 @@
+.catn8-toast-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
+  z-index: var(--catn8-z-toast);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 18px;
+}
+
+.catn8-toast {
+  width: min(560px, calc(100vw - 36px));
+  border-radius: 14px;
+  padding: 14px 14px 12px 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.catn8-toast-success {
+  background: rgba(46, 204, 113, 0.95);
+  color: #fff;
+}
+
+.catn8-toast-error {
+  background: rgba(231, 76, 60, 0.95);
+  color: #fff;
+}
+
+.catn8-toast-info {
+  background: rgba(52, 152, 219, 0.95);
+  color: #fff;
+}
+
+.catn8-toast-overlay-mystery {
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.catn8-toast-mystery {
+  border-color: rgba(255, 220, 150, 0.55);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.catn8-toast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catn8-toast-title {
+  font-weight: 900;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.catn8-toast-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 26px;
+  line-height: 1;
+  padding: 0 6px;
+}
+
+.catn8-toast-body {
+  margin-top: 8px;
+  font-weight: 700;
+}

@@ -1,0 +1,154 @@
+/* Global page styling for React-driven pages */
+
+:root {
+  --primary-color: #ff6b6b;
+  --secondary-color: #4ecdc4;
+  --accent-color: #ffe66d;
+  --dark-color: #2c3e50;
+  --light-color: #f7f9fc;
+  --fun-purple: #9b59b6;
+  --fun-green: #2ecc71;
+  --fun-orange: #e67e22;
+
+  --catn8-color-noir-black: #000000;
+  --catn8-color-noir-gray: #1a1a1a;
+  --catn8-color-noir-white: #ffffff;
+  --catn8-color-noir-gold: #d4af37;
+  --catn8-color-noir-blood: #8a0303;
+
+  --catn8-z-base: 0;
+  --catn8-z-modal-backdrop: 5000;
+  --catn8-z-modal: 5100;
+  --catn8-z-toast: 5200;
+}
+
+body {
+  font-family: 'Comic Neue', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--dark-color);
+  background: url('/images/pattern.svg') repeat;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: url('/images/homepage_friends.jpg') center/cover no-repeat fixed;
+  opacity: 0.1;
+  z-index: -1;
+}
+
+/* Global "Noir Mode" Class - Forces Pitch Black Backdrops */
+html.catn8-noir-mode .modal-backdrop,
+html.catn8-noir-mode body .modal-backdrop,
+body.catn8-noir-mode .modal-backdrop,
+.catn8-noir-mode .modal-backdrop.show,
+.catn8-noir-mode .modal-backdrop.fade.show,
+.catn8-pitch-black-backdrop {
+  --bs-backdrop-opacity: 1 !important;
+  --bs-backdrop-bg: #000 !important;
+  opacity: 1 !important;
+  background-color: #000 !important;
+  background: #000 !important;
+  transition: none !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+.modal-backdrop {
+  position: fixed !important;
+  inset: 0;
+  z-index: var(--catn8-z-modal-backdrop) !important;
+  background-color: #000;
+  pointer-events: auto;
+}
+
+.modal-backdrop.show {
+  opacity: 1;
+}
+
+.modal {
+  position: fixed !important;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: var(--catn8-z-modal) !important;
+}
+
+.modal.show,
+.modal.showing {
+  transform: none !important;
+}
+
+ .modal.catn8-modal-layer-0 { z-index: 5100 !important; }
+ .modal.catn8-modal-layer-1 { z-index: 5110 !important; }
+ .modal.catn8-modal-layer-2 { z-index: 5120 !important; }
+ .modal.catn8-modal-layer-3 { z-index: 5130 !important; }
+ .modal.catn8-modal-layer-4 { z-index: 5140 !important; }
+ .modal.catn8-modal-layer-5 { z-index: 5150 !important; }
+ .modal.catn8-modal-layer-6 { z-index: 5160 !important; }
+ .modal.catn8-modal-layer-7 { z-index: 5170 !important; }
+ .modal.catn8-modal-layer-8 { z-index: 5180 !important; }
+ .modal.catn8-modal-layer-9 { z-index: 5190 !important; }
+
+ .modal.show .modal-dialog {
+   display: block !important;
+   width: auto !important;
+   min-width: 1px;
+   min-height: 1px;
+ }
+
+ .modal.show .modal-content {
+   display: block;
+   min-width: 1px;
+   min-height: 1px;
+ }
+
+ .container,
+ .container-sm,
+ .container-md,
+ .container-lg,
+ .container-xl,
+ .container-xxl {
+   max-width: 100% !important;
+   padding-left: 24px;
+   padding-right: 24px;
+ }
+
+/* Admin Command Console Neon Styling */
+.admin-console-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-console-btn:hover {
+  transform: translateY(-5px) scale(1.02) !important;
+  box-shadow: 0 0 25px rgba(13, 202, 240, 0.6) !important;
+  background: rgba(13, 202, 240, 0.15) !important;
+  border-color: #0dcaf0 !important;
+}
+
+.admin-console-btn:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.admin-console-btn i {
+  text-shadow: 0 0 10px rgba(13, 202, 240, 0.5);
+}
+
+@keyframes admin-pulse {
+  0% { box-shadow: 0 0 10px rgba(13, 202, 240, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(13, 202, 240, 0.4); }
+  100% { box-shadow: 0 0 10px rgba(13, 202, 240, 0.2); }
+}
+
+.catn8-card.admin-console-card {
+  border: 3px solid #0dcaf0 !important;
+  animation: admin-pulse 3s infinite ease-in-out;
+}
+

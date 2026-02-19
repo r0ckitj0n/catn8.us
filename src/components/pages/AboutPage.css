@@ -1,0 +1,35 @@
+.catn8-quote {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-style: italic;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.catn8-quote-attrib {
+  margin-top: 10px;
+  font-style: normal;
+  opacity: 0.9;
+}
+
+.catn8-value-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin: 8px 0 14px;
+}
+
+.catn8-inline-image {
+  width: min(420px, 100%);
+  height: auto;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 18px;
+  margin-top: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}

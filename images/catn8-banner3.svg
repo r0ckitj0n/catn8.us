@@ -1,0 +1,62 @@
+<svg viewBox="0 0 450 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Option 3: Cat-Themed Letters -->
+  <g transform="translate(15, 20)">
+    <!-- C with cat ear -->
+    <path d="M0,50 C0,25 25,10 50,20 C75,30 75,70 50,80 C25,90 0,75 0,50 Z" 
+          fill="#8A4FFF" stroke="#6930C3" stroke-width="3" />
+    <path d="M25,20 L20,5 L35,15" fill="#8A4FFF" stroke="#6930C3" stroke-width="2" />
+    
+    <!-- A with cat ear -->
+    <path d="M100,80 L120,20 L140,80 Z" fill="#FFD166" stroke="#6930C3" stroke-width="3" />
+    <line x1="110" y1="60" x2="130" y2="60" stroke="#6930C3" stroke-width="3" />
+    <path d="M115,20 L120,5 L125,20" fill="#FFD166" stroke="#6930C3" stroke-width="2" />
+    
+    <!-- T with whiskers -->
+    <path d="M160,20 L220,20" stroke="#64DFDF" stroke-width="12" fill="none" />
+    <path d="M190,20 L190,80" stroke="#64DFDF" stroke-width="12" fill="none" />
+    <path d="M160,20 L220,20" stroke="#6930C3" stroke-width="3" fill="none" />
+    <path d="M190,20 L190,80" stroke="#6930C3" stroke-width="3" fill="none" />
+    <line x1="175" y1="40" x2="160" y2="35" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="175" y1="40" x2="160" y2="40" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="175" y1="40" x2="160" y2="45" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="205" y1="40" x2="220" y2="35" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="205" y1="40" x2="220" y2="40" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="205" y1="40" x2="220" y2="45" stroke="#6930C3" stroke-width="1.5" />
+    
+    <!-- N with paw print -->
+    <path d="M240,20 L240,80 L280,20 L280,80" fill="none" stroke="#FFABE1" stroke-width="12" />
+    <path d="M240,20 L240,80 L280,20 L280,80" fill="none" stroke="#6930C3" stroke-width="3" />
+    <circle cx="255" cy="60" r="3" fill="#6930C3" />
+    <circle cx="260" cy="55" r="3" fill="#6930C3" />
+    <circle cx="250" cy="55" r="3" fill="#6930C3" />
+    <circle cx="255" cy="50" r="3" fill="#6930C3" />
+    
+    <!-- 8 as cat face -->
+    <path d="M320,35 C320,25 300,15 290,25 C280,35 300,45 320,35" 
+          fill="#64DFDF" stroke="#6930C3" stroke-width="3" />
+    <path d="M320,65 C320,75 300,85 290,75 C280,65 300,55 320,65" 
+          fill="#64DFDF" stroke="#6930C3" stroke-width="3" />
+    <!-- Cat eyes -->
+    <circle cx="295" cy="30" r="4" fill="#6930C3" />
+    <circle cx="315" cy="30" r="4" fill="#6930C3" />
+    <!-- Cat nose -->
+    <path d="M305,55 L308,58 L302,58 Z" fill="#FF9AE8" />
+    
+    <!-- . as cat toy ball -->
+    <circle cx="340" cy="75" r="8" fill="#FFE459" stroke="#6930C3" stroke-width="2" />
+    <path d="M340,67 L340,83" stroke="#6930C3" stroke-width="1" />
+    <path d="M332,75 L348,75" stroke="#6930C3" stroke-width="1" />
+    
+    <!-- U with cat tail -->
+    <path d="M360,20 L360,60 C360,75 390,75 390,60 L390,20" 
+          fill="#FFABE1" stroke="#6930C3" stroke-width="3" />
+    <path d="M390,40 Q410,25 405,5" fill="none" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- S with whiskers -->
+    <path d="M430,30 C410,10 435,10 445,25 C455,40 425,60 415,70 C405,80 430,95 450,70" 
+          fill="#8A4FFF" stroke="#6930C3" stroke-width="3" />
+    <line x1="420" y1="25" x2="405" y2="20" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="420" y1="25" x2="405" y2="25" stroke="#6930C3" stroke-width="1.5" />
+    <line x1="420" y1="25" x2="405" y2="30" stroke="#6930C3" stroke-width="1.5" />
+  </g>
+</svg>

@@ -1,0 +1,30 @@
+[
+  {
+    "location_id": "loc_downtown_square",
+    "name": "Downtown Dawsonville Square",
+    "base_image_prompt": "Cinematic rainy night shot of Downtown Dawsonville Square, wet pavement reflecting streetlights, storefronts dim, misty air, moody noir lighting, 8k.",
+    "overlay_asset_prompt": "A transparent PNG cutout of a dead body, male, tuxedo with cowboy boots, lying face down, high contrast lighting.",
+    "overlay_trigger": "FOUND_BODY"
+  },
+  {
+    "location_id": "loc_racing_hof",
+    "name": "Georgia Racing Hall of Fame",
+    "base_image_prompt": "Interior of the Georgia Racing Hall of Fame at night, vintage race cars and moonshine-running cars on display, dim museum lighting, long shadows, cinematic noir mood.",
+    "overlay_asset_prompt": "A transparent PNG cutout of a concealed flask tucked behind a racing display placard.",
+    "overlay_trigger": "SEARCH_HELMET"
+  },
+  {
+    "location_id": "loc_dawson_forest",
+    "name": "Dawson Forest Wildlife Management Area",
+    "base_image_prompt": "Remote Georgia forest access road at night in Dawson Forest WMA, pines and hardwoods, red clay mud, fog in headlights, moonlight breaking through clouds, noir atmosphere.",
+    "overlay_asset_prompt": "A transparent PNG cutout of a muddy hand protruding from a pile of fresh red dirt.",
+    "overlay_trigger": "EXCAVATE_RIVER"
+  },
+  {
+    "location_id": "loc_amicalola_falls",
+    "name": "Amicalola Falls State Park",
+    "base_image_prompt": "Cinematic night shot near Amicalola Falls State Park, wet stone steps, dark pines, fog drifting, distant rushing water, dramatic noir lighting.",
+    "overlay_asset_prompt": "A transparent PNG cutout of shattered glass on wet stone, with a faint spill trail.",
+    "overlay_trigger": "SEARCH_DRAIN"
+  }
+]

@@ -1,0 +1,11 @@
+      setError(e?.message || 'Clear failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, mysteryId, masterAssetDetailsItem, masterAssetDetailsType, isCharacter, state.setMasterAssetDetailsFields, state.setMasterAssetDetailsRapport, state.setMasterAssetDetailsFavorites, state.setMasterAssetDetailsData, showMysteryToast, setError, setBusy]);
+
+  const requestMasterAssetDelete = useCallback(({ type, item }: { type: string; item: any }) => {
+    if (!isAdmin) return;
+    if (!item.is_archived) {
+      setError('Only archived assets can be deleted.');
+      return;

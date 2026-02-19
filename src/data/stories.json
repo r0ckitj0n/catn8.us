@@ -1,0 +1,502 @@
+[
+  {
+    "id": "super-sparkle-family",
+    "age": "3-7",
+    "title": "The Super Sparkle Family!",
+    "image": "/images/story1.jpg",
+    "excerpt": "Papa and Nana had a special power - their hugs were so full of love that they created magical sparkles! When they hugged someone, tiny stars of joy would float around them, making everyone feel warm and happy inside.",
+    "tags": ["Adventure", "Friendship"],
+    "content": [
+      {
+        "image": "/images/story1_beginning.jpg",
+        "alt": "Papa and Nana creating magical sparkles",
+        "text": "Papa and Nana had a special power - their hugs were so full of love that they created magical sparkles! When they hugged someone, tiny stars of joy would float around them, making everyone feel warm and happy inside."
+      },
+      {
+        "image": "/images/story1_middle.jpg",
+        "alt": "Family sharing sparkles",
+        "text": "Their sparkles helped Trinity find strength when she needed it most, gave Elijah confidence in the kitchen, and helped Reuel solve his trickiest puzzles. The magic spread to everyone in the family!"
+      },
+      {
+        "image": "/images/story1_end.jpg",
+        "alt": "House filled with joy and laughter",
+        "text": "The Super Sparkle Family taught everyone that the best kind of magic is the love we share with our family. And that's why their sparkles will always be remembered as the most magical sparkles in the world!"
+      }
+    ]
+  },
+  {
+    "id": "elijah-kitchen",
+    "age": "3-7",
+    "title": "Elijah's Kitchen of Culinary Craziness",
+    "image": "/images/story2.jpg",
+    "excerpt": "When Elijah's kitchen appliances came to life with their own personalities, they turned cooking into a wild adventure. His blender started doing happy dances, his toaster told jokes, and his mixer sang songs while it worked.",
+    "tags": ["Family", "Creativity"],
+    "content": [
+      {
+        "image": "/images/story2_beginning.jpg",
+        "alt": "Kitchen appliances coming to life",
+        "text": "When Elijah's kitchen appliances came to life with their own personalities, they turned cooking into a wild adventure. His blender started doing happy dances, his toaster told jokes, and his mixer sang songs while it worked."
+      },
+      {
+        "image": "/images/story2_middle.jpg",
+        "alt": "Dancing kitchen appliances",
+        "text": "With his new kitchen friends, cooking became an adventure. They helped him create special meals for the whole family - from Papa and Nana's favorite recipes to treats for his nieces and nephews."
+      },
+      {
+        "image": "/images/story2_end.jpg",
+        "alt": "Family meal with kitchen friends",
+        "text": "Elijah learned that cooking wasn't just about making food - it was about creating joy and bringing the family together. And with his kitchen friends by his side, every meal became a celebration!"
+      }
+    ]
+  },
+  {
+    "id": "calendar-of-kindness",
+    "age": "3-7",
+    "title": "The Magical Calendar of Kindness",
+    "image": "/images/story3.jpg",
+    "excerpt": "In a cozy corner of the house, there lived a magical calendar with blinking eyes. It wasn't just any calendar - it had the power to make every day special with acts of kindness!",
+    "tags": ["Kindness", "Magic"],
+    "content": [
+      {
+        "image": "/images/story3_beginning.jpg",
+        "alt": "Magical calendar with eyeballs",
+        "text": "In a cozy corner of the house, there lived a magical calendar with blinking eyes. It wasn't just any calendar - it had the power to make every day special with acts of kindness!"
+      },
+      {
+        "image": "/images/story3_middle.jpg",
+        "alt": "Calendar doing the chicken dance",
+        "text": "The calendar would dance and sing, suggesting fun ways to be kind. It taught the family that even small acts of kindness could make big differences in someone's day."
+      },
+      {
+        "image": "/images/story3_end.jpg",
+        "alt": "Family group hug with sparkles",
+        "text": "From sharing toys to helping with chores, the calendar showed that kindness was the best way to make every day magical. And that's how the family learned that kindness is the greatest superpower of all!"
+      }
+    ]
+  },
+  {
+    "id": "family-puzzle-adventure",
+    "age": "3-7",
+    "title": "The Family Puzzle Adventure",
+    "image": "/images/story4.jpg",
+    "excerpt": "In a magical puzzle box, each piece came alive with its own personality. Some pieces were round and bouncy, others were square and steady, but they all had one thing in common - they were part of the same family!",
+    "tags": ["Family", "Creativity"],
+    "content": [
+      {
+        "image": "/images/story4_beginning.jpg",
+        "alt": "Puzzle pieces coming to life",
+        "text": "In a magical puzzle box, each piece came alive with its own personality. Some pieces were round and bouncy, others were square and steady, but they all had one thing in common - they were part of the same family!"
+      },
+      {
+        "image": "/images/story4_middle.jpg",
+        "alt": "Family puzzle pieces dancing",
+        "text": "Each piece represented a family member with their special traits. Papa's piece was strong and protective, Nana's piece was warm and caring, and each child's piece showed their unique talents and interests."
+      },
+      {
+        "image": "/images/story4_end.jpg",
+        "alt": "Complete family puzzle",
+        "text": "When all the pieces came together, they created a beautiful picture of family love. The puzzle taught everyone that even though they were different, they fit together perfectly as a family!"
+      }
+    ]
+  },
+  {
+    "id": "singing-garden",
+    "age": "3-7",
+    "title": "The Singing Garden",
+    "image": "/images/story5.jpg",
+    "excerpt": "In a special garden, flowers sang sweet melodies and trees danced in the breeze. It was a place where nature came alive with music and joy!",
+    "tags": ["Nature", "Friendship"],
+    "content": [
+      {
+        "image": "/images/story5_beginning.jpg",
+        "alt": "Magical garden coming to life",
+        "text": "In a special garden, flowers sang sweet melodies and trees danced in the breeze. It was a place where nature came alive with music and joy!"
+      },
+      {
+        "image": "/images/story5_middle.jpg",
+        "alt": "Children playing in garden",
+        "text": "Children discovered that each plant had its own song to share. The roses sang lullabies, the sunflowers hummed happy tunes, and the trees provided the rhythm with their swaying branches."
+      },
+      {
+        "image": "/images/story5_end.jpg",
+        "alt": "Garden party celebration",
+        "text": "The garden taught everyone that nature is full of music and magic, and that every living thing has its own special song to share with the world!"
+      }
+    ]
+  },
+  {
+    "id": "wise-forest-friends",
+    "age": "3-7",
+    "title": "The Wise Forest Friends",
+    "image": "/images/story6.jpg",
+    "excerpt": "Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!",
+    "tags": ["Animals", "Learning"],
+    "content": [
+      {
+        "image": "/images/story6_beginning.jpg",
+        "alt": "Talking animals in forest",
+        "text": "Deep in the forest, animals had the special ability to speak and share their wisdom with children. Each animal had its own unique lesson to teach!"
+      },
+      {
+        "image": "/images/story6_middle.jpg",
+        "alt": "Animals teaching children",
+        "text": "The wise owl taught about the night sky, the friendly fox showed how to identify plants, and the gentle deer shared secrets of the forest."
+      },
+      {
+        "image": "/images/story6_end.jpg",
+        "alt": "Children and animals working together",
+        "text": "Together, they learned that nature is the greatest teacher of all, and that every creature has something special to share!"
+      }
+    ]
+  },
+  {
+    "id": "living-library",
+    "age": "3-7",
+    "title": "The Living Library",
+    "image": "/images/story7.jpg",
+    "excerpt": "In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers.",
+    "tags": ["Reading", "Imagination"],
+    "content": [
+      {
+        "image": "/images/story7_beginning.jpg",
+        "alt": "Magical library entrance",
+        "text": "In a magical library, books didn't just sit on shelves - they came alive! Characters would jump from the pages and share their stories with eager young readers."
+      },
+      {
+        "image": "/images/story7_middle.jpg",
+        "alt": "Characters coming to life",
+        "text": "Each book had its own magical world to explore, and the characters were excited to share their adventures with the children."
+      },
+      {
+        "image": "/images/story7_end.jpg",
+        "alt": "Children reading with characters",
+        "text": "The library taught everyone that books are magical portals to new worlds, and that reading is the key to endless adventures!"
+      }
+    ]
+  },
+  {
+    "id": "musical-instrument-friends",
+    "age": "3-7",
+    "title": "The Musical Instrument Friends",
+    "image": "/images/story8.jpg",
+    "excerpt": "In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!",
+    "tags": ["Music", "Learning"],
+    "content": [
+      {
+        "image": "/images/story8_beginning.jpg",
+        "alt": "Musical instruments coming to life",
+        "text": "In a special music room, instruments came to life and taught children about the joy of music. Each instrument had its own personality and story to share!"
+      },
+      {
+        "image": "/images/story8_middle.jpg",
+        "alt": "Instruments playing together",
+        "text": "The piano played gentle lullabies, the drums kept the beat, and the violin sang sweet melodies. Together, they created beautiful music!"
+      },
+      {
+        "image": "/images/story8_end.jpg",
+        "alt": "Children playing instruments",
+        "text": "The instruments showed that music is a language everyone can understand, and that playing together creates the most beautiful harmony!"
+      }
+    ]
+  },
+  {
+    "id": "magical-paint-box",
+    "age": "3-7",
+    "title": "The Magical Paint Box",
+    "image": "/images/story9.jpg",
+    "excerpt": "In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own.",
+    "tags": ["Art", "Creativity"],
+    "content": [
+      {
+        "image": "/images/story9_beginning.jpg",
+        "alt": "Colorful paint splashes",
+        "text": "In an art studio, paints had minds of their own! They would mix and swirl, creating beautiful pictures that told stories of their own."
+      },
+      {
+        "image": "/images/story9_middle.jpg",
+        "alt": "Paints creating art",
+        "text": "Each color had its own personality - red was bold and brave, blue was calm and peaceful, and yellow was bright and cheerful."
+      },
+      {
+        "image": "/images/story9_end.jpg",
+        "alt": "Children painting together",
+        "text": "The paints taught everyone that art is a way to express feelings and create magic, and that every color has its own special story to tell!"
+      }
+    ]
+  },
+  {
+    "id": "dancing-numbers",
+    "age": "3-7",
+    "title": "The Dancing Numbers",
+    "image": "/images/story10.jpg",
+    "excerpt": "In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality.",
+    "tags": ["Math", "Learning"],
+    "content": [
+      {
+        "image": "/images/story10_beginning.jpg",
+        "alt": "Numbers dancing",
+        "text": "In a magical math classroom, numbers came alive and danced! Each number had its own special moves and personality."
+      },
+      {
+        "image": "/images/story10_middle.jpg",
+        "alt": "Numbers teaching math",
+        "text": "The numbers showed how they could add up to make bigger numbers, subtract to make smaller ones, and multiply to create patterns."
+      },
+      {
+        "image": "/images/story10_end.jpg",
+        "alt": "Children solving math problems",
+        "text": "The dancing numbers proved that math can be fun and exciting, and that every number has its own special place in the world!"
+      }
+    ]
+  },
+  {
+    "id": "dancing-letters",
+    "age": "3-7",
+    "title": "The Dancing Letters",
+    "image": "/images/story11.jpg",
+    "excerpt": "In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality.",
+    "tags": ["Reading", "Learning"],
+    "content": [
+      {
+        "image": "/images/story11_beginning.jpg",
+        "alt": "Letters floating",
+        "text": "In a magical classroom, letters came alive and danced! Each letter had its own special moves and personality."
+      },
+      {
+        "image": "/images/story11_middle.jpg",
+        "alt": "Letters forming words",
+        "text": "The letters showed how they could join together to make words, and how words could tell stories and share ideas."
+      },
+      {
+        "image": "/images/story11_end.jpg",
+        "alt": "Children reading and writing",
+        "text": "The dancing letters taught everyone that reading and writing are magical ways to share stories and learn new things!"
+      }
+    ]
+  },
+  {
+    "id": "shape-shapers",
+    "age": "3-7",
+    "title": "The Shape Shapers",
+    "image": "/images/story12.jpg",
+    "excerpt": "In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains.",
+    "tags": ["Shapes", "Learning"],
+    "content": [
+      {
+        "image": "/images/story12_beginning.jpg",
+        "alt": "Shapes dancing",
+        "text": "In a magical art room, shapes came alive and transformed! Circles became wheels, squares became houses, and triangles became mountains."
+      },
+      {
+        "image": "/images/story12_middle.jpg",
+        "alt": "Shapes creating pictures",
+        "text": "Each shape had its own special power - circles could roll, squares could stack, and triangles could point the way."
+      },
+      {
+        "image": "/images/story12_end.jpg",
+        "alt": "Children creating with shapes",
+        "text": "The shapes showed that everything in the world is made up of basic shapes, and that imagination can turn simple shapes into amazing things!"
+      }
+    ]
+  },
+  {
+    "id": "color-mixers",
+    "age": "3-7",
+    "title": "The Color Mixers",
+    "image": "/images/story13.jpg",
+    "excerpt": "In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green.",
+    "tags": ["Colors", "Art"],
+    "content": [
+      {
+        "image": "/images/story13_beginning.jpg",
+        "alt": "Colors mixing",
+        "text": "In a magical art studio, colors came alive and mixed! Red and blue would dance together to make purple, yellow and blue would twirl to make green."
+      },
+      {
+        "image": "/images/story13_middle.jpg",
+        "alt": "Colors creating new colors",
+        "text": "Each color had its own special friend - red loved to dance with blue, yellow loved to play with blue, and red loved to twirl with yellow."
+      },
+      {
+        "image": "/images/story13_end.jpg",
+        "alt": "Children mixing colors",
+        "text": "The colors taught everyone that mixing colors creates new possibilities, and that every color has its own special place in the rainbow!"
+      }
+    ]
+  },
+  {
+    "id": "animal-teachers",
+    "age": "3-7",
+    "title": "The Animal Teachers",
+    "image": "/images/story14.jpg",
+    "excerpt": "In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share.",
+    "tags": ["Animals", "Nature"],
+    "content": [
+      {
+        "image": "/images/story14_beginning.jpg",
+        "alt": "Animals in classroom",
+        "text": "In a magical classroom, animals came to teach children about nature! Each animal had its own special lesson to share."
+      },
+      {
+        "image": "/images/story14_middle.jpg",
+        "alt": "Animals teaching children",
+        "text": "The wise owl taught about the night sky, the friendly fox showed how to identify plants, and the gentle deer shared secrets of the forest."
+      },
+      {
+        "image": "/images/story14_end.jpg",
+        "alt": "Children and animals working together",
+        "text": "Together, they learned that nature is the greatest teacher of all, and that every creature has something special to share!"
+      }
+    ]
+  },
+  {
+    "id": "dancing-notes",
+    "age": "3-7",
+    "title": "The Dancing Notes",
+    "image": "/images/story15.jpg",
+    "excerpt": "In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality.",
+    "tags": ["Music", "Learning"],
+    "content": [
+      {
+        "image": "/images/story15_beginning.jpg",
+        "alt": "Musical notes floating",
+        "text": "In a magical music room, musical notes came alive and danced! Each note had its own special sound and personality."
+      },
+      {
+        "image": "/images/story15_middle.jpg",
+        "alt": "Notes creating melodies",
+        "text": "The notes showed how they could join together to make melodies, and how melodies could tell stories and share feelings."
+      },
+      {
+        "image": "/images/story15_end.jpg",
+        "alt": "Children playing music",
+        "text": "The dancing notes taught everyone that music is a magical way to express feelings and share joy!"
+      }
+    ]
+  },
+  {
+    "id": "word-wizards",
+    "age": "3-7",
+    "title": "The Word Wizards",
+    "image": "/images/story16.jpg",
+    "excerpt": "In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality.",
+    "tags": ["Writing", "Creativity"],
+    "content": [
+      {
+        "image": "/images/story16_beginning.jpg",
+        "alt": "Words floating",
+        "text": "In a magical writing room, words came alive and told stories! Each word had its own special meaning and personality."
+      },
+      {
+        "image": "/images/story16_middle.jpg",
+        "alt": "Words forming sentences",
+        "text": "The words showed how they could join together to make sentences, and how sentences could tell stories and share ideas."
+      },
+      {
+        "image": "/images/story16_end.jpg",
+        "alt": "Children writing stories",
+        "text": "The word wizards taught everyone that writing is a magical way to share stories and learn new things!"
+      }
+    ]
+  },
+  {
+    "id": "number-ninjas",
+    "age": "3-7",
+    "title": "The Number Ninjas",
+    "image": "/images/story17.jpg",
+    "excerpt": "In a magical math room, numbers came alive and played games! Each number had its own special value and personality.",
+    "tags": ["Math", "Learning"],
+    "content": [
+      {
+        "image": "/images/story17_beginning.jpg",
+        "alt": "Numbers dancing",
+        "text": "In a magical math room, numbers came alive and played games! Each number had its own special value and personality."
+      },
+      {
+        "image": "/images/story17_middle.jpg",
+        "alt": "Numbers solving problems",
+        "text": "The numbers showed how they could add up to make bigger numbers, subtract to make smaller ones, and multiply to create patterns."
+      },
+      {
+        "image": "/images/story17_end.jpg",
+        "alt": "Children solving math problems",
+        "text": "The number ninjas proved that math can be fun and exciting, and that every number has its own special place in the world!"
+      }
+    ]
+  },
+  {
+    "id": "color-creators",
+    "age": "3-7",
+    "title": "The Color Creators",
+    "image": "/images/story18.jpg",
+    "excerpt": "In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality.",
+    "tags": ["Art", "Creativity"],
+    "content": [
+      {
+        "image": "/images/story18_beginning.jpg",
+        "alt": "Colors mixing",
+        "text": "In a magical art room, colors came alive and painted pictures! Each color had its own special shade and personality."
+      },
+      {
+        "image": "/images/story18_middle.jpg",
+        "alt": "Colors creating art",
+        "text": "The colors showed how they could mix to create new colors, and how colors could tell stories and share feelings."
+      },
+      {
+        "image": "/images/story18_end.jpg",
+        "alt": "Children creating art",
+        "text": "The color creators taught everyone that art is a magical way to express feelings and create beauty!"
+      }
+    ]
+  },
+  {
+    "id": "nature-navigators",
+    "age": "3-7",
+    "title": "The Nature Navigators",
+    "image": "/images/story19.jpg",
+    "excerpt": "In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality.",
+    "tags": ["Animals", "Nature"],
+    "content": [
+      {
+        "image": "/images/story19_beginning.jpg",
+        "alt": "Animals in classroom",
+        "text": "In a magical nature room, animals came alive and shared their wisdom! Each animal had its own special knowledge and personality."
+      },
+      {
+        "image": "/images/story19_middle.jpg",
+        "alt": "Animals teaching about nature",
+        "text": "The animals showed how they lived in harmony with nature, and how they could teach children about the world around them."
+      },
+      {
+        "image": "/images/story19_end.jpg",
+        "alt": "Children learning about nature",
+        "text": "The nature navigators taught everyone that nature is full of wonder and wisdom, and that every creature has something special to share!"
+      }
+    ]
+  },
+  {
+    "id": "melody-makers",
+    "age": "3-7",
+    "title": "The Melody Makers",
+    "image": "/images/story20.jpg",
+    "excerpt": "In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality.",
+    "tags": ["Music", "Learning"],
+    "content": [
+      {
+        "image": "/images/story20_beginning.jpg",
+        "alt": "Musical notes floating",
+        "text": "In a magical music room, melodies came alive and created harmony! Each melody had its own special tune and personality."
+      },
+      {
+        "image": "/images/story20_middle.jpg",
+        "alt": "Melodies creating music",
+        "text": "The melodies showed how they could join together to make songs, and how songs could tell stories and share feelings."
+      },
+      {
+        "image": "/images/story20_end.jpg",
+        "alt": "Children making music",
+        "text": "The melody makers taught everyone that music is a magical way to express feelings and share joy!"
+      }
+    ]
+  }
+]

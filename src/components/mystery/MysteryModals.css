@@ -1,0 +1,178 @@
+
+.catn8-mystery-modal.show .modal-dialog,
+.catn8-mystery-modal.showing .modal-dialog {
+  display: block !important;
+  width: min(96vw, 1600px) !important;
+  max-width: min(96vw, 1600px) !important;
+  min-width: 320px;
+  min-height: 1px;
+  height: auto !important;
+  max-height: calc(100vh - 2rem);
+  transform: none !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.catn8-mystery-modal .modal-dialog {
+  transform: none !important;
+}
+
+.catn8-mystery-modal .modal-dialog-centered {
+  transform: none !important;
+}
+
+.catn8-mystery-modal.show .modal-content,
+.catn8-mystery-modal.showing .modal-content {
+  display: block !important;
+  min-width: 1px;
+  min-height: 1px;
+}
+
+.catn8-case-details-dialog {
+  width: 95vw;
+  max-width: 95vw;
+}
+
+.catn8-modal-wide {
+  width: min(98vw, 1800px);
+  max-width: min(98vw, 1800px);
+}
+
+.catn8-mystery-modal .modal-content {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  position: relative;
+}
+
+.catn8-mystery-modal .modal-header {
+  padding-right: 58px;
+}
+
+.catn8-mystery-modal .modal-body {
+  padding: 0;
+}
+
+.catn8-mystery-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  filter: invert(1) grayscale(1);
+  opacity: 0.9;
+}
+
+.catn8-mystery-modal-close:hover {
+  opacity: 1;
+}
+
+.catn8-mystery-modal-card {
+  position: relative;
+}
+
+.catn8-mystery-modal .catn8-mystery-roster-card {
+  background: rgba(0, 0, 0, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.catn8-mystery-modal .form-control,
+.catn8-mystery-modal .form-select {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(246, 240, 227, 0.95);
+}
+
+.catn8-mystery-modal .form-control::placeholder {
+  color: rgba(246, 240, 227, 0.55);
+}
+
+.catn8-mystery-modal .form-label {
+  color: rgba(246, 240, 227, 0.9);
+  font-weight: 800;
+}
+
+.catn8-mystery-modal .catn8-asset-library table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.catn8-mystery-modal .catn8-asset-library .table-responsive {
+  overflow-x: hidden;
+}
+
+.catn8-mystery-modal .catn8-asset-library table th:last-child,
+.catn8-mystery-modal .catn8-asset-library table td:last-child {
+  width: 132px;
+  white-space: nowrap;
+}
+
+.catn8-mystery-modal .catn8-asset-library table td:first-child input.form-control {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catn8-mystery-modal .text-muted,
+.catn8-mystery-modal .form-text {
+  color: rgba(246, 240, 227, 0.65) !important;
+}
+
+.catn8-mystery-modal .btn.btn-primary {
+  background: linear-gradient(180deg, rgba(220, 190, 120, 0.95), rgba(140, 104, 46, 0.95));
+  border: 1px solid rgba(255, 220, 150, 0.55);
+  color: #120f0b;
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+}
+
+.catn8-mystery-modal .btn.btn-outline-secondary,
+.catn8-mystery-modal .btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(246, 240, 227, 0.92);
+}
+
+.catn8-mystery-modal .btn.btn-outline-secondary:hover,
+.catn8-mystery-modal .btn.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.catn8-mystery-modal .table {
+  --bs-table-color: rgba(246, 240, 227, 0.92);
+  --bs-table-bg: transparent;
+  --bs-table-striped-color: rgba(246, 240, 227, 0.92);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+  --bs-table-active-color: rgba(246, 240, 227, 0.92);
+  --bs-table-active-bg: rgba(255, 255, 255, 0.06);
+  --bs-table-hover-color: rgba(246, 240, 227, 0.92);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.06);
+  --bs-table-border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(246, 240, 227, 0.92);
+}
+
+.catn8-mystery-modal .table > :not(caption) > * > * {
+  background-color: transparent;
+}
+
+.catn8-mystery-modal .table thead th {
+  color: rgba(246, 240, 227, 0.92);
+}
+
+.catn8-stacked-modal.catn8-mystery-modal-obscured .modal-dialog {
+  position: relative;
+}
+
+.catn8-stacked-modal.catn8-mystery-modal-obscured .modal-dialog::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 18px;
+  background: #000;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.catn8-stacked-modal.catn8-mystery-modal-obscured {
+  pointer-events: none;
+}

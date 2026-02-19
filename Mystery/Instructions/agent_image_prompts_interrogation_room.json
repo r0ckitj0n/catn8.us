@@ -1,0 +1,58 @@
+[
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 1,
+    "name": "Eleanor Vance",
+    "birthday": "1953-11-04",
+    "interrogation_prompt": "Interrogation room shot of Eleanor Vance, sitting elegantly but looking disgusted at the surroundings, harsh overhead light casting shadows on her aged face, steel table, smoke atmosphere, photorealistic."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 2,
+    "name": "Marcus Sterling",
+    "birthday": "1981-06-02",
+    "interrogation_prompt": "Interrogation room shot of Marcus Sterling, leaning forward aggressively, hands clasped on the metal table, harsh spotlight, dust motes in the air, noir thriller aesthetic."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 3,
+    "name": "Sofia Rodriguez",
+    "birthday": "1993-04-07",
+    "interrogation_prompt": "Interrogation room shot of Sofia Rodriguez, slumped in the metal chair, nervously wiping her hands on her apron, looking away from the camera, dim moody lighting, cinematic."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 4,
+    "name": "Billy Taggart",
+    "birthday": "1989-05-11",
+    "interrogation_prompt": "Interrogation room shot of Billy Taggart, arms crossed defensively, leaning back in the chair, eyes shadowed, harsh lighting, 8k resolution."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 5,
+    "name": "Dr. Aris Thorne",
+    "birthday": "1973-09-08",
+    "interrogation_prompt": "Interrogation room shot of Dr. Aris Thorne, inspecting his own fingernails calmly, sitting perfectly upright, spotlight hitting his glasses, cinematic noir."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 6,
+    "name": "Patricia O'Neil",
+    "birthday": "2001-02-05",
+    "interrogation_prompt": "Interrogation room shot of Patricia O'Neil, cleaning her fingernails, looking bored and unimpressed, low key lighting, noir aesthetic."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 7,
+    "name": "Caleb Hunt",
+    "birthday": "1984-01-12",
+    "interrogation_prompt": "Interrogation room shot of Caleb Hunt, leaning back in chair with feet near table, relaxed posture, cigarette smoke in air, noir atmosphere."
+  },
+  {
+    "interrogation_style_instruction": "A gritty, ultra-realistic color photograph in the style of film noir, bathed in harsh, single-source light from a desk lamp that casts long, deep shadows. There face is a mix of weariness and defiance. Rain streaks a small, high window. The colors are muted and desaturated, with deep blacks, tobacco browns, and sickly greens. The texture of the concrete, fabric and wood is palpable. All sholuld be highly detailed 8k.",
+    "agent_id": 8,
+    "name": "Chloe Kim",
+    "birthday": "1998-12-03",
+    "interrogation_prompt": "Interrogation room shot of Chloe Kim, leaning in as if interrogating the camera, intense focus, smoke and shadow interplay, photorealistic."
+  }
+]

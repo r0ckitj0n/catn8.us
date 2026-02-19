@@ -1,0 +1,61 @@
+# --- Dependencies ---
+node_modules/
+vendor/
+
+# --- Build Outputs ---
+dist/
+build/
+.cache/
+.local/
+hot
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*
+!.env.example
+
+# --- PHP / Runtime ---
+sessions/
+config/secret.key
+
+# --- Deploy / Local Keys ---
+whf_deploy_key
+whf_deploy_key.pub
+catn8-vertex-imagen-*.key.json
+test_api_key.php
+
+# --- SQL / Database ---
+**/*.sql
+*.sql
+*.sqlite
+*.db
+!src/data/database_schema.md
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# --- IDE / OS Junk ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# --- Backups / Reports ---
+backups/**
+/reports/
+!reports/.htaccess
+
+# --- Project docs with sensitive info ---
+/documentation/info.txt

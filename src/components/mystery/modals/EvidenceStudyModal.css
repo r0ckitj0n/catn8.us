@@ -1,0 +1,87 @@
+.catn8-evidence-thumb {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #000;
+  padding: 4px;
+}
+
+.catn8-evidence-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.1) grayscale(0.2);
+}
+
+.catn8-evidence-report-card {
+  background: #f8f9fa !important;
+  color: #212529 !important;
+  border: 1px solid #dee2e6 !important;
+  box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+  font-family: 'Courier New', Courier, monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+.catn8-evidence-report-card::before {
+  content: "TOP SECRET / EVIDENCE";
+  position: absolute;
+  top: 10px;
+  right: -30px;
+  background: #dc3545;
+  color: white;
+  padding: 2px 40px;
+  transform: rotate(45deg);
+  font-size: 10px;
+  font-weight: bold;
+  font-family: sans-serif;
+  z-index: 10;
+}
+
+.catn8-evidence-report-header {
+  border-bottom: 2px solid #212529;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+}
+
+.catn8-evidence-report-title {
+  font-size: 1.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.catn8-evidence-report-meta {
+  font-size: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.catn8-evidence-report-body {
+  line-height: 1.4;
+  font-size: 0.85rem;
+  background-image: radial-gradient(#dee2e6 1px, transparent 1px);
+  background-size: 20px 20px;
+  padding: 10px;
+  border: 1px inset #eee;
+  min-height: 120px;
+}
+
+.catn8-evidence-notes-list {
+  max-height: 150px;
+  overflow-y: auto;
+  padding-right: 8px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.catn8-evidence-note {
+  border-left: 3px solid #6c757d !important;
+  background: white !important;
+  color: #495057 !important;
+  box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
+  margin-bottom: 8px;
+}

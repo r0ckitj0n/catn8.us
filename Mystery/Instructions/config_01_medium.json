@@ -1,0 +1,31 @@
+{
+  "config_id": "medium_01",
+  "parent_scenario_id": "core_01",
+  "difficulty_level": "MEDIUM",
+  "timer_settings": {
+    "start_time_minutes": 180,
+    "wrong_guess_penalty": 30,
+    "search_penalty": 15
+  },
+  "initial_game_state": {
+    "case_type": "MURDER",
+    "body_status": "FOUND_ON_DECK",
+    "weapon_status": "HIDDEN (Stuffed inside a Racing Helmet)",
+    "suspect_secrecy_level": "GUARDED"
+  },
+  "suspect_behavior_modifier": {
+    "lie_frequency": 0.5,
+    "volunteers_clues": false,
+    "requires_trigger_topic": true
+  },
+  "search_requirements": {
+    "Georgia Racing Hall of Fame": "MUST_SEARCH_HELMET_DISPLAY"
+  },
+  "winning_criteria": {
+    "murderer_id": 3,
+    "motive": "Property / Land / Boundary Dispute",
+    "weapon": "Poisoned Drink",
+    "location": "Downtown Dawsonville Square"
+  }
+}
+

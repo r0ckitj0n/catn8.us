@@ -1,0 +1,42 @@
+# AGENTS.md - catn8.us Project Context
+
+## 1. Project Identity & Environment
+- **Project Name:** catn8.us
+- **Developer:** Jon Graves
+- **Live Site:** https://catn8.us
+- **Dev Site (Vite):** http://localhost:5178
+- **Dev Site (Backend):** http://localhost:8888
+- **Database:** MySQL (Single Source of Truth). Do NOT use SQLite.
+- **Codex File Names:** Keep this file named `AGENTS.md` and the ignore file named `.codexignore` so Codex loads them.
+
+## 2. Tech Stack (Strict)
+- **Frontend:** React 18, Vite ^7.0, TypeScript.
+- **Backend:** PHP (API in `/api`, shared logic in `/includes`), MySQL.
+- **Package Manager:** npm / Composer.
+
+## 3. Critical Architecture Protocols
+
+### The "Shared Types" Protocol
+1. **Centralized Storage:** API/data interfaces should live in `src/types/`.
+2. **Workflow:** Define shared request/response types in `src/types/` first, then use in frontend and backend.
+3. **Prohibition:** Do not duplicate API response shapes inside multiple components/hooks.
+
+### App Composition
+- **Entry shell:** `index.html` is the frontend entry shell.
+- **React mount:** React mounts into `#catn8-app`.
+- **Component size:** Large React components should be refactored into `src/components/` and `src/hooks/`.
+
+### Database & Error Handling
+- **Transparency Mandate:** Silent `catch` blocks are prohibited for database/API failures.
+- **Naming:** Tables and columns use snake_case.
+- **Currency:** Use `DECIMAL(10,2)` or integer cents; never `FLOAT`.
+
+## 4. Design & Styling
+- Prefer existing project patterns and shared CSS variables.
+- Avoid unnecessary inline styles.
+- Keep accessibility and semantic HTML standards.
+
+## 5. Repository Hygiene
+- Verify changes with browser preview or `curl` when applicable.
+- Keep runtime artifacts under ignored directories and never commit generated logs/secrets.
+- Do not commit `.env` secrets or private keys.

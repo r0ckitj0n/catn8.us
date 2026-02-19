@@ -1,0 +1,57 @@
+<svg viewBox="0 0 520 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Option 2: Bouncy Playful Text -->
+  <g transform="translate(25, 30)">
+    <!-- Letters with varying baselines and rotations -->
+    <g transform="translate(0,0)">
+      <text x="40" y="45" font-family="Comic Sans MS, cursive" font-size="70" fill="#8A4FFF" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(-5)">c</text>
+    </g>
+    
+    <g transform="translate(60,0)">
+      <text x="40" y="55" font-family="Comic Sans MS, cursive" font-size="70" fill="#FFABE1" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(5)">a</text>
+    </g>
+    
+    <g transform="translate(130,0)">
+      <text x="40" y="40" font-family="Comic Sans MS, cursive" font-size="70" fill="#64DFDF" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(-8)">t</text>
+    </g>
+    
+    <g transform="translate(180,0)">
+      <text x="40" y="60" font-family="Comic Sans MS, cursive" font-size="70" fill="#8A4FFF" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(7)">n</text>
+    </g>
+    
+    <g transform="translate(260,0)">
+      <text x="40" y="45" font-family="Comic Sans MS, cursive" font-size="80" fill="#FFD166" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(-6)">8</text>
+    </g>
+    
+    <g transform="translate(330,0)">
+      <text x="40" y="55" font-family="Comic Sans MS, cursive" font-size="70" fill="#6930C3" 
+            stroke="#6930C3" stroke-width="1">.</text>
+    </g>
+    
+    <g transform="translate(365,0)">
+      <text x="40" y="40" font-family="Comic Sans MS, cursive" font-size="70" fill="#64DFDF" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(-5)">u</text>
+    </g>
+    
+    <g transform="translate(430,0)">
+      <text x="40" y="60" font-family="Comic Sans MS, cursive" font-size="70" fill="#FFABE1" 
+            stroke="#6930C3" stroke-width="2" transform="rotate(8)">s</text>
+    </g>
+    
+    <!-- Stars scattered -->
+    <path d="M110,25 L113,32 L120,32 L115,37 L117,45 L110,40 L103,45 L105,37 L100,32 L107,32 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M300,20 L303,27 L310,27 L305,32 L307,40 L300,35 L293,40 L295,32 L290,27 L297,27 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M470,30 L473,37 L480,37 L475,42 L477,50 L470,45 L463,50 L465,42 L460,37 L467,37 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    
+    <!-- Small balloon accent -->
+    <circle cx="500" cy="20" r="15" fill="#FFABE1" stroke="#6930C3" stroke-width="2" />
+    <path d="M500,35 Q505,45 495,55" stroke="#6930C3" stroke-width="1.5" fill="none" />
+  </g>
+</svg>

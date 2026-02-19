@@ -1,0 +1,52 @@
+<svg viewBox="135 80 230 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cat silhouette - now in violet -->
+  <path d="M250,320
+           C220,320 200,290 200,250
+           C200,210 220,180 250,180
+           C280,180 300,210 300,250
+           C300,290 280,320 250,320 Z" 
+        fill="#8A4FFF" stroke="#6930C3" stroke-width="4"/>
+  
+  <!-- Cat ears -->
+  <path d="M230,190 L220,160 L240,180" fill="#8A4FFF" stroke="#6930C3" stroke-width="3"/>
+  <path d="M270,190 L280,160 L260,180" fill="#8A4FFF" stroke="#6930C3" stroke-width="3"/>
+  
+  <!-- Cat face -->
+  <circle cx="235" cy="225" r="8" fill="#FFFFFF" stroke="#6930C3" stroke-width="2"/> <!-- Left eye -->
+  <circle cx="235" cy="225" r="3" fill="#6930C3"/> <!-- Left pupil -->
+  
+  <circle cx="265" cy="225" r="8" fill="#FFFFFF" stroke="#6930C3" stroke-width="2"/> <!-- Right eye -->
+  <circle cx="265" cy="225" r="3" fill="#6930C3"/> <!-- Right pupil -->
+  
+  <ellipse cx="250" cy="245" rx="5" ry="3" fill="#FF9AE8"/> <!-- Nose -->
+  
+  <path d="M240,260 C245,265 255,265 260,260" stroke="#6930C3" stroke-width="2.5" fill="none"/> <!-- Smile -->
+  
+  <!-- Whiskers -->
+  <line x1="245" y1="250" x2="220" y2="245" stroke="#6930C3" stroke-width="1.5"/>
+  <line x1="245" y1="250" x2="220" y2="250" stroke="#6930C3" stroke-width="1.5"/>
+  <line x1="245" y1="250" x2="220" y2="255" stroke="#6930C3" stroke-width="1.5"/>
+  
+  <line x1="255" y1="250" x2="280" y2="245" stroke="#6930C3" stroke-width="1.5"/>
+  <line x1="255" y1="250" x2="280" y2="250" stroke="#6930C3" stroke-width="1.5"/>
+  <line x1="255" y1="250" x2="280" y2="255" stroke="#6930C3" stroke-width="1.5"/>
+  
+  <!-- Colorful balloons with complementary colors to violet -->
+  <!-- Yellow/Gold Balloon (complementary to violet) -->
+  <circle cx="180" cy="150" r="40" fill="#FFD166" stroke="#6930C3" stroke-width="3"/>
+  <path d="M180,190 Q195,210 220,225" stroke="#6930C3" stroke-width="2.5" fill="none"/>
+  
+  <!-- Teal Balloon (complementary triad with violet) -->
+  <circle cx="320" cy="150" r="40" fill="#64DFDF" stroke="#6930C3" stroke-width="3"/>
+  <path d="M320,190 Q305,210 280,225" stroke="#6930C3" stroke-width="2.5" fill="none"/>
+  
+  <!-- Light Pink Balloon (analogous to violet) -->
+  <circle cx="250" cy="100" r="45" fill="#FFABE1" stroke="#6930C3" stroke-width="3"/>
+  <path d="M250,145 Q250,160 250,190" stroke="#6930C3" stroke-width="2.5" fill="none"/>
+  
+  <!-- Little stars scattered around (whimsical elements) -->
+  <path d="M150,220 L155,230 L165,230 L157,238 L160,250 L150,243 L140,250 L143,238 L135,230 L145,230 Z" fill="#FFE459" stroke="#6930C3" stroke-width="1"/>
+  <path d="M350,220 L355,230 L365,230 L357,238 L360,250 L350,243 L340,250 L343,238 L335,230 L345,230 Z" fill="#FFE459" stroke="#6930C3" stroke-width="1"/>
+  <path d="M200,80 L203,87 L210,87 L205,92 L207,100 L200,95 L193,100 L195,92 L190,87 L197,87 Z" fill="#FFE459" stroke="#6930C3" stroke-width="1"/>
+  <path d="M300,80 L303,87 L310,87 L305,92 L307,100 L300,95 L293,100 L295,92 L290,87 L297,87 Z" fill="#FFE459" stroke="#6930C3" stroke-width="1"/>
+</svg>

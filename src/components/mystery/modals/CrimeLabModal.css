@@ -1,0 +1,75 @@
+.catn8-crime-lab-modal {
+  width: 540px !important;
+  max-width: min(92vw, 540px) !important;
+  max-height: 92vh;
+}
+
+.catn8-crime-lab-modal .modal-content {
+  width: 100%;
+}
+
+.catn8-crime-lab-modal .modal-body {
+  padding: 0;
+}
+
+.catn8-crime-lab-card {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  display: flex;
+  max-height: 540px;
+}
+
+.catn8-crime-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  align-content: center;
+}
+
+@media (max-width: 520px) {
+  .catn8-crime-lab-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.catn8-crime-lab-tile {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  color: rgba(246, 240, 227, 0.92);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: clamp(96px, 16vh, 140px);
+  text-align: center;
+}
+
+.catn8-crime-lab-tile:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.catn8-crime-lab-tile:disabled {
+  opacity: 0.6;
+}
+
+.catn8-crime-lab-tile-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  color: rgba(212, 175, 55, 0.95);
+}
+
+.catn8-crime-lab-tile-label {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}

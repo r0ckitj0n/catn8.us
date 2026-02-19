@@ -1,0 +1,23 @@
+[
+  {
+    "id": "tetris",
+    "title": "Tetris",
+    "description": "Classic block-stacking puzzle game",
+    "href": "tetris-game.php",
+    "image": "images/tetris-preview.jpg"
+  },
+  {
+    "id": "asteroids",
+    "title": "Asteroids",
+    "description": "Classic space shooter game",
+    "href": "asteroids-game.php",
+    "image": "images/asteroids-preview.jpg"
+  },
+  {
+    "id": "frogger",
+    "title": "Frogger",
+    "description": "Help the frog cross the road safely!",
+    "href": "frogger-game.php",
+    "image": "images/frogger-preview.jpg"
+  }
+]

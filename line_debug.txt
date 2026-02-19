@@ -1,0 +1,8 @@
+   775	    } finally {
+   776	      setBusy(false);
+   777	    }
+   778	  }, [isAdmin, mysteryId, masterAssetDetailsItem, masterAssetDetailsType, isCharacter, state.setMasterAssetDetailsFields, state.setMasterAssetDetailsRapport, state.setMasterAssetDetailsFavorites, state.setMasterAssetDetailsData, showMysteryToast, setError, setBusy]);
+   779	
+   780	  const requestMasterAssetDelete = useCallback(({ type, item }: { type: string; item: any }) => {
+   781	    if (!isAdmin) return;
+   782	    if (!item.is_archived) {

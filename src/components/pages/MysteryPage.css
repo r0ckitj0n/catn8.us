@@ -1,0 +1,307 @@
+/* Mystery noir theme (scoped) */
+.catn8-page[data-page="mystery"],
+.catn8-page[data-page="sheriff_station"] {
+  color: #e9e4d7;
+  min-height: 100vh;
+  background: #000;
+}
+
+.catn8-page[data-page="mystery"] .section:nth-child(odd),
+.catn8-page[data-page="mystery"] .section:nth-child(even),
+.catn8-page[data-page="sheriff_station"] .section:nth-child(odd),
+.catn8-page[data-page="sheriff_station"] .section:nth-child(even) {
+  background: radial-gradient(circle at 20% 10%, rgba(255, 250, 240, 0.08), rgba(0, 0, 0, 0.92) 55%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.86), rgba(12, 12, 14, 0.98));
+  color: #e9e4d7;
+}
+
+.catn8-page[data-page="mystery"] .section::before,
+.catn8-page[data-page="sheriff_station"] .section::before {
+  opacity: 0;
+}
+
+.catn8-page[data-page="mystery"] .section,
+.catn8-page[data-page="sheriff_station"] .section {
+  position: relative;
+  min-height: 100vh;
+  background: transparent;
+}
+
+.catn8-page[data-page="mystery"] .section::after,
+.catn8-page[data-page="sheriff_station"] .section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 45% 18%, rgba(255, 233, 186, 0.12), rgba(0, 0, 0, 0) 55%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0, rgba(255, 255, 255, 0.02) 1px, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0) 6px);
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+}
+
+.catn8-page[data-page="mystery"] .section-title,
+.catn8-page[data-page="mystery"] h1,
+.catn8-page[data-page="mystery"] h2,
+.catn8-page[data-page="mystery"] h3,
+.catn8-page[data-page="sheriff_station"] .section-title,
+.catn8-page[data-page="sheriff_station"] h1,
+.catn8-page[data-page="sheriff_station"] h2,
+.catn8-page[data-page="sheriff_station"] h3 {
+  color: #f6f0e3;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0.6px;
+}
+
+.catn8-page[data-page="mystery"] .lead,
+.catn8-page[data-page="sheriff_station"] .lead {
+  color: rgba(233, 228, 215, 0.92);
+}
+
+.catn8-page[data-page="mystery"] .btn.btn-primary,
+.catn8-page[data-page="sheriff_station"] .btn.btn-primary {
+  background: linear-gradient(180deg, rgba(220, 190, 120, 0.95), rgba(140, 104, 46, 0.95));
+  border: 1px solid rgba(255, 220, 150, 0.55);
+  color: #120f0b;
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+}
+
+.catn8-page[data-page="mystery"] .btn.btn-primary:hover,
+.catn8-page[data-page="sheriff_station"] .btn.btn-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.catn8-page[data-page="mystery"] .btn.btn-outline-secondary,
+.catn8-page[data-page="mystery"] .btn.btn-secondary,
+.catn8-page[data-page="sheriff_station"] .btn.btn-outline-secondary,
+.catn8-page[data-page="sheriff_station"] .btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(246, 240, 227, 0.92);
+}
+
+.catn8-page[data-page="mystery"] .btn.btn-outline-secondary:hover,
+.catn8-page[data-page="mystery"] .btn.btn-secondary:hover,
+.catn8-page[data-page="sheriff_station"] .btn.btn-outline-secondary:hover,
+.catn8-page[data-page="sheriff_station"] .btn.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.catn8-page[data-page="mystery"] .catn8-card,
+.catn8-page[data-page="mystery"] .story-card,
+.catn8-page[data-page="mystery"] .game-card,
+.catn8-page[data-page="mystery"] .catn8-ws-toolbar,
+.catn8-page[data-page="sheriff_station"] .catn8-card,
+.catn8-page[data-page="sheriff_station"] .story-card,
+.catn8-page[data-page="sheriff_station"] .game-card,
+.catn8-page[data-page="sheriff_station"] .catn8-ws-toolbar {
+  background: rgba(10, 10, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.catn8-page[data-page="mystery"] .form-control,
+.catn8-page[data-page="mystery"] .form-select,
+.catn8-page[data-page="sheriff_station"] .form-control,
+.catn8-page[data-page="sheriff_station"] .form-select {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(246, 240, 227, 0.95);
+}
+
+.catn8-page[data-page="mystery"] .form-control::placeholder,
+.catn8-page[data-page="sheriff_station"] .form-control::placeholder {
+  color: rgba(246, 240, 227, 0.55);
+}
+
+.catn8-page[data-page="mystery"] .form-label,
+.catn8-page[data-page="sheriff_station"] .form-label {
+  color: rgba(246, 240, 227, 0.9);
+  font-weight: 800;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-meta {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-home-subtitle {
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log {
+  height: 100%;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log-scroll {
+  height: 520px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-tools-log-scroll {
+  max-height: 1500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-tools-log-scroll td,
+.catn8-page[data-page="mystery"] .catn8-mystery-tools-log-scroll th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-tools-log-col-error {
+  width: 28%;
+  max-width: 520px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log-line {
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log-line:last-child {
+  border-bottom: 0;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log-speaker {
+  font-weight: 900;
+  color: rgba(255, 220, 150, 0.92);
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-investigation-log-text {
+  white-space: pre-wrap;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-log-col-time {
+  width: 180px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-log-col-role {
+  width: 130px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-log-col-provider {
+  width: 140px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-log-text {
+  white-space: pre-wrap;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  word-break: break-all;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-tile {
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(246, 240, 227, 0.95);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-tile:hover {
+  background: rgba(0, 0, 0, 0.36);
+  transform: translateY(-1px);
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-name {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  line-height: 1.15;
+}
+
+.catn8-page[data-page="mystery"] .catn8-mystery-cast-role {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.catn8-page[data-page="mystery"] .container {
+  background: transparent;
+}
+
+/* Admin Command Console Neon Styling */
+.admin-console-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-console-btn:hover {
+  transform: translateY(-5px) scale(1.02) !important;
+  box-shadow: 0 0 25px rgba(13, 202, 240, 0.6) !important;
+  background: rgba(13, 202, 240, 0.15) !important;
+  border-color: #0dcaf0 !important;
+}
+
+.admin-console-btn:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.admin-console-btn i {
+  text-shadow: 0 0 10px rgba(13, 202, 240, 0.5);
+}
+
+@keyframes admin-pulse {
+  0% { box-shadow: 0 0 10px rgba(13, 202, 240, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(13, 202, 240, 0.4); }
+  100% { box-shadow: 0 0 10px rgba(13, 202, 240, 0.2); }
+}
+
+.catn8-card.border-info {
+  animation: admin-pulse 3s infinite ease-in-out;
+}
+
+@media (max-width: 992px) {
+  .catn8-page[data-page="mystery"] .catn8-mystery-interrogation-body {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .catn8-page[data-page="mystery"] .catn8-mystery-interrogation-left,
+  .catn8-page[data-page="mystery"] .catn8-mystery-interrogation-right {
+    flex: 0 0 auto;
+  }
+
+  .catn8-page[data-page="mystery"] .catn8-mystery-interrogation-content {
+    height: auto;
+  }
+}

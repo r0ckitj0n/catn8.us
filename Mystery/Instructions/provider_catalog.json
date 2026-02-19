@@ -1,0 +1,369 @@
+{
+  "schema_version": "1.0",
+  "retrieved_on": "2025-12-15",
+  "currency": "USD",
+  "providers": [
+    {
+      "id": "google_gemini_api",
+      "display_name": "Google Gemini API",
+      "services": ["conversation"],
+      "capabilities": {
+        "modes": ["text", "realtime_audio"],
+        "notes": [
+          "Free/Paid/Enterprise tiers exist.",
+          "Paid tier supports higher rate limits, context caching, and Batch API with advertised 50% cost reduction."
+        ]
+      },
+      "pricing": {
+        "billing_unit": "tokens",
+        "price_table": null,
+        "notes": [
+          "Token pricing varies by model and can change. Store/display the provider's official pricing table when available.",
+          "This catalog includes the official tier and feature notes, and the Gemini-TTS token pricing separately under google_gemini_tts and google_cloud_tts."
+        ]
+      },
+      "source_urls": ["https://ai.google.dev/gemini-api/docs/pricing"]
+    },
+    {
+      "id": "anthropic_claude_api",
+      "display_name": "Anthropic Claude API",
+      "services": ["conversation"],
+      "capabilities": {
+        "modes": ["text"],
+        "notes": [
+          "Prompt caching can reduce cost for repeated prompts.",
+          "Batch processing is available for asynchronous workloads."
+        ]
+      },
+      "pricing": {
+        "billing_unit": "tokens",
+        "example_models": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input_per_million_tokens": 3.0,
+            "output_per_million_tokens": 15.0,
+            "notes": [
+              "Official product page states pricing starts at these rates; exact pricing may vary by features (prompt caching, batch) and platform."
+            ]
+          }
+        ],
+        "notes": [
+          "Prices are per 1,000,000 tokens unless stated otherwise.",
+          "Output tokens are typically more expensive than input tokens."
+        ]
+      },
+      "source_urls": [
+        "https://www.anthropic.com/claude/sonnet",
+        "https://platform.claude.com/docs/en/about-claude/pricing"
+      ]
+    },
+    {
+      "id": "openai_api",
+      "display_name": "OpenAI API",
+      "services": ["conversation", "stt", "tts"],
+      "capabilities": {
+        "notes": [
+          "Supports token-billed text/chat models as well as speech-to-text and text-to-speech.",
+          "Cached input tokens (when supported) can significantly reduce costs when re-sending the same context."
+        ]
+      },
+      "pricing": {
+        "provenance": {
+          "type": "user_provided",
+          "provided_on": "2025-12-15",
+          "notes": [
+            "OpenAI pricing pages were not retrievable from this environment (Forbidden), so these figures were added from user-provided pricing output.",
+            "Verify against official OpenAI docs before making production billing decisions."
+          ]
+        },
+        "conversation": {
+          "billing_unit": "tokens",
+          "per_million_tokens": {
+            "gpt-5.2": {
+              "input": 1.75,
+              "cached_input": 0.175,
+              "output": 14.0
+            },
+            "gpt-5.2-chat-latest": {
+              "input": 1.75,
+              "cached_input": 0.175,
+              "output": 14.0
+            },
+            "gpt-5.2-pro": {
+              "input": 21.0,
+              "output": 168.0
+            }
+          },
+          "notes": [
+            "Prices are per 1,000,000 tokens unless stated otherwise.",
+            "Cached input tokens are listed as a discounted rate when applicable."
+          ]
+        },
+        "stt": {
+          "billing_unit": "minutes",
+          "per_minute": {
+            "whisper": 0.006,
+            "gpt-4o-transcribe": 0.006,
+            "gpt-4o-transcribe-diarize": 0.006,
+            "gpt-4o-mini-transcribe": 0.003
+          },
+          "notes": [
+            "Speech-to-text is priced per audio minute (not tokens) in the user-provided pricing."
+          ]
+        },
+        "tts": {
+          "billing_unit": "characters",
+          "per_million_characters": {
+            "standard": 15.0,
+            "hd": 30.0
+          },
+          "notes": [
+            "Text-to-speech is priced per character in the user-provided pricing."
+          ]
+        }
+      },
+      "source_urls": ["user_provided"],
+      "source_notes": [
+        "User pasted pricing labeled as 'latest official OpenAI API pricing (as of December 2025)'."
+      ]
+    },
+    {
+      "id": "google_cloud_tts",
+      "display_name": "Google Cloud Text-to-Speech",
+      "services": ["tts"],
+      "capabilities": {
+        "billing_unit": "characters",
+        "notes": [
+          "Supports multiple voice types (Standard, WaveNet, Neural2, Studio, Chirp).",
+          "Common controls: speaking rate, pitch, audio encoding, language/voice selection.",
+          "Character count includes spaces/newlines; SSML tags are generally included in character count (per official pricing notes)."
+        ]
+      },
+      "pricing": {
+        "billing_unit": "characters",
+        "per_million_characters": {
+          "standard": 4,
+          "wavenet": 4,
+          "neural2": 16,
+          "studio": 160,
+          "chirp3_hd": 30,
+          "instant_custom_voice": 60
+        },
+        "free_tier": {
+          "standard_and_wavenet": "Up to 4 million characters/month",
+          "neural2": "Up to 1 million characters/month",
+          "studio": "Up to 1 million characters/month",
+          "chirp3_hd": "Up to 1 million characters"
+        },
+        "notes": [
+          "Voice type availability varies by language/region."
+        ]
+      },
+      "source_urls": ["https://cloud.google.com/text-to-speech/pricing"]
+    },
+    {
+      "id": "google_gemini_tts",
+      "display_name": "Gemini-TTS (token-priced TTS)",
+      "services": ["tts"],
+      "capabilities": {
+        "billing_unit": "tokens",
+        "notes": [
+          "Token-priced TTS models; audio tokens correspond to 25 tokens per second of audio (per official pricing).",
+          "Designed for controllable speech generation via prompting."
+        ]
+      },
+      "pricing": {
+        "billing_unit": "tokens",
+        "models": [
+          {
+            "model": "Gemini 2.5 Flash TTS",
+            "input_per_million_text_tokens": 0.5,
+            "output_per_million_audio_tokens": 10.0
+          },
+          {
+            "model": "Gemini 2.5 Pro TTS",
+            "input_per_million_text_tokens": 1.0,
+            "output_per_million_audio_tokens": 20.0
+          }
+        ],
+        "notes": [
+          "Audio tokens correspond to 25 tokens per second of audio."
+        ]
+      },
+      "source_urls": ["https://cloud.google.com/text-to-speech/pricing"]
+    },
+    {
+      "id": "aws_polly",
+      "display_name": "AWS Amazon Polly",
+      "services": ["tts"],
+      "capabilities": {
+        "billing_unit": "characters",
+        "notes": [
+          "Supports Standard, Neural, Generative, and Long-Form voice engines.",
+          "Supports SSML and speech marks."
+        ]
+      },
+      "pricing": {
+        "billing_unit": "characters",
+        "per_million_characters": {
+          "standard": 4,
+          "neural": 16,
+          "generative": 30,
+          "long_form": 100
+        },
+        "free_tier": {
+          "standard": "5 million characters/month for first 12 months",
+          "neural": "1 million characters/month for first 12 months",
+          "long_form": "500k characters/month for first 12 months",
+          "generative": "100k characters/month for first 12 months"
+        }
+      },
+      "source_urls": ["https://aws.amazon.com/polly/pricing/"]
+    },
+    {
+      "id": "elevenlabs",
+      "display_name": "ElevenLabs",
+      "services": ["tts", "stt"],
+      "capabilities": {
+        "tts": {
+          "billing_unit": "credits",
+          "notes": [
+            "TTS is credits-based; credit usage depends on model."
+          ],
+          "common_controls": ["speed", "stability", "similarity", "style"]
+        },
+        "stt": {
+          "billing_unit": "hours",
+          "notes": [
+            "STT pricing is published per subscription tier with included hours and additional-hour rates.",
+            "Free tier requires attribution and does not have commercial licensing (per pricing note)."
+          ]
+        }
+      },
+      "pricing": {
+        "provenance": {
+          "type": "mixed",
+          "notes": [
+            "Subscription tier prices/credits and approximate included TTS minutes were provided by the user.",
+            "STT additional-hour examples were sourced from ElevenLabs docs content previously retrieved in this environment.",
+            "Verify against ElevenLabs pricing pages before making production billing decisions."
+          ],
+          "user_provided": {
+            "provided_on": "2025-12-15"
+          }
+        },
+        "subscription_tiers": {
+          "billing_unit": "credits",
+          "credit_notes": [
+            "One credit typically equals one character of TTS, but usage can vary by model/quality settings.",
+            "Speech-to-text and Agents usage can also consume credits, typically based on duration."
+          ],
+          "tiers": {
+            "free": {
+              "monthly_price": 0,
+              "credits_per_month": 10000,
+              "approx_tts_minutes_included": 10
+            },
+            "starter": {
+              "monthly_price": 5,
+              "credits_per_month": 30000,
+              "approx_tts_minutes_included": 30
+            },
+            "creator": {
+              "monthly_price": 22,
+              "credits_per_month": 100000,
+              "approx_tts_minutes_included": 100
+            },
+            "pro": {
+              "monthly_price": 99,
+              "credits_per_month": 500000,
+              "approx_tts_minutes_included": 500
+            },
+            "scale": {
+              "monthly_price": 330,
+              "credits_per_month": 2000000,
+              "approx_tts_minutes_included": 2000,
+              "seats_included": 3
+            },
+            "business": {
+              "monthly_price": 1320,
+              "credits_per_month": 11000000,
+              "approx_tts_minutes_included": 11000,
+              "seats_included": 5
+            },
+            "enterprise": {
+              "monthly_price": null,
+              "credits_per_month": null,
+              "approx_tts_minutes_included": null,
+              "notes": ["Custom pricing; contact ElevenLabs sales."]
+            }
+          },
+          "notes": [
+            "Pricing and credit amounts may vary by region and billing cycle (monthly vs annual).",
+            "Credit rollover may apply depending on plan terms.",
+            "Usage-based billing may be available on some tiers for purchasing extra credits."
+          ]
+        },
+        "stt_examples": {
+          "scribe_v1_developer_api": {
+            "creator": { "price_per_additional_hour": 0.48 },
+            "pro": { "price_per_additional_hour": 0.4 },
+            "scale": { "price_per_additional_hour": 0.33 },
+            "business": { "price_per_additional_hour": 0.22 }
+          },
+          "scribe_v2_realtime_developer_api": {
+            "creator": { "price_per_additional_hour": 0.63 },
+            "pro": { "price_per_additional_hour": 0.53 },
+            "scale": { "price_per_additional_hour": 0.46 },
+            "business": { "price_per_additional_hour": 0.39 }
+          }
+        },
+        "tts_notes": [
+          "This catalog includes user-provided monthly tier prices/credits and approximate included TTS minutes.",
+          "If you want a deterministic USD-per-1K-credits estimate for budgeting, compute it from tier price divided by included credits (note: this ignores seats, non-TTS usage, rollovers, and model-dependent credit burn)."
+        ]
+      },
+      "source_urls": ["https://elevenlabs.io/docs/llms-full.txt"]
+    },
+    {
+      "id": "deepgram",
+      "display_name": "Deepgram",
+      "services": ["stt", "tts"],
+      "capabilities": {
+        "notes": [
+          "Pricing page advertises $200 free credit then pay-as-you-go.",
+          "Provides STT, TTS, and voice agent offerings; concurrency limits vary by plan."
+        ]
+      },
+      "pricing": {
+        "notes": [
+          "This catalog does not include specific per-minute/per-character rates because they are not presented in a machine-readable way on the public pricing page content we retrieved.",
+          "If you want hard numbers shown in the UI, we should add them manually after confirming the exact SKUs you plan to use."
+        ]
+      },
+      "source_urls": ["https://deepgram.com/pricing"]
+    }
+  ],
+  "selection_guide": {
+    "conversation": {
+      "rules_of_thumb": [
+        "For lowest latency interactive play, prefer models/providers with realtime audio or streaming support.",
+        "For best reasoning and fewer loopholes, prefer stronger reasoning models even if slightly slower.",
+        "Use batch/async modes when generating non-interactive content (backstory generation, summaries, etc.)."
+      ]
+    },
+    "tts": {
+      "rules_of_thumb": [
+        "Character-priced engines are predictable for budget planning; token-priced engines can be better for expressive/steerable speech.",
+        "If you need consistent character voices, choose a provider with strong voice libraries or cloning/remixing tools.",
+        "Expose a 'Preview voice' function in the admin UI so configuration is self-serve."
+      ]
+    },
+    "stt": {
+      "rules_of_thumb": [
+        "For group play with background noise, prioritize models that perform well on conversational audio and support diarization if needed.",
+        "Make language selection explicit (en-US, es-US, etc.) for best accuracy."
+      ]
+    }
+  }
+}

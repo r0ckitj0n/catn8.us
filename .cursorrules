@@ -1,0 +1,40 @@
+# .cursorrules (catn8.us)
+
+## Environment Information (Persistent)
+- **Dev Site (Vite):** http://localhost:5178
+- **Dev Site (Backend):** http://localhost:8888
+- **Live Site:** https://catn8.us
+- **Credentials:** Never store plaintext credentials in repo rules. Use `.env` and local secret stores only.
+
+## Tech Stack
+- PHP (API endpoints in `/api`, shared libraries in `/includes`)
+- TypeScript + React (Vite-built frontend)
+- JavaScript (tooling scripts)
+- CSS (Vite-managed)
+
+## Front-end / Build
+- Vite `^7.x` (build output to `dist/`, manifest enabled)
+- React `^18`
+- React Router dependency is available if route-level React navigation is needed
+
+## Server / Runtime
+- Local development database is **MySQL**
+- PHP endpoints should use centralized config/bootstrap files
+
+## Security Baseline
+- Every mutating endpoint must enforce explicit auth
+- Mutating actions must use `POST`/`PUT`/`DELETE`, not `GET`
+- Validate and normalize all external input at endpoint boundaries
+- Parameterize all untrusted SQL values
+- Never commit secrets or raw private keys
+
+## Coding Guidelines
+- Keep shared API/data interfaces in `src/types/`
+- Avoid explicit `any` where practical
+- Use semantic interactive HTML elements (`button`, `a`)
+- Keep console/debug noise out of committed code
+
+## Critical Constraints
+- Use `src/core/ApiClient.ts` for frontend API requests
+- Keep `index.html` as the frontend entry shell
+- Do not add silent fallbacks that hide backend errors

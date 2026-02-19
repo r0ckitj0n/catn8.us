@@ -1,0 +1,41 @@
+{
+  "scenario_id": "core_01",
+  "title": "Murder at Amicalola",
+  "setting": "Dawson County, GA",
+  "narrative_summary": "Local land developer Julian Sterling hosted his annual 'New Year's Moonshine Gala'. At midnight, he toasted to a controversial new deal near the Etowah River. By 2:00 AM, the lodge is on lockdown. It's pouring rain outside.",
+  "victim": {
+    "name": "Julian Sterling",
+    "role": "Land Developer & Host",
+    "cause_of_death": "Cyanide Poisoning (Spiked Moonshine)",
+    "time_of_death": "01:15 AM"
+  },
+  "evidence_database": {
+    "weapon": {
+      "name": "Poisoned Drink",
+      "description": "A drink spiked with cyanide. Smells faintly of peaches and bitter almonds.",
+      "fingerprints": ["Sofia Rodriguez", "Julian Sterling"]
+    },
+    "body": {
+      "state": "Collapsed, signs of asphyxiation, red clay mud on boots.",
+      "clothing": "Tuxedo with a vintage Bill Elliott racing lapel pin."
+    }
+  },
+  "locations": [
+    "Downtown Dawsonville Square",
+    "Georgia Racing Hall of Fame",
+    "Dawson County Courthouse",
+    "Dawson County Jail (Historic)",
+    "North Georgia Premium Outlets",
+    "Amicalola Falls State Park",
+    "Amicalola Falls Visitor Center",
+    "Burt's Pumpkin Farm",
+    "Veterans Memorial Park",
+    "Rock Creek Sports Complex",
+    "War Hill Park (Lake Lanier)",
+    "Toto Creek Park (Lake Lanier)",
+    "Thompson Creek Park (Lake Lanier)",
+    "Nix Bridge Park (Lake Lanier)",
+    "Dawson Forest Wildlife Management Area"
+  ]
+}
+

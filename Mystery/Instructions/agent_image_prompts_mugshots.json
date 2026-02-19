@@ -1,0 +1,58 @@
+[
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 1,
+    "name": "Eleanor Vance",
+    "birthday": "1953-11-04",
+    "mugshot_prompt": "Mugshot of elderly wealthy matriarch Eleanor Vance, haughty expression, wearing a sharp black blazer and pearls, silver hair in a tight bun, holding police slate, 1940s noir style lighting, highly detailed 8k."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 2,
+    "name": "Marcus Sterling",
+    "birthday": "1981-06-02",
+    "mugshot_prompt": "Mugshot of Marcus Sterling, frantic businessman, expensive bespoke suit with loosened tie, slicked back hair, sweat on brow, holding police slate, harsh precinct lighting, photorealistic 8k."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 3,
+    "name": "Sofia Rodriguez",
+    "birthday": "1993-04-07",
+    "mugshot_prompt": "Mugshot of Sofia Rodriguez, wearing chef whites, hair messy from a long shift, defiant and intense expression, holding police slate, stark side lighting, photorealistic 8k."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 4,
+    "name": "Billy Taggart",
+    "birthday": "1989-05-11",
+    "mugshot_prompt": "Mugshot of Billy Taggart, rough pit crew chief, wearing a grease-stained mechanic shirt, stubble, angry scowl, holding police slate, high contrast noir lighting, highly detailed texture."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 5,
+    "name": "Dr. Aris Thorne",
+    "birthday": "1973-09-08",
+    "mugshot_prompt": "Mugshot of Dr. Aris Thorne, wearing a pristine expensive dress shirt, rimless glasses, emotionless cold stare, holding police slate, clinical lighting, photorealistic."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 6,
+    "name": "Patricia O'Neil",
+    "birthday": "2001-02-05",
+    "mugshot_prompt": "Mugshot of Patricia O'Neil, bartender, black vest, cynical smirk, messy bun, holding police slate, stark lighting, photorealistic texture."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 7,
+    "name": "Caleb Hunt",
+    "birthday": "1984-01-12",
+    "mugshot_prompt": "Mugshot of Caleb Hunt, rugged mountain guide, flannel shirt, beard, relaxed smirk, holding police slate, warm side lighting, highly detailed."
+  },
+  {
+    "mugshot_style_instruction": "Please create a gritty, black and white photograph in a film noir style of this person's mugshot. Their face is partially shadowed, with a stern, weary expression. The background is a dark, textured concrete wall with a height chart. The lighting is harsh and directional, creating deep shadows.",
+    "agent_id": 8,
+    "name": "Chloe Kim",
+    "birthday": "1998-12-03",
+    "mugshot_prompt": "Mugshot of Chloe Kim, journalist, leather jacket, sharp observant eyes, notebook in pocket, holding police slate, noir lighting, 8k."
+  }
+]

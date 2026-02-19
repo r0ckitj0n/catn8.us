@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ensure Vite dev marker does not interfere with production-like builds.
+# This file is intentionally ignored by git, but can still confuse local behavior.
+if [ -f "hot" ]; then
+  echo "[pre-commit] Removing ./hot (Vite dev marker)" >&2
+  rm -f hot
+fi

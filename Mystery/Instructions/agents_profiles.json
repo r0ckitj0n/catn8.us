@@ -1,0 +1,394 @@
+[
+  {
+    "id": 1,
+    "name": "Eleanor Vance",
+    "voice_id": "female_mature_southern",
+    "image_path": "agent1.png",
+    "static_profile": {
+      "demographics": {
+        "age": 72,
+        "birthday": "1953-11-04",
+        "hometown": "Savannah, GA",
+        "ethnicity": "White",
+        "zodiac": "Scorpio"
+      },
+      "appearance": {
+        "height": "5'5\"",
+        "style": "Old Money Classic, sharp black blazer, always wearing pearls.",
+        "distinguishing_marks": "Surgical scar on left knee from a tennis injury in '82."
+      },
+      "psychology": {
+        "mbti": "ENTJ (The Commander)",
+        "phobia": "Peniaphobia (Fear of poverty/losing status)",
+        "tech_literacy": "Low (Uses an iPad only for email and solitaire).",
+        "political_leaning": "Old Guard Conservative (Land rights above all).",
+        "childhood_memory": "Winning the Savannah Debutante Ball in 1971, which she mentions constantly."
+      },
+      "background": {
+        "education": "B.A. Art History, UGA (1975)",
+        "criminal_record": "Clean.",
+        "employment": ["Chairwoman of the Vance Trust (1985-Present)", "Board Member of the Atlanta Opera."],
+        "financials": {
+          "income": "Passive ($450k/year from Trust)",
+          "assets": "Vance Estate, 1968 Mercedes SL (Convertible)",
+          "debt_vulnerability": "Critical. She is legally bankrupt but hiding it to maintain social status."
+        }
+      },
+      "favorites": {
+        "drink": "Gin and Tonic (No Lime, specifically Tanqueray)",
+        "food": "Lobster Bisque",
+        "hobby": "Bird-watching (specifically raptors)"
+      },
+      "daily_routine": "Wakes at 6 AM, tea on the veranda, calls her broker to yell at him, naps at 2 PM."
+    }
+  },
+  {
+    "id": 2,
+    "name": "Marcus Sterling",
+    "voice_id": "male_middle_aged_business",
+    "image_path": "agent2.png",
+    "static_profile": {
+      "demographics": {
+        "age": 44,
+        "birthday": "1981-06-02",
+        "hometown": "Atlanta, GA (Buckhead)",
+        "ethnicity": "White",
+        "zodiac": "Gemini"
+      },
+      "appearance": {
+        "height": "5'10\"",
+        "style": "Bespoke Italian suits, loosened tie, constantly sweating.",
+        "distinguishing_marks": "Nervous tic in left eye when lying."
+      },
+      "psychology": {
+        "mbti": "ESTP (The Entrepreneur)",
+        "phobia": "Failure / Being ignored",
+        "tech_literacy": "High (Obsessed with crypto and day-trading apps).",
+        "political_leaning": "Libertarian (Anti-tax, anti-regulation).",
+        "childhood_memory": "Julian locking him in the wine cellar during a thunderstorm."
+      },
+      "background": {
+        "education": "MBA, Emory University (2004)",
+        "criminal_record": "Sealed (DUI charge in 2010, disappeared by family lawyers).",
+        "employment": ["CFO of Sterling Development (Nepotism hire)"],
+        "financials": {
+          "income": "$250k/year (Salary)",
+          "assets": "Leased Porsche 911, Condo in Midtown",
+          "debt_vulnerability": "Catastrophic. Owes $2.5M to 'The Atlanta Syndicate' (Loan Sharks)."
+        }
+      },
+      "favorites": {
+        "drink": "Macallan 18, Neat (drank too fast)",
+        "food": "Rare Steak",
+        "hobby": "High-stakes Poker"
+      },
+      "daily_routine": "Wakes at 10 AM, checks crypto markets, ignores calls from unknown numbers, drinks lunch."
+    }
+  },
+  {
+    "id": 3,
+    "name": "Sofia Rodriguez",
+    "voice_id": "female_young_hispanic",
+    "image_path": "agent3.png",
+    "static_profile": {
+      "demographics": {
+        "age": 32,
+        "birthday": "1993-04-07",
+        "hometown": "Miami, FL",
+        "ethnicity": "Latina (Cuban-American)",
+        "zodiac": "Aries"
+      },
+      "appearance": {
+        "height": "5'7\"",
+        "style": "Chef whites, sleeves rolled up, messy bun.",
+        "distinguishing_marks": "Large burn scar on right forearm from a grease fire."
+      },
+      "psychology": {
+        "mbti": "ISTP (The Virtuoso)",
+        "phobia": "Mediocrity",
+        "tech_literacy": "Moderate (Uses kitchen inventory software).",
+        "political_leaning": "Progressive (Focus on labor rights).",
+        "childhood_memory": "Cooking Mole with her Abuela, the recipe Julian stole."
+      },
+      "background": {
+        "education": "Le Cordon Bleu, Paris (Dropped out)",
+        "criminal_record": "Assault charge (Bar fight, 2018).",
+        "employment": ["Head Chef at The Lodge", "Former Owner of 'Sofia's Table' (Bankrupt)."],
+        "financials": {
+          "income": "$65k/year",
+          "assets": "Vintage Knife Set ($5k value)",
+          "debt_vulnerability": "High. Paying off legal fees from the lawsuit against Julian."
+        }
+      },
+      "favorites": {
+        "drink": "Mezcal, straight",
+        "food": "Street Tacos (Al Pastor)",
+        "hobby": "Kickboxing"
+      },
+      "daily_routine": "Wakes at 4 AM for market prep, screams at suppliers, cooks for 12 hours, passes out."
+    }
+  },
+  {
+    "id": 4,
+    "name": "Billy Taggart",
+    "voice_id": "male_rough_southern",
+    "image_path": "agent4.png",
+    "static_profile": {
+      "demographics": {
+        "age": 36,
+        "birthday": "1989-05-11",
+        "hometown": "Dawsonville, GA",
+        "ethnicity": "White",
+        "zodiac": "Taurus"
+      },
+      "appearance": {
+        "height": "6'2\"",
+        "style": "Grease-stained polo shirt, mesh trucker hat, work boots.",
+        "distinguishing_marks": "Knuckles tattooed with 'FAST' and 'LOUD'."
+      },
+      "psychology": {
+        "mbti": "ISFJ (The Defender)",
+        "phobia": "Claustrophobia (Hates small cells).",
+        "tech_literacy": "Specialized (Can reprogram a car ECU but barely use a smartphone).",
+        "political_leaning": "Apolitical (Hates all politicians).",
+        "childhood_memory": "Watching Bill Elliott race at the Atlanta Motor Speedway with his dad."
+      },
+      "background": {
+        "education": "Dawson County High (GED)",
+        "criminal_record": "Several speeding tickets, one 'Disturbing the Peace'.",
+        "employment": ["Pit Chief for Sterling Racing (Until last week)."],
+        "financials": {
+          "income": "$85k/year (Formerly)",
+          "assets": "1970 Chevelle SS (Heavily Modified)",
+          "debt_vulnerability": "Low. He lives in a trailer but owns it outright."
+        }
+      },
+      "favorites": {
+        "drink": "Sweet Tea or Miller High Life",
+        "food": "BBQ Ribs",
+        "hobby": "Drag Racing"
+      },
+      "daily_routine": "Wakes at 5 AM, works on the truck, drives to the track, drinks beer at The Pool Room."
+    }
+  },
+  {
+    "id": 5,
+    "name": "Dr. Aris Thorne",
+    "voice_id": "male_refined_british",
+    "image_path": "agent5.png",
+    "static_profile": {
+      "demographics": {
+        "age": 52,
+        "birthday": "1973-09-08",
+        "hometown": "Boston, MA",
+        "ethnicity": "White",
+        "zodiac": "Virgo"
+      },
+      "appearance": {
+        "height": "5'11\"",
+        "style": "Clinical Chic. Pristine dress shirt, rimless glasses.",
+        "distinguishing_marks": "Always wears latex gloves when touching anything public."
+      },
+      "psychology": {
+        "mbti": "INTJ (The Architect)",
+        "phobia": "Mysophobia (Germs) - Severe.",
+        "tech_literacy": "High (Uses advanced medical diagnostics).",
+        "political_leaning": "Establishment (Pro-Pharma).",
+        "childhood_memory": "Dissecting a frog perfectly in 3rd grade while other kids cried."
+      },
+      "background": {
+        "education": "MD, Harvard Medical School (1998)",
+        "criminal_record": "Clean (Hidden malpractice settlements).",
+        "employment": ["Concierge Doctor for North Georgia's Elite."],
+        "financials": {
+          "income": "$1.2M/year",
+          "assets": "Lake Lanier House, Tesla Model S",
+          "debt_vulnerability": "Low. Very wealthy but being blackmailed for over-prescribing."
+        }
+      },
+      "favorites": {
+        "drink": "Sparkling Water with a lemon twist",
+        "food": "Sushi (Owe-makase only)",
+        "hobby": "Collecting rare medical instruments"
+      },
+      "daily_routine": "Wakes at 5:30 AM, 10k run, reviews patient charts, ignores ethics board emails."
+    }
+  },
+  {
+    "id": 6,
+    "name": "Patricia O'Neil",
+    "voice_id": "female_young_cynical",
+    "image_path": "agent6.png",
+    "static_profile": {
+      "demographics": {
+        "age": 24,
+        "birthday": "2001-02-05",
+        "hometown": "Boston, MA (Southie)",
+        "ethnicity": "White (Irish-American)",
+        "zodiac": "Aquarius"
+      },
+      "appearance": {
+        "height": "5'4\"",
+        "style": "Service Industry Black. Vest, messy bun, ironic pins.",
+        "distinguishing_marks": "Nose ring (septum)."
+      },
+      "psychology": {
+        "mbti": "INTP (The Logician)",
+        "phobia": "Being stuck in a dead-end job.",
+        "tech_literacy": "High (Digital native, runs a meme page).",
+        "political_leaning": "Anarchist-lite.",
+        "childhood_memory": "Sneaking into Fenway Park without a ticket."
+      },
+      "background": {
+        "education": "Pursuing Masters in Psychology at Emory.",
+        "criminal_record": "Clean.",
+        "employment": ["Bartender at Sterling Lodge", "Research Assistant"],
+        "financials": {
+          "income": "$30k/year (Tips)",
+          "assets": "2012 Honda Civic",
+          "debt_vulnerability": "High. $80k in Student Loans."
+        }
+      },
+      "favorites": {
+        "drink": "PBR (Ironically)",
+        "food": "Late night pizza",
+        "hobby": "People watching / Psychoanalyzing drunks"
+      },
+      "daily_routine": "Wakes at noon, studies, works shift, drinks with coworkers until 3 AM."
+    }
+  },
+  {
+    "id": 7,
+    "name": "Caleb Hunt",
+    "voice_id": "male_rugged_gravel",
+    "image_path": "agent7.png",
+    "static_profile": {
+      "demographics": {
+        "age": 41,
+        "birthday": "1984-01-12",
+        "hometown": "Dahlonega, GA",
+        "ethnicity": "White",
+        "zodiac": "Capricorn"
+      },
+      "appearance": {
+        "height": "6'4\"",
+        "style": "Mountain Man. Flannel, Carhartt pants, muddy boots.",
+        "distinguishing_marks": "Missing tip of pinky finger (wood chopping accident)."
+      },
+      "psychology": {
+        "mbti": "ISTJ (The Logistician)",
+        "phobia": "Crowds / Cities.",
+        "tech_literacy": "Very Low (Uses a flip phone).",
+        "political_leaning": "Conservationist.",
+        "childhood_memory": "Camping alone in the Chattahoochee National Forest for a week at age 12."
+      },
+      "background": {
+        "education": "High School, Army Ranger (Discharged).",
+        "criminal_record": "Trespassing (Protesting logging companies).",
+        "employment": ["Wilderness Guide", "Trail Maintenance Contractor"],
+        "financials": {
+          "income": "$40k/year",
+          "assets": "Cabin near Etowah River, Canoe",
+          "debt_vulnerability": "Low. Lives off the grid."
+        }
+      },
+      "favorites": {
+        "drink": "Black Coffee (Thermos)",
+        "food": "Venison Jerky",
+        "hobby": "Whittling"
+      },
+      "daily_routine": "Wakes before dawn, checks traps, hikes the perimeter, avoids people."
+    }
+  },
+  {
+    "id": 8,
+    "name": "Chloe Kim",
+    "voice_id": "female_investigative_clear",
+    "image_path": "agent8.png",
+    "static_profile": {
+      "demographics": {
+        "age": 27,
+        "birthday": "1998-12-03",
+        "hometown": "Atlanta, GA",
+        "ethnicity": "Asian-American (Korean)",
+        "zodiac": "Sagittarius"
+      },
+      "appearance": {
+        "height": "5'6\"",
+        "style": "Urban Utility. Leather jacket, combat boots, hidden pockets.",
+        "distinguishing_marks": "Ink stain constantly on fingers."
+      },
+      "psychology": {
+        "mbti": "ENFP (The Campaigner)",
+        "phobia": "Being scooped on a story.",
+        "tech_literacy": "Expert (Can hack basic passwords and record secretly).",
+        "political_leaning": "Liberal (Anti-corruption crusader).",
+        "childhood_memory": "Her father losing his shop to eminent domain (zoning fraud)."
+      },
+      "background": {
+        "education": "B.A. Journalism, NYU (2018)",
+        "criminal_record": "Several counts of 'Criminal Trespass' (Investigative work).",
+        "employment": ["Junior Reporter, Atlanta Journal-Constitution"],
+        "financials": {
+          "income": "$45k/year",
+          "assets": "High-end Camera Gear, Laptop",
+          "debt_vulnerability": "Low. Secretly comes from a wealthy family but refuses their money."
+        }
+      },
+      "favorites": {
+        "drink": "Red Bull",
+        "food": "Ramen",
+        "hobby": "Urban Exploration / Lockpicking"
+      },
+      "daily_routine": "Sleeps 4 hours, chases leads, edits video, annoys police officers."
+    }
+  },
+  {
+    "id": 100,
+    "name": "Sheriff Hank Mercer",
+    "voice_id": "male_sheriff_gravel",
+    "image_path": "sheriff.png",
+    "static_profile": {
+      "demographics": {
+        "age": 58,
+        "birthday": "1967-08-04",
+        "hometown": "Dawsonville, GA",
+        "ethnicity": "White",
+        "zodiac": "Leo"
+      },
+      "appearance": {
+        "height": "6'0\"",
+        "style": "Pressed uniform shirt under a worn leather jacket, badge polished, coffee stains on the cuff.",
+        "distinguishing_marks": "A thin scar along the right eyebrow from a long-ago bar fight call."
+      },
+      "psychology": {
+        "mbti": "ISTJ (The Inspector)",
+        "phobia": "Loss of control / public scandal",
+        "tech_literacy": "Moderate (Uses department systems, distrusts new apps).",
+        "political_leaning": "Law-and-order pragmatist.",
+        "childhood_memory": "Listening to police radio chatter from his father’s cruiser, swearing he’d “do it right.”"
+      },
+      "background": {
+        "education": "Criminal Justice, Georgia State (Night school, 1990).",
+        "criminal_record": "Clean (two internal affairs complaints, both “unsubstantiated”).",
+        "employment": [
+          "Patrol Officer (1989–1996)",
+          "Detective (1996–2008)",
+          "Captain (2008–2018)",
+          "Sheriff, Dawsonville (2018–Present)"
+        ],
+        "financials": {
+          "income": "$115k/year",
+          "assets": "A modest home off Hwy 9, a 2006 F-150, a locked filing cabinet no one is allowed to touch.",
+          "debt_vulnerability": "Medium. College tuition and medical bills make him “motivatable.”"
+        }
+      },
+      "favorites": {
+        "drink": "Black coffee (burnt, always)",
+        "food": "Diner meatloaf",
+        "hobby": "Rebuilding antique radios"
+      },
+      "daily_routine": "Up at 4:45 AM. Coffee. Reads incident reports. Shows up early so nobody sees what he does in the records room."
+    }
+  }
+]

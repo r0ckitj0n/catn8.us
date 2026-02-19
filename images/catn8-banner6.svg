@@ -1,0 +1,79 @@
+<svg viewBox="0 0 380 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Option 5: Gradient Shiny Text -->
+  <g transform="translate(30, 30)">
+    <!-- Gradient definitions -->
+    <defs>
+      <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#C77DFF" />
+        <stop offset="100%" stop-color="#7B2CBF" />
+      </linearGradient>
+      
+      <linearGradient id="blueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#90E0EF" />
+        <stop offset="100%" stop-color="#0077B6" />
+      </linearGradient>
+      
+      <linearGradient id="pinkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FFAFCC" />
+        <stop offset="100%" stop-color="#FF85A1" />
+      </linearGradient>
+      
+      <linearGradient id="yellowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FFE668" />
+        <stop offset="100%" stop-color="#FFB300" />
+      </linearGradient>
+    </defs>
+    
+    <!-- Text with gradient fills -->
+    <text x="25" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#blueGradient)" stroke="#6930C3" stroke-width="1.5">c</text>
+    
+    <text x="70" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#purpleGradient)" stroke="#6930C3" stroke-width="1.5">a</text>
+    
+    <text x="120" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#pinkGradient)" stroke="#6930C3" stroke-width="1.5">t</text>
+    
+    <text x="150" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#yellowGradient)" stroke="#6930C3" stroke-width="1.5">n</text>
+    
+    <text x="200" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#blueGradient)" stroke="#6930C3" stroke-width="1.5">8</text>
+    
+    <text x="250" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#purpleGradient)" stroke="#6930C3" stroke-width="1.5">.</text>
+    
+    <text x="270" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#pinkGradient)" stroke="#6930C3" stroke-width="1.5">u</text>
+    
+    <text x="320" y="60" font-family="Arial Rounded MT Bold, Arial, sans-serif" font-size="70" 
+          fill="url(#yellowGradient)" stroke="#6930C3" stroke-width="1.5">s</text>
+    
+    <!-- Shine effects -->
+    <line x1="25" y1="15" x2="45" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="75" y1="15" x2="95" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="125" y1="15" x2="140" y2="30" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="160" y1="15" x2="180" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="205" y1="15" x2="225" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="255" y1="35" x2="265" y2="45" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="275" y1="15" x2="295" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    <line x1="325" y1="15" x2="345" y2="35" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+    
+    <!-- Stars scattered -->
+    <path d="M50,15 L53,22 L60,22 L55,27 L57,35 L50,30 L43,35 L45,27 L40,22 L47,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M200,15 L203,22 L210,22 L205,27 L207,35 L200,30 L193,35 L195,27 L190,22 L197,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M300,15 L303,22 L310,22 L305,27 L307,35 L300,30 L293,35 L295,27 L290,22 L297,22 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    
+    <!-- Additional sparkles -->
+    <circle cx="35" cy="45" r="1.5" fill="white" />
+    <circle cx="85" cy="45" r="1.5" fill="white" />
+    <circle cx="135" cy="45" r="1.5" fill="white" />
+    <circle cx="170" cy="45" r="1.5" fill="white" />
+    <circle cx="215" cy="45" r="1.5" fill="white" />
+    <circle cx="285" cy="45" r="1.5" fill="white" />
+    <circle cx="335" cy="45" r="1.5" fill="white" />
+  </g>
+</svg>

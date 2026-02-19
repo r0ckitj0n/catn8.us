@@ -1,0 +1,59 @@
+[
+  {
+    "agent_id": 1,
+    "name": "Eleanor Vance",
+    "trigger_topic": "The Will",
+    "clue": "Julian was rewriting his will tonight. He signed the papers on the napkin at dinner. I saw him put it in his pocket. He was cutting Marcus out.",
+    "reason_known": "She witnessed the signature."
+  },
+  {
+    "agent_id": 2,
+    "name": "Marcus Sterling",
+    "trigger_topic": "Money/Debts",
+    "clue": "Julian didn't have the liquidity he claimed. He was leveraging the company assets to pay off a blackmailer. I saw the bank notices in his desk.",
+    "reason_known": "He audits the books."
+  },
+  {
+    "agent_id": 3,
+    "name": "Sofia Rodriguez",
+    "trigger_topic": "The Drinks/Moonshine",
+    "clue": "Julian refused the champagne. He had his own private drink he insisted on pouring himself, and he kept it close like he didn't trust anyone. He kept it under the bar.",
+    "reason_known": "She stocked the bar."
+  },
+  {
+    "agent_id": 4,
+    "name": "Billy Taggart",
+    "trigger_topic": "Noise/Vehicle",
+    "clue": "I heard an ATV idling out toward Dawson Forest around 1:15 AM. It wasn't one of ours. Someone was waiting out there.",
+    "reason_known": "He knows every engine sound."
+  },
+  {
+    "agent_id": 5,
+    "name": "Dr. Aris Thorne",
+    "trigger_topic": "Medical/Smell",
+    "clue": "I smelled his breath when he yelled at me. It wasn't just alcohol. It smelled like burnt almonds. That's Cyanide, not moonshine.",
+    "reason_known": "He is a medical expert."
+  },
+  {
+    "agent_id": 6,
+    "name": "Patricia O'Neil",
+    "trigger_topic": "Glass/Inventory",
+    "clue": "I counted the inventory. We are missing one crystal flute from the VIP set, and the antique racing helmet from the display is facing the wrong way.",
+    "reason_known": "She manages the bar area."
+  },
+  {
+    "agent_id": 7,
+    "name": "Caleb Hunt",
+    "trigger_topic": "Mud/Tracks",
+    "clue": "I saw tracks in the red clay leading off the deck. Someone dragged something heavy toward the river bank. The rain is washing them away fast.",
+    "reason_known": "He is a master tracker."
+  },
+  {
+    "agent_id": 8,
+    "name": "Chloe Kim",
+    "trigger_topic": "Phone/Gossip",
+    "clue": "I overheard Julian in the bathroom. He was on the phone yelling: 'I know it was you! If the siren goes off tomorrow, it won't be for a victory!'",
+    "reason_known": "She was eavesdropping."
+  }
+]
+

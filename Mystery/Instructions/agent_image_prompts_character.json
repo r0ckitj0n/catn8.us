@@ -1,0 +1,58 @@
+[
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 1,
+    "name": "Eleanor Vance",
+    "birthday": "1953-11-04",
+    "character_prompt": "Character reference portrait of Eleanor Vance, elderly wealthy matriarch, haughty but composed expression, silver hair in a tight bun, sharp black blazer and pearls, realistic skin texture and subtle wrinkles, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 2,
+    "name": "Marcus Sterling",
+    "birthday": "1981-06-02",
+    "character_prompt": "Character reference portrait of Marcus Sterling, frantic businessman, expensive bespoke suit with loosened tie, slicked-back hair, tired eyes with a hint of panic, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 3,
+    "name": "Sofia Rodriguez",
+    "birthday": "1993-04-07",
+    "character_prompt": "Character reference portrait of Sofia Rodriguez, young chef, wearing crisp chef whites, hair slightly messy from a long shift, intense defiant gaze, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 4,
+    "name": "Billy Taggart",
+    "birthday": "1989-05-11",
+    "character_prompt": "Character reference portrait of Billy Taggart, rough pit crew chief, grease-stained mechanic shirt, stubble, angry scowl, strong jawline, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 5,
+    "name": "Dr. Aris Thorne",
+    "birthday": "1973-09-08",
+    "character_prompt": "Character reference portrait of Dr. Aris Thorne, calm clinical demeanor, pristine expensive dress shirt, rimless glasses, emotionless cold stare, neat hair, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 6,
+    "name": "Patricia O'Neil",
+    "birthday": "2001-02-05",
+    "character_prompt": "Character reference portrait of Patricia O'Neil, bartender, black vest, cynical smirk, messy bun, youthful face, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 7,
+    "name": "Caleb Hunt",
+    "birthday": "1984-01-12",
+    "character_prompt": "Character reference portrait of Caleb Hunt, rugged mountain guide, flannel shirt, beard, relaxed confident smirk, neutral studio background, photorealistic 8k."
+  },
+  {
+    "character_style_instruction": "Create a photorealistic, high-detail, full-color character reference portrait. Neutral studio lighting, clean background, sharp focus, natural skin texture, realistic fabric texture, subtle depth of field. This image is the baseline reference for all other images of this character (mugshot and interrogation room). Maintain consistent facial features, hair, age, and overall look across all images.",
+    "agent_id": 8,
+    "name": "Chloe Kim",
+    "birthday": "1998-12-03",
+    "character_prompt": "Character reference portrait of Chloe Kim, journalist, leather jacket, sharp observant eyes, subtle determined expression, neutral studio background, photorealistic 8k."
+  }
+]

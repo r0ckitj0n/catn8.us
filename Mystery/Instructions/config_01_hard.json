@@ -1,0 +1,27 @@
+{
+  "config_id": "hard_01",
+  "parent_scenario_id": "core_01",
+  "difficulty_level": "HARD",
+  "timer_settings": {
+    "start_time_minutes": 150,
+    "wrong_guess_penalty": 45,
+    "search_penalty": 20
+  },
+  "initial_game_state": {
+    "case_type": "MISSING_PERSON",
+    "mission_brief": "Julian vanished after the toast. Find him.",
+    "body_status": "BURIED (Dawson Forest)",
+    "weapon_status": "DESTROYED (Amicalola Falls)",
+    "suspect_secrecy_level": "HOSTILE"
+  },
+  "winning_criteria": {
+    "murderer_ids": [3, 2],
+    "motive": "Financial Greed / Inheritance",
+    "weapon": "Poisoned Drink",
+    "location": "Dawson Forest Wildlife Management Area"
+  },
+  "search_mechanics": {
+    "Dawson Forest Wildlife Management Area": { "action": "DIG", "time_cost": 20, "result": "You find the body." },
+    "Amicalola Falls State Park": { "action": "CHECK_PIPES", "time_cost": 20, "result": "You find glass shards." }
+  }
+}

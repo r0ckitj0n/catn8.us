@@ -1,0 +1,82 @@
+.catn8-sheriff-station-view {
+  min-height: 70vh;
+}
+
+.catn8-sheriff-station-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  padding: 20px;
+}
+
+.catn8-station-btn {
+  background: var(--catn8-color-noir-gray);
+  border: 2px solid var(--catn8-color-noir-gold);
+  border-radius: 12px;
+  padding: 24px;
+  color: var(--catn8-color-noir-white);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.catn8-station-btn:hover {
+  background: var(--catn8-color-noir-gold);
+  color: var(--catn8-color-noir-black);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+}
+
+.catn8-station-btn-icon {
+  font-size: 2.5rem;
+}
+
+.catn8-station-btn-text {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.catn8-noir-title {
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  color: var(--catn8-color-noir-gold);
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.catn8-case-header {
+  margin-bottom: 2rem;
+}
+
+.catn8-case-name {
+  font-family: 'Courier New', Courier, monospace;
+  background: #fdfdfd;
+  color: #222;
+  padding: 8px 20px;
+  border-radius: 2px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  display: inline-block;
+  transform: rotate(-0.5deg);
+  font-weight: bold;
+  position: relative;
+  border: 1px solid #ddd;
+  font-size: 1.1rem;
+  max-width: 90%;
+  line-height: 1.4;
+}
+
+.catn8-case-name::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 80%, rgba(0,0,0,0.05) 100%);
+  pointer-events: none;
+}

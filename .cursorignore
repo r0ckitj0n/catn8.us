@@ -1,0 +1,17 @@
+node_modules/
+vendor/
+dist/
+backups/
+logs/
+.git/
+*.log
+*.sqlite
+*.sql
+.local/
+hot
+
+# Tooling artifacts
+src_files.txt
+tsc_output.txt
+backup_css_counts.txt
+current_css_counts.txt

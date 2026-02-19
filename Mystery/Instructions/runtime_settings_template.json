@@ -1,0 +1,327 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "id": "the_3_hour_hold",
+    "name": "The 3-Hour Hold"
+  },
+  "ai": {
+    "conversation": {
+      "provider": "google",
+      "mode": "realtime",
+      "model": "",
+      "parameters": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_output_tokens": 512
+      },
+      "safety": {
+        "enabled": true
+      },
+      "credentials": {
+        "api_key": ""
+      }
+    },
+    "stt": {
+      "enabled": false,
+      "provider": "google",
+      "model": "",
+      "language": "en-US",
+      "user_friendly_controls": {
+        "language": {
+          "label": "Language",
+          "help": "Pick the language you expect players to speak. Using the right language improves accuracy.",
+          "examples": ["en-US", "es-US"]
+        }
+      },
+      "credentials": {
+        "api_key": ""
+      }
+    },
+    "tts": {
+      "provider": "google_cloud_tts",
+      "output_format": "mp3",
+      "speaking_rate": 1.0,
+      "pitch": 0.0,
+      "user_friendly_controls": {
+        "output_format": {
+          "label": "Audio format",
+          "help": "mp3 is a good default for web playback. wav is bigger but can be higher fidelity.",
+          "options": ["mp3", "wav", "ogg"]
+        },
+        "speaking_rate": {
+          "label": "Speed",
+          "help": "How fast the voice speaks. 1.0 is normal.",
+          "range": { "min": 0.7, "max": 1.2, "step": 0.05 },
+          "recommended": 1.0
+        },
+        "pitch": {
+          "label": "Pitch",
+          "help": "How high/low the voice sounds. 0.0 is normal.",
+          "range": { "min": -10, "max": 10, "step": 0.5 },
+          "recommended": 0.0
+        }
+      },
+      "credentials": {
+        "api_key": "",
+        "service_account_json": ""
+      }
+    }
+  },
+  "agents": {
+    "voice_mapping": {
+      "1": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Eleanor Vance",
+          "style_prompt": "Speak with a slow, deep Southern accent and a condescending, old-money tone.",
+          "controls": {
+            "speed": 1.0,
+            "pitch": -1.0,
+            "stability": 0.7,
+            "expressiveness": 0.4,
+            "clarity": 0.8
+          },
+          "control_definitions": {
+            "speed": { "label": "Speed", "range": { "min": 0.7, "max": 1.2 }, "help": "How fast the agent speaks." },
+            "pitch": { "label": "Pitch", "range": { "min": -10, "max": 10 }, "help": "Higher is brighter; lower is deeper." },
+            "stability": { "label": "Stability", "range": { "min": 0, "max": 1 }, "help": "Higher = consistent and calm. Lower = more variation and improvisation." },
+            "expressiveness": { "label": "Expressiveness", "range": { "min": 0, "max": 1 }, "help": "Higher = more emotion and emphasis. Lower = flatter delivery." },
+            "clarity": { "label": "Clarity", "range": { "min": 0, "max": 1 }, "help": "Higher = clearer diction. Lower = rougher/more casual." }
+          },
+          "provider_specific": {
+            "google_cloud_tts": {
+              "ssml_supported": true
+            },
+            "aws_polly": {
+              "engine": "neural"
+            },
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.7,
+                "similarity_boost": 0.75,
+                "style": 0,
+                "speed": 1.0
+              }
+            }
+          }
+        }
+      },
+      "2": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Marcus Sterling",
+          "style_prompt": "Speak with an authoritative, measured pace and a smooth, professional tone.",
+          "controls": {
+            "speed": 1.0,
+            "pitch": -0.5,
+            "stability": 0.8,
+            "expressiveness": 0.3,
+            "clarity": 0.9
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.8,
+                "similarity_boost": 0.75,
+                "style": 0,
+                "speed": 1.0
+              }
+            }
+          }
+        }
+      },
+      "3": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "es-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Sofia Rodriguez",
+          "style_prompt": "Use a quick, slightly stressed pace with a warm, definite Spanish accent.",
+          "controls": {
+            "speed": 1.05,
+            "pitch": 0.5,
+            "stability": 0.6,
+            "expressiveness": 0.6,
+            "clarity": 0.8
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.6,
+                "similarity_boost": 0.75,
+                "style": 0,
+                "speed": 1.05
+              }
+            }
+          }
+        }
+      },
+      "4": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Billy Taggart",
+          "style_prompt": "Use a rough, slow Georgia drawl and a gruff, easily irritated tone.",
+          "controls": {
+            "speed": 0.9,
+            "pitch": -2.0,
+            "stability": 0.65,
+            "expressiveness": 0.55,
+            "clarity": 0.6
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.65,
+                "similarity_boost": 0.7,
+                "style": 0,
+                "speed": 0.9
+              }
+            }
+          }
+        }
+      },
+      "5": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-GB",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Dr. Aris Thorne",
+          "style_prompt": "Use a precise, high-class British accent and a cold, intellectual tone.",
+          "controls": {
+            "speed": 0.95,
+            "pitch": -0.5,
+            "stability": 0.9,
+            "expressiveness": 0.2,
+            "clarity": 0.95
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.9,
+                "similarity_boost": 0.8,
+                "style": 0,
+                "speed": 0.95
+              }
+            }
+          }
+        }
+      },
+      "6": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Patricia O'Neil",
+          "style_prompt": "Use a raspy, slightly Bostonian accent and a cynical, bored tone.",
+          "controls": {
+            "speed": 1.0,
+            "pitch": 0.0,
+            "stability": 0.75,
+            "expressiveness": 0.35,
+            "clarity": 0.75
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.75,
+                "similarity_boost": 0.75,
+                "style": 0,
+                "speed": 1.0
+              }
+            }
+          }
+        }
+      },
+      "7": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Caleb Hunt",
+          "style_prompt": "Use a low, gravelly tone with a laid-back, slow drawl typical of the North Georgia mountains.",
+          "controls": {
+            "speed": 0.95,
+            "pitch": -2.5,
+            "stability": 0.8,
+            "expressiveness": 0.25,
+            "clarity": 0.7
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.8,
+                "similarity_boost": 0.7,
+                "style": 0,
+                "speed": 0.95
+              }
+            }
+          }
+        }
+      },
+      "8": {
+        "voice": {
+          "provider": "google_cloud_tts",
+          "language_code": "en-US",
+          "voice_id": ""
+        },
+        "character_voice": {
+          "label": "Chloe Kim",
+          "style_prompt": "Use a quick, investigative, questioning tone with clear American English pronunciation.",
+          "controls": {
+            "speed": 1.05,
+            "pitch": 0.5,
+            "stability": 0.7,
+            "expressiveness": 0.55,
+            "clarity": 0.9
+          },
+          "provider_specific": {
+            "elevenlabs": {
+              "voice_id": "",
+              "model": "",
+              "settings": {
+                "stability": 0.7,
+                "similarity_boost": 0.75,
+                "style": 0,
+                "speed": 1.05
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

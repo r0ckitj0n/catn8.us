@@ -1,0 +1,29 @@
+.catn8-logs-container {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+.catn8-log-entry {
+  padding: 10px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.catn8-log-entry:last-child {
+  border-bottom: 0;
+}
+
+.catn8-log-time {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.catn8-log-entity {
+  font-weight: 900;
+  color: rgba(255, 220, 150, 0.92);
+}
+
+.catn8-log-text {
+  white-space: pre-wrap;
+  font-size: 13px;
+}

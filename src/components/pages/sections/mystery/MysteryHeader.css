@@ -1,0 +1,51 @@
+.catn8-mystery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: rgba(10, 10, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.catn8-mystery-header-title {
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  color: #f6f0e3;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+  font-size: clamp(20px, 4vw, 30px);
+}
+
+.catn8-mystery-header-close {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(246, 240, 227, 0.92);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.catn8-mystery-header-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.catn8-header-clickable {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.catn8-header-clickable:hover {
+  background-color: rgba(212, 175, 55, 0.2);
+  color: var(--catn8-color-noir-gold);
+}

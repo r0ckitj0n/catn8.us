@@ -1,0 +1,424 @@
+# Database Schema Reference
+
+This file serves as the Single Source of Truth for the database structure, derived from actual SQL queries and table definitions found in the codebase (`api/` and `includes/`).
+
+## Core Tables
+
+### users
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `username` (VARCHAR(64), UNIQUE)
+- `email` (VARCHAR(191), UNIQUE)
+- `password_hash` (VARCHAR(255))
+- `is_admin` (TINYINT(1), DEFAULT 0)
+- `is_active` (TINYINT(1), DEFAULT 0)
+- `email_verified` (TINYINT(1), DEFAULT 0)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### catn8_groups
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(96), UNIQUE)
+- `title` (VARCHAR(191))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### group_memberships
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `group_id` (INT, FOREIGN KEY -> catn8_groups.id)
+- `user_id` (INT, FOREIGN KEY -> users.id)
+- `created_at` (TIMESTAMP)
+
+### email_verification_tokens
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `token_hash` (VARBINARY(32), UNIQUE)
+- `expires_at` (DATETIME)
+- `used_at` (DATETIME)
+- `created_at` (TIMESTAMP)
+
+### password_reset_tokens
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `token_hash` (VARBINARY(32), UNIQUE)
+- `pending_password_hash` (VARCHAR(255))
+- `expires_at` (DATETIME)
+- `used_at` (DATETIME)
+- `created_at` (TIMESTAMP)
+
+### secrets
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `key` (VARCHAR(191), UNIQUE)
+- `value_enc` (LONGBLOB)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+## Mystery Game Tables
+
+### mystery_mysteries
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT)
+- `slug` (VARCHAR, UNIQUE)
+- `title` (VARCHAR)
+- `settings_json` (LONGTEXT/JSON)
+- `is_archived` (TINYINT(1))
+- `updated_at` (TIMESTAMP)
+
+### mystery_games (Cases)
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT)
+- `mystery_id` (INT)
+- `backstory_id` (INT)
+- `slug` (VARCHAR)
+- `title` (VARCHAR)
+- `description` (TEXT)
+- `is_template` (TINYINT(1))
+- `is_archived` (TINYINT(1))
+
+### mystery_scenarios
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `game_id` (INT)
+- `backstory_id` (INT)
+- `slug` (VARCHAR)
+- `title` (VARCHAR)
+- `status` (VARCHAR)
+- `specs_json` (JSON)
+- `constraints_json` (JSON)
+- `briefing_text` (TEXT)
+- `csi_report_text` (TEXT)
+- `csi_report_json` (JSON)
+- `csi_detective_entity_id` (INT, NULLABLE)
+- `crime_scene_weapon` (VARCHAR)
+- `crime_scene_motive` (VARCHAR)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_entities
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `game_id` (INT)
+- `entity_type` (VARCHAR: 'character', 'location', etc.)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `data_json` (JSON)
+- `roles_json` (JSON)
+- `accent_preference` (VARCHAR)
+- `is_archived` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_scenario_entities
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `role` (VARCHAR: 'suspect', 'sheriff', 'csi_detective', etc.)
+- `override_json` (JSON)
+
+### mystery_scenario_lies
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `lie_type` (VARCHAR)
+- `topic_key` (VARCHAR)
+- `lie_text` (TEXT)
+- `truth_text` (TEXT)
+- `trigger_questions_json` (JSON)
+- `relevance` (VARCHAR)
+- `notes` (TEXT)
+
+### mystery_scenario_depositions
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `deposition_text` (TEXT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_scenario_murderers
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+
+### mystery_scenario_cold_hard_facts
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `facts_json` (JSON)
+- `annotations_json` (JSON)
+
+### mystery_run_sessions
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `case_id` (INT)
+- `scenario_id` (INT)
+- `owner_user_id` (INT)
+- `status` (VARCHAR: 'active', etc.)
+- `run_settings_json` (JSON)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_generation_jobs
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `game_id` (INT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `action` (VARCHAR)
+- `spec_json` (JSON)
+- `status` (VARCHAR: 'queued', etc.)
+- `result_json` (JSON)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_interrogation_events
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `question_text` (TEXT)
+- `answer_text` (TEXT)
+- `meta_json` (JSON)
+- `asked_at` (TIMESTAMP)
+
+### mystery_conversation_events
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `entity_id` (INT)
+- `channel` (VARCHAR)
+- `provider` (VARCHAR)
+- `role` (VARCHAR)
+- `content_text` (TEXT)
+- `meta_json` (JSON)
+
+### mystery_case_notes
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `scenario_id` (INT)
+- `title` (VARCHAR)
+- `note_type` (VARCHAR: 'detective_note', etc.)
+- `content_rich_json` (JSON)
+- `clue_count` (INT)
+- `is_archived` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_backstories
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `owner_user_id` (INT)
+- `slug` (VARCHAR)
+- `title` (VARCHAR)
+- `backstory_summary` (TEXT)
+- `backstory_text` (TEXT)
+- `location_master_id` (INT, NULLABLE)
+- `meta_json` (JSON)
+- `spawned_case_id` (INT)
+- `is_archived` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_master_characters
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `agent_id` (INT)
+- `is_law_enforcement` (TINYINT(1))
+- `voice_profile_id` (INT, NULLABLE)
+- `character_image_path` (VARCHAR)
+- `image_path` (VARCHAR)
+- `dob` (DATE, NULLABLE)
+- `age` (INT)
+- `hometown` (VARCHAR)
+- `address` (VARCHAR)
+- `aliases_json` (JSON)
+- `ethnicity` (VARCHAR)
+- `zodiac` (VARCHAR)
+- `mbti` (VARCHAR)
+- `height` (VARCHAR)
+- `weight` (VARCHAR)
+- `eye_color` (VARCHAR)
+- `hair_color` (VARCHAR)
+- `distinguishing_marks` (TEXT)
+- `education` (TEXT)
+- `employment_json` (JSON)
+- `criminal_record` (TEXT)
+- `fav_color` (VARCHAR)
+- `fav_snack` (VARCHAR)
+- `fav_drink` (VARCHAR)
+- `fav_music` (VARCHAR)
+- `fav_hobby` (VARCHAR)
+- `fav_pet` (VARCHAR)
+- `voice_id` (VARCHAR)
+- `is_archived` (TINYINT(1))
+- `is_regen_locked` (TINYINT(1))
+
+### mystery_master_locations
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `location_id` (INT)
+- `address_line1` (VARCHAR)
+- `address_line2` (VARCHAR)
+- `city` (VARCHAR)
+- `region` (VARCHAR)
+- `postal_code` (VARCHAR)
+- `country` (VARCHAR)
+- `base_image_prompt` (TEXT)
+- `overlay_asset_prompt` (TEXT)
+- `overlay_trigger` (VARCHAR)
+- `is_archived` (TINYINT(1))
+
+### mystery_master_location_clues
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `location_id` (INT, FOREIGN KEY -> mystery_master_locations.id)
+- `text` (TEXT)
+
+### mystery_master_weapons
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `is_archived` (TINYINT(1))
+
+### mystery_master_weapon_fingerprints
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `weapon_id` (INT, FOREIGN KEY -> mystery_master_weapons.id)
+- `fingerprint` (VARCHAR)
+- `sort_order` (INT)
+
+### mystery_master_motives
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `is_archived` (TINYINT(1))
+
+### mystery_master_character_rapport
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `master_character_id` (INT)
+- [Includes other fields related to rapport/relationships]
+
+### mystery_master_character_images
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `character_id` (INT, FOREIGN KEY -> mystery_master_characters.id)
+- `url` (VARCHAR)
+- `kind` (VARCHAR: 'character', 'mugshot', 'ir')
+- `emotion` (VARCHAR, NULLABLE)
+
+### mystery_master_location_images
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `location_id` (INT, FOREIGN KEY -> mystery_master_locations.id)
+- `url` (VARCHAR)
+
+### mystery_master_weapon_images
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `weapon_id` (INT, FOREIGN KEY -> mystery_master_weapons.id)
+- `url` (VARCHAR)
+
+### mystery_master_motive_images
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `motive_id` (INT, FOREIGN KEY -> mystery_master_motives.id)
+- `url` (VARCHAR)
+
+### mystery_master_asset_field_locks
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `mystery_id` (INT)
+- `asset_type` (VARCHAR)
+- `asset_id` (INT)
+- `field_name` (VARCHAR)
+
+### mystery_voice_profiles
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `display_name` (VARCHAR)
+- `notes` (TEXT)
+- `provider` (VARCHAR)
+- `language_code` (VARCHAR)
+- `ssml_gender` (VARCHAR)
+
+### mystery_evidence
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `case_id` (INT)
+- `scenario_id` (INT)
+- `slug` (VARCHAR(96))
+- `title` (VARCHAR(191))
+- `description` (TEXT)
+- `image_url` (TEXT, NULLABLE)
+- `evidence_type` (VARCHAR(64), DEFAULT 'physical')
+- `is_archived` (TINYINT(1), DEFAULT 0)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_story_book_entries
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT)
+- `slug` (VARCHAR)
+- `title` (VARCHAR)
+- `theme` (VARCHAR)
+- `source_text` (TEXT)
+- `meta_json` (JSON)
+- `is_archived` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### mystery_weapons (Standalone catalog)
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `is_archived` (TINYINT(1))
+
+### mystery_motives (Standalone catalog)
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `is_archived` (TINYINT(1))
+
+### mystery_locations (Standalone catalog)
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR)
+- `name` (VARCHAR)
+- `description` (TEXT)
+- `location_id` (INT)
+- `address_line1` (VARCHAR)
+- `address_line2` (VARCHAR)
+- `city` (VARCHAR)
+- `region` (VARCHAR)
+- `postal_code` (VARCHAR)
+- `country` (VARCHAR)
+- `is_archived` (TINYINT(1))
+
+## Wordsearch Tables
+
+### wordsearch_puzzles
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT)
+- `title` (VARCHAR)
+- `topic_id` (INT)
+- `grid_size` (INT)
+- `difficulty` (VARCHAR(16))
+- `pages_count` (INT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### wordsearch_puzzle_pages
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `puzzle_id` (INT)
+- `page_number` (INT)
+- `description_text` (MEDIUMTEXT)
+- `summary_text` (MEDIUMTEXT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### wordsearch_topics
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `title` (VARCHAR)
+- `words_per_page` (INT)
+- `is_active` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)

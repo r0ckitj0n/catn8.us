@@ -1,0 +1,65 @@
+<svg viewBox="0 0 440 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Option 1: Playful Balloon Letters -->
+  <g transform="translate(30, 20)">
+    <!-- C -->
+    <path d="M30,80 C10,80 0,65 0,50 C0,35 10,20 30,20 C50,20 60,35 60,40" 
+          fill="#FFD166" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    <!-- String -->
+    <path d="M30,80 L30,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- A -->
+    <path d="M90,20 L70,80 L110,80 Z" 
+          fill="#8A4FFF" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    <!-- Crossbar -->
+    <line x1="80" y1="60" x2="100" y2="60" stroke="#6930C3" stroke-width="3" />
+    <!-- String -->
+    <path d="M90,80 L90,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- T -->
+    <path d="M120,20 L180,20" stroke="#64DFDF" stroke-width="12" stroke-linecap="round" fill="none" />
+    <path d="M150,20 L150,80" stroke="#64DFDF" stroke-width="12" stroke-linecap="round" fill="none" />
+    <path d="M120,20 L180,20" stroke="#6930C3" stroke-width="3" stroke-linecap="round" fill="none" />
+    <path d="M150,20 L150,80" stroke="#6930C3" stroke-width="3" stroke-linecap="round" fill="none" />
+    <!-- String -->
+    <path d="M150,80 L150,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- N -->
+    <path d="M190,20 L190,80 L230,20 L230,80" 
+          fill="none" stroke="#FFABE1" stroke-width="12" stroke-linecap="round" />
+    <path d="M190,20 L190,80 L230,20 L230,80" 
+          fill="none" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    <!-- String -->
+    <path d="M210,80 L210,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- 8 -->
+    <path d="M290,35 C290,25 270,15 260,25 C250,35 270,45 290,35" 
+          fill="#FFD166" stroke="#6930C3" stroke-width="3" />
+    <path d="M290,65 C290,75 270,85 260,75 C250,65 270,55 290,65" 
+          fill="#FFD166" stroke="#6930C3" stroke-width="3" />
+    <!-- String -->
+    <path d="M270,80 L270,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- . -->
+    <circle cx="320" cy="80" r="6" fill="#6930C3" stroke="#6930C3" stroke-width="1" />
+    
+    <!-- U -->
+    <path d="M340,20 L340,60 C340,75 360,75 360,60 L360,20" 
+          fill="#64DFDF" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    <!-- String -->
+    <path d="M350,75 L350,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- S -->
+    <path d="M400,30 C380,10 405,10 415,25 C425,40 395,60 385,70 C375,80 400,95 420,70" 
+          fill="#FFABE1" stroke="#6930C3" stroke-width="3" stroke-linecap="round" />
+    <!-- String -->
+    <path d="M400,80 L400,100" stroke="#6930C3" stroke-width="2" fill="none" />
+    
+    <!-- Little stars scattered -->
+    <path d="M45,40 L48,47 L55,47 L50,52 L52,60 L45,55 L38,60 L40,52 L35,47 L42,47 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M270,25 L273,32 L280,32 L275,37 L277,45 L270,40 L263,45 L265,37 L260,32 L267,32 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+    <path d="M380,45 L383,52 L390,52 L385,57 L387,65 L380,60 L373,65 L375,57 L370,52 L377,52 Z" 
+          fill="#FFE459" stroke="#6930C3" stroke-width="1" />
+  </g>
+</svg>

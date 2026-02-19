@@ -1,0 +1,7 @@
+.catn8-case-file-text {
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.4);
+  font-family: 'Courier New', Courier, monospace;
+}

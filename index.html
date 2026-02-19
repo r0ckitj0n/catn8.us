@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>catn8.us - A Fun Place for Families!</title>
+  <meta name="description" content="catn8.us - Games, stories, and interactive family fun.">
+
+  <link rel="stylesheet" href="/api/appearance.css.php">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap">
+
+  <script>
+    (function setPageDataset() {
+      var path = (window.location.pathname || '/').toLowerCase();
+      var page = 'home';
+      var routes = {
+        '/': 'home',
+        '/index.php': 'home',
+        '/about': 'about',
+        '/about.php': 'about',
+        '/activities': 'activities',
+        '/activities.php': 'activities',
+        '/stories': 'stories',
+        '/stories.php': 'stories',
+        '/games': 'games',
+        '/games.php': 'games',
+        '/arcade': 'arcade',
+        '/arcade.php': 'arcade',
+        '/login': 'login',
+        '/login.php': 'login',
+        '/mystery': 'mystery',
+        '/mystery.php': 'mystery',
+        '/sheriff_station': 'sheriff_station',
+        '/sheriff_station.php': 'sheriff_station',
+        '/settings': 'settings',
+        '/settings.php': 'settings',
+        '/wordsearch': 'wordsearch',
+        '/wordsearch.php': 'wordsearch',
+        '/frogger': 'frogger',
+        '/frogger-game': 'frogger',
+        '/frogger-game.php': 'frogger',
+        '/asteroids': 'asteroids',
+        '/asteroids-game': 'asteroids',
+        '/asteroids-game.php': 'asteroids',
+        '/tetris': 'tetris',
+        '/tetris-game': 'tetris',
+        '/tetris-game.php': 'tetris',
+        '/verify': 'verify',
+        '/verify.php': 'verify',
+        '/reset': 'reset',
+        '/reset.php': 'reset'
+      };
+
+      if (routes[path]) {
+        page = routes[path];
+      } else if (path.endsWith('.php')) {
+        page = path.replace(/^\//, '').replace(/\.php$/, '') || 'home';
+      }
+
+      var isNoir = (page === 'mystery' || page === 'sheriff_station');
+      if (isNoir) {
+        document.documentElement.classList.add('catn8-noir-mode');
+      }
+
+      window.__CATN8_PAGE__ = page;
+    })();
+  </script>
+
+  <script>
+    async function loadViteAssets() {
+      var root = document.getElementById('catn8-app');
+      if (!root) return;
+      if (!root.dataset.page) {
+        root.dataset.page = window.__CATN8_PAGE__ || 'home';
+      }
+
+      var candidates = [
+        { manifestUrl: '/dist/.vite/manifest.json', prefix: '/dist/' },
+        { manifestUrl: '/dist/manifest.json', prefix: '/dist/' }
+      ];
+
+      async function readManifest(url) {
+        try {
+          var res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) return null;
+          return await res.json();
+        } catch (_err) {
+          return null;
+        }
+      }
+
+      function collectCss(manifest, key, seen, out) {
+        if (!key || seen[key] || !manifest[key]) return;
+        seen[key] = true;
+        var entry = manifest[key];
+        var css = Array.isArray(entry.css) ? entry.css : [];
+        for (var i = 0; i < css.length; i += 1) out[css[i]] = true;
+        var imports = Array.isArray(entry.imports) ? entry.imports : [];
+        for (var j = 0; j < imports.length; j += 1) collectCss(manifest, imports[j], seen, out);
+      }
+
+      for (var c = 0; c < candidates.length; c += 1) {
+        var candidate = candidates[c];
+        var manifest = await readManifest(candidate.manifestUrl);
+        if (!manifest) continue;
+
+        var entryKey = manifest['index.html']
+          ? 'index.html'
+          : (manifest['src/entries/app.tsx'] ? 'src/entries/app.tsx' : null);
+        if (!entryKey) continue;
+
+        var cssFiles = {};
+        collectCss(manifest, entryKey, {}, cssFiles);
+        var cssKeys = Object.keys(cssFiles);
+        for (var k = 0; k < cssKeys.length; k += 1) {
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = candidate.prefix + cssKeys[k];
+          document.head.appendChild(link);
+        }
+
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.src = candidate.prefix + manifest[entryKey].file;
+        document.body.appendChild(script);
+        return;
+      }
+
+      var devScript = document.createElement('script');
+      devScript.type = 'module';
+      devScript.src = '/src/entries/app.tsx';
+      document.body.appendChild(devScript);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadViteAssets);
+    } else {
+      void loadViteAssets();
+    }
+  </script>
+</head>
+<body>
+  <div id="catn8-app" data-page="home"></div>
+
+  <noscript>
+    <p>This application requires JavaScript to run.</p>
+  </noscript>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      try { window.AOS && window.AOS.init({ duration: 1000, once: true }); } catch (_err) {}
+    });
+  </script>
+</body>
+</html>

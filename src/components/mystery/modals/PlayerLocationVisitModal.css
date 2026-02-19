@@ -1,0 +1,68 @@
+.catn8-location-visit-container {
+  min-height: 200px;
+}
+
+.catn8-location-image-wrapper {
+  max-height: 300px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.catn8-location-img {
+  max-height: 300px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.catn8-report-text {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: #f8f9fa; /* Default to light text for dark theme game */
+}
+
+/* Specific background overrides */
+.bg-light .catn8-report-text,
+.bg-white .catn8-report-text {
+  color: #333 !important;
+}
+
+.bg-dark .catn8-report-text,
+.bg-black .catn8-report-text,
+.catn8-report-text.bg-dark,
+.catn8-report-text.bg-black {
+  color: #f8f9fa !important;
+}
+
+.catn8-noir-subtitle {
+  font-family: 'Georgia', serif;
+  letter-spacing: 1px;
+  color: #e9ecef; /* Default to light for dark theme */
+}
+
+.bg-light .catn8-noir-subtitle,
+.bg-white .catn8-noir-subtitle {
+  color: #222 !important;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.catn8-location-report-view {
+  /* Prevent flashing by ensuring initial state is handled */
+  opacity: 1;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.catn8-clue-section {
+  border-style: dashed !important;
+}

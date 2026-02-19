@@ -94,6 +94,14 @@ function formatTimelineDate(input: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function withDownloadFlag(url: string): string {
+  const clean = String(url || '').trim();
+  if (!clean) {
+    return '';
+  }
+  return `${clean}${clean.includes('?') ? '&' : '?'}download=1`;
+}
+
 function toNumberOrNull(value: string): number | null {
   const trimmed = String(value || '').trim();
   if (trimmed === '') {
@@ -1144,7 +1152,19 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
       {lightboxDoc ? (
         <div className="build-wizard-lightbox" onClick={() => setLightboxDoc(null)}>
           <div className="build-wizard-lightbox-inner" onClick={(e) => e.stopPropagation()}>
-            <button className="build-wizard-lightbox-close" onClick={() => setLightboxDoc(null)}>Close</button>
+            <div className="build-wizard-lightbox-actions">
+              <a
+                href={withDownloadFlag(lightboxDoc.src)}
+                className="build-wizard-lightbox-download"
+                title="Download"
+                aria-label="Download"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+                </svg>
+              </a>
+              <button className="build-wizard-lightbox-close" onClick={() => setLightboxDoc(null)}>Close</button>
+            </div>
             <img src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
           </div>

@@ -1023,6 +1023,7 @@ try {
     if ($action === 'get_document') {
         catn8_require_method('GET');
         $documentId = isset($_GET['document_id']) ? (int)$_GET['document_id'] : 0;
+        $download = ((int)($_GET['download'] ?? 0) === 1);
         $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
         if (!$doc) {
             http_response_code(404);
@@ -1037,7 +1038,15 @@ try {
             if ($mime === '') {
                 $mime = 'application/octet-stream';
             }
+            $originalName = trim((string)($doc['original_name'] ?? 'download'));
+            if ($originalName === '') {
+                $originalName = 'download';
+            }
+            $safeName = str_replace(["\r", "\n", '"'], [' ', ' ', "'"], $originalName);
             header('Content-Type: ' . $mime);
+            if ($download) {
+                header('Content-Disposition: attachment; filename="' . $safeName . '"');
+            }
             header('Content-Length: ' . strlen($blob));
             header('Cache-Control: private, max-age=600');
             echo $blob;
@@ -1056,7 +1065,15 @@ try {
         if ($mime === '') {
             $mime = 'application/octet-stream';
         }
+        $originalName = trim((string)($doc['original_name'] ?? basename($path)));
+        if ($originalName === '') {
+            $originalName = basename($path);
+        }
+        $safeName = str_replace(["\r", "\n", '"'], [' ', ' ', "'"], $originalName);
         header('Content-Type: ' . $mime);
+        if ($download) {
+            header('Content-Disposition: attachment; filename="' . $safeName . '"');
+        }
         header('Content-Length: ' . filesize($path));
         header('Cache-Control: private, max-age=600');
         readfile($path);

@@ -627,6 +627,36 @@
   padding: 10px;
 }
 
+.build-wizard-lightbox-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.build-wizard-lightbox-download {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #c5d4e8;
+  background: #f3f8ff;
+  color: #223449;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.build-wizard-lightbox-download:hover {
+  background: #e9f2ff;
+}
+
+.build-wizard-lightbox-download svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .build-wizard-lightbox-close {
   border: 1px solid #c5d4e8;
   background: #f3f8ff;

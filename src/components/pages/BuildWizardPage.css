@@ -242,30 +242,51 @@
 
 .build-wizard-step-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(200px, 1fr)) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 1.6fr) minmax(180px, 1fr) minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr);
   gap: 10px;
 }
 
-.build-wizard-step-grid-spacer {
-  min-width: 0;
-}
-
-.build-wizard-step-cost-row {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(190px, 220px));
-  gap: 10px;
-  justify-content: end;
-}
-
-.build-wizard-note-row {
+.build-wizard-step-actions {
   margin-top: 10px;
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
-.build-wizard-note-row input {
-  flex: 1;
+.build-wizard-upload-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.build-wizard-upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.build-wizard-note-editor {
+  margin-top: 10px;
+  border: 1px solid #d5dce6;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 8px;
+}
+
+.build-wizard-note-editor textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+}
+
+.build-wizard-note-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.build-wizard-step-media {
+  margin-top: 10px;
 }
 
 .build-wizard-note-list {
@@ -275,18 +296,6 @@
   display: grid;
   gap: 4px;
   font-size: 0.9rem;
-}
-
-.build-wizard-step-media {
-  margin-top: 10px;
-}
-
-.build-wizard-upload-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-weight: 600;
-  margin-bottom: 8px;
 }
 
 .build-wizard-desk-grid {
@@ -581,15 +590,6 @@
 
   .build-wizard-step-grid {
     grid-template-columns: 1fr;
-  }
-
-  .build-wizard-step-grid-spacer {
-    display: none;
-  }
-
-  .build-wizard-step-cost-row {
-    grid-template-columns: 1fr;
-    justify-content: stretch;
   }
 
   .build-wizard-duration-inline input {

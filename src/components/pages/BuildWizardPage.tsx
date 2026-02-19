@@ -277,6 +277,7 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
+  const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
 
@@ -405,13 +406,14 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
     await updateStep(stepId, patch);
   };
 
-  const onSubmitNote = async (step: IBuildWizardStep) => {
+  const onSubmitNote = async (step: IBuildWizardStep): Promise<boolean> => {
     const draft = String(noteDraftByStep[step.id] || '').trim();
     if (!draft) {
-      return;
+      return false;
     }
     await addStepNote(step.id, draft);
     setNoteDraftByStep((prev) => ({ ...prev, [step.id]: '' }));
+    return true;
   };
 
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
@@ -530,10 +532,6 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     onBlur={() => void commitStep(step.id, { permit_name: toStringOrNull(stepDrafts[step.id]?.permit_name || '') })}
                   />
                 </label>
-                <div className="build-wizard-step-grid-spacer" aria-hidden="true" />
-              </div>
-
-              <div className="build-wizard-step-cost-row">
                 <label>
                   Estimated Cost
                   <input
@@ -566,19 +564,15 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                 />
               </label>
 
-              <div className="build-wizard-note-row">
-                <input
-                  type="text"
-                  placeholder="Add step note"
-                  value={noteDraftByStep[step.id] || ''}
-                  onChange={(e) => setNoteDraftByStep((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                />
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => void onSubmitNote(step)}>Add Note</button>
-              </div>
-
-              <div className="build-wizard-step-media">
-                <label className="build-wizard-upload-inline">
-                  Add Progress Photo / File
+              <div className="build-wizard-step-actions">
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: !prev[step.id] }))}
+                >
+                  Add Note
+                </button>
+                <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
+                  Upload
                   <input
                     type="file"
                     accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
@@ -591,6 +585,40 @@ export function BuildWizardPage({ onToast }: BuildWizardPageProps) {
                     }}
                   />
                 </label>
+              </div>
+
+              {noteEditorOpenByStep[step.id] ? (
+                <div className="build-wizard-note-editor">
+                  <textarea
+                    rows={3}
+                    placeholder="Type your note..."
+                    value={noteDraftByStep[step.id] || ''}
+                    onChange={(e) => setNoteDraftByStep((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                  />
+                  <div className="build-wizard-note-editor-actions">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        void onSubmitNote(step).then((saved) => {
+                          if (saved) {
+                            setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
+                          }
+                        });
+                      }}
+                    >
+                      Save Note
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={() => setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }))}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="build-wizard-step-media">
                 {renderDocumentGallery(
                   documents.filter((d) => Number(d.step_id || 0) === step.id),
                   'No media attached to this step yet.'

@@ -606,7 +606,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
   ) => {
     setRecoveryBusy(true);
     try {
-      const res = await ApiClient.post<IBuildWizardSingletreeRecoverResponse>('/api/build_wizard_recover_singletree.php', {
+      const queued = await ApiClient.post<IBuildWizardSingletreeRecoverResponse>('/api/build_wizard_recover_singletree.php', {
         apply: apply ? 1 : 0,
         db_env: options?.db_env || 'live',
         project_title: options?.project_title || 'Cabin - 91 Singletree Ln',
@@ -614,6 +614,34 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
         owner_user_id: options?.owner_user_id && options.owner_user_id > 0 ? options.owner_user_id : undefined,
         include_archives: options?.include_archives ? 1 : 0,
       });
+
+      const jobId = String(queued?.job_id || '').trim();
+      if (!jobId) {
+        throw new Error('Recovery job did not return a job_id');
+      }
+
+      onToast?.({ tone: 'info', message: `${apply ? 'Apply' : 'Dry run'} recovery started...` });
+
+      let res: IBuildWizardSingletreeRecoverResponse | null = null;
+      const startedAt = Date.now();
+      const timeoutMs = 12 * 60 * 1000;
+      while (Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const status = await ApiClient.get<IBuildWizardSingletreeRecoverResponse>(
+          `/api/build_wizard_recover_singletree.php?job_id=${encodeURIComponent(jobId)}`,
+        );
+        if (Number(status?.completed || 0) === 1 || status?.status === 'failed') {
+          res = status;
+          break;
+        }
+      }
+
+      if (!res) {
+        throw new Error('Recovery is still running. Please check Recovery Report shortly.');
+      }
+      if (!res.success) {
+        throw new Error(String(res.error || 'Recovery failed'));
+      }
 
       const result = (typeof res?.result === 'object' && res?.result !== null) ? res.result : null;
       const summary = result?.summary;

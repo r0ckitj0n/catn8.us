@@ -204,8 +204,13 @@ export interface IBuildWizardSingletreeRecoverResult {
 
 export interface IBuildWizardSingletreeRecoverResponse {
   success: boolean;
-  exit_code: number;
-  result: IBuildWizardSingletreeRecoverResult | string;
+  queued?: number;
+  completed?: number;
+  job_id?: string;
+  status?: 'queued' | 'running' | 'completed' | 'failed' | 'unknown';
+  exit_code?: number;
+  result?: IBuildWizardSingletreeRecoverResult | string;
   stderr?: string;
   command?: string;
+  error?: string;
 }

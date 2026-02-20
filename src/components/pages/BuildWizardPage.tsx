@@ -20,6 +20,7 @@ type BuildTabId = 'overview' | 'start' | 'land' | 'permits' | 'site' | 'framing'
 type StepDraftMap = Record<number, IBuildWizardStep>;
 type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number }>;
 type StepType = IBuildWizardStep['step_type'];
+type LotSizeUnit = 'sqft' | 'acres';
 
 const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
   { id: 'overview', label: '1. Overview' },
@@ -77,6 +78,7 @@ STEP_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sen
 
 const PERMIT_STATUS_OPTIONS = ['', 'approved', 'closed', 'drafting', 'not_started', 'rejected', 'submitted'];
 const PURCHASE_UNIT_OPTIONS = ['', 'box', 'bundle', 'cuft', 'ea', 'ft', 'gal', 'lb', 'roll', 'set', 'sqft'];
+const SQFT_PER_ACRE = 43560;
 
 const DOC_KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'blueprint', label: 'Blueprint' },
@@ -203,6 +205,28 @@ function toNumberOrNull(value: string): number | null {
   }
   const n = Number(trimmed);
   return Number.isFinite(n) ? n : null;
+}
+
+function formatLotSizeDisplayFromSqft(valueSqft: number | null, unit: LotSizeUnit): string {
+  if (valueSqft === null || !Number.isFinite(Number(valueSqft))) {
+    return '';
+  }
+  if (unit === 'sqft') {
+    return String(Math.round(Number(valueSqft)));
+  }
+  const acres = Number(valueSqft) / SQFT_PER_ACRE;
+  return String(Number(acres.toFixed(4)));
+}
+
+function lotSizeInputToSqft(inputValue: string, unit: LotSizeUnit): number | null {
+  const parsed = toNumberOrNull(inputValue);
+  if (parsed === null) {
+    return null;
+  }
+  if (unit === 'sqft') {
+    return Math.round(parsed);
+  }
+  return Math.round(parsed * SQFT_PER_ACRE);
 }
 
 function toStringOrNull(value: string): string | null {
@@ -584,6 +608,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [docKind, setDocKind] = React.useState<string>('blueprint');
   const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
   const [docStepId, setDocStepId] = React.useState<number>(0);
+  const [lotSizeUnit, setLotSizeUnit] = React.useState<LotSizeUnit>('sqft');
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
@@ -1789,6 +1814,75 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     );
   };
 
+  const renderProjectPhotosAndKeyPaperwork = () => (
+    <>
+      <div className="build-wizard-section-divider" />
+      <h3>Project Photos & Key Paperwork</h3>
+      <div className="build-wizard-upload-row">
+        <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+          {DOC_KIND_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
+          {phaseOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
+          <option value="">Auto-link by phase</option>
+          {selectableDocSteps.map((step) => (
+            <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
+          ))}
+        </select>
+        <input
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+          onChange={(e) => {
+            const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+            if (file) {
+              void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
+            }
+            e.currentTarget.value = '';
+          }}
+        />
+      </div>
+      <div className="build-wizard-upload-row build-wizard-primary-row">
+        <label>
+          Primary Project Photo
+          <select
+            value={Number(project?.primary_photo_document_id || 0) > 0 ? String(project?.primary_photo_document_id) : ''}
+            onChange={(e) => {
+              const nextId = Number(e.target.value || '0');
+              void updateProject({ primary_photo_document_id: nextId > 0 ? nextId : null });
+            }}
+          >
+            <option value="">No primary photo</option>
+            {primaryPhotoChoices.map((doc) => (
+              <option key={doc.id} value={doc.id}>{doc.original_name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Primary Blueprint
+          <select
+            value={Number(project?.blueprint_document_id || 0) > 0 ? String(project?.blueprint_document_id) : ''}
+            onChange={(e) => {
+              const nextId = Number(e.target.value || '0');
+              void updateProject({ blueprint_document_id: nextId > 0 ? nextId : null });
+            }}
+          >
+            <option value="">No primary blueprint</option>
+            {primaryBlueprintChoices.map((doc) => (
+              <option key={doc.id} value={doc.id}>{doc.original_name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {renderDocumentGallery(projectDocuments, 'No project media yet.')}
+    </>
+  );
+
   const renderLauncher = () => (
     <div className="build-wizard-shell">
       <div className="build-wizard-launcher">
@@ -1937,6 +2031,8 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               </button>
               <div className="build-wizard-overview-footnote">* AI-estimated value</div>
             </div>
+
+            {renderProjectPhotosAndKeyPaperwork()}
           </div>
         ) : null}
 
@@ -2055,13 +2151,22 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 />
               </label>
               <label>
-                Lot Size (sq ft)
+                Lot Size
+                <select
+                  value={lotSizeUnit}
+                  onChange={(e) => setLotSizeUnit(e.target.value === 'acres' ? 'acres' : 'sqft')}
+                >
+                  <option value="sqft">sq ft</option>
+                  <option value="acres">acres</option>
+                </select>
                 <input
                   type="number"
-                  value={projectDraft.lot_size_sqft ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_size_sqft: toNumberOrNull(e.target.value) }))}
+                  step={lotSizeUnit === 'acres' ? '0.0001' : '1'}
+                  value={formatLotSizeDisplayFromSqft(projectDraft.lot_size_sqft, lotSizeUnit)}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_size_sqft: lotSizeInputToSqft(e.target.value, lotSizeUnit) }))}
                   onBlur={() => void updateProject({ lot_size_sqft: projectDraft.lot_size_sqft })}
                 />
+                <div className="build-wizard-permit-usage-note">1 acre = 43,560 sq ft</div>
               </label>
               <label>
                 Garage Spaces
@@ -2136,70 +2241,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               <span>Actual Total: {formatCurrency(projectTotals.totalActual)}</span>
             </div>
 
-            <div className="build-wizard-section-divider" />
-            <h3>Project Photos & Key Paperwork</h3>
-            <div className="build-wizard-upload-row">
-              <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                {DOC_KIND_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
-                {phaseOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
-                <option value="">Auto-link by phase</option>
-                {selectableDocSteps.map((step) => (
-                  <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
-                ))}
-              </select>
-              <input
-                type="file"
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                onChange={(e) => {
-                  const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                  if (file) {
-                    void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
-                  }
-                  e.currentTarget.value = '';
-                }}
-              />
-            </div>
-            <div className="build-wizard-upload-row build-wizard-primary-row">
-              <label>
-                Primary Project Photo
-                <select
-                  value={Number(project?.primary_photo_document_id || 0) > 0 ? String(project?.primary_photo_document_id) : ''}
-                  onChange={(e) => {
-                    const nextId = Number(e.target.value || '0');
-                    void updateProject({ primary_photo_document_id: nextId > 0 ? nextId : null });
-                  }}
-                >
-                  <option value="">No primary photo</option>
-                  {primaryPhotoChoices.map((doc) => (
-                    <option key={doc.id} value={doc.id}>{doc.original_name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Primary Blueprint
-                <select
-                  value={Number(project?.blueprint_document_id || 0) > 0 ? String(project?.blueprint_document_id) : ''}
-                  onChange={(e) => {
-                    const nextId = Number(e.target.value || '0');
-                    void updateProject({ blueprint_document_id: nextId > 0 ? nextId : null });
-                  }}
-                >
-                  <option value="">No primary blueprint</option>
-                  {primaryBlueprintChoices.map((doc) => (
-                    <option key={doc.id} value={doc.id}>{doc.original_name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {renderDocumentGallery(projectDocuments, 'No project media yet.')}
+            {renderProjectPhotosAndKeyPaperwork()}
           </div>
         ) : null}
 

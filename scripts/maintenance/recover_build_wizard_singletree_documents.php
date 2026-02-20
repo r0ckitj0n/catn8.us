@@ -422,7 +422,7 @@ $stats = [
 ];
 
 $projectRoot = dirname(__DIR__, 2);
-$uploadDir = $projectRoot . '/uploads/build-wizard';
+$uploadDir = $projectRoot . '/images/build-wizard';
 if ($apply && !is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
     fwrite(STDERR, "Failed to create upload directory: {$uploadDir}\n");
     exit(1);

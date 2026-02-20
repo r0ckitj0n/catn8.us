@@ -1009,7 +1009,7 @@ function catn8_build_wizard_resolve_document_path(string $storagePath): string
 
     $normalized = str_replace('\\', '/', $rawPath);
     $projectRoot = dirname(__DIR__);
-    $uploadRoot = $projectRoot . '/uploads/build-wizard';
+    $uploadRoot = $projectRoot . '/images/build-wizard';
     $importStageRoot = $projectRoot . '/.local/state/build_wizard_import/stage_docs';
 
     if ($normalized !== '' && $normalized[0] !== '/') {
@@ -1019,7 +1019,7 @@ function catn8_build_wizard_resolve_document_path(string $storagePath): string
         }
     }
 
-    $uploadsMarker = '/uploads/build-wizard/';
+    $uploadsMarker = '/images/build-wizard/';
     $markerPos = strpos($normalized, $uploadsMarker);
     if ($markerPos !== false) {
         $relativeFromUploads = substr($normalized, $markerPos + 1); // remove leading slash
@@ -3535,7 +3535,7 @@ try {
 
         $deletedFileCount = 0;
         $fileDeleteErrorCount = 0;
-        $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+        $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
         if ($uploadRoot !== false) {
             foreach (array_keys($paths) as $storagePath) {
                 if (!is_file($storagePath)) {
@@ -4187,7 +4187,7 @@ try {
         if ($mime === '') {
             $mime = 'application/octet-stream';
         }
-        $uploadDir = dirname(__DIR__) . '/uploads/build-wizard';
+        $uploadDir = dirname(__DIR__) . '/images/build-wizard';
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
             throw new RuntimeException('Failed to prepare upload directory');
         }
@@ -4382,7 +4382,7 @@ try {
             $mime = 'application/octet-stream';
         }
 
-        $uploadDir = dirname(__DIR__) . '/uploads/build-wizard';
+        $uploadDir = dirname(__DIR__) . '/images/build-wizard';
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
             throw new RuntimeException('Failed to prepare upload directory');
         }
@@ -4435,7 +4435,7 @@ try {
         }
 
         if ($oldStoragePath !== '' && is_file($oldStoragePath)) {
-            $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+            $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
             $realStoragePath = realpath($oldStoragePath);
             if (
                 $uploadRoot !== false
@@ -4492,7 +4492,7 @@ try {
         }
 
         if ($storagePath !== '' && is_file($storagePath)) {
-            $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+            $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
             $realStoragePath = realpath($storagePath);
             if (
                 $uploadRoot !== false

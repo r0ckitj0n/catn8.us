@@ -15,7 +15,7 @@ function catn8_mystery_worker_location_reference_cache_path(int $mysteryId, stri
     $safe = preg_replace('#[^a-zA-Z0-9_\-]+#', '_', $locationId);
     if (!is_string($safe) || $safe === '') $safe = 'loc';
     $rootDir = dirname(__DIR__, 2);
-    $outDir = $rootDir . '/uploads/mystery';
+    $outDir = $rootDir . '/images/mystery';
     catn8_mystery_worker_ensure_dir($outDir);
     return $outDir . '/location_ref_m' . $mysteryId . '_' . $safe . '.jpg';
 }
@@ -4041,14 +4041,14 @@ try {
             }
 
             $rootDir = dirname(__DIR__, 2);
-            $outDir = $rootDir . '/uploads/mystery';
+            $outDir = $rootDir . '/images/mystery';
             catn8_mystery_worker_ensure_dir($outDir);
             $fileName = 'img_' . $imageId . '_' . gmdate('Ymd_His') . '.png';
             $absPath = $outDir . '/' . $fileName;
             if (file_put_contents($absPath, $bin) === false) {
                 throw new RuntimeException('Failed to write image file');
             }
-            $relUrl = '/uploads/mystery/' . $fileName;
+            $relUrl = '/images/mystery/' . $fileName;
 
             Database::execute(
                 'UPDATE mystery_images SET status = ?, url = ?, error_text = ? WHERE id = ?',

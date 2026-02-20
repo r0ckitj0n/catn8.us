@@ -27,7 +27,6 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
 
   const loadTopics = React.useCallback(() => {
     setBusy(true);
-    setErrorRef.current('');
     ApiClient.get('/api/wordsearch/topics.php?action=list')
       .then((res) => {
         const t = Array.isArray(res?.topics) ? res.topics : [];
@@ -42,7 +41,6 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
 
   const loadPuzzles = React.useCallback(() => {
     setBusy(true);
-    setErrorRef.current('');
     ApiClient.get('/api/wordsearch/puzzles.php?action=list')
       .then((res) => {
         const list = Array.isArray(res?.puzzles) ? res.puzzles : [];
@@ -67,7 +65,6 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
     const id = Number(topicId);
     if (!id) return;
     setBusy(true);
-    setErrorRef.current('');
     setTopic(null);
     ApiClient.get('/api/wordsearch/topics.php?action=get&id=' + String(id))
       .then((res) => setTopic(res?.topic || null))
@@ -86,7 +83,6 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
     }
 
     setBusy(true);
-    setErrorRef.current('');
     setPuzzle(null);
     setPages([]);
     setPageId('');
@@ -140,7 +136,6 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
   const generateAllPages = async () => {
     if (!canEditPuzzle || !puzzle || !topic) return;
     setBusy(true);
-    setErrorRef.current('');
     try {
       const settingsRes = await ApiClient.get('/api/wordsearch/settings.php');
       const wsSettings = settingsRes?.settings || {};

@@ -22,7 +22,7 @@ function bw_blob_resolve_path(string $storagePath, string $projectRoot): string
     }
 
     $normalized = str_replace('\\', '/', $rawPath);
-    $uploadRoot = $projectRoot . '/uploads/build-wizard';
+    $uploadRoot = $projectRoot . '/images/build-wizard';
     $stageRoot = $projectRoot . '/.local/state/build_wizard_import/stage_docs';
 
     if ($normalized !== '' && $normalized[0] !== '/') {
@@ -32,7 +32,7 @@ function bw_blob_resolve_path(string $storagePath, string $projectRoot): string
         }
     }
 
-    foreach (['/uploads/build-wizard/', '/.local/state/build_wizard_import/stage_docs/'] as $marker) {
+    foreach (['/images/build-wizard/', '/.local/state/build_wizard_import/stage_docs/'] as $marker) {
         $markerPos = strpos($normalized, $marker);
         if ($markerPos === false) {
             continue;

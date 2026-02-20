@@ -278,7 +278,7 @@ function catn8_interrogate_synth_tts(int $scenarioId, int $entityId, string $tex
         'pitch' => $pitch,
     ]);
 
-    $outDir = dirname(__DIR__, 2) . '/uploads/mystery';
+    $outDir = dirname(__DIR__, 2) . '/images/mystery';
     if (!is_dir($outDir)) @mkdir($outDir, 0775, true);
 
     $ext = ($audioEncoding === 'LINEAR16') ? 'wav' : 'mp3';
@@ -286,7 +286,7 @@ function catn8_interrogate_synth_tts(int $scenarioId, int $entityId, string $tex
     file_put_contents($outDir . '/' . $fileName, (string)($ttsResp['audio_bytes'] ?? ''));
 
     return [
-        'audio_url' => '/uploads/mystery/' . $fileName,
+        'audio_url' => '/images/mystery/' . $fileName,
         'audio_encoding' => $audioEncoding,
         'tts_meta' => [
             'provider' => 'google_cloud_tts',
@@ -296,7 +296,7 @@ function catn8_interrogate_synth_tts(int $scenarioId, int $entityId, string $tex
             'speaking_rate' => $sr,
             'pitch' => $pitch,
             'audio_encoding' => $audioEncoding,
-            'audio_url' => '/uploads/mystery/' . $fileName,
+            'audio_url' => '/images/mystery/' . $fileName,
         ]
     ];
 }

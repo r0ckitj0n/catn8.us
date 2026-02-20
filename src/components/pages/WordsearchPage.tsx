@@ -23,7 +23,13 @@ interface WordsearchPageProps extends AppShellPageProps {
  * COMPLIANCE: File size < 250 lines
  */
 export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick, onToast, mysteryTitle }: WordsearchPageProps) {
-  const state = useWordsearchPage(viewer, (err) => onToast({ tone: 'error', message: err }));
+  const showErrorToast = React.useCallback((err: string) => {
+    const message = String(err || '').trim();
+    if (!message) return;
+    onToast({ tone: 'error', message });
+  }, [onToast]);
+
+  const state = useWordsearchPage(viewer, showErrorToast);
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [topicsOpen, setTopicsOpen] = React.useState(false);

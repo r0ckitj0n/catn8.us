@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { useDeployConfig } from './hooks/useDeployConfig';
@@ -65,7 +66,7 @@ export function DeployConfigModal({ open, onClose, onToast }: DeployConfigModalP
                 {saveSvg}
                 <span className="ms-1">Save</span>
               </button>
-              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              <ModalCloseIconButton />
             </div>
           </div>
 

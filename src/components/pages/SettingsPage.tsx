@@ -9,6 +9,8 @@ import { WordsearchSettingsModal } from '../modals/WordsearchSettingsModal';
 import { DbConfigModal } from '../modals/DbConfigModal';
 import { DeployConfigModal } from '../modals/DeployConfigModal';
 import { DocumentSettingsModal } from '../modals/DocumentSettingsModal';
+import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
+import { CustomCssSettingsModal } from '../modals/CustomCssSettingsModal';
 import { IToast } from '../../types/common';
 
 interface SettingsPageProps {
@@ -21,6 +23,7 @@ interface SettingsPageProps {
   onOpenAiVoiceCommunication: () => void;
   onToast: (toast: IToast) => void;
   mysteryTitle?: string;
+  page: string;
 }
 
 export function SettingsPage({
@@ -33,6 +36,7 @@ export function SettingsPage({
   onOpenAiVoiceCommunication,
   onToast,
   mysteryTitle,
+  page,
 }: SettingsPageProps) {
   const [emailOpen, setEmailOpen] = React.useState(false);
   const [usersOpen, setUsersOpen] = React.useState(false);
@@ -43,6 +47,8 @@ export function SettingsPage({
   const [dbOpen, setDbOpen] = React.useState(false);
   const [deployOpen, setDeployOpen] = React.useState(false);
   const [documentSettingsOpen, setDocumentSettingsOpen] = React.useState(false);
+  const [iconsOpen, setIconsOpen] = React.useState(false);
+  const [customCssOpen, setCustomCssOpen] = React.useState(false);
 
   return (
     <>
@@ -102,6 +108,12 @@ export function SettingsPage({
                   Document Settings
                 </button>
               ) : null}
+              <button type="button" className="btn btn-primary" onClick={() => setIconsOpen(true)}>
+                Standardized Icons
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => setCustomCssOpen(true)}>
+                Custom CSS Settings
+              </button>
             </div>
           </div>
         </section>
@@ -116,6 +128,8 @@ export function SettingsPage({
       <DbConfigModal open={dbOpen} onClose={() => setDbOpen(false)} onToast={onToast} />
       <DeployConfigModal open={deployOpen} onClose={() => setDeployOpen(false)} onToast={onToast} />
       <DocumentSettingsModal open={documentSettingsOpen} onClose={() => setDocumentSettingsOpen(false)} onToast={onToast} />
+      <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
+      <CustomCssSettingsModal open={customCssOpen} onClose={() => setCustomCssOpen(false)} onToast={onToast} page={page} />
     </>
   );
 }

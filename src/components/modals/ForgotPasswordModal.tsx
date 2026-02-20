@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 
@@ -45,7 +46,7 @@ export function ForgotPasswordModal({ open, onClose }: ForgotPasswordModalProps)
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Forgot Password</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             {error && <div className="alert alert-danger">{error}</div>}

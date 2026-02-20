@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
 import { WebpImage } from '../common/WebpImage';
 import './StoryModal.css';
@@ -40,7 +41,7 @@ export function StoryModal({ open, onClose, story }: StoryModalProps) {
         <div className="modal-content">
           <div className="modal-header">
             <h2 className="modal-title">{title}</h2>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <div className="catn8-story-content">

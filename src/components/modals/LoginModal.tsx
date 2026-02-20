@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { IToast } from '../../types/common';
@@ -45,7 +46,7 @@ export function LoginModal({ open, onClose, onLoggedIn, onToast }: LoginModalPro
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">Account</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              <ModalCloseIconButton />
             </div>
             <div className="modal-body">
               {state.error && <div className="alert alert-danger">{state.error}</div>}

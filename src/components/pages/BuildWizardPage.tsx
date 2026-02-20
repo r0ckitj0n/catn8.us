@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { StandardIconButton } from '../common/StandardIconButton';
 import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
@@ -2393,7 +2394,13 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <div className="build-wizard-doc-manager-inner" onClick={(e) => e.stopPropagation()}>
             <div className="build-wizard-doc-manager-head">
               <h3>Document Manager</h3>
-              <button className="btn btn-outline-secondary btn-sm" onClick={() => setDocumentManagerOpen(false)}>Close</button>
+              <StandardIconButton
+                iconKey="close"
+                ariaLabel="Close document manager"
+                title="Close"
+                className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                onClick={() => setDocumentManagerOpen(false)}
+              />
             </div>
             {documents.length ? (
               <div className="build-wizard-doc-manager-list">
@@ -2546,7 +2553,13 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 >
                   +
                 </button>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => setProjectDeskOpen(false)}>Close</button>
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close project desk"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setProjectDeskOpen(false)}
+                />
               </div>
             </div>
             <div className="build-wizard-desk-grid">
@@ -2621,7 +2634,13 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
                 </svg>
               </a>
-              <button className="build-wizard-lightbox-close" onClick={() => setLightboxDoc(null)}>Close</button>
+              <StandardIconButton
+                iconKey="close"
+                ariaLabel="Close preview"
+                title="Close"
+                className="build-wizard-lightbox-close"
+                onClick={() => setLightboxDoc(null)}
+              />
             </div>
             <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
@@ -2673,7 +2692,13 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 >
                   Copy JSON
                 </button>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => setRecoveryReportOpen(false)}>Close</button>
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close recovery report"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setRecoveryReportOpen(false)}
+                />
               </div>
             </div>
             {recoveryStagedRoot ? (

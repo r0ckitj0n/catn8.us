@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IBuildWizardPdfThumbnailDiagnosticsResponse } from '../../types/buildWizard';
@@ -53,7 +54,7 @@ export function DocumentSettingsModal({ open, onClose, onToast }: DocumentSettin
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Document Settings</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <div className="catn8-card p-2 mb-3">

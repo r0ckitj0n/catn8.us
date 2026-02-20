@@ -3,6 +3,7 @@ import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { pickWordsForPage, buildWordSearch } from '../../utils/wordsearchUtils';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
 interface ManagePuzzlesModalProps {
   open: boolean;
@@ -164,7 +165,7 @@ export function ManagePuzzlesModal({ open, onClose, topics, puzzles, viewer, onC
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Manage Puzzles</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <div className="row g-3">

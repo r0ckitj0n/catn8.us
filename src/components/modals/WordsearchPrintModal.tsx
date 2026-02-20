@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
 interface WordsearchPrintModalProps {
   open: boolean;
@@ -63,7 +64,7 @@ export function WordsearchPrintModal({ open, onClose, puzzles, defaultPuzzleId, 
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Print Word Search</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <div className="fw-bold mb-2">Select puzzles to print</div>

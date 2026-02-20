@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { useGroupMemberships } from './hooks/useGroupMemberships';
@@ -32,7 +33,7 @@ export function GroupMembershipsModal({ open, onClose, onToast }: GroupMembershi
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Group Access</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <div className="mb-3">

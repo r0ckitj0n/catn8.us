@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
@@ -97,7 +98,7 @@ export function PuzzleManagerModal({ open, onClose, topics, viewer, onCreated, o
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Create Puzzle</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             {!canCreate ? (

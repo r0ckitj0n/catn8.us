@@ -49,6 +49,7 @@ import games from '../data/games.json';
 import { createBootstrapModal, isBootstrapModalReady } from '../core/bootstrapModal';
 import { ApiClient } from '../core/ApiClient';
 import { GeminiProvider } from '../core/ai/GeminiProvider';
+import { applyGlobalUiSettings, UI_STANDARDS_EVENT } from '../core/uiStandards';
 
 function App({ page }) {
   const [loginOpen, setLoginOpen] = React.useState(page === 'login');
@@ -81,6 +82,13 @@ function App({ page }) {
       document.documentElement.classList.remove('catn8-noir-mode');
       document.body.classList.remove('catn8-noir-mode');
     }
+  }, [page]);
+
+  React.useEffect(() => {
+    applyGlobalUiSettings(page);
+    const onUiStandardsChange = () => applyGlobalUiSettings(page);
+    window.addEventListener(UI_STANDARDS_EVENT, onUiStandardsChange);
+    return () => window.removeEventListener(UI_STANDARDS_EVENT, onUiStandardsChange);
   }, [page]);
 
   const openLogin = React.useCallback(() => setLoginOpen(true), []);
@@ -241,6 +249,7 @@ function App({ page }) {
   if (page === 'settings') content = (
     <SettingsPage 
       {...layoutProps} 
+      page={page}
       onOpenAiImageConfig={handleOpenAiImageConfig} 
       onOpenAiConfig={handleOpenAiConfig} 
       onOpenAiVoiceCommunication={handleOpenAiVoiceConfig} 

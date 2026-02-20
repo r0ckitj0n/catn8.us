@@ -29,12 +29,14 @@
 .build-wizard-launcher-grid {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, 200px);
+  justify-content: flex-start;
   gap: 14px;
 }
 
 .build-wizard-launch-card {
-  aspect-ratio: 1 / 1;
+  width: 200px;
+  height: 200px;
   border: 1px solid #c7d3e3;
   border-radius: 16px;
   background: #fff;
@@ -47,6 +49,16 @@
   text-align: center;
   box-shadow: 0 6px 22px rgba(31, 42, 55, 0.08);
   overflow: hidden;
+}
+
+@media (max-width: 460px) {
+  .build-wizard-launcher-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-launch-card {
+    justify-self: center;
+  }
 }
 
 .build-wizard-launch-card-with-delete {
@@ -1236,7 +1248,15 @@
   background: #f3f8ff;
   color: #223449;
   border-radius: 8px;
-  padding: 4px 10px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.catn8-build-wizard-close-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
 }
 
 .build-wizard-lightbox-image {

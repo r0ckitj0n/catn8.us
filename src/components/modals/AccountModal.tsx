@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
@@ -146,7 +147,7 @@ export function AccountModal({ open, onClose, viewer, onChanged, onToast }: Acco
                 {saveSvg}
                 <span className="ms-1">Save</span>
               </button>
-              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              <ModalCloseIconButton />
             </div>
           </div>
           <div className="modal-body">

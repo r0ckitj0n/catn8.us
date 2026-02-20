@@ -1,6 +1,7 @@
 import React from 'react';
 import './ToastOverlay.css';
 import { IToast } from '../../types/common';
+import { StandardIconButton } from '../common/StandardIconButton';
 
 interface ToastOverlayProps {
   toast: IToast | null;
@@ -50,16 +51,14 @@ export function ToastOverlay({ toast, onClose }: ToastOverlayProps) {
       >
         <div className="catn8-toast-header">
           <div className="catn8-toast-title">{title}</div>
-          <button
-            type="button"
+          <StandardIconButton
+            iconKey="close"
+            ariaLabel="Close"
             className="catn8-toast-close"
-            aria-label="Close"
             onClick={() => {
               if (typeof onClose === 'function') onClose();
             }}
-          >
-            ×
-          </button>
+          />
         </div>
         {message ? <div className="catn8-toast-body">{message}</div> : null}
       </div>

@@ -1,13 +1,13 @@
 /* Global page styling for React-driven pages */
 
 :root {
-  --primary-color: #ff6b6b;
-  --secondary-color: #4ecdc4;
-  --accent-color: #ffe66d;
+  --primary-color: var(--catn8-brand-primary, #9b59b6);
+  --secondary-color: var(--catn8-brand-secondary, #2ecc71);
+  --accent-color: #f6d04d;
   --dark-color: #2c3e50;
   --light-color: #f7f9fc;
-  --fun-purple: #9b59b6;
-  --fun-green: #2ecc71;
+  --fun-purple: var(--catn8-brand-primary, #9b59b6);
+  --fun-green: var(--catn8-brand-secondary, #2ecc71);
   --fun-orange: #e67e22;
 
   --catn8-color-noir-black: #000000;
@@ -20,6 +20,15 @@
   --catn8-z-modal-backdrop: 5000;
   --catn8-z-modal: 5100;
   --catn8-z-toast: 5200;
+
+  --catn8-global-button-radius: 12px;
+  --catn8-global-panel-radius: 16px;
+  --catn8-global-hover-lift: 2px;
+  --catn8-global-hover-scale: 1.02;
+  --catn8-global-surface-alpha: 0.96;
+  --catn8-global-surface-blur: 5px;
+  --catn8-global-transition-ms: 170ms;
+  --catn8-global-focus-ring: #2f75d8;
 }
 
 body {
@@ -28,6 +37,92 @@ body {
   background: url('/images/pattern.svg') repeat;
   overflow-x: hidden;
   position: relative;
+}
+
+body.catn8-global-ui .btn,
+body.catn8-global-ui .catn8-icon-btn {
+  border-radius: var(--catn8-global-button-radius);
+  transition:
+    transform var(--catn8-global-transition-ms) ease,
+    box-shadow var(--catn8-global-transition-ms) ease,
+    background-color var(--catn8-global-transition-ms) ease,
+    border-color var(--catn8-global-transition-ms) ease;
+}
+
+body.catn8-global-ui .btn:hover:not(:disabled),
+body.catn8-global-ui .catn8-icon-btn:hover:not(:disabled) {
+  transform: translateY(calc(-1 * var(--catn8-global-hover-lift))) scale(var(--catn8-global-hover-scale));
+  box-shadow: 0 10px 24px rgba(26, 42, 62, 0.18);
+}
+
+body.catn8-global-ui .btn:focus-visible,
+body.catn8-global-ui .catn8-icon-btn:focus-visible,
+body.catn8-global-ui a:focus-visible,
+body.catn8-global-ui input:focus-visible,
+body.catn8-global-ui select:focus-visible,
+body.catn8-global-ui textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--catn8-global-focus-ring) 55%, transparent);
+  outline-offset: 2px;
+}
+
+body.catn8-global-ui .modal-content,
+body.catn8-global-ui .card,
+body.catn8-global-ui .catn8-card {
+  border-radius: var(--catn8-global-panel-radius);
+  background-color: rgba(255, 255, 255, var(--catn8-global-surface-alpha));
+  backdrop-filter: blur(var(--catn8-global-surface-blur));
+  box-shadow: 0 16px 32px rgba(20, 36, 54, 0.15);
+}
+
+body.catn8-global-ui a {
+  text-underline-offset: 2px;
+  transition: color var(--catn8-global-transition-ms) ease;
+}
+
+body.catn8-global-ui a:hover {
+  color: var(--catn8-brand-primary);
+}
+
+.catn8-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2a37;
+}
+
+.catn8-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.catn8-icon-btn-glyph {
+  width: 1rem;
+  height: 1rem;
+}
+
+.catn8-modal-close-btn {
+  border-radius: 999px;
+}
+
+.catn8-icon-library-preview {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.catn8-icon-library-glyph {
+  width: 1rem;
+  height: 1rem;
 }
 
 .catn8-background-image-layer {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IViewer, IToast } from '../../types/common';
 import { useAIVoiceCommunication } from './hooks/useAIVoiceCommunication';
@@ -55,7 +56,7 @@ export function AIVoiceCommunicationModal({ open, onClose, onToast, viewer }: AI
                 {saveSvg}
                 <span className="ms-1">Save</span>
               </button>
-              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              <ModalCloseIconButton />
             </div>
           </div>
           <div className="modal-body">

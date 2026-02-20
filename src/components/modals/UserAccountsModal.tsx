@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { useUserAccounts } from './hooks/useUserAccounts';
@@ -33,7 +34,7 @@ export function UserAccountsModal({ open, onClose, onToast }: UserAccountsModalP
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">User Accounts</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <ModalCloseIconButton />
           </div>
           <div className="modal-body">
             <UserCreateSection 

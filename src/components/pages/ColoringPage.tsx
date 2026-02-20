@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { COLORING_PAGE_COUNT, COLORING_THEME_LABELS, COLORING_THEMES } from '../../data/coloringPages';
+import { COLORING_THEME_LABELS } from '../../data/coloringPages';
 import { useColoringBook } from '../../hooks/useColoringBook';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { ColoringMode, ColoringShapeType } from '../../types/coloring';
@@ -45,6 +45,7 @@ export function ColoringPage({ viewer, onLoginClick, onLogout, onAccountClick, m
     setDifficultyFilter,
     selectedPage,
     filteredPages,
+    themeOptions,
     selectedPageId,
     selectPage,
     selectedColorId,
@@ -55,6 +56,7 @@ export function ColoringPage({ viewer, onLoginClick, onLogout, onAccountClick, m
     correctness,
     resetPage,
     statusText,
+    totalPageCount,
   } = useColoringBook();
 
   const paletteMap = React.useMemo(() => {
@@ -72,7 +74,7 @@ export function ColoringPage({ viewer, onLoginClick, onLogout, onAccountClick, m
       <section className="section">
         <div className="container">
           <h1 className="section-title">Coloring Studio</h1>
-          <p className="lead text-center mb-2">{COLORING_PAGE_COUNT} themed pages with simple to difficult designs.</p>
+          <p className="lead text-center mb-2">{totalPageCount} themed pages with simple to difficult designs.</p>
 
           <div className="catn8-coloring-controls catn8-card p-3 mb-3">
             <div>
@@ -84,7 +86,7 @@ export function ColoringPage({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onChange={(event) => setThemeFilter(event.target.value as typeof themeFilter)}
               >
                 <option value="all">All Themes</option>
-                {COLORING_THEMES.map((theme) => (
+                {themeOptions.map((theme) => (
                   <option key={theme.id} value={theme.id}>{theme.emoji} {theme.label}</option>
                 ))}
               </select>

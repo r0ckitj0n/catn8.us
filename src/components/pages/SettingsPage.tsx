@@ -11,6 +11,7 @@ import { DeployConfigModal } from '../modals/DeployConfigModal';
 import { BuildWizardSettingsModal } from '../modals/BuildWizardSettingsModal';
 import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
 import { SiteMaintenanceModal } from '../modals/SiteMaintenanceModal';
+import { ColoringPagesModal } from '../modals/ColoringPagesModal';
 import { IToast } from '../../types/common';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
@@ -45,6 +46,7 @@ export function SettingsPage({
   const [buildWizardSettingsOpen, setBuildWizardSettingsOpen] = React.useState(false);
   const [iconsOpen, setIconsOpen] = React.useState(false);
   const [siteMaintenanceOpen, setSiteMaintenanceOpen] = React.useState(false);
+  const [coloringPagesOpen, setColoringPagesOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
 
   return (
@@ -158,6 +160,11 @@ export function SettingsPage({
                       <button type="button" className="btn btn-primary" onClick={() => setWordsearchOpen(true)}>
                         Word Search Settings
                       </button>
+                      {isAdmin ? (
+                        <button type="button" className="btn btn-primary" onClick={() => setColoringPagesOpen(true)}>
+                          Coloring Pages
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -178,6 +185,7 @@ export function SettingsPage({
       <BuildWizardSettingsModal open={buildWizardSettingsOpen} onClose={() => setBuildWizardSettingsOpen(false)} onToast={onToast} />
       <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
       <SiteMaintenanceModal open={siteMaintenanceOpen} onClose={() => setSiteMaintenanceOpen(false)} onToast={onToast} />
+      <ColoringPagesModal open={coloringPagesOpen} onClose={() => setColoringPagesOpen(false)} onToast={onToast} />
     </>
   );
 }

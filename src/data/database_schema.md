@@ -502,3 +502,56 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `is_active` (TINYINT(1))
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
+
+## Coloring Book Tables
+
+### coloring_categories
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(96), UNIQUE)
+- `name` (VARCHAR(191))
+- `description` (TEXT)
+- `sort_order` (INT)
+- `is_active` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### coloring_themes
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `category_id` (INT, FOREIGN KEY style -> coloring_categories.id)
+- `slug` (VARCHAR(96), UNIQUE)
+- `name` (VARCHAR(191))
+- `description` (TEXT)
+- `sort_order` (INT)
+- `is_active` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### coloring_difficulties
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(64), UNIQUE)
+- `name` (VARCHAR(128))
+- `description` (TEXT)
+- `complexity_level` (INT)
+- `sort_order` (INT)
+- `is_active` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### coloring_pages_library
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `title` (VARCHAR(191))
+- `description` (TEXT)
+- `category_id` (INT, FOREIGN KEY style -> coloring_categories.id)
+- `theme_id` (INT, FOREIGN KEY style -> coloring_themes.id)
+- `difficulty_id` (INT, FOREIGN KEY style -> coloring_difficulties.id)
+- `image_url` (VARCHAR(500))
+- `image_prompt` (TEXT)
+- `palette_json` (MEDIUMTEXT)
+- `regions_json` (MEDIUMTEXT)
+- `metadata_json` (MEDIUMTEXT)
+- `ai_provider` (VARCHAR(64))
+- `ai_model` (VARCHAR(191))
+- `created_by_user_id` (INT)
+- `is_active` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)

@@ -1,0 +1,64 @@
+.catn8-coloring-admin-modal .modal-body {
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.catn8-coloring-admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.catn8-coloring-admin-tab {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+
+.catn8-coloring-admin-tab.is-active {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+}
+
+.catn8-coloring-admin-grid {
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 14px;
+}
+
+.catn8-coloring-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.catn8-coloring-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catn8-coloring-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.catn8-coloring-admin-generate {
+  max-width: 680px;
+}
+
+@media (max-width: 992px) {
+  .catn8-coloring-admin-grid {
+    grid-template-columns: 1fr;
+  }
+}

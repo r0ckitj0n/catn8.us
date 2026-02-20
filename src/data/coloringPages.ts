@@ -7,9 +7,6 @@ import {
   ColoringThemeId,
 } from '../types/coloring';
 
-const VIEWBOX_WIDTH = 1000;
-const VIEWBOX_HEIGHT = 700;
-
 const THEMES: ColoringThemeDefinition[] = [
   {
     id: 'animals',
@@ -169,12 +166,6 @@ const difficultyForSubject = (index: number): ColoringDifficulty => {
   return 'difficult';
 };
 
-const difficultyRegionRange: Record<ColoringDifficulty, [number, number]> = {
-  simple: [7, 9],
-  medium: [11, 15],
-  difficult: [17, 23],
-};
-
 function hashString(input: string): number {
   let hash = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
@@ -194,43 +185,413 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function pickShape(random: () => number, shapeBias: ColoringShapeType[]): ColoringShapeType {
-  return shapeBias[Math.floor(random() * shapeBias.length)] || 'rect';
+function difficultyDetailCount(difficulty: ColoringDifficulty): number {
+  if (difficulty === 'simple') return 2;
+  if (difficulty === 'medium') return 5;
+  return 9;
 }
 
-function buildRegions(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, shapeBias: ColoringShapeType[]): ColoringRegion[] {
+function hasAny(subject: string, tokens: string[]): boolean {
+  const normalized = subject.toLowerCase();
+  return tokens.some((token) => normalized.includes(token));
+}
+
+function addSceneBase(regions: ColoringRegion[], pageId: string, paletteIds: string[], random: () => number): number {
+  const next = regions.length + 1;
+  const jitterX = (random() - 0.5) * 28;
+  const jitterY = (random() - 0.5) * 16;
+  regions.push(
+    {
+      id: `${pageId}-r${next}`,
+      label: 'Sky',
+      targetColorId: paletteIds[3 % paletteIds.length],
+      shapeType: 'rect',
+      cx: 500,
+      cy: 195,
+      width: 1000,
+      height: 390,
+    },
+    {
+      id: `${pageId}-r${next + 1}`,
+      label: 'Ground',
+      targetColorId: paletteIds[4 % paletteIds.length],
+      shapeType: 'rect',
+      cx: 500,
+      cy: 550,
+      width: 1000,
+      height: 300,
+    },
+    {
+      id: `${pageId}-r${next + 2}`,
+      label: 'Sun',
+      targetColorId: paletteIds[2 % paletteIds.length],
+      shapeType: 'circle',
+      cx: 150 + jitterX,
+      cy: 110 + jitterY,
+      width: 108,
+      height: 108,
+    },
+  );
+
+  return next + 3;
+}
+
+function pushRegion(
+  regions: ColoringRegion[],
+  pageId: string,
+  sequence: number,
+  shapeType: ColoringShapeType,
+  label: string,
+  targetColorId: string,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+): number {
+  regions.push({
+    id: `${pageId}-r${sequence}`,
+    label,
+    targetColorId,
+    shapeType,
+    cx,
+    cy,
+    width,
+    height,
+  });
+  return sequence + 1;
+}
+
+function buildAnimalScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
   const random = mulberry32(hashString(pageId));
-  const [min, max] = difficultyRegionRange[difficulty];
-  const regionCount = min + Math.floor(random() * (max - min + 1));
-
-  const cols = Math.max(3, Math.ceil(Math.sqrt(regionCount * 1.65)));
-  const rows = Math.ceil(regionCount / cols);
-  const cellW = VIEWBOX_WIDTH / cols;
-  const cellH = VIEWBOX_HEIGHT / rows;
-
   const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
 
-  for (let i = 0; i < regionCount; i += 1) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const centerX = col * cellW + cellW * (0.5 + (random() - 0.5) * 0.22);
-    const centerY = row * cellH + cellH * (0.5 + (random() - 0.5) * 0.22);
-    const width = cellW * (0.62 + random() * 0.2);
-    const height = cellH * (0.58 + random() * 0.25);
+  const isDuck = hasAny(subject, ['duck']);
+  const isRabbit = hasAny(subject, ['rabbit']);
+  const bodyColor = isDuck ? paletteIds[2] : paletteIds[0];
+  const earColor = isRabbit ? paletteIds[5] : paletteIds[1];
 
-    regions.push({
-      id: `${pageId}-r${i + 1}`,
-      label: `Area ${i + 1}`,
-      targetColorId: paletteIds[(i + Math.floor(random() * paletteIds.length)) % paletteIds.length],
-      shapeType: pickShape(random, shapeBias),
-      cx: Number(centerX.toFixed(2)),
-      cy: Number(centerY.toFixed(2)),
-      width: Number(width.toFixed(2)),
-      height: Number(height.toFixed(2)),
-    });
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Body', bodyColor, 500, 420, 250, 220);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Head', paletteIds[1], 650, 335, 140, 130);
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Left Ear', earColor, 615, 252, 58, 90);
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Right Ear', earColor, 685, 252, 58, 90);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Front Leg', paletteIds[0], 447, 560, 60, 130);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Back Leg', paletteIds[0], 552, 560, 60, 130);
+
+  if (hasAny(subject, ['pond'])) {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Pond', paletteIds[3], 230, 520, 250, 120);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty);
+  for (let i = 0; i < detailCount; i += 1) {
+    const cx = 170 + i * 72 + (random() - 0.5) * 15;
+    const cy = 580 - (i % 2) * 24;
+    seq = pushRegion(regions, pageId, seq, 'triangle', `Grass ${i + 1}`, paletteIds[4], cx, cy, 42, 64);
   }
 
   return regions;
+}
+
+function buildNatureScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Left Mountain', paletteIds[4], 310, 340, 330, 260);
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Right Mountain', paletteIds[4], 630, 360, 360, 280);
+  seq = pushRegion(regions, pageId, seq, 'diamond', 'River', paletteIds[3], 520, 528, 240, 220);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Tree Trunk', paletteIds[4], 140, 470, 70, 170);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Tree Top', paletteIds[0], 140, 360, 180, 180);
+
+  const detailCount = difficultyDetailCount(difficulty);
+  for (let i = 0; i < detailCount; i += 1) {
+    const flowerX = 700 + (i % 4) * 60 + (random() - 0.5) * 18;
+    const flowerY = 580 - Math.floor(i / 4) * 55;
+    seq = pushRegion(regions, pageId, seq, 'circle', `Flower ${i + 1}`, paletteIds[i % 2 === 0 ? 2 : 5], flowerX, flowerY, 38, 38);
+  }
+
+  return regions;
+}
+
+function buildSpaceScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = 1;
+
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Space Background', paletteIds[0], 500, 350, 1000, 700);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Planet', paletteIds[3], 245, 455, 250, 250);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Moon', paletteIds[5], 795, 165, 120, 120);
+
+  if (hasAny(subject, ['station'])) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Station Core', paletteIds[4], 545, 305, 200, 95);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Station Wing Left', paletteIds[1], 425, 305, 120, 50);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Station Wing Right', paletteIds[1], 665, 305, 120, 50);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Rocket Nose', paletteIds[4], 520, 170, 82, 110);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Rocket Body', paletteIds[4], 520, 295, 130, 220);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Rocket Window', paletteIds[5], 520, 282, 58, 58);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Rocket Flame', paletteIds[2], 520, 432, 72, 112);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty) + 2;
+  for (let i = 0; i < detailCount; i += 1) {
+    const starX = 120 + random() * 760;
+    const starY = 80 + random() * 500;
+    seq = pushRegion(regions, pageId, seq, 'diamond', `Star ${i + 1}`, paletteIds[2], starX, starY, 30, 30);
+  }
+
+  return regions;
+}
+
+function buildOceanScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = 1;
+
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Water', paletteIds[1], 500, 320, 1000, 640);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Seabed', paletteIds[3], 500, 620, 1000, 160);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Main Body', paletteIds[2], 500, 390, 300, 180);
+
+  if (hasAny(subject, ['whale'])) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Whale Tail', paletteIds[0], 670, 390, 150, 80);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Fish Tail', paletteIds[0], 670, 390, 120, 120);
+  }
+
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Top Fin', paletteIds[4], 510, 300, 76, 90);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Eye', paletteIds[5], 440, 370, 24, 24);
+
+  const detailCount = difficultyDetailCount(difficulty) + 1;
+  for (let i = 0; i < detailCount; i += 1) {
+    if (i % 2 === 0) {
+      seq = pushRegion(regions, pageId, seq, 'rect', `Kelp ${i + 1}`, paletteIds[4], 120 + i * 55, 565, 30, 170);
+    } else {
+      const bubbleX = 710 + (i % 4) * 42 + (random() - 0.5) * 15;
+      const bubbleY = 530 - Math.floor(i / 2) * 68;
+      seq = pushRegion(regions, pageId, seq, 'circle', `Bubble ${i + 1}`, paletteIds[5], bubbleX, bubbleY, 34, 34);
+    }
+  }
+
+  return regions;
+}
+
+function buildDinoScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Dino Body', paletteIds[0], 480, 420, 300, 230);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Dino Head', paletteIds[0], 665, 330, 150, 130);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Left Leg', paletteIds[4], 410, 555, 65, 135);
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Right Leg', paletteIds[4], 525, 555, 65, 135);
+  seq = pushRegion(regions, pageId, seq, 'triangle', 'Tail', paletteIds[2], 290, 430, 170, 110);
+
+  if (hasAny(subject, ['volcano'])) {
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Volcano', paletteIds[2], 180, 360, 220, 220);
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Lava', paletteIds[1], 180, 252, 90, 90);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty);
+  for (let i = 0; i < detailCount; i += 1) {
+    const spikeX = 420 + i * 38;
+    const spikeY = 298 + (i % 2) * 14;
+    seq = pushRegion(regions, pageId, seq, 'triangle', `Back Plate ${i + 1}`, paletteIds[1], spikeX, spikeY, 36, 52);
+  }
+
+  return regions;
+}
+
+function buildFantasyScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  if (hasAny(subject, ['castle', 'tower'])) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Castle Base', paletteIds[5], 520, 450, 380, 250);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Left Tower', paletteIds[3], 380, 350, 90, 220);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Right Tower', paletteIds[3], 660, 350, 90, 220);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Castle Roof', paletteIds[0], 520, 255, 260, 110);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Creature Body', paletteIds[0], 500, 415, 260, 220);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Creature Head', paletteIds[3], 650, 330, 140, 130);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Horn', paletteIds[2], 705, 246, 56, 92);
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Wing', paletteIds[1], 360, 360, 180, 120);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty) + 2;
+  for (let i = 0; i < detailCount; i += 1) {
+    const cx = 160 + (i % 5) * 135 + (random() - 0.5) * 15;
+    const cy = 570 - Math.floor(i / 5) * 70;
+    seq = pushRegion(regions, pageId, seq, 'diamond', `Gem ${i + 1}`, paletteIds[(i + 1) % paletteIds.length], cx, cy, 38, 38);
+  }
+
+  return regions;
+}
+
+function buildVehicleScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  const isPlane = hasAny(subject, ['plane', 'jet']);
+  const isBoat = hasAny(subject, ['ferry', 'harbor']);
+  const isTrain = hasAny(subject, ['train']);
+
+  if (isPlane) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Fuselage', paletteIds[0], 520, 340, 360, 90);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Nose', paletteIds[2], 720, 340, 100, 86);
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Wing', paletteIds[1], 500, 380, 260, 110);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Tail', paletteIds[3], 355, 305, 90, 90);
+  } else if (isBoat) {
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Hull', paletteIds[4], 500, 470, 460, 150);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Cabin', paletteIds[0], 500, 370, 170, 100);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Window Band', paletteIds[5], 500, 370, 132, 40);
+  } else if (isTrain) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Engine', paletteIds[0], 350, 430, 220, 160);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Carriage', paletteIds[1], 620, 430, 260, 160);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Window Row', paletteIds[5], 620, 390, 220, 50);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Vehicle Body', paletteIds[0], 500, 430, 420, 170);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Cabin', paletteIds[1], 605, 360, 170, 100);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Window', paletteIds[5], 612, 360, 92, 58);
+  }
+
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Left Wheel', paletteIds[3], 390, 535, 105, 105);
+  seq = pushRegion(regions, pageId, seq, 'circle', 'Right Wheel', paletteIds[3], 610, 535, 105, 105);
+
+  const detailCount = difficultyDetailCount(difficulty);
+  for (let i = 0; i < detailCount; i += 1) {
+    const lineX = 120 + i * 82 + (random() - 0.5) * 16;
+    seq = pushRegion(regions, pageId, seq, 'rect', `Road Mark ${i + 1}`, paletteIds[2], lineX, 620, 56, 22);
+  }
+
+  return regions;
+}
+
+function buildHolidayScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  if (hasAny(subject, ['birthday'])) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Cake Base', paletteIds[0], 500, 500, 260, 150);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Cake Top', paletteIds[5], 500, 430, 220, 90);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Candle', paletteIds[2], 500, 335, 24, 90);
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Flame', paletteIds[5], 500, 275, 24, 40);
+  } else if (hasAny(subject, ['winter', 'snow'])) {
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Holiday Tree', paletteIds[1], 500, 430, 280, 280);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Tree Trunk', paletteIds[0], 500, 585, 65, 80);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Gift Box', paletteIds[4], 350, 570, 120, 90);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Gift Box 2', paletteIds[0], 640, 570, 120, 90);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Main Balloon', paletteIds[4], 500, 300, 180, 180);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Balloon Left', paletteIds[0], 375, 340, 125, 125);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Balloon Right', paletteIds[2], 625, 340, 125, 125);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Ribbon', paletteIds[5], 500, 480, 36, 160);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty) + 1;
+  for (let i = 0; i < detailCount; i += 1) {
+    const confettiX = 140 + random() * 700;
+    const confettiY = 120 + random() * 450;
+    const shape: ColoringShapeType = i % 2 === 0 ? 'diamond' : 'circle';
+    seq = pushRegion(regions, pageId, seq, shape, `Confetti ${i + 1}`, paletteIds[i % paletteIds.length], confettiX, confettiY, 26, 26);
+  }
+
+  return regions;
+}
+
+function buildFarmScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = addSceneBase(regions, pageId, paletteIds, random);
+
+  if (hasAny(subject, ['tractor'])) {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Tractor Body', paletteIds[0], 500, 450, 300, 150);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Tractor Cabin', paletteIds[5], 570, 360, 140, 100);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Big Wheel', paletteIds[4], 390, 530, 130, 130);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Small Wheel', paletteIds[4], 615, 530, 90, 90);
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Barn Wall', paletteIds[0], 500, 430, 420, 270);
+    seq = pushRegion(regions, pageId, seq, 'triangle', 'Barn Roof', paletteIds[4], 500, 270, 460, 170);
+    seq = pushRegion(regions, pageId, seq, 'rect', 'Barn Door', paletteIds[4], 500, 515, 125, 170);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Barn Window', paletteIds[5], 500, 390, 65, 65);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty) + 2;
+  for (let i = 0; i < detailCount; i += 1) {
+    const baleX = 120 + (i % 5) * 160 + (random() - 0.5) * 12;
+    const baleY = 590 - Math.floor(i / 5) * 65;
+    seq = pushRegion(regions, pageId, seq, 'rect', `Hay Bale ${i + 1}`, paletteIds[1], baleX, baleY, 80, 52);
+  }
+
+  return regions;
+}
+
+function buildWeatherScene(pageId: string, paletteIds: string[], difficulty: ColoringDifficulty, subject: string): ColoringRegion[] {
+  const random = mulberry32(hashString(pageId));
+  const regions: ColoringRegion[] = [];
+  let seq = pushRegion(regions, pageId, 1, 'rect', 'Sky', paletteIds[3], 500, 270, 1000, 540);
+
+  if (hasAny(subject, ['storm', 'lightning'])) {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Storm Cloud', paletteIds[2], 500, 230, 320, 180);
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Lightning Bolt', paletteIds[5], 500, 390, 90, 180);
+  } else if (hasAny(subject, ['rain', 'shower'])) {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Rain Cloud', paletteIds[3], 500, 235, 320, 180);
+    for (let i = 0; i < 6; i += 1) {
+      seq = pushRegion(regions, pageId, seq, 'diamond', `Raindrop ${i + 1}`, paletteIds[1], 360 + i * 55, 410 + (i % 2) * 30, 30, 45);
+    }
+  } else {
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Sun', paletteIds[0], 250, 160, 140, 140);
+    seq = pushRegion(regions, pageId, seq, 'circle', 'Cloud', paletteIds[3], 610, 230, 260, 150);
+  }
+
+  seq = pushRegion(regions, pageId, seq, 'rect', 'Ground', paletteIds[4], 500, 590, 1000, 220);
+  if (hasAny(subject, ['rainbow'])) {
+    seq = pushRegion(regions, pageId, seq, 'diamond', 'Rainbow Arc', paletteIds[5], 500, 330, 450, 170);
+  }
+
+  const detailCount = difficultyDetailCount(difficulty);
+  for (let i = 0; i < detailCount; i += 1) {
+    const gustX = 130 + (i % 6) * 130 + (random() - 0.5) * 20;
+    const gustY = 520 - Math.floor(i / 6) * 56;
+    seq = pushRegion(regions, pageId, seq, 'rect', `Wind Gust ${i + 1}`, paletteIds[1], gustX, gustY, 85, 20);
+  }
+
+  return regions;
+}
+
+function buildThemedRegions(
+  pageId: string,
+  theme: ColoringThemeId,
+  paletteIds: string[],
+  difficulty: ColoringDifficulty,
+  subject: string,
+): ColoringRegion[] {
+  switch (theme) {
+    case 'animals':
+      return buildAnimalScene(pageId, paletteIds, difficulty, subject);
+    case 'nature':
+      return buildNatureScene(pageId, paletteIds, difficulty);
+    case 'space':
+      return buildSpaceScene(pageId, paletteIds, difficulty, subject);
+    case 'ocean':
+      return buildOceanScene(pageId, paletteIds, difficulty, subject);
+    case 'dinosaurs':
+      return buildDinoScene(pageId, paletteIds, difficulty, subject);
+    case 'fantasy':
+      return buildFantasyScene(pageId, paletteIds, difficulty, subject);
+    case 'vehicles':
+      return buildVehicleScene(pageId, paletteIds, difficulty, subject);
+    case 'holidays':
+      return buildHolidayScene(pageId, paletteIds, difficulty, subject);
+    case 'farm':
+      return buildFarmScene(pageId, paletteIds, difficulty, subject);
+    case 'weather':
+      return buildWeatherScene(pageId, paletteIds, difficulty, subject);
+    default:
+      return [];
+  }
 }
 
 export const COLORING_THEMES = THEMES.map((theme) => ({ id: theme.id, label: theme.label, emoji: theme.emoji }));
@@ -238,6 +599,7 @@ export const COLORING_THEMES = THEMES.map((theme) => ({ id: theme.id, label: the
 export const COLORING_PAGES: ColoringPageDefinition[] = THEMES.flatMap((theme) => theme.subjects.map((subject, subjectIndex) => {
   const difficulty = difficultyForSubject(subjectIndex);
   const id = `${theme.id}-${String(subjectIndex + 1).padStart(2, '0')}`;
+  const paletteIds = theme.palette.map((color) => color.id);
 
   return {
     id,
@@ -245,9 +607,9 @@ export const COLORING_PAGES: ColoringPageDefinition[] = THEMES.flatMap((theme) =
     theme: theme.id,
     difficulty,
     previewEmoji: theme.emoji,
-    description: `${theme.label} themed coloring scene in ${difficulty} mode with guided regions.`,
+    description: `${theme.label} scene: ${subject}.`,
     palette: theme.palette,
-    regions: buildRegions(id, theme.palette.map((c) => c.id), difficulty, theme.shapeBias),
+    regions: buildThemedRegions(id, theme.id, paletteIds, difficulty, subject),
   };
 }));
 

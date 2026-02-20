@@ -2,17 +2,7 @@ export type ColoringMode = 'professional' | 'beginner' | 'novice';
 
 export type ColoringDifficulty = 'simple' | 'medium' | 'difficult';
 
-export type ColoringThemeId =
-  | 'animals'
-  | 'nature'
-  | 'space'
-  | 'ocean'
-  | 'dinosaurs'
-  | 'fantasy'
-  | 'vehicles'
-  | 'holidays'
-  | 'farm'
-  | 'weather';
+export type ColoringThemeId = string;
 
 export interface ColoringColorOption {
   id: string;

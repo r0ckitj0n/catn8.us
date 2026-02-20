@@ -608,6 +608,11 @@
   text-align: left;
 }
 
+.build-wizard-doc-thumb-link {
+  display: block;
+  width: 100%;
+}
+
 .build-wizard-doc-thumb {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -625,6 +630,57 @@
   border-radius: 6px;
   color: #2459a5;
   text-decoration: none;
+}
+
+.build-wizard-doc-file-link-rich {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  border-style: solid;
+  border-color: #c8d7eb;
+  background: linear-gradient(155deg, #eff5ff 0%, #e2ecfa 100%);
+  color: #1f467b;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+}
+
+.build-wizard-doc-file-link-rich:hover {
+  border-color: #8eabd3;
+  background: linear-gradient(155deg, #e6f0ff 0%, #d9e8f8 100%);
+  color: #183a66;
+}
+
+.build-wizard-doc-file-glyph {
+  width: 24px;
+  height: 24px;
+}
+
+.build-wizard-doc-file-glyph svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.build-wizard-doc-file-ext {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.build-wizard-doc-file-open {
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .build-wizard-doc-name {

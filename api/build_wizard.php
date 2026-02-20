@@ -854,6 +854,199 @@ function catn8_build_wizard_resolve_document_path(string $storagePath): string
     return '';
 }
 
+function catn8_build_wizard_is_pdf_document(array $doc): bool
+{
+    $mime = strtolower(trim((string)($doc['mime_type'] ?? '')));
+    if ($mime === 'application/pdf') {
+        return true;
+    }
+    $name = strtolower(trim((string)($doc['original_name'] ?? '')));
+    return str_ends_with($name, '.pdf');
+}
+
+function catn8_build_wizard_document_thumb_label(array $doc): string
+{
+    $name = trim((string)($doc['original_name'] ?? ''));
+    if ($name !== '' && str_contains($name, '.')) {
+        $parts = explode('.', $name);
+        $ext = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)end($parts)) ?? '');
+        if ($ext !== '') {
+            return substr($ext, 0, 5);
+        }
+    }
+
+    $mime = strtolower(trim((string)($doc['mime_type'] ?? '')));
+    if (str_contains($mime, 'pdf')) {
+        return 'PDF';
+    }
+    if (str_contains($mime, 'sheet') || str_contains($mime, 'excel') || str_contains($mime, 'csv')) {
+        return 'SHEET';
+    }
+    if (str_contains($mime, 'word') || str_contains($mime, 'text')) {
+        return 'DOC';
+    }
+    return 'FILE';
+}
+
+function catn8_build_wizard_send_thumb_placeholder(string $label): void
+{
+    $clean = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $label) ?? 'FILE', 0, 5));
+    if ($clean === '') {
+        $clean = 'FILE';
+    }
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">'
+        . '<defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ecf4ff"/><stop offset="100%" stop-color="#dce9fa"/></linearGradient></defs>'
+        . '<rect width="480" height="360" rx="16" fill="url(#g)"/>'
+        . '<rect x="160" y="72" width="160" height="208" rx="12" fill="#f8fbff" stroke="#7f9dc6" stroke-width="6"/>'
+        . '<path d="M272 72v44h48" fill="none" stroke="#7f9dc6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+        . '<text x="240" y="318" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#1e467c">' . htmlspecialchars($clean, ENT_QUOTES, 'UTF-8') . '</text>'
+        . '</svg>';
+    header('Content-Type: image/svg+xml; charset=UTF-8');
+    header('Cache-Control: private, max-age=600');
+    echo $svg;
+}
+
+function catn8_build_wizard_pdf_thumb_cache_path(int $documentId, int $fileSizeBytes): string
+{
+    $root = dirname(__DIR__) . '/.local/state/build_wizard/pdf_thumbs';
+    if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
+        return '';
+    }
+    $docPart = max(1, $documentId);
+    $sizePart = max(0, $fileSizeBytes);
+    return $root . '/doc_' . $docPart . '_' . $sizePart . '.png';
+}
+
+function catn8_build_wizard_generate_pdf_thumb_from_path(string $pdfPath): ?string
+{
+    if ($pdfPath === '' || !is_file($pdfPath)) {
+        return null;
+    }
+    if (!class_exists('Imagick')) {
+        return null;
+    }
+
+    try {
+        $im = new Imagick();
+        $im->setResolution(144, 144);
+        $im->readImage($pdfPath . '[0]');
+        $im->setImageFormat('png');
+        $im->setImageBackgroundColor('white');
+        $im->thumbnailImage(480, 360, true, true);
+        if (method_exists($im, 'stripImage')) {
+            $im->stripImage();
+        }
+        $bytes = $im->getImageBlob();
+        $im->clear();
+        $im->destroy();
+        return (is_string($bytes) && $bytes !== '') ? $bytes : null;
+    } catch (Throwable $e) {
+        error_log('Build Wizard PDF thumbnail generation failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function catn8_build_wizard_generate_pdf_thumb_from_blob(string $pdfBytes): ?string
+{
+    if ($pdfBytes === '') {
+        return null;
+    }
+    $tmp = tempnam(sys_get_temp_dir(), 'bw_pdf_');
+    if (!is_string($tmp) || $tmp === '') {
+        return null;
+    }
+
+    $written = file_put_contents($tmp, $pdfBytes);
+    if ($written === false || $written <= 0) {
+        if (is_file($tmp)) {
+            unlink($tmp);
+        }
+        return null;
+    }
+
+    $thumb = catn8_build_wizard_generate_pdf_thumb_from_path($tmp);
+    if (is_file($tmp)) {
+        unlink($tmp);
+    }
+    return $thumb;
+}
+
+function catn8_build_wizard_pdf_thumbnail_diagnostics(): array
+{
+    $imagickLoaded = class_exists('Imagick');
+    $imagickVersion = null;
+    $pdfFormatAvailable = false;
+    $pdfaFormatAvailable = false;
+    $delegateContainsGhostscript = false;
+    $delegatesSummary = null;
+    $shellExecAvailable = function_exists('shell_exec');
+    $ghostscriptBinaryPath = null;
+
+    if ($imagickLoaded) {
+        try {
+            $ver = Imagick::getVersion();
+            if (is_array($ver)) {
+                $imagickVersion = isset($ver['versionString']) ? (string)$ver['versionString'] : null;
+            } else {
+                $imagickVersion = is_string($ver) ? $ver : null;
+            }
+        } catch (Throwable $e) {
+            error_log('Build Wizard diagnostics: failed to read Imagick version: ' . $e->getMessage());
+        }
+
+        try {
+            $pdfFormats = Imagick::queryFormats('PDF');
+            $pdfFormatAvailable = is_array($pdfFormats) && count($pdfFormats) > 0;
+        } catch (Throwable $e) {
+            error_log('Build Wizard diagnostics: failed to query Imagick PDF formats: ' . $e->getMessage());
+        }
+
+        try {
+            $pdfaFormats = Imagick::queryFormats('PDFA');
+            $pdfaFormatAvailable = is_array($pdfaFormats) && count($pdfaFormats) > 0;
+        } catch (Throwable $e) {
+            error_log('Build Wizard diagnostics: failed to query Imagick PDFA formats: ' . $e->getMessage());
+        }
+
+        try {
+            $delegateOptions = Imagick::getConfigureOptions('delegates');
+            $delegates = trim((string)($delegateOptions['DELEGATES'] ?? ''));
+            if ($delegates !== '') {
+                $delegatesSummary = $delegates;
+                $delegateContainsGhostscript = str_contains(strtolower($delegates), 'ghostscript')
+                    || str_contains(strtolower($delegates), 'gs');
+            }
+        } catch (Throwable $e) {
+            error_log('Build Wizard diagnostics: failed to read Imagick delegates: ' . $e->getMessage());
+        }
+    }
+
+    if ($shellExecAvailable) {
+        $gsPathRaw = shell_exec('command -v gs 2>/dev/null');
+        $gsPath = trim((string)$gsPathRaw);
+        if ($gsPath !== '') {
+            $ghostscriptBinaryPath = $gsPath;
+        }
+    }
+
+    $supported = $imagickLoaded
+        && ($pdfFormatAvailable || $pdfaFormatAvailable)
+        && ($delegateContainsGhostscript || $ghostscriptBinaryPath !== null);
+
+    return [
+        'imagick_loaded' => $imagickLoaded,
+        'imagick_version' => $imagickVersion,
+        'imagick_pdf_format_available' => $pdfFormatAvailable,
+        'imagick_pdfa_format_available' => $pdfaFormatAvailable,
+        'imagick_delegate_contains_ghostscript' => $delegateContainsGhostscript,
+        'imagick_delegates_summary' => $delegatesSummary,
+        'shell_exec_available' => $shellExecAvailable,
+        'ghostscript_binary_path' => $ghostscriptBinaryPath,
+        'pdf_thumbnail_supported' => $supported,
+        'checked_at_utc' => gmdate('c'),
+    ];
+}
+
 function catn8_build_wizard_backfill_document_blobs(bool $apply, ?int $projectId = null, int $limit = 0): array
 {
     $effectiveProjectId = ($projectId !== null && $projectId > 0) ? $projectId : null;
@@ -1899,11 +2092,89 @@ try {
         catn8_require_method('GET');
         $documentId = isset($_GET['document_id']) ? (int)$_GET['document_id'] : 0;
         $download = ((int)($_GET['download'] ?? 0) === 1);
+        $thumb = ((int)($_GET['thumb'] ?? 0) === 1);
         $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
         if (!$doc) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=UTF-8');
             echo 'Document not found';
+            exit;
+        }
+
+        if ($thumb) {
+            $imageBlob = $doc['image_blob'] ?? null;
+            if (is_string($imageBlob) && $imageBlob !== '') {
+                $imageMime = trim((string)($doc['blob_mime_type'] ?? $doc['mime_type'] ?? 'image/jpeg'));
+                if ($imageMime === '') {
+                    $imageMime = 'image/jpeg';
+                }
+                header('Content-Type: ' . $imageMime);
+                header('Content-Length: ' . strlen($imageBlob));
+                header('Cache-Control: private, max-age=600');
+                echo $imageBlob;
+                exit;
+            }
+
+            $docMime = strtolower(trim((string)($doc['mime_type'] ?? '')));
+            $fileBlob = $doc['file_blob'] ?? null;
+            if (strpos($docMime, 'image/') === 0 && is_string($fileBlob) && $fileBlob !== '') {
+                header('Content-Type: ' . $docMime);
+                header('Content-Length: ' . strlen($fileBlob));
+                header('Cache-Control: private, max-age=600');
+                echo $fileBlob;
+                exit;
+            }
+
+            if (catn8_build_wizard_is_pdf_document($doc)) {
+                $cachePath = catn8_build_wizard_pdf_thumb_cache_path((int)($doc['id'] ?? 0), (int)($doc['file_size_bytes'] ?? 0));
+                if ($cachePath !== '' && is_file($cachePath)) {
+                    $cached = file_get_contents($cachePath);
+                    if (is_string($cached) && $cached !== '') {
+                        header('Content-Type: image/png');
+                        header('Content-Length: ' . strlen($cached));
+                        header('Cache-Control: private, max-age=600');
+                        echo $cached;
+                        exit;
+                    }
+                }
+
+                $pdfThumb = null;
+                if (is_string($fileBlob) && $fileBlob !== '') {
+                    $pdfThumb = catn8_build_wizard_generate_pdf_thumb_from_blob($fileBlob);
+                }
+                if (!is_string($pdfThumb) || $pdfThumb === '') {
+                    $path = catn8_build_wizard_resolve_document_path((string)($doc['storage_path'] ?? ''));
+                    if ($path === '') {
+                        $sourcePath = catn8_build_wizard_find_source_file_path_for_name((string)($doc['original_name'] ?? ''));
+                        if ($sourcePath !== '') {
+                            $recoveredBytes = file_get_contents($sourcePath);
+                            if (is_string($recoveredBytes) && $recoveredBytes !== '') {
+                                $recoveredMime = trim((string)($doc['mime_type'] ?? 'application/pdf'));
+                                if ($recoveredMime === '') {
+                                    $recoveredMime = 'application/pdf';
+                                }
+                                catn8_build_wizard_upsert_document_blob((int)($doc['id'] ?? 0), $recoveredMime, $recoveredBytes);
+                                $pdfThumb = catn8_build_wizard_generate_pdf_thumb_from_blob($recoveredBytes);
+                            }
+                        }
+                    } else {
+                        $pdfThumb = catn8_build_wizard_generate_pdf_thumb_from_path($path);
+                    }
+                }
+
+                if (is_string($pdfThumb) && $pdfThumb !== '') {
+                    if ($cachePath !== '') {
+                        file_put_contents($cachePath, $pdfThumb);
+                    }
+                    header('Content-Type: image/png');
+                    header('Content-Length: ' . strlen($pdfThumb));
+                    header('Cache-Control: private, max-age=600');
+                    echo $pdfThumb;
+                    exit;
+                }
+            }
+
+            catn8_build_wizard_send_thumb_placeholder(catn8_build_wizard_document_thumb_label($doc));
             exit;
         }
 
@@ -2982,6 +3253,16 @@ try {
         catn8_json_response([
             'success' => true,
             'report' => $report,
+        ]);
+    }
+
+    if ($action === 'pdf_thumbnail_diagnostics') {
+        catn8_require_method('GET');
+        catn8_require_admin();
+
+        catn8_json_response([
+            'success' => true,
+            'diagnostics' => catn8_build_wizard_pdf_thumbnail_diagnostics(),
         ]);
     }
 

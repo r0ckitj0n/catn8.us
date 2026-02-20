@@ -7,6 +7,7 @@ import {
   IBuildWizardFindPurchaseOptionsResponse,
   IBuildWizardHydrateBlobsResponse,
   IBuildWizardHydrateFromSourcesResponse,
+  IBuildWizardPdfThumbnailDiagnosticsResponse,
   IBuildWizardPurchaseOption,
   IBuildWizardProject,
   IBuildWizardProjectSummary,
@@ -596,6 +597,16 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const checkPdfThumbnailDiagnostics = React.useCallback(async () => {
+    try {
+      const res = await ApiClient.get<IBuildWizardPdfThumbnailDiagnosticsResponse>('/api/build_wizard.php?action=pdf_thumbnail_diagnostics');
+      return res?.diagnostics || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to fetch PDF thumbnail diagnostics' });
+      return null;
+    }
+  }, [onToast]);
+
   const recoverSingletreeDocuments = React.useCallback(async (
     apply: boolean,
     options?: {
@@ -742,6 +753,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     backfillDocumentBlobs,
     hydrateMissingDocumentBlobs,
     hydrateMissingDocumentBlobsFromSources,
+    checkPdfThumbnailDiagnostics,
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,

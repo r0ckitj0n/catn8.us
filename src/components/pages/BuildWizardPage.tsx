@@ -146,6 +146,54 @@ function withDownloadFlag(url: string): string {
   return `${clean}${clean.includes('?') ? '&' : '?'}download=1`;
 }
 
+function fileExtensionFromName(name: string): string {
+  const clean = String(name || '').trim();
+  if (!clean || !clean.includes('.')) {
+    return '';
+  }
+  const ext = clean.split('.').pop() || '';
+  return ext.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+}
+
+function mimeGroupLabel(mimeType: string): string {
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime.startsWith('application/pdf')) {
+    return 'PDF';
+  }
+  if (mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv')) {
+    return 'Spreadsheet';
+  }
+  if (mime.includes('wordprocessingml') || mime.includes('msword') || mime.includes('rtf') || mime.includes('text/')) {
+    return 'Document';
+  }
+  if (mime.includes('presentation')) {
+    return 'Slides';
+  }
+  if (mime.includes('zip') || mime.includes('compressed')) {
+    return 'Archive';
+  }
+  if (mime.includes('json') || mime.includes('xml')) {
+    return 'Data';
+  }
+  return 'File';
+}
+
+function thumbnailKindLabel(doc: IBuildWizardDocument): string {
+  const ext = fileExtensionFromName(doc.original_name);
+  if (ext) {
+    return ext;
+  }
+  return mimeGroupLabel(doc.mime_type);
+}
+
+function isPdfDocument(doc: IBuildWizardDocument): boolean {
+  const mime = String(doc.mime_type || '').trim().toLowerCase();
+  if (mime === 'application/pdf') {
+    return true;
+  }
+  return fileExtensionFromName(doc.original_name) === 'PDF';
+}
+
 function toNumberOrNull(value: string): number | null {
   const trimmed = String(value || '').trim();
   if (trimmed === '') {
@@ -517,6 +565,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
+    checkPdfThumbnailDiagnostics,
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
@@ -551,6 +600,9 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [pdfDiagOpen, setPdfDiagOpen] = React.useState<boolean>(false);
+  const [pdfDiagBusy, setPdfDiagBusy] = React.useState<boolean>(false);
+  const [pdfDiagJson, setPdfDiagJson] = React.useState<string>('');
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -980,6 +1032,29 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       caption: draft.caption.trim() || null,
       step_id: draft.step_id > 0 ? draft.step_id : null,
     });
+  };
+
+  const onRunPdfThumbnailDiagnostics = async () => {
+    if (!isAdmin || pdfDiagBusy) {
+      return;
+    }
+    setPdfDiagBusy(true);
+    try {
+      const diagnostics = await checkPdfThumbnailDiagnostics();
+      if (!diagnostics) {
+        return;
+      }
+      setPdfDiagJson(JSON.stringify(diagnostics, null, 2));
+      setPdfDiagOpen(true);
+      onToast?.({
+        tone: diagnostics.pdf_thumbnail_supported ? 'success' : 'warning',
+        message: diagnostics.pdf_thumbnail_supported
+          ? 'PDF thumbnail rendering is available.'
+          : 'PDF thumbnail rendering is not fully available on this server.',
+      });
+    } finally {
+      setPdfDiagBusy(false);
+    }
   };
 
   const onFindPurchase = async (step: IBuildWizardStep) => {
@@ -1597,9 +1672,20 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               >
                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
               </button>
+            ) : isPdfDocument(doc) ? (
+              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
+                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
+              </a>
             ) : (
-              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link">
-                Open File
+              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
+                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                    <path d="M9 13h6M9 16h6" />
+                  </svg>
+                </span>
+                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                <span className="build-wizard-doc-file-open">Open file</span>
               </a>
             )}
             <button
@@ -1700,6 +1786,16 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
+            {isAdmin ? (
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => void onRunPdfThumbnailDiagnostics()}
+                disabled={pdfDiagBusy}
+                title="Check server support for PDF thumbnail rendering"
+              >
+                {pdfDiagBusy ? 'Checking PDF Thumbs...' : 'PDF Thumb Diagnostics'}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -2041,8 +2137,21 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                           >
                             <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
                           </button>
+                        ) : isPdfDocument(doc) ? (
+                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
+                            <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
+                          </a>
                         ) : (
-                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link">Open File</a>
+                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
+                            <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                                <path d="M9 13h6M9 16h6" />
+                              </svg>
+                            </span>
+                            <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                            <span className="build-wizard-doc-file-open">Open file</span>
+                          </a>
                         )}
                       </div>
                       <div className="build-wizard-doc-manager-fields">
@@ -2216,6 +2325,45 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               <pre className="build-wizard-recovery-json">{recoveryReportJson}</pre>
             ) : (
               <div className="build-wizard-muted">No recovery report yet. Run Dry Run or Apply first.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {pdfDiagOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setPdfDiagOpen(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>PDF Thumbnail Diagnostics</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => void onRunPdfThumbnailDiagnostics()}
+                  disabled={pdfDiagBusy}
+                >
+                  {pdfDiagBusy ? 'Checking...' : 'Refresh'}
+                </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(pdfDiagJson || '');
+                      onToast?.({ tone: 'success', message: 'Diagnostics copied.' });
+                    } catch (_) {
+                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
+                    }
+                  }}
+                  disabled={!pdfDiagJson}
+                >
+                  Copy JSON
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setPdfDiagOpen(false)}>Close</button>
+              </div>
+            </div>
+            {pdfDiagJson ? (
+              <pre className="build-wizard-recovery-json">{pdfDiagJson}</pre>
+            ) : (
+              <div className="build-wizard-muted">No diagnostics report yet.</div>
             )}
           </div>
         </div>

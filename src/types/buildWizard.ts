@@ -165,6 +165,22 @@ export interface IBuildWizardHydrateFromSourcesResponse {
   }>;
 }
 
+export interface IBuildWizardPdfThumbnailDiagnosticsResponse {
+  success: boolean;
+  diagnostics: {
+    imagick_loaded: boolean;
+    imagick_version: string | null;
+    imagick_pdf_format_available: boolean;
+    imagick_pdfa_format_available: boolean;
+    imagick_delegate_contains_ghostscript: boolean;
+    imagick_delegates_summary: string | null;
+    shell_exec_available: boolean;
+    ghostscript_binary_path: string | null;
+    pdf_thumbnail_supported: boolean;
+    checked_at_utc: string;
+  };
+}
+
 export interface IBuildWizardPurchaseOption {
   title: string;
   url: string;

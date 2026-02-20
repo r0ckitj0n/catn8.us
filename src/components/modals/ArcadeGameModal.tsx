@@ -4,6 +4,7 @@ import { ArcadeGameId } from '../../types/arcade';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { AsteroidsGamePanel } from '../arcade/AsteroidsGamePanel';
 import { FroggerGamePanel } from '../arcade/FroggerGamePanel';
+import { PacmanGamePanel } from '../arcade/PacmanGamePanel';
 import { TetrisGamePanel } from '../arcade/TetrisGamePanel';
 
 interface ArcadeGameModalProps {
@@ -16,6 +17,7 @@ const GAME_TITLE: Record<ArcadeGameId, string> = {
   tetris: 'Tetris',
   frogger: 'Frogger',
   asteroids: 'Asteroids',
+  pacman: 'Pac-man',
 };
 
 export function ArcadeGameModal({ open, gameId, onClose }: ArcadeGameModalProps) {
@@ -42,6 +44,7 @@ export function ArcadeGameModal({ open, gameId, onClose }: ArcadeGameModalProps)
             {gameId === 'tetris' ? <TetrisGamePanel /> : null}
             {gameId === 'frogger' ? <FroggerGamePanel /> : null}
             {gameId === 'asteroids' ? <AsteroidsGamePanel /> : null}
+            {gameId === 'pacman' ? <PacmanGamePanel /> : null}
           </div>
         </div>
       </div>

@@ -24,6 +24,23 @@ export default defineConfig(({ command }) => ({
       input: {
         index: resolve(__dirname, 'index.html'),
       },
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+          if (id.includes('/src/components/mystery/') || id.includes('/src/hooks/mystery')) {
+            return 'mystery';
+          }
+          if (id.includes('/src/components/modals/')) {
+            return 'modals';
+          }
+          return undefined;
+        },
+      },
     },
   },
 }));

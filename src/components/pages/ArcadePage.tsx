@@ -9,7 +9,7 @@ import { CatalogCard } from '../common/cards/CatalogCard';
 import { ArcadeGameModal } from '../modals/ArcadeGameModal';
 import { ArcadeCatalogEntry, ArcadeGameId } from '../../types/arcade';
 
-const LOCAL_ARCADE_GAMES: ArcadeGameId[] = ['tetris', 'frogger', 'asteroids'];
+const LOCAL_ARCADE_GAMES: ArcadeGameId[] = ['tetris', 'frogger', 'asteroids', 'pacman'];
 
 export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const [query, setQuery] = React.useState('');

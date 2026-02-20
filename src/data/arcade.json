@@ -19,5 +19,12 @@
     "description": "Help the frog cross the road safely!",
     "href": "frogger-game.php",
     "image": "images/frogger-preview.jpg"
+  },
+  {
+    "id": "pacman",
+    "title": "Pac-man",
+    "description": "Race through the maze and dodge ghosts!",
+    "href": "pacman-game.php",
+    "image": "images/pacman-preview.svg"
   }
 ]

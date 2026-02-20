@@ -588,6 +588,15 @@
   margin: 0;
 }
 
+.build-wizard-step-order-select {
+  width: 78px;
+  min-width: 78px;
+}
+
+.build-wizard-step-order-select.is-expanded {
+  width: min(52vw, 430px);
+}
+
 .build-wizard-duration-inline {
   display: flex;
   flex-direction: column;

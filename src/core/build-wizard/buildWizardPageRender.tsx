@@ -141,6 +141,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [draggingStepId, setDraggingStepId] = React.useState<number>(0);
   const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
+  const [expandedStepOrderSelectId, setExpandedStepOrderSelectId] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
@@ -1135,6 +1136,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
+  const onReorderStepByDisplayNumber = async (stepId: number, targetDisplayNumber: number) => {
+    if (stepId <= 0 || targetDisplayNumber <= 0) {
+      return;
+    }
+    const flatIds = activeTabTreeRows.map((row) => row.step.id);
+    const currentIndex = flatIds.indexOf(stepId);
+    if (currentIndex < 0) {
+      return;
+    }
+    const boundedTargetIndex = Math.max(0, Math.min(targetDisplayNumber - 1, flatIds.length - 1));
+    if (boundedTargetIndex === currentIndex) {
+      return;
+    }
+    const reorderedIds = [...flatIds];
+    reorderedIds.splice(currentIndex, 1);
+    reorderedIds.splice(boundedTargetIndex, 0, stepId);
+
+    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
+    const step = stepById.get(stepId);
+    if (step && Number(step.parent_step_id || 0) > 0) {
+      await updateStep(stepId, { parent_step_id: null });
+    }
+    await reorderSteps(activePhaseKey, reorderedIds);
+  };
+
   const onDropMakeChild = async (targetStepId: number) => {
     if (draggingStepId <= 0 || targetStepId <= 0 || draggingStepId === targetStepId) {
       clearStepDragState();
@@ -1216,8 +1242,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               }}
             >
               <div className="build-wizard-step-phase-accent" style={{ background: TAB_PHASE_COLORS[stepPhaseBucket(step)] }} />
-              <div className="build-wizard-step-header">
-                <div className="build-wizard-step-header-left">
+	          <div className="build-wizard-step-header">
+	            <div className="build-wizard-step-header-left">
                   <button
                     type="button"
                     className="build-wizard-step-drag-handle"
@@ -1233,15 +1259,35 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     <span aria-hidden="true">⋮⋮</span>
                   </button>
                   {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
-                  <label className="build-wizard-inline-check">
-                    <input
-                      type="checkbox"
-                      checked={Number(step.is_completed) === 1}
-                      disabled={completionLocked}
-                      onChange={(e) => void toggleStep(step, e.target.checked)}
-                    />
-                    <span>#{stepDisplayNumber} Completed</span>
-                  </label>
+	                  <div className="build-wizard-inline-check">
+	                    <input
+	                      type="checkbox"
+	                      checked={Number(step.is_completed) === 1}
+	                      disabled={completionLocked}
+	                      onChange={(e) => void toggleStep(step, e.target.checked)}
+	                    />
+	                    <select
+	                      className={`build-wizard-step-order-select ${expandedStepOrderSelectId === step.id ? 'is-expanded' : ''}`}
+	                      value={String(stepDisplayNumber)}
+	                      onChange={(e) => {
+	                        const targetDisplayNumber = Number(e.target.value || '0');
+	                        if (targetDisplayNumber > 0) {
+	                          void onReorderStepByDisplayNumber(step.id, targetDisplayNumber);
+	                        }
+	                      }}
+	                      onFocus={() => setExpandedStepOrderSelectId(step.id)}
+	                      onBlur={() => setExpandedStepOrderSelectId((prev) => (prev === step.id ? 0 : prev))}
+	                      title="Move this step to a different step number"
+	                      aria-label={`Step number for ${step.title}`}
+	                    >
+	                      {rows.map((optionRow, optionIndex) => (
+	                        <option key={optionRow.step.id} value={String(optionIndex + 1)}>
+	                          {expandedStepOrderSelectId === step.id ? `#${optionIndex + 1} ${optionRow.step.title}` : `#${optionIndex + 1}`}
+	                        </option>
+	                      ))}
+	                    </select>
+	                    <span>Completed</span>
+	                  </div>
                   {completionLocked ? (
                     <span className="build-wizard-parent-lock-note">
                       Complete {incompleteDescendantCount} child step{incompleteDescendantCount === 1 ? '' : 's'} first

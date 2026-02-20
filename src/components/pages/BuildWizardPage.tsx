@@ -5,6 +5,13 @@ import { StandardIconLink } from '../common/StandardIconLink';
 import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
+import { IBuildWizardDropdownSettings } from '../../types/buildWizardDropdowns';
+import {
+  buildWizardTokenLabel,
+  BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT,
+  DEFAULT_BUILD_WIZARD_DROPDOWN_SETTINGS,
+  fetchBuildWizardDropdownSettings,
+} from '../../core/buildWizardDropdownSettings';
 import './BuildWizardPage.css';
 
 interface BuildWizardPageProps {
@@ -78,23 +85,7 @@ const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
 ];
 STEP_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
-const PERMIT_STATUS_OPTIONS = ['', 'approved', 'closed', 'drafting', 'not_started', 'rejected', 'submitted'];
-const PURCHASE_UNIT_OPTIONS = ['', 'box', 'bundle', 'cuft', 'ea', 'ft', 'gal', 'lb', 'roll', 'set', 'sqft'];
 const SQFT_PER_ACRE = 43560;
-
-const DOC_KIND_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'blueprint', label: 'Blueprint' },
-  { value: 'document', label: 'Document' },
-  { value: 'home_photo', label: 'Home Photo' },
-  { value: 'other', label: 'Other' },
-  { value: 'permit', label: 'Permit' },
-  { value: 'photo', label: 'Photo' },
-  { value: 'receipt', label: 'Receipt' },
-  { value: 'site_photo', label: 'Site Photo' },
-  { value: 'spec_sheet', label: 'Spec Sheet' },
-  { value: 'survey', label: 'Survey' },
-];
-DOC_KIND_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
 function formatCurrency(value: number | null): string {
   if (value === null || Number.isNaN(Number(value))) {
@@ -616,6 +607,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [docKind, setDocKind] = React.useState<string>('blueprint');
   const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
   const [docStepId, setDocStepId] = React.useState<number>(0);
+  const [dropdownSettings, setDropdownSettings] = React.useState<IBuildWizardDropdownSettings>(DEFAULT_BUILD_WIZARD_DROPDOWN_SETTINGS);
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
   const [lotSizeInput, setLotSizeInput] = React.useState<string>(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
@@ -666,11 +658,66 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   }, [openProject, projectId]);
 
   React.useEffect(() => {
+    let cancelled = false;
+    void fetchBuildWizardDropdownSettings()
+      .then((loaded) => {
+        if (!cancelled) {
+          setDropdownSettings(loaded);
+        }
+      })
+      .catch((err: any) => {
+        if (Number(err?.status || 0) === 403) {
+          return;
+        }
+        onToast?.({ tone: 'warning', message: err?.message || 'Failed to load Build Wizard dropdown settings' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onToast]);
+
+  React.useEffect(() => {
+    const onSettingsUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<IBuildWizardDropdownSettings>;
+      if (customEvent?.detail) {
+        setDropdownSettings(customEvent.detail);
+      }
+    };
+    window.addEventListener(BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT, onSettingsUpdated as EventListener);
+    return () => window.removeEventListener(BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT, onSettingsUpdated as EventListener);
+  }, []);
+
+  React.useEffect(() => {
     setProjectDraft(questionnaire);
     setLotSizeInput(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   }, [questionnaire]);
 
   const lotSizeDetectedUnit = React.useMemo<LotSizeUnit>(() => detectLotSizeUnit(lotSizeInput), [lotSizeInput]);
+
+  const permitStatusOptions = React.useMemo(() => {
+    return dropdownSettings.permit_statuses || [];
+  }, [dropdownSettings.permit_statuses]);
+
+  const purchaseUnitOptions = React.useMemo(() => {
+    return dropdownSettings.purchase_units || [];
+  }, [dropdownSettings.purchase_units]);
+
+  const docKindOptions = React.useMemo(() => {
+    return (dropdownSettings.document_kinds || []).map((value) => ({
+      value,
+      label: buildWizardTokenLabel(value, 'Other'),
+    }));
+  }, [dropdownSettings.document_kinds]);
+
+  React.useEffect(() => {
+    if (!docKindOptions.length) {
+      return;
+    }
+    const validValues = new Set(docKindOptions.map((opt) => opt.value));
+    if (!validValues.has(docKind)) {
+      setDocKind(docKindOptions[0].value);
+    }
+  }, [docKind, docKindOptions]);
 
   React.useEffect(() => {
     setStepDrafts((prev) => {
@@ -1462,7 +1509,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                         onChange={(e) => updateStepDraft(step.id, { permit_status: e.target.value || null })}
                         onBlur={() => void commitStep(step.id, { permit_status: toStringOrNull(stepDrafts[step.id]?.permit_status || '') })}
                       >
-                        {PERMIT_STATUS_OPTIONS.map((status) => (
+                        {permitStatusOptions.map((status) => (
                           <option key={status} value={status}>{status === '' ? 'Select status' : status}</option>
                         ))}
                       </select>
@@ -1533,7 +1580,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                         onChange={(e) => updateStepDraft(step.id, { purchase_unit: e.target.value || null })}
                         onBlur={() => void commitStep(step.id, { purchase_unit: toStringOrNull(stepDrafts[step.id]?.purchase_unit || '') })}
                       >
-                        {PURCHASE_UNIT_OPTIONS.map((unit) => (
+                        {purchaseUnitOptions.map((unit) => (
                           <option key={unit} value={unit}>{unit === '' ? 'Select unit' : unit}</option>
                         ))}
                       </select>
@@ -1841,7 +1888,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       <h3>Project Photos & Key Paperwork</h3>
       <div className="build-wizard-upload-row">
         <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-          {DOC_KIND_OPTIONS.map((opt) => (
+          {docKindOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
@@ -2299,7 +2346,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   <h3>Documents</h3>
                   <div className="build-wizard-upload-row">
                     <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                      {DOC_KIND_OPTIONS.map((opt) => (
+                      {docKindOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
@@ -2448,7 +2495,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                               value={draft.kind}
                               onChange={(e) => updateDocumentDraft(doc.id, { kind: e.target.value })}
                             >
-                              {DOC_KIND_OPTIONS.map((opt) => (
+                              {docKindOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
                               ))}
                             </select>
@@ -2585,7 +2632,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 <h3>Documents</h3>
                 <div className="build-wizard-upload-row">
                   <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                    {DOC_KIND_OPTIONS.map((opt) => (
+                    {docKindOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>

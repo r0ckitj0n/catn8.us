@@ -207,22 +207,20 @@ function toNumberOrNull(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function formatLotSizeDisplayFromSqft(valueSqft: number | null, unit: LotSizeUnit): string {
-  if (valueSqft === null || !Number.isFinite(Number(valueSqft))) {
-    return '';
+function detectLotSizeUnit(inputValue: string): LotSizeUnit {
+  const parsed = toNumberOrNull(inputValue);
+  if (parsed === null) {
+    return 'sqft';
   }
-  if (unit === 'sqft') {
-    return String(Math.round(Number(valueSqft)));
-  }
-  const acres = Number(valueSqft) / SQFT_PER_ACRE;
-  return String(Number(acres.toFixed(4)));
+  return parsed < 1000 ? 'acres' : 'sqft';
 }
 
-function lotSizeInputToSqft(inputValue: string, unit: LotSizeUnit): number | null {
+function lotSizeInputToSqftAuto(inputValue: string): number | null {
   const parsed = toNumberOrNull(inputValue);
   if (parsed === null) {
     return null;
   }
+  const unit = detectLotSizeUnit(inputValue);
   if (unit === 'sqft') {
     return Math.round(parsed);
   }
@@ -608,8 +606,8 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [docKind, setDocKind] = React.useState<string>('blueprint');
   const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
   const [docStepId, setDocStepId] = React.useState<number>(0);
-  const [lotSizeUnit, setLotSizeUnit] = React.useState<LotSizeUnit>('sqft');
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
+  const [lotSizeInput, setLotSizeInput] = React.useState<string>(questionnaire.lot_size_sqft !== null ? String(questionnaire.lot_size_sqft) : '');
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
@@ -659,7 +657,10 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
 
   React.useEffect(() => {
     setProjectDraft(questionnaire);
+    setLotSizeInput(questionnaire.lot_size_sqft !== null ? String(questionnaire.lot_size_sqft) : '');
   }, [questionnaire]);
+
+  const lotSizeDetectedUnit = React.useMemo<LotSizeUnit>(() => detectLotSizeUnit(lotSizeInput), [lotSizeInput]);
 
   React.useEffect(() => {
     setStepDrafts((prev) => {
@@ -2152,21 +2153,18 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               </label>
               <label>
                 Lot Size
-                <select
-                  value={lotSizeUnit}
-                  onChange={(e) => setLotSizeUnit(e.target.value === 'acres' ? 'acres' : 'sqft')}
-                >
-                  <option value="sqft">sq ft</option>
-                  <option value="acres">acres</option>
-                </select>
                 <input
                   type="number"
-                  step={lotSizeUnit === 'acres' ? '0.0001' : '1'}
-                  value={formatLotSizeDisplayFromSqft(projectDraft.lot_size_sqft, lotSizeUnit)}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_size_sqft: lotSizeInputToSqft(e.target.value, lotSizeUnit) }))}
-                  onBlur={() => void updateProject({ lot_size_sqft: projectDraft.lot_size_sqft })}
+                  step="0.0001"
+                  value={lotSizeInput}
+                  onChange={(e) => setLotSizeInput(e.target.value)}
+                  onBlur={() => {
+                    const nextLotSizeSqft = lotSizeInputToSqftAuto(lotSizeInput);
+                    setProjectDraft((prev) => ({ ...prev, lot_size_sqft: nextLotSizeSqft }));
+                    void updateProject({ lot_size_sqft: nextLotSizeSqft });
+                  }}
                 />
-                <div className="build-wizard-permit-usage-note">1 acre = 43,560 sq ft</div>
+                <div className="build-wizard-permit-usage-note">{lotSizeDetectedUnit === 'acres' ? '(acres)' : '(sq ft)'}</div>
               </label>
               <label>
                 Garage Spaces

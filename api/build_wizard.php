@@ -4001,7 +4001,7 @@ try {
                 (project_id, step_order, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                  purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                  expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, 0, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, NULL, 0, ?)',
             [
                 $projectId,
                 $nextOrder,

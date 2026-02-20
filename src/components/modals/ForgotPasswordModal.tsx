@@ -52,6 +52,16 @@ export function ForgotPasswordModal({ open, onClose }: ForgotPasswordModalProps)
             {error && <div className="alert alert-danger">{error}</div>}
             {message && <div className="alert alert-success">{message}</div>}
             <form onSubmit={submit}>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+              />
               <div className="mb-3">
                 <label className="form-label" htmlFor="forgot-email">Email</label>
                 <input

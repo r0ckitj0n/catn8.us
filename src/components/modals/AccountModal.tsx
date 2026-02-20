@@ -187,6 +187,16 @@ export function AccountModal({ open, onClose, viewer, onChanged, onToast }: Acco
 
             <div className="fw-bold mb-2">Change password</div>
             <form onSubmit={changePassword}>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={username}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+              />
               <div className="mb-3">
                 <label className="form-label" htmlFor="acct-current-pass">Current password</label>
                 <input
@@ -222,6 +232,16 @@ export function AccountModal({ open, onClose, viewer, onChanged, onToast }: Acco
 
             <div className="fw-bold mb-2">Delete account</div>
             <form onSubmit={deleteAccount}>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={username}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+              />
               <div className="mb-3">
                 <label className="form-label" htmlFor="acct-delete-pass">Current password</label>
                 <input

@@ -15,33 +15,46 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
   const [busy, setBusy] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(0);
   const [printJobs, setPrintJobs] = useState<any[]>([]);
+  const setErrorRef = React.useRef(setError);
+
+  React.useEffect(() => {
+    setErrorRef.current = setError;
+  }, [setError]);
+
+  const reportError = React.useCallback((fallback: string, e: any) => {
+    setErrorRef.current(e?.message || fallback);
+  }, []);
 
   const loadTopics = React.useCallback(() => {
     setBusy(true);
-    setError('');
+    setErrorRef.current('');
     ApiClient.get('/api/wordsearch/topics.php?action=list')
       .then((res) => {
         const t = Array.isArray(res?.topics) ? res.topics : [];
         setTopics(t);
-        if (!topicId && t.length) setTopicId(String(t[0].id));
+        if (t.length) {
+          setTopicId((prev) => (prev ? prev : String(t[0].id)));
+        }
       })
-      .catch((e) => setError(e?.message || 'Failed to load topics'))
+      .catch((e) => reportError('Failed to load topics', e))
       .finally(() => setBusy(false));
-  }, [topicId, setError]);
+  }, [reportError]);
 
   const loadPuzzles = React.useCallback(() => {
     setBusy(true);
-    setError('');
+    setErrorRef.current('');
     ApiClient.get('/api/wordsearch/puzzles.php?action=list')
       .then((res) => {
         const list = Array.isArray(res?.puzzles) ? res.puzzles : [];
         setPuzzles(list);
-        if (!puzzleId && list.length) setPuzzleId(String(list[0].id));
+        if (list.length) {
+          setPuzzleId((prev) => (prev ? prev : String(list[0].id)));
+        }
         setIsAdmin(Number(res?.viewer?.is_admin || 0));
       })
-      .catch((e) => setError(e?.message || 'Failed to load puzzles'))
+      .catch((e) => reportError('Failed to load puzzles', e))
       .finally(() => setBusy(false));
-  }, [puzzleId, setError]);
+  }, [reportError]);
 
   React.useEffect(() => {
     if (!isLoggedIn) return;
@@ -54,13 +67,13 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
     const id = Number(topicId);
     if (!id) return;
     setBusy(true);
-    setError('');
+    setErrorRef.current('');
     setTopic(null);
     ApiClient.get('/api/wordsearch/topics.php?action=get&id=' + String(id))
       .then((res) => setTopic(res?.topic || null))
-      .catch((e) => setError(e?.message || 'Failed to load topic'))
+      .catch((e) => reportError('Failed to load topic', e))
       .finally(() => setBusy(false));
-  }, [topicId, isLoggedIn, setError]);
+  }, [topicId, isLoggedIn, reportError]);
 
   React.useEffect(() => {
     if (!isLoggedIn) return;
@@ -73,7 +86,7 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
     }
 
     setBusy(true);
-    setError('');
+    setErrorRef.current('');
     setPuzzle(null);
     setPages([]);
     setPageId('');
@@ -84,7 +97,7 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
         setPuzzle(p);
         if (p && p.topic_id) setTopicId(String(p.topic_id));
       })
-      .catch((e) => setError(e?.message || 'Failed to load puzzle'))
+      .catch((e) => reportError('Failed to load puzzle', e))
       .finally(() => setBusy(false));
 
     ApiClient.get('/api/wordsearch/pages.php?action=list&puzzle_id=' + String(id))
@@ -93,8 +106,8 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
         setPages(list);
         if (list.length) setPageId(String(list[0].id));
       })
-      .catch((e) => setError(e?.message || 'Failed to load pages'));
-  }, [puzzleId, isLoggedIn, setError]);
+      .catch((e) => reportError('Failed to load pages', e));
+  }, [puzzleId, isLoggedIn, reportError]);
 
   const reloadPages = async (pid: string | number) => {
     const id = Number(pid);
@@ -106,7 +119,9 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
       if (list.length && !list.find((p) => String(p.id) === String(pageId))) {
         setPageId(String(list[0].id));
       }
-    } catch (_e) {}
+    } catch (e) {
+      reportError('Failed to reload pages', e);
+    }
   };
 
   const selectedPage = React.useMemo(() => {
@@ -125,7 +140,7 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
   const generateAllPages = async () => {
     if (!canEditPuzzle || !puzzle || !topic) return;
     setBusy(true);
-    setError('');
+    setErrorRef.current('');
     try {
       const settingsRes = await ApiClient.get('/api/wordsearch/settings.php');
       const wsSettings = settingsRes?.settings || {};
@@ -153,7 +168,7 @@ export function useWordsearchPage(viewer: any, setError: (err: string) => void) 
 
       await reloadPages(puzzle.id);
     } catch (e: any) {
-      setError(e?.message || 'Generate pages failed');
+      reportError('Generate pages failed', e);
     } finally {
       setBusy(false);
     }

@@ -23,6 +23,16 @@ export function UserPasswordSection({
     <div className="catn8-card p-3 mb-3">
       <div className="fw-bold">Set Password (User #{String(pwUserId)})</div>
       <form onSubmit={savePassword} className="row g-2 mt-1">
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={`user-${String(pwUserId)}`}
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+        />
         <div className="col-md-8">
           <label className="form-label" htmlFor="settings-user-pw">New Password</label>
           <input id="settings-user-pw" className="form-control" type="password" value={pwValue} onChange={(e) => setPwValue(e.target.value)} disabled={busy} />

@@ -185,7 +185,7 @@ function catn8_build_wizard_document_kind($value): string
 {
     $raw = strtolower(trim((string)$value));
     return match ($raw) {
-        'photo', 'site_photo', 'home_photo', 'blueprint', 'survey', 'permit', 'receipt', 'spec_sheet', 'progress_photo', 'other' => $raw,
+        'blueprint', 'document', 'home_photo', 'other', 'permit', 'photo', 'progress_photo', 'receipt', 'site_photo', 'spec_sheet', 'survey' => $raw,
         default => 'other',
     };
 }

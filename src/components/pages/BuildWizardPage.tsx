@@ -58,34 +58,37 @@ const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
 };
 
 const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
-  { value: 'construction', label: 'Construction' },
-  { value: 'photos', label: 'Photos' },
   { value: 'blueprints', label: 'Blueprints' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'delivery', label: 'Delivery' },
-  { value: 'milestone', label: 'Milestone' },
   { value: 'closeout', label: 'Closeout' },
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'inspection', label: 'Inspection' },
-  { value: 'permit', label: 'Permit' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'delivery', label: 'Delivery' },
   { value: 'documentation', label: 'Documentation' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'milestone', label: 'Milestone' },
   { value: 'other', label: 'Other' },
+  { value: 'permit', label: 'Permit' },
+  { value: 'photos', label: 'Photos' },
+  { value: 'purchase', label: 'Purchase' },
+  { value: 'utility', label: 'Utility' },
 ];
+STEP_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
-const PERMIT_STATUS_OPTIONS = ['', 'not_started', 'drafting', 'submitted', 'approved', 'rejected', 'closed'];
-const PURCHASE_UNIT_OPTIONS = ['', 'ea', 'ft', 'sqft', 'cuft', 'gal', 'lb', 'box', 'bundle', 'set', 'roll'];
+const PERMIT_STATUS_OPTIONS = ['', 'approved', 'closed', 'drafting', 'not_started', 'rejected', 'submitted'];
+const PURCHASE_UNIT_OPTIONS = ['', 'box', 'bundle', 'cuft', 'ea', 'ft', 'gal', 'lb', 'roll', 'set', 'sqft'];
 
 const DOC_KIND_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'photo', label: 'Photo' },
-  { value: 'site_photo', label: 'Site Photo' },
-  { value: 'home_photo', label: 'Home Photo' },
   { value: 'blueprint', label: 'Blueprint' },
-  { value: 'survey', label: 'Survey' },
-  { value: 'permit', label: 'Permit' },
-  { value: 'receipt', label: 'Receipt' },
-  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'document', label: 'Document' },
+  { value: 'home_photo', label: 'Home Photo' },
   { value: 'other', label: 'Other' },
+  { value: 'permit', label: 'Permit' },
+  { value: 'photo', label: 'Photo' },
+  { value: 'receipt', label: 'Receipt' },
+  { value: 'site_photo', label: 'Site Photo' },
+  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'survey', label: 'Survey' },
 ];
+DOC_KIND_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
 function formatCurrency(value: number | null): string {
   if (value === null || Number.isNaN(Number(value))) {
@@ -155,6 +158,10 @@ function toNumberOrNull(value: string): number | null {
 function toStringOrNull(value: string): string | null {
   const trimmed = String(value || '').trim();
   return trimmed === '' ? null : trimmed;
+}
+
+function sortAlpha(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' });
 }
 
 function calculateDurationDays(startDate: string | null | undefined, endDate: string | null | undefined): number | null {
@@ -651,7 +658,9 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   }, [documents]);
 
   const permitDocuments = React.useMemo(() => {
-    return documents.filter((d) => String(d.kind || '') === 'permit');
+    return documents
+      .filter((d) => String(d.kind || '') === 'permit')
+      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
   }, [documents]);
 
   const permitUsageByDocumentId = React.useMemo(() => {
@@ -667,14 +676,18 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   }, [steps]);
 
   const primaryPhotoChoices = React.useMemo(() => {
-    return documents.filter((doc) => {
-      const kind = String(doc.kind || '');
-      return Number(doc.is_image) === 1 && (kind === 'photo' || kind === 'site_photo' || kind === 'home_photo' || kind === 'progress_photo');
-    });
+    return documents
+      .filter((doc) => {
+        const kind = String(doc.kind || '');
+        return Number(doc.is_image) === 1 && (kind === 'photo' || kind === 'site_photo' || kind === 'home_photo' || kind === 'progress_photo');
+      })
+      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
   }, [documents]);
 
   const primaryBlueprintChoices = React.useMemo(() => {
-    return documents.filter((doc) => String(doc.kind || '') === 'blueprint');
+    return documents
+      .filter((doc) => String(doc.kind || '') === 'blueprint')
+      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
   }, [documents]);
 
   const phaseOptions = React.useMemo(() => {
@@ -688,15 +701,28 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       seen.add(key);
       options.push({ value: key, label: prettyPhaseLabel(key) });
     });
-    return options;
+    return options.sort((a, b) => sortAlpha(a.label, b.label));
   }, [steps]);
 
   const selectableDocSteps = React.useMemo(() => {
-    if (!docPhaseKey || docPhaseKey === 'general') {
-      return steps;
-    }
-    return steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
+    const filtered = !docPhaseKey || docPhaseKey === 'general'
+      ? steps
+      : steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
+
+    return [...filtered].sort((a, b) => {
+      const aLabel = `${prettyPhaseLabel(a.phase_key)} ${a.title}`;
+      const bLabel = `${prettyPhaseLabel(b.phase_key)} ${b.title}`;
+      return sortAlpha(aLabel, bLabel);
+    });
   }, [steps, docPhaseKey]);
+
+  const linkedStepOptions = React.useMemo(() => {
+    return [...steps].sort((a, b) => {
+      const aLabel = `${prettyPhaseLabel(a.phase_key)} ${a.title}`;
+      const bLabel = `${prettyPhaseLabel(b.phase_key)} ${b.title}`;
+      return sortAlpha(aLabel, bLabel);
+    });
+  }, [steps]);
 
   React.useEffect(() => {
     if (docStepId <= 0) {
@@ -1711,10 +1737,10 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   onChange={(e) => setProjectDraft((prev) => ({ ...prev, status: e.target.value }))}
                   onBlur={() => void updateProject({ status: projectDraft.status || 'planning' })}
                 >
-                  <option value="planning">Planning</option>
                   <option value="active">Active</option>
-                  <option value="on_hold">On Hold</option>
                   <option value="completed">Completed</option>
+                  <option value="on_hold">On Hold</option>
+                  <option value="planning">Planning</option>
                 </select>
               </label>
               <label>
@@ -2041,7 +2067,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                               onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
                             >
                               <option value="">No step linked</option>
-                              {steps.map((step) => (
+                              {linkedStepOptions.map((step) => (
                                 <option key={step.id} value={step.id}>
                                   {prettyPhaseLabel(step.phase_key)} - #{step.step_order} {step.title}
                                 </option>

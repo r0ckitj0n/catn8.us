@@ -137,11 +137,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
   const [stickyTopOffset, setStickyTopOffset] = React.useState<number>(8);
+  const [stickyHeadHeight, setStickyHeadHeight] = React.useState<number>(0);
   const [draggingStepId, setDraggingStepId] = React.useState<number>(0);
   const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
+  const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
 
   React.useEffect(() => {
@@ -167,6 +169,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     window.addEventListener('resize', updateStickyOffset);
     return () => window.removeEventListener('resize', updateStickyOffset);
   }, []);
+
+  React.useEffect(() => {
+    const node = stickyHeadRef.current;
+    if (!node) {
+      setStickyHeadHeight(0);
+      return;
+    }
+
+    const measure = () => setStickyHeadHeight(Math.ceil(node.getBoundingClientRect().height));
+    measure();
+    window.addEventListener('resize', measure);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => {
+        observer.disconnect();
+        window.removeEventListener('resize', measure);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('resize', measure);
+    };
+  }, [activeTab, projectId, view]);
 
   React.useEffect(() => {
     const onPopState = () => {
@@ -2003,7 +2030,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const renderBuildWorkspace = () => (
     <div className="build-wizard-shell build-wizard-has-footer-space" style={{ ['--build-wizard-sticky-top' as string]: `${stickyTopOffset}px` }}>
       <div className="build-wizard-workspace">
-        <div className="build-wizard-sticky-head">
+        <div className="build-wizard-sticky-head" ref={stickyHeadRef}>
           <div className="build-wizard-topbar">
             <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
             <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
@@ -2037,6 +2064,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             ))}
           </div>
         </div>
+        <div className="build-wizard-sticky-head-spacer" aria-hidden="true" style={{ height: stickyHeadHeight }} />
 
         {activeTab === 'overview' ? (
           <div className="build-wizard-card">

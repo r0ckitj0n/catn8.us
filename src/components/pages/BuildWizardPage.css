@@ -28,6 +28,10 @@
   padding: 24px;
 }
 
+.build-wizard-workspace {
+  position: relative;
+}
+
 .build-wizard-page-close {
   position: sticky;
   top: var(--build-wizard-sticky-top, 8px);
@@ -273,10 +277,18 @@
 }
 
 .build-wizard-sticky-head {
-  position: sticky;
+  position: fixed;
   top: var(--build-wizard-sticky-top, 8px);
+  left: 0;
+  right: 0;
   z-index: 20;
   background: linear-gradient(180deg, var(--catn8-bw-shell-bg-start) 0%, var(--catn8-bw-shell-bg-end) 100%);
+  padding: 0 24px;
+}
+
+.build-wizard-sticky-head-spacer {
+  height: 0;
+  pointer-events: none;
 }
 
 .build-wizard-topbar-title {
@@ -1507,6 +1519,11 @@
   .build-wizard-launcher,
   .build-wizard-workspace,
   .build-wizard-footer-inner {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .build-wizard-sticky-head {
     padding-left: 14px;
     padding-right: 14px;
   }

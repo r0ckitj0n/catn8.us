@@ -130,3 +130,16 @@
 - AI provider usage must flow through abstractions in `src/core/ai/*`.
 - Keep prompts isolated under `src/data/prompts/` when used.
 - Do not bypass backend data authority with client-side persistence hacks for core data.
+
+## 11. Live SQL Access Workflow
+- Prefer server-side SQL execution via the authenticated maintenance endpoint instead of direct remote MySQL connections when DNS/network access is unreliable from local dev.
+- Primary path for targeted SQL execution:
+  - `POST /api/database_maintenance.php?action=restore_database&admin_token=<token>`
+  - Send SQL as multipart form field `backup_file` (`.sql`, `.txt`, or `.gz`).
+- Build Wizard live merge UI endpoint is available at `/build_wizard_merge_live.php` for merge files prefixed `build_wizard_merge_`.
+- Keep live SQL scripts scoped and idempotent:
+  - Resolve target project/user by stable keys.
+  - Delete only rows with a narrow `source_ref`/scope before reinsert.
+  - Avoid broad destructive statements.
+- Do not store, hardcode, or commit live DB credentials/admin tokens in repo files or scripts; load from `.env`/secret store only.
+- Record generated/import SQL artifacts under `/.local/state/` for traceability.

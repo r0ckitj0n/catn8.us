@@ -755,6 +755,14 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const overviewMetrics = React.useMemo(() => {
     const today = new Date();
     const todayIso = toIsoDate(today);
+    const projectStart = parseDate(project?.target_start_date || null);
+    const timelineStart = steps
+      .map((s) => parseDate(s.expected_start_date) || parseDate(s.expected_end_date))
+      .filter(Boolean)
+      .sort((a, b) => (a!.getTime() - b!.getTime()))[0] || null;
+    const startDate = projectStart || timelineStart;
+    const startCountdownDays = startDate ? Math.round((startDate.getTime() - parseDate(todayIso)!.getTime()) / 86400000) : null;
+
     const projectEnd = parseDate(project?.target_completion_date || null);
     const timelineEnd = steps
       .map((s) => parseDate(s.expected_end_date) || parseDate(s.expected_start_date))
@@ -789,6 +797,8 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     const missingTimelineCount = steps.filter((s) => !s.expected_start_date || !s.expected_end_date).length;
 
     return {
+      startDate: startDate ? toIsoDate(startDate) : null,
+      startCountdownDays,
       endDate: endDate ? toIsoDate(endDate) : null,
       endCountdownDays,
       nextStep,
@@ -799,7 +809,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       missingEstimateCount,
       missingTimelineCount,
     };
-  }, [project?.target_completion_date, steps]);
+  }, [project?.target_completion_date, project?.target_start_date, steps]);
 
   const projectDocuments = React.useMemo(() => {
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
@@ -1991,6 +2001,17 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <div className="build-wizard-card">
             <h2>Project Overview</h2>
             <div className="build-wizard-overview-grid">
+              <div className="build-wizard-overview-metric">
+                <div className="build-wizard-overview-label">Project Start Date</div>
+                <div className="build-wizard-overview-value">{overviewMetrics.startDate ? formatTimelineDate(overviewMetrics.startDate) : 'Not set'}</div>
+                <div className="build-wizard-overview-sub">
+                  {overviewMetrics.startCountdownDays === null
+                    ? 'Set Target Start Date or step start dates.'
+                    : (overviewMetrics.startCountdownDays >= 0
+                      ? `${overviewMetrics.startCountdownDays} day(s) until start`
+                      : `${Math.abs(overviewMetrics.startCountdownDays)} day(s) since start`)}
+                </div>
+              </div>
               <div className="build-wizard-overview-metric">
                 <div className="build-wizard-overview-label">Next Looming Step</div>
                 <div className="build-wizard-overview-value">

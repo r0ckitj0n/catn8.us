@@ -16,6 +16,15 @@
   padding: 24px;
 }
 
+.build-wizard-page-close {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 24px 0;
+}
+
 .build-wizard-launcher h1 {
   margin: 0;
   font-size: 2rem;
@@ -1314,6 +1323,11 @@
 }
 
 @media (max-width: 768px) {
+  .build-wizard-page-close {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
   .build-wizard-launcher,
   .build-wizard-workspace,
   .build-wizard-footer-inner {

@@ -1,0 +1,21 @@
+.catn8-login-panel {
+  position: fixed;
+  z-index: 1090;
+  width: min(420px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+}
+
+.catn8-login-panel .card-header {
+  background: var(--card-bg, #ffffff);
+}
+
+.catn8-login-panel .nav-tabs {
+  margin-bottom: 0;
+}
+
+@media (max-width: 991.98px) {
+  .catn8-login-panel {
+    width: min(420px, calc(100vw - 24px));
+  }
+}

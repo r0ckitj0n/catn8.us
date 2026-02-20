@@ -147,7 +147,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
             ) : (
               <li className="nav-item">
                 <a
-                  className={"nav-link" + (active === 'login' ? ' active' : '')}
+                  className={"nav-link catn8-login-link" + (active === 'login' ? ' active' : '')}
                   href="login.php"
                   onClick={(e) => {
                     if (typeof onLoginClick === 'function') {

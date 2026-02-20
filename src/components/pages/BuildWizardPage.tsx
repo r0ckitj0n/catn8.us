@@ -978,6 +978,30 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     pushUrlState('launcher', null);
   };
 
+  const onCloseWizard = React.useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const fallbackUrl = '/';
+    const referrer = String(window.document.referrer || '').trim();
+    if (!referrer) {
+      window.location.assign(fallbackUrl);
+      return;
+    }
+    try {
+      const refUrl = new URL(referrer);
+      const refHost = String(refUrl.hostname || '').toLowerCase();
+      const isCatn8Domain = refHost === 'catn8.us' || refHost.endsWith('.catn8.us');
+      if (isCatn8Domain) {
+        window.location.assign(refUrl.toString());
+        return;
+      }
+    } catch (_) {
+      // Ignore malformed referrer and use default fallback.
+    }
+    window.location.assign(fallbackUrl);
+  }, []);
+
   const updateStepDraft = (stepId: number, patch: Partial<IBuildWizardStep>) => {
     setStepDrafts((prev) => ({
       ...prev,
@@ -1954,8 +1978,17 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const renderLauncher = () => (
     <div className="build-wizard-shell">
       <div className="build-wizard-launcher">
-        <h1>Build Launcher</h1>
-        <p>Choose an existing home build or start a new home plan.</p>
+        <div className="build-wizard-page-close">
+          <StandardIconButton
+            iconKey="close"
+            ariaLabel="Close Build Wizard"
+            title="Close Build Wizard"
+            className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+            onClick={onCloseWizard}
+          />
+        </div>
+        <h1>Build Wizard</h1>
+        <p>Choose an existing build or start a new build.</p>
 
         <div className="build-wizard-launcher-grid">
           <button className="build-wizard-launch-card is-new" onClick={() => void onCreateNewBuild()}>
@@ -2019,6 +2052,15 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
 
   const renderBuildWorkspace = () => (
     <div className="build-wizard-shell build-wizard-has-footer-space">
+      <div className="build-wizard-page-close">
+        <StandardIconButton
+          iconKey="close"
+          ariaLabel="Close Build Wizard"
+          title="Close Build Wizard"
+          className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+          onClick={onCloseWizard}
+        />
+      </div>
       <div className="build-wizard-workspace">
         <div className="build-wizard-topbar">
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>

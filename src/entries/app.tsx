@@ -12,6 +12,7 @@ import { ActivitiesPage } from '../components/pages/ActivitiesPage';
 import { ArcadePage } from '../components/pages/ArcadePage';
 import { AsteroidsPage } from '../components/pages/AsteroidsPage';
 import { BuildWizardPage } from '../components/pages/BuildWizardPage';
+import { ColoringPage } from '../components/pages/ColoringPage';
 import { FroggerPage } from '../components/pages/FroggerPage';
 import { GamesPage } from '../components/pages/GamesPage';
 import { HomePage } from '../components/pages/HomePage';
@@ -36,6 +37,7 @@ type AppPage =
   | 'games'
   | 'arcade'
   | 'activities'
+  | 'coloring'
   | 'build_wizard'
   | 'login'
   | 'mystery'
@@ -73,6 +75,7 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   games: GamesPage,
   arcade: ArcadePage,
   activities: ActivitiesPage,
+  coloring: ColoringPage,
   wordsearch: WordsearchPage,
   frogger: FroggerPage,
   asteroids: AsteroidsPage,

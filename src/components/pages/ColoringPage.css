@@ -1,0 +1,136 @@
+.catn8-coloring-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.catn8-coloring-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.catn8-coloring-sidebar {
+  position: sticky;
+  top: 92px;
+}
+
+.catn8-coloring-main {
+  min-width: 0;
+}
+
+.catn8-coloring-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.catn8-color-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+}
+
+.catn8-color-swatch.active {
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.35);
+  border-color: #0d6efd;
+}
+
+.catn8-novice-target {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(219, 234, 254, 0.95));
+  border: 1px solid rgba(13, 110, 253, 0.18);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.catn8-novice-chip {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.catn8-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.catn8-coloring-status {
+  min-height: 40px;
+}
+
+.catn8-coloring-canvas-wrap {
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.catn8-coloring-canvas {
+  display: block;
+  width: 100%;
+  max-height: 640px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+}
+
+.catn8-coloring-region {
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.catn8-coloring-region:hover {
+  transform: scale(1.01);
+  filter: brightness(1.03);
+}
+
+.catn8-coloring-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.catn8-page-tile {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.catn8-page-tile.active {
+  border-color: rgba(13, 110, 253, 0.5);
+  box-shadow: 0 8px 20px rgba(13, 110, 253, 0.12);
+}
+
+.catn8-page-tile-emoji {
+  font-size: 1.2rem;
+}
+
+.catn8-page-tile-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.catn8-page-tile-meta {
+  font-size: 0.78rem;
+  color: rgba(27, 34, 42, 0.72);
+}
+
+@media (max-width: 991px) {
+  .catn8-coloring-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .catn8-coloring-sidebar {
+    position: static;
+  }
+}

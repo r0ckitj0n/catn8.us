@@ -21,14 +21,14 @@
 }
 
 .welcome-message h1 {
-  color: white;
+  color: var(--catn8-glass-heading);
   font-size: 3.5rem;
   margin-bottom: 1rem;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);
 }
 
 .welcome-message p {
-  color: white;
+  color: var(--catn8-glass-text);
 }
 
 .catn8-dictionary-entry {
@@ -42,16 +42,16 @@
 .catn8-dictionary-word {
   margin: 0;
   font-weight: 900;
-  color: #fff;
+  color: var(--catn8-glass-heading);
 }
 
 .catn8-dictionary-pron {
   font-style: italic;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--catn8-glass-muted);
 }
 
 .catn8-dictionary-pos {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--catn8-glass-muted);
 }
 
 .catn8-dictionary-logo {
@@ -84,7 +84,7 @@
   text-align: center;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  color: white;
+  color: var(--catn8-glass-text);
   backdrop-filter: blur(10px);
   text-decoration: none;
   display: block;
@@ -108,7 +108,7 @@
 .quick-access-title {
   font-size: 1.75rem;
   font-weight: 700;
-  color: white;
+  color: var(--catn8-glass-heading);
   margin-bottom: 0.5rem;
 }
 
@@ -145,10 +145,10 @@
 
 .featured-card-content {
   padding: 1.5rem;
-  color: white;
+  color: var(--catn8-glass-text);
 }
 
 .featured-card-content h3 {
-  color: white;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  color: var(--catn8-glass-heading);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);
 }

@@ -29,6 +29,10 @@
   --catn8-global-surface-blur: 5px;
   --catn8-global-transition-ms: 170ms;
   --catn8-global-focus-ring: #2f75d8;
+  --catn8-glass-text: #121826;
+  --catn8-glass-heading: #1a1630;
+  --catn8-glass-muted: #131d2a;
+  --catn8-glass-chip-bg: rgba(255, 255, 255, 0.62);
 }
 
 body {

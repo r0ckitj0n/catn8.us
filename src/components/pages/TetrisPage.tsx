@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { useTetris } from '../../hooks/useTetris';
+import './ArcadeGamePages.css';
 
 export function TetrisPage(props: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -10,17 +11,17 @@ export function TetrisPage(props: any) {
 
   return (
     <PageLayout {...props}>
-      <div className="container py-4 text-white">
-        <h1 className="text-center mb-4" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+      <div className="container py-4 catn8-arcade-shell">
+        <h1 className="text-center mb-4 catn8-arcade-title">
           Tetris Adventure!
         </h1>
         
         <div className="row g-4 justify-content-center">
           <div className="col-lg-3">
-            <div className="catn8-card p-3 mb-3 bg-opacity-25 bg-white">
+            <div className="catn8-card p-3 mb-3 catn8-arcade-card">
               <p>Welcome to our Tetris playground! Build something wonderful piece by piece!</p>
             </div>
-            <div className="catn8-card p-3 bg-opacity-25 bg-white">
+            <div className="catn8-card p-3 catn8-arcade-card">
               <p>Did you know? Tetris helps our brains grow stronger!</p>
             </div>
           </div>
@@ -35,13 +36,13 @@ export function TetrisPage(props: any) {
           </div>
 
           <div className="col-lg-3">
-            <div className="catn8-card p-3 mb-3 bg-opacity-25 bg-white">
-              <div className="mb-2">Score: <span className="fw-bold text-warning">{score}</span></div>
-              <div className="mb-2">Level: <span className="fw-bold text-info">{level}</span></div>
-              <div className="mb-2">Lines: <span className="fw-bold text-success">{lines}</span></div>
+            <div className="catn8-card p-3 mb-3 catn8-arcade-card">
+              <div className="mb-2">Score: <span className="fw-bold catn8-arcade-stat-score">{score}</span></div>
+              <div className="mb-2">Level: <span className="fw-bold catn8-arcade-stat-level">{level}</span></div>
+              <div className="mb-2">Lines: <span className="fw-bold catn8-arcade-stat-lines">{lines}</span></div>
             </div>
 
-            <div className="catn8-card p-3 bg-opacity-25 bg-white">
+            <div className="catn8-card p-3 catn8-arcade-card">
               <button 
                 className="btn btn-primary w-100 mb-2 rounded-pill" 
                 onClick={startGame}
@@ -49,14 +50,14 @@ export function TetrisPage(props: any) {
                 {gameOver || !gameStarted ? 'Start Game' : 'Restart'}
               </button>
               <button 
-                className="btn btn-outline-light w-100 mb-3 rounded-pill" 
+                className="btn btn-outline-primary w-100 mb-3 rounded-pill" 
                 onClick={togglePause}
                 disabled={!gameStarted || gameOver}
               >
                 {paused ? 'Resume' : 'Pause'}
               </button>
               
-              <div className="small opacity-75">
+              <div className="small catn8-arcade-note">
                 <strong>How to play:</strong>
                 <ul className="ps-3 mb-0">
                   <li>← / → : Move</li>

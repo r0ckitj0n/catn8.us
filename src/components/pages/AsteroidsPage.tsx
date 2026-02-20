@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { useAsteroids } from '../../hooks/useAsteroids';
+import './ArcadeGamePages.css';
 
 export function AsteroidsPage(props: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,17 +15,17 @@ export function AsteroidsPage(props: any) {
 
   return (
     <PageLayout {...props}>
-      <div className="container py-4">
-        <h1 className="text-center mb-4 text-white" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+      <div className="container py-4 catn8-arcade-shell">
+        <h1 className="text-center mb-4 catn8-arcade-title">
           Asteroids Adventure!
         </h1>
         
         <div className="row g-4">
           <div className="col-lg-3">
-            <div className="catn8-card p-3 mb-3 bg-opacity-25 bg-white text-white">
+            <div className="catn8-card p-3 mb-3 catn8-arcade-card">
               <p>Welcome to our space adventure! Exploring the stars brings friends together!</p>
             </div>
-            <div className="catn8-card p-3 bg-opacity-25 bg-white text-white">
+            <div className="catn8-card p-3 catn8-arcade-card">
               <p>Did you know? Asteroids helps improve hand-eye coordination!</p>
             </div>
           </div>
@@ -39,22 +40,22 @@ export function AsteroidsPage(props: any) {
           </div>
 
           <div className="col-lg-3">
-            <div className="catn8-card p-3 mb-3 bg-opacity-25 bg-white text-white">
-              <div className="mb-2">Score: <span className="fw-bold text-warning">{score}</span></div>
-              <div className="mb-2">Level: <span className="fw-bold text-info">{level}</span></div>
-              <div className="mb-2">Lives: <span className="fw-bold text-danger">{lives}</span></div>
+            <div className="catn8-card p-3 mb-3 catn8-arcade-card">
+              <div className="mb-2">Score: <span className="fw-bold catn8-arcade-stat-score">{score}</span></div>
+              <div className="mb-2">Level: <span className="fw-bold catn8-arcade-stat-level">{level}</span></div>
+              <div className="mb-2">Lives: <span className="fw-bold catn8-arcade-stat-lives">{lives}</span></div>
               <div className="mb-2">
                 Shield: {shieldActive ? (
-                  <span className="text-info">Active ({Math.ceil(shieldTimeLeft)}s)</span>
+                  <span className="catn8-arcade-stat-active">Active ({Math.ceil(shieldTimeLeft)}s)</span>
                 ) : shieldReady ? (
-                  <span className="text-success">Ready (Z)</span>
+                  <span className="catn8-arcade-stat-ready">Ready (Z)</span>
                 ) : (
-                  <span className="text-warning">Recharging ({Math.ceil(shieldCooldownLeft)}s)</span>
+                  <span className="catn8-arcade-stat-cooldown">Recharging ({Math.ceil(shieldCooldownLeft)}s)</span>
                 )}
               </div>
             </div>
 
-            <div className="catn8-card p-3 bg-opacity-25 bg-white text-white">
+            <div className="catn8-card p-3 catn8-arcade-card">
               <button 
                 className="btn btn-primary w-100 mb-2 rounded-pill" 
                 onClick={startGame}
@@ -62,14 +63,14 @@ export function AsteroidsPage(props: any) {
                 {gameOver || !gameStarted ? 'Start Game' : 'Restart'}
               </button>
               <button 
-                className="btn btn-outline-light w-100 mb-3 rounded-pill" 
+                className="btn btn-outline-primary w-100 mb-3 rounded-pill" 
                 onClick={togglePause}
                 disabled={!gameStarted || gameOver}
               >
                 {paused ? 'Resume' : 'Pause'}
               </button>
               
-              <div className="small opacity-75">
+              <div className="small catn8-arcade-note">
                 <strong>How to play:</strong>
                 <ul className="ps-3 mb-0">
                   <li>← / → : Rotate</li>

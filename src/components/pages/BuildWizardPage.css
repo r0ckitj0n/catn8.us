@@ -30,7 +30,7 @@
 
 .build-wizard-page-close {
   position: sticky;
-  top: 12px;
+  top: var(--build-wizard-sticky-top, 8px);
   z-index: 20;
   display: flex;
   justify-content: flex-end;
@@ -270,6 +270,13 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 14px;
+}
+
+.build-wizard-sticky-head {
+  position: sticky;
+  top: var(--build-wizard-sticky-top, 8px);
+  z-index: 20;
+  background: linear-gradient(180deg, var(--catn8-bw-shell-bg-start) 0%, var(--catn8-bw-shell-bg-end) 100%);
 }
 
 .build-wizard-topbar-title {

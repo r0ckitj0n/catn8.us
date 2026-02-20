@@ -118,6 +118,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [recoveryUploadToken, setRecoveryUploadToken] = React.useState<string>('');
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
+  const [stickyTopOffset, setStickyTopOffset] = React.useState<number>(8);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -128,6 +129,23 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setActiveTab('overview');
     }
   }, [initialUrlState.view, initialUrlState.projectId, projectId, openProject]);
+
+  React.useEffect(() => {
+    const updateStickyOffset = () => {
+      const nav = document.querySelector<HTMLElement>('.navbar.sticky-top, .navbar.fixed-top');
+      if (!nav) {
+        setStickyTopOffset(8);
+        return;
+      }
+      const navRect = nav.getBoundingClientRect();
+      const navStyle = window.getComputedStyle(nav);
+      const marginBottom = Number.parseFloat(navStyle.marginBottom || '0') || 0;
+      setStickyTopOffset(Math.max(8, Math.ceil(navRect.height + marginBottom + 8)));
+    };
+    updateStickyOffset();
+    window.addEventListener('resize', updateStickyOffset);
+    return () => window.removeEventListener('resize', updateStickyOffset);
+  }, []);
 
   React.useEffect(() => {
     const onPopState = () => {
@@ -1537,41 +1555,41 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   );
 
   const renderBuildWorkspace = () => (
-    <div className="build-wizard-shell build-wizard-has-footer-space">
-      <div className="build-wizard-page-close">
-        <StandardIconButton
-          iconKey="close"
-          ariaLabel="Close Build Wizard"
-          title="Close Build Wizard"
-          className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-          onClick={onCloseWizard}
-        />
-      </div>
+    <div className="build-wizard-shell build-wizard-has-footer-space" style={{ ['--build-wizard-sticky-top' as string]: `${stickyTopOffset}px` }}>
       <div className="build-wizard-workspace">
-        <div className="build-wizard-topbar">
-          <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
-          <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
-          <div className="build-wizard-topbar-actions">
-            <button className="btn btn-primary btn-sm" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
-              {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
-            </button>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
+        <div className="build-wizard-sticky-head">
+          <div className="build-wizard-topbar">
+            <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
+            <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
+            <div className="build-wizard-topbar-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
+                {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
+              </button>
+              <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
+              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
+              <StandardIconButton
+                iconKey="close"
+                ariaLabel="Close Build Wizard"
+                title="Close Build Wizard"
+                className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                onClick={onCloseWizard}
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="build-wizard-tabs">
-          {BUILD_TABS.filter((tab) => tab.id !== 'desk').map((tab) => (
-            <button
-              key={tab.id}
-              className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
-              style={{ ['--tab-phase-color' as string]: TAB_PHASE_COLORS[tab.id] }}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="build-wizard-tab-swatch" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
+          <div className="build-wizard-tabs">
+            {BUILD_TABS.filter((tab) => tab.id !== 'desk').map((tab) => (
+              <button
+                key={tab.id}
+                className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
+                style={{ ['--tab-phase-color' as string]: TAB_PHASE_COLORS[tab.id] }}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span className="build-wizard-tab-swatch" />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {activeTab === 'overview' ? (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IMasterCharacter, IMasterLocation, IMasterWeapon, IMasterMotive } from '../../../types/game';
 import { IMasterAssetsDetails } from '../../../types/mysteryHooks';
+import { buildMasterAssetDetailState } from '../lib/masterAssetDetailsMapper';
 
 type MasterAssetItem = IMasterCharacter | IMasterLocation | IMasterWeapon | IMasterMotive;
 
@@ -172,90 +173,14 @@ export function useMasterAssetsDetails(
     setMasterAssetDetailsItem(item);
     setMasterAssetDetailsName(item.name || '');
     setMasterAssetDetailsSlug(item.slug || '');
-    
-    const fields = item.data || item.roles_json || {};
-    
-    if (type === 'character') {
-      const char = item as IMasterCharacter;
-      const mergedFields = {
-        ...fields,
-        dob: char.dob || fields.dob || '',
-        age: char.age || fields.age || 0,
-        hometown: char.hometown || fields.hometown || '',
-        address: char.address || fields.address || '',
-        ethnicity: char.ethnicity || fields.ethnicity || '',
-        zodiac: char.zodiac || fields.zodiac || '',
-        mbti: char.mbti || fields.mbti || '',
-        height: char.height || fields.height || '',
-        weight: char.weight || fields.weight || '',
-        eye_color: char.eye_color || fields.eye_color || '',
-        hair_color: char.hair_color || fields.hair_color || '',
-        distinguishing_marks: char.distinguishing_marks || fields.distinguishing_marks || '',
-        education: char.education || fields.education || '',
-        criminal_record: char.criminal_record || fields.criminal_record || '',
-        fav_color: char.fav_color || fields.fav_color || '',
-        fav_snack: char.fav_snack || fields.fav_snack || '',
-        fav_drink: char.fav_drink || fields.fav_drink || '',
-        fav_music: char.fav_music || fields.fav_music || '',
-        fav_hobby: char.fav_hobby || fields.fav_hobby || '',
-        fav_pet: char.fav_pet || fields.fav_pet || '',
-        aliases: Array.isArray(char.aliases_json) ? char.aliases_json : (fields.aliases || []),
-        employment: Array.isArray(char.employment_json) ? char.employment_json : (fields.employment || []),
-        rapport_likes: Array.isArray(char.rapport_likes_json) ? char.rapport_likes_json : (fields.rapport_likes || []),
-        rapport_dislikes: Array.isArray(char.rapport_dislikes_json) ? char.rapport_dislikes_json : (fields.rapport_dislikes || []),
-        rapport_quirks: Array.isArray(char.rapport_quirks_json) ? char.rapport_quirks_json : (fields.rapport_quirks || []),
-        rapport_fun_facts: Array.isArray(char.rapport_fun_facts_json) ? char.rapport_fun_facts_json : (fields.rapport_fun_facts || []),
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsRapport(char.rapport_json || fields.rapport || { likes: [], dislikes: [], quirks: [], fun_facts: [] });
-      setMasterAssetDetailsFavorites(char.favorites_json || fields.favorites || { color: '', snack: '', drink: '', music: '', hobby: '', pet: '' });
-    } else if (type === 'location') {
-      const loc = item as IMasterLocation;
-      const mergedFields = {
-        ...fields,
-        description: loc.description || fields.description || '',
-        location_id: loc.location_id || fields.location_id || '',
-        address_line1: loc.address_line1 || fields.address_line1 || '',
-        address_line2: loc.address_line2 || fields.address_line2 || '',
-        city: loc.city || fields.city || '',
-        region: loc.region || fields.region || '',
-        postal_code: loc.postal_code || fields.postal_code || '',
-        country: loc.country || fields.country || '',
-        base_image_prompt: loc.base_image_prompt || fields.base_image_prompt || '',
-        overlay_asset_prompt: loc.overlay_asset_prompt || fields.overlay_asset_prompt || '',
-        overlay_trigger: loc.overlay_trigger || fields.overlay_trigger || '',
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsData({
-        description: loc.description || fields.description || '',
-        items: loc.items || fields.items || [],
-        image: loc.image || fields.image || null
-      });
-    } else if (type === 'weapon') {
-      const wp = item as IMasterWeapon;
-      const mergedFields = {
-        ...fields,
-        description: wp.description || fields.description || '',
-        fingerprints: Array.isArray(wp.fingerprints) ? wp.fingerprints : (fields.fingerprints || []),
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsData({
-        description: wp.description || fields.description || '',
-        items: wp.items || fields.items || [],
-        image: wp.image || fields.image || null
-      });
-    } else {
-      setMasterAssetDetailsFields(fields);
-      setMasterAssetDetailsData({
-        description: item.description || fields.description || '',
-        items: item.items || fields.items || [],
-        image: item.image || fields.image || null
-      });
-    }
+    const nextState = buildMasterAssetDetailState(type, item);
+    setMasterAssetDetailsFields(nextState.fields);
+    if (nextState.rapport) setMasterAssetDetailsRapport(nextState.rapport);
+    if (nextState.favorites) setMasterAssetDetailsFavorites(nextState.favorites);
+    if (nextState.data) setMasterAssetDetailsData(nextState.data);
 
     await loadMasterAssetFieldLocks(type, item.id);
     
-    // Set clean snapshot AFTER all state is updated
     window.setTimeout(() => {
       masterAssetDetailsCleanSnapshotRef.current = buildMasterAssetDetailsSnapshot();
     }, 0);
@@ -269,115 +194,16 @@ export function useMasterAssetsDetails(
     setMasterAssetDetailsName(item.name || '');
     setMasterAssetDetailsSlug(item.slug || '');
     
-    const fields = item.data || item.roles_json || {};
-    
-    if (type === 'character') {
-      const char = item as IMasterCharacter;
-      const mergedFields = {
-        ...fields,
-        dob: char.dob || fields.dob || '',
-        age: char.age || fields.age || 0,
-        hometown: char.hometown || fields.hometown || '',
-        address: char.address || fields.address || '',
-        ethnicity: char.ethnicity || fields.ethnicity || '',
-        zodiac: char.zodiac || fields.zodiac || '',
-        mbti: char.mbti || fields.mbti || '',
-        height: char.height || fields.height || '',
-        weight: char.weight || fields.weight || '',
-        eye_color: char.eye_color || fields.eye_color || '',
-        hair_color: char.hair_color || fields.hair_color || '',
-        distinguishing_marks: char.distinguishing_marks || fields.distinguishing_marks || '',
-        education: char.education || fields.education || '',
-        criminal_record: char.criminal_record || fields.criminal_record || '',
-        fav_color: char.fav_color || fields.fav_color || '',
-        fav_snack: char.fav_snack || fields.fav_snack || '',
-        fav_drink: char.fav_drink || fields.fav_drink || '',
-        fav_music: char.fav_music || fields.fav_music || '',
-        fav_hobby: char.fav_hobby || fields.fav_hobby || '',
-        fav_pet: char.fav_pet || fields.fav_pet || '',
-        aliases: Array.isArray(char.aliases_json) ? char.aliases_json : (fields.aliases || []),
-        employment: Array.isArray(char.employment_json) ? char.employment_json : (fields.employment || []),
-        rapport_likes: Array.isArray(char.rapport_likes_json) ? char.rapport_likes_json : (fields.rapport_likes || []),
-        rapport_dislikes: Array.isArray(char.rapport_dislikes_json) ? char.rapport_dislikes_json : (fields.rapport_dislikes || []),
-        rapport_quirks: Array.isArray(char.rapport_quirks_json) ? char.rapport_quirks_json : (fields.rapport_quirks || []),
-        rapport_fun_facts: Array.isArray(char.rapport_fun_facts_json) ? char.rapport_fun_facts_json : (fields.rapport_fun_facts || []),
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsRapport(char.rapport_json || fields.rapport || { likes: [], dislikes: [], quirks: [], fun_facts: [] });
-      setMasterAssetDetailsFavorites(char.favorites_json || fields.favorites || { color: '', snack: '', drink: '', music: '', hobby: '', pet: '' });
-    } else if (type === 'location') {
-      const loc = item as IMasterLocation;
-      const mergedFields = {
-        ...fields,
-        description: loc.description || fields.description || '',
-        location_id: loc.location_id || fields.location_id || '',
-        address_line1: loc.address_line1 || fields.address_line1 || '',
-        address_line2: loc.address_line2 || fields.address_line2 || '',
-        city: loc.city || fields.city || '',
-        region: loc.region || fields.region || '',
-        postal_code: loc.postal_code || fields.postal_code || '',
-        country: loc.country || fields.country || '',
-        base_image_prompt: loc.base_image_prompt || fields.base_image_prompt || '',
-        overlay_asset_prompt: loc.overlay_asset_prompt || fields.overlay_asset_prompt || '',
-        overlay_trigger: loc.overlay_trigger || fields.overlay_trigger || '',
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsData({
-        description: loc.description || fields.description || '',
-        items: loc.items || fields.items || [],
-        image: loc.image || fields.image || null
-      });
-    } else if (type === 'weapon') {
-      const wp = item as IMasterWeapon;
-      const mergedFields = {
-        ...fields,
-        description: wp.description || fields.description || '',
-        fingerprints: Array.isArray(wp.fingerprints) ? wp.fingerprints : (fields.fingerprints || []),
-      };
-      setMasterAssetDetailsFields(mergedFields);
-      setMasterAssetDetailsData({
-        description: wp.description || fields.description || '',
-        items: wp.items || fields.items || [],
-        image: wp.image || fields.image || null
-      });
-    } else {
-      setMasterAssetDetailsFields(fields);
-      setMasterAssetDetailsData({
-        description: item.description || fields.description || '',
-        items: item.items || fields.items || [],
-        image: item.image || fields.image || null
-      });
-    }
+    const nextState = buildMasterAssetDetailState(type, item);
+    setMasterAssetDetailsFields(nextState.fields);
+    if (nextState.rapport) setMasterAssetDetailsRapport(nextState.rapport);
+    if (nextState.favorites) setMasterAssetDetailsFavorites(nextState.favorites);
+    if (nextState.data) setMasterAssetDetailsData(nextState.data);
     
     window.setTimeout(() => {
       masterAssetDetailsCleanSnapshotRef.current = buildMasterAssetDetailsSnapshot();
     }, 0);
   }, [masterAssetDetailsItem, masterAssetDetailsType, buildMasterAssetDetailsSnapshot]);
 
-  return {
-    masterAssetDetailsOpen, setMasterAssetDetailsOpen,
-    masterAssetDetailsItem, setMasterAssetDetailsItem,
-    masterAssetDetailsType, setMasterAssetDetailsType,
-    masterAssetDetailsName, setMasterAssetDetailsName,
-    masterAssetDetailsSlug, setMasterAssetDetailsSlug,
-    masterAssetDetailsFields, setMasterAssetDetailsFields,
-    masterAssetDetailsLocks, setMasterAssetDetailsLocks,
-    masterAssetDetailsData, setMasterAssetDetailsData,
-    masterAssetDetailsRapport, setMasterAssetDetailsRapport,
-    masterAssetDetailsFavorites, setMasterAssetDetailsFavorites,
-    masterAssetDetailsDataText,
-    getMasterAssetFieldLocks,
-    loadMasterAssetFieldLocks,
-    toggleMasterAssetFieldLock,
-    isMasterAssetFieldLocked,
-    openMasterAssetDetails,
-    updateMasterAssetDetailsDataObject,
-    getMasterAssetDataObject,
-    isMasterAssetDetailsDirty,
-    masterAssetDetailsCleanSnapshotRef,
-    masterCharacterRapport,
-    masterCharacterMissingRequiredImageFields,
-    resetMasterAssetDetails,
-    buildMasterAssetDetailsSnapshot
-  };
+  return { masterAssetDetailsOpen, setMasterAssetDetailsOpen, masterAssetDetailsItem, setMasterAssetDetailsItem, masterAssetDetailsType, setMasterAssetDetailsType, masterAssetDetailsName, setMasterAssetDetailsName, masterAssetDetailsSlug, setMasterAssetDetailsSlug, masterAssetDetailsFields, setMasterAssetDetailsFields, masterAssetDetailsLocks, setMasterAssetDetailsLocks, masterAssetDetailsData, setMasterAssetDetailsData, masterAssetDetailsRapport, setMasterAssetDetailsRapport, masterAssetDetailsFavorites, setMasterAssetDetailsFavorites, masterAssetDetailsDataText, getMasterAssetFieldLocks, loadMasterAssetFieldLocks, toggleMasterAssetFieldLock, isMasterAssetFieldLocked, openMasterAssetDetails, updateMasterAssetDetailsDataObject, getMasterAssetDataObject, isMasterAssetDetailsDirty, masterAssetDetailsCleanSnapshotRef, masterCharacterRapport, masterCharacterMissingRequiredImageFields, resetMasterAssetDetails, buildMasterAssetDetailsSnapshot };
 }

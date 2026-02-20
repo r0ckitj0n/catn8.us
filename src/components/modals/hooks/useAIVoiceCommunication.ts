@@ -3,10 +3,9 @@ import { ApiClient } from '../../../core/ApiClient';
 import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/storageUtils';
 import { formatTestResult } from '../../../utils/textUtils';
 import { IToast } from '../../../types/common';
-
+import { buildAiVoiceSnapshot } from './aiVoiceSnapshot';
 const LS_VOICE_GCP = 'catn8.last_test.ai_voice.gcp_service_account';
 const LS_VOICE_GEMINI_TOKEN = 'catn8.last_test.ai_voice.gemini_live_token';
-
 export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast) => void) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -14,14 +13,12 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
   const cleanSnapshotRef = React.useRef('');
   const [lastGcpServiceAccountTest, setLastGcpServiceAccountTest] = React.useState('');
   const [lastGeminiLiveTokenTest, setLastGeminiLiveTokenTest] = React.useState('');
-
   const [ttsVoiceMapActive, setTtsVoiceMapActive] = React.useState('google');
   const [ttsOutputFormat, setTtsOutputFormat] = React.useState('mp3');
   const [ttsLanguageCode, setTtsLanguageCode] = React.useState('en-US');
   const [ttsVoiceName, setTtsVoiceName] = React.useState('');
   const [ttsSpeakingRate, setTtsSpeakingRate] = React.useState(1.0);
   const [ttsPitch, setTtsPitch] = React.useState(0.0);
-
   const [hasMysteryServiceAccount, setHasMysteryServiceAccount] = React.useState(0);
   const [hasMysteryGeminiKey, setHasMysteryGeminiKey] = React.useState(0);
   const [mysteryServiceAccountJson, setMysteryServiceAccountJson] = React.useState('');
@@ -29,23 +26,19 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
   const [mysteryGeminiKeyName, setMysteryGeminiKeyName] = React.useState('');
   const [mysteryGeminiProjectName, setMysteryGeminiProjectName] = React.useState('');
   const [mysteryGeminiProjectNumber, setMysteryGeminiProjectNumber] = React.useState('');
-
   const buildSnapshot = React.useCallback(() => {
-    return JSON.stringify({
-      mysteryServiceAccountJson: '',
-      mysteryGeminiApiKey: '',
-      mysteryGeminiKeyName: String(mysteryGeminiKeyName || ''),
-      mysteryGeminiProjectName: String(mysteryGeminiProjectName || ''),
-      mysteryGeminiProjectNumber: String(mysteryGeminiProjectNumber || ''),
-      ttsVoiceMapActive: String(ttsVoiceMapActive || ''),
-      ttsOutputFormat: String(ttsOutputFormat || ''),
-      ttsLanguageCode: String(ttsLanguageCode || ''),
-      ttsVoiceName: String(ttsVoiceName || ''),
-      ttsSpeakingRate: Number(ttsSpeakingRate),
-      ttsPitch: Number(ttsPitch),
+    return buildAiVoiceSnapshot({
+      mysteryGeminiKeyName,
+      mysteryGeminiProjectName,
+      mysteryGeminiProjectNumber,
+      ttsVoiceMapActive,
+      ttsOutputFormat,
+      ttsLanguageCode,
+      ttsVoiceName,
+      ttsSpeakingRate,
+      ttsPitch,
     });
   }, [mysteryGeminiKeyName, mysteryGeminiProjectName, mysteryGeminiProjectNumber, ttsVoiceMapActive, ttsOutputFormat, ttsLanguageCode, ttsVoiceName, ttsSpeakingRate, ttsPitch]);
-
   React.useEffect(() => {
     if (!open) return;
     setBusy(true);
@@ -55,7 +48,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
     setLastGeminiLiveTokenTest(catn8LocalStorageGet(LS_VOICE_GEMINI_TOKEN));
     setMysteryServiceAccountJson('');
     setMysteryGeminiApiKey('');
-
     Promise.all([
       ApiClient.get('/api/settings/mystery_gcp.php'),
       ApiClient.get('/api/settings/mystery_gemini.php'),
@@ -64,7 +56,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       .then(([resGcp, resGemini, resTtsDefaults]) => {
         setHasMysteryServiceAccount(Number(resGcp?.has_service_account_json || 0));
         setHasMysteryGeminiKey(Number(resGemini?.has_api_key || 0));
-
         const td = (resTtsDefaults?.tts_defaults && typeof resTtsDefaults.tts_defaults === 'object') ? resTtsDefaults.tts_defaults : {};
         setTtsVoiceMapActive(String(td?.voice_map_active || 'google'));
         setTtsOutputFormat(String(td?.output_format || 'mp3'));
@@ -74,17 +65,13 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
         setTtsSpeakingRate(typeof sr === 'number' ? sr : Number(sr || 1.0));
         const p = td?.pitch;
         setTtsPitch(typeof p === 'number' ? p : Number(p || 0.0));
-
         const kn = String(resGemini?.key_name || '');
         const pn = String(resGemini?.project_name || '');
         const pnum = String(resGemini?.project_number || '');
         setMysteryGeminiKeyName(kn);
         setMysteryGeminiProjectName(pn);
         setMysteryGeminiProjectNumber(pnum);
-
-        cleanSnapshotRef.current = JSON.stringify({
-          mysteryServiceAccountJson: '',
-          mysteryGeminiApiKey: '',
+        cleanSnapshotRef.current = buildAiVoiceSnapshot({
           mysteryGeminiKeyName: kn,
           mysteryGeminiProjectName: pn,
           mysteryGeminiProjectNumber: pnum,
@@ -99,25 +86,21 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       .catch((e) => setError(e?.message || 'Failed to load voice configuration'))
       .finally(() => setBusy(false));
   }, [open]);
-
   React.useEffect(() => {
     if (error && onToast) {
       onToast({ tone: 'error', message: error });
       setError('');
     }
   }, [error, onToast]);
-
   React.useEffect(() => {
     if (message && onToast) {
       onToast({ tone: 'success', message: message });
       setMessage('');
     }
   }, [message, onToast]);
-
   const isDirty = React.useMemo(() => {
     return cleanSnapshotRef.current !== buildSnapshot();
   }, [buildSnapshot]);
-
   const testGeminiLiveToken = async () => {
     setLastGeminiLiveTokenTest('Running…');
     setBusy(true);
@@ -138,7 +121,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       setBusy(false);
     }
   };
-
   const testMysteryGcpServiceAccount = async () => {
     setLastGcpServiceAccountTest('Running…');
     setBusy(true);
@@ -157,7 +139,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       setBusy(false);
     }
   };
-
   const save = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setBusy(true);
@@ -167,12 +148,10 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       if (mysteryGeminiKeyName.trim()) geminiPayload.key_name = mysteryGeminiKeyName;
       if (mysteryGeminiProjectName.trim()) geminiPayload.project_name = mysteryGeminiProjectName;
       if (mysteryGeminiProjectNumber.trim()) geminiPayload.project_number = mysteryGeminiProjectNumber;
-
       const [resGcp, resGemini] = await Promise.all([
         mysteryServiceAccountJson.trim() ? ApiClient.post('/api/settings/mystery_gcp.php', { service_account_json: mysteryServiceAccountJson }) : Promise.resolve(null),
         Object.keys(geminiPayload).length > 0 ? ApiClient.post('/api/settings/mystery_gemini.php', geminiPayload) : Promise.resolve(null),
       ]);
-
       const resTtsDefaults = await ApiClient.post('/api/settings/mystery_tts_defaults.php', {
         voice_map_active: ttsVoiceMapActive,
         output_format: ttsOutputFormat,
@@ -181,7 +160,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
         speaking_rate: Number(ttsSpeakingRate),
         pitch: Number(ttsPitch),
       });
-
       if (resGcp) setHasMysteryServiceAccount(Number(resGcp?.has_service_account_json || 0));
       if (resGemini) {
         setHasMysteryGeminiKey(Number(resGemini?.has_api_key || 0));
@@ -191,7 +169,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       }
       setMysteryServiceAccountJson('');
       setMysteryGeminiApiKey('');
-
       const td = resTtsDefaults?.tts_defaults || {};
       setTtsVoiceMapActive(String(td?.voice_map_active || 'google'));
       setTtsOutputFormat(String(td?.output_format || 'mp3'));
@@ -199,10 +176,7 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       setTtsVoiceName(String(td?.voice_name || ''));
       setTtsSpeakingRate(Number(td?.speaking_rate ?? 1.0));
       setTtsPitch(Number(td?.pitch ?? 0.0));
-
-      cleanSnapshotRef.current = JSON.stringify({
-        mysteryServiceAccountJson: '',
-        mysteryGeminiApiKey: '',
+      cleanSnapshotRef.current = buildAiVoiceSnapshot({
         mysteryGeminiKeyName: String(resGemini?.key_name || mysteryGeminiKeyName || ''),
         mysteryGeminiProjectName: String(resGemini?.project_name || mysteryGeminiProjectName || ''),
         mysteryGeminiProjectNumber: String(resGemini?.project_number || mysteryGeminiProjectNumber || ''),
@@ -220,7 +194,6 @@ export function useAIVoiceCommunication(open: boolean, onToast?: (toast: IToast)
       setBusy(false);
     }
   };
-
   return {
     busy, isDirty,
     ttsVoiceMapActive, setTtsVoiceMapActive,

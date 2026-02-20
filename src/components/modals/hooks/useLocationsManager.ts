@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IToast } from '../../../types/common';
 import { useLocationsDraft } from './useLocationsDraft';
-
+import { EMPTY_LOCATION_BASELINE, isLocationDirty, mapLocationToBaseline } from './locationsManagerUtils';
 /**
  * useLocationsManager - Refactored Hook
  * COMPLIANCE: File size < 250 lines
@@ -18,14 +18,8 @@ export function useLocationsManager(
   const [locations, setLocations] = useState<any[]>([]);
   const [locationSelectedId, setLocationSelectedId] = React.useState('');
   const [locationSelectedIsLocked, setLocationSelectedIsLocked] = React.useState(false);
-  const [locationBaseline, setLocationBaseline] = useState<any>({ 
-    id: '', slug: '', name: '', description: '', location_id: '', 
-    address_line1: '', address_line2: '', city: '', region: '', 
-    postal_code: '', country: '', is_archived: 0 
-  });
-
+  const [locationBaseline, setLocationBaseline] = useState<any>(EMPTY_LOCATION_BASELINE);
   const draft = useLocationsDraft();
-
   const loadLocations = React.useCallback(async () => {
     setLocationsBusy(true);
     setLocationsError('');
@@ -44,7 +38,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [locationSelectedId, locationsIncludeArchived]);
-
   const selectLocationById = React.useCallback((id: string, list: any[]) => {
     const sid = String(id || '');
     setLocationSelectedId(sid);
@@ -52,27 +45,13 @@ export function useLocationsManager(
     if (!found) {
       setLocationSelectedIsLocked(false);
       draft.resetDraft();
-      setLocationBaseline({ id: '', slug: '', name: '', description: '', location_id: '', address_line1: '', address_line2: '', city: '', region: '', postal_code: '', country: '', is_archived: 0 });
+      setLocationBaseline(EMPTY_LOCATION_BASELINE);
       return;
     }
     setLocationSelectedIsLocked(Boolean(Number(found?.is_locked || 0) === 1));
     draft.setDraftFromLocation(found);
-    setLocationBaseline({
-      id: String(found?.id || ''),
-      slug: String(found?.slug || ''),
-      name: String(found?.name || ''),
-      description: String(found?.description || ''),
-      location_id: String(found?.location_id || ''),
-      address_line1: String(found?.address_line1 || ''),
-      address_line2: String(found?.address_line2 || ''),
-      city: String(found?.city || ''),
-      region: String(found?.region || ''),
-      postal_code: String(found?.postal_code || ''),
-      country: String(found?.country || ''),
-      is_archived: Number(found?.is_archived || 0) === 1 ? 1 : 0,
-    });
+    setLocationBaseline(mapLocationToBaseline(found));
   }, [draft]);
-
   const saveLocation = React.useCallback(async () => {
     if (!isAdmin || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -107,7 +86,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedIsLocked, locationSelectedId, draft, loadLocations, locationsIncludeArchived, selectLocationById]);
-
   const generateLocation = React.useCallback(async (fillMissingOnly: boolean) => {
     if (!isAdmin || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -139,41 +117,19 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedIsLocked, locationSelectedId, draft, loadLocations]);
-
   React.useEffect(() => {
     loadLocations();
   }, [loadLocations]);
-
   React.useEffect(() => {
     if (locationsError) {
       showMysteryToast({ tone: 'error', message: String(locationsError) });
       setLocationsError('');
     }
   }, [locationsError, showMysteryToast]);
-
-  const locationIsDirty = React.useMemo(() => {
-    const base = locationBaseline || {};
-    const norm = (v: any) => String(v ?? '');
-    const normBool = (v: any) => (Boolean(v) ? 1 : 0);
-    return (
-      norm(base.slug) !== norm(draft.locationSlugDraft) ||
-      norm(base.name) !== norm(draft.locationNameDraft) ||
-      norm(base.description) !== norm(draft.locationDescriptionDraft) ||
-      norm(base.location_id) !== norm(draft.locationExternalIdDraft) ||
-      norm(base.address_line1) !== norm(draft.locationAddress1Draft) ||
-      norm(base.address_line2) !== norm(draft.locationAddress2Draft) ||
-      norm(base.city) !== norm(draft.locationCityDraft) ||
-      norm(base.region) !== norm(draft.locationRegionDraft) ||
-      norm(base.postal_code) !== norm(draft.locationPostalDraft) ||
-      norm(base.country) !== norm(draft.locationCountryDraft) ||
-      normBool(base.is_archived) !== normBool(draft.locationIsArchivedDraft)
-    );
-  }, [locationBaseline, draft]);
-
+  const locationIsDirty = React.useMemo(() => isLocationDirty(locationBaseline, draft), [locationBaseline, draft]);
   const canGenerateLocationDetails = React.useMemo(() => {
     return Boolean(draft.locationNameDraft.trim());
   }, [draft.locationNameDraft]);
-
   const deleteLocationAction = React.useCallback(async () => {
     if (!isAdmin || !locationSelectedId || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -189,7 +145,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedId, locationSelectedIsLocked, draft, loadLocations, showMysteryToast]);
-
   const generateLocationPhotoFromAddress = React.useCallback(async () => {
     if (!isAdmin || !locationSelectedId || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -210,7 +165,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedId, locationSelectedIsLocked, draft, showMysteryToast]);
-
   const uploadLocationImage = React.useCallback(async (file: File) => {
     if (!isAdmin || !locationSelectedId || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -219,7 +173,6 @@ export function useLocationsManager(
       formData.append('file', file);
       formData.append('id', locationSelectedId);
       formData.append('type', 'location');
-      
       const res = await ApiClient.post<{ image?: any }>('/api/mystery/admin.php?action=upload_location_image', formData);
       if (res?.image) {
         draft.setLocationImageDraft(res.image);
@@ -231,7 +184,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedId, locationSelectedIsLocked, draft, showMysteryToast]);
-
   const deleteLocationImage = React.useCallback(async () => {
     if (!isAdmin || !locationSelectedId || locationSelectedIsLocked) return;
     setLocationsBusy(true);
@@ -245,7 +197,6 @@ export function useLocationsManager(
       setLocationsBusy(false);
     }
   }, [isAdmin, locationSelectedId, locationSelectedIsLocked, draft, showMysteryToast]);
-
   return {
     locationsBusy, locationsIncludeArchived, setLocationsIncludeArchived,
     locations, locationSelectedId, setLocationSelectedId, locationSelectedIsLocked,

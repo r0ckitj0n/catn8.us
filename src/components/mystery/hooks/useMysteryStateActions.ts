@@ -1,59 +1,10 @@
 import React from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IMysteryStateActions } from '../../../types/mysteryHooks';
-
-export interface IMysteryStateActionsProps {
-  setBusy: (busy: boolean) => void;
-  setError: (err: string) => void;
-  showMysteryToast: (t: any) => void;
-  scenarioId: string;
-  caseId: string;
-  mysteryId: string;
-  backstoryId: string;
-  backstoryTitleDraft: string;
-  backstorySlugDraft: string;
-  backstoryTextDraft: string;
-  backstoryLocationMasterIdDraft: string;
-  backstoryMetaDraft: string;
-  backstoryFullTextDraft: string;
-  loadEvidence: (sid: string | number) => Promise<void>;
-  loadJobs: (cid: string | number) => Promise<void>;
-  loadCases: (mid: string | number) => Promise<any[]>;
-  loadMysteries: () => Promise<void>;
-  loadBackstories: (mid: string | number) => Promise<any[]>;
-  loadBackstoryDetails: (id: string | number) => Promise<void>;
-  loadCaseMgmtBriefingForScenarioId: (sid: number) => Promise<void>;
-  loadScenarios: (sid: string | number) => Promise<any[]>;
-  loadScenarioEntities: (sid: string | number) => Promise<void>;
-  loadScenario: (sid: string | number) => Promise<void>;
-  watchJobToast: (opts: { caseId: number; jobId: number; label: string; onDone?: (result: any) => void }) => Promise<void>;
-}
+import { IMysteryStateActionsProps } from '../../../types/mysteryStateActions';
 
 export function useMysteryStateActions({
-  setBusy,
-  setError,
-  showMysteryToast,
-  scenarioId,
-  caseId,
-  mysteryId,
-  backstoryId,
-  backstoryTitleDraft,
-  backstorySlugDraft,
-  backstoryTextDraft,
-  backstoryLocationMasterIdDraft,
-  backstoryMetaDraft,
-  backstoryFullTextDraft,
-  loadEvidence,
-  loadJobs,
-  loadCases,
-  loadMysteries,
-  loadBackstories,
-  loadBackstoryDetails,
-  loadCaseMgmtBriefingForScenarioId,
-  loadScenarios,
-  loadScenarioEntities,
-  loadScenario,
-  watchJobToast
+  setBusy, setError, showMysteryToast, scenarioId, caseId, mysteryId, backstoryId, backstoryTitleDraft, backstorySlugDraft, backstoryTextDraft, backstoryLocationMasterIdDraft, backstoryMetaDraft, backstoryFullTextDraft, loadEvidence, loadJobs, loadCases, loadMysteries, loadBackstories, loadBackstoryDetails, loadCaseMgmtBriefingForScenarioId, loadScenarios, loadScenarioEntities, loadScenario, watchJobToast
 }: IMysteryStateActionsProps): IMysteryStateActions {
   const generateCsiReport = React.useCallback(async (sid?: string | number) => {
     const targetSid = sid || scenarioId;
@@ -114,7 +65,6 @@ export function useMysteryStateActions({
       });
       
       if (res?.id) {
-        // Fire and forget the job watcher so we don't block the UI busy state
         void watchJobToast({
           caseId: cid,
           jobId: res.id,
@@ -125,12 +75,9 @@ export function useMysteryStateActions({
             } else if (action === 'generate_deposition' && sid) {
               await loadScenarioEntities(sid);
             }
-            // Also refresh jobs list
             await loadJobs(cid);
           }
         });
-        
-        // Refresh jobs list immediately to show the "queued" status in any job list views
         await loadJobs(cid);
       }
       return res;
@@ -240,7 +187,7 @@ export function useMysteryStateActions({
     }
   }, [backstoryId, backstoryFullTextDraft, setBusy, setError, showMysteryToast]);
 
-  return React.useMemo(() => ({
+  return {
     addEvidenceNote,
     enqueueSpecificJob,
     createBackstory,
@@ -253,10 +200,5 @@ export function useMysteryStateActions({
     loadBackstoryDetails,
     loadScenarios,
     watchJobToast
-  }), [
-    addEvidenceNote, enqueueSpecificJob, createBackstory,
-    spawnCaseFromBackstory, saveCaseSetup, saveBackstoryDetails,
-    saveBackstoryFullStory, generateCsiReport, loadBackstories, loadBackstoryDetails,
-    loadScenarios, watchJobToast
-  ]);
+  };
 }

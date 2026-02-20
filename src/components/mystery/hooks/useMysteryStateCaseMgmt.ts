@@ -4,13 +4,7 @@ import { IToast } from '../../../types/common';
 import { ICase, IScenario, IScenarioEntity } from '../../../types/game';
 import { IMysteryStateCaseMgmt } from '../../../types/mysteryHooks';
 
-export function useMysteryStateCaseMgmt(
-  mysteryId: string,
-  caseId: string,
-  setBusy: (busy: boolean) => void,
-  setError: (err: string) => void,
-  showMysteryToast: (t: Partial<IToast>) => void
-): IMysteryStateCaseMgmt {
+export function useMysteryStateCaseMgmt(mysteryId: string, caseId: string, setBusy: (busy: boolean) => void, setError: (err: string) => void, showMysteryToast: (t: Partial<IToast>) => void): IMysteryStateCaseMgmt {
   const [caseMgmtMysteryId, setCaseMgmtMysteryId] = React.useState(mysteryId || '');
   const [caseMgmtCases, setCaseMgmtCases] = useState<ICase[]>([]);
   const [caseMgmtCaseId, setCaseMgmtCaseId] = React.useState(caseId || '');
@@ -213,58 +207,5 @@ export function useMysteryStateCaseMgmt(
     else setCaseMgmtCases([]);
   }, [caseMgmtMysteryId, loadCaseMgmtCases]);
 
-  return React.useMemo(() => ({
-    caseMgmtMysteryId, setCaseMgmtMysteryId,
-    caseMgmtCases, setCaseMgmtCases,
-    caseMgmtCaseId, setCaseMgmtCaseId,
-    caseMgmtScenarios, setCaseMgmtScenarios,
-    caseMgmtScenarioId, setCaseMgmtScenarioId,
-    caseMgmtBriefingDraft, setCaseMgmtBriefingDraft,
-    caseMgmtCaseTitleDraft, setCaseMgmtCaseTitleDraft,
-    caseMgmtCaseSlugDraft, setCaseMgmtCaseSlugDraft,
-    caseMgmtCaseDescriptionDraft, setCaseMgmtCaseDescriptionDraft,
-    caseMgmtCaseArchivedDraft, setCaseMgmtCaseArchivedDraft,
-    caseMgmtCaseTemplateDraft, setCaseMgmtCaseTemplateDraft,
-    caseMgmtScenarioSnapshot, setCaseMgmtScenarioSnapshot,
-    csiDetectiveEntityIdDraft, setCsiDetectiveEntityIdDraft,
-    csiReportTextDraft, setCsiReportTextDraft,
-    csiReportJsonDraft, setCsiReportJsonDraft,
-    caseMgmtScenarioEntities, setCaseMgmtScenarioEntities,
-    caseMgmtInvolvedCharacters, setCaseMgmtInvolvedCharacters,
-    caseMgmtExpandedEntityIds, setCaseMgmtExpandedEntityIds,
-    caseMgmtDepositionBusyByEntityId, setCaseMgmtDepositionBusyByEntityId,
-    caseMgmtDepositionErrorByEntityId, setCaseMgmtDepositionErrorByEntityId,
-    caseMgmtDepositionByEntityId, setCaseMgmtDepositionByEntityId,
-    loadCaseMgmtCases,
-    loadCaseMgmtScenariosAndBriefing,
-    loadCaseMgmtBriefingForScenarioId,
-    saveCaseMgmtCaseDetails,
-    saveCaseMgmtBriefing,
-    loadCaseMgmtDepositionForEntity,
-    enqueueCaseMgmtGenerateDeposition,
-    removeCaseMgmtLawEnforcementCharacter,
-    recomputeCaseMgmtRoles,
-    saveCsiReport,
-    caseAvailableMasterCharacterIds, setCaseAvailableMasterCharacterIds,
-    caseAvailableMasterLocationIds, setCaseAvailableMasterLocationIds,
-    caseAvailableMasterWeaponIds, setCaseAvailableMasterWeaponIds,
-    caseAvailableMasterMotiveIds, setCaseAvailableMasterMotiveIds
-  }), [
-    caseMgmtMysteryId, caseMgmtCases, caseMgmtCaseId, caseMgmtScenarios,
-    caseMgmtScenarioId, caseMgmtBriefingDraft, caseMgmtCaseTitleDraft,
-    caseMgmtCaseSlugDraft, caseMgmtCaseDescriptionDraft,
-    caseMgmtCaseArchivedDraft, caseMgmtCaseTemplateDraft,
-    caseMgmtScenarioSnapshot, csiDetectiveEntityIdDraft,
-    csiReportTextDraft, csiReportJsonDraft, caseMgmtScenarioEntities,
-    caseMgmtInvolvedCharacters, caseMgmtExpandedEntityIds,
-    caseMgmtDepositionBusyByEntityId, caseMgmtDepositionErrorByEntityId,
-    caseMgmtDepositionByEntityId, loadCaseMgmtCases,
-    loadCaseMgmtScenariosAndBriefing, loadCaseMgmtBriefingForScenarioId,
-    saveCaseMgmtCaseDetails, saveCaseMgmtBriefing,
-    loadCaseMgmtDepositionForEntity, enqueueCaseMgmtGenerateDeposition,
-    removeCaseMgmtLawEnforcementCharacter, recomputeCaseMgmtRoles,
-    saveCsiReport, caseAvailableMasterCharacterIds,
-    caseAvailableMasterLocationIds, caseAvailableMasterWeaponIds,
-    caseAvailableMasterMotiveIds
-  ]);
+  return { caseMgmtMysteryId, setCaseMgmtMysteryId, caseMgmtCases, setCaseMgmtCases, caseMgmtCaseId, setCaseMgmtCaseId, caseMgmtScenarios, setCaseMgmtScenarios, caseMgmtScenarioId, setCaseMgmtScenarioId, caseMgmtBriefingDraft, setCaseMgmtBriefingDraft, caseMgmtCaseTitleDraft, setCaseMgmtCaseTitleDraft, caseMgmtCaseSlugDraft, setCaseMgmtCaseSlugDraft, caseMgmtCaseDescriptionDraft, setCaseMgmtCaseDescriptionDraft, caseMgmtCaseArchivedDraft, setCaseMgmtCaseArchivedDraft, caseMgmtCaseTemplateDraft, setCaseMgmtCaseTemplateDraft, caseMgmtScenarioSnapshot, setCaseMgmtScenarioSnapshot, csiDetectiveEntityIdDraft, setCsiDetectiveEntityIdDraft, csiReportTextDraft, setCsiReportTextDraft, csiReportJsonDraft, setCsiReportJsonDraft, caseMgmtScenarioEntities, setCaseMgmtScenarioEntities, caseMgmtInvolvedCharacters, setCaseMgmtInvolvedCharacters, caseMgmtExpandedEntityIds, setCaseMgmtExpandedEntityIds, caseMgmtDepositionBusyByEntityId, setCaseMgmtDepositionBusyByEntityId, caseMgmtDepositionErrorByEntityId, setCaseMgmtDepositionErrorByEntityId, caseMgmtDepositionByEntityId, setCaseMgmtDepositionByEntityId, loadCaseMgmtCases, loadCaseMgmtScenariosAndBriefing, loadCaseMgmtBriefingForScenarioId, saveCaseMgmtCaseDetails, saveCaseMgmtBriefing, loadCaseMgmtDepositionForEntity, enqueueCaseMgmtGenerateDeposition, removeCaseMgmtLawEnforcementCharacter, recomputeCaseMgmtRoles, saveCsiReport, caseAvailableMasterCharacterIds, setCaseAvailableMasterCharacterIds, caseAvailableMasterLocationIds, setCaseAvailableMasterLocationIds, caseAvailableMasterWeaponIds, setCaseAvailableMasterWeaponIds, caseAvailableMasterMotiveIds, setCaseAvailableMasterMotiveIds };
 }

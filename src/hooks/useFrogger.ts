@@ -1,30 +1,17 @@
 import React from 'react';
-
-const GRID_SIZE = 40;
-const GAME_WIDTH = 480;
-const GAME_HEIGHT = 520;
-const STARTING_LIVES = 3;
-const LEVEL_TIME = 600;
-const FROG_START_X = Math.floor(GAME_WIDTH / 2) - GRID_SIZE / 2;
-const FROG_START_Y = GAME_HEIGHT - GRID_SIZE;
-
-const BASE_SPEEDS: any = {
-  car1: 0.4, car2: 0.6, car3: 0.8, car4: 0.3,
-  log1: 0.5, log2: 0.4, turtle1: 0.4, turtle2: 0.5
-};
-
-const VEHICLE_TYPES: any = {
-  smallCar: { width: GRID_SIZE - 10, height: GRID_SIZE - 10, color: '#E74C3C', speed: 'car1' },
-  mediumCar: { width: GRID_SIZE * 1.2, height: GRID_SIZE - 10, color: '#9B59B6', speed: 'car2' },
-  largeCar: { width: GRID_SIZE * 1.5, height: GRID_SIZE - 10, color: '#E67E22', speed: 'car3' },
-  truck: { width: GRID_SIZE * 2, height: GRID_SIZE - 10, color: '#1ABC9C', speed: 'car4' }
-};
-
-const COLORS = {
-  water: '#3498DB', road: '#34495E', grass: '#2ECC71', median: '#F1C40F',
-  car1: '#E74C3C', car2: '#9B59B6', car3: '#E67E22', car4: '#1ABC9C',
-  log: '#795548', turtle: '#27AE60', frog: '#4ECDC4', lilyPad: '#2ECC71', text: '#ffffff'
-};
+import {
+  BASE_SPEEDS,
+  COLORS,
+  FROG_START_X,
+  FROG_START_Y,
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  GRID_SIZE,
+  LEVEL_TIME,
+  STARTING_LIVES,
+  VEHICLE_TYPES,
+  isColliding,
+} from './games/froggerConfig';
 
 export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
   const [level, setLevel] = React.useState(1);
@@ -106,14 +93,6 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
   const togglePause = React.useCallback(() => {
     setPaused(p => !p);
   }, []);
-
-  const isColliding = (obj1: any, obj2: any) => {
-    const margin = 8;
-    return obj1.x + margin < obj2.x + obj2.width - margin &&
-           obj1.x + obj1.width - margin > obj2.x + margin &&
-           obj1.y + margin < obj2.y + obj2.height - margin &&
-           obj1.y + obj1.height - margin > obj2.y + margin;
-  };
 
   React.useEffect(() => {
     if (!gameStarted || paused || gameOver) return;

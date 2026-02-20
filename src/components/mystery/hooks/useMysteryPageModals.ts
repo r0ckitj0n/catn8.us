@@ -1,7 +1,5 @@
 import React, { useRef } from 'react';
 import { IBootstrapModal } from '../../../core/bootstrapModal';
-import { cleanupModalArtifactsIfNoOpenModals } from '../../../utils/modalUtils';
-
 export function useMysteryPageModals(
   showModalNow: (ref: React.RefObject<HTMLElement>, apiRef: React.MutableRefObject<IBootstrapModal | null>, setOpen?: (open: boolean) => void) => void,
   transitionToModal: (fromRef: React.RefObject<HTMLElement>, toRef: React.RefObject<HTMLElement>, toApiRef: React.MutableRefObject<IBootstrapModal | null>, setToOpen: (open: boolean) => void) => void,
@@ -41,7 +39,6 @@ export function useMysteryPageModals(
   const [interrogationLogsOpen, setInterrogationLogsOpen] = React.useState(false);
   const [depositionsOpen, setDepositionsOpen] = React.useState(false);
   const [playerLocationVisitOpen, setPlayerLocationVisitOpen] = React.useState(false);
-
   const takeCaseModalRef = useRef<HTMLDivElement>(null);
   const takeCaseModalApiRef = useRef<IBootstrapModal | null>(null);
   const crimeLabRef = useRef<HTMLDivElement>(null);
@@ -100,7 +97,6 @@ export function useMysteryPageModals(
   const masterAssetJsonApiRef = useRef<IBootstrapModal | null>(null);
   const jsonPreviewRef = useRef<HTMLDivElement>(null);
   const jsonPreviewApiRef = useRef<IBootstrapModal | null>(null);
-
   const sheriffTalkRef = useRef<HTMLDivElement>(null);
   const sheriffTalkApiRef = useRef<IBootstrapModal | null>(null);
   const csiTalkRef = useRef<HTMLDivElement>(null);
@@ -115,47 +111,33 @@ export function useMysteryPageModals(
   const depositionsApiRef = useRef<IBootstrapModal | null>(null);
   const playerLocationVisitRef = useRef<HTMLDivElement>(null);
   const playerLocationVisitApiRef = useRef<IBootstrapModal | null>(null);
-
   const openTakeCaseModal = React.useCallback(() => {
     setTakeCaseModalOpen(true);
     showModalNow(takeCaseModalRef, takeCaseModalApiRef, setTakeCaseModalOpen);
   }, [showModalNow]);
-
   const takeCaseSelect = React.useCallback((cid: string | number) => {
-    console.log("takeCaseSelect: START - cid =", cid);
     const caseIdStr = String(cid || '');
     if (!caseIdStr) {
-      console.warn("takeCaseSelect: No case ID provided.");
       return;
     }
-
     try {
       setCaseId(caseIdStr);
-      console.log("takeCaseSelect: caseId set to", caseIdStr);
-
-      // Close the modal before redirecting
       if (takeCaseModalApiRef.current) {
         takeCaseModalApiRef.current.hide();
       }
-
-      window.location.href = '/sheriff_station.php';
-      return;
-
+      window.location.href = '/sheriff_station.php'; return;
     } catch (err) {
       console.error("takeCaseSelect: CRITICAL ERROR", err);
     }
   }, [setCaseId, setTakeCaseModalOpen, setGameMgmtOpen, setCaseMgmtOpen, setMysteryPickerOpen]);
-
   const confirmMysterySelect = React.useCallback((id?: string) => {
     confirmMysterySelection(id);
     if (mysteryPickerApiRef.current) {
-      console.log("confirmMysterySelect: Hiding MysteryPickerModal");
       mysteryPickerApiRef.current.hide();
     }
     setMysteryPickerOpen(false);
   }, [confirmMysterySelection, setMysteryPickerOpen]);
-
-  return React.useMemo(() => ({
+  return {
     state: {
       gameMgmtOpen, setGameMgmtOpen,
       startResumeOpen, setStartResumeOpen,
@@ -229,23 +211,6 @@ export function useMysteryPageModals(
       depositionsRef, depositionsApiRef,
       playerLocationVisitRef, playerLocationVisitApiRef,
     },
-    actions: {
-      openTakeCaseModal,
-      takeCaseSelect,
-      confirmMysterySelect
-    }
-  }), [
-    gameMgmtOpen, takeCaseModalOpen, mysteryPickerOpen, caseMgmtOpen,
-    locationsModalOpen, weaponsModalOpen, motivesModalOpen,
-    backstoryModalOpen, caseSetupModalOpen, scenariosModalOpen,
-    mysteriesModalOpen, storiesModalOpen, seedStoryModalOpen,
-    advancedModalOpen, caseboardOpen, crimeLabOpen, toolsOpen,
-    interrogationOpen, suspectsModalOpen, rapSheetOpen, assetLibraryOpen,
-    characterLibraryOpen,
-    mysterySettingsOpen, mysterySettingsEditorOpen, jsonPreviewOpen,
-    sheriffTalkOpen, csiTalkOpen, evidenceStudyOpen,
-    caseFilesOpen, interrogationLogsOpen, depositionsOpen,
-    playerLocationVisitOpen,
-    openTakeCaseModal, takeCaseSelect, confirmMysterySelect
-  ]);
+    actions: { openTakeCaseModal, takeCaseSelect, confirmMysterySelect }
+  };
 }

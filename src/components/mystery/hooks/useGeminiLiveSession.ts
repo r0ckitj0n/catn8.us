@@ -46,7 +46,6 @@ export function useGeminiLiveSession({
     const client = clientRef.current;
     clientRef.current = null;
     if (client) {
-      console.log(`useGeminiLiveSession(${type}): Disconnecting client`);
       try {
         await client.disconnect();
       } catch (e: any) {
@@ -61,7 +60,6 @@ export function useGeminiLiveSession({
   React.useEffect(() => {
     return () => {
       if (clientRef.current) {
-        console.log(`useGeminiLiveSession(${type}): Component unmounting, cleaning up client`);
         void clientRef.current.disconnect();
         clientRef.current = null;
       }
@@ -201,23 +199,5 @@ export function useGeminiLiveSession({
     }
   }, [type, scenarioId, tokenName, model, systemInstruction, entityId, getActiveVoiceMapProvider, showVoiceToast, stopStreaming, setBusy, setError, setMessage]);
 
-  const returnValue = React.useMemo(() => ({
-    status, setStatus,
-    inputText, setInputText,
-    outputText, setOutputText,
-    name,
-    startSession,
-    startStreaming,
-    stopStreaming
-  }), [
-    status, setStatus,
-    inputText, setInputText,
-    outputText, setOutputText,
-    name,
-    startSession,
-    startStreaming,
-    stopStreaming
-  ]);
-
-  return returnValue;
+  return { status, setStatus, inputText, setInputText, outputText, setOutputText, name, startSession, startStreaming, stopStreaming };
 }

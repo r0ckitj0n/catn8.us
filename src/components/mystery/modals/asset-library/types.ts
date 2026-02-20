@@ -1,0 +1,48 @@
+import React from 'react';
+import { IMasterCharacter, IMasterLocation, IMasterWeapon, IMasterMotive } from '../../../../types/game';
+
+export interface AssetLibraryModalProps {
+  modalRef: React.RefObject<HTMLDivElement>;
+  busy: boolean;
+  isAdmin: boolean;
+  mysteryId: string | number;
+  masterCharacters: IMasterCharacter[];
+  masterLocations: IMasterLocation[];
+  masterWeapons: IMasterWeapon[];
+  masterMotives: IMasterMotive[];
+  newMasterCharacter: { name: string };
+  setNewMasterCharacter: React.Dispatch<React.SetStateAction<{ name: string }>>;
+  newMasterLocation: { name: string };
+  setNewMasterLocation: React.Dispatch<React.SetStateAction<{ name: string }>>;
+  newMasterWeapon: { name: string };
+  setNewMasterWeapon: React.Dispatch<React.SetStateAction<{ name: string }>>;
+  newMasterMotive: { name: string };
+  setNewMasterMotive: React.Dispatch<React.SetStateAction<{ name: string }>>;
+  masterAssetsIncludeArchived: boolean;
+  setMasterAssetsIncludeArchived: (val: boolean) => void;
+  loadMasterCharacters: () => Promise<IMasterCharacter[]>;
+  loadMasterLocations: () => Promise<IMasterLocation[]>;
+  loadMasterWeapons: () => Promise<IMasterWeapon[]>;
+  loadMasterMotives: () => Promise<IMasterMotive[]>;
+  upsertMasterCharacter: (e: React.FormEvent) => Promise<void>;
+  upsertMasterLocation: (e: React.FormEvent) => Promise<void>;
+  upsertMasterWeapon: (e: React.FormEvent) => Promise<void>;
+  upsertMasterMotive: (e: React.FormEvent) => Promise<void>;
+  archiveMasterAsset: (opts: { type: string; id: string | number; is_archived: number }) => Promise<void>;
+  setMasterAssetRegenLock: (opts: { type: string; item: any; is_regen_locked: number }) => Promise<void>;
+  openMasterAssetDetails: (opts: { type: string; item: any }) => void;
+  requestMasterAssetDelete: (opts: { type: string; item: any }) => void;
+  backfillMasterAssetColumnsFromJson: () => Promise<void>;
+  cleanupMasterOnlyFieldsForMystery: () => Promise<void>;
+  linkAndImportCaseDetailsForMystery: () => Promise<void>;
+  getMasterAssetNameDraft: (opts: { type: string; id: string | number; fallback: string }) => string;
+  updateMasterAssetNameDraft: (opts: { type: string; id: string | number; value: string }) => void;
+  saveMasterAssetInlineName: (opts: { type: string; item: any }) => Promise<void>;
+  needsCleanup: boolean;
+  needsLinkImport: boolean;
+  checkMaintenanceNeeded: () => Promise<void>;
+  trashSvg: React.ReactNode;
+  pencilSvg: React.ReactNode;
+  lockSvg: React.ReactNode;
+  unlockSvg: React.ReactNode;
+}

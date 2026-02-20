@@ -16,6 +16,13 @@
   --catn8-glass-muted: var(--catn8-color-ink-muted);
 }
 
+html,
+body,
+#catn8-app {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--catn8-font-family-base);
   font-size: var(--catn8-global-base-font-size);
@@ -157,6 +164,13 @@ body.catn8-noir-mode .modal-backdrop,
   overflow-x: hidden;
   overflow-y: auto;
   z-index: var(--catn8-z-modal) !important;
+}
+
+.modal-dialog,
+.modal-content,
+.modal-body {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .modal.show,

@@ -121,6 +121,19 @@ export class ApiClient {
     return ApiClient.request<T>('POST', url, body);
   }
 
+  static async getBlob(url: string): Promise<Blob> {
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+    });
+
+    if (!res.ok) {
+      throw new Error(`Request failed: ${res.status}`);
+    }
+
+    return await res.blob();
+  }
+
   static async postFormData<T = any>(url: string, formData: FormData): Promise<T> {
     const opts: RequestInit = {
       method: 'POST',

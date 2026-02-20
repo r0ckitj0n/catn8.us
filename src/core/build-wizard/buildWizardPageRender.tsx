@@ -3,11 +3,13 @@ import React from 'react';
 import { StandardIconButton } from '../../components/common/StandardIconButton';
 import { StandardIconLink } from '../../components/common/StandardIconLink';
 import { WebpImage } from '../../components/common/WebpImage';
+import { ApiClient } from '../ApiClient';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { IBuildWizardDropdownSettings } from '../../types/buildWizardDropdowns';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { BuildTabId, DocumentDraftMap, LotSizeUnit, StepDraftMap, StepType, WizardView } from '../../types/pages/buildWizardPage';
+import { read, utils } from 'xlsx';
 import {
   buildWizardTokenLabel,
   BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT,
@@ -53,6 +55,18 @@ interface BuildWizardPageProps extends AppShellPageProps {
   isAdmin?: boolean;
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
+
+type SpreadsheetPreviewSheet = {
+  name: string;
+  rows: string[][];
+};
+
+type LightboxPreview =
+  | { mode: 'image'; src: string; title: string }
+  | { mode: 'loading'; src: string; title: string }
+  | { mode: 'spreadsheet'; src: string; title: string; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
+  | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean }
+  | { mode: 'error'; src: string; title: string; message: string };
 
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
@@ -101,8 +115,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
-  const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
+  const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
+  const [lightboxSpreadsheetSheetIndex, setLightboxSpreadsheetSheetIndex] = React.useState<number>(0);
   const [documentManagerOpen, setDocumentManagerOpen] = React.useState<boolean>(false);
+  const [documentManagerKindFilter, setDocumentManagerKindFilter] = React.useState<string>('all');
+  const [documentManagerPhaseFilter, setDocumentManagerPhaseFilter] = React.useState<string>('all');
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
@@ -541,6 +558,46 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   }, [steps]);
 
+  const documentManagerKindOptions = React.useMemo(() => {
+    const fromDocs = documents
+      .map((doc) => String(doc.kind || '').trim())
+      .filter(Boolean);
+    const fromSettings = docKindOptions
+      .map((opt) => String(opt.value || '').trim())
+      .filter(Boolean);
+    return Array.from(new Set([...fromSettings, ...fromDocs])).sort((a, b) => sortAlpha(a, b));
+  }, [documents, docKindOptions]);
+
+  const documentManagerPhaseOptions = React.useMemo(() => {
+    const keys = new Set<string>();
+    keys.add('general');
+    steps.forEach((step) => {
+      const key = String(step.phase_key || '').trim() || 'general';
+      keys.add(key);
+    });
+    documents.forEach((doc) => {
+      const key = String(doc.step_phase_key || '').trim();
+      if (key) {
+        keys.add(key);
+      }
+    });
+    return Array.from(keys).sort((a, b) => sortAlpha(prettyPhaseLabel(a), prettyPhaseLabel(b)));
+  }, [documents, steps]);
+
+  const filteredDocumentManagerDocs = React.useMemo(() => {
+    return documents.filter((doc) => {
+      const docKindValue = String(doc.kind || '').trim();
+      if (documentManagerKindFilter !== 'all' && docKindValue !== documentManagerKindFilter) {
+        return false;
+      }
+      const docPhaseValue = String(doc.step_phase_key || '').trim() || 'general';
+      if (documentManagerPhaseFilter !== 'all' && docPhaseValue !== documentManagerPhaseFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter]);
+
   React.useEffect(() => {
     if (docStepId <= 0) {
       return;
@@ -564,6 +621,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       };
     });
     setDocumentDrafts(nextDrafts);
+    setDocumentManagerKindFilter('all');
+    setDocumentManagerPhaseFilter('all');
   }, [documentManagerOpen, documents]);
 
   const openBuild = async (nextProjectId: number) => {
@@ -663,6 +722,115 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setReplacingDocumentId(0);
     }
   };
+
+  const isSpreadsheetPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
+    const ext = fileExtensionFromName(doc.original_name);
+    if (ext === 'XLSX' || ext === 'XLSM' || ext === 'XLS') {
+      return true;
+    }
+    const mime = String(doc.mime_type || '').toLowerCase();
+    return mime.includes('spreadsheet') || mime.includes('excel');
+  }, []);
+
+  const isPlanPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
+    return fileExtensionFromName(doc.original_name) === 'PLAN';
+  }, []);
+
+  const openDocumentPreview = React.useCallback(async (doc: IBuildWizardDocument) => {
+    const src = String(doc.public_url || '').trim();
+    const title = String(doc.original_name || 'Document');
+    if (!src) {
+      onToast?.({ tone: 'error', message: `Unable to open ${title}` });
+      return;
+    }
+
+    if (Number(doc.is_image) === 1) {
+      setLightboxDoc({ mode: 'image', src, title });
+      return;
+    }
+
+    if (!isSpreadsheetPreviewDoc(doc) && !isPlanPreviewDoc(doc)) {
+      window.open(src, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setLightboxDoc({ mode: 'loading', src, title });
+    setLightboxSpreadsheetSheetIndex(0);
+
+    try {
+      const blob = await ApiClient.getBlob(src);
+
+      if (isSpreadsheetPreviewDoc(doc)) {
+        const bytes = await blob.arrayBuffer();
+        const workbook = read(bytes, { type: 'array' });
+        const maxRows = 120;
+        const maxCols = 24;
+        let truncated = false;
+
+        const sheets: SpreadsheetPreviewSheet[] = workbook.SheetNames.map((sheetName) => {
+          const sheet = workbook.Sheets[sheetName];
+          const rawRows = utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+            header: 1,
+            raw: false,
+            blankrows: false,
+            defval: '',
+          });
+          const boundedRows = rawRows.slice(0, maxRows).map((row) => {
+            const hasExtraCols = row.length > maxCols;
+            if (hasExtraCols) {
+              truncated = true;
+            }
+            return row.slice(0, maxCols).map((cell) => String(cell ?? ''));
+          });
+          if (rawRows.length > maxRows) {
+            truncated = true;
+          }
+          return {
+            name: sheetName,
+            rows: boundedRows,
+          };
+        });
+
+        if (!sheets.length) {
+          throw new Error('Spreadsheet has no visible sheets');
+        }
+
+        setLightboxDoc({ mode: 'spreadsheet', src, title, sheets, truncated });
+        return;
+      }
+
+      const textRaw = await blob.text();
+      const text = textRaw.replace(/\u0000/g, '').trim();
+      if (!text) {
+        throw new Error('Plan file appears empty');
+      }
+
+      const sample = text.slice(0, 2000);
+      const nonPrintableCount = sample.replace(/[\t\r\n\x20-\x7E]/g, '').length;
+      if (sample.length > 0 && nonPrintableCount / sample.length > 0.2) {
+        throw new Error('Plan file is binary and cannot be rendered as text');
+      }
+
+      const maxChars = 60000;
+      const truncated = text.length > maxChars;
+      setLightboxDoc({
+        mode: 'plan',
+        src,
+        title,
+        text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
+        truncated,
+      });
+    } catch (err: any) {
+      const detail = String(err?.message || '').trim() || 'Failed to load file preview';
+      setLightboxDoc({
+        mode: 'error',
+        src,
+        title,
+        message: detail,
+      });
+      onToast?.({ tone: 'warning', message: `${title}: ${detail}` });
+    }
+  }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, onToast]);
 
   const onDeleteProject = async (projectSummary: { id: number; title: string }) => {
     if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
@@ -1608,7 +1776,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             {Number(doc.is_image) === 1 ? (
               <button
                 className="build-wizard-doc-thumb-btn"
-                onClick={() => setLightboxDoc({ src: doc.public_url, title: doc.original_name })}
+                onClick={() => void openDocumentPreview(doc)}
                 title="Click to enlarge"
               >
                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
@@ -1617,6 +1785,22 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
               </a>
+            ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
+              <button
+                type="button"
+                className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
+                onClick={() => void openDocumentPreview(doc)}
+                title="Open preview"
+              >
+                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                    <path d="M9 13h6M9 16h6" />
+                  </svg>
+                </span>
+                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                <span className="build-wizard-doc-file-open">Open preview</span>
+              </button>
             ) : (
               <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
                 <span className="build-wizard-doc-file-glyph" aria-hidden="true">
@@ -2245,7 +2429,37 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             </div>
             {documents.length ? (
               <div className="build-wizard-doc-manager-list">
-                {documents.map((doc) => {
+                <div className="build-wizard-doc-manager-filters">
+                  <label>
+                    Kind
+                    <select
+                      value={documentManagerKindFilter}
+                      onChange={(e) => setDocumentManagerKindFilter(e.target.value)}
+                    >
+                      <option value="all">All</option>
+                      {documentManagerKindOptions.map((kindValue) => (
+                        <option key={kindValue} value={kindValue}>
+                          {buildWizardTokenLabel(kindValue, 'Other')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Phase
+                    <select
+                      value={documentManagerPhaseFilter}
+                      onChange={(e) => setDocumentManagerPhaseFilter(e.target.value)}
+                    >
+                      <option value="all">All</option>
+                      {documentManagerPhaseOptions.map((phaseKey) => (
+                        <option key={phaseKey} value={phaseKey}>
+                          {prettyPhaseLabel(phaseKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
                   const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
                   const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
                   const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
@@ -2256,7 +2470,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         {Number(doc.is_image) === 1 ? (
                           <button
                             className="build-wizard-doc-thumb-btn"
-                            onClick={() => setLightboxDoc({ src: doc.public_url, title: doc.original_name })}
+                            onClick={() => void openDocumentPreview(doc)}
                             title="Open preview"
                           >
                             <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
@@ -2265,6 +2479,22 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
                             <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
                           </a>
+                        ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
+                          <button
+                            type="button"
+                            className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
+                            onClick={() => void openDocumentPreview(doc)}
+                            title="Open preview"
+                          >
+                            <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                                <path d="M9 13h6M9 16h6" />
+                              </svg>
+                            </span>
+                            <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                            <span className="build-wizard-doc-file-open">Open preview</span>
+                          </button>
                         ) : (
                           <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
                             <span className="build-wizard-doc-file-glyph" aria-hidden="true">
@@ -2296,6 +2526,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           <label>
                             Linked Step
                             <select
+                              className="build-wizard-doc-manager-step-select"
                               value={draft.step_id > 0 ? String(draft.step_id) : ''}
                               onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
                             >
@@ -2317,15 +2548,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           </label>
                         </div>
                         <div className="build-wizard-doc-manager-actions">
-                          <StandardIconLink
-                            iconKey="view"
-                            ariaLabel={`Open ${doc.original_name}`}
-                            title="Open"
-                            className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                            href={doc.public_url}
-                            target="_blank"
-                            rel="noreferrer"
-                          />
+                          {(isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc) || Number(doc.is_image) === 1) ? (
+                            <StandardIconButton
+                              iconKey="view"
+                              ariaLabel={`Open ${doc.original_name}`}
+                              title="Open"
+                              className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                              onClick={() => void openDocumentPreview(doc)}
+                            />
+                          ) : (
+                            <StandardIconLink
+                              iconKey="view"
+                              ariaLabel={`Open ${doc.original_name}`}
+                              title="Open"
+                              className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                              href={doc.public_url}
+                              target="_blank"
+                              rel="noreferrer"
+                            />
+                          )}
                           <StandardIconLink
                             iconKey="download"
                             ariaLabel={`Download ${doc.original_name}`}
@@ -2387,7 +2628,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       </div>
                     </div>
                   );
-                })}
+                }) : <div className="build-wizard-muted">No documents match the selected filters.</div>}
               </div>
             ) : (
               <div className="build-wizard-muted">No documents uploaded yet.</div>
@@ -2497,7 +2738,56 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 onClick={() => setLightboxDoc(null)}
               />
             </div>
-            <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
+            {lightboxDoc.mode === 'image' ? (
+              <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
+            ) : null}
+            {lightboxDoc.mode === 'loading' ? (
+              <div className="build-wizard-lightbox-message">Loading preview...</div>
+            ) : null}
+            {lightboxDoc.mode === 'error' ? (
+              <div className="build-wizard-lightbox-message">
+                <div>{lightboxDoc.message}</div>
+                <div>
+                  <a href={lightboxDoc.src} target="_blank" rel="noreferrer">Open original file</a>
+                </div>
+              </div>
+            ) : null}
+            {lightboxDoc.mode === 'plan' ? (
+              <div className="build-wizard-lightbox-plan-wrap">
+                <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
+                {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview truncated for performance.</div> : null}
+              </div>
+            ) : null}
+            {lightboxDoc.mode === 'spreadsheet' ? (
+              <div className="build-wizard-lightbox-sheet-wrap">
+                <div className="build-wizard-lightbox-sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
+                  {lightboxDoc.sheets.map((sheet, idx) => (
+                    <button
+                      key={sheet.name}
+                      type="button"
+                      className={`build-wizard-lightbox-sheet-tab ${lightboxSpreadsheetSheetIndex === idx ? 'is-active' : ''}`}
+                      onClick={() => setLightboxSpreadsheetSheetIndex(idx)}
+                    >
+                      {sheet.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="build-wizard-lightbox-sheet-table-wrap">
+                  <table className="build-wizard-lightbox-sheet-table">
+                    <tbody>
+                      {(lightboxDoc.sheets[lightboxSpreadsheetSheetIndex]?.rows || []).map((row, rowIndex) => (
+                        <tr key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}`}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview is limited to 120 rows and 24 columns per sheet.</div> : null}
+              </div>
+            ) : null}
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
           </div>
         </div>

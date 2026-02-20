@@ -576,8 +576,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
-    alignProjectToTemplate,
-    refineLegacySteps,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -608,11 +606,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [recoveryUploadToken, setRecoveryUploadToken] = React.useState<string>('');
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
-  const [aligningTemplate, setAligningTemplate] = React.useState<boolean>(false);
-  const [refiningLegacy, setRefiningLegacy] = React.useState<boolean>(false);
-  const [alignReportOpen, setAlignReportOpen] = React.useState<boolean>(false);
-  const [alignReportTitle, setAlignReportTitle] = React.useState<string>('Template Alignment Report');
-  const [alignReportJson, setAlignReportJson] = React.useState<string>('');
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -1162,52 +1155,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       return;
     }
     await generateStepsFromAi('complete');
-  };
-
-  const onAlignTemplate = async () => {
-    if (!projectId || aligningTemplate) {
-      return;
-    }
-    const confirmed = window.confirm(
-      'Align this project to the latest house template?\n\nThis updates phase sequencing and dependency links, and preserves unmatched legacy steps at the end.',
-    );
-    if (!confirmed) {
-      return;
-    }
-    setAligningTemplate(true);
-    try {
-      const result = await alignProjectToTemplate(projectId);
-      if (result) {
-        setAlignReportTitle('Template Alignment Report');
-        setAlignReportJson(JSON.stringify(result, null, 2));
-        setAlignReportOpen(true);
-      }
-    } finally {
-      setAligningTemplate(false);
-    }
-  };
-
-  const onRefineLegacy = async () => {
-    if (!projectId || refiningLegacy) {
-      return;
-    }
-    const confirmed = window.confirm(
-      'Refine legacy steps?\n\nThis reclassifies legacy steps by phase, deduplicates obvious overlaps, and rebuilds dependency links.',
-    );
-    if (!confirmed) {
-      return;
-    }
-    setRefiningLegacy(true);
-    try {
-      const result = await refineLegacySteps(projectId);
-      if (result) {
-        setAlignReportTitle('Legacy Refinement Report');
-        setAlignReportJson(JSON.stringify(result, null, 2));
-        setAlignReportOpen(true);
-      }
-    } finally {
-      setRefiningLegacy(false);
-    }
   };
 
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
@@ -1910,12 +1857,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
-            <button className="btn btn-outline-primary btn-sm" onClick={() => void onAlignTemplate()} disabled={aligningTemplate || aiBusy}>
-              {aligningTemplate ? 'Aligning...' : 'Align to Template'}
-            </button>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => void onRefineLegacy()} disabled={refiningLegacy || aiBusy}>
-              {refiningLegacy ? 'Refining...' : 'Refine Legacy Steps'}
-            </button>
             <button className="btn btn-primary btn-sm" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
               {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
             </button>
@@ -2453,38 +2394,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             </div>
             <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
-          </div>
-        </div>
-      ) : null}
-
-      {alignReportOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setAlignReportOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>{alignReportTitle}</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(alignReportJson || '');
-                      onToast?.({ tone: 'success', message: 'Report copied.' });
-                    } catch (_) {
-                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
-                    }
-                  }}
-                  disabled={!alignReportJson}
-                >
-                  Copy JSON
-                </button>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => setAlignReportOpen(false)}>Close</button>
-              </div>
-            </div>
-            {alignReportJson ? (
-              <pre className="build-wizard-recovery-json">{alignReportJson}</pre>
-            ) : (
-              <div className="build-wizard-muted">No report data.</div>
-            )}
           </div>
         </div>
       ) : null}

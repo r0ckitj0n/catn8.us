@@ -3024,6 +3024,12 @@ function catn8_build_wizard_refine_legacy_steps(int $projectId): array
 
     Database::beginTransaction();
     try {
+        // Avoid unique(project_id, step_order) collisions while resequencing legacy rows.
+        Database::execute(
+            'UPDATE build_wizard_steps SET step_order = step_order + 1000 WHERE project_id = ? AND step_order > ?',
+            [$projectId, $templateCount]
+        );
+
         if ($duplicateToKeeper) {
             foreach ($duplicateToKeeper as $duplicateId => $keeperId) {
                 Database::execute(

@@ -237,13 +237,6 @@ export interface IBuildWizardPhaseReview {
   steps: IBuildWizardPhaseReviewStep[];
 }
 
-export interface IBuildWizardAlignToTemplateResponse {
-  success: boolean;
-  summary: IBuildWizardAlignSummary;
-  phase_review: IBuildWizardPhaseReview[];
-  steps: IBuildWizardStep[];
-}
-
 export interface IBuildWizardRefineLegacySummary {
   project_id: number;
   template_step_count: number;
@@ -253,13 +246,6 @@ export interface IBuildWizardRefineLegacySummary {
   phase_reclassified_count: number;
   dependency_updates: number;
   updated_count: number;
-}
-
-export interface IBuildWizardRefineLegacyResponse {
-  success: boolean;
-  summary: IBuildWizardRefineLegacySummary;
-  phase_review: IBuildWizardPhaseReview[];
-  steps: IBuildWizardStep[];
 }
 
 export interface IBuildWizardSingletreeRecoverSummary {

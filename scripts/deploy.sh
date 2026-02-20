@@ -41,6 +41,8 @@ Common options:
   --full           Full-replace mode
   --dist-only      Deploy dist assets only
   --env-only       Deploy .env.live only
+  --backup-live    Trigger live website backup API before deploy
+  --no-backup-live Skip live website backup API before deploy
   --purge          Purge managed remote directories before deploy
   --skip-build     Skip release build step
   --help           Show this help
@@ -76,6 +78,7 @@ UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
 PRESERVE_IMAGES=1
 PURGE_IMAGES=0
 CODE_ONLY=0
+BACKUP_LIVE="${CATN8_BACKUP_BEFORE_DEPLOY:-0}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -97,6 +100,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --purge)
       PURGE=1
+      shift
+      ;;
+    --backup-live)
+      BACKUP_LIVE=1
+      shift
+      ;;
+    --no-backup-live)
+      BACKUP_LIVE=0
       shift
       ;;
     --full)
@@ -184,6 +195,8 @@ fi
 echo -e "${GREEN}🚀 Starting fast file deployment...${NC}"
 if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
   echo -e "${YELLOW}DRY-RUN: Skipping live website backup API call${NC}"
+elif [ "$BACKUP_LIVE" != "1" ]; then
+  echo -e "${YELLOW}⏭️  Skipping website backup API (set CATN8_BACKUP_BEFORE_DEPLOY=1 or pass --backup-live to enable)${NC}"
 else
   echo -e "${GREEN}💾 Backing up website...${NC}"
   BACKUP_URL="${BASE_URL}/api/backup_website.php"

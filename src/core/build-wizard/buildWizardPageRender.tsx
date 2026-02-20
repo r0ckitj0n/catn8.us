@@ -65,7 +65,7 @@ type LightboxPreview =
   | { mode: 'image'; src: string; title: string }
   | { mode: 'loading'; src: string; title: string }
   | { mode: 'spreadsheet'; src: string; title: string; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
-  | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean }
+  | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean; format: 'text' | 'hex' }
   | { mode: 'error'; src: string; title: string; message: string };
 
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
@@ -808,7 +808,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       const sample = text.slice(0, 2000);
       const nonPrintableCount = sample.replace(/[\t\r\n\x20-\x7E]/g, '').length;
       if (sample.length > 0 && nonPrintableCount / sample.length > 0.2) {
-        throw new Error('Plan file is binary and cannot be rendered as text');
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const maxBytes = 4096;
+        const bounded = bytes.slice(0, maxBytes);
+        const lines: string[] = [];
+        for (let offset = 0; offset < bounded.length; offset += 16) {
+          const chunk = bounded.slice(offset, offset + 16);
+          const hex = Array.from(chunk).map((b) => b.toString(16).padStart(2, '0')).join(' ');
+          const ascii = Array.from(chunk).map((b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('');
+          lines.push(`${offset.toString(16).padStart(6, '0')}  ${hex.padEnd(47, ' ')}  ${ascii}`);
+        }
+        setLightboxDoc({
+          mode: 'plan',
+          src,
+          title,
+          text: lines.join('\n'),
+          truncated: bytes.length > maxBytes,
+          format: 'hex',
+        });
+        return;
       }
 
       const maxChars = 60000;
@@ -819,6 +837,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         title,
         text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
         truncated,
+        format: 'text',
       });
     } catch (err: any) {
       const detail = String(err?.message || '').trim() || 'Failed to load file preview';
@@ -2755,7 +2774,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             {lightboxDoc.mode === 'plan' ? (
               <div className="build-wizard-lightbox-plan-wrap">
                 <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
-                {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview truncated for performance.</div> : null}
+                <div className="build-wizard-lightbox-note">
+                  {lightboxDoc.format === 'hex' ? 'Binary .plan preview (hex + ASCII).' : 'Text preview.'}
+                  {lightboxDoc.truncated ? ' Preview truncated for performance.' : ''}
+                </div>
               </div>
             ) : null}
             {lightboxDoc.mode === 'spreadsheet' ? (

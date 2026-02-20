@@ -87,6 +87,9 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
         </button>
         <div className="collapse navbar-collapse" id="navbarNav">
           <ul className="navbar-nav catn8-nav-shortcuts me-auto">
+            <li className="nav-item">
+              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
+            </li>
             {shortcutItems.map((item) => (
               <li className="nav-item" key={item.key}>
                 {item.href ? (
@@ -119,9 +122,6 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
               <a className="navbar-brand catn8-nav-logo-link" href="/">
                 <WebpImage src="images/catn8_logo.svg" alt="catn8.us Logo" />
               </a>
-            </li>
-            <li className="nav-item">
-              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
             </li>
             {isAuthed ? (
               <li className="nav-item">

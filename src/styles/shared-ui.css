@@ -1,0 +1,132 @@
+.catn8-glass-card {
+  background: var(--catn8-glass-bg);
+  border: 2px solid var(--catn8-glass-border);
+  border-radius: var(--catn8-radius-xl);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--catn8-shadow-sm);
+}
+
+.catn8-glass-card--interactive {
+  transition:
+    transform var(--catn8-transition-base) ease,
+    box-shadow var(--catn8-transition-base) ease,
+    background-color var(--catn8-transition-base) ease;
+}
+
+.catn8-glass-card--interactive:hover {
+  transform: translateY(-5px);
+  background: var(--catn8-glass-bg-hover);
+  box-shadow: var(--catn8-shadow-md);
+}
+
+.catn8-media-frame {
+  border-radius: var(--catn8-radius-md);
+  border: 2px solid var(--catn8-glass-border-strong);
+  overflow: hidden;
+}
+
+.catn8-chip {
+  background: var(--catn8-glass-chip-bg);
+  border-radius: var(--catn8-radius-md);
+  backdrop-filter: blur(5px);
+}
+
+.catn8-text-heading {
+  color: var(--catn8-color-ink-strong);
+}
+
+.catn8-text-body {
+  color: var(--catn8-color-ink-base);
+}
+
+.catn8-text-muted {
+  color: var(--catn8-color-ink-muted);
+}
+
+.catn8-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--catn8-space-4);
+}
+
+.catn8-card-list-item {
+  min-width: 0;
+}
+
+.catn8-catalog-card {
+  width: 100%;
+  margin-bottom: var(--catn8-space-6);
+  color: var(--catn8-color-ink-base);
+  text-decoration: none;
+  overflow: hidden;
+  display: block;
+}
+
+button.catn8-catalog-card {
+  border: 0;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.catn8-catalog-card-image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.catn8-catalog-card-content {
+  padding: var(--catn8-space-5);
+}
+
+.catn8-story-card {
+  margin-bottom: var(--catn8-space-6);
+  padding: var(--catn8-space-5);
+  position: relative;
+  cursor: pointer;
+}
+
+.catn8-story-card-image {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  margin-bottom: var(--catn8-space-4);
+  transition: transform var(--catn8-transition-base) ease;
+}
+
+.catn8-story-card:hover .catn8-story-card-image {
+  transform: scale(1.05);
+}
+
+.catn8-story-age-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: var(--catn8-space-1) var(--catn8-space-3);
+  font-size: 0.9rem;
+  z-index: 1;
+}
+
+.catn8-story-title {
+  font-size: 1.5rem;
+  margin: var(--catn8-space-4) 0;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.25);
+}
+
+.catn8-story-text {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: var(--catn8-space-4);
+}
+
+.catn8-story-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--catn8-space-2);
+  margin-top: var(--catn8-space-4);
+}
+
+.catn8-story-tag {
+  padding: var(--catn8-space-1) var(--catn8-space-3);
+  font-size: 0.9rem;
+}

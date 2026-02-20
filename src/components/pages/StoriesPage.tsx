@@ -1,22 +1,14 @@
 import React from 'react';
 
-import { WebpImage } from '../common/WebpImage';
-import './StoriesPage.css';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
 import { StoryModal } from '../modals/StoryModal';
 import { normalizeText } from '../../utils/textUtils';
 import stories from '../../data/stories.json';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { StoryCatalogCard } from '../common/cards/StoryCatalogCard';
 
-interface StoriesPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: StoriesPageProps) {
+export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const [query, setQuery] = React.useState('');
   const [activeStoryId, setActiveStoryId] = React.useState<number | null>(null);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -48,29 +40,14 @@ export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, my
           <div className="row mt-4">
             {filtered.map((s) => (
               <div className="col-md-6" key={s.id}>
-                <div
-                  className="story-card"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openStory(s.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') openStory(s.id);
-                  }}
-                >
-                  <div className="age-badge">{s.age}</div>
-                  <div className="story-section">
-                    <WebpImage src={s.image} alt={s.title} className="story-image" />
-                    <h3 className="story-title">{s.title}</h3>
-                    <p className="story-text">{s.excerpt}</p>
-                    <div className="story-tags">
-                      {s.tags.map((t) => (
-                        <span className="story-tag" key={t}>
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <StoryCatalogCard
+                  age={s.age}
+                  title={s.title}
+                  excerpt={s.excerpt}
+                  image={s.image}
+                  tags={s.tags}
+                  onOpen={() => openStory(s.id)}
+                />
               </div>
             ))}
           </div>

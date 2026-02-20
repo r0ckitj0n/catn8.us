@@ -38,8 +38,6 @@ export function MysteryStationView({
   onOpenGameMgmt,
   onOpenCrimeLab
 }: MysteryStationViewProps) {
-  console.log('[MysteryStationView] isAdmin:', isAdmin, 'caseId:', caseId);
-
   const handleEnterStation = () => {
     window.location.href = '/sheriff_station.php';
   };

@@ -12,14 +12,10 @@ import { WordsearchGrid } from './sections/wordsearch/WordsearchGrid';
 import { WordsearchPrintView } from './sections/wordsearch/WordsearchPrintView';
 import { ApiClient } from '../../core/ApiClient';
 import { pickWordsForPage, buildWordSearch, generateWordsearchQuickFacts } from '../../utils/wordsearchUtils';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
-interface WordsearchPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
+interface WordsearchPageProps extends AppShellPageProps {
   onToast: (toast: IToast) => void;
-  mysteryTitle?: string;
 }
 
 /**

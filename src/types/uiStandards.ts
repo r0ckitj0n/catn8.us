@@ -46,4 +46,7 @@ export interface CustomCssSettings {
   surface_blur_px: number;
   transition_ms: number;
   focus_ring_color: string;
+  icon_button_size_px: number;
+  content_max_width_px: number;
+  base_font_size_px: number;
 }

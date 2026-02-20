@@ -5,9 +5,9 @@
   justify-content: center;
   flex-wrap: wrap;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.75);
+  background: color-mix(in srgb, var(--catn8-color-white) 75%, transparent);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 14px;
+  border-radius: var(--catn8-radius-sm);
   backdrop-filter: blur(8px);
 }
 
@@ -18,15 +18,15 @@
 .catn8-filter-input {
   min-width: 240px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--catn8-radius-sm);
   border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .catn8-filter-button {
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--catn8-radius-sm);
   border: 1px solid rgba(0, 0, 0, 0.2);
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--catn8-color-white) 90%, transparent);
 }
 
 .catn8-filter-button:disabled {

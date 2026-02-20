@@ -54,7 +54,7 @@ export function ToastOverlay({ toast, onClose }: ToastOverlayProps) {
           <StandardIconButton
             iconKey="close"
             ariaLabel="Close"
-            className="catn8-toast-close"
+            className="btn btn-outline-light btn-sm catn8-action-icon-btn catn8-toast-close"
             onClick={() => {
               if (typeof onClose === 'function') onClose();
             }}

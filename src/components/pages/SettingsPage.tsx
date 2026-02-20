@@ -10,19 +10,14 @@ import { DbConfigModal } from '../modals/DbConfigModal';
 import { DeployConfigModal } from '../modals/DeployConfigModal';
 import { BuildWizardSettingsModal } from '../modals/BuildWizardSettingsModal';
 import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
-import { CustomCssSettingsModal } from '../modals/CustomCssSettingsModal';
 import { IToast } from '../../types/common';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
-interface SettingsPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
+interface SettingsPageProps extends AppShellPageProps {
   onOpenAiImageConfig: () => void;
   onOpenAiConfig: () => void;
   onOpenAiVoiceCommunication: () => void;
   onToast: (toast: IToast) => void;
-  mysteryTitle?: string;
   page: string;
 }
 
@@ -48,7 +43,6 @@ export function SettingsPage({
   const [deployOpen, setDeployOpen] = React.useState(false);
   const [buildWizardSettingsOpen, setBuildWizardSettingsOpen] = React.useState(false);
   const [iconsOpen, setIconsOpen] = React.useState(false);
-  const [customCssOpen, setCustomCssOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
 
   return (
@@ -123,9 +117,6 @@ export function SettingsPage({
                       <button type="button" className="btn btn-primary" onClick={() => setIconsOpen(true)}>
                         Standardized Icons
                       </button>
-                      <button type="button" className="btn btn-primary" onClick={() => setCustomCssOpen(true)}>
-                        Custom CSS Settings
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -173,13 +164,12 @@ export function SettingsPage({
       <UserAccountsModal open={usersOpen} onClose={() => setUsersOpen(false)} onToast={onToast} />
       <GroupMembershipsModal open={groupsOpen} onClose={() => setGroupsOpen(false)} onToast={onToast} />
       <AuthPolicyModal open={policyOpen} onClose={() => setPolicyOpen(false)} onToast={onToast} />
-      <SiteAppearanceModal open={appearanceOpen} onClose={() => setAppearanceOpen(false)} onToast={onToast} />
+      <SiteAppearanceModal open={appearanceOpen} onClose={() => setAppearanceOpen(false)} onToast={onToast} page={page} />
       <WordsearchSettingsModal open={wordsearchOpen} onClose={() => setWordsearchOpen(false)} onToast={onToast} />
       <DbConfigModal open={dbOpen} onClose={() => setDbOpen(false)} onToast={onToast} />
       <DeployConfigModal open={deployOpen} onClose={() => setDeployOpen(false)} onToast={onToast} />
       <BuildWizardSettingsModal open={buildWizardSettingsOpen} onClose={() => setBuildWizardSettingsOpen(false)} onToast={onToast} />
       <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
-      <CustomCssSettingsModal open={customCssOpen} onClose={() => setCustomCssOpen(false)} onToast={onToast} page={page} />
     </>
   );
 }

@@ -3,16 +3,9 @@ import React from 'react';
 import { WebpImage } from '../common/WebpImage';
 import './AboutPage.css';
 import { PageLayout } from '../layout/PageLayout';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
-interface AboutPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AboutPageProps) {
+export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   return (
     <PageLayout page="about" title="About" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="hero">
@@ -50,7 +43,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
               <WebpImage className="catn8-inline-image" src="/images/homepage_kindness.jpg" alt="Community Vision" />
             </div>
             <div className="col-lg-5">
-              <div className="catn8-quote">
+              <div className="catn8-quote catn8-glass-card">
                 “Family is not an important thing. It’s everything.”
                 <div className="catn8-quote-attrib">- Michael J. Fox</div>
               </div>

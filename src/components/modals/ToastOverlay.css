@@ -57,11 +57,7 @@
 }
 
 .catn8-toast-close {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.14);
   color: inherit;
-  width: 30px;
-  height: 30px;
 }
 
 .catn8-toast-body {

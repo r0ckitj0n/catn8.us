@@ -1,0 +1,77 @@
+:root {
+  --catn8-font-family-base: 'Comic Neue', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --catn8-color-brand-primary: var(--catn8-brand-primary, #9b59b6);
+  --catn8-color-brand-secondary: var(--catn8-brand-secondary, #2ecc71);
+  --catn8-color-accent: #f6d04d;
+  --catn8-color-accent-strong: #e67e22;
+  --catn8-color-ink-strong: #1a1630;
+  --catn8-color-ink-base: #121826;
+  --catn8-color-ink-muted: #131d2a;
+  --catn8-color-bg-pattern: #f7f9fc;
+
+  --catn8-color-white: #ffffff;
+  --catn8-color-black: #000000;
+  --catn8-color-noir-gray: #1a1a1a;
+  --catn8-color-noir-gold: #d4af37;
+  --catn8-color-noir-blood: #8a0303;
+
+  --catn8-color-cyan-500: #0dcaf0;
+  --catn8-color-focus-ring: #2f75d8;
+
+  --catn8-bw-overview-color: #3f6b95;
+  --catn8-bw-start-color: #5b6f87;
+  --catn8-bw-land-color: #4c9f70;
+  --catn8-bw-permits-color: #c3833a;
+  --catn8-bw-site-color: #d4635c;
+  --catn8-bw-framing-color: #5b7bd5;
+  --catn8-bw-mep-color: #7d5cc8;
+  --catn8-bw-finishes-color: #3ca6ac;
+  --catn8-bw-desk-color: #6a7a8f;
+  --catn8-bw-completed-color: #2f8a4a;
+  --catn8-bw-tab-fallback-color: #9fb0c7;
+
+  --catn8-glass-bg: rgba(255, 255, 255, 0.15);
+  --catn8-glass-bg-hover: rgba(255, 255, 255, 0.25);
+  --catn8-glass-border: rgba(255, 255, 255, 0.2);
+  --catn8-glass-border-strong: rgba(255, 255, 255, 0.3);
+  --catn8-glass-chip-bg: rgba(255, 255, 255, 0.62);
+
+  --catn8-shadow-sm: 0 4px 15px rgba(0, 0, 0, 0.2);
+  --catn8-shadow-md: 0 8px 25px rgba(0, 0, 0, 0.3);
+  --catn8-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.25);
+  --catn8-shadow-xl: 0 16px 32px rgba(20, 36, 54, 0.15);
+
+  --catn8-radius-sm: 12px;
+  --catn8-radius-md: 15px;
+  --catn8-radius-lg: 18px;
+  --catn8-radius-xl: 20px;
+  --catn8-radius-pill: 999px;
+
+  --catn8-space-1: 0.25rem;
+  --catn8-space-2: 0.5rem;
+  --catn8-space-3: 0.75rem;
+  --catn8-space-4: 1rem;
+  --catn8-space-5: 1.5rem;
+  --catn8-space-6: 2rem;
+
+  --catn8-transition-fast: 170ms;
+  --catn8-transition-base: 300ms;
+
+  --catn8-z-base: 0;
+  --catn8-z-modal-backdrop: 5000;
+  --catn8-z-modal: 5100;
+  --catn8-z-toast: 5200;
+
+  --catn8-global-button-radius: var(--catn8-radius-sm);
+  --catn8-global-panel-radius: 16px;
+  --catn8-global-hover-lift: 2px;
+  --catn8-global-hover-scale: 1.02;
+  --catn8-global-surface-alpha: 0.96;
+  --catn8-global-surface-blur: 5px;
+  --catn8-global-transition-ms: 170ms;
+  --catn8-global-focus-ring: var(--catn8-color-focus-ring);
+  --catn8-global-icon-button-size: 32px;
+  --catn8-global-content-max-width: 1680px;
+  --catn8-global-base-font-size: 16px;
+}

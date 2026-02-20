@@ -1,17 +1,10 @@
 import React from 'react';
 
-import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { CatalogCard } from '../common/cards/CatalogCard';
 
-interface ActivitiesPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: ActivitiesPageProps) {
+export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const sections = [
     {
       title: 'Fun Activities for Everyone!',
@@ -52,13 +45,7 @@ export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick,
             <div className="row">
               {sec.items.map((it) => (
                 <div className="col-md-6" key={it.title}>
-                  <div className="game-card">
-                    <WebpImage src={it.image} alt={it.title} />
-                    <div className="game-card-content">
-                      <h3>{it.title}</h3>
-                      <p className="mb-0">{it.description}</p>
-                    </div>
-                  </div>
+                  <CatalogCard title={it.title} description={it.description} image={it.image} />
                 </div>
               ))}
             </div>

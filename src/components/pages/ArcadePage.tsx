@@ -1,20 +1,13 @@
 import React from 'react';
 
-import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
 import { normalizeText } from '../../utils/textUtils';
 import arcade from '../../data/arcade.json';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { CatalogCard } from '../common/cards/CatalogCard';
 
-interface ArcadePageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: ArcadePageProps) {
+export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const [query, setQuery] = React.useState('');
   const q = normalizeText(query);
   const filtered = React.useMemo(() => {
@@ -32,13 +25,7 @@ export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mys
           <div className="row mt-4">
             {filtered.map((g) => (
               <div className="col-md-6" key={g.id}>
-                <a className="game-card" href={g.href}>
-                  <WebpImage src={g.image} alt={g.title} />
-                  <div className="game-info">
-                    <h3>{g.title}</h3>
-                    <p className="mb-0">{g.description}</p>
-                  </div>
-                </a>
+                <CatalogCard title={g.title} description={g.description} image={g.image} href={g.href} />
               </div>
             ))}
           </div>

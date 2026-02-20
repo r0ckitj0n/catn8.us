@@ -1,10 +1,6 @@
 .catn8-quote {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  border-radius: var(--catn8-radius-xl);
   padding: 22px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
   color: var(--catn8-glass-heading);
   font-style: italic;
   font-size: 1.2rem;
@@ -28,8 +24,8 @@
   height: auto;
   max-height: 420px;
   object-fit: cover;
-  border-radius: 18px;
+  border-radius: var(--catn8-radius-lg);
   margin-top: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: var(--catn8-shadow-lg);
+  border: 2px solid color-mix(in srgb, var(--catn8-glass-border-strong) 85%, transparent);
 }

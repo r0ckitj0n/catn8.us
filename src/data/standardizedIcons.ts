@@ -41,4 +41,7 @@ export const DEFAULT_CUSTOM_CSS_SETTINGS: CustomCssSettings = {
   surface_blur_px: 5,
   transition_ms: 170,
   focus_ring_color: '#2f75d8',
+  icon_button_size_px: 32,
+  content_max_width_px: 1680,
+  base_font_size_px: 16,
 };

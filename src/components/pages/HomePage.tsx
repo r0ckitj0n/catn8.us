@@ -3,16 +3,9 @@ import React from 'react';
 import { WebpImage } from '../common/WebpImage';
 import './HomePage.css';
 import { PageLayout } from '../layout/PageLayout';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
-interface HomePageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: HomePageProps) {
+export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const cards = [
     { href: 'stories.php', title: 'Stories', text: 'Read our fun adventures!', image: '/images/homepage_friends.jpg' },
     { href: 'games.php', title: 'Games', text: 'Play and learn together!', image: '/images/homepage_growth.jpg' },
@@ -25,7 +18,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
         <div className="container hero-content">
           <div className="row align-items-center g-4">
             <div className="col-lg-6">
-              <div className="welcome-message">
+              <div className="welcome-message catn8-glass-card">
                 <h1>Welcome to catn8.us!</h1>
                 <p className="lead">Where Fun Meets Family!</p>
                 <p>
@@ -61,7 +54,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
         <div className="container">
           <div className="quick-access">
             {cards.map((c) => (
-              <a className="quick-access-btn" href={c.href} key={c.href}>
+              <a className="quick-access-btn catn8-glass-card catn8-glass-card--interactive" href={c.href} key={c.href}>
                 <WebpImage className="catn8-quick-access-image" src={c.image} alt={c.title} />
                 <div className="quick-access-title">{c.title}</div>
                 <div>{c.text}</div>
@@ -75,7 +68,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
         <div className="container">
           <h2 className="section-title">What Makes Us Special</h2>
           <div className="featured-grid">
-            <div className="featured-card">
+              <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
               <WebpImage className="catn8-featured-image" src="/images/homepage_friends.jpg" alt="Making Friends" />
               <div className="featured-card-content">
                 <h3>Making Friends</h3>
@@ -85,7 +78,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
                 </p>
               </div>
             </div>
-            <div className="featured-card">
+              <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
               <WebpImage className="catn8-featured-image" src="/images/homepage_kindness.jpg" alt="Spreading Joy" />
               <div className="featured-card-content">
                 <h3>Spreading Joy</h3>
@@ -95,7 +88,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
                 </p>
               </div>
             </div>
-            <div className="featured-card">
+              <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
               <WebpImage className="catn8-featured-image" src="/images/homepage_growth.jpg" alt="Growing Together" />
               <div className="featured-card-content">
                 <h3>Growing Together</h3>
@@ -130,7 +123,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
         <div className="container">
           <div className="row justify-content-center">
             <div className="col-lg-10">
-              <div className="welcome-message text-center">
+              <div className="welcome-message catn8-glass-card text-center">
                 <h2 className="section-title mb-3">Join Our Family!</h2>
                 <p className="lead">
                   Welcome to our special family circle! We're like a big, friendly tree where everyone can find a branch to sit

@@ -1,21 +1,13 @@
 import React from 'react';
 
-import { WebpImage } from '../common/WebpImage';
-import './GamesPage.css';
 import { PageLayout } from '../layout/PageLayout';
 import { FilterBar } from '../layout/FilterBar';
 import { normalizeText } from '../../utils/textUtils';
 import games from '../../data/games.json';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { CatalogCard } from '../common/cards/CatalogCard';
 
-interface GamesPageProps {
-  viewer: any;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
-}
-
-export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: GamesPageProps) {
+export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const [query, setQuery] = React.useState('');
   const q = normalizeText(query);
 
@@ -42,13 +34,7 @@ export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
               <div className="row">
                 {sec.items.map((it: any) => (
                   <div className="col-md-6" key={it.title}>
-                    <div className="game-card">
-                      <WebpImage src={it.image} alt={it.title} />
-                      <div className="game-card-content">
-                        <h3>{it.title}</h3>
-                        <p className="mb-0">{it.description}</p>
-                      </div>
-                    </div>
+                    <CatalogCard title={it.title} description={it.description} image={it.image} />
                   </div>
                 ))}
               </div>

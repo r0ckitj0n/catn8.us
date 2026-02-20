@@ -18,19 +18,20 @@ import { MysteryHeader } from './sections/mystery/MysteryHeader';
 import { MysteryStationView } from './sections/mystery/MysteryStationView';
 import { MysteryModals } from '../mystery/MysteryModals';
 import { InvestigationModals } from '../mystery/sections/modals/InvestigationModals';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 interface MysteryPageProps {
-  viewer: any;
+  viewer: AppShellPageProps['viewer'];
   isAdmin: boolean;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
+  onLoginClick: AppShellPageProps['onLoginClick'];
+  onLogout: AppShellPageProps['onLogout'];
+  onAccountClick: AppShellPageProps['onAccountClick'];
   onToast: any;
   onOpenAiImageConfig: () => void;
   onOpenAiConfig: () => void;
   onOpenAiVoiceConfig: () => void;
   onMysteryTitleChange: (title: string) => void;
-  mysteryTitle: string;
+  mysteryTitle: AppShellPageProps['mysteryTitle'];
   refreshViewer: () => Promise<any>;
 }
 
@@ -44,12 +45,6 @@ export function MysteryPage({
   onMysteryTitleChange, mysteryTitle, refreshViewer
 }: MysteryPageProps) {
   const isAuthed = Boolean(viewer && viewer.id);
-
-  React.useEffect(() => {
-    console.log('[MysteryPage] viewer:', viewer);
-    console.log('[MysteryPage] isAdmin:', isAdmin);
-    console.log('[MysteryPage] isAuthed:', isAuthed);
-  }, [viewer, isAdmin, isAuthed]);
 
   // 1. Hook initializations
   const [busy, setBusy] = React.useState(false);

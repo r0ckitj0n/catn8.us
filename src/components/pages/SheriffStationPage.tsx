@@ -14,18 +14,19 @@ import { SheriffStationView } from '../mystery/SheriffStationView';
 import { MysteryModals } from '../mystery/MysteryModals';
 import { InvestigationModals } from '../mystery/sections/modals/InvestigationModals';
 import { cleanupModalArtifactsIfNoOpenModals } from '../../utils/modalUtils';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 interface SheriffStationPageProps {
-  viewer: any;
+  viewer: AppShellPageProps['viewer'];
   isAdmin: boolean;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
+  onLoginClick: AppShellPageProps['onLoginClick'];
+  onLogout: AppShellPageProps['onLogout'];
+  onAccountClick: AppShellPageProps['onAccountClick'];
   onToast: any;
   onOpenAiImageConfig: () => void;
   onOpenAiConfig: () => void;
   onOpenAiVoiceConfig: () => void;
-  mysteryTitle: string;
+  mysteryTitle: AppShellPageProps['mysteryTitle'];
 }
 
 export function SheriffStationPage({
@@ -169,7 +170,6 @@ export function SheriffStationPage({
             })()}
             briefing={activeBriefing}
             onOpenInterrogationRoom={() => {
-              console.log('[SheriffStationPage] onOpenInterrogationRoom clicked');
               showModalNow(modalRefs.suspectsModalRef, modalRefs.suspectsModalApiRef, modalState.setSuspectsModalOpen);
             }}
             onStudyCaseFiles={() => {

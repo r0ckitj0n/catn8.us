@@ -13,7 +13,7 @@ export function ModalCloseIconButton({ onClick, className = '', title = 'Close' 
       iconKey="close"
       ariaLabel="Close"
       title={title}
-      className={`catn8-modal-close-btn ${className}`.trim()}
+      className={`btn btn-outline-secondary btn-sm catn8-action-icon-btn ${className}`.trim()}
       dismissModal={!onClick}
       onClick={onClick}
     />

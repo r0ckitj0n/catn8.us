@@ -6,566 +6,52 @@ import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { IBuildWizardDropdownSettings } from '../../types/buildWizardDropdowns';
+import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { BuildTabId, DocumentDraftMap, LotSizeUnit, StepDraftMap, StepType, WizardView } from '../../types/pages/buildWizardPage';
 import {
   buildWizardTokenLabel,
   BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT,
   DEFAULT_BUILD_WIZARD_DROPDOWN_SETTINGS,
   fetchBuildWizardDropdownSettings,
 } from '../../core/buildWizardDropdownSettings';
+import {
+  BUILD_TABS,
+  PHASE_PROGRESS_ORDER,
+  STEP_TYPE_OPTIONS,
+  TAB_DEFAULT_PHASE_KEY,
+  TAB_PHASE_COLORS,
+  isAiEstimatedField,
+  stepCostTotal,
+} from './build-wizard/buildWizardConstants';
+import {
+  calculateDurationDays,
+  detectLotSizeUnit,
+  fileExtensionFromName,
+  formatCurrency,
+  formatDate,
+  formatTimelineDate,
+  getDefaultRange,
+  isPdfDocument,
+  lotSizeInputToSqftAuto,
+  lotSizeSqftToDisplayInput,
+  parseDate,
+  parseUrlState,
+  prettyPhaseLabel,
+  pushUrlState,
+  sortAlpha,
+  stepPhaseBucket,
+  thumbnailKindLabel,
+  toIsoDate,
+  toNumberOrNull,
+  toStringOrNull,
+  withDownloadFlag,
+} from './build-wizard/buildWizardUtils';
+import { DateRangeChart, FooterPhaseTimeline } from './build-wizard/BuildWizardTimeline';
 import './BuildWizardPage.css';
 
-interface BuildWizardPageProps {
-  viewer: any;
+interface BuildWizardPageProps extends AppShellPageProps {
   isAdmin?: boolean;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle?: string;
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
-}
-
-type WizardView = 'launcher' | 'build';
-type BuildTabId = 'overview' | 'start' | 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes' | 'desk' | 'completed';
-type StepDraftMap = Record<number, IBuildWizardStep>;
-type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number }>;
-type StepType = IBuildWizardStep['step_type'];
-type LotSizeUnit = 'sqft' | 'acres';
-
-const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
-  { id: 'overview', label: '1. Overview' },
-  { id: 'start', label: '2. Start' },
-  { id: 'land', label: '3. Land & Survey' },
-  { id: 'permits', label: '4. Permits' },
-  { id: 'site', label: '5. Site & Foundation' },
-  { id: 'framing', label: '6. Framing & Shell' },
-  { id: 'mep', label: '7. MEP & Inspections' },
-  { id: 'finishes', label: '8. Finishes' },
-  { id: 'desk', label: '9. Project Desk' },
-  { id: 'completed', label: '10. Completed' },
-];
-
-const PHASE_PROGRESS_ORDER: BuildTabId[] = ['land', 'permits', 'site', 'framing', 'mep', 'finishes', 'desk'];
-
-const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
-  overview: '#3f6b95',
-  start: '#5b6f87',
-  land: '#4c9f70',
-  permits: '#c3833a',
-  site: '#d4635c',
-  framing: '#5b7bd5',
-  mep: '#7d5cc8',
-  finishes: '#3ca6ac',
-  desk: '#6a7a8f',
-  completed: '#2f8a4a',
-};
-
-const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
-  land: 'land_due_diligence',
-  permits: 'dawson_county_permits',
-  site: 'site_preparation',
-  framing: 'framing_shell',
-  mep: 'mep_rough_in',
-  finishes: 'interior_finishes',
-  desk: 'general',
-};
-
-const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
-  { value: 'blueprints', label: 'Blueprints' },
-  { value: 'closeout', label: 'Closeout' },
-  { value: 'construction', label: 'Construction' },
-  { value: 'delivery', label: 'Delivery' },
-  { value: 'documentation', label: 'Documentation' },
-  { value: 'inspection', label: 'Inspection' },
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'other', label: 'Other' },
-  { value: 'permit', label: 'Permit' },
-  { value: 'photos', label: 'Photos' },
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'utility', label: 'Utility' },
-];
-STEP_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-
-const SQFT_PER_ACRE = 43560;
-
-function formatCurrency(value: number | null): string {
-  if (value === null || Number.isNaN(Number(value))) {
-    return '-';
-  }
-  return Number(value).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
-}
-
-function parseDate(input: string | null | undefined): Date | null {
-  if (!input) {
-    return null;
-  }
-  const str = String(input).trim();
-  if (!str) {
-    return null;
-  }
-  const normalized = str.length > 10 ? str.slice(0, 10) : str;
-  const d = new Date(`${normalized}T00:00:00`);
-  if (Number.isNaN(d.getTime())) {
-    return null;
-  }
-  return d;
-}
-
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function formatDate(input: string | null | undefined): string {
-  const d = parseDate(input);
-  return d ? toIsoDate(d) : '-';
-}
-
-function formatTimelineDate(input: string | null | undefined): string {
-  const d = parseDate(input);
-  if (!d) {
-    return '-';
-  }
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function tabLabelShort(tabId: BuildTabId): string {
-  const label = BUILD_TABS.find((t) => t.id === tabId)?.label || tabId;
-  return label.replace(/^\d+\.\s*/, '');
-}
-
-function withDownloadFlag(url: string): string {
-  const clean = String(url || '').trim();
-  if (!clean) {
-    return '';
-  }
-  return `${clean}${clean.includes('?') ? '&' : '?'}download=1`;
-}
-
-function fileExtensionFromName(name: string): string {
-  const clean = String(name || '').trim();
-  if (!clean || !clean.includes('.')) {
-    return '';
-  }
-  const ext = clean.split('.').pop() || '';
-  return ext.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-}
-
-function mimeGroupLabel(mimeType: string): string {
-  const mime = String(mimeType || '').toLowerCase();
-  if (mime.startsWith('application/pdf')) {
-    return 'PDF';
-  }
-  if (mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv')) {
-    return 'Spreadsheet';
-  }
-  if (mime.includes('wordprocessingml') || mime.includes('msword') || mime.includes('rtf') || mime.includes('text/')) {
-    return 'Document';
-  }
-  if (mime.includes('presentation')) {
-    return 'Slides';
-  }
-  if (mime.includes('zip') || mime.includes('compressed')) {
-    return 'Archive';
-  }
-  if (mime.includes('json') || mime.includes('xml')) {
-    return 'Data';
-  }
-  return 'File';
-}
-
-function thumbnailKindLabel(doc: IBuildWizardDocument): string {
-  const ext = fileExtensionFromName(doc.original_name);
-  if (ext) {
-    return ext;
-  }
-  return mimeGroupLabel(doc.mime_type);
-}
-
-function isPdfDocument(doc: IBuildWizardDocument): boolean {
-  const mime = String(doc.mime_type || '').trim().toLowerCase();
-  if (mime === 'application/pdf') {
-    return true;
-  }
-  return fileExtensionFromName(doc.original_name) === 'PDF';
-}
-
-function toNumberOrNull(value: string): number | null {
-  const trimmed = String(value || '').trim();
-  if (trimmed === '') {
-    return null;
-  }
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
-}
-
-function detectLotSizeUnit(inputValue: string): LotSizeUnit {
-  const parsed = toNumberOrNull(inputValue);
-  if (parsed === null) {
-    return 'acres';
-  }
-  return parsed < 1000 ? 'acres' : 'sqft';
-}
-
-function lotSizeInputToSqftAuto(inputValue: string): number | null {
-  const parsed = toNumberOrNull(inputValue);
-  if (parsed === null) {
-    return null;
-  }
-  const unit = detectLotSizeUnit(inputValue);
-  if (unit === 'sqft') {
-    return Math.round(parsed);
-  }
-  return Math.round(parsed * SQFT_PER_ACRE);
-}
-
-function lotSizeSqftToDisplayInput(sqft: number | null): string {
-  if (sqft === null || !Number.isFinite(Number(sqft)) || Number(sqft) <= 0) {
-    return '';
-  }
-  const acres = Number(sqft) / SQFT_PER_ACRE;
-  return acres.toFixed(4).replace(/\.?0+$/, '');
-}
-
-function toStringOrNull(value: string): string | null {
-  const trimmed = String(value || '').trim();
-  return trimmed === '' ? null : trimmed;
-}
-
-function sortAlpha(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' });
-}
-
-function calculateDurationDays(startDate: string | null | undefined, endDate: string | null | undefined): number | null {
-  const start = parseDate(startDate);
-  const end = parseDate(endDate);
-  if (!start || !end) {
-    return null;
-  }
-  const msDiff = end.getTime() - start.getTime();
-  const days = Math.round(msDiff / 86400000) + 1;
-  return Math.max(1, days);
-}
-
-function stepCostTotal(step: IBuildWizardStep): number {
-  const actual = Number(step.actual_cost);
-  if (Number.isFinite(actual) && actual > 0) {
-    return actual;
-  }
-  const estimated = Number(step.estimated_cost);
-  if (Number.isFinite(estimated) && estimated > 0) {
-    return estimated;
-  }
-  return 0;
-}
-
-function isAiEstimatedField(step: IBuildWizardStep, field: string): boolean {
-  const fields = Array.isArray(step.ai_estimated_fields) ? step.ai_estimated_fields : [];
-  return fields.includes(field);
-}
-
-function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
-  const key = String(step.phase_key || '').toLowerCase();
-
-  if (key.includes('land') || key.includes('survey') || key.includes('due_diligence') || key.includes('purchase')) {
-    return 'land';
-  }
-  if (key.includes('permit') || key.includes('approval')) {
-    return 'permits';
-  }
-  if (key.includes('site') || key.includes('foundation') || key.includes('grading') || key.includes('excav')) {
-    return 'site';
-  }
-  if (key.includes('framing') || key.includes('enclosure') || key.includes('roof') || key.includes('shell')) {
-    return 'framing';
-  }
-  if (key.includes('plumb') || key.includes('elect') || key.includes('mechanical') || key.includes('hvac') || key.includes('mep') || key.includes('inspection')) {
-    return 'mep';
-  }
-  if (key.includes('finish') || key.includes('interior') || key.includes('paint') || key.includes('cabinet') || key.includes('floor')) {
-    return 'finishes';
-  }
-  return 'desk';
-}
-
-function prettyPhaseLabel(phaseKey: string | null | undefined): string {
-  const raw = String(phaseKey || '').trim();
-  if (!raw) {
-    return 'General';
-  }
-  return raw.split('_').filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-}
-
-function stepDateRange(step: IBuildWizardStep): { start: Date | null; end: Date | null } {
-  const start = parseDate(step.expected_start_date) || parseDate(step.completed_at) || parseDate(step.expected_end_date);
-  const end = parseDate(step.expected_end_date) || parseDate(step.completed_at) || parseDate(step.expected_start_date);
-
-  if (!start && !end) {
-    return { start: null, end: null };
-  }
-  if (start && end && end.getTime() < start.getTime()) {
-    return { start: end, end: start };
-  }
-  return {
-    start: start || end,
-    end: end || start,
-  };
-}
-
-function getDefaultRange(steps: IBuildWizardStep[]): { start: string; end: string } {
-  const allDates: Date[] = [];
-  steps.forEach((step) => {
-    const r = stepDateRange(step);
-    if (r.start) {
-      allDates.push(r.start);
-    }
-    if (r.end) {
-      allDates.push(r.end);
-    }
-  });
-
-  if (!allDates.length) {
-    const today = new Date();
-    return { start: toIsoDate(today), end: toIsoDate(today) };
-  }
-
-  allDates.sort((a, b) => a.getTime() - b.getTime());
-  return {
-    start: toIsoDate(allDates[0]),
-    end: toIsoDate(allDates[allDates.length - 1]),
-  };
-}
-
-function parseUrlState(): { view: WizardView; projectId: number | null } {
-  if (typeof window === 'undefined') {
-    return { view: 'launcher', projectId: null };
-  }
-  const url = new URL(window.location.href);
-  const viewParam = String(url.searchParams.get('view') || '').toLowerCase();
-  const projectIdParam = Number(url.searchParams.get('project_id') || '0');
-  return {
-    view: (viewParam === 'build' ? 'build' : 'launcher'),
-    projectId: Number.isFinite(projectIdParam) && projectIdParam > 0 ? projectIdParam : null,
-  };
-}
-
-function pushUrlState(view: WizardView, projectId: number | null): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  const url = new URL(window.location.href);
-
-  if (view === 'build' && projectId && projectId > 0) {
-    url.searchParams.set('view', 'build');
-    url.searchParams.set('project_id', String(projectId));
-  } else {
-    url.searchParams.delete('view');
-    url.searchParams.delete('project_id');
-  }
-
-  window.history.pushState({ view, projectId }, '', url.toString());
-}
-
-type DateRangeChartProps = {
-  steps: IBuildWizardStep[];
-  rangeStart: string;
-  rangeEnd: string;
-  compact?: boolean;
-};
-
-type FooterTimelineProps = {
-  steps: IBuildWizardStep[];
-  rangeStart: string;
-  rangeEnd: string;
-};
-
-function segmentBackground(colors: string[]): string {
-  if (colors.length <= 1) {
-    return colors[0] || '#9fb0c7';
-  }
-  const stripeWidth = 8;
-  const stops = colors
-    .map((color, i) => {
-      const start = i * stripeWidth;
-      const end = (i + 1) * stripeWidth;
-      return `${color} ${start}px ${end}px`;
-    })
-    .join(', ');
-  return `repeating-linear-gradient(135deg, ${stops})`;
-}
-
-function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProps) {
-  const startDate = parseDate(rangeStart);
-  const endDate = parseDate(rangeEnd);
-
-  if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
-    return <div className="build-wizard-muted">Invalid date range.</div>;
-  }
-
-  const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
-  const phaseByDay: Array<Set<BuildTabId>> = Array.from({ length: totalDays }, () => new Set<BuildTabId>());
-
-  steps.forEach((step) => {
-    const range = stepDateRange(step);
-    if (!range.start || !range.end) {
-      return;
-    }
-    if (range.end.getTime() < startDate.getTime() || range.start.getTime() > endDate.getTime()) {
-      return;
-    }
-    const clampedStartMs = Math.max(range.start.getTime(), startDate.getTime());
-    const clampedEndMs = Math.min(range.end.getTime(), endDate.getTime());
-    const startOffset = Math.max(0, Math.round((clampedStartMs - startDate.getTime()) / 86400000));
-    const endOffset = Math.min(totalDays - 1, Math.round((clampedEndMs - startDate.getTime()) / 86400000));
-    const phase = stepPhaseBucket(step);
-    for (let day = startOffset; day <= endOffset; day += 1) {
-      phaseByDay[day].add(phase);
-    }
-  });
-
-  const segments: Array<{ leftPercent: number; widthPercent: number; colors: string[]; key: string }> = [];
-  let idx = 0;
-  while (idx < totalDays) {
-    const phaseIds = Array.from(phaseByDay[idx]).sort() as BuildTabId[];
-    const key = phaseIds.join('|');
-    let endIdx = idx;
-    while (endIdx + 1 < totalDays) {
-      const nextIds = Array.from(phaseByDay[endIdx + 1]).sort().join('|');
-      if (nextIds !== key) {
-        break;
-      }
-      endIdx += 1;
-    }
-    if (phaseIds.length > 0) {
-      const runLen = (endIdx - idx) + 1;
-      segments.push({
-        key: `${idx}-${key}`,
-        leftPercent: (idx / totalDays) * 100,
-        widthPercent: (runLen / totalDays) * 100,
-        colors: phaseIds.map((phaseId) => TAB_PHASE_COLORS[phaseId]),
-      });
-    }
-    idx = endIdx + 1;
-  }
-
-  const quarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.25)));
-  const midDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.5)));
-  const threeQuarterDate = toIsoDate(new Date(startDate.getTime() + ((endDate.getTime() - startDate.getTime()) * 0.75)));
-  const phaseStatus = new Map<BuildTabId, { total: number; done: number }>();
-
-  steps.forEach((step) => {
-    const phaseId = stepPhaseBucket(step);
-    if (!phaseStatus.has(phaseId)) {
-      phaseStatus.set(phaseId, { total: 0, done: 0 });
-    }
-    const stat = phaseStatus.get(phaseId)!;
-    stat.total += 1;
-    if (Number(step.is_completed) === 1) {
-      stat.done += 1;
-    }
-  });
-
-  const orderedStatusPhases = BUILD_TABS
-    .map((t) => t.id)
-    .filter((id): id is BuildTabId => id !== 'overview' && id !== 'start' && id !== 'completed' && (phaseStatus.get(id)?.total || 0) > 0);
-
-  return (
-    <div className="build-wizard-phase-timeline">
-      <div className="build-wizard-phase-range">
-        {formatTimelineDate(rangeStart)} - {formatTimelineDate(rangeEnd)}
-      </div>
-      <div className="build-wizard-phase-track">
-        {segments.map((segment) => (
-          <div
-            key={segment.key}
-            className="build-wizard-phase-segment"
-            style={{
-              left: `${segment.leftPercent}%`,
-              width: `${segment.widthPercent}%`,
-              background: segmentBackground(segment.colors),
-            }}
-          />
-        ))}
-      </div>
-      <div className="build-wizard-phase-ticks">
-        <span className="is-edge is-start" style={{ left: '0%' }}>{formatTimelineDate(rangeStart)}</span>
-        <span className="is-mid" style={{ left: '25%' }}>{formatTimelineDate(quarterDate)}</span>
-        <span className="is-mid" style={{ left: '50%' }}>{formatTimelineDate(midDate)}</span>
-        <span className="is-mid" style={{ left: '75%' }}>{formatTimelineDate(threeQuarterDate)}</span>
-        <span className="is-edge is-end" style={{ left: '100%' }}>{formatTimelineDate(rangeEnd)}</span>
-      </div>
-      {orderedStatusPhases.length ? (
-        <div className="build-wizard-phase-status">
-          {orderedStatusPhases.map((phaseId) => {
-            const stat = phaseStatus.get(phaseId)!;
-            return (
-              <div key={phaseId} className="build-wizard-phase-status-chip">
-                <span className="build-wizard-phase-status-swatch" style={{ background: TAB_PHASE_COLORS[phaseId] }} />
-                <span>{tabLabelShort(phaseId)}: {stat.done}/{stat.total}</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DateRangeChart({ steps, rangeStart, rangeEnd, compact = false }: DateRangeChartProps) {
-  const startDate = parseDate(rangeStart);
-  const endDate = parseDate(rangeEnd);
-
-  if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
-    return <div className="build-wizard-muted">Invalid date range.</div>;
-  }
-
-  const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
-
-  const rows = steps
-    .map((step) => {
-      const range = stepDateRange(step);
-      if (!range.start || !range.end) {
-        return null;
-      }
-
-      if (range.end.getTime() < startDate.getTime() || range.start.getTime() > endDate.getTime()) {
-        return null;
-      }
-
-      const clampedStartMs = Math.max(range.start.getTime(), startDate.getTime());
-      const clampedEndMs = Math.min(range.end.getTime(), endDate.getTime());
-
-      const leftDays = Math.round((clampedStartMs - startDate.getTime()) / 86400000);
-      const widthDays = Math.max(1, Math.round((clampedEndMs - clampedStartMs) / 86400000) + 1);
-
-      return {
-        step,
-        leftPercent: (leftDays / totalDays) * 100,
-        widthPercent: (widthDays / totalDays) * 100,
-      };
-    })
-    .filter(Boolean) as Array<{ step: IBuildWizardStep; leftPercent: number; widthPercent: number }>;
-
-  if (!rows.length) {
-    return <div className="build-wizard-muted">No step dates in selected range.</div>;
-  }
-
-  return (
-    <div className={`build-wizard-chart ${compact ? 'is-compact' : ''}`}>
-      {rows.map((row) => (
-        <div key={row.step.id} className="build-wizard-chart-row">
-          <div className="build-wizard-chart-label">#{row.step.step_order} {row.step.title}</div>
-          <div className="build-wizard-chart-track">
-            <div
-              className="build-wizard-chart-bar"
-              style={{ left: `${row.leftPercent}%`, width: `${row.widthPercent}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
@@ -2731,21 +2217,18 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
         <div className="build-wizard-lightbox" onClick={() => setLightboxDoc(null)}>
           <div className="build-wizard-lightbox-inner" onClick={(e) => e.stopPropagation()}>
             <div className="build-wizard-lightbox-actions">
-              <a
-                href={withDownloadFlag(lightboxDoc.src)}
-                className="build-wizard-lightbox-download"
+              <StandardIconLink
+                iconKey="download"
+                ariaLabel="Download"
                 title="Download"
-                aria-label="Download"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
-                </svg>
-              </a>
+                href={withDownloadFlag(lightboxDoc.src)}
+                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-download"
+              />
               <StandardIconButton
                 iconKey="close"
                 ariaLabel="Close preview"
                 title="Close"
-                className="build-wizard-lightbox-close"
+                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-close"
                 onClick={() => setLightboxDoc(null)}
               />
             </div>

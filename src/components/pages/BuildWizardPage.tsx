@@ -210,7 +210,7 @@ function toNumberOrNull(value: string): number | null {
 function detectLotSizeUnit(inputValue: string): LotSizeUnit {
   const parsed = toNumberOrNull(inputValue);
   if (parsed === null) {
-    return 'sqft';
+    return 'acres';
   }
   return parsed < 1000 ? 'acres' : 'sqft';
 }
@@ -225,6 +225,14 @@ function lotSizeInputToSqftAuto(inputValue: string): number | null {
     return Math.round(parsed);
   }
   return Math.round(parsed * SQFT_PER_ACRE);
+}
+
+function lotSizeSqftToDisplayInput(sqft: number | null): string {
+  if (sqft === null || !Number.isFinite(Number(sqft)) || Number(sqft) <= 0) {
+    return '';
+  }
+  const acres = Number(sqft) / SQFT_PER_ACRE;
+  return acres.toFixed(4).replace(/\.?0+$/, '');
 }
 
 function toStringOrNull(value: string): string | null {
@@ -607,7 +615,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
   const [docStepId, setDocStepId] = React.useState<number>(0);
   const [projectDraft, setProjectDraft] = React.useState(questionnaire);
-  const [lotSizeInput, setLotSizeInput] = React.useState<string>(questionnaire.lot_size_sqft !== null ? String(questionnaire.lot_size_sqft) : '');
+  const [lotSizeInput, setLotSizeInput] = React.useState<string>(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
@@ -657,7 +665,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
 
   React.useEffect(() => {
     setProjectDraft(questionnaire);
-    setLotSizeInput(questionnaire.lot_size_sqft !== null ? String(questionnaire.lot_size_sqft) : '');
+    setLotSizeInput(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   }, [questionnaire]);
 
   const lotSizeDetectedUnit = React.useMemo<LotSizeUnit>(() => detectLotSizeUnit(lotSizeInput), [lotSizeInput]);

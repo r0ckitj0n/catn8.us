@@ -483,6 +483,15 @@
   padding: 12px;
   background: var(--catn8-bw-surface-1);
   position: relative;
+  margin-left: calc(var(--bw-indent-level, 0) * 26px);
+}
+
+.build-wizard-step.is-child {
+  background: #f7fbff;
+}
+
+.build-wizard-step.is-parent-target {
+  box-shadow: inset 0 0 0 2px #5f86c5;
 }
 
 .build-wizard-step-phase-accent {
@@ -513,6 +522,51 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.build-wizard-step-drag-handle {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #c6d5ea;
+  border-radius: 8px;
+  background: #eef5ff;
+  color: #1d487e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  cursor: grab;
+}
+
+.build-wizard-step-drag-handle:active {
+  cursor: grabbing;
+}
+
+.build-wizard-child-glyph {
+  color: #3d5f89;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.build-wizard-parent-lock-note {
+  font-size: 0.78rem;
+  color: #7a4b0c;
+  background: #fff3de;
+  border: 1px solid #f0d4a3;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.build-wizard-drop-zone {
+  height: 8px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.build-wizard-drop-zone.is-active {
+  background: #98b7e4;
 }
 
 .build-wizard-inline-check {
@@ -657,6 +711,12 @@
 .build-wizard-phase-add:hover {
   background: #e0edff;
   border-color: #7ba3d9;
+}
+
+.build-wizard-step-drag-hint {
+  margin: 8px 0 10px;
+  font-size: 0.82rem;
+  color: #4f6178;
 }
 
 .build-wizard-step-actions {

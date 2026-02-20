@@ -84,6 +84,7 @@ function catn8_build_wizard_tables_ensure(): void
         project_id INT NOT NULL,
         step_order INT NOT NULL,
         phase_key VARCHAR(64) NOT NULL DEFAULT 'general',
+        parent_step_id INT NULL,
         depends_on_step_ids_json LONGTEXT NULL,
         step_type VARCHAR(32) NOT NULL DEFAULT 'construction',
         title VARCHAR(255) NOT NULL,
@@ -117,6 +118,7 @@ function catn8_build_wizard_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_project_step_order (project_id, step_order),
         KEY idx_project_id (project_id),
+        KEY idx_parent_step_id (parent_step_id),
         KEY idx_is_completed (is_completed),
         CONSTRAINT fk_build_wizard_steps_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -176,6 +178,7 @@ function catn8_build_wizard_tables_ensure(): void
     }
 
     $stepColumns = [
+        'parent_step_id' => "ALTER TABLE build_wizard_steps ADD COLUMN parent_step_id INT NULL AFTER phase_key",
         'depends_on_step_ids_json' => "ALTER TABLE build_wizard_steps ADD COLUMN depends_on_step_ids_json LONGTEXT NULL AFTER phase_key",
         'step_type' => "ALTER TABLE build_wizard_steps ADD COLUMN step_type VARCHAR(32) NOT NULL DEFAULT 'construction' AFTER phase_key",
         'permit_document_id' => "ALTER TABLE build_wizard_steps ADD COLUMN permit_document_id INT NULL AFTER permit_required",
@@ -201,6 +204,14 @@ function catn8_build_wizard_tables_ensure(): void
         if (!$exists) {
             Database::execute($alterSql);
         }
+    }
+
+    $hasParentStepIndex = Database::queryOne(
+        'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+        ['build_wizard_steps', 'idx_parent_step_id']
+    );
+    if (!$hasParentStepIndex) {
+        Database::execute('ALTER TABLE build_wizard_steps ADD KEY idx_parent_step_id (parent_step_id)');
     }
 }
 
@@ -556,6 +567,219 @@ function catn8_build_wizard_resequence_step_orders(int $projectId): void
     }
 }
 
+function catn8_build_wizard_reorder_phase_steps(int $projectId, string $phaseKey, array $orderedStepIds): void
+{
+    if ($projectId <= 0) {
+        throw new RuntimeException('Invalid project for reorder');
+    }
+    $normalizedPhase = catn8_build_wizard_normalize_phase_key($phaseKey);
+
+    $allRows = Database::queryAll(
+        'SELECT id, phase_key, step_order
+         FROM build_wizard_steps
+         WHERE project_id = ?
+         ORDER BY step_order ASC, id ASC',
+        [$projectId]
+    );
+    if (!$allRows) {
+        return;
+    }
+
+    $phaseStepIds = [];
+    foreach ($allRows as $row) {
+        $stepId = (int)($row['id'] ?? 0);
+        $rowPhase = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
+        if ($stepId > 0 && $rowPhase === $normalizedPhase) {
+            $phaseStepIds[] = $stepId;
+        }
+    }
+    sort($phaseStepIds);
+
+    $requested = [];
+    foreach ($orderedStepIds as $stepId) {
+        $n = (int)$stepId;
+        if ($n > 0) {
+            $requested[] = $n;
+        }
+    }
+    $requested = array_values(array_unique($requested));
+    sort($requested);
+
+    if ($phaseStepIds !== $requested) {
+        throw new RuntimeException('ordered_step_ids must contain all and only steps in the selected phase');
+    }
+
+    $phaseQueue = array_values($orderedStepIds);
+    $finalOrderedIds = [];
+    foreach ($allRows as $row) {
+        $rowPhase = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
+        if ($rowPhase === $normalizedPhase) {
+            $nextId = (int)array_shift($phaseQueue);
+            if ($nextId > 0) {
+                $finalOrderedIds[] = $nextId;
+            }
+            continue;
+        }
+        $stepId = (int)($row['id'] ?? 0);
+        if ($stepId > 0) {
+            $finalOrderedIds[] = $stepId;
+        }
+    }
+
+    if (!$finalOrderedIds) {
+        return;
+    }
+
+    Database::execute(
+        'UPDATE build_wizard_steps SET step_order = step_order + 10000 WHERE project_id = ?',
+        [$projectId]
+    );
+    foreach ($finalOrderedIds as $index => $stepId) {
+        Database::execute(
+            'UPDATE build_wizard_steps SET step_order = ? WHERE id = ? AND project_id = ?',
+            [$index + 1, (int)$stepId, $projectId]
+        );
+    }
+}
+
+function catn8_build_wizard_validate_parent_step(int $projectId, int $stepId, $candidateParentStepId): ?int
+{
+    $parentStepId = (int)$candidateParentStepId;
+    if ($parentStepId <= 0) {
+        return null;
+    }
+    if ($parentStepId === $stepId) {
+        throw new RuntimeException('A step cannot be its own parent');
+    }
+
+    $stepRow = Database::queryOne(
+        'SELECT id, phase_key FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+        [$stepId, $projectId]
+    );
+    if (!$stepRow) {
+        throw new RuntimeException('Step not found');
+    }
+
+    $parentRow = Database::queryOne(
+        'SELECT id, phase_key FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+        [$parentStepId, $projectId]
+    );
+    if (!$parentRow) {
+        throw new RuntimeException('Parent step not found for this project');
+    }
+
+    $stepPhase = catn8_build_wizard_normalize_phase_key((string)($stepRow['phase_key'] ?? 'general'));
+    $parentPhase = catn8_build_wizard_normalize_phase_key((string)($parentRow['phase_key'] ?? 'general'));
+    if ($stepPhase !== $parentPhase) {
+        throw new RuntimeException('Parent step must be in the same phase');
+    }
+
+    $cursor = $parentStepId;
+    $safety = 0;
+    while ($cursor > 0 && $safety < 10000) {
+        $safety++;
+        if ($cursor === $stepId) {
+            throw new RuntimeException('Parent assignment would create a cycle');
+        }
+        $cursorRow = Database::queryOne(
+            'SELECT parent_step_id FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+            [$cursor, $projectId]
+        );
+        if (!$cursorRow || $cursorRow['parent_step_id'] === null) {
+            break;
+        }
+        $cursor = (int)$cursorRow['parent_step_id'];
+    }
+
+    return $parentStepId;
+}
+
+function catn8_build_wizard_validate_child_dates_with_parent(int $projectId, int $stepId, ?string $expectedStartDate, ?string $expectedEndDate): void
+{
+    $row = Database::queryOne(
+        'SELECT s.parent_step_id, p.expected_start_date AS parent_start_date, p.expected_end_date AS parent_end_date
+         FROM build_wizard_steps s
+         LEFT JOIN build_wizard_steps p ON p.id = s.parent_step_id
+         WHERE s.id = ? AND s.project_id = ?
+         LIMIT 1',
+        [$stepId, $projectId]
+    );
+    if (!$row) {
+        throw new RuntimeException('Step not found for date validation');
+    }
+    $parentStepId = isset($row['parent_step_id']) ? (int)$row['parent_step_id'] : 0;
+    if ($parentStepId <= 0) {
+        return;
+    }
+
+    $parentStart = $row['parent_start_date'] !== null ? (string)$row['parent_start_date'] : null;
+    $parentEnd = $row['parent_end_date'] !== null ? (string)$row['parent_end_date'] : null;
+
+    if ($expectedStartDate !== null && $parentStart !== null && strcmp($expectedStartDate, $parentStart) < 0) {
+        throw new RuntimeException('Child start date must be on or after parent start date');
+    }
+    if ($expectedStartDate !== null && $parentEnd !== null && strcmp($expectedStartDate, $parentEnd) > 0) {
+        throw new RuntimeException('Child start date must be on or before parent end date');
+    }
+    if ($expectedEndDate !== null && $parentStart !== null && strcmp($expectedEndDate, $parentStart) < 0) {
+        throw new RuntimeException('Child end date must be on or after parent start date');
+    }
+    if ($expectedEndDate !== null && $parentEnd !== null && strcmp($expectedEndDate, $parentEnd) > 0) {
+        throw new RuntimeException('Child end date must be on or before parent end date');
+    }
+}
+
+function catn8_build_wizard_has_incomplete_descendants(int $projectId, int $stepId): bool
+{
+    if ($projectId <= 0 || $stepId <= 0) {
+        return false;
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, parent_step_id, is_completed
+         FROM build_wizard_steps
+         WHERE project_id = ?',
+        [$projectId]
+    );
+    if (!$rows) {
+        return false;
+    }
+
+    $childrenByParent = [];
+    $completionById = [];
+    foreach ($rows as $row) {
+        $id = (int)($row['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $completionById[$id] = ((int)($row['is_completed'] ?? 0) === 1);
+        $parentId = isset($row['parent_step_id']) ? (int)$row['parent_step_id'] : 0;
+        if ($parentId > 0) {
+            if (!isset($childrenByParent[$parentId])) {
+                $childrenByParent[$parentId] = [];
+            }
+            $childrenByParent[$parentId][] = $id;
+        }
+    }
+
+    $queue = $childrenByParent[$stepId] ?? [];
+    $visited = [];
+    while ($queue) {
+        $childId = (int)array_shift($queue);
+        if ($childId <= 0 || isset($visited[$childId])) {
+            continue;
+        }
+        $visited[$childId] = true;
+        if (!($completionById[$childId] ?? false)) {
+            return true;
+        }
+        foreach (($childrenByParent[$childId] ?? []) as $grandChildId) {
+            $queue[] = (int)$grandChildId;
+        }
+    }
+    return false;
+}
+
 function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $skipExistingTitles = false): int
 {
     if ($projectId <= 0 || !$steps) {
@@ -881,7 +1105,7 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
 function catn8_build_wizard_steps_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, project_id, step_order, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
+        'SELECT id, project_id, step_order, phase_key, parent_step_id, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                 expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
@@ -901,6 +1125,7 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_order' => (int)($r['step_order'] ?? 0),
             'phase_key' => (string)($r['phase_key'] ?? ''),
+            'parent_step_id' => $r['parent_step_id'] !== null ? (int)$r['parent_step_id'] : null,
             'depends_on_step_ids' => catn8_build_wizard_normalize_int_array(catn8_build_wizard_decode_json_array($r['depends_on_step_ids_json'] ?? null)),
             'step_type' => catn8_build_wizard_step_type((string)($r['step_type'] ?? '')),
             'title' => (string)($r['title'] ?? ''),
@@ -1666,7 +1891,7 @@ function catn8_build_wizard_find_source_file_path_for_name(string $originalName)
 function catn8_build_wizard_step_by_id(int $stepId): ?array
 {
     $row = Database::queryOne(
-        'SELECT id, project_id, step_order, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
+        'SELECT id, project_id, step_order, phase_key, parent_step_id, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
                 expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref
          FROM build_wizard_steps
@@ -1685,6 +1910,7 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
         'project_id' => (int)($row['project_id'] ?? 0),
         'step_order' => (int)($row['step_order'] ?? 0),
         'phase_key' => (string)($row['phase_key'] ?? ''),
+        'parent_step_id' => $row['parent_step_id'] !== null ? (int)$row['parent_step_id'] : null,
         'depends_on_step_ids' => catn8_build_wizard_normalize_int_array(catn8_build_wizard_decode_json_array($row['depends_on_step_ids_json'] ?? null)),
         'step_type' => catn8_build_wizard_step_type((string)($row['step_type'] ?? '')),
         'title' => (string)($row['title'] ?? ''),
@@ -3579,7 +3805,7 @@ try {
         }
 
         $stepRow = Database::queryOne(
-            'SELECT s.id, s.project_id, s.step_type
+            'SELECT s.id, s.project_id, s.step_type, s.expected_start_date, s.expected_end_date
              FROM build_wizard_steps s
              INNER JOIN build_wizard_projects p ON p.id = s.project_id
              WHERE s.id = ? AND p.owner_user_id = ?
@@ -3596,6 +3822,11 @@ try {
         if (array_key_exists('phase_key', $body)) {
             $updates[] = 'phase_key = ?';
             $params[] = catn8_build_wizard_normalize_phase_key($body['phase_key']);
+        }
+        if (array_key_exists('parent_step_id', $body)) {
+            $validatedParentStepId = catn8_build_wizard_validate_parent_step((int)$stepRow['project_id'], $stepId, $body['parent_step_id']);
+            $updates[] = 'parent_step_id = ?';
+            $params[] = $validatedParentStepId;
         }
         if (array_key_exists('depends_on_step_ids', $body)) {
             $candidateIds = catn8_build_wizard_normalize_int_array($body['depends_on_step_ids']);
@@ -3772,6 +4003,9 @@ try {
 
         if (array_key_exists('is_completed', $body)) {
             $isCompleted = ((int)$body['is_completed'] === 1) ? 1 : 0;
+            if ($isCompleted === 1 && catn8_build_wizard_has_incomplete_descendants((int)$stepRow['project_id'], $stepId)) {
+                throw new RuntimeException('Complete all child steps before completing this parent step');
+            }
             $updates[] = 'is_completed = ?';
             $params[] = $isCompleted;
             if ($isCompleted === 1) {
@@ -3789,6 +4023,14 @@ try {
         if (!$updates) {
             throw new RuntimeException('No step updates provided');
         }
+
+        $nextExpectedStartDate = array_key_exists('expected_start_date', $body)
+            ? catn8_build_wizard_parse_date_or_null($body['expected_start_date'] ?? null)
+            : catn8_build_wizard_parse_date_or_null($stepRow['expected_start_date'] ?? null);
+        $nextExpectedEndDate = array_key_exists('expected_end_date', $body)
+            ? catn8_build_wizard_parse_date_or_null($body['expected_end_date'] ?? null)
+            : catn8_build_wizard_parse_date_or_null($stepRow['expected_end_date'] ?? null);
+        catn8_build_wizard_validate_child_dates_with_parent((int)$stepRow['project_id'], $stepId, $nextExpectedStartDate, $nextExpectedEndDate);
 
         $params[] = $stepId;
         Database::execute('UPDATE build_wizard_steps SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
@@ -4066,6 +4308,12 @@ try {
         $projectId = (int)($stepRow['project_id'] ?? 0);
         Database::beginTransaction();
         try {
+            Database::execute(
+                'UPDATE build_wizard_steps
+                 SET parent_step_id = NULL
+                 WHERE project_id = ? AND parent_step_id = ?',
+                [$projectId, $stepId]
+            );
             Database::execute('DELETE FROM build_wizard_steps WHERE id = ?', [$stepId]);
             catn8_build_wizard_resequence_step_orders($projectId);
             Database::commit();
@@ -4079,6 +4327,35 @@ try {
         catn8_json_response([
             'success' => true,
             'deleted_step_id' => $stepId,
+            'steps' => catn8_build_wizard_steps_for_project($projectId),
+        ]);
+    }
+
+    if ($action === 'reorder_steps') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $phaseKey = catn8_build_wizard_normalize_phase_key($body['phase_key'] ?? 'general');
+        $orderedStepIds = is_array($body['ordered_step_ids'] ?? null) ? $body['ordered_step_ids'] : [];
+        if (!$orderedStepIds) {
+            throw new RuntimeException('ordered_step_ids is required');
+        }
+
+        Database::beginTransaction();
+        try {
+            catn8_build_wizard_reorder_phase_steps($projectId, $phaseKey, $orderedStepIds);
+            Database::commit();
+        } catch (Throwable $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
+
+        catn8_json_response([
+            'success' => true,
             'steps' => catn8_build_wizard_steps_for_project($projectId),
         ]);
     }

@@ -55,6 +55,11 @@ type DeleteStepResponse = {
   steps: IBuildWizardStep[];
 };
 
+type ReorderStepsResponse = {
+  success: boolean;
+  steps: IBuildWizardStep[];
+};
+
 type DeleteDocumentResponse = {
   success: boolean;
   deleted_document_id: number;
@@ -259,6 +264,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     const body: Record<string, unknown> = { step_id: stepId };
     const acceptedFields = [
       'phase_key',
+      'parent_step_id',
       'step_type',
       'title',
       'description',
@@ -377,6 +383,29 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       await refreshCurrentProject();
     }
   }, [onToast, refreshCurrentProject]);
+
+  const reorderSteps = React.useCallback(async (phaseKey: string, orderedStepIds: number[]) => {
+    if (projectId <= 0 || !Array.isArray(orderedStepIds) || orderedStepIds.length === 0) {
+      return false;
+    }
+    try {
+      const res = await ApiClient.post<ReorderStepsResponse>('/api/build_wizard.php?action=reorder_steps', {
+        project_id: projectId,
+        phase_key: phaseKey,
+        ordered_step_ids: orderedStepIds,
+      });
+      if (Array.isArray(res?.steps)) {
+        setSteps(res.steps);
+      } else {
+        await refreshCurrentProject();
+      }
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to reorder steps' });
+      await refreshCurrentProject();
+      return false;
+    }
+  }, [onToast, projectId, refreshCurrentProject]);
 
   const deleteProject = React.useCallback(async (targetProjectId: number) => {
     if (targetProjectId <= 0) {
@@ -797,6 +826,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     updateStep,
     toggleStep,
     addStep,
+    reorderSteps,
     deleteStep,
     deleteProject,
     addStepNote,

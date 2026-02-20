@@ -10,6 +10,7 @@ export interface IBuildWizardStep {
   project_id: number;
   step_order: number;
   phase_key: string;
+  parent_step_id: number | null;
   depends_on_step_ids: number[];
   step_type: 'permit' | 'purchase' | 'inspection' | 'documentation' | 'construction' | 'photos' | 'blueprints' | 'utility' | 'delivery' | 'milestone' | 'closeout' | 'other';
   title: string;

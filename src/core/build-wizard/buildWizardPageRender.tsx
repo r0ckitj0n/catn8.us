@@ -72,6 +72,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     toggleStep,
     updateStep,
     addStep,
+    reorderSteps,
     deleteStep,
     deleteProject,
     addStepNote,
@@ -119,6 +120,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
   const [stickyTopOffset, setStickyTopOffset] = React.useState<number>(8);
+  const [draggingStepId, setDraggingStepId] = React.useState<number>(0);
+  const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
+  const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -257,6 +261,108 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
   }, [steps, activeTab]);
+
+  const stepById = React.useMemo(() => {
+    const map = new Map<number, IBuildWizardStep>();
+    steps.forEach((step) => {
+      map.set(step.id, step);
+    });
+    return map;
+  }, [steps]);
+
+  const activeTabTreeRows = React.useMemo(() => {
+    const stepIdsInTab = new Set(filteredTabSteps.map((step) => step.id));
+    const childrenByParent = new Map<number, IBuildWizardStep[]>();
+    const roots: IBuildWizardStep[] = [];
+    const sortedTabSteps = [...filteredTabSteps].sort((a, b) => {
+      if (a.step_order !== b.step_order) {
+        return a.step_order - b.step_order;
+      }
+      return a.id - b.id;
+    });
+
+    sortedTabSteps.forEach((step) => {
+      const parentStepId = Number(step.parent_step_id || 0);
+      if (parentStepId > 0 && stepIdsInTab.has(parentStepId)) {
+        const siblings = childrenByParent.get(parentStepId) || [];
+        siblings.push(step);
+        childrenByParent.set(parentStepId, siblings);
+      } else {
+        roots.push(step);
+      }
+    });
+
+    const rows: Array<{ step: IBuildWizardStep; level: number }> = [];
+    const visited = new Set<number>();
+    const walk = (node: IBuildWizardStep, level: number) => {
+      if (visited.has(node.id)) {
+        return;
+      }
+      visited.add(node.id);
+      rows.push({ step: node, level });
+      const children = childrenByParent.get(node.id) || [];
+      children.forEach((child) => walk(child, level + 1));
+    };
+    roots.forEach((root) => walk(root, 0));
+    sortedTabSteps.forEach((step) => {
+      if (!visited.has(step.id)) {
+        walk(step, 0);
+      }
+    });
+    return rows;
+  }, [filteredTabSteps]);
+
+  const activeTabStepNumbers = React.useMemo(() => {
+    const map = new Map<number, number>();
+    activeTabTreeRows.forEach((row, idx) => {
+      map.set(row.step.id, idx + 1);
+    });
+    return map;
+  }, [activeTabTreeRows]);
+
+  const incompleteDescendantCountByStepId = React.useMemo(() => {
+    const childrenByParent = new Map<number, number[]>();
+    filteredTabSteps.forEach((step) => {
+      const parentStepId = Number(step.parent_step_id || 0);
+      if (parentStepId > 0) {
+        const children = childrenByParent.get(parentStepId) || [];
+        children.push(step.id);
+        childrenByParent.set(parentStepId, children);
+      }
+    });
+
+    const completionById = new Map<number, boolean>();
+    filteredTabSteps.forEach((step) => {
+      completionById.set(step.id, Number(step.is_completed) === 1);
+    });
+
+    const countMap = new Map<number, number>();
+    const countIncompleteDescendants = (stepId: number, stack: Set<number> = new Set()): number => {
+      if (countMap.has(stepId)) {
+        return countMap.get(stepId) || 0;
+      }
+      if (stack.has(stepId)) {
+        return 0;
+      }
+      stack.add(stepId);
+      let count = 0;
+      const children = childrenByParent.get(stepId) || [];
+      children.forEach((childId) => {
+        if (!(completionById.get(childId) || false)) {
+          count += 1;
+        }
+        count += countIncompleteDescendants(childId, stack);
+      });
+      stack.delete(stepId);
+      countMap.set(stepId, count);
+      return count;
+    };
+
+    filteredTabSteps.forEach((step) => {
+      countIncompleteDescendants(step.id);
+    });
+    return countMap;
+  }, [filteredTabSteps]);
 
   const projectDeskSteps = React.useMemo(() => {
     return steps.filter((step) => stepPhaseBucket(step) === 'desk');
@@ -783,35 +889,150 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     await generateStepsFromAi('complete');
   };
 
+  const clearStepDragState = () => {
+    setDraggingStepId(0);
+    setDragOverInsertIndex(-1);
+    setDragOverParentStepId(0);
+  };
+
+  const onDropReorder = async (insertIndex: number) => {
+    if (draggingStepId <= 0) {
+      clearStepDragState();
+      return;
+    }
+    const flatIds = activeTabTreeRows.map((row) => row.step.id);
+    if (!flatIds.includes(draggingStepId)) {
+      clearStepDragState();
+      return;
+    }
+    const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
+    const boundedInsertIndex = Math.max(0, Math.min(insertIndex, withoutDragged.length));
+    withoutDragged.splice(boundedInsertIndex, 0, draggingStepId);
+
+    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
+    try {
+      const draggedStep = stepById.get(draggingStepId);
+      if (draggedStep && Number(draggedStep.parent_step_id || 0) > 0) {
+        await updateStep(draggingStepId, { parent_step_id: null });
+      }
+      await reorderSteps(activePhaseKey, withoutDragged);
+    } finally {
+      clearStepDragState();
+    }
+  };
+
+  const onDropMakeChild = async (targetStepId: number) => {
+    if (draggingStepId <= 0 || targetStepId <= 0 || draggingStepId === targetStepId) {
+      clearStepDragState();
+      return;
+    }
+    const flatIds = activeTabTreeRows.map((row) => row.step.id);
+    if (!flatIds.includes(draggingStepId) || !flatIds.includes(targetStepId)) {
+      clearStepDragState();
+      return;
+    }
+
+    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
+    const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
+    const targetIndex = withoutDragged.indexOf(targetStepId);
+    const insertIndex = targetIndex >= 0 ? (targetIndex + 1) : withoutDragged.length;
+    withoutDragged.splice(insertIndex, 0, draggingStepId);
+
+    try {
+      await updateStep(draggingStepId, { parent_step_id: targetStepId });
+      await reorderSteps(activePhaseKey, withoutDragged);
+    } finally {
+      clearStepDragState();
+    }
+  };
+
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
     if (!tabSteps.length) {
       return <div className="build-wizard-muted">No steps in this tab yet.</div>;
     }
+    const rows = activeTabTreeRows;
 
     return (
       <div className="build-wizard-step-list">
-        {tabSteps.map((step) => {
+        <div
+          className={`build-wizard-drop-zone ${dragOverInsertIndex === 0 ? 'is-active' : ''}`}
+          onDragOver={(e) => {
+            if (draggingStepId > 0) {
+              e.preventDefault();
+              setDragOverInsertIndex(0);
+              setDragOverParentStepId(0);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            void onDropReorder(0);
+          }}
+        />
+        {rows.map((row, rowIndex) => {
+          const step = row.step;
+          const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
           const draft = stepDrafts[step.id] || step;
+          const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
+          const childDateMin = parentStep?.expected_start_date || undefined;
+          const childDateMax = parentStep?.expected_end_date || undefined;
+          const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
+          const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
             ?? (draft.expected_duration_days ?? null);
           const aiEstimated = new Set(Array.isArray(draft.ai_estimated_fields) ? draft.ai_estimated_fields : []);
           const dependencyTitles = (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
             .map((id) => steps.find((candidate) => candidate.id === id))
             .filter((dependency): dependency is IBuildWizardStep => Boolean(dependency))
-            .map((dependency) => `#${dependency.step_order} ${dependency.title}`);
+            .map((dependency) => `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title}`);
           return (
-            <div className="build-wizard-step" key={step.id}>
+            <React.Fragment key={step.id}>
+            <div
+              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''}`}
+              style={{ '--bw-indent-level': String(row.level) } as React.CSSProperties}
+              onDragOver={(e) => {
+                if (draggingStepId > 0 && draggingStepId !== step.id) {
+                  e.preventDefault();
+                  setDragOverParentStepId(step.id);
+                  setDragOverInsertIndex(-1);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                void onDropMakeChild(step.id);
+              }}
+            >
               <div className="build-wizard-step-phase-accent" style={{ background: TAB_PHASE_COLORS[stepPhaseBucket(step)] }} />
               <div className="build-wizard-step-header">
                 <div className="build-wizard-step-header-left">
+                  <button
+                    type="button"
+                    className="build-wizard-step-drag-handle"
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDraggingStepId(step.id);
+                    }}
+                    onDragEnd={() => clearStepDragState()}
+                  >
+                    <span aria-hidden="true">⋮⋮</span>
+                  </button>
+                  {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
                   <label className="build-wizard-inline-check">
                     <input
                       type="checkbox"
                       checked={Number(step.is_completed) === 1}
+                      disabled={completionLocked}
                       onChange={(e) => void toggleStep(step, e.target.checked)}
                     />
-                    <span>#{step.step_order} Completed</span>
+                    <span>#{stepDisplayNumber} Completed</span>
                   </label>
+                  {completionLocked ? (
+                    <span className="build-wizard-parent-lock-note">
+                      Complete {incompleteDescendantCount} child step{incompleteDescendantCount === 1 ? '' : 's'} first
+                    </span>
+                  ) : null}
                   <div className="build-wizard-inline-metrics">
                     <label className="build-wizard-duration-inline">
                       Duration (Days)
@@ -822,6 +1043,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <input
                         type="date"
                         value={draft.expected_start_date || ''}
+                        min={childDateMin}
+                        max={childDateMax}
                         onChange={(e) => {
                           const nextStartDate = toStringOrNull(e.target.value);
                           const nextDuration = calculateDurationDays(nextStartDate, draft.expected_end_date) ?? draft.expected_duration_days;
@@ -847,6 +1070,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <input
                         type="date"
                         value={draft.expected_end_date || ''}
+                        min={childDateMin}
+                        max={childDateMax}
                         onChange={(e) => {
                           const nextEndDate = toStringOrNull(e.target.value);
                           const nextDuration = calculateDurationDays(draft.expected_start_date, nextEndDate) ?? draft.expected_duration_days;
@@ -951,6 +1176,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <div className="build-wizard-step-grid">
                 {dependencyTitles.length ? (
                   <div className="build-wizard-type-note">Depends on: {dependencyTitles.join(', ')}</div>
+                ) : null}
+                {parentStep ? (
+                  <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
                 ) : null}
                 <label>
                   Step Title
@@ -1347,6 +1575,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </div>
               ) : null}
             </div>
+            <div
+              className={`build-wizard-drop-zone ${dragOverInsertIndex === rowIndex + 1 ? 'is-active' : ''}`}
+              onDragOver={(e) => {
+                if (draggingStepId > 0) {
+                  e.preventDefault();
+                  setDragOverInsertIndex(rowIndex + 1);
+                  setDragOverParentStepId(0);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                void onDropReorder(rowIndex + 1);
+              }}
+            />
+            </React.Fragment>
           );
         })}
       </div>
@@ -1884,6 +2127,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               >
                 +
               </button>
+            </div>
+
+            <div className="build-wizard-step-drag-hint">
+              Drag the handle to reorder. Drop on another step card to make it a child.
             </div>
 
             {activeTab === 'desk' ? (

@@ -50,7 +50,7 @@ export const STEP_TYPE_OPTIONS: Array<{ value: StepType; label: string }> = [
   { value: 'other', label: 'Other' },
   { value: 'permit', label: 'Permit' },
   { value: 'photos', label: 'Photos' },
-  { value: 'purchase', label: 'Purchase' },
+  { value: 'purchase', label: 'Supplies' },
   { value: 'utility', label: 'Utility' },
 ];
 STEP_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));

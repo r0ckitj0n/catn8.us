@@ -1,6 +1,7 @@
 import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
+  IBuildWizardAlignToTemplateResponse,
   IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
   IBuildWizardDocument,
@@ -26,9 +27,11 @@ type BuildWizardAiGenerateResponse = {
   success: boolean;
   provider: string;
   model: string;
+  mode?: 'optimize' | 'fill_missing' | 'complete';
   parsed_step_count: number;
   inserted_count: number;
   updated_count: number;
+  missing_fields?: string[];
   steps: IBuildWizardStep[];
 };
 
@@ -258,6 +261,8 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       'actual_cost',
       'is_completed',
       'source_ref',
+      'depends_on_step_ids',
+      'ai_estimated_fields',
     ] as const;
 
     acceptedFields.forEach((field) => {
@@ -549,7 +554,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [projectId, onToast]);
 
-  const generateStepsFromAi = React.useCallback(async () => {
+  const generateStepsFromAi = React.useCallback(async (mode: 'optimize' | 'fill_missing' | 'complete' = 'optimize') => {
     if (projectId <= 0) {
       return;
     }
@@ -557,17 +562,20 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     try {
       const res = await ApiClient.post<BuildWizardAiGenerateResponse>('/api/build_wizard.php?action=generate_steps_from_ai', {
         project_id: projectId,
+        mode,
       });
       if (Array.isArray(res?.steps)) {
         setSteps(res.steps);
       }
+      const missingFields = Array.isArray(res?.missing_fields) ? res.missing_fields.length : 0;
+      const modeLabel = mode === 'complete' ? 'AI full completion' : (mode === 'fill_missing' ? 'AI missing-field estimate' : 'AI step ingestion');
       onToast?.({
         tone: 'success',
-        message: `AI step ingestion complete (${res?.inserted_count || 0} inserted, ${res?.updated_count || 0} updated).`,
+        message: `${modeLabel} complete (${res?.inserted_count || 0} inserted, ${res?.updated_count || 0} updated${missingFields > 0 ? `, ${missingFields} fields still missing` : ''}).`,
       });
       await refreshCurrentProject();
     } catch (err: any) {
-      onToast?.({ tone: 'error', message: err?.message || 'Failed to generate steps from AI' });
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to run AI step generation' });
     } finally {
       setAiBusy(false);
     }
@@ -736,6 +744,31 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
+  const alignProjectToTemplate = React.useCallback(async (targetProjectId?: number) => {
+    const effectiveProjectId = (targetProjectId && targetProjectId > 0) ? targetProjectId : projectId;
+    if (effectiveProjectId <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<IBuildWizardAlignToTemplateResponse>('/api/build_wizard.php?action=align_to_template', {
+        project_id: effectiveProjectId,
+      });
+      if (Array.isArray(res?.steps)) {
+        setSteps(res.steps);
+      } else {
+        await refreshCurrentProject();
+      }
+      onToast?.({
+        tone: 'success',
+        message: `Template alignment complete (${res?.summary?.updated_count || 0} updated, ${res?.summary?.inserted_count || 0} inserted).`,
+      });
+      return res || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to align project to template' });
+      return null;
+    }
+  }, [onToast, projectId, refreshCurrentProject]);
+
   return {
     loading,
     saving,
@@ -774,5 +807,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
+    alignProjectToTemplate,
   };
 }

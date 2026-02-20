@@ -10,6 +10,7 @@ export interface IBuildWizardStep {
   project_id: number;
   step_order: number;
   phase_key: string;
+  depends_on_step_ids: number[];
   step_type: 'permit' | 'purchase' | 'inspection' | 'documentation' | 'construction' | 'photos' | 'blueprints' | 'utility' | 'delivery' | 'milestone' | 'closeout' | 'other';
   title: string;
   description: string;
@@ -33,6 +34,7 @@ export interface IBuildWizardStep {
   expected_duration_days: number | null;
   estimated_cost: number | null;
   actual_cost: number | null;
+  ai_estimated_fields: string[];
   is_completed: number;
   completed_at: string | null;
   ai_generated: number;
@@ -200,6 +202,46 @@ export interface IBuildWizardFindPurchaseOptionsResponse {
   query: string;
   options: IBuildWizardPurchaseOption[];
   step: IBuildWizardStep;
+}
+
+export interface IBuildWizardAlignSummary {
+  project_id: number;
+  template_step_count: number;
+  existing_step_count: number;
+  matched_existing_count: number;
+  legacy_step_count: number;
+  inserted_count: number;
+  updated_count: number;
+  dependency_updates: number;
+}
+
+export interface IBuildWizardPhaseReviewStep {
+  step_id: number;
+  step_order: number;
+  title: string;
+  step_type: string;
+  dependency_count: number;
+  depends_on: Array<{
+    step_id: number;
+    step_order: number;
+    title: string;
+    phase_key: string;
+  }>;
+  ordering_issues: string[];
+}
+
+export interface IBuildWizardPhaseReview {
+  phase_key: string;
+  step_count: number;
+  dependency_issue_count: number;
+  steps: IBuildWizardPhaseReviewStep[];
+}
+
+export interface IBuildWizardAlignToTemplateResponse {
+  success: boolean;
+  summary: IBuildWizardAlignSummary;
+  phase_review: IBuildWizardPhaseReview[];
+  steps: IBuildWizardStep[];
 }
 
 export interface IBuildWizardSingletreeRecoverSummary {

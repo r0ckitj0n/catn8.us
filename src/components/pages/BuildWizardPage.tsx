@@ -16,26 +16,28 @@ interface BuildWizardPageProps {
 }
 
 type WizardView = 'launcher' | 'build';
-type BuildTabId = 'start' | 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes' | 'desk' | 'completed';
+type BuildTabId = 'overview' | 'start' | 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes' | 'desk' | 'completed';
 type StepDraftMap = Record<number, IBuildWizardStep>;
 type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number }>;
 type StepType = IBuildWizardStep['step_type'];
 
 const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
-  { id: 'start', label: '1. Start' },
-  { id: 'land', label: '2. Land & Survey' },
-  { id: 'permits', label: '3. Permits' },
-  { id: 'site', label: '4. Site & Foundation' },
-  { id: 'framing', label: '5. Framing & Shell' },
-  { id: 'mep', label: '6. MEP & Inspections' },
-  { id: 'finishes', label: '7. Finishes' },
-  { id: 'desk', label: '8. Project Desk' },
-  { id: 'completed', label: '9. Completed' },
+  { id: 'overview', label: '1. Overview' },
+  { id: 'start', label: '2. Start' },
+  { id: 'land', label: '3. Land & Survey' },
+  { id: 'permits', label: '4. Permits' },
+  { id: 'site', label: '5. Site & Foundation' },
+  { id: 'framing', label: '6. Framing & Shell' },
+  { id: 'mep', label: '7. MEP & Inspections' },
+  { id: 'finishes', label: '8. Finishes' },
+  { id: 'desk', label: '9. Project Desk' },
+  { id: 'completed', label: '10. Completed' },
 ];
 
 const PHASE_PROGRESS_ORDER: BuildTabId[] = ['land', 'permits', 'site', 'framing', 'mep', 'finishes', 'desk'];
 
 const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
+  overview: '#3f6b95',
   start: '#5b6f87',
   land: '#4c9f70',
   permits: '#c3833a',
@@ -233,6 +235,11 @@ function stepCostTotal(step: IBuildWizardStep): number {
     return estimated;
   }
   return 0;
+}
+
+function isAiEstimatedField(step: IBuildWizardStep, field: string): boolean {
+  const fields = Array.isArray(step.ai_estimated_fields) ? step.ai_estimated_fields : [];
+  return fields.includes(field);
 }
 
 function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
@@ -438,7 +445,7 @@ function FooterPhaseTimeline({ steps, rangeStart, rangeEnd }: FooterTimelineProp
 
   const orderedStatusPhases = BUILD_TABS
     .map((t) => t.id)
-    .filter((id): id is BuildTabId => id !== 'start' && id !== 'completed' && (phaseStatus.get(id)?.total || 0) > 0);
+    .filter((id): id is BuildTabId => id !== 'overview' && id !== 'start' && id !== 'completed' && (phaseStatus.get(id)?.total || 0) > 0);
 
   return (
     <div className="build-wizard-phase-timeline">
@@ -569,6 +576,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
+    alignProjectToTemplate,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -599,6 +607,9 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [recoveryUploadToken, setRecoveryUploadToken] = React.useState<string>('');
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
+  const [aligningTemplate, setAligningTemplate] = React.useState<boolean>(false);
+  const [alignReportOpen, setAlignReportOpen] = React.useState<boolean>(false);
+  const [alignReportJson, setAlignReportJson] = React.useState<string>('');
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -606,6 +617,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
       void openProject(initialUrlState.projectId);
+      setActiveTab('overview');
     }
   }, [initialUrlState.view, initialUrlState.projectId, projectId, openProject]);
 
@@ -615,6 +627,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       setView(state.view);
       if (state.view === 'build' && state.projectId && state.projectId !== projectId) {
         void openProject(state.projectId);
+        setActiveTab('overview');
       }
     };
 
@@ -655,7 +668,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   }, [steps]);
 
   const filteredTabSteps = React.useMemo(() => {
-    if (activeTab === 'completed' || activeTab === 'start') {
+    if (activeTab === 'completed' || activeTab === 'start' || activeTab === 'overview') {
       return [] as IBuildWizardStep[];
     }
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
@@ -681,7 +694,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   }, [activeTab, filteredTabSteps, steps]);
 
   const footerTimelineSteps = React.useMemo(() => {
-    if (activeTab === 'start' || activeTab === 'completed') {
+    if (activeTab === 'start' || activeTab === 'completed' || activeTab === 'overview') {
       return steps;
     }
     return filteredTabSteps;
@@ -703,6 +716,55 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       totalCount: steps.length,
     };
   }, [steps]);
+
+  const overviewMetrics = React.useMemo(() => {
+    const today = new Date();
+    const todayIso = toIsoDate(today);
+    const projectEnd = parseDate(project?.target_completion_date || null);
+    const timelineEnd = steps
+      .map((s) => parseDate(s.expected_end_date) || parseDate(s.expected_start_date))
+      .filter(Boolean)
+      .sort((a, b) => (a!.getTime() - b!.getTime()))
+      .pop() || null;
+    const endDate = projectEnd || timelineEnd;
+    const endCountdownDays = endDate ? Math.round((endDate.getTime() - parseDate(todayIso)!.getTime()) / 86400000) : null;
+
+    const nextStep = steps
+      .filter((s) => Number(s.is_completed) !== 1)
+      .map((s) => ({ step: s, start: parseDate(s.expected_start_date), end: parseDate(s.expected_end_date) }))
+      .filter((r) => r.start || r.end)
+      .sort((a, b) => {
+        const aStart = (a.start || a.end)!.getTime();
+        const bStart = (b.start || b.end)!.getTime();
+        return aStart - bStart;
+      })[0] || null;
+
+    const spentActual = steps.reduce((sum, s) => sum + Math.max(0, Number(s.actual_cost) || 0), 0);
+    const projectedTotal = steps.reduce((sum, s) => {
+      const actual = Number(s.actual_cost);
+      if (Number.isFinite(actual) && actual > 0) {
+        return sum + actual;
+      }
+      return sum + Math.max(0, Number(s.estimated_cost) || 0);
+    }, 0);
+    const remainingProjected = Math.max(0, projectedTotal - spentActual);
+
+    const aiEstimatedCostSteps = steps.filter((s) => isAiEstimatedField(s, 'estimated_cost')).length;
+    const missingEstimateCount = steps.filter((s) => Number(s.actual_cost ?? 0) <= 0 && Number(s.estimated_cost ?? 0) <= 0).length;
+    const missingTimelineCount = steps.filter((s) => !s.expected_start_date || !s.expected_end_date).length;
+
+    return {
+      endDate: endDate ? toIsoDate(endDate) : null,
+      endCountdownDays,
+      nextStep,
+      spentActual,
+      projectedTotal,
+      remainingProjected,
+      aiEstimatedCostSteps,
+      missingEstimateCount,
+      missingTimelineCount,
+    };
+  }, [project?.target_completion_date, steps]);
 
   const projectDocuments = React.useMemo(() => {
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
@@ -802,7 +864,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
 
   const openBuild = async (nextProjectId: number) => {
     await openProject(nextProjectId);
-    setActiveTab('start');
+    setActiveTab('overview');
     setView('build');
     pushUrlState('build', nextProjectId);
   };
@@ -1081,6 +1143,46 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     await commitStep(step.id, patch);
   };
 
+  const onEstimateMissingWithAi = async () => {
+    const confirmed = window.confirm('Ask AI to estimate missing timeline and budget values for this project?');
+    if (!confirmed) {
+      return;
+    }
+    await generateStepsFromAi('fill_missing');
+  };
+
+  const onCompleteWithAi = async () => {
+    const confirmed = window.confirm(
+      'Run Complete w/ AI?\n\nThis can reorder/add/update steps across phases using your project data and documents.',
+    );
+    if (!confirmed) {
+      return;
+    }
+    await generateStepsFromAi('complete');
+  };
+
+  const onAlignTemplate = async () => {
+    if (!projectId || aligningTemplate) {
+      return;
+    }
+    const confirmed = window.confirm(
+      'Align this project to the latest house template?\n\nThis updates phase sequencing and dependency links, and preserves unmatched legacy steps at the end.',
+    );
+    if (!confirmed) {
+      return;
+    }
+    setAligningTemplate(true);
+    try {
+      const result = await alignProjectToTemplate(projectId);
+      if (result) {
+        setAlignReportJson(JSON.stringify(result, null, 2));
+        setAlignReportOpen(true);
+      }
+    } finally {
+      setAligningTemplate(false);
+    }
+  };
+
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
     if (!tabSteps.length) {
       return <div className="build-wizard-muted">No steps in this tab yet.</div>;
@@ -1092,6 +1194,11 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           const draft = stepDrafts[step.id] || step;
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
             ?? (draft.expected_duration_days ?? null);
+          const aiEstimated = new Set(Array.isArray(draft.ai_estimated_fields) ? draft.ai_estimated_fields : []);
+          const dependencyTitles = (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
+            .map((id) => steps.find((candidate) => candidate.id === id))
+            .filter((dependency): dependency is IBuildWizardStep => Boolean(dependency))
+            .map((dependency) => `#${dependency.step_order} ${dependency.title}`);
           return (
             <div className="build-wizard-step" key={step.id}>
               <div className="build-wizard-step-phase-accent" style={{ background: TAB_PHASE_COLORS[stepPhaseBucket(step)] }} />
@@ -1111,7 +1218,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                       <input type="number" value={durationDays ?? ''} readOnly />
                     </label>
                     <label className="build-wizard-date-inline">
-                      Start
+                      Start {aiEstimated.has('expected_start_date') ? '*' : ''}
                       <input
                         type="date"
                         value={draft.expected_start_date || ''}
@@ -1136,7 +1243,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                       />
                     </label>
                     <label className="build-wizard-date-inline">
-                      End
+                      End {aiEstimated.has('expected_end_date') ? '*' : ''}
                       <input
                         type="date"
                         value={draft.expected_end_date || ''}
@@ -1242,6 +1349,9 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               </div>
 
               <div className="build-wizard-step-grid">
+                {dependencyTitles.length ? (
+                  <div className="build-wizard-type-note">Depends on: {dependencyTitles.join(', ')}</div>
+                ) : null}
                 <label>
                   Step Title
                   <input
@@ -1501,7 +1611,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 {['construction', 'purchase', 'inspection', 'permit', 'documentation', 'utility', 'delivery'].includes(draft.step_type) ? (
                   <>
                     <label>
-                      Estimated Cost
+                      Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}
                       <input
                         type="number"
                         step="0.01"
@@ -1773,6 +1883,12 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
+            <button className="btn btn-outline-primary btn-sm" onClick={() => void onAlignTemplate()} disabled={aligningTemplate || aiBusy}>
+              {aligningTemplate ? 'Aligning...' : 'Align to Template'}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
+              {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
+            </button>
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
           </div>
         </div>
@@ -1790,6 +1906,62 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             </button>
           ))}
         </div>
+
+        {activeTab === 'overview' ? (
+          <div className="build-wizard-card">
+            <h2>Project Overview</h2>
+            <div className="build-wizard-overview-grid">
+              <div className="build-wizard-overview-metric">
+                <div className="build-wizard-overview-label">Estimated Project End</div>
+                <div className="build-wizard-overview-value">{overviewMetrics.endDate ? formatTimelineDate(overviewMetrics.endDate) : 'Not set'}</div>
+                <div className="build-wizard-overview-sub">
+                  {overviewMetrics.endCountdownDays === null
+                    ? 'Set Target Completion Date or step end dates.'
+                    : (overviewMetrics.endCountdownDays >= 0
+                      ? `${overviewMetrics.endCountdownDays} day(s) remaining`
+                      : `${Math.abs(overviewMetrics.endCountdownDays)} day(s) past due`)}
+                </div>
+              </div>
+              <div className="build-wizard-overview-metric">
+                <div className="build-wizard-overview-label">Next Looming Step</div>
+                <div className="build-wizard-overview-value">
+                  {overviewMetrics.nextStep ? `#${overviewMetrics.nextStep.step.step_order} ${overviewMetrics.nextStep.step.title}` : 'No upcoming step dates'}
+                </div>
+                <div className="build-wizard-overview-sub">
+                  {overviewMetrics.nextStep
+                    ? `${formatDate(overviewMetrics.nextStep.step.expected_start_date)} - ${formatDate(overviewMetrics.nextStep.step.expected_end_date)}`
+                    : 'Add expected dates to upcoming steps.'}
+                </div>
+              </div>
+            </div>
+
+            <div className="build-wizard-overview-spend">
+              <h3>Budget Progress</h3>
+              <div className="build-wizard-overview-bar">
+                <div
+                  className="build-wizard-overview-spent"
+                  style={{ width: `${overviewMetrics.projectedTotal > 0 ? Math.min(100, (overviewMetrics.spentActual / overviewMetrics.projectedTotal) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="build-wizard-overview-spend-meta">
+                <span>Spent: {formatCurrency(overviewMetrics.spentActual)}</span>
+                <span>Projected Total: {formatCurrency(overviewMetrics.projectedTotal)}</span>
+                <span>Estimated Left: {formatCurrency(overviewMetrics.remainingProjected)}{overviewMetrics.aiEstimatedCostSteps > 0 ? '*' : ''}</span>
+              </div>
+            </div>
+
+            <div className="build-wizard-overview-missing">
+              <div className="build-wizard-overview-missing-title">Missing Data Check</div>
+              <div className="build-wizard-overview-missing-text">
+                Steps missing cost estimates: {overviewMetrics.missingEstimateCount} | Steps missing dates: {overviewMetrics.missingTimelineCount}
+              </div>
+              <button className="btn btn-outline-primary btn-sm" onClick={() => void onEstimateMissingWithAi()} disabled={aiBusy}>
+                {aiBusy ? 'Estimating...' : 'Estimate Missing w/ AI'}
+              </button>
+              <div className="build-wizard-overview-footnote">* AI-estimated value</div>
+            </div>
+          </div>
+        ) : null}
 
         {activeTab === 'start' ? (
           <div className="build-wizard-card">
@@ -1974,7 +2146,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           </div>
         ) : null}
 
-        {activeTab !== 'start' && activeTab !== 'completed' ? (
+        {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
           <div className="build-wizard-card">
             <div className="build-wizard-phase-head">
               <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
@@ -2033,7 +2205,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   <h3>AI Package</h3>
                   <div className="build-wizard-ai-actions">
                     <button className="btn btn-success" disabled={aiBusy} onClick={() => void packageForAi()}>Build AI Package</button>
-                    <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi()}>
+                    <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi('optimize')}>
                       {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest'}
                     </button>
                   </div>
@@ -2251,6 +2423,38 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             </div>
             <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {alignReportOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setAlignReportOpen(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Template Alignment Report</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(alignReportJson || '');
+                      onToast?.({ tone: 'success', message: 'Alignment report copied.' });
+                    } catch (_) {
+                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
+                    }
+                  }}
+                  disabled={!alignReportJson}
+                >
+                  Copy JSON
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setAlignReportOpen(false)}>Close</button>
+              </div>
+            </div>
+            {alignReportJson ? (
+              <pre className="build-wizard-recovery-json">{alignReportJson}</pre>
+            ) : (
+              <div className="build-wizard-muted">No report data.</div>
+            )}
           </div>
         </div>
       ) : null}

@@ -1984,17 +1984,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             <h2>Project Overview</h2>
             <div className="build-wizard-overview-grid">
               <div className="build-wizard-overview-metric">
-                <div className="build-wizard-overview-label">Estimated Project End</div>
-                <div className="build-wizard-overview-value">{overviewMetrics.endDate ? formatTimelineDate(overviewMetrics.endDate) : 'Not set'}</div>
-                <div className="build-wizard-overview-sub">
-                  {overviewMetrics.endCountdownDays === null
-                    ? 'Set Target Completion Date or step end dates.'
-                    : (overviewMetrics.endCountdownDays >= 0
-                      ? `${overviewMetrics.endCountdownDays} day(s) remaining`
-                      : `${Math.abs(overviewMetrics.endCountdownDays)} day(s) past due`)}
-                </div>
-              </div>
-              <div className="build-wizard-overview-metric">
                 <div className="build-wizard-overview-label">Next Looming Step</div>
                 <div className="build-wizard-overview-value">
                   {overviewMetrics.nextStep ? `#${overviewMetrics.nextStep.step.step_order} ${overviewMetrics.nextStep.step.title}` : 'No upcoming step dates'}
@@ -2003,6 +1992,17 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   {overviewMetrics.nextStep
                     ? `${formatDate(overviewMetrics.nextStep.step.expected_start_date)} - ${formatDate(overviewMetrics.nextStep.step.expected_end_date)}`
                     : 'Add expected dates to upcoming steps.'}
+                </div>
+              </div>
+              <div className="build-wizard-overview-metric">
+                <div className="build-wizard-overview-label">Estimated Project End</div>
+                <div className="build-wizard-overview-value">{overviewMetrics.endDate ? formatTimelineDate(overviewMetrics.endDate) : 'Not set'}</div>
+                <div className="build-wizard-overview-sub">
+                  {overviewMetrics.endCountdownDays === null
+                    ? 'Set Target Completion Date or step end dates.'
+                    : (overviewMetrics.endCountdownDays >= 0
+                      ? `${overviewMetrics.endCountdownDays} day(s) remaining`
+                      : `${Math.abs(overviewMetrics.endCountdownDays)} day(s) past due`)}
                 </div>
               </div>
             </div>

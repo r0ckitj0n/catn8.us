@@ -8,6 +8,7 @@ import { SiteAppearanceModal } from '../modals/SiteAppearanceModal';
 import { WordsearchSettingsModal } from '../modals/WordsearchSettingsModal';
 import { DbConfigModal } from '../modals/DbConfigModal';
 import { DeployConfigModal } from '../modals/DeployConfigModal';
+import { DocumentSettingsModal } from '../modals/DocumentSettingsModal';
 import { IToast } from '../../types/common';
 
 interface SettingsPageProps {
@@ -41,6 +42,7 @@ export function SettingsPage({
   const [wordsearchOpen, setWordsearchOpen] = React.useState(false);
   const [dbOpen, setDbOpen] = React.useState(false);
   const [deployOpen, setDeployOpen] = React.useState(false);
+  const [documentSettingsOpen, setDocumentSettingsOpen] = React.useState(false);
 
   return (
     <>
@@ -95,6 +97,11 @@ export function SettingsPage({
               <button type="button" className="btn btn-primary" onClick={() => setDeployOpen(true)}>
                 Deployment Configuration
               </button>
+              {Number(viewer?.is_admin || 0) === 1 ? (
+                <button type="button" className="btn btn-primary" onClick={() => setDocumentSettingsOpen(true)}>
+                  Document Settings
+                </button>
+              ) : null}
             </div>
           </div>
         </section>
@@ -108,6 +115,7 @@ export function SettingsPage({
       <WordsearchSettingsModal open={wordsearchOpen} onClose={() => setWordsearchOpen(false)} onToast={onToast} />
       <DbConfigModal open={dbOpen} onClose={() => setDbOpen(false)} onToast={onToast} />
       <DeployConfigModal open={deployOpen} onClose={() => setDeployOpen(false)} onToast={onToast} />
+      <DocumentSettingsModal open={documentSettingsOpen} onClose={() => setDocumentSettingsOpen(false)} onToast={onToast} />
     </>
   );
 }

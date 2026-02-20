@@ -1072,6 +1072,10 @@
   gap: 8px;
 }
 
+.build-wizard-hidden-file-input {
+  display: none;
+}
+
 .build-wizard-recovery-modal {
   width: min(960px, 100%);
 }

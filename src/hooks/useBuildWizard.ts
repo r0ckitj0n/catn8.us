@@ -7,7 +7,6 @@ import {
   IBuildWizardFindPurchaseOptionsResponse,
   IBuildWizardHydrateBlobsResponse,
   IBuildWizardHydrateFromSourcesResponse,
-  IBuildWizardPdfThumbnailDiagnosticsResponse,
   IBuildWizardPurchaseOption,
   IBuildWizardProject,
   IBuildWizardProjectSummary,
@@ -68,6 +67,11 @@ type DeleteProjectResponse = {
 };
 
 type UpdateDocumentResponse = {
+  success: boolean;
+  document: IBuildWizardDocument;
+};
+
+type ReplaceDocumentResponse = {
   success: boolean;
   document: IBuildWizardDocument;
 };
@@ -448,6 +452,29 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast, refreshCurrentProject]);
 
+  const replaceDocument = React.useCallback(async (documentId: number, file: File) => {
+    if (documentId <= 0 || !file) {
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('document_id', String(documentId));
+    formData.append('file', file);
+
+    try {
+      const res = await ApiClient.postFormData<ReplaceDocumentResponse>('/api/build_wizard.php?action=replace_document', formData);
+      if (res?.document) {
+        setDocuments((prev) => prev.map((doc) => (doc.id === documentId ? res.document : doc)));
+      }
+      onToast?.({ tone: 'success', message: 'Document file replaced.' });
+      return res?.document || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to replace document file' });
+      await refreshCurrentProject();
+      return null;
+    }
+  }, [onToast, refreshCurrentProject]);
+
   const updateDocument = React.useCallback(async (
     documentId: number,
     patch: { kind?: string; caption?: string | null; step_id?: number | null },
@@ -597,16 +624,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast]);
 
-  const checkPdfThumbnailDiagnostics = React.useCallback(async () => {
-    try {
-      const res = await ApiClient.get<IBuildWizardPdfThumbnailDiagnosticsResponse>('/api/build_wizard.php?action=pdf_thumbnail_diagnostics');
-      return res?.diagnostics || null;
-    } catch (err: any) {
-      onToast?.({ tone: 'error', message: err?.message || 'Failed to fetch PDF thumbnail diagnostics' });
-      return null;
-    }
-  }, [onToast]);
-
   const recoverSingletreeDocuments = React.useCallback(async (
     apply: boolean,
     options?: {
@@ -745,6 +762,7 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     deleteProject,
     addStepNote,
     uploadDocument,
+    replaceDocument,
     deleteDocument,
     updateDocument,
     findPurchaseOptions,
@@ -753,7 +771,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     backfillDocumentBlobs,
     hydrateMissingDocumentBlobs,
     hydrateMissingDocumentBlobsFromSources,
-    checkPdfThumbnailDiagnostics,
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,

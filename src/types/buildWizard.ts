@@ -176,6 +176,7 @@ export interface IBuildWizardPdfThumbnailDiagnosticsResponse {
     imagick_delegates_summary: string | null;
     shell_exec_available: boolean;
     ghostscript_binary_path: string | null;
+    ghostscript_render_supported: boolean;
     pdf_thumbnail_supported: boolean;
     checked_at_utc: string;
   };

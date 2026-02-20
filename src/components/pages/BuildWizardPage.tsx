@@ -560,12 +560,12 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     deleteProject,
     addStepNote,
     uploadDocument,
+    replaceDocument,
     deleteDocument,
     updateDocument,
     findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
-    checkPdfThumbnailDiagnostics,
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
@@ -600,9 +600,8 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [recoveryStagedRoot, setRecoveryStagedRoot] = React.useState<string>('');
   const [recoveryStagedCount, setRecoveryStagedCount] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [pdfDiagOpen, setPdfDiagOpen] = React.useState<boolean>(false);
-  const [pdfDiagBusy, setPdfDiagBusy] = React.useState<boolean>(false);
-  const [pdfDiagJson, setPdfDiagJson] = React.useState<string>('');
+  const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
+  const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -863,6 +862,18 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     }
   };
 
+  const onReplaceDocumentFile = async (doc: IBuildWizardDocument, file: File | null) => {
+    if (!file || replacingDocumentId === doc.id) {
+      return;
+    }
+    setReplacingDocumentId(doc.id);
+    try {
+      await replaceDocument(doc.id, file);
+    } finally {
+      setReplacingDocumentId(0);
+    }
+  };
+
   const onDeleteProject = async (projectSummary: { id: number; title: string }) => {
     if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
       return;
@@ -1032,29 +1043,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
       caption: draft.caption.trim() || null,
       step_id: draft.step_id > 0 ? draft.step_id : null,
     });
-  };
-
-  const onRunPdfThumbnailDiagnostics = async () => {
-    if (!isAdmin || pdfDiagBusy) {
-      return;
-    }
-    setPdfDiagBusy(true);
-    try {
-      const diagnostics = await checkPdfThumbnailDiagnostics();
-      if (!diagnostics) {
-        return;
-      }
-      setPdfDiagJson(JSON.stringify(diagnostics, null, 2));
-      setPdfDiagOpen(true);
-      onToast?.({
-        tone: diagnostics.pdf_thumbnail_supported ? 'success' : 'warning',
-        message: diagnostics.pdf_thumbnail_supported
-          ? 'PDF thumbnail rendering is available.'
-          : 'PDF thumbnail rendering is not fully available on this server.',
-      });
-    } finally {
-      setPdfDiagBusy(false);
-    }
   };
 
   const onFindPurchase = async (step: IBuildWizardStep) => {
@@ -1786,16 +1774,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
           <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
           <div className="build-wizard-topbar-actions">
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
-            {isAdmin ? (
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                onClick={() => void onRunPdfThumbnailDiagnostics()}
-                disabled={pdfDiagBusy}
-                title="Check server support for PDF thumbnail rendering"
-              >
-                {pdfDiagBusy ? 'Checking PDF Thumbs...' : 'PDF Thumb Diagnostics'}
-              </button>
-            ) : null}
           </div>
         </div>
 
@@ -2195,6 +2173,23 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                         <div className="build-wizard-doc-manager-actions">
                           <a className="btn btn-outline-primary btn-sm" href={doc.public_url} target="_blank" rel="noreferrer">Open</a>
                           <a className="btn btn-outline-secondary btn-sm" href={withDownloadFlag(doc.public_url)}>Download</a>
+                          <input
+                            ref={(el) => { replaceFileInputByDocId.current[doc.id] = el; }}
+                            type="file"
+                            className="build-wizard-hidden-file-input"
+                            onChange={(e) => {
+                              const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                              void onReplaceDocumentFile(doc, file);
+                              e.currentTarget.value = '';
+                            }}
+                          />
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => replaceFileInputByDocId.current[doc.id]?.click()}
+                            disabled={replacingDocumentId === doc.id}
+                          >
+                            {replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
+                          </button>
                           {Number(doc.is_image) === 1 ? (
                             <button
                               className="btn btn-outline-primary btn-sm"
@@ -2330,44 +2325,6 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
         </div>
       ) : null}
 
-      {pdfDiagOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setPdfDiagOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>PDF Thumbnail Diagnostics</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <button
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={() => void onRunPdfThumbnailDiagnostics()}
-                  disabled={pdfDiagBusy}
-                >
-                  {pdfDiagBusy ? 'Checking...' : 'Refresh'}
-                </button>
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(pdfDiagJson || '');
-                      onToast?.({ tone: 'success', message: 'Diagnostics copied.' });
-                    } catch (_) {
-                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
-                    }
-                  }}
-                  disabled={!pdfDiagJson}
-                >
-                  Copy JSON
-                </button>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => setPdfDiagOpen(false)}>Close</button>
-              </div>
-            </div>
-            {pdfDiagJson ? (
-              <pre className="build-wizard-recovery-json">{pdfDiagJson}</pre>
-            ) : (
-              <div className="build-wizard-muted">No diagnostics report yet.</div>
-            )}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 

@@ -917,33 +917,124 @@ function catn8_build_wizard_pdf_thumb_cache_path(int $documentId, int $fileSizeB
     return $root . '/doc_' . $docPart . '_' . $sizePart . '.png';
 }
 
+function catn8_build_wizard_clear_pdf_thumb_cache(int $documentId): void
+{
+    if ($documentId <= 0) {
+        return;
+    }
+    $root = dirname(__DIR__) . '/.local/state/build_wizard/pdf_thumbs';
+    if (!is_dir($root)) {
+        return;
+    }
+    $pattern = $root . '/doc_' . $documentId . '_*.png';
+    $matches = glob($pattern);
+    if (!is_array($matches)) {
+        return;
+    }
+    foreach ($matches as $path) {
+        if (is_string($path) && is_file($path)) {
+            unlink($path);
+        }
+    }
+}
+
+function catn8_build_wizard_find_ghostscript_binary(): ?string
+{
+    if (function_exists('shell_exec')) {
+        $rawPath = shell_exec('command -v gs 2>/dev/null');
+        $resolved = trim((string)$rawPath);
+        if ($resolved !== '' && is_executable($resolved)) {
+            return $resolved;
+        }
+    }
+
+    $candidates = [
+        '/bin/gs',
+        '/usr/bin/gs',
+        '/usr/local/bin/gs',
+        '/opt/homebrew/bin/gs',
+    ];
+    foreach ($candidates as $path) {
+        if (is_executable($path)) {
+            return $path;
+        }
+    }
+
+    return null;
+}
+
+function catn8_build_wizard_generate_pdf_thumb_with_ghostscript(string $pdfPath): ?string
+{
+    if ($pdfPath === '' || !is_file($pdfPath)) {
+        return null;
+    }
+
+    $ghostscript = catn8_build_wizard_find_ghostscript_binary();
+    if ($ghostscript === null) {
+        return null;
+    }
+
+    $outputPath = tempnam(sys_get_temp_dir(), 'bw_pdf_png_');
+    if (!is_string($outputPath) || $outputPath === '') {
+        return null;
+    }
+
+    $cmd = escapeshellarg($ghostscript)
+        . ' -dSAFER -dBATCH -dNOPAUSE'
+        . ' -sDEVICE=png16m'
+        . ' -dFirstPage=1 -dLastPage=1'
+        . ' -r120'
+        . ' -dTextAlphaBits=4 -dGraphicsAlphaBits=4'
+        . ' -g480x360 -dPDFFitPage'
+        . ' -sOutputFile=' . escapeshellarg($outputPath)
+        . ' ' . escapeshellarg($pdfPath)
+        . ' 2>&1';
+
+    $shellOutput = function_exists('shell_exec') ? shell_exec($cmd) : null;
+    if (!is_file($outputPath) || filesize($outputPath) <= 0) {
+        if (is_string($shellOutput) && trim($shellOutput) !== '') {
+            error_log('Build Wizard PDF Ghostscript thumbnail generation failed: ' . trim($shellOutput));
+        }
+        if (is_file($outputPath)) {
+            unlink($outputPath);
+        }
+        return null;
+    }
+
+    $bytes = file_get_contents($outputPath);
+    unlink($outputPath);
+    return (is_string($bytes) && $bytes !== '') ? $bytes : null;
+}
+
 function catn8_build_wizard_generate_pdf_thumb_from_path(string $pdfPath): ?string
 {
     if ($pdfPath === '' || !is_file($pdfPath)) {
         return null;
     }
-    if (!class_exists('Imagick')) {
-        return null;
+
+    if (class_exists('Imagick')) {
+        try {
+            $im = new Imagick();
+            $im->setResolution(144, 144);
+            $im->readImage($pdfPath . '[0]');
+            $im->setImageFormat('png');
+            $im->setImageBackgroundColor('white');
+            $im->thumbnailImage(480, 360, true, true);
+            if (method_exists($im, 'stripImage')) {
+                $im->stripImage();
+            }
+            $bytes = $im->getImageBlob();
+            $im->clear();
+            $im->destroy();
+            if (is_string($bytes) && $bytes !== '') {
+                return $bytes;
+            }
+        } catch (Throwable $e) {
+            error_log('Build Wizard PDF Imagick thumbnail generation failed: ' . $e->getMessage());
+        }
     }
 
-    try {
-        $im = new Imagick();
-        $im->setResolution(144, 144);
-        $im->readImage($pdfPath . '[0]');
-        $im->setImageFormat('png');
-        $im->setImageBackgroundColor('white');
-        $im->thumbnailImage(480, 360, true, true);
-        if (method_exists($im, 'stripImage')) {
-            $im->stripImage();
-        }
-        $bytes = $im->getImageBlob();
-        $im->clear();
-        $im->destroy();
-        return (is_string($bytes) && $bytes !== '') ? $bytes : null;
-    } catch (Throwable $e) {
-        error_log('Build Wizard PDF thumbnail generation failed: ' . $e->getMessage());
-        return null;
-    }
+    return catn8_build_wizard_generate_pdf_thumb_with_ghostscript($pdfPath);
 }
 
 function catn8_build_wizard_generate_pdf_thumb_from_blob(string $pdfBytes): ?string
@@ -980,7 +1071,8 @@ function catn8_build_wizard_pdf_thumbnail_diagnostics(): array
     $delegateContainsGhostscript = false;
     $delegatesSummary = null;
     $shellExecAvailable = function_exists('shell_exec');
-    $ghostscriptBinaryPath = null;
+    $ghostscriptBinaryPath = catn8_build_wizard_find_ghostscript_binary();
+    $ghostscriptRenderSupported = $ghostscriptBinaryPath !== null;
 
     if ($imagickLoaded) {
         try {
@@ -1021,17 +1113,10 @@ function catn8_build_wizard_pdf_thumbnail_diagnostics(): array
         }
     }
 
-    if ($shellExecAvailable) {
-        $gsPathRaw = shell_exec('command -v gs 2>/dev/null');
-        $gsPath = trim((string)$gsPathRaw);
-        if ($gsPath !== '') {
-            $ghostscriptBinaryPath = $gsPath;
-        }
-    }
-
-    $supported = $imagickLoaded
+    $imagickPdfSupported = $imagickLoaded
         && ($pdfFormatAvailable || $pdfaFormatAvailable)
         && ($delegateContainsGhostscript || $ghostscriptBinaryPath !== null);
+    $supported = $imagickPdfSupported || $ghostscriptRenderSupported;
 
     return [
         'imagick_loaded' => $imagickLoaded,
@@ -1042,6 +1127,7 @@ function catn8_build_wizard_pdf_thumbnail_diagnostics(): array
         'imagick_delegates_summary' => $delegatesSummary,
         'shell_exec_available' => $shellExecAvailable,
         'ghostscript_binary_path' => $ghostscriptBinaryPath,
+        'ghostscript_render_supported' => $ghostscriptRenderSupported,
         'pdf_thumbnail_supported' => $supported,
         'checked_at_utc' => gmdate('c'),
     ];
@@ -3168,6 +3254,138 @@ try {
 
         $params[] = $documentId;
         Database::execute('UPDATE build_wizard_documents SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
+
+        $updated = Database::queryOne(
+            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+             FROM build_wizard_documents d
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             WHERE d.id = ? LIMIT 1',
+            [$documentId]
+        );
+        if (!$updated) {
+            throw new RuntimeException('Updated document not found');
+        }
+        $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
+        $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
+        $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+
+        catn8_json_response(['success' => true, 'document' => $updated]);
+    }
+
+    if ($action === 'replace_document') {
+        catn8_require_method('POST');
+
+        $documentId = isset($_POST['document_id']) ? (int)$_POST['document_id'] : 0;
+        if ($documentId <= 0) {
+            throw new RuntimeException('Missing document_id');
+        }
+
+        $doc = catn8_build_wizard_document_for_user($documentId, $viewerId);
+        if (!$doc) {
+            throw new RuntimeException('Document not found or not authorized');
+        }
+        $projectId = (int)($doc['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            throw new RuntimeException('Invalid document project');
+        }
+
+        if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
+            throw new RuntimeException('No replacement file uploaded');
+        }
+        $file = $_FILES['file'];
+        $tmp = (string)($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new RuntimeException('Invalid replacement upload');
+        }
+
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0) {
+            throw new RuntimeException('Replacement file is empty');
+        }
+        if ($size > 25 * 1024 * 1024) {
+            throw new RuntimeException('Replacement file exceeds 25MB');
+        }
+
+        $origName = trim((string)($file['name'] ?? 'document'));
+        $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '_', $origName);
+        if (!is_string($safeName) || $safeName === '') {
+            $safeName = 'document';
+        }
+
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $detectedMime = $finfo ? finfo_file($finfo, $tmp) : false;
+        if ($finfo) {
+            finfo_close($finfo);
+        }
+        $mime = trim((string)($detectedMime ?: ($file['type'] ?? 'application/octet-stream')));
+        if ($mime === '') {
+            $mime = 'application/octet-stream';
+        }
+
+        $uploadDir = dirname(__DIR__) . '/uploads/build-wizard';
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            throw new RuntimeException('Failed to prepare upload directory');
+        }
+
+        $storedName = date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '_' . $safeName;
+        $destPath = $uploadDir . '/' . $storedName;
+        if (!move_uploaded_file($tmp, $destPath)) {
+            throw new RuntimeException('Failed to store replacement file');
+        }
+
+        $bytes = file_get_contents($destPath);
+        if (!is_string($bytes) || $bytes === '') {
+            throw new RuntimeException('Failed to read replacement file');
+        }
+
+        $oldStoragePath = trim((string)($doc['storage_path'] ?? ''));
+        catn8_build_wizard_clear_pdf_thumb_cache($documentId);
+
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE build_wizard_documents
+                 SET original_name = ?, mime_type = ?, storage_path = ?, file_size_bytes = ?, uploaded_at = CURRENT_TIMESTAMP
+                 WHERE id = ?',
+                [$origName, $mime, $destPath, $size, $documentId]
+            );
+
+            catn8_build_wizard_upsert_document_blob($documentId, $mime, $bytes);
+
+            if (strpos(strtolower($mime), 'image/') === 0) {
+                $sizeInfo = @getimagesize($destPath);
+                $width = is_array($sizeInfo) && isset($sizeInfo[0]) ? (int)$sizeInfo[0] : null;
+                $height = is_array($sizeInfo) && isset($sizeInfo[1]) ? (int)$sizeInfo[1] : null;
+                Database::execute(
+                    'INSERT INTO build_wizard_document_images (document_id, mime_type, image_blob, width_px, height_px, file_size_bytes)
+                     VALUES (?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), image_blob = VALUES(image_blob), width_px = VALUES(width_px), height_px = VALUES(height_px), file_size_bytes = VALUES(file_size_bytes)',
+                    [$documentId, $mime, $bytes, $width, $height, strlen($bytes)]
+                );
+            } else {
+                Database::execute('DELETE FROM build_wizard_document_images WHERE document_id = ?', [$documentId]);
+            }
+
+            Database::commit();
+        } catch (Throwable $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
+
+        if ($oldStoragePath !== '' && is_file($oldStoragePath)) {
+            $uploadRoot = realpath(dirname(__DIR__) . '/uploads/build-wizard');
+            $realStoragePath = realpath($oldStoragePath);
+            if (
+                $uploadRoot !== false
+                && $realStoragePath !== false
+                && str_starts_with($realStoragePath, $uploadRoot . DIRECTORY_SEPARATOR)
+            ) {
+                unlink($realStoragePath);
+            }
+        }
 
         $updated = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,

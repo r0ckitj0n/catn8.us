@@ -39,8 +39,8 @@ export function AIVoiceCommunicationModal({ open, onClose, onToast, viewer }: AI
   }, [open, modalApiRef]);
 
   return (
-    <div className="modal fade catn8-mystery-modal catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
-      <div className="modal-dialog modal-dialog-centered modal-xl catn8-modal-wide">
+    <div className="modal fade catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+      <div className="modal-dialog modal-dialog-centered modal-xl">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">AI Voice Configuration</h5>

@@ -4,6 +4,7 @@ import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/stora
 import { formatTestResult, normalizeText } from '../../../utils/textUtils';
 import { aiImageGetModelChoices, aiImageParamOptions, aiImageDefaultParams } from '../../../utils/aiImageUtils';
 import { IToast, AiLooseObject } from '../../../types/common';
+import { IAiImageDraftTestRequest, IAiModelChoice, IAiModelsRequest, IAiModelsResponse } from '../../../types/aiSettings';
 
 export type AIImageConfigState = {
   provider: string;
@@ -45,7 +46,9 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
   const [secretsByProvider, setSecretsByProvider] = useState<Record<string, AiLooseObject>>({});
 
   const providerKey = normalizeText(config.provider);
-  const modelChoices = React.useMemo(() => aiImageGetModelChoices(config.provider), [config.provider]);
+  const [modelChoices, setModelChoices] = React.useState<IAiModelChoice[]>(() => aiImageGetModelChoices('openai'));
+  const [isRefreshingModels, setIsRefreshingModels] = React.useState(false);
+  const [modelChoicesSource, setModelChoicesSource] = React.useState<'catalog' | 'live'>('catalog');
   const paramOptions = React.useMemo(() => aiImageParamOptions(config.provider), [config.provider]);
 
   const buildSnapshot = React.useCallback(() => {
@@ -78,6 +81,8 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
           provider_config: providerConfig,
         };
         setConfig(nextConfig);
+        setModelChoices(aiImageGetModelChoices(nextConfig.provider));
+        setModelChoicesSource('catalog');
         setHasSecrets((res && typeof res === 'object' && res.has_secrets && typeof res.has_secrets === 'object') ? res.has_secrets : {});
         cleanSnapshotRef.current = JSON.stringify({ cfg: nextConfig, secrets: {} });
       })
@@ -89,12 +94,18 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
     if (!open) return;
     if (!config || typeof config !== 'object') return;
     if (!config.provider) return;
-    const choices = aiImageGetModelChoices(config.provider);
+    const choices = modelChoices.length ? modelChoices : aiImageGetModelChoices(config.provider);
     if (!choices.length) return;
     const current = String(config.model || '');
     if (choices.some((m) => String(m.value) === current)) return;
     setConfig((c) => ({ ...c, model: String(choices[0].value || '') }));
-  }, [open, config.provider, config.model]);
+  }, [open, config.provider, config.model, modelChoices]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setModelChoices(aiImageGetModelChoices(config.provider));
+    setModelChoicesSource('catalog');
+  }, [open, config.provider]);
 
   React.useEffect(() => {
     if (!error) return;
@@ -133,6 +144,84 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
       setError(String(e?.message || e || 'Failed to test provider'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testAiImageProviderDraft = async () => {
+    if (busy) return;
+    setLastAiImageProviderTest('Running…');
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
+        ? secretsByProvider[providerKey]
+        : {};
+      const req: IAiImageDraftTestRequest = {
+        provider: config.provider,
+        model: config.model,
+        base_url: config.base_url,
+        provider_config: config.provider_config || {},
+        params: config.params || {},
+        secrets: providerSecrets,
+      };
+      const res = await ApiClient.post('/api/settings/ai_image_test.php', req);
+      const provider = String(res?.ai_image?.provider || '').trim();
+      const model = String(res?.ai_image?.model || '').trim();
+      const sample = String(res?.sample || '').trim();
+      const details = `${provider}${model ? ` / ${model}` : ''}${sample ? ` — ${sample}` : ''}`;
+      const next = formatTestResult('success', details);
+      setLastAiImageProviderTest(next);
+      catn8LocalStorageSet(LS_AI_IMAGE_PROVIDER_TEST, next);
+      setMessage(`Test OK: ${details}`);
+    } catch (e: any) {
+      const next = formatTestResult('failure', String(e?.message || e || 'Failed'));
+      setLastAiImageProviderTest(next);
+      catn8LocalStorageSet(LS_AI_IMAGE_PROVIDER_TEST, next);
+      setError(String(e?.message || e || 'Failed to test provider'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshModelChoices = async () => {
+    if (busy || isRefreshingModels) return;
+    setIsRefreshingModels(true);
+    setError('');
+    try {
+      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
+        ? secretsByProvider[providerKey]
+        : {};
+      const req: IAiModelsRequest = {
+        mode: 'image',
+        provider: config.provider,
+        model: config.model,
+        base_url: config.base_url,
+        provider_config: config.provider_config || {},
+        params: config.params || {},
+        secrets: providerSecrets,
+      };
+      const res = await ApiClient.post<IAiModelsResponse>('/api/settings/ai_models.php', req);
+      const models = Array.isArray(res?.models) ? res.models : [];
+      if (models.length) {
+        const normalized = models
+          .map((m: any) => ({
+            value: String(m?.value || '').trim(),
+            label: String(m?.label || m?.value || '').trim(),
+          }))
+          .filter((m: any) => m.value !== '');
+        if (normalized.length) {
+          setModelChoices(normalized);
+          setModelChoicesSource(String(res?.source || 'live') === 'live' ? 'live' : 'catalog');
+          if (!normalized.some((m: any) => m.value === String(config.model || '').trim())) {
+            setConfig((prev) => ({ ...prev, model: normalized[0].value }));
+          }
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh model list');
+    } finally {
+      setIsRefreshingModels(false);
     }
   };
 
@@ -195,9 +284,13 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
     lastAiImageLocationRefTest, setLastAiImageLocationRefTest,
     providerKey,
     modelChoices,
+    modelChoicesSource,
+    isRefreshingModels,
     paramOptions,
     isDirty,
     testAiImageProvider,
+    testAiImageProviderDraft,
+    refreshModelChoices,
     save
   };
 }

@@ -4,6 +4,7 @@ import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/stora
 import { formatTestResult, normalizeText } from '../../../utils/textUtils';
 import { aiGetModelChoices } from '../../../utils/aiUtils';
 import { IToast, AiLooseObject } from '../../../types/common';
+import { IAiModelChoice, IAiModelsRequest, IAiModelsResponse } from '../../../types/aiSettings';
 
 export type AIConfigState = {
   provider: string;
@@ -49,7 +50,9 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
   const [secretsByProvider, setSecretsByProvider] = useState<Record<string, AiLooseObject>>({});
 
   const providerKey = normalizeText(config.provider);
-  const modelChoices = React.useMemo(() => aiGetModelChoices(config.provider), [config.provider]);
+  const [modelChoices, setModelChoices] = React.useState<IAiModelChoice[]>(() => aiGetModelChoices('openai'));
+  const [isRefreshingModels, setIsRefreshingModels] = React.useState(false);
+  const [modelChoicesSource, setModelChoicesSource] = React.useState<'catalog' | 'live'>('catalog');
 
   const buildSnapshot = React.useCallback((nextConfig = config, nextSecretsByProvider = secretsByProvider) => {
     const cfg = (nextConfig && typeof nextConfig === 'object') ? (nextConfig as any) : {};
@@ -83,23 +86,31 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
           provider_config: providerConfig,
         };
         setConfig(nextConfig);
+        setModelChoices(aiGetModelChoices(nextConfig.provider));
+        setModelChoicesSource('catalog');
         setHasSecrets((resAi && typeof resAi === 'object' && resAi.has_secrets && typeof resAi.has_secrets === 'object') ? resAi.has_secrets : {});
         cleanSnapshotRef.current = buildSnapshot(nextConfig, {});
       })
       .catch((e) => setError(e?.message || 'Failed to load AI configuration'))
       .finally(() => setBusy(false));
-  }, [open, buildSnapshot]);
+  }, [open]);
 
   React.useEffect(() => {
     if (!open) return;
     if (!config || typeof config !== 'object') return;
     if (!config.provider) return;
-    const choices = aiGetModelChoices(config.provider);
+    const choices = modelChoices.length ? modelChoices : aiGetModelChoices(config.provider);
     if (!choices.length) return;
     const current = String(config.model || '').trim();
     if (current !== '') return;
     setConfig((c) => ({ ...c, model: String(choices[0].value || '') }));
-  }, [open, config.provider, config.model]);
+  }, [open, config.provider, config.model, modelChoices]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setModelChoices(aiGetModelChoices(config.provider));
+    setModelChoicesSource('catalog');
+  }, [open, config.provider]);
 
   React.useEffect(() => {
     if (!error) return;
@@ -137,6 +148,47 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
       setError(e?.message || 'Failed to test AI provider');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refreshModelChoices = async () => {
+    if (busy || isRefreshingModels) return;
+    setIsRefreshingModels(true);
+    setError('');
+    try {
+      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
+        ? secretsByProvider[providerKey]
+        : {};
+      const req: IAiModelsRequest = {
+        mode: 'chat',
+        provider: config.provider,
+        model: config.model,
+        base_url: config.base_url,
+        location: config.location,
+        provider_config: config.provider_config || {},
+        secrets: providerSecrets,
+      };
+      const res = await ApiClient.post<IAiModelsResponse>('/api/settings/ai_models.php', req);
+      const models = Array.isArray(res?.models) ? res.models : [];
+      if (models.length) {
+        const normalized = models
+          .map((m: any) => ({
+            value: String(m?.value || '').trim(),
+            label: String(m?.label || m?.value || '').trim(),
+          }))
+          .filter((m: any) => m.value !== '');
+        if (normalized.length) {
+          setModelChoices(normalized);
+          setModelChoicesSource(String(res?.source || 'live') === 'live' ? 'live' : 'catalog');
+          if (!normalized.some((m: any) => m.value === String(config.model || '').trim())) {
+            setConfig((prev) => ({ ...prev, model: normalized[0].value }));
+          }
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh model list');
+    } finally {
+      setIsRefreshingModels(false);
     }
   };
 
@@ -202,8 +254,11 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
     lastAiProviderTest,
     providerKey,
     modelChoices,
+    modelChoicesSource,
+    isRefreshingModels,
     isDirty,
     testAiProvider,
+    refreshModelChoices,
     save
   };
 }

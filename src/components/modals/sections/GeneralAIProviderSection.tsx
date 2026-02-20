@@ -7,6 +7,9 @@ interface GeneralAIProviderSectionProps {
   modelChoices: any[];
   providerKey: string;
   busy: boolean;
+  refreshModelChoices: () => Promise<void>;
+  isRefreshingModels: boolean;
+  modelChoicesSource: 'catalog' | 'live';
 }
 
 export function GeneralAIProviderSection({
@@ -14,7 +17,10 @@ export function GeneralAIProviderSection({
   setConfig,
   modelChoices,
   providerKey,
-  busy
+  busy,
+  refreshModelChoices,
+  isRefreshingModels,
+  modelChoicesSource
 }: GeneralAIProviderSectionProps) {
   return (
     <div className="border rounded p-3 mb-3">
@@ -47,7 +53,17 @@ export function GeneralAIProviderSection({
           </select>
         </div>
         <div className="col-md-6">
-          <label className="form-label" htmlFor="ai-model">Model</label>
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            <label className="form-label mb-0" htmlFor="ai-model">Model</label>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => void refreshModelChoices()}
+              disabled={busy || isRefreshingModels}
+            >
+              {isRefreshingModels ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
           <datalist id="ai-model-options">
             {modelChoices.map((m) => (
               <option key={m.value} value={m.value} />
@@ -62,7 +78,9 @@ export function GeneralAIProviderSection({
             list="ai-model-options"
             placeholder={modelChoices.length ? String(modelChoices[0].value || '') : 'Enter model id…'}
           />
-          <div className="form-text">Pick a preset or type an exact model id (recommended for new releases).</div>
+          <div className="form-text">
+            Source: {modelChoicesSource === 'live' ? 'Live provider list' : 'Built-in catalog'}. Pick a preset or type an exact model id.
+          </div>
         </div>
 
         <div className="col-12">

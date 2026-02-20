@@ -38,7 +38,7 @@ export function AIImageConfigModal({ open, onClose, onToast }: AIImageConfigModa
   }, [open, modalApiRef]);
 
   return (
-    <div className="modal fade catn8-mystery-modal catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+    <div className="modal fade catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-xl">
         <div className="modal-content">
           <div className="modal-header">
@@ -77,6 +77,9 @@ export function AIImageConfigModal({ open, onClose, onToast }: AIImageConfigModa
                     busy={state.busy}
                     lastAiImageProviderTest={state.lastAiImageProviderTest}
                     testAiImageProvider={state.testAiImageProvider}
+                    refreshModelChoices={state.refreshModelChoices}
+                    isRefreshingModels={state.isRefreshingModels}
+                    modelChoicesSource={state.modelChoicesSource}
                   />
                 </div>
                 <div className="col-lg-6">
@@ -92,6 +95,7 @@ export function AIImageConfigModal({ open, onClose, onToast }: AIImageConfigModa
                     busy={state.busy}
                     setBusy={state.setBusy}
                     onToast={onToast}
+                    testAiImageProviderDraft={state.testAiImageProviderDraft}
                   />
                 </div>
               </div>

@@ -14,6 +14,7 @@ interface AIImageSecretsSectionProps {
   busy: boolean;
   setBusy: React.Dispatch<React.SetStateAction<boolean>>;
   onToast?: (toast: any) => void;
+  testAiImageProviderDraft?: () => Promise<void>;
 }
 
 export function AIImageSecretsSection({
@@ -27,7 +28,8 @@ export function AIImageSecretsSection({
   setLastAiImageLocationRefTest,
   busy,
   setBusy,
-  onToast
+  onToast,
+  testAiImageProviderDraft
 }: AIImageSecretsSectionProps) {
   const providerHas = hasSecrets[providerKey] || {};
   const providerSecrets = secretsByProvider[providerKey] || {};
@@ -182,10 +184,22 @@ export function AIImageSecretsSection({
           providerKey === 'fireworks_ai' || providerKey === 'stability_ai' || 
           providerKey === 'replicate' || providerKey === 'huggingface') && (
           <div className="col-12">
-            <label className="form-label" htmlFor="ai-image-provider-api-key">
-              {providerKey === 'replicate' || providerKey === 'huggingface' ? 'API Token' : 'API Key'}
-              {providerHas.api_key ? ' (saved)' : ' (not set)'}
-            </label>
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <label className="form-label mb-0" htmlFor="ai-image-provider-api-key">
+                {providerKey === 'replicate' || providerKey === 'huggingface' ? 'API Token' : 'API Key'}
+                {providerHas.api_key ? ' (saved)' : ' (not set)'}
+              </label>
+              {typeof testAiImageProviderDraft === 'function' ? (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => void testAiImageProviderDraft()}
+                  disabled={busy}
+                >
+                  Test API key
+                </button>
+              ) : null}
+            </div>
             <input
               id="ai-image-provider-api-key"
               className="form-control"

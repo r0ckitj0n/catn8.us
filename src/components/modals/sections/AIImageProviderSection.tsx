@@ -9,6 +9,9 @@ interface AIImageProviderSectionProps {
   busy: boolean;
   lastAiImageProviderTest: string;
   testAiImageProvider: () => Promise<void>;
+  refreshModelChoices: () => Promise<void>;
+  isRefreshingModels: boolean;
+  modelChoicesSource: 'catalog' | 'live';
 }
 
 export function AIImageProviderSection({
@@ -18,7 +21,10 @@ export function AIImageProviderSection({
   providerKey,
   busy,
   lastAiImageProviderTest,
-  testAiImageProvider
+  testAiImageProvider,
+  refreshModelChoices,
+  isRefreshingModels,
+  modelChoicesSource
 }: AIImageProviderSectionProps) {
   return (
     <div className="border rounded p-3 mb-3">
@@ -29,7 +35,7 @@ export function AIImageProviderSection({
             <div className="text-muted small">Last result: {lastAiImageProviderTest}</div>
           ) : null}
           <button type="button" className="btn btn-outline-secondary" onClick={testAiImageProvider} disabled={busy}>
-            Test provider
+            Test saved config
           </button>
         </div>
       </div>
@@ -60,7 +66,17 @@ export function AIImageProviderSection({
           </select>
         </div>
         <div className="col-md-6">
-          <label className="form-label" htmlFor="ai-image-model">Model</label>
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            <label className="form-label mb-0" htmlFor="ai-image-model">Model</label>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => void refreshModelChoices()}
+              disabled={busy || isRefreshingModels}
+            >
+              {isRefreshingModels ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
           <select
             id="ai-image-model"
             className="form-select"
@@ -75,6 +91,9 @@ export function AIImageProviderSection({
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
+          <div className="form-text">
+            Source: {modelChoicesSource === 'live' ? 'Live provider list' : 'Built-in catalog'}
+          </div>
         </div>
 
         {(providerKey === 'openai' || providerKey === 'together_ai' || providerKey === 'fireworks_ai') ? (

@@ -38,7 +38,7 @@ export function AIConfigModal({ open, onClose, onToast }: AIConfigModalProps) {
   }, [open, modalApiRef]);
 
   return (
-    <div className="modal fade catn8-mystery-modal catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+    <div className="modal fade catn8-stacked-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">
@@ -74,6 +74,9 @@ export function AIConfigModal({ open, onClose, onToast }: AIConfigModalProps) {
                 modelChoices={state.modelChoices}
                 providerKey={state.providerKey}
                 busy={state.busy}
+                refreshModelChoices={state.refreshModelChoices}
+                isRefreshingModels={state.isRefreshingModels}
+                modelChoicesSource={state.modelChoicesSource}
               />
 
               <div className="border rounded p-3 mb-3">

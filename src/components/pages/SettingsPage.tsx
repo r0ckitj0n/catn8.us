@@ -91,20 +91,6 @@ export function SettingsPage({
                       }}>
                         AI Configuration
                       </button>
-                      {isAdmin ? (
-                        <button type="button" className="btn btn-primary" onClick={() => {
-                          if (typeof onOpenAiVoiceCommunication === 'function') onOpenAiVoiceCommunication();
-                        }}>
-                          AI Voice Configuration
-                        </button>
-                      ) : null}
-                      {isAdmin ? (
-                        <button type="button" className="btn btn-primary" onClick={() => {
-                          if (typeof onOpenAiImageConfig === 'function') onOpenAiImageConfig();
-                        }}>
-                          AI Image Configuration
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                 </div>

@@ -1,9 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { AIVoiceCommunicationModal } from '../components/modals/AIVoiceCommunicationModal';
-import { AIConfigModal } from '../components/modals/AIConfigModal';
-import { AIImageConfigModal } from '../components/modals/AIImageConfigModal';
+import { AIConfigurationModal, AIConfigurationTab } from '../components/modals/AIConfigurationModal';
 import { AccountModal } from '../components/modals/AccountModal';
 import { LoginModal } from '../components/modals/LoginModal';
 import { ToastOverlay } from '../components/modals/ToastOverlay';
@@ -85,9 +83,8 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
 function App({ page }: { page: AppPage }) {
   const [loginOpen, setLoginOpen] = React.useState(page === 'login');
   const [accountOpen, setAccountOpen] = React.useState(false);
-  const [aiImageOpen, setAiImageOpen] = React.useState(false);
-  const [aiOpen, setAiOpen] = React.useState(false);
-  const [aiVoiceOpen, setAiVoiceOpen] = React.useState(false);
+  const [aiConfigOpen, setAiConfigOpen] = React.useState(false);
+  const [aiConfigTab, setAiConfigTab] = React.useState<AIConfigurationTab>('general');
   const [viewer, setViewer] = React.useState<Viewer>(null);
   const [toast, setToast] = React.useState<Toast>(null);
   const [mysteryTitle, setMysteryTitle] = React.useState(() => catn8LocalStorageGet('catn8_mystery_title') || '');
@@ -217,9 +214,9 @@ function App({ page }: { page: AppPage }) {
           {...sharedProps}
           onToast={setToast}
           isAdmin={isAdmin}
-          onOpenAiImageConfig={() => setAiImageOpen(true)}
-          onOpenAiConfig={() => setAiOpen(true)}
-          onOpenAiVoiceConfig={() => setAiVoiceOpen(true)}
+          onOpenAiImageConfig={() => { setAiConfigTab('image'); setAiConfigOpen(true); }}
+          onOpenAiConfig={() => { setAiConfigTab('general'); setAiConfigOpen(true); }}
+          onOpenAiVoiceConfig={() => { setAiConfigTab('voice'); setAiConfigOpen(true); }}
           onMysteryTitleChange={setMysteryTitle}
           refreshViewer={refreshViewer}
         />
@@ -232,9 +229,9 @@ function App({ page }: { page: AppPage }) {
           {...sharedProps}
           isAdmin={isAdmin}
           onToast={setToast}
-          onOpenAiImageConfig={() => setAiImageOpen(true)}
-          onOpenAiConfig={() => setAiOpen(true)}
-          onOpenAiVoiceConfig={() => setAiVoiceOpen(true)}
+          onOpenAiImageConfig={() => { setAiConfigTab('image'); setAiConfigOpen(true); }}
+          onOpenAiConfig={() => { setAiConfigTab('general'); setAiConfigOpen(true); }}
+          onOpenAiVoiceConfig={() => { setAiConfigTab('voice'); setAiConfigOpen(true); }}
           mysteryTitle={mysteryTitle}
         />
       );
@@ -245,9 +242,9 @@ function App({ page }: { page: AppPage }) {
         <SettingsPage
           {...sharedProps}
           page={page}
-          onOpenAiImageConfig={() => setAiImageOpen(true)}
-          onOpenAiConfig={() => setAiOpen(true)}
-          onOpenAiVoiceCommunication={() => setAiVoiceOpen(true)}
+          onOpenAiImageConfig={() => { setAiConfigTab('image'); setAiConfigOpen(true); }}
+          onOpenAiConfig={() => { setAiConfigTab('general'); setAiConfigOpen(true); }}
+          onOpenAiVoiceCommunication={() => { setAiConfigTab('voice'); setAiConfigOpen(true); }}
           onToast={setToast}
         />
       );
@@ -271,9 +268,7 @@ function App({ page }: { page: AppPage }) {
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLoggedIn={refreshViewer} onToast={setToast} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} viewer={viewer} onChanged={refreshViewer} onToast={setToast} />
       <ToastOverlay toast={toast} onClose={() => setToast(null)} />
-      <AIImageConfigModal open={aiImageOpen} onClose={() => setAiImageOpen(false)} onToast={setToast} />
-      <AIConfigModal open={aiOpen} onClose={() => setAiOpen(false)} onToast={setToast} />
-      <AIVoiceCommunicationModal open={aiVoiceOpen} onClose={() => setAiVoiceOpen(false)} onToast={setToast} viewer={viewer} />
+      <AIConfigurationModal open={aiConfigOpen} onClose={() => setAiConfigOpen(false)} onToast={setToast} viewer={viewer} initialTab={aiConfigTab} />
     </>
   );
 }

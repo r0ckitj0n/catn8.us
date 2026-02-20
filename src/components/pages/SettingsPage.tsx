@@ -10,6 +10,7 @@ import { DbConfigModal } from '../modals/DbConfigModal';
 import { DeployConfigModal } from '../modals/DeployConfigModal';
 import { BuildWizardSettingsModal } from '../modals/BuildWizardSettingsModal';
 import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
+import { SiteMaintenanceModal } from '../modals/SiteMaintenanceModal';
 import { IToast } from '../../types/common';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
@@ -43,6 +44,7 @@ export function SettingsPage({
   const [deployOpen, setDeployOpen] = React.useState(false);
   const [buildWizardSettingsOpen, setBuildWizardSettingsOpen] = React.useState(false);
   const [iconsOpen, setIconsOpen] = React.useState(false);
+  const [siteMaintenanceOpen, setSiteMaintenanceOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
 
   return (
@@ -134,6 +136,11 @@ export function SettingsPage({
                         Deployment Configuration
                       </button>
                       {isAdmin ? (
+                        <button type="button" className="btn btn-primary" onClick={() => setSiteMaintenanceOpen(true)}>
+                          Site Maintenance
+                        </button>
+                      ) : null}
+                      {isAdmin ? (
                         <button type="button" className="btn btn-primary" onClick={() => setBuildWizardSettingsOpen(true)}>
                           Build Wizard
                         </button>
@@ -170,6 +177,7 @@ export function SettingsPage({
       <DeployConfigModal open={deployOpen} onClose={() => setDeployOpen(false)} onToast={onToast} />
       <BuildWizardSettingsModal open={buildWizardSettingsOpen} onClose={() => setBuildWizardSettingsOpen(false)} onToast={onToast} />
       <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
+      <SiteMaintenanceModal open={siteMaintenanceOpen} onClose={() => setSiteMaintenanceOpen(false)} onToast={onToast} />
     </>
   );
 }

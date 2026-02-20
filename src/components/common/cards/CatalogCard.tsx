@@ -10,6 +10,7 @@ interface CatalogCardProps {
 }
 
 export function CatalogCard({ title, description, image, href, onClick }: CatalogCardProps) {
+  const isExternalHref = typeof href === 'string' && /^https?:\/\//i.test(href);
   const content = (
     <>
       <WebpImage src={image} alt={title} className="catn8-catalog-card-image" />
@@ -22,7 +23,12 @@ export function CatalogCard({ title, description, image, href, onClick }: Catalo
 
   if (href) {
     return (
-      <a className="catn8-catalog-card catn8-glass-card catn8-glass-card--interactive" href={href}>
+      <a
+        className="catn8-catalog-card catn8-glass-card catn8-glass-card--interactive"
+        href={href}
+        target={isExternalHref ? '_blank' : undefined}
+        rel={isExternalHref ? 'noopener noreferrer' : undefined}
+      >
         {content}
       </a>
     );

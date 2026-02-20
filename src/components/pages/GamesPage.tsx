@@ -34,7 +34,7 @@ export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
               <div className="row">
                 {sec.items.map((it: any) => (
                   <div className="col-md-6" key={it.title}>
-                    <CatalogCard title={it.title} description={it.description} image={it.image} />
+                    <CatalogCard title={it.title} description={it.description} image={it.image} href={it.href} />
                   </div>
                 ))}
               </div>

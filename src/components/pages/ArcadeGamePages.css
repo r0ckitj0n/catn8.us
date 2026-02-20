@@ -44,3 +44,8 @@
 .catn8-arcade-stat-cooldown {
   color: #7a3e00;
 }
+
+.catn8-arcade-canvas {
+  max-width: 100%;
+  height: auto;
+}

@@ -32,11 +32,12 @@ export function useAsteroids(canvasRef: React.RefObject<HTMLCanvasElement>) {
     textAlpha: 0,
     shieldActive: false,
     shieldTimer: 0,
-    shieldCooldown: 0
+    shieldCooldown: 0,
+    respawnTimeoutId: null as number | null
   });
 
-  const newAsteroid = React.useCallback((x: number, y: number, r: number) => {
-    const lvlMult = 1 + (level - 1) * 0.1;
+  const newAsteroid = React.useCallback((x: number, y: number, r: number, targetLevel = level) => {
+    const lvlMult = 1 + (targetLevel - 1) * 0.1;
     const asteroid = {
       x, y,
       xv: Math.random() * ASTEROID_SPEED * lvlMult / 60 * (Math.random() < 0.5 ? 1 : -1),
@@ -52,19 +53,19 @@ export function useAsteroids(canvasRef: React.RefObject<HTMLCanvasElement>) {
     return asteroid;
   }, [level]);
 
-  const createAsteroidBelt = React.useCallback(() => {
+  const createAsteroidBelt = React.useCallback((targetLevel = level) => {
     const gs = gameState.current;
     gs.asteroids = [];
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    for (let i = 0; i < ASTEROID_NUM + level; i++) {
+    for (let i = 0; i < ASTEROID_NUM + targetLevel; i++) {
       let x, y;
       do {
         x = Math.random() * canvas.width;
         y = Math.random() * canvas.height;
       } while (distBetweenPoints(gs.ship.x, gs.ship.y, x, y) < ASTEROID_SIZE * 2 + gs.ship.radius);
-      gs.asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
+      gs.asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2), targetLevel));
     }
   }, [level, canvasRef, newAsteroid]);
 
@@ -88,14 +89,26 @@ export function useAsteroids(canvasRef: React.RefObject<HTMLCanvasElement>) {
   }, [canvasRef]);
 
   const startGame = React.useCallback(() => {
+    if (gameState.current.respawnTimeoutId !== null) {
+      clearTimeout(gameState.current.respawnTimeoutId);
+      gameState.current.respawnTimeoutId = null;
+    }
     setScore(0);
     setLevel(1);
     setLives(GAME_LIVES);
     setGameOver(false);
     setPaused(false);
+    setShieldReady(true);
+    setShieldTimeLeft(0);
+    setShieldCooldownLeft(0);
     gameState.current.textAlpha = 0;
+    gameState.current.lastTime = 0;
+    gameState.current.shieldActive = false;
+    gameState.current.shieldTimer = 0;
+    gameState.current.shieldCooldown = 0;
+    gameState.current.lasers = [];
     createShip();
-    createAsteroidBelt();
+    createAsteroidBelt(1);
     setGameStarted(true);
   }, [createShip, createAsteroidBelt]);
 

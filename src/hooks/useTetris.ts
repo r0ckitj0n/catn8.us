@@ -92,11 +92,14 @@ export function useTetris(canvasRef: React.RefObject<HTMLCanvasElement>) {
       count++;
     }
     if (count > 0) {
-      setLines(l => l + count);
+      setLines((currentLines) => {
+        const nextLines = currentLines + count;
+        setLevel(Math.floor(nextLines / 10) + 1);
+        return nextLines;
+      });
       setScore(s => s + [0, 40, 100, 300, 1200][count] * level);
-      setLevel(l => Math.floor((lines + count) / 10) + 1);
     }
-  }, [level, lines]);
+  }, [level]);
 
   const drop = React.useCallback(() => {
     const gs = gameState.current;
@@ -138,6 +141,8 @@ export function useTetris(canvasRef: React.RefObject<HTMLCanvasElement>) {
 
   const startGame = React.useCallback(() => {
     gameState.current.board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+    gameState.current.dropCounter = 0;
+    gameState.current.lastTime = 0;
     setScore(0); setLevel(1); setLines(0); setGameOver(false); setPaused(false);
     resetPlayer();
     setGameStarted(true);
@@ -147,8 +152,12 @@ export function useTetris(canvasRef: React.RefObject<HTMLCanvasElement>) {
     if (!gameStarted || paused || gameOver) return;
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
+    gameState.current.lastTime = 0;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
       if (e.key === 'ArrowLeft') move(-1);
       if (e.key === 'ArrowRight') move(1);
       if (e.key === 'ArrowDown') drop();

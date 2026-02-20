@@ -16,7 +16,7 @@ type AsteroidsLoopOptions = {
   gameState: React.MutableRefObject<any>;
   gameOver: boolean;
   createShip: () => void;
-  createAsteroidBelt: () => void;
+  createAsteroidBelt: (targetLevel?: number) => void;
   newAsteroid: (x: number, y: number, r: number) => any;
   setShieldReady: React.Dispatch<React.SetStateAction<boolean>>;
   setShieldTimeLeft: React.Dispatch<React.SetStateAction<number>>;
@@ -52,6 +52,7 @@ export function runAsteroidsLoop({
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
+  gameState.current.lastTime = 0;
 
   let animationId = 0;
   const loop = (time: number) => {
@@ -133,7 +134,13 @@ export function runAsteroidsLoop({
             if (current <= 1) {
               setGameOver(true);
             } else {
-              setTimeout(createShip, 1500);
+              if (gs.respawnTimeoutId !== null) {
+                clearTimeout(gs.respawnTimeoutId);
+              }
+              gs.respawnTimeoutId = window.setTimeout(() => {
+                createShip();
+                gs.respawnTimeoutId = null;
+              }, 1500);
             }
             return current - 1;
           });
@@ -156,8 +163,11 @@ export function runAsteroidsLoop({
     }
 
     if (gs.asteroids.length === 0 && !gameOver) {
-      setLevel((current) => current + 1);
-      createAsteroidBelt();
+      setLevel((current) => {
+        const nextLevel = current + 1;
+        createAsteroidBelt(nextLevel);
+        return nextLevel;
+      });
     }
 
     drawAsteroidsScene(ctx, canvas, gs, gameOver);
@@ -168,6 +178,10 @@ export function runAsteroidsLoop({
   animationId = requestAnimationFrame(loop);
 
   return () => {
+    if (gameState.current.respawnTimeoutId !== null) {
+      clearTimeout(gameState.current.respawnTimeoutId);
+      gameState.current.respawnTimeoutId = null;
+    }
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     cancelAnimationFrame(animationId);

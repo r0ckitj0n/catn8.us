@@ -8,6 +8,9 @@ type ControlsOptions = {
 
 export function createAsteroidsControls({ gameState, setShieldReady }: ControlsOptions) {
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(event.key)) {
+      event.preventDefault();
+    }
     const gs = gameState.current;
     if (!gs.ship || gs.ship.dead) {
       return;

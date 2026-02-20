@@ -30,6 +30,7 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
     lilyPads: [] as any[],
     showCongratulations: false,
     congratulationsTimer: 0,
+    levelTimer: LEVEL_TIME,
     lastTime: 0
   });
 
@@ -85,6 +86,10 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
     setTimeLeft(LEVEL_TIME);
     setGameOver(false);
     setPaused(false);
+    gameState.current.lastTime = 0;
+    gameState.current.levelTimer = LEVEL_TIME;
+    gameState.current.showCongratulations = false;
+    gameState.current.congratulationsTimer = 0;
     resetFrog();
     setupLevel(1);
     setGameStarted(true);
@@ -102,6 +107,9 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
     if (!ctx || !canvas) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+      }
       const frog = gameState.current.frog;
       if (e.key === 'ArrowUp') frog.y -= frog.speed;
       if (e.key === 'ArrowDown') frog.y += frog.speed;
@@ -122,18 +130,15 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
 
       const gs = gameState.current;
       const speedMultiplier = 1 + (level - 1) * 0.05;
+      let lifeLost = false;
 
       // Update cars
       gs.cars.forEach(car => {
         car.x += car.speed * speedMultiplier;
         if (car.speed > 0 && car.x > GAME_WIDTH) car.x = -car.width;
         else if (car.speed < 0 && car.x + car.width < 0) car.x = GAME_WIDTH;
-        if (isColliding(gs.frog, car)) {
-          setLives(l => {
-            if (l <= 1) setGameOver(true);
-            resetFrog();
-            return l - 1;
-          });
+        if (!lifeLost && isColliding(gs.frog, car)) {
+          lifeLost = true;
         }
       });
 
@@ -146,23 +151,41 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
         if (isColliding(gs.frog, log)) {
           onLog = true;
           gs.frog.x += log.speed * speedMultiplier;
+          gs.frog.x = Math.max(0, Math.min(GAME_WIDTH - gs.frog.width, gs.frog.x));
         }
       });
 
       // Water check
-      if (!onLog && gs.frog.y < GAME_HEIGHT - 5 * GRID_SIZE && gs.frog.y > GRID_SIZE) {
+      if (!lifeLost && !onLog && gs.frog.y < GAME_HEIGHT - 5 * GRID_SIZE && gs.frog.y > GRID_SIZE) {
         const isInMedian = gs.frog.y >= GAME_HEIGHT - 6 * GRID_SIZE && gs.frog.y <= GAME_HEIGHT - 5 * GRID_SIZE;
         if (!isInMedian) {
-          setLives(l => {
-            if (l <= 1) setGameOver(true);
-            resetFrog();
-            return l - 1;
-          });
+          lifeLost = true;
         }
       }
 
+      gs.levelTimer = Math.max(0, gs.levelTimer - dt / 1000);
+      setTimeLeft(Math.ceil(gs.levelTimer));
+
+      if (!lifeLost && gs.levelTimer <= 0) {
+        lifeLost = true;
+      }
+
+      if (lifeLost) {
+        gs.levelTimer = LEVEL_TIME;
+        setTimeLeft(LEVEL_TIME);
+        setLives((current) => {
+          const nextLives = current - 1;
+          if (nextLives <= 0) {
+            setGameOver(true);
+            return 0;
+          }
+          resetFrog();
+          return nextLives;
+        });
+      }
+
       // Win check
-      if (gs.frog.y <= GRID_SIZE && !gs.showCongratulations) {
+      if (!lifeLost && gs.frog.y <= GRID_SIZE && !gs.showCongratulations) {
         setScore(s => s + 100);
         gs.showCongratulations = true;
         gs.congratulationsTimer = 0;
@@ -172,8 +195,13 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
         gs.congratulationsTimer += dt;
         if (gs.congratulationsTimer >= 2000) {
           gs.showCongratulations = false;
-          setLevel(l => l + 1);
-          setupLevel(level + 1);
+          setLevel((currentLevel) => {
+            const nextLevel = currentLevel + 1;
+            setupLevel(nextLevel);
+            return nextLevel;
+          });
+          gs.levelTimer = LEVEL_TIME;
+          setTimeLeft(LEVEL_TIME);
           resetFrog();
         }
       }

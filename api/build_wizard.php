@@ -15,9 +15,17 @@ function catn8_build_wizard_tables_ensure(): void
         status VARCHAR(32) NOT NULL DEFAULT 'planning',
         square_feet INT NULL,
         home_style VARCHAR(120) NOT NULL DEFAULT '',
+        home_type VARCHAR(64) NOT NULL DEFAULT '',
         room_count INT NULL,
+        bedrooms_count INT NULL,
+        kitchens_count INT NULL,
         bathroom_count INT NULL,
         stories_count INT NULL,
+        lot_size_sqft INT NULL,
+        garage_spaces INT NULL,
+        parking_spaces INT NULL,
+        year_built INT NULL,
+        hoa_fee_monthly DECIMAL(10,2) NULL,
         lot_address VARCHAR(255) NOT NULL DEFAULT '',
         target_start_date DATE NULL,
         target_completion_date DATE NULL,
@@ -145,6 +153,26 @@ function catn8_build_wizard_tables_ensure(): void
     );
     if (!$hasPrimaryPhotoDocumentId) {
         Database::execute('ALTER TABLE build_wizard_projects ADD COLUMN primary_photo_document_id INT NULL AFTER blueprint_document_id');
+    }
+
+    $projectColumns = [
+        'home_type' => "ALTER TABLE build_wizard_projects ADD COLUMN home_type VARCHAR(64) NOT NULL DEFAULT '' AFTER home_style",
+        'bedrooms_count' => 'ALTER TABLE build_wizard_projects ADD COLUMN bedrooms_count INT NULL AFTER room_count',
+        'kitchens_count' => 'ALTER TABLE build_wizard_projects ADD COLUMN kitchens_count INT NULL AFTER bedrooms_count',
+        'lot_size_sqft' => 'ALTER TABLE build_wizard_projects ADD COLUMN lot_size_sqft INT NULL AFTER stories_count',
+        'garage_spaces' => 'ALTER TABLE build_wizard_projects ADD COLUMN garage_spaces INT NULL AFTER lot_size_sqft',
+        'parking_spaces' => 'ALTER TABLE build_wizard_projects ADD COLUMN parking_spaces INT NULL AFTER garage_spaces',
+        'year_built' => 'ALTER TABLE build_wizard_projects ADD COLUMN year_built INT NULL AFTER parking_spaces',
+        'hoa_fee_monthly' => 'ALTER TABLE build_wizard_projects ADD COLUMN hoa_fee_monthly DECIMAL(10,2) NULL AFTER year_built',
+    ];
+    foreach ($projectColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_projects', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
     }
 
     $stepColumns = [
@@ -655,16 +683,24 @@ function catn8_build_wizard_seed_project_from_file(int $projectId): void
     if ($seedProject) {
         Database::execute(
             'UPDATE build_wizard_projects
-             SET title = ?, status = ?, square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?
+             SET title = ?, status = ?, square_feet = ?, home_style = ?, home_type = ?, room_count = ?, bedrooms_count = ?, kitchens_count = ?, bathroom_count = ?, stories_count = ?, lot_size_sqft = ?, garage_spaces = ?, parking_spaces = ?, year_built = ?, hoa_fee_monthly = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?
              WHERE id = ?',
             [
                 trim((string)($seedProject['title'] ?? 'Build Wizard Project')),
                 trim((string)($seedProject['status'] ?? 'planning')),
                 isset($seedProject['square_feet']) && is_numeric($seedProject['square_feet']) ? (int)$seedProject['square_feet'] : null,
                 trim((string)($seedProject['home_style'] ?? '')),
+                trim((string)($seedProject['home_type'] ?? '')),
                 isset($seedProject['room_count']) && is_numeric($seedProject['room_count']) ? (int)$seedProject['room_count'] : null,
+                isset($seedProject['bedrooms_count']) && is_numeric($seedProject['bedrooms_count']) ? (int)$seedProject['bedrooms_count'] : null,
+                isset($seedProject['kitchens_count']) && is_numeric($seedProject['kitchens_count']) ? (int)$seedProject['kitchens_count'] : null,
                 isset($seedProject['bathroom_count']) && is_numeric($seedProject['bathroom_count']) ? (int)$seedProject['bathroom_count'] : null,
                 isset($seedProject['stories_count']) && is_numeric($seedProject['stories_count']) ? (int)$seedProject['stories_count'] : null,
+                isset($seedProject['lot_size_sqft']) && is_numeric($seedProject['lot_size_sqft']) ? (int)$seedProject['lot_size_sqft'] : null,
+                isset($seedProject['garage_spaces']) && is_numeric($seedProject['garage_spaces']) ? (int)$seedProject['garage_spaces'] : null,
+                isset($seedProject['parking_spaces']) && is_numeric($seedProject['parking_spaces']) ? (int)$seedProject['parking_spaces'] : null,
+                isset($seedProject['year_built']) && is_numeric($seedProject['year_built']) ? (int)$seedProject['year_built'] : null,
+                catn8_build_wizard_to_decimal_or_null($seedProject['hoa_fee_monthly'] ?? null),
                 trim((string)($seedProject['lot_address'] ?? '')),
                 catn8_build_wizard_parse_date_or_null($seedProject['target_start_date'] ?? null),
                 catn8_build_wizard_parse_date_or_null($seedProject['target_completion_date'] ?? null),
@@ -1697,9 +1733,17 @@ function catn8_build_wizard_build_ai_package(array $project, array $steps, array
             'status' => (string)($project['status'] ?? ''),
             'square_feet' => $project['square_feet'] !== null ? (int)$project['square_feet'] : null,
             'home_style' => (string)($project['home_style'] ?? ''),
+            'home_type' => (string)($project['home_type'] ?? ''),
             'room_count' => $project['room_count'] !== null ? (int)$project['room_count'] : null,
+            'bedrooms_count' => $project['bedrooms_count'] !== null ? (int)$project['bedrooms_count'] : null,
+            'kitchens_count' => $project['kitchens_count'] !== null ? (int)$project['kitchens_count'] : null,
             'bathroom_count' => $project['bathroom_count'] !== null ? (int)$project['bathroom_count'] : null,
             'stories_count' => $project['stories_count'] !== null ? (int)$project['stories_count'] : null,
+            'lot_size_sqft' => $project['lot_size_sqft'] !== null ? (int)$project['lot_size_sqft'] : null,
+            'garage_spaces' => $project['garage_spaces'] !== null ? (int)$project['garage_spaces'] : null,
+            'parking_spaces' => $project['parking_spaces'] !== null ? (int)$project['parking_spaces'] : null,
+            'year_built' => $project['year_built'] !== null ? (int)$project['year_built'] : null,
+            'hoa_fee_monthly' => $project['hoa_fee_monthly'] !== null ? (float)$project['hoa_fee_monthly'] : null,
             'lot_address' => (string)($project['lot_address'] ?? ''),
             'target_start_date' => $project['target_start_date'] !== null ? (string)$project['target_start_date'] : null,
             'target_completion_date' => $project['target_completion_date'] !== null ? (string)$project['target_completion_date'] : null,
@@ -3426,16 +3470,24 @@ try {
 
         Database::execute(
             'UPDATE build_wizard_projects
-             SET title = ?, status = ?, square_feet = ?, home_style = ?, room_count = ?, bathroom_count = ?, stories_count = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?, blueprint_document_id = ?, primary_photo_document_id = ?
+             SET title = ?, status = ?, square_feet = ?, home_style = ?, home_type = ?, room_count = ?, bedrooms_count = ?, kitchens_count = ?, bathroom_count = ?, stories_count = ?, lot_size_sqft = ?, garage_spaces = ?, parking_spaces = ?, year_built = ?, hoa_fee_monthly = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?, blueprint_document_id = ?, primary_photo_document_id = ?
              WHERE id = ?',
             [
                 trim((string)($body['title'] ?? 'Build Wizard Project')),
                 $status,
                 isset($body['square_feet']) && is_numeric($body['square_feet']) ? (int)$body['square_feet'] : null,
                 trim((string)($body['home_style'] ?? '')),
+                trim((string)($body['home_type'] ?? '')),
                 isset($body['room_count']) && is_numeric($body['room_count']) ? (int)$body['room_count'] : null,
+                isset($body['bedrooms_count']) && is_numeric($body['bedrooms_count']) ? (int)$body['bedrooms_count'] : null,
+                isset($body['kitchens_count']) && is_numeric($body['kitchens_count']) ? (int)$body['kitchens_count'] : null,
                 isset($body['bathroom_count']) && is_numeric($body['bathroom_count']) ? (int)$body['bathroom_count'] : null,
                 isset($body['stories_count']) && is_numeric($body['stories_count']) ? (int)$body['stories_count'] : null,
+                isset($body['lot_size_sqft']) && is_numeric($body['lot_size_sqft']) ? (int)$body['lot_size_sqft'] : null,
+                isset($body['garage_spaces']) && is_numeric($body['garage_spaces']) ? (int)$body['garage_spaces'] : null,
+                isset($body['parking_spaces']) && is_numeric($body['parking_spaces']) ? (int)$body['parking_spaces'] : null,
+                isset($body['year_built']) && is_numeric($body['year_built']) ? (int)$body['year_built'] : null,
+                catn8_build_wizard_to_decimal_or_null($body['hoa_fee_monthly'] ?? null),
                 trim((string)($body['lot_address'] ?? '')),
                 catn8_build_wizard_parse_date_or_null($body['target_start_date'] ?? null),
                 catn8_build_wizard_parse_date_or_null($body['target_completion_date'] ?? null),
@@ -4751,7 +4803,7 @@ try {
         $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
         $model = trim((string)($cfg['model'] ?? ''));
         $systemPrompt = 'You are an expert house construction planner and permit workflow architect. Return strict JSON only. '
-            . 'Schema: {"project_updates":{"home_style":string|null,"square_feet":number|null,"room_count":number|null,"bathroom_count":number|null,"stories_count":number|null,"target_start_date":"YYYY-MM-DD|null","target_completion_date":"YYYY-MM-DD|null","wizard_notes_append":string},"missing_fields":[string],"steps":[{"step_order":number,"phase_key":string,"step_type":"permit|purchase|inspection|documentation|construction|photos|blueprints|utility|delivery|milestone|closeout|other","title":string,"description":string,"permit_required":boolean,"permit_name":string|null,"expected_start_date":"YYYY-MM-DD|null","expected_end_date":"YYYY-MM-DD|null","expected_duration_days":number|null,"estimated_cost":number|null,"depends_on_step_orders":[number],"ai_estimated_fields":[string],"source_ref":string|null}]}. '
+            . 'Schema: {"project_updates":{"home_style":string|null,"home_type":string|null,"square_feet":number|null,"room_count":number|null,"bedrooms_count":number|null,"kitchens_count":number|null,"bathroom_count":number|null,"stories_count":number|null,"lot_size_sqft":number|null,"garage_spaces":number|null,"parking_spaces":number|null,"year_built":number|null,"hoa_fee_monthly":number|null,"target_start_date":"YYYY-MM-DD|null","target_completion_date":"YYYY-MM-DD|null","wizard_notes_append":string},"missing_fields":[string],"steps":[{"step_order":number,"phase_key":string,"step_type":"permit|purchase|inspection|documentation|construction|photos|blueprints|utility|delivery|milestone|closeout|other","title":string,"description":string,"permit_required":boolean,"permit_name":string|null,"expected_start_date":"YYYY-MM-DD|null","expected_end_date":"YYYY-MM-DD|null","expected_duration_days":number|null,"estimated_cost":number|null,"depends_on_step_orders":[number],"ai_estimated_fields":[string],"source_ref":string|null}]}. '
             . 'Never return markdown.';
         $modeInstruction = match ($mode) {
             'fill_missing' => 'Only fill missing values or obviously incomplete steps. Keep existing step order and titles unless required for safety/compliance.',
@@ -4781,14 +4833,22 @@ try {
             if ($projectUpdates) {
                 Database::execute(
                     'UPDATE build_wizard_projects
-                     SET home_style = ?, square_feet = ?, room_count = ?, bathroom_count = ?, stories_count = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = CONCAT(COALESCE(wizard_notes, ""), ?)
+                     SET home_style = ?, home_type = ?, square_feet = ?, room_count = ?, bedrooms_count = ?, kitchens_count = ?, bathroom_count = ?, stories_count = ?, lot_size_sqft = ?, garage_spaces = ?, parking_spaces = ?, year_built = ?, hoa_fee_monthly = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = CONCAT(COALESCE(wizard_notes, ""), ?)
                      WHERE id = ?',
                     [
                         trim((string)($projectUpdates['home_style'] ?? ($project['home_style'] ?? ''))),
+                        trim((string)($projectUpdates['home_type'] ?? ($project['home_type'] ?? ''))),
                         isset($projectUpdates['square_feet']) && is_numeric($projectUpdates['square_feet']) ? (int)$projectUpdates['square_feet'] : ($project['square_feet'] !== null ? (int)$project['square_feet'] : null),
                         isset($projectUpdates['room_count']) && is_numeric($projectUpdates['room_count']) ? (int)$projectUpdates['room_count'] : ($project['room_count'] !== null ? (int)$project['room_count'] : null),
+                        isset($projectUpdates['bedrooms_count']) && is_numeric($projectUpdates['bedrooms_count']) ? (int)$projectUpdates['bedrooms_count'] : ($project['bedrooms_count'] !== null ? (int)$project['bedrooms_count'] : null),
+                        isset($projectUpdates['kitchens_count']) && is_numeric($projectUpdates['kitchens_count']) ? (int)$projectUpdates['kitchens_count'] : ($project['kitchens_count'] !== null ? (int)$project['kitchens_count'] : null),
                         isset($projectUpdates['bathroom_count']) && is_numeric($projectUpdates['bathroom_count']) ? (int)$projectUpdates['bathroom_count'] : ($project['bathroom_count'] !== null ? (int)$project['bathroom_count'] : null),
                         isset($projectUpdates['stories_count']) && is_numeric($projectUpdates['stories_count']) ? (int)$projectUpdates['stories_count'] : ($project['stories_count'] !== null ? (int)$project['stories_count'] : null),
+                        isset($projectUpdates['lot_size_sqft']) && is_numeric($projectUpdates['lot_size_sqft']) ? (int)$projectUpdates['lot_size_sqft'] : ($project['lot_size_sqft'] !== null ? (int)$project['lot_size_sqft'] : null),
+                        isset($projectUpdates['garage_spaces']) && is_numeric($projectUpdates['garage_spaces']) ? (int)$projectUpdates['garage_spaces'] : ($project['garage_spaces'] !== null ? (int)$project['garage_spaces'] : null),
+                        isset($projectUpdates['parking_spaces']) && is_numeric($projectUpdates['parking_spaces']) ? (int)$projectUpdates['parking_spaces'] : ($project['parking_spaces'] !== null ? (int)$project['parking_spaces'] : null),
+                        isset($projectUpdates['year_built']) && is_numeric($projectUpdates['year_built']) ? (int)$projectUpdates['year_built'] : ($project['year_built'] !== null ? (int)$project['year_built'] : null),
+                        isset($projectUpdates['hoa_fee_monthly']) && is_numeric($projectUpdates['hoa_fee_monthly']) ? (float)$projectUpdates['hoa_fee_monthly'] : ($project['hoa_fee_monthly'] !== null ? (float)$project['hoa_fee_monthly'] : null),
                         catn8_build_wizard_parse_date_or_null($projectUpdates['target_start_date'] ?? ($project['target_start_date'] ?? null)),
                         catn8_build_wizard_parse_date_or_null($projectUpdates['target_completion_date'] ?? ($project['target_completion_date'] ?? null)),
                         "\n\n[AI update " . gmdate('c') . "] " . trim((string)($projectUpdates['wizard_notes_append'] ?? '')),

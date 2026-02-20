@@ -78,6 +78,14 @@ type ReplaceDocumentResponse = {
   document: IBuildWizardDocument;
 };
 
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
@@ -92,9 +100,17 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     status: 'planning',
     square_feet: null,
     home_style: '',
+    home_type: '',
     room_count: null,
+    bedrooms_count: null,
+    kitchens_count: null,
     bathroom_count: null,
     stories_count: null,
+    lot_size_sqft: null,
+    garage_spaces: null,
+    parking_spaces: null,
+    year_built: null,
+    hoa_fee_monthly: null,
     lot_address: '',
     target_start_date: null,
     target_completion_date: null,
@@ -119,11 +135,19 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
       setQuestionnaire({
         title: String(res?.project?.title || ''),
         status: String(res?.project?.status || 'planning'),
-        square_feet: res?.project?.square_feet ?? null,
+        square_feet: toNullableNumber(res?.project?.square_feet),
         home_style: String(res?.project?.home_style || ''),
-        room_count: res?.project?.room_count ?? null,
-        bathroom_count: res?.project?.bathroom_count ?? null,
-        stories_count: res?.project?.stories_count ?? null,
+        home_type: String(res?.project?.home_type || ''),
+        room_count: toNullableNumber(res?.project?.room_count),
+        bedrooms_count: toNullableNumber(res?.project?.bedrooms_count),
+        kitchens_count: toNullableNumber(res?.project?.kitchens_count),
+        bathroom_count: toNullableNumber(res?.project?.bathroom_count),
+        stories_count: toNullableNumber(res?.project?.stories_count),
+        lot_size_sqft: toNullableNumber(res?.project?.lot_size_sqft),
+        garage_spaces: toNullableNumber(res?.project?.garage_spaces),
+        parking_spaces: toNullableNumber(res?.project?.parking_spaces),
+        year_built: toNullableNumber(res?.project?.year_built),
+        hoa_fee_monthly: toNullableNumber(res?.project?.hoa_fee_monthly),
         lot_address: String(res?.project?.lot_address || ''),
         target_start_date: res?.project?.target_start_date || null,
         target_completion_date: res?.project?.target_completion_date || null,
@@ -383,9 +407,17 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
           status: 'planning',
           square_feet: null,
           home_style: '',
+          home_type: '',
           room_count: null,
+          bedrooms_count: null,
+          kitchens_count: null,
           bathroom_count: null,
           stories_count: null,
+          lot_size_sqft: null,
+          garage_spaces: null,
+          parking_spaces: null,
+          year_built: null,
+          hoa_fee_monthly: null,
           lot_address: '',
           target_start_date: null,
           target_completion_date: null,

@@ -591,6 +591,7 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<{ src: string; title: string } | null>(null);
   const [documentManagerOpen, setDocumentManagerOpen] = React.useState<boolean>(false);
+  const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
@@ -669,6 +670,10 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
     }
     return steps.filter((step) => stepPhaseBucket(step) === activeTab);
   }, [steps, activeTab]);
+
+  const projectDeskSteps = React.useMemo(() => {
+    return steps.filter((step) => stepPhaseBucket(step) === 'desk');
+  }, [steps]);
 
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
@@ -1861,11 +1866,12 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
               {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
             </button>
             <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
           </div>
         </div>
 
         <div className="build-wizard-tabs">
-          {BUILD_TABS.map((tab) => (
+          {BUILD_TABS.filter((tab) => tab.id !== 'desk').map((tab) => (
             <button
               key={tab.id}
               className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
@@ -1988,12 +1994,46 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                 />
               </label>
               <label>
+                Home Type
+                <select
+                  value={projectDraft.home_type || ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, home_type: e.target.value }))}
+                  onBlur={() => void updateProject({ home_type: projectDraft.home_type || '' })}
+                >
+                  <option value="">Select type</option>
+                  <option value="single_family">Single Family</option>
+                  <option value="townhouse">Townhouse</option>
+                  <option value="condo">Condo</option>
+                  <option value="multi_family">Multi Family</option>
+                  <option value="manufactured">Manufactured</option>
+                  <option value="farm_ranch">Farm/Ranch</option>
+                </select>
+              </label>
+              <label>
                 Number of Rooms
                 <input
                   type="number"
                   value={projectDraft.room_count ?? ''}
                   onChange={(e) => setProjectDraft((prev) => ({ ...prev, room_count: toNumberOrNull(e.target.value) }))}
                   onBlur={() => void updateProject({ room_count: projectDraft.room_count })}
+                />
+              </label>
+              <label>
+                Number of Bedrooms
+                <input
+                  type="number"
+                  value={projectDraft.bedrooms_count ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, bedrooms_count: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ bedrooms_count: projectDraft.bedrooms_count })}
+                />
+              </label>
+              <label>
+                Number of Kitchens
+                <input
+                  type="number"
+                  value={projectDraft.kitchens_count ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, kitchens_count: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ kitchens_count: projectDraft.kitchens_count })}
                 />
               </label>
               <label>
@@ -2012,6 +2052,52 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                   value={projectDraft.stories_count ?? ''}
                   onChange={(e) => setProjectDraft((prev) => ({ ...prev, stories_count: toNumberOrNull(e.target.value) }))}
                   onBlur={() => void updateProject({ stories_count: projectDraft.stories_count })}
+                />
+              </label>
+              <label>
+                Lot Size (sq ft)
+                <input
+                  type="number"
+                  value={projectDraft.lot_size_sqft ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_size_sqft: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ lot_size_sqft: projectDraft.lot_size_sqft })}
+                />
+              </label>
+              <label>
+                Garage Spaces
+                <input
+                  type="number"
+                  value={projectDraft.garage_spaces ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, garage_spaces: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ garage_spaces: projectDraft.garage_spaces })}
+                />
+              </label>
+              <label>
+                Parking Spaces
+                <input
+                  type="number"
+                  value={projectDraft.parking_spaces ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, parking_spaces: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ parking_spaces: projectDraft.parking_spaces })}
+                />
+              </label>
+              <label>
+                Year Built (if existing)
+                <input
+                  type="number"
+                  value={projectDraft.year_built ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, year_built: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ year_built: projectDraft.year_built })}
+                />
+              </label>
+              <label>
+                HOA Monthly Fee
+                <input
+                  type="number"
+                  step="0.01"
+                  value={projectDraft.hoa_fee_monthly ?? ''}
+                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, hoa_fee_monthly: toNumberOrNull(e.target.value) }))}
+                  onBlur={() => void updateProject({ hoa_fee_monthly: projectDraft.hoa_fee_monthly })}
                 />
               </label>
               <label>
@@ -2372,6 +2458,82 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
             ) : (
               <div className="build-wizard-muted">No documents uploaded yet.</div>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {projectDeskOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setProjectDeskOpen(false)}>
+          <div className="build-wizard-doc-manager-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Project Desk</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <button
+                  type="button"
+                  className="build-wizard-phase-add"
+                  title="Add step"
+                  aria-label="Add step"
+                  onClick={() => void addStep('general')}
+                >
+                  +
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setProjectDeskOpen(false)}>Close</button>
+              </div>
+            </div>
+            <div className="build-wizard-desk-grid">
+              <div>
+                <h3>Documents</h3>
+                <div className="build-wizard-upload-row">
+                  <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+                    {DOC_KIND_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
+                    {phaseOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
+                    <option value="">Auto-link by phase</option>
+                    {selectableDocSteps.map((step) => (
+                      <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                      if (file) {
+                        void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
+                      }
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </div>
+                <div className="build-wizard-doc-list">
+                  {renderDocumentGallery(documents, 'No documents uploaded yet.')}
+                </div>
+              </div>
+              <div>
+                <h3>AI Package</h3>
+                <div className="build-wizard-ai-actions">
+                  <button className="btn btn-success" disabled={aiBusy} onClick={() => void packageForAi()}>Build AI Package</button>
+                  <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi('optimize')}>
+                    {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest'}
+                  </button>
+                </div>
+                <label>
+                  Prompt Text
+                  <textarea value={aiPromptText || ''} readOnly rows={4} />
+                </label>
+                <label>
+                  Payload JSON
+                  <textarea value={aiPayloadJson || ''} readOnly rows={6} />
+                </label>
+              </div>
+            </div>
+            {renderEditableStepCards(projectDeskSteps)}
           </div>
         </div>
       ) : null}

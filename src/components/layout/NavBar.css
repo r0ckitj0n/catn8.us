@@ -14,9 +14,7 @@
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex: 1 1 auto;
-  min-width: 0;
+  margin: 0;
 }
 
 .navbar-brand img {
@@ -24,33 +22,30 @@
   transition: transform var(--catn8-transition-base) ease;
 }
 
-.navbar-brand img:first-child {
-  flex: 0 0 auto;
-}
-
 .navbar-brand img:hover {
   transform: scale(1.1);
 }
 
-.navbar-brand .banner-image {
-  margin-left: 1rem;
-  flex: 1 1 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  max-height: 80px;
-  height: auto;
-  object-fit: contain;
-}
-
 .navbar .navbar-collapse {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.navbar .navbar-home-link {
-  flex: 0 0 auto;
-  margin: 0;
+.catn8-nav-shortcuts,
+.catn8-nav-account {
+  align-items: center;
+}
+
+.catn8-nav-account {
+  margin-left: auto;
+}
+
+.catn8-nav-logo-link {
+  padding: 0;
+}
+
+.catn8-nav-logo-link img {
+  height: 64px;
 }
 
 .navbar .nav-link {
@@ -81,5 +76,25 @@
   .catn8-nav-mystery-title {
     border-right: 1px solid rgba(255, 255, 255, 0.1);
     padding-right: 1rem;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .navbar > .container {
+    flex-wrap: wrap;
+  }
+
+  .catn8-nav-shortcuts,
+  .catn8-nav-account {
+    align-items: flex-start;
+  }
+
+  .catn8-nav-account {
+    margin-top: 0.5rem;
+    margin-left: 0;
+  }
+
+  .catn8-nav-logo-link img {
+    height: 56px;
   }
 }

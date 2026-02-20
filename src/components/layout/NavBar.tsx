@@ -21,6 +21,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     || Number(viewer?.is_administrator || 0) === 1
     || String(viewer?.username || '').toLowerCase() === 'admin'
   );
+  const isInAdministratorGroup = Number(viewer?.is_administrator || 0) === 1;
   const isMysteryGameUser = Number(viewer?.is_mystery_game_user || 0) === 1;
   const isWordsearchUser = Number(viewer?.is_wordsearch_user || 0) === 1;
   const isBuildWizardUser = Number(viewer?.is_build_wizard_user || 0) === 1;
@@ -28,21 +29,54 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
 
   const links = [
     { key: 'about', href: 'about.php', label: 'About' },
-    { key: 'stories', href: 'stories.php', label: 'Stories' },
-    { key: 'games', href: 'games.php', label: 'Games' },
-    { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
     { key: 'activities', href: 'activities.php', label: 'Activities' },
+    { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
     { key: 'coloring', href: 'coloring.php', label: 'Coloring' },
+    { key: 'games', href: 'games.php', label: 'Games' },
+    { key: 'stories', href: 'stories.php', label: 'Stories' },
     ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'Word Search' }] : []),
   ];
+  const shortcutItems: Array<{
+    key: string;
+    label: string;
+    href?: string;
+    buttonClassName?: string;
+    onClick?: () => void;
+    title?: string;
+    iconClassName?: string;
+  }> = [
+    ...links.map((l) => ({ key: l.key, label: l.label, href: l.href })),
+    ...(isAuthed && isMysteryGameUser
+      ? [{ key: 'mystery', label: 'Mystery Game', href: 'mystery.php' }]
+      : []),
+    ...(canUseBuildWizard
+      ? [{ key: 'build_wizard', label: 'Build Wizard', href: 'build-wizard.php' }]
+      : []),
+    ...((active === 'mystery' || active === 'sheriff_station') && isAuthed && isAdministrator
+      ? [
+          {
+            key: 'dossier',
+            label: 'Dossier',
+            onClick: () => (window as any).catn8_open_dossier?.(),
+            title: 'Open Dossier',
+            buttonClassName: 'nav-link btn btn-link border-0 text-info opacity-75',
+            iconClassName: 'bi bi-person-badge-fill me-1',
+          },
+          {
+            key: 'lab',
+            label: 'Lab',
+            onClick: () => (window as any).catn8_open_crime_lab?.(),
+            title: 'Open Crime Lab',
+            buttonClassName: 'nav-link btn btn-link border-0 text-info opacity-75',
+            iconClassName: 'bi bi-microscope me-1',
+          },
+        ]
+      : []),
+  ].sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <nav className="navbar navbar-expand-lg navbar-light sticky-top">
       <div className="container">
-        <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
-        <a className="navbar-brand" href="/">
-          <WebpImage src="images/catn8_logo.svg" alt="catn8.us Logo" />
-        </a>
         <button
           className="navbar-toggler"
           type="button"
@@ -52,99 +86,58 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
           <span className="navbar-toggler-icon"></span>
         </button>
         <div className="collapse navbar-collapse" id="navbarNav">
-          <ul className="navbar-nav ms-auto">
-            {links.map((l) => (
-              <li className="nav-item" key={l.key}>
-                <a className={"nav-link" + (active === l.key ? ' active' : '')} href={l.href}>
-                  {l.label}
-                </a>
+          <ul className="navbar-nav catn8-nav-shortcuts me-auto">
+            {shortcutItems.map((item) => (
+              <li className="nav-item" key={item.key}>
+                {item.href ? (
+                  <a className={"nav-link" + (active === item.key ? ' active' : '')} href={item.href}>
+                    {item.label}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className={item.buttonClassName || 'nav-link btn btn-link border-0'}
+                    onClick={item.onClick}
+                    title={item.title}
+                  >
+                    {item.iconClassName ? <i className={item.iconClassName}></i> : null}
+                    {item.label}
+                  </button>
+                )}
               </li>
             ))}
-            {isAuthed && isMysteryGameUser ? (
-              <li className="nav-item">
-                <a className={"nav-link" + (active === 'mystery' ? ' active' : '')} href="mystery.php">
-                  Mystery Game
-                </a>
-              </li>
-            ) : null}
-            {canUseBuildWizard ? (
-              <li className="nav-item">
-                <a className={"nav-link" + (active === 'build_wizard' ? ' active' : '')} href="build-wizard.php">
-                  Build Wizard
-                </a>
-              </li>
-            ) : null}
-            {isAuthed && isAdministrator ? (
-              <>
-                <li className="nav-item">
-                  <a className={"nav-link" + (active === 'settings' ? ' active' : '')} href="settings.php">
-                    Settings
-                  </a>
-                </li>
-                {(active === 'mystery' || active === 'sheriff_station') && (
-                  <>
-                    <li className="nav-item">
-                      <button 
-                        type="button" 
-                        className="nav-link btn btn-link border-0 text-info opacity-75"
-                        onClick={() => (window as any).catn8_open_dossier?.()}
-                        title="Open Dossier"
-                      >
-                        <i className="bi bi-person-badge-fill me-1"></i> Dossier
-                      </button>
-                    </li>
-                    <li className="nav-item">
-                      <button 
-                        type="button" 
-                        className="nav-link btn btn-link border-0 text-info opacity-75"
-                        onClick={() => (window as any).catn8_open_crime_lab?.()}
-                        title="Open Crime Lab"
-                      >
-                        <i className="bi bi-microscope me-1"></i> Lab
-                      </button>
-                    </li>
-                  </>
-                )}
-              </>
-            ) : null}
-            {isAuthed && mysteryTitle && (
+            {isAuthed && mysteryTitle ? (
               <li className="nav-item">
                 <span className="nav-link text-muted opacity-75 catn8-nav-mystery-title">
                   {mysteryTitle}
                 </span>
               </li>
-            )}
+            ) : null}
+          </ul>
+          <ul className="navbar-nav catn8-nav-account ms-auto">
+            <li className="nav-item">
+              <a className="navbar-brand catn8-nav-logo-link" href="/">
+                <WebpImage src="images/catn8_logo.svg" alt="catn8.us Logo" />
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
+            </li>
             {isAuthed ? (
-              <>
-                <li className="nav-item">
-                  <a
-                    className="nav-link"
-                    href="account.php"
-                    onClick={(e) => {
-                      if (typeof onAccountClick === 'function') {
-                        e.preventDefault();
-                        onAccountClick();
-                      }
-                    }}
-                  >
-                    {viewer.username}
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className="nav-link"
-                    href="logout.php"
-                    onClick={(e) => {
-                      if (typeof onLogout === 'function') {
-                        e.preventDefault();
-                        onLogout();
-                      }
-                    }}
-                  >
-                    Logout
-                  </a>
-                </li>
-              </>
+              <li className="nav-item">
+                <a
+                  className="nav-link"
+                  href="account.php"
+                  onClick={(e) => {
+                    if (typeof onAccountClick === 'function') {
+                      e.preventDefault();
+                      onAccountClick();
+                    }
+                  }}
+                >
+                  {viewer.username}
+                </a>
+              </li>
             ) : (
               <li className="nav-item">
                 <a
@@ -161,6 +154,29 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
                 </a>
               </li>
             )}
+            {isAuthed && isInAdministratorGroup ? (
+              <li className="nav-item">
+                <a className={"nav-link" + (active === 'settings' ? ' active' : '')} href="settings.php">
+                  Settings
+                </a>
+              </li>
+            ) : null}
+            {isAuthed ? (
+              <li className="nav-item">
+                <a
+                  className="nav-link"
+                  href="logout.php"
+                  onClick={(e) => {
+                    if (typeof onLogout === 'function') {
+                      e.preventDefault();
+                      onLogout();
+                    }
+                  }}
+                >
+                  Logout
+                </a>
+              </li>
+            ) : null}
           </ul>
         </div>
       </div>

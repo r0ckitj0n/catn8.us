@@ -244,6 +244,24 @@ export interface IBuildWizardAlignToTemplateResponse {
   steps: IBuildWizardStep[];
 }
 
+export interface IBuildWizardRefineLegacySummary {
+  project_id: number;
+  template_step_count: number;
+  legacy_step_count_before: number;
+  legacy_step_count_after: number;
+  deduplicated_count: number;
+  phase_reclassified_count: number;
+  dependency_updates: number;
+  updated_count: number;
+}
+
+export interface IBuildWizardRefineLegacyResponse {
+  success: boolean;
+  summary: IBuildWizardRefineLegacySummary;
+  phase_review: IBuildWizardPhaseReview[];
+  steps: IBuildWizardStep[];
+}
+
 export interface IBuildWizardSingletreeRecoverSummary {
   project_id: number;
   project_title: string;

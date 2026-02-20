@@ -2688,6 +2688,446 @@ function catn8_build_wizard_align_project_to_template(int $projectId): array
     ];
 }
 
+function catn8_build_wizard_refine_phase_order(): array
+{
+    return [
+        'land_due_diligence',
+        'design_preconstruction',
+        'dawson_county_permits',
+        'site_preparation',
+        'foundation',
+        'framing_shell',
+        'mep_rough_in',
+        'interior_finishes',
+        'move_in',
+        'inspections_closeout',
+        'general',
+    ];
+}
+
+function catn8_build_wizard_refine_legacy_phase_key(array $step): string
+{
+    $title = strtolower(trim((string)($step['title'] ?? '')));
+    $description = strtolower(trim((string)($step['description'] ?? '')));
+    $phase = strtolower(trim((string)($step['phase_key'] ?? '')));
+    $stepType = catn8_build_wizard_step_type((string)($step['step_type'] ?? 'construction'));
+    $permitRequired = !empty($step['permit_required']) ? 1 : 0;
+    $text = trim($title . ' ' . $description . ' ' . $phase);
+
+    $isLikelyChore = str_contains($text, 'tammy')
+        || str_contains($text, 'angela')
+        || str_contains($text, 'barn')
+        || str_contains($text, 'lawn mower')
+        || str_contains($text, 'firewood')
+        || str_contains($text, 'pressure wash')
+        || str_contains($text, 'delivery box')
+        || str_contains($text, 'camper')
+        || str_contains($text, 'trail')
+        || str_contains($text, 'burn pile');
+    if ($isLikelyChore) {
+        return 'general';
+    }
+
+    if (
+        str_contains($text, 'ownership')
+        || str_contains($text, 'zoning')
+        || str_contains($text, 'setback')
+        || str_contains($text, 'survey')
+        || str_contains($text, 'topographic')
+        || str_contains($text, 'soil')
+        || str_contains($text, 'percolation')
+        || str_contains($text, 'geotechnical')
+    ) {
+        return 'land_due_diligence';
+    }
+
+    if (
+        str_contains($text, 'architect')
+        || str_contains($text, 'engineer')
+        || str_contains($text, 'blueprint')
+        || str_contains($text, 'plan set')
+        || str_contains($text, 'structural')
+        || str_contains($text, 'design')
+    ) {
+        return 'design_preconstruction';
+    }
+
+    if (
+        $stepType === 'permit'
+        || $permitRequired === 1
+        || str_contains($text, 'permit')
+        || str_contains($text, 'certificate of occupancy')
+        || str_contains($text, 'co ')
+        || str_contains($text, 'approval')
+        || str_contains($text, 'inspection')
+    ) {
+        if (str_contains($text, 'final') || str_contains($text, 'certificate of occupancy') || str_contains($text, 'co ')) {
+            return 'inspections_closeout';
+        }
+        return 'dawson_county_permits';
+    }
+
+    if (
+        str_contains($text, 'erosion')
+        || str_contains($text, 'site work')
+        || str_contains($text, 'scraped')
+        || str_contains($text, 'leveled')
+        || str_contains($text, 'rough grade')
+        || str_contains($text, 'stake')
+        || str_contains($text, 'excavat')
+        || str_contains($text, 'clear')
+    ) {
+        return 'site_preparation';
+    }
+
+    if (
+        str_contains($text, 'foundation')
+        || str_contains($text, 'footing')
+        || str_contains($text, 'slab')
+        || str_contains($text, 'rebar')
+        || str_contains($text, 'vapor barrier')
+        || str_contains($text, 'concrete')
+    ) {
+        return 'foundation';
+    }
+
+    if (
+        str_contains($text, 'frame')
+        || str_contains($text, 'roof')
+        || str_contains($text, 'sheathing')
+        || str_contains($text, 'shingle')
+        || str_contains($text, 'window')
+        || str_contains($text, 'exterior door')
+    ) {
+        return 'framing_shell';
+    }
+
+    if (
+        str_contains($text, 'mep')
+        || str_contains($text, 'rough plumbing')
+        || str_contains($text, 'rough electrical')
+        || str_contains($text, 'rough hvac')
+        || str_contains($text, 'electrical')
+        || str_contains($text, 'plumbing')
+        || str_contains($text, 'hvac')
+        || str_contains($text, 'breaker')
+        || str_contains($text, 'mini-split')
+        || str_contains($text, 'septic')
+        || str_contains($text, 'utility')
+    ) {
+        return 'mep_rough_in';
+    }
+
+    if (
+        str_contains($text, 'insulation')
+        || str_contains($text, 'drywall')
+        || str_contains($text, 'flooring')
+        || str_contains($text, 'paint')
+        || str_contains($text, 'tile')
+        || str_contains($text, 'trim')
+        || str_contains($text, 'cabinet')
+        || str_contains($text, 'fixture')
+        || str_contains($text, 'countertop')
+        || str_contains($text, 'appliance')
+        || str_contains($text, 'door casing')
+    ) {
+        return 'interior_finishes';
+    }
+
+    if (
+        str_contains($text, 'move in')
+        || str_contains($text, 'walk-through')
+        || str_contains($text, 'closeout')
+        || str_contains($text, 'warranty')
+        || str_contains($text, 'handoff')
+        || str_contains($text, 'final grading')
+        || str_contains($text, 'landscap')
+        || str_contains($text, 'driveway')
+        || str_contains($text, 'closing')
+    ) {
+        return 'move_in';
+    }
+
+    return 'general';
+}
+
+function catn8_build_wizard_refine_legacy_steps(int $projectId): array
+{
+    if ($projectId <= 0) {
+        throw new RuntimeException('Invalid project id for legacy refinement');
+    }
+
+    $templateSteps = catn8_build_wizard_dawsonville_template_steps();
+    $templateCount = count($templateSteps);
+    $allSteps = catn8_build_wizard_fetch_steps_minimal($projectId);
+    if (!$allSteps) {
+        return [
+            'summary' => [
+                'project_id' => $projectId,
+                'template_step_count' => $templateCount,
+                'legacy_step_count_before' => 0,
+                'legacy_step_count_after' => 0,
+                'deduplicated_count' => 0,
+                'phase_reclassified_count' => 0,
+                'dependency_updates' => 0,
+                'updated_count' => 0,
+            ],
+            'phase_review' => [],
+            'steps' => [],
+        ];
+    }
+
+    usort($allSteps, static fn(array $a, array $b): int => ((int)($a['step_order'] ?? 0) <=> (int)($b['step_order'] ?? 0)));
+
+    $templateStepIds = [];
+    foreach ($allSteps as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        $order = (int)($row['step_order'] ?? 0);
+        if ($sid > 0 && $order > 0 && $order <= $templateCount) {
+            $templateStepIds[$sid] = true;
+        }
+    }
+
+    $legacyRows = [];
+    foreach ($allSteps as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        if ($sid > 0 && !isset($templateStepIds[$sid])) {
+            $legacyRows[] = $row;
+        }
+    }
+
+    $legacyCountBefore = count($legacyRows);
+    if ($legacyCountBefore === 0) {
+        return [
+            'summary' => [
+                'project_id' => $projectId,
+                'template_step_count' => $templateCount,
+                'legacy_step_count_before' => 0,
+                'legacy_step_count_after' => 0,
+                'deduplicated_count' => 0,
+                'phase_reclassified_count' => 0,
+                'dependency_updates' => 0,
+                'updated_count' => 0,
+            ],
+            'phase_review' => catn8_build_wizard_phase_review($allSteps),
+            'steps' => catn8_build_wizard_steps_for_project($projectId),
+        ];
+    }
+
+    $seenTitleKeys = [];
+    $duplicateToKeeper = [];
+    $legacySurvivors = [];
+    foreach ($legacyRows as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        if ($sid <= 0) {
+            continue;
+        }
+        $titleKey = catn8_build_wizard_title_key((string)($row['title'] ?? ''));
+        if ($titleKey === '') {
+            $titleKey = 'legacy_step_' . $sid;
+        }
+        if (isset($seenTitleKeys[$titleKey])) {
+            $duplicateToKeeper[$sid] = (int)$seenTitleKeys[$titleKey];
+            continue;
+        }
+        $seenTitleKeys[$titleKey] = $sid;
+        $legacySurvivors[$sid] = $row;
+    }
+
+    $deduplicatedCount = count($duplicateToKeeper);
+    $phaseOrder = catn8_build_wizard_refine_phase_order();
+    $phaseRank = [];
+    foreach ($phaseOrder as $idx => $phaseKey) {
+        $phaseRank[$phaseKey] = $idx;
+    }
+
+    $legacyMetaById = [];
+    $phaseReclassifiedCount = 0;
+    foreach ($legacySurvivors as $sid => $row) {
+        $refinedPhase = catn8_build_wizard_refine_legacy_phase_key($row);
+        $currentPhase = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
+        if ($refinedPhase !== $currentPhase) {
+            $phaseReclassifiedCount++;
+        }
+        $legacyMetaById[$sid] = [
+            'id' => $sid,
+            'old_order' => (int)($row['step_order'] ?? 0),
+            'phase_key' => $refinedPhase,
+            'step_type' => catn8_build_wizard_step_type((string)($row['step_type'] ?? catn8_build_wizard_infer_step_type((string)($row['title'] ?? ''), $refinedPhase, !empty($row['permit_required']) ? 1 : 0))),
+            'source_ref' => trim((string)($row['source_ref'] ?? '')),
+        ];
+    }
+
+    uasort($legacyMetaById, static function (array $a, array $b) use ($phaseRank): int {
+        $aRank = $phaseRank[$a['phase_key']] ?? 999;
+        $bRank = $phaseRank[$b['phase_key']] ?? 999;
+        if ($aRank !== $bRank) {
+            return $aRank <=> $bRank;
+        }
+        if ($a['old_order'] !== $b['old_order']) {
+            return $a['old_order'] <=> $b['old_order'];
+        }
+        return $a['id'] <=> $b['id'];
+    });
+
+    $templatePhaseLastStepId = [];
+    foreach ($allSteps as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        if ($sid <= 0 || !isset($templateStepIds[$sid])) {
+            continue;
+        }
+        $phaseKey = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
+        $templatePhaseLastStepId[$phaseKey] = $sid;
+    }
+
+    $phaseGateway = [
+        'design_preconstruction' => 'land_due_diligence',
+        'dawson_county_permits' => 'design_preconstruction',
+        'site_preparation' => 'dawson_county_permits',
+        'foundation' => 'site_preparation',
+        'framing_shell' => 'foundation',
+        'mep_rough_in' => 'framing_shell',
+        'interior_finishes' => 'mep_rough_in',
+        'move_in' => 'interior_finishes',
+        'inspections_closeout' => 'move_in',
+    ];
+
+    $newOrderByStepId = [];
+    $newDepsByStepId = [];
+    $lastByPhase = [];
+    $phaseLastStepId = $templatePhaseLastStepId;
+    $order = $templateCount + 1;
+    foreach ($legacyMetaById as $sid => $meta) {
+        $phaseKey = (string)$meta['phase_key'];
+        $depIds = [];
+        if (isset($lastByPhase[$phaseKey])) {
+            $depIds[] = (int)$lastByPhase[$phaseKey];
+        } elseif (isset($phaseGateway[$phaseKey])) {
+            $gatewayPhase = $phaseGateway[$phaseKey];
+            $gatewayId = (int)($phaseLastStepId[$gatewayPhase] ?? 0);
+            if ($gatewayId > 0) {
+                $depIds[] = $gatewayId;
+            }
+        }
+        $depIds = array_values(array_unique(array_filter($depIds, static fn($id): bool => (int)$id > 0)));
+
+        $newOrderByStepId[$sid] = $order;
+        $newDepsByStepId[$sid] = $depIds;
+        $lastByPhase[$phaseKey] = $sid;
+        $phaseLastStepId[$phaseKey] = $sid;
+        $order++;
+    }
+
+    $dependencyUpdates = 0;
+    $updatedCount = 0;
+    $refineTag = 'legacy_refined_' . gmdate('Ymd_His');
+
+    Database::beginTransaction();
+    try {
+        if ($duplicateToKeeper) {
+            foreach ($duplicateToKeeper as $duplicateId => $keeperId) {
+                Database::execute(
+                    'UPDATE build_wizard_documents SET step_id = ? WHERE project_id = ? AND step_id = ?',
+                    [(int)$keeperId, $projectId, (int)$duplicateId]
+                );
+            }
+        }
+
+        $rowsForDeps = Database::queryAll(
+            'SELECT id, depends_on_step_ids_json FROM build_wizard_steps WHERE project_id = ?',
+            [$projectId]
+        );
+        foreach ($rowsForDeps as $row) {
+            $sid = (int)($row['id'] ?? 0);
+            if ($sid <= 0) {
+                continue;
+            }
+            $deps = catn8_build_wizard_normalize_int_array(catn8_build_wizard_decode_json_array($row['depends_on_step_ids_json'] ?? null));
+            $changed = false;
+            $rewritten = [];
+            foreach ($deps as $depId) {
+                $nextDepId = (int)($duplicateToKeeper[$depId] ?? $depId);
+                if ($nextDepId !== $depId) {
+                    $changed = true;
+                }
+                if ($nextDepId > 0 && $nextDepId !== $sid) {
+                    $rewritten[] = $nextDepId;
+                }
+            }
+            $rewritten = array_values(array_unique($rewritten));
+            if ($changed || $rewritten !== $deps) {
+                Database::execute(
+                    'UPDATE build_wizard_steps SET depends_on_step_ids_json = ? WHERE id = ?',
+                    [$rewritten ? json_encode($rewritten, JSON_UNESCAPED_SLASHES) : null, $sid]
+                );
+                $dependencyUpdates++;
+            }
+        }
+
+        if ($duplicateToKeeper) {
+            $deleteIds = array_values(array_map('intval', array_keys($duplicateToKeeper)));
+            $deleteIds = array_values(array_filter($deleteIds, static fn($id): bool => $id > 0));
+            if ($deleteIds) {
+                $placeholders = implode(',', array_fill(0, count($deleteIds), '?'));
+                Database::execute(
+                    'DELETE FROM build_wizard_steps WHERE project_id = ? AND id IN (' . $placeholders . ')',
+                    array_merge([$projectId], $deleteIds)
+                );
+            }
+        }
+
+        foreach ($legacyMetaById as $sid => $meta) {
+            $sourceRef = trim((string)($meta['source_ref'] ?? ''));
+            if ($sourceRef !== '') {
+                $sourceRef .= ' | ';
+            }
+            $sourceRef .= $refineTag;
+            $depIds = $newDepsByStepId[$sid] ?? [];
+            Database::execute(
+                'UPDATE build_wizard_steps
+                 SET step_order = ?, phase_key = ?, step_type = ?, depends_on_step_ids_json = ?, source_ref = ?
+                 WHERE id = ? AND project_id = ?',
+                [
+                    (int)($newOrderByStepId[$sid] ?? 0),
+                    (string)$meta['phase_key'],
+                    (string)$meta['step_type'],
+                    $depIds ? json_encode($depIds, JSON_UNESCAPED_SLASHES) : null,
+                    $sourceRef,
+                    (int)$sid,
+                    $projectId,
+                ]
+            );
+            $updatedCount++;
+            $dependencyUpdates++;
+        }
+
+        Database::commit();
+    } catch (Throwable $e) {
+        if (Database::inTransaction()) {
+            Database::rollBack();
+        }
+        throw $e;
+    }
+
+    $finalSteps = catn8_build_wizard_fetch_steps_minimal($projectId);
+    $phaseReview = catn8_build_wizard_phase_review($finalSteps);
+
+    return [
+        'summary' => [
+            'project_id' => $projectId,
+            'template_step_count' => $templateCount,
+            'legacy_step_count_before' => $legacyCountBefore,
+            'legacy_step_count_after' => count($legacyMetaById),
+            'deduplicated_count' => $deduplicatedCount,
+            'phase_reclassified_count' => $phaseReclassifiedCount,
+            'dependency_updates' => $dependencyUpdates,
+            'updated_count' => $updatedCount,
+        ],
+        'phase_review' => $phaseReview,
+        'steps' => catn8_build_wizard_steps_for_project($projectId),
+    ];
+}
+
 try {
     catn8_build_wizard_tables_ensure();
 
@@ -4388,6 +4828,22 @@ try {
         catn8_build_wizard_require_project_access($projectId, $viewerId);
 
         $result = catn8_build_wizard_align_project_to_template($projectId);
+        catn8_json_response([
+            'success' => true,
+            'summary' => $result['summary'] ?? null,
+            'phase_review' => $result['phase_review'] ?? [],
+            'steps' => $result['steps'] ?? [],
+        ]);
+    }
+
+    if ($action === 'refine_legacy_steps') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $result = catn8_build_wizard_refine_legacy_steps($projectId);
         catn8_json_response([
             'success' => true,
             'summary' => $result['summary'] ?? null,

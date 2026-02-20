@@ -2,6 +2,7 @@ import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
   IBuildWizardAlignToTemplateResponse,
+  IBuildWizardRefineLegacyResponse,
   IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
   IBuildWizardDocument,
@@ -769,6 +770,31 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     }
   }, [onToast, projectId, refreshCurrentProject]);
 
+  const refineLegacySteps = React.useCallback(async (targetProjectId?: number) => {
+    const effectiveProjectId = (targetProjectId && targetProjectId > 0) ? targetProjectId : projectId;
+    if (effectiveProjectId <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<IBuildWizardRefineLegacyResponse>('/api/build_wizard.php?action=refine_legacy_steps', {
+        project_id: effectiveProjectId,
+      });
+      if (Array.isArray(res?.steps)) {
+        setSteps(res.steps);
+      } else {
+        await refreshCurrentProject();
+      }
+      onToast?.({
+        tone: 'success',
+        message: `Legacy refinement complete (${res?.summary?.updated_count || 0} updated, ${res?.summary?.deduplicated_count || 0} deduplicated).`,
+      });
+      return res || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to refine legacy steps' });
+      return null;
+    }
+  }, [onToast, projectId, refreshCurrentProject]);
+
   return {
     loading,
     saving,
@@ -808,5 +834,6 @@ export function useBuildWizard(onToast?: (t: { tone: 'success' | 'error' | 'info
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
     alignProjectToTemplate,
+    refineLegacySteps,
   };
 }

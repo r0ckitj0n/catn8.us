@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { StandardIconButton } from '../common/StandardIconButton';
+import { StandardIconLink } from '../common/StandardIconLink';
 import { WebpImage } from '../common/WebpImage';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
@@ -2476,8 +2477,22 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                           </label>
                         </div>
                         <div className="build-wizard-doc-manager-actions">
-                          <a className="btn btn-outline-primary btn-sm" href={doc.public_url} target="_blank" rel="noreferrer">Open</a>
-                          <a className="btn btn-outline-secondary btn-sm" href={withDownloadFlag(doc.public_url)}>Download</a>
+                          <StandardIconLink
+                            iconKey="view"
+                            ariaLabel={`Open ${doc.original_name}`}
+                            title="Open"
+                            className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                            href={doc.public_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                          <StandardIconLink
+                            iconKey="download"
+                            ariaLabel={`Download ${doc.original_name}`}
+                            title="Download"
+                            className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
+                            href={withDownloadFlag(doc.public_url)}
+                          />
                           <input
                             ref={(el) => { replaceFileInputByDocId.current[doc.id] = el; }}
                             type="file"
@@ -2488,13 +2503,14 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                               e.currentTarget.value = '';
                             }}
                           />
-                          <button
-                            className="btn btn-outline-secondary btn-sm"
+                          <StandardIconButton
+                            iconKey={replacingDocumentId === doc.id ? 'refresh' : 'upload'}
+                            ariaLabel={replacingDocumentId === doc.id ? `Replacing ${doc.original_name}` : `Replace ${doc.original_name}`}
+                            title={replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
+                            className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
                             onClick={() => replaceFileInputByDocId.current[doc.id]?.click()}
                             disabled={replacingDocumentId === doc.id}
-                          >
-                            {replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
-                          </button>
+                          />
                           {Number(doc.is_image) === 1 ? (
                             <button
                               className="btn btn-outline-primary btn-sm"
@@ -2511,20 +2527,22 @@ export function BuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
                               {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
                             </button>
                           ) : null}
-                          <button
-                            className="btn btn-success btn-sm"
+                          <StandardIconButton
+                            iconKey={documentSavingId === doc.id ? 'refresh' : 'save'}
+                            ariaLabel={documentSavingId === doc.id ? `Saving ${doc.original_name}` : `Save ${doc.original_name}`}
+                            title={documentSavingId === doc.id ? 'Saving...' : 'Save'}
+                            className="btn btn-success btn-sm catn8-action-icon-btn"
                             onClick={() => void onSaveDocumentDraft(doc)}
                             disabled={documentSavingId === doc.id}
-                          >
-                            {documentSavingId === doc.id ? 'Saving...' : 'Save'}
-                          </button>
-                          <button
-                            className="btn btn-outline-danger btn-sm"
+                          />
+                          <StandardIconButton
+                            iconKey={deletingDocumentId === doc.id ? 'refresh' : 'delete'}
+                            ariaLabel={deletingDocumentId === doc.id ? `Deleting ${doc.original_name}` : `Delete ${doc.original_name}`}
+                            title={deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+                            className="btn btn-outline-danger btn-sm catn8-action-icon-btn"
                             onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
                             disabled={deletingDocumentId === doc.id}
-                          >
-                            {deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-                          </button>
+                          />
                         </div>
                       </div>
                     </div>

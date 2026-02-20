@@ -1,5 +1,6 @@
 import React from 'react';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { StandardIconButton } from '../common/StandardIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { useUserAccounts } from './hooks/useUserAccounts';
@@ -73,9 +74,14 @@ export function UserAccountsModal({ open, onClose, onToast }: UserAccountsModalP
             />
 
             <div className="d-flex justify-content-end mb-2">
-              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={state.load} disabled={state.busy}>
-                Refresh
-              </button>
+              <StandardIconButton
+                iconKey="refresh"
+                ariaLabel="Refresh users"
+                title={state.busy ? 'Refreshing...' : 'Refresh users'}
+                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
+                onClick={state.load}
+                disabled={state.busy}
+              />
             </div>
             <div className="table-responsive">
               <table className="table table-sm align-middle">
@@ -119,9 +125,30 @@ export function UserAccountsModal({ open, onClose, onToast }: UserAccountsModalP
                       <td>{u.email_verified ? 'Yes' : 'No'}</td>
                       <td className="text-end">
                         <div className="d-flex justify-content-end gap-2">
-                          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.startEdit(u)} disabled={state.busy}>Edit</button>
-                          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.startPassword(u)} disabled={state.busy}>Set Password</button>
-                          <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => state.deleteUser(u)} disabled={state.busy}>Delete</button>
+                          <StandardIconButton
+                            iconKey="edit"
+                            ariaLabel={`Edit user ${u.username}`}
+                            title="Edit user"
+                            className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
+                            onClick={() => state.startEdit(u)}
+                            disabled={state.busy}
+                          />
+                          <StandardIconButton
+                            iconKey="settings"
+                            ariaLabel={`Set password for ${u.username}`}
+                            title="Set password"
+                            className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
+                            onClick={() => state.startPassword(u)}
+                            disabled={state.busy}
+                          />
+                          <StandardIconButton
+                            iconKey="delete"
+                            ariaLabel={`Delete user ${u.username}`}
+                            title="Delete user"
+                            className="btn btn-sm btn-outline-danger catn8-action-icon-btn"
+                            onClick={() => state.deleteUser(u)}
+                            disabled={state.busy}
+                          />
                         </div>
                       </td>
                     </tr>

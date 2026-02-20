@@ -109,6 +109,12 @@ body.catn8-global-ui a:hover {
   border-radius: 999px;
 }
 
+.catn8-action-icon-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+}
+
 .catn8-icon-library-preview {
   width: 2rem;
   height: 2rem;

@@ -29,14 +29,14 @@
 .build-wizard-launcher-grid {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, 200px);
+  grid-template-columns: repeat(auto-fit, 500px);
   justify-content: flex-start;
   gap: 14px;
 }
 
 .build-wizard-launch-card {
-  width: 200px;
-  height: 200px;
+  width: 500px;
+  height: 500px;
   border: 1px solid #c7d3e3;
   border-radius: 16px;
   background: #fff;

@@ -33,6 +33,14 @@ export interface FooterTimelineProps {
   steps: IBuildWizardStep[];
   rangeStart: string;
   rangeEnd: string;
+  activeTab?: BuildTabId;
+  editable?: boolean;
+  displayNumberById?: Map<number, number>;
+  onStepTimelineChange?: (stepId: number, patch: {
+    expected_start_date: string | null;
+    expected_end_date: string | null;
+    expected_duration_days: number | null;
+  }) => void;
 }
 
 export interface BuildWizardTimelineHelpers {

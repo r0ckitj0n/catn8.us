@@ -10,6 +10,7 @@ import {
   IBuildWizardFindPurchaseOptionsResponse,
   IBuildWizardHydrateBlobsResponse,
   IBuildWizardHydrateFromSourcesResponse,
+  IBuildWizardPhaseDateRange,
   IBuildWizardPurchaseOption,
   IBuildWizardProject,
   IBuildWizardProjectSummary,
@@ -111,6 +112,11 @@ type DeleteContactAssignmentResponse = {
   deleted_assignment_id: number;
 };
 
+type SavePhaseDateRangeResponse = {
+  success: boolean;
+  phase_date_ranges: IBuildWizardPhaseDateRange[];
+};
+
 function toNullableNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -153,6 +159,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
   const [documents, setDocuments] = React.useState<IBuildWizardDocument[]>([]);
   const [contacts, setContacts] = React.useState<IBuildWizardContact[]>([]);
   const [contactAssignments, setContactAssignments] = React.useState<IBuildWizardContactAssignment[]>([]);
+  const [phaseDateRanges, setPhaseDateRanges] = React.useState<IBuildWizardPhaseDateRange[]>([]);
   const [aiPromptText, setAiPromptText] = React.useState<string>('');
   const [aiPayloadJson, setAiPayloadJson] = React.useState<string>('');
 
@@ -192,6 +199,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       setDocuments(Array.isArray(res?.documents) ? res.documents : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setContactAssignments(Array.isArray(res?.contact_assignments) ? res.contact_assignments : []);
+      setPhaseDateRanges(Array.isArray(res?.phase_date_ranges) ? res.phase_date_ranges : []);
       setAiPromptText(String(res?.project?.ai_prompt_text || ''));
       setAiPayloadJson(String(res?.project?.ai_payload_json || ''));
     } catch (err: any) {
@@ -493,6 +501,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         setDocuments([]);
         setContacts([]);
         setContactAssignments([]);
+        setPhaseDateRanges([]);
         setAiPromptText('');
         setAiPayloadJson('');
       }
@@ -987,6 +996,31 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
   }, [onToast]);
 
+  const savePhaseDateRange = React.useCallback(async (
+    projectIdValue: number,
+    phaseTab: 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes',
+    startDate: string | null,
+    endDate: string | null,
+  ) => {
+    if (projectIdValue <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<SavePhaseDateRangeResponse>('/api/build_wizard.php?action=save_phase_date_range', {
+        project_id: projectIdValue,
+        phase_tab: phaseTab,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      const nextRanges = Array.isArray(res?.phase_date_ranges) ? res.phase_date_ranges : [];
+      setPhaseDateRanges(nextRanges);
+      return nextRanges;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to save phase date range' });
+      return null;
+    }
+  }, [onToast]);
+
   return {
     loading,
     saving,
@@ -1002,6 +1036,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     documents,
     contacts,
     contactAssignments,
+    phaseDateRanges,
     aiPromptText,
     aiPayloadJson,
     openProject,
@@ -1033,5 +1068,6 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     deleteContact,
     addContactAssignment,
     deleteContactAssignment,
+    savePhaseDateRange,
   };
 }

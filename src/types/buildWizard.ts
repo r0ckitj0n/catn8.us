@@ -134,6 +134,16 @@ export interface IBuildWizardContactAssignment {
   created_at: string;
 }
 
+export interface IBuildWizardPhaseDateRange {
+  id: number;
+  project_id: number;
+  phase_tab: 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes';
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface IBuildWizardQuestionnaire {
   title: string;
   status: string;
@@ -165,6 +175,7 @@ export interface IBuildWizardBootstrapResponse {
   documents: IBuildWizardDocument[];
   contacts: IBuildWizardContact[];
   contact_assignments: IBuildWizardContactAssignment[];
+  phase_date_ranges: IBuildWizardPhaseDateRange[];
   leading_questions: string[];
 }
 

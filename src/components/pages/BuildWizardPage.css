@@ -286,6 +286,12 @@
   padding: 0 24px;
 }
 
+.build-wizard-sticky-phase-controls {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
 .build-wizard-sticky-head-spacer {
   height: 0;
   pointer-events: none;
@@ -573,13 +579,14 @@
   border: 1px solid var(--catn8-bw-border-soft);
   border-radius: 12px;
   padding: 12px 12px 44px;
-  background: var(--catn8-bw-surface-1);
+  background: linear-gradient(180deg, #ffffff 0%, #f9fcff 100%);
   position: relative;
   margin-left: calc(var(--bw-indent-level, 0) * 26px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bw-step-phase-color, #9fb2cb) 28%, #ffffff);
 }
 
 .build-wizard-step.is-child {
-  background: #f7fbff;
+  background: linear-gradient(180deg, #f7fbff 0%, #f2f8ff 100%);
 }
 
 .build-wizard-step.is-parent-target {
@@ -719,6 +726,21 @@
   width: min(52vw, 430px);
 }
 
+.build-wizard-step-order-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bw-step-phase-color, #9fb2cb) 58%, #ffffff);
+  background: color-mix(in srgb, var(--bw-step-phase-color, #9fb2cb) 15%, #ffffff);
+  color: #244267;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
 .build-wizard-duration-inline {
   display: flex;
   flex-direction: column;
@@ -851,6 +873,32 @@
   color: #b91c1c;
 }
 
+.build-wizard-phase-date-range {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.build-wizard-phase-date-range label {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #4f6178;
+  font-weight: 600;
+}
+
+.build-wizard-phase-date-range input {
+  min-width: 150px;
+}
+
+.build-wizard-phase-range-reset {
+  white-space: nowrap;
+}
+
 .build-wizard-phase-add {
   justify-self: end;
   width: 30px;
@@ -892,6 +940,10 @@
 
 .build-wizard-step-assignee-filters select {
   min-width: 190px;
+}
+
+.build-wizard-phase-add-in-filters {
+  margin-left: auto;
 }
 
 .build-wizard-step-actions {
@@ -1596,6 +1648,10 @@
   border: 1px solid #cfdae9;
 }
 
+.build-wizard-phase-track.is-editable {
+  height: 24px;
+}
+
 .build-wizard-phase-segment {
   position: absolute;
   top: 0;
@@ -1651,6 +1707,71 @@
   height: 9px;
   border-radius: 999px;
   flex: 0 0 auto;
+}
+
+.build-wizard-footer-step-editor {
+  border-top: 1px solid #d6e1ef;
+  padding-top: 8px;
+  margin-top: 2px;
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-footer-step-editor-note {
+  font-size: 0.76rem;
+  color: #4b5f7a;
+}
+
+.build-wizard-footer-step-track-single {
+  position: relative;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #cfdae9;
+  background: #edf3fa;
+  overflow: hidden;
+}
+
+.build-wizard-footer-step-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 999px;
+  min-width: 8px;
+  cursor: grab;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.build-wizard-footer-step-bar:active {
+  cursor: grabbing;
+}
+
+.build-wizard-footer-step-bar.is-readonly {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.build-wizard-footer-step-handle {
+  position: absolute;
+  top: -2px;
+  width: 8px;
+  height: calc(100% + 4px);
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  cursor: ew-resize;
+  padding: 0;
+}
+
+.build-wizard-footer-step-handle.is-start {
+  left: 0;
+}
+
+.build-wizard-footer-step-handle.is-end {
+  right: 0;
+}
+
+.build-wizard-footer-step-handle:disabled {
+  cursor: default;
 }
 
 .build-wizard-footer-chart {
@@ -2135,5 +2256,31 @@
 
   .build-wizard-phase-add {
     justify-self: end;
+  }
+
+  .build-wizard-phase-date-range {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .build-wizard-phase-date-range label {
+    width: 100%;
+  }
+
+  .build-wizard-phase-date-range input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .build-wizard-phase-range-reset {
+    width: 100%;
+  }
+
+  .build-wizard-phase-add-in-filters {
+    margin-left: 0;
+  }
+
+  .build-wizard-footer-step-track-single {
+    width: 100%;
   }
 }

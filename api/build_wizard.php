@@ -190,6 +190,19 @@ function catn8_build_wizard_tables_ensure(): void
         CONSTRAINT fk_build_wizard_contact_assignments_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_phase_date_ranges (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        phase_tab VARCHAR(32) NOT NULL,
+        start_date DATE NULL,
+        end_date DATE NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_project_phase_tab (project_id, phase_tab),
+        KEY idx_project_id (project_id),
+        CONSTRAINT fk_build_wizard_phase_date_ranges_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     $hasStepId = Database::queryOne(
         'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
         ['build_wizard_documents', 'step_id']
@@ -334,6 +347,37 @@ function catn8_build_wizard_tables_ensure(): void
         $exists = Database::queryOne(
             'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
             ['build_wizard_contact_assignments', $indexName]
+        );
+        if (!$exists) {
+            Database::execute($indexSql);
+        }
+    }
+
+    $phaseRangeColumns = [
+        'project_id' => 'ALTER TABLE build_wizard_phase_date_ranges ADD COLUMN project_id INT NOT NULL AFTER id',
+        'phase_tab' => 'ALTER TABLE build_wizard_phase_date_ranges ADD COLUMN phase_tab VARCHAR(32) NOT NULL AFTER project_id',
+        'start_date' => 'ALTER TABLE build_wizard_phase_date_ranges ADD COLUMN start_date DATE NULL AFTER phase_tab',
+        'end_date' => 'ALTER TABLE build_wizard_phase_date_ranges ADD COLUMN end_date DATE NULL AFTER start_date',
+        'updated_at' => 'ALTER TABLE build_wizard_phase_date_ranges ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+    ];
+    foreach ($phaseRangeColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_phase_date_ranges', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
+    }
+
+    $phaseRangeIndexes = [
+        'uniq_project_phase_tab' => 'ALTER TABLE build_wizard_phase_date_ranges ADD UNIQUE KEY uniq_project_phase_tab (project_id, phase_tab)',
+        'idx_project_id' => 'ALTER TABLE build_wizard_phase_date_ranges ADD KEY idx_project_id (project_id)',
+    ];
+    foreach ($phaseRangeIndexes as $indexName => $indexSql) {
+        $exists = Database::queryOne(
+            'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+            ['build_wizard_phase_date_ranges', $indexName]
         );
         if (!$exists) {
             Database::execute($indexSql);
@@ -652,6 +696,15 @@ function catn8_build_wizard_normalize_phase_key($value): string
         $raw = substr($raw, 0, 64);
     }
     return $raw;
+}
+
+function catn8_build_wizard_normalize_phase_tab($value): string
+{
+    $phaseTab = strtolower(trim((string)$value));
+    return match ($phaseTab) {
+        'land', 'permits', 'site', 'framing', 'mep', 'finishes' => $phaseTab,
+        default => '',
+    };
 }
 
 function catn8_build_wizard_default_phase_for_kind(string $kind): string
@@ -1375,6 +1428,39 @@ function catn8_build_wizard_contact_assignments_for_project(int $projectId, int 
         ];
     }
     return $assignments;
+}
+
+function catn8_build_wizard_phase_date_ranges_for_project(int $projectId): array
+{
+    if ($projectId <= 0) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, project_id, phase_tab, start_date, end_date, created_at, updated_at
+         FROM build_wizard_phase_date_ranges
+         WHERE project_id = ?
+         ORDER BY phase_tab ASC, id ASC',
+        [$projectId]
+    );
+
+    $ranges = [];
+    foreach ($rows as $row) {
+        $phaseTab = catn8_build_wizard_normalize_phase_tab($row['phase_tab'] ?? '');
+        if ($phaseTab === '') {
+            continue;
+        }
+        $ranges[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'project_id' => (int)($row['project_id'] ?? 0),
+            'phase_tab' => $phaseTab,
+            'start_date' => $row['start_date'] !== null ? (string)$row['start_date'] : null,
+            'end_date' => $row['end_date'] !== null ? (string)$row['end_date'] : null,
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'updated_at' => (string)($row['updated_at'] ?? ''),
+        ];
+    }
+    return $ranges;
 }
 
 function catn8_build_wizard_contact_for_project(int $contactId, int $projectId, int $uid): ?array
@@ -4582,6 +4668,7 @@ try {
             'documents' => catn8_build_wizard_documents_for_project($projectId),
             'contacts' => catn8_build_wizard_contacts_for_project($projectId, $viewerId),
             'contact_assignments' => catn8_build_wizard_contact_assignments_for_project($projectId, $viewerId),
+            'phase_date_ranges' => catn8_build_wizard_phase_date_ranges_for_project($projectId),
             'leading_questions' => catn8_build_wizard_default_questions(),
         ]);
     }
@@ -4696,6 +4783,47 @@ try {
 
         $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]);
         catn8_json_response(['success' => true, 'project' => $project]);
+    }
+
+    if ($action === 'save_phase_date_range') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        if ($projectId <= 0) {
+            throw new RuntimeException('Missing project_id');
+        }
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $phaseTab = catn8_build_wizard_normalize_phase_tab($body['phase_tab'] ?? '');
+        if ($phaseTab === '') {
+            throw new RuntimeException('Invalid phase_tab');
+        }
+
+        $startDate = catn8_build_wizard_parse_date_or_null($body['start_date'] ?? null);
+        $endDate = catn8_build_wizard_parse_date_or_null($body['end_date'] ?? null);
+        if ($startDate !== null && $endDate !== null && strcmp($startDate, $endDate) > 0) {
+            throw new RuntimeException('Phase start_date must be on or before end_date');
+        }
+
+        if ($startDate === null && $endDate === null) {
+            Database::execute(
+                'DELETE FROM build_wizard_phase_date_ranges WHERE project_id = ? AND phase_tab = ? LIMIT 1',
+                [$projectId, $phaseTab]
+            );
+        } else {
+            Database::execute(
+                'INSERT INTO build_wizard_phase_date_ranges (project_id, phase_tab, start_date, end_date)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE start_date = VALUES(start_date), end_date = VALUES(end_date)',
+                [$projectId, $phaseTab, $startDate, $endDate]
+            );
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'phase_date_ranges' => catn8_build_wizard_phase_date_ranges_for_project($projectId),
+        ]);
     }
 
     if ($action === 'delete_project') {

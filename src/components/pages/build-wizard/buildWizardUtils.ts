@@ -337,3 +337,9 @@ export function segmentBackground(colors: string[]): string {
     .join(', ');
   return `repeating-linear-gradient(135deg, ${stops})`;
 }
+
+export function getStepPastelColor(stepId: number): string {
+  const id = Math.max(1, Number(stepId) || 1);
+  const hue = (id * 47) % 360;
+  return `hsl(${hue}deg 62% 84%)`;
+}

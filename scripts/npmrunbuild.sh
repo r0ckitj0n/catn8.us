@@ -40,7 +40,14 @@ fi
 mkdir -p "$DIST_DIR"
 
 echo "[npmrunbuild] Running npm run typecheck and build from $PROJECT_ROOT..."
-npm run typecheck
-npm run build
+if [ "${CATN8_SKIP_TYPECHECK:-0}" = "1" ] || [ "${CATN8_BUILD_NO_TYPECHECK:-0}" = "1" ]; then
+  echo "[npmrunbuild] CATN8_SKIP_TYPECHECK=1 -> skipping typecheck"
+  npx vite build
+else
+  echo "[npmrunbuild] Typecheck starting..."
+  npm run typecheck
+  echo "[npmrunbuild] Typecheck completed."
+  npx vite build
+fi
 
 echo "[npmrunbuild] Build completed successfully."

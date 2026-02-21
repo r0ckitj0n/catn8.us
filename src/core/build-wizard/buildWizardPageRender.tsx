@@ -39,6 +39,7 @@ import {
   formatDate,
   formatTimelineDate,
   getDefaultRange,
+  getStepPastelColor,
   isPdfDocument,
   lotSizeInputToSqftAuto,
   lotSizeSqftToDisplayInput,
@@ -114,6 +115,11 @@ type BuildWizardConfirmState = {
   resolve: (confirmed: boolean) => void;
 };
 
+type PhaseDateRange = {
+  start: string | null;
+  end: string | null;
+};
+
 const LIGHTBOX_ZOOM_MIN = 0.5;
 const LIGHTBOX_ZOOM_MAX = 3;
 const LIGHTBOX_ZOOM_STEP = 0.1;
@@ -166,6 +172,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     documents,
     contacts,
     contactAssignments,
+    phaseDateRanges,
     aiPromptText,
     aiPayloadJson,
     openProject,
@@ -192,6 +199,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     deleteContact,
     addContactAssignment,
     deleteContactAssignment,
+    savePhaseDateRange,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -272,7 +280,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [draggingStepId, setDraggingStepId] = React.useState<number>(0);
   const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
-  const [expandedStepOrderSelectId, setExpandedStepOrderSelectId] = React.useState<number>(0);
   const [topbarSearchQuery, setTopbarSearchQuery] = React.useState<string>('');
   const [topbarSearchOpen, setTopbarSearchOpen] = React.useState<boolean>(false);
   const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
@@ -761,6 +768,122 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
     return { phaseTotal, projectToDateTotal };
   }, [activeTab, filteredTabSteps, steps]);
+
+  const derivePhaseDateRange = React.useCallback((tabId: BuildTabId): PhaseDateRange => {
+    const tabSteps = steps.filter((step) => stepPhaseBucket(step) === tabId);
+    const sortedStartDates = tabSteps
+      .map((step) => toStringOrNull(step.expected_start_date || ''))
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const sortedEndCandidates = tabSteps
+      .map((step) => toStringOrNull(step.expected_end_date || '') || toStringOrNull(step.expected_start_date || ''))
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    return {
+      start: sortedStartDates.length ? sortedStartDates[0] : null,
+      end: sortedEndCandidates.length ? sortedEndCandidates[sortedEndCandidates.length - 1] : null,
+    };
+  }, [steps]);
+
+  const phaseDateRangeByTab = React.useMemo<Partial<Record<BuildTabId, PhaseDateRange>>>(() => {
+    const map: Partial<Record<BuildTabId, PhaseDateRange>> = {};
+    phaseDateRanges.forEach((range) => {
+      const phaseTab = range.phase_tab as BuildTabId;
+      if (!PHASE_PROGRESS_ORDER.includes(phaseTab)) {
+        return;
+      }
+      map[phaseTab] = {
+        start: toStringOrNull(range.start_date || ''),
+        end: toStringOrNull(range.end_date || ''),
+      };
+    });
+    return map;
+  }, [phaseDateRanges]);
+
+  const resolvePhaseDateRange = React.useCallback((tabId: BuildTabId): PhaseDateRange => {
+    const derived = derivePhaseDateRange(tabId);
+    const override = phaseDateRangeByTab[tabId];
+    return {
+      start: toStringOrNull(override?.start || '') || derived.start,
+      end: toStringOrNull(override?.end || '') || derived.end,
+    };
+  }, [derivePhaseDateRange, phaseDateRangeByTab]);
+
+  const activePhaseDateRange = React.useMemo<PhaseDateRange>(() => {
+    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
+      return { start: null, end: null };
+    }
+    return resolvePhaseDateRange(activeTab);
+  }, [activeTab, resolvePhaseDateRange]);
+
+  const activePhaseHasStoredDateRange = React.useMemo<boolean>(() => {
+    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
+      return false;
+    }
+    const stored = phaseDateRangeByTab[activeTab];
+    return Boolean(toStringOrNull(stored?.start || '') || toStringOrNull(stored?.end || ''));
+  }, [activeTab, phaseDateRangeByTab]);
+
+  const clampDateToRange = React.useCallback((value: string | null | undefined, min: string | null, max: string | null): string | null => {
+    const next = toStringOrNull(value || '');
+    if (!next) {
+      return null;
+    }
+    if (min && next < min) {
+      return min;
+    }
+    if (max && next > max) {
+      return max;
+    }
+    return next;
+  }, []);
+
+  const mergeDateMin = React.useCallback((a: string | null | undefined, b: string | null | undefined): string | undefined => {
+    const left = toStringOrNull(a || '');
+    const right = toStringOrNull(b || '');
+    if (!left && !right) {
+      return undefined;
+    }
+    if (!left) {
+      return right || undefined;
+    }
+    if (!right) {
+      return left || undefined;
+    }
+    return left > right ? left : right;
+  }, []);
+
+  const mergeDateMax = React.useCallback((a: string | null | undefined, b: string | null | undefined): string | undefined => {
+    const left = toStringOrNull(a || '');
+    const right = toStringOrNull(b || '');
+    if (!left && !right) {
+      return undefined;
+    }
+    if (!left) {
+      return right || undefined;
+    }
+    if (!right) {
+      return left || undefined;
+    }
+    return left < right ? left : right;
+  }, []);
+
+  const onPhaseDateRangeChange = React.useCallback((patch: Partial<PhaseDateRange>) => {
+    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
+      return;
+    }
+    const current = resolvePhaseDateRange(activeTab);
+    let nextStart = toStringOrNull((patch.start ?? current.start) || '');
+    let nextEnd = toStringOrNull((patch.end ?? current.end) || '');
+    if (nextStart && nextEnd && nextStart > nextEnd) {
+      if (Object.prototype.hasOwnProperty.call(patch, 'start')) {
+        nextEnd = nextStart;
+      } else {
+        nextStart = nextEnd;
+      }
+    }
+    void savePhaseDateRange(projectId, activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
+  }, [activeTab, projectId, resolvePhaseDateRange, savePhaseDateRange]);
 
   const footerTimelineSteps = React.useMemo(() => {
     if (activeTab === 'start' || activeTab === 'completed' || activeTab === 'overview') {
@@ -1257,6 +1380,30 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const commitStep = async (stepId: number, patch: Partial<IBuildWizardStep>) => {
     await updateStep(stepId, patch);
   };
+
+  const onTimelineStepChange = React.useCallback((stepId: number, patch: {
+    expected_start_date: string | null;
+    expected_end_date: string | null;
+    expected_duration_days: number | null;
+  }) => {
+    const step = stepById.get(stepId);
+    if (!step || Number(step.is_completed) === 1) {
+      return;
+    }
+    const tabId = stepPhaseBucket(step);
+    const phaseDateRange = PHASE_PROGRESS_ORDER.includes(tabId) ? resolvePhaseDateRange(tabId) : { start: null, end: null };
+    const nextStart = clampDateToRange(patch.expected_start_date, phaseDateRange.start, phaseDateRange.end);
+    const nextEnd = clampDateToRange(patch.expected_end_date, phaseDateRange.start, phaseDateRange.end);
+    const normalizedEnd = (nextStart && nextEnd && nextEnd < nextStart) ? nextStart : nextEnd;
+    const nextPatch = {
+      ...patch,
+      expected_start_date: nextStart,
+      expected_end_date: normalizedEnd,
+      expected_duration_days: calculateDurationDays(nextStart, normalizedEnd) ?? patch.expected_duration_days,
+    };
+    updateStepDraft(stepId, nextPatch);
+    void commitStep(stepId, nextPatch);
+  }, [clampDateToRange, resolvePhaseDateRange, stepById]);
 
   const onSubmitNote = async (step: IBuildWizardStep): Promise<boolean> => {
     const draft = String(noteDraftByStep[step.id] || '').trim();
@@ -2047,31 +2194,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
-  const onReorderStepByDisplayNumber = async (stepId: number, targetDisplayNumber: number) => {
-    if (stepId <= 0 || targetDisplayNumber <= 0) {
-      return;
-    }
-    const flatIds = activeTabTreeRows.map((row) => row.step.id);
-    const currentIndex = flatIds.indexOf(stepId);
-    if (currentIndex < 0) {
-      return;
-    }
-    const boundedTargetIndex = Math.max(0, Math.min(targetDisplayNumber - 1, flatIds.length - 1));
-    if (boundedTargetIndex === currentIndex) {
-      return;
-    }
-    const reorderedIds = [...flatIds];
-    reorderedIds.splice(currentIndex, 1);
-    reorderedIds.splice(boundedTargetIndex, 0, stepId);
-
-    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
-    const step = stepById.get(stepId);
-    if (step && Number(step.parent_step_id || 0) > 0) {
-      await updateStep(stepId, { parent_step_id: null });
-    }
-    await reorderSteps(activePhaseKey, reorderedIds);
-  };
-
   const onDropMakeChild = async (targetStepId: number) => {
     if (draggingStepId <= 0 || targetStepId <= 0 || draggingStepId === targetStepId) {
       clearStepDragState();
@@ -2140,6 +2262,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
           const childDateMin = parentStep?.expected_start_date || undefined;
           const childDateMax = parentStep?.expected_end_date || undefined;
+          const stepDateMin = mergeDateMin(childDateMin, activePhaseDateRange.start);
+          const stepDateMax = mergeDateMax(childDateMax, activePhaseDateRange.end);
           const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
           const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
@@ -2149,12 +2273,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             .map((id) => steps.find((candidate) => candidate.id === id))
             .filter((dependency): dependency is IBuildWizardStep => Boolean(dependency))
             .map((dependency) => `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title}`);
+          const stepPastelColor = getStepPastelColor(step.id);
           return (
             <React.Fragment key={step.id}>
             <div
               id={`build-wizard-step-${step.id}`}
               className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''}`}
-              style={{ '--bw-indent-level': String(row.level) } as React.CSSProperties}
+              style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
               onDragOver={(e) => {
                 if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
                   e.preventDefault();
@@ -2167,7 +2292,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 void onDropMakeChild(step.id);
               }}
             >
-              <div className="build-wizard-step-phase-accent" style={{ background: TAB_PHASE_COLORS[stepPhaseBucket(step)] }} />
+              <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
 	          <div className="build-wizard-step-header">
 	            <div className="build-wizard-step-header-left">
                   <button
@@ -2199,27 +2324,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 	                      />
 	                      <span>Complete</span>
 	                    </label>
-	                    <select
-	                      className={`build-wizard-step-order-select ${expandedStepOrderSelectId === step.id ? 'is-expanded' : ''}`}
-	                      value={String(stepDisplayNumber)}
-                        disabled={stepReadOnly}
-	                      onChange={(e) => {
-	                        const targetDisplayNumber = Number(e.target.value || '0');
-	                        if (targetDisplayNumber > 0) {
-	                          void onReorderStepByDisplayNumber(step.id, targetDisplayNumber);
-	                        }
-	                      }}
-	                      onFocus={() => setExpandedStepOrderSelectId(step.id)}
-	                      onBlur={() => setExpandedStepOrderSelectId((prev) => (prev === step.id ? 0 : prev))}
-	                      title="Move this step to a different step number"
-	                      aria-label={`Step number for ${step.title}`}
-	                    >
-	                      {rows.map((optionRow, optionIndex) => (
-	                        <option key={optionRow.step.id} value={String(optionIndex + 1)}>
-	                          {expandedStepOrderSelectId === step.id ? `#${optionIndex + 1} ${optionRow.step.title}` : `#${optionIndex + 1}`}
-	                        </option>
-	                      ))}
-	                    </select>
+                      <span className="build-wizard-step-order-pill" title="Step number is automatically set from timeline order">
+                        #{stepDisplayNumber}
+                      </span>
 	                  </div>
                   {completionLocked ? (
                     <span className="build-wizard-parent-lock-note">
@@ -2241,8 +2348,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <input
                         type="date"
                         value={draft.expected_start_date || ''}
-                        min={childDateMin}
-                        max={childDateMax}
+                        min={stepDateMin}
+                        max={stepDateMax}
                         disabled={stepReadOnly}
                         onChange={(e) => {
                           const nextStartDate = toStringOrNull(e.target.value);
@@ -2269,8 +2376,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <input
                         type="date"
                         value={draft.expected_end_date || ''}
-                        min={childDateMin}
-                        max={childDateMax}
+                        min={stepDateMin}
+                        max={stepDateMax}
                         disabled={stepReadOnly}
                         onChange={(e) => {
                           const nextEndDate = toStringOrNull(e.target.value);
@@ -3158,6 +3265,102 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </button>
             ))}
           </div>
+
+          {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
+            <div className="build-wizard-sticky-phase-controls">
+              <div className="build-wizard-phase-head">
+                <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
+                <div className="build-wizard-phase-totals">
+                  <span>Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.phaseTotal)}</span></span>
+                  <span>Project Total To Date: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.projectToDateTotal)}</span></span>
+                </div>
+                <div className="build-wizard-phase-date-range">
+                  <label>
+                    Phase Start
+                    <input
+                      type="date"
+                      value={activePhaseDateRange.start || ''}
+                      max={activePhaseDateRange.end || undefined}
+                      onChange={(e) => onPhaseDateRangeChange({ start: toStringOrNull(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Phase End
+                    <input
+                      type="date"
+                      value={activePhaseDateRange.end || ''}
+                      min={activePhaseDateRange.start || undefined}
+                      onChange={(e) => onPhaseDateRangeChange({ end: toStringOrNull(e.target.value) })}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm build-wizard-phase-range-reset"
+                    disabled={!activePhaseHasStoredDateRange}
+                    title="Reset phase dates to auto-derived step range"
+                    onClick={() => {
+                      if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
+                        return;
+                      }
+                      void savePhaseDateRange(
+                        projectId,
+                        activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes',
+                        null,
+                        null,
+                      );
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              <div className="build-wizard-step-assignee-filters">
+                <span>Step Card Filters</span>
+                <select
+                  value={stepCardAssigneeTypeFilter}
+                  onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
+                >
+                  <option value="all">All Contacts</option>
+                  <option value="contact">Contacts Only</option>
+                  <option value="vendor">Vendors Only</option>
+                  <option value="authority">Authorities Only</option>
+                </select>
+                <select
+                  value={stepCardAssigneeIdFilter > 0 ? String(stepCardAssigneeIdFilter) : ''}
+                  onChange={(e) => setStepCardAssigneeIdFilter(Number(e.target.value || '0'))}
+                >
+                  <option value="">All Assigned People</option>
+                  {stepFilterContactOptions.map((contact) => (
+                    <option key={`step-filter-contact-${contact.id}`} value={contact.id}>
+                      {contactTypeLabel(normalizeContactType(contact))}: {contact.display_name}
+                    </option>
+                  ))}
+                </select>
+                {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0) ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setStepCardAssigneeTypeFilter('all');
+                      setStepCardAssigneeIdFilter(0);
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="build-wizard-phase-add build-wizard-phase-add-in-filters"
+                  title="Add step"
+                  aria-label="Add step"
+                  onClick={() => void addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general')}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
         <div className="build-wizard-sticky-head-spacer" aria-hidden="true" style={{ height: stickyHeadHeight }} />
 
@@ -3438,61 +3641,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
         {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
           <div className="build-wizard-card">
-            <div className="build-wizard-phase-head">
-              <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
-              <div className="build-wizard-phase-totals">
-                <span>Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.phaseTotal)}</span></span>
-                <span>Project Total To Date: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.projectToDateTotal)}</span></span>
-              </div>
-              <button
-                type="button"
-                className="build-wizard-phase-add"
-                title="Add step"
-                aria-label="Add step"
-                onClick={() => void addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general')}
-              >
-                +
-              </button>
-            </div>
-
             <div className="build-wizard-step-drag-hint">
               Drag the handle to reorder. Drop on another step card to make it a child.
-            </div>
-
-            <div className="build-wizard-step-assignee-filters">
-              <span>Step Card Filters</span>
-              <select
-                value={stepCardAssigneeTypeFilter}
-                onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
-              >
-                <option value="all">All Contacts</option>
-                <option value="contact">Contacts Only</option>
-                <option value="vendor">Vendors Only</option>
-                <option value="authority">Authorities Only</option>
-              </select>
-              <select
-                value={stepCardAssigneeIdFilter > 0 ? String(stepCardAssigneeIdFilter) : ''}
-                onChange={(e) => setStepCardAssigneeIdFilter(Number(e.target.value || '0'))}
-              >
-                <option value="">All Assigned People</option>
-                {stepFilterContactOptions.map((contact) => (
-                  <option key={`step-filter-contact-${contact.id}`} value={contact.id}>
-                    {contactTypeLabel(normalizeContactType(contact))}: {contact.display_name}
-                  </option>
-                ))}
-              </select>
-              {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0) ? (
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => {
-                    setStepCardAssigneeTypeFilter('all');
-                    setStepCardAssigneeIdFilter(0);
-                  }}
-                >
-                  Clear Filters
-                </button>
-              ) : null}
             </div>
 
             {activeTab === 'desk' ? (
@@ -3586,7 +3736,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
       <footer className="build-wizard-footer-chart">
         <div className="build-wizard-footer-inner">
-          <FooterPhaseTimeline steps={footerTimelineSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
+          <FooterPhaseTimeline
+            steps={footerTimelineSteps}
+            rangeStart={footerRange.start}
+            rangeEnd={footerRange.end}
+            activeTab={activeTab}
+            editable={true}
+            displayNumberById={activeTabStepNumbers}
+            onStepTimelineChange={onTimelineStepChange}
+          />
         </div>
       </footer>
 

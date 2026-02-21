@@ -154,6 +154,15 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `phase_key` (VARCHAR(64), NULLABLE)
 - `created_at` (TIMESTAMP)
 
+### build_wizard_phase_date_ranges
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
+- `phase_tab` (VARCHAR(32))
+- `start_date` (DATE, NULLABLE)
+- `end_date` (DATE, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### build_wizard_documents
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)

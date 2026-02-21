@@ -45,6 +45,7 @@ Common options:
   --no-backup-live Skip live website backup API before deploy
   --purge          Purge managed remote directories before deploy
   --skip-build     Skip release build step
+  --skip-typecheck Skip TypeScript check during build (sets CATN8_SKIP_TYPECHECK=1)
   --help           Show this help
 USAGE
 }
@@ -59,6 +60,11 @@ PUBLIC_BASE="${CATN8_PUBLIC_BASE:-}"
 # Parameterized deployment base URL (protocol+host), fallback to catn8.us
 DEPLOY_BASE_URL="${DEPLOY_BASE_URL:-https://catn8.us}"
 BASE_URL="${DEPLOY_BASE_URL}${PUBLIC_BASE}"
+CURL_CONNECT_TIMEOUT="${CATN8_CURL_CONNECT_TIMEOUT_SEC:-10}"
+CURL_MAX_TIME="${CATN8_CURL_MAX_TIME_SEC:-45}"
+LFTP_NET_TIMEOUT="${CATN8_LFTP_TIMEOUT_SEC:-30}"
+LFTP_NET_MAX_RETRIES="${CATN8_LFTP_MAX_RETRIES:-1}"
+LFTP_NET_SETTINGS=$'set net:timeout '"${LFTP_NET_TIMEOUT}"$'\nset net:max-retries '"${LFTP_NET_MAX_RETRIES}"$'\nset net:reconnect-interval-base 5\nset net:reconnect-interval-max 15'
 
 require_var() {
   local key="$1" value="${!1:-}"
@@ -71,6 +77,7 @@ require_var() {
 # Parameter parsing
 MODE="lite"
 SKIP_BUILD="${CATN8_SKIP_RELEASE_BUILD:-0}"
+SKIP_TYPECHECK="${CATN8_SKIP_TYPECHECK:-0}"
 PURGE="${CATN8_PURGE_REMOTE:-0}"
 STRICT_VERIFY="${CATN8_STRICT_VERIFY:-0}"
 UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
@@ -131,6 +138,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_BUILD=1
       shift
       ;;
+    --skip-typecheck)
+      SKIP_TYPECHECK=1
+      shift
+      ;;
     *)
       shift
       ;;
@@ -174,20 +185,26 @@ require_dist_artifacts() {
 
   if [ ! -s "dist/index.html" ]; then
     echo -e "${RED}❌ Missing dist/index.html. Refusing to deploy.${NC}"
+    echo -e "${YELLOW}   Run: npm run build   (or: ./scripts/deploy.sh --skip-typecheck)${NC}"
     exit 1
   fi
   if [ ! -s "dist/.vite/manifest.json" ]; then
     echo -e "${RED}❌ Missing dist/.vite/manifest.json. Refusing to deploy.${NC}"
+    echo -e "${YELLOW}   Run: npm run build   (or: ./scripts/deploy.sh --skip-typecheck)${NC}"
     exit 1
   fi
   if ! ls dist/assets/*.js >/dev/null 2>&1; then
     echo -e "${RED}❌ Missing dist/assets/*.js bundles. Refusing to deploy.${NC}"
+    echo -e "${YELLOW}   Run: npm run build   (or: ./scripts/deploy.sh --skip-typecheck)${NC}"
     exit 1
   fi
 }
 
 # Ensure a fresh frontend build via the shared release orchestrator (build-only)
 if [ "$SKIP_BUILD" != "1" ] && [ "$MODE" != "env-only" ]; then
+  if [ "$SKIP_TYPECHECK" = "1" ]; then
+    export CATN8_SKIP_TYPECHECK=1
+  fi
   echo -e "${GREEN}🏗  Running release.sh build (no deploy)...${NC}"
   bash scripts/release.sh --no-deploy
 fi
@@ -202,7 +219,7 @@ else
   BACKUP_URL="${BASE_URL}/api/backup_website.php"
   BACKUP_TOKEN="${CATN8_ADMIN_TOKEN:-${CATN8_DEPLOY_ADMIN_TOKEN:-}}"
   if [ -n "$BACKUP_TOKEN" ]; then
-    if curl -fsS -X POST "${BACKUP_URL}?admin_token=${BACKUP_TOKEN}" >/dev/null; then
+    if curl -fsS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -X POST "${BACKUP_URL}?admin_token=${BACKUP_TOKEN}" >/dev/null; then
       echo -e "${GREEN}✅ Website backup API triggered${NC}"
     else
       echo -e "${YELLOW}⚠️  Website backup failed (auth/token or endpoint issue), continuing deployment...${NC}"
@@ -264,6 +281,7 @@ cat > preclean_remote.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit no
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 rm -f .tmp* ".tmp2 *" *.bak *.bak.*
 rm -f src/.tmp* src/".tmp2 *" src/*.bak src/*.bak.*
@@ -295,6 +313,7 @@ if [ "$PURGE" = "1" ]; then
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit no
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 rm -r api dist${PURGE_IMAGE_DIRS} includes scripts src documentation Documentation vendor node_modules || true
 rm index.php .htaccess index.html favicon.ico manifest.json package.json package-lock.json || true
@@ -338,6 +357,7 @@ cat > deploy_commands.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 # Log sessions to logs/lftp_deploy.log (appends by default)
 debug 3 -o logs/lftp_deploy.log
 open sftp://$USER:$PASS@$HOST
@@ -422,6 +442,7 @@ if [ "${DRY_DEPLOY_SUCCESS}" = "1" ]; then
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 put dist/index.html -o index.html
 bye
@@ -444,6 +465,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --reverse --delete --verbose --only-newer --no-perms \
   vendor vendor
@@ -467,6 +489,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mkdir -p api/maintenance
 cd api/maintenance
@@ -490,6 +513,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit no
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 # Backup existing .env if present
 mv .env .env.bak || true
@@ -517,6 +541,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --reverse --delete --verbose --overwrite --no-perms \
   dist dist
@@ -545,6 +570,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --reverse --verbose --only-newer --no-perms \
   includes includes
@@ -581,6 +607,7 @@ if [ "$MODE" != "env-only" ]; then
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 lcd .
 put /dev/null -o .disable-vite-dev
@@ -597,6 +624,7 @@ EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit no
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mkdir -p backups
 mkdir -p backups/src-archives
@@ -622,9 +650,9 @@ if [ "$MODE" != "env-only" ]; then
   VERIFY_FAILED=0
   
   # Check Vite manifest availability (prefer .vite/manifest.json)
-  HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/.vite/manifest.json")
+  HTTP_MANIFEST_CODE=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$BASE_URL/dist/.vite/manifest.json")
   if [ "$HTTP_MANIFEST_CODE" != "200" ]; then
-    HTTP_MANIFEST_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dist/manifest.json")
+    HTTP_MANIFEST_CODE=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$BASE_URL/dist/manifest.json")
   fi
   if [ "$HTTP_MANIFEST_CODE" = "200" ]; then
     echo -e "${GREEN}✅ Vite manifest accessible over HTTP${NC}"
@@ -634,7 +662,7 @@ if [ "$MODE" != "env-only" ]; then
   fi
   
   # Homepage should never reference source paths in production.
-  HOME_HTML=$(curl -s "$BASE_URL/")
+  HOME_HTML=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" "$BASE_URL/")
   if echo "$HOME_HTML" | grep -q "/src/"; then
     echo -e "${YELLOW}⚠️  Homepage still references /src/ paths${NC}"
     VERIFY_FAILED=1
@@ -647,14 +675,14 @@ if [ "$MODE" != "env-only" ]; then
   APP_JS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']+\\.js" | head -n1 || true)
   MAIN_CSS=$(echo "$HOME_HTML" | grep -Eo "/(dist/assets|build-assets)/[^\"']*public-core[^\"']+\\.css" | head -n1 || true)
   if [ -n "$APP_JS" ]; then
-    CODE_JS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$APP_JS")
+    CODE_JS=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$BASE_URL$APP_JS")
     echo -e "  • JS $APP_JS -> HTTP $CODE_JS"
     if [ "$CODE_JS" != "200" ]; then VERIFY_FAILED=1; fi
   else
     echo -e "  • JS: ℹ️ Not found in homepage HTML (manifest loader may be in use)"
   fi
   if [ -n "$MAIN_CSS" ]; then
-    CODE_CSS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$MAIN_CSS")
+    CODE_CSS=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$BASE_URL$MAIN_CSS")
     echo -e "  • CSS $MAIN_CSS -> HTTP $CODE_CSS"
     if [ "$CODE_CSS" != "200" ]; then VERIFY_FAILED=1; fi
   else
@@ -667,6 +695,7 @@ if [ "$MODE" != "env-only" ]; then
   cat > fix_permissions.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
+${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 chmod 755 images/
 bye
@@ -698,7 +727,7 @@ else
     *)  TEST_LOGO_URL="${BASE_URL}/$TEST_LOGO_PATH" ;;
   esac
 fi
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TEST_LOGO_URL")
+HTTP_CODE=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$TEST_LOGO_URL")
 if [ "$HTTP_CODE" = "200" ]; then
   echo -e "${GREEN}✅ Logo image is accessible online!${NC}"
 elif [ "$HTTP_CODE" = "404" ]; then

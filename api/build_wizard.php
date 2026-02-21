@@ -795,6 +795,99 @@ function catn8_build_wizard_reorder_phase_steps(int $projectId, string $phaseKey
     }
 }
 
+function catn8_build_wizard_reorder_phase_steps_by_timeline(int $projectId, string $phaseKey): bool
+{
+    if ($projectId <= 0) {
+        return false;
+    }
+
+    $normalizedPhase = catn8_build_wizard_normalize_phase_key($phaseKey);
+    $rows = Database::queryAll(
+        'SELECT id, phase_key, step_order, expected_start_date, expected_end_date
+         FROM build_wizard_steps
+         WHERE project_id = ?
+         ORDER BY step_order ASC, id ASC',
+        [$projectId]
+    );
+    if (!$rows) {
+        return false;
+    }
+
+    $phaseRows = [];
+    foreach ($rows as $row) {
+        $rowPhase = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
+        if ($rowPhase === $normalizedPhase) {
+            $phaseRows[] = $row;
+        }
+    }
+    if (count($phaseRows) <= 1) {
+        return false;
+    }
+
+    $currentOrderIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $phaseRows);
+    $sortedRows = $phaseRows;
+    usort($sortedRows, static function (array $a, array $b): int {
+        $aAnchor = $a['expected_start_date'] !== null ? (string)$a['expected_start_date'] : ($a['expected_end_date'] !== null ? (string)$a['expected_end_date'] : null);
+        $bAnchor = $b['expected_start_date'] !== null ? (string)$b['expected_start_date'] : ($b['expected_end_date'] !== null ? (string)$b['expected_end_date'] : null);
+        if ($aAnchor === null && $bAnchor !== null) {
+            return 1;
+        }
+        if ($aAnchor !== null && $bAnchor === null) {
+            return -1;
+        }
+        if ($aAnchor !== null && $bAnchor !== null) {
+            $anchorCmp = strcmp($aAnchor, $bAnchor);
+            if ($anchorCmp !== 0) {
+                return $anchorCmp;
+            }
+        }
+
+        $aStart = $a['expected_start_date'] !== null ? (string)$a['expected_start_date'] : null;
+        $bStart = $b['expected_start_date'] !== null ? (string)$b['expected_start_date'] : null;
+        if ($aStart === null && $bStart !== null) {
+            return 1;
+        }
+        if ($aStart !== null && $bStart === null) {
+            return -1;
+        }
+        if ($aStart !== null && $bStart !== null) {
+            $startCmp = strcmp($aStart, $bStart);
+            if ($startCmp !== 0) {
+                return $startCmp;
+            }
+        }
+
+        $aEnd = $a['expected_end_date'] !== null ? (string)$a['expected_end_date'] : null;
+        $bEnd = $b['expected_end_date'] !== null ? (string)$b['expected_end_date'] : null;
+        if ($aEnd === null && $bEnd !== null) {
+            return 1;
+        }
+        if ($aEnd !== null && $bEnd === null) {
+            return -1;
+        }
+        if ($aEnd !== null && $bEnd !== null) {
+            $endCmp = strcmp($aEnd, $bEnd);
+            if ($endCmp !== 0) {
+                return $endCmp;
+            }
+        }
+
+        $orderCmp = ((int)($a['step_order'] ?? 0)) <=> ((int)($b['step_order'] ?? 0));
+        if ($orderCmp !== 0) {
+            return $orderCmp;
+        }
+        return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+    });
+
+    $sortedIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $sortedRows);
+    if ($sortedIds === $currentOrderIds) {
+        return false;
+    }
+
+    catn8_build_wizard_reorder_phase_steps($projectId, $normalizedPhase, $sortedIds);
+    return true;
+}
+
 function catn8_build_wizard_validate_parent_step(int $projectId, int $stepId, $candidateParentStepId): ?int
 {
     $parentStepId = (int)$candidateParentStepId;
@@ -4910,16 +5003,41 @@ try {
             ? catn8_build_wizard_parse_date_or_null($body['expected_end_date'] ?? null)
             : catn8_build_wizard_parse_date_or_null($stepRow['expected_end_date'] ?? null);
         catn8_build_wizard_validate_child_dates_with_parent((int)$stepRow['project_id'], $stepId, $nextExpectedStartDate, $nextExpectedEndDate);
+        $autoReorderByTimeline = array_key_exists('expected_start_date', $body) || array_key_exists('expected_end_date', $body);
+        $autoReordered = false;
 
-        $params[] = $stepId;
-        Database::execute('UPDATE build_wizard_steps SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
+        Database::beginTransaction();
+        try {
+            $params[] = $stepId;
+            Database::execute('UPDATE build_wizard_steps SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
 
-        $step = catn8_build_wizard_step_by_id($stepId);
-        if (!$step) {
-            throw new RuntimeException('Step not found after update');
+            if ($autoReorderByTimeline) {
+                $phaseRow = Database::queryOne(
+                    'SELECT phase_key FROM build_wizard_steps WHERE id = ? LIMIT 1',
+                    [$stepId]
+                );
+                $phaseKey = catn8_build_wizard_normalize_phase_key((string)($phaseRow['phase_key'] ?? 'general'));
+                $autoReordered = catn8_build_wizard_reorder_phase_steps_by_timeline((int)$stepRow['project_id'], $phaseKey);
+            }
+
+            $step = catn8_build_wizard_step_by_id($stepId);
+            if (!$step) {
+                throw new RuntimeException('Step not found after update');
+            }
+
+            $response = ['success' => true, 'step' => $step];
+            if ($autoReordered) {
+                $response['steps'] = catn8_build_wizard_steps_for_project((int)$stepRow['project_id']);
+            }
+
+            Database::commit();
+            catn8_json_response($response);
+        } catch (Throwable $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
         }
-
-        catn8_json_response(['success' => true, 'step' => $step]);
     }
 
     if ($action === 'find_purchase_options') {

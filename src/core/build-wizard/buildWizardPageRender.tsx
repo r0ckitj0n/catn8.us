@@ -55,6 +55,7 @@ import {
   toStringOrNull,
   withDownloadFlag,
 } from '../../components/pages/build-wizard/buildWizardUtils';
+import { sanitizeBuildWizardStepTitle } from './buildWizardSanitizers';
 import { DateRangeChart, FooterPhaseTimeline } from '../../components/pages/build-wizard/BuildWizardTimeline';
 import '../../components/pages/BuildWizardPage.css';
 
@@ -1975,8 +1976,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const onUsePurchaseOption = async (step: IBuildWizardStep, option: any) => {
+    const nextTitle = sanitizeBuildWizardStepTitle(option?.title || step.title, step.step_type || 'purchase');
     const patch: Partial<IBuildWizardStep> = {
-      title: option.title || step.title,
+      title: nextTitle || step.title,
       purchase_url: option.url || null,
       purchase_vendor: option.vendor || null,
       purchase_unit_price: typeof option.unit_price === 'number' ? option.unit_price : (step.purchase_unit_price ?? null),
@@ -2752,7 +2754,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   {(purchaseOptionsByStep[step.id] || []).map((opt: any, idx: number) => (
                     <div className="build-wizard-purchase-option" key={`${step.id}-opt-${idx}`}>
                       <div className="build-wizard-purchase-option-title">
-                        <span>{opt.title}</span>
+                        <span>{sanitizeBuildWizardStepTitle(opt.title || '', 'purchase')}</span>
                         <span className={`build-wizard-purchase-tier is-${String(opt.tier || '').toLowerCase() || 'standard'}`}>
                           {opt.tier_label || 'Standard'}
                         </span>

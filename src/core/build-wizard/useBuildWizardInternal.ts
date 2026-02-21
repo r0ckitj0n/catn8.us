@@ -18,6 +18,11 @@ import {
   IBuildWizardSingletreeStageUploadResponse,
   IBuildWizardStep,
 } from '../../types/buildWizard';
+import {
+  normalizeBuildWizardStep,
+  normalizeBuildWizardSteps,
+  sanitizeBuildWizardStepTitle,
+} from './buildWizardSanitizers';
 
 type BuildWizardPayloadResponse = {
   success: boolean;
@@ -183,7 +188,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         target_completion_date: res?.project?.target_completion_date || null,
         wizard_notes: String(res?.project?.wizard_notes || ''),
       });
-      setSteps(Array.isArray(res?.steps) ? res.steps : []);
+      setSteps(normalizeBuildWizardSteps(Array.isArray(res?.steps) ? res.steps : []));
       setDocuments(Array.isArray(res?.documents) ? res.documents : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setContactAssignments(Array.isArray(res?.contact_assignments) ? res.contact_assignments : []);
@@ -332,9 +337,13 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
 
     try {
-      const res = await ApiClient.post<{ success: boolean; step: IBuildWizardStep }>('/api/build_wizard.php?action=update_step', body);
-      const next = res?.step;
-      setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
+      const res = await ApiClient.post<{ success: boolean; step: IBuildWizardStep; steps?: IBuildWizardStep[] }>('/api/build_wizard.php?action=update_step', body);
+      if (Array.isArray(res?.steps)) {
+        setSteps(normalizeBuildWizardSteps(res.steps));
+      } else {
+        const next = res?.step ? normalizeBuildWizardStep(res.step) : null;
+        setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
+      }
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to update step' });
       await refreshCurrentProject();
@@ -355,7 +364,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         step_id: stepId,
         note_text: t,
       });
-      const next = res?.step;
+      const next = res?.step ? normalizeBuildWizardStep(res.step) : null;
       setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to add note' });
@@ -372,8 +381,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         phase_key: phaseKey,
       });
       if (res?.step) {
+        const nextStep = normalizeBuildWizardStep(res.step);
         setSteps((prev) => {
-          const next = [...prev, res.step];
+          const next = [...prev, nextStep];
           next.sort((a, b) => {
             if (a.step_order !== b.step_order) {
               return a.step_order - b.step_order;
@@ -400,7 +410,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         step_id: stepId,
       });
       if (Array.isArray(res?.steps)) {
-        setSteps(res.steps);
+        setSteps(normalizeBuildWizardSteps(res.steps));
       } else {
         setSteps((prev) => prev.filter((s) => s.id !== stepId));
       }
@@ -422,7 +432,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         ordered_step_ids: orderedStepIds,
       });
       if (Array.isArray(res?.steps)) {
-        setSteps(res.steps);
+        setSteps(normalizeBuildWizardSteps(res.steps));
       } else {
         await refreshCurrentProject();
       }
@@ -613,12 +623,18 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         step_id: stepId,
         product_url: (productUrl || '').trim() || undefined,
       });
-      const nextStep = res?.step || null;
+      const nextStep = res?.step ? normalizeBuildWizardStep(res.step) : null;
       if (nextStep) {
         setSteps((prev) => prev.map((s) => (s.id === stepId ? nextStep : s)));
       }
+      const nextOptions = Array.isArray(res?.options)
+        ? res.options.map((opt) => ({
+          ...opt,
+          title: sanitizeBuildWizardStepTitle(opt?.title || '', 'purchase'),
+        }))
+        : [];
       return {
-        options: Array.isArray(res?.options) ? res.options : [],
+        options: nextOptions,
         step: nextStep,
       };
     } catch (err: any) {
@@ -654,7 +670,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         mode,
       });
       if (Array.isArray(res?.steps)) {
-        setSteps(res.steps);
+        setSteps(normalizeBuildWizardSteps(res.steps));
       }
       const missingFields = Array.isArray(res?.missing_fields) ? res.missing_fields.length : 0;
       const modeLabel = mode === 'complete' ? 'AI full completion' : (mode === 'fill_missing' ? 'AI missing-field estimate' : 'AI step ingestion');

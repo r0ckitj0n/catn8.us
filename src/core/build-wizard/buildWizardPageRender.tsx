@@ -113,6 +113,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [lotSizeInput, setLotSizeInput] = React.useState<string>(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
+  const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
@@ -579,12 +580,46 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [steps, docPhaseKey]);
 
   const linkedStepOptions = React.useMemo(() => {
-    return [...steps].sort((a, b) => {
-      const aLabel = `${prettyPhaseLabel(a.phase_key)} ${a.title}`;
-      const bLabel = `${prettyPhaseLabel(b.phase_key)} ${b.title}`;
-      return sortAlpha(aLabel, bLabel);
+    const ordered = [...steps].sort((a, b) => {
+      const aRawOrder = Number(a.step_order) || 0;
+      const bRawOrder = Number(b.step_order) || 0;
+      const aHasOrder = aRawOrder > 0;
+      const bHasOrder = bRawOrder > 0;
+      if (aHasOrder && bHasOrder && aRawOrder !== bRawOrder) {
+        return aRawOrder - bRawOrder;
+      }
+      if (aHasOrder !== bHasOrder) {
+        return aHasOrder ? -1 : 1;
+      }
+      return a.id - b.id;
     });
+
+    const numberWidth = Math.max(2, String(ordered.length).length);
+    return ordered.map((step, index) => ({
+      step,
+      displayNumber: index + 1,
+      sortKey: `#${String(index + 1).padStart(numberWidth, '0')} ${String(step.title || '')}`.trim(),
+      label: `#${index + 1} ${String(step.title || '').trim()} (${prettyPhaseLabel(step.phase_key)})`.trim(),
+    })).sort((a, b) => sortAlpha(a.sortKey, b.sortKey));
   }, [steps]);
+
+  const linkedStepDisplayNumberById = React.useMemo(() => {
+    const map = new Map<number, number>();
+    linkedStepOptions.forEach((option) => {
+      map.set(option.step.id, option.displayNumber);
+    });
+    return map;
+  }, [linkedStepOptions]);
+
+  const attachableProjectDocuments = React.useMemo(() => {
+    return [...documents].sort((a, b) => {
+      const nameCmp = sortAlpha(String(a.original_name || ''), String(b.original_name || ''));
+      if (nameCmp !== 0) {
+        return nameCmp;
+      }
+      return a.id - b.id;
+    });
+  }, [documents]);
 
   const documentManagerKindOptions = React.useMemo(() => {
     const fromDocs = documents
@@ -1048,6 +1083,24 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       caption: draft.caption.trim() || null,
       step_id: draft.step_id > 0 ? draft.step_id : null,
     });
+  };
+
+  const onAttachExistingDocumentToStep = async (step: IBuildWizardStep) => {
+    const selectedDocumentId = Number(attachExistingDocByStepId[step.id] || 0);
+    if (selectedDocumentId <= 0) {
+      return;
+    }
+    const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId);
+    if (!selectedDocument) {
+      onToast?.({ tone: 'warning', message: 'Selected document is no longer available. Refresh and try again.' });
+      return;
+    }
+    if (Number(selectedDocument.step_id || 0) === step.id) {
+      onToast?.({ tone: 'info', message: 'Document is already linked to this step.' });
+      return;
+    }
+    await onSaveDocument(selectedDocumentId, { step_id: step.id });
+    setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: '' }));
   };
 
   const onFindPurchase = async (step: IBuildWizardStep) => {
@@ -1764,6 +1817,39 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     }}
                   />
                 </label>
+                {attachableProjectDocuments.length ? (
+                  <div className="build-wizard-step-attach-existing">
+                    <select
+                      value={attachExistingDocByStepId[step.id] || ''}
+                      onChange={(e) => setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                    >
+                      <option value="">Attach existing document...</option>
+                      {attachableProjectDocuments.map((doc) => {
+                        const linkedStepId = Number(doc.step_id || 0);
+                        const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
+                        const linkedStepNumber = linkedStepId > 0
+                          ? (linkedStepDisplayNumberById.get(linkedStepId) || linkedStep?.step_order || linkedStepId)
+                          : 0;
+                        const linkSuffix = linkedStep
+                          ? `Linked #${linkedStepNumber}: ${linkedStep.title}`
+                          : 'Unlinked';
+                        return (
+                          <option key={doc.id} value={String(doc.id)}>
+                            {doc.original_name} ({buildWizardTokenLabel(doc.kind, 'Other')}) - {linkSuffix}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      onClick={() => void onAttachExistingDocumentToStep(step)}
+                      disabled={!attachExistingDocByStepId[step.id]}
+                    >
+                      Attach
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               {noteEditorOpenByStep[step.id] ? (
@@ -2648,9 +2734,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                               onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
                             >
                               <option value="">No step linked</option>
-                              {linkedStepOptions.map((step) => (
-                                <option key={step.id} value={step.id}>
-                                  {prettyPhaseLabel(step.phase_key)} - #{step.step_order} {step.title}
+                              {linkedStepOptions.map((option) => (
+                                <option key={option.step.id} value={option.step.id}>
+                                  {option.label}
                                 </option>
                               ))}
                             </select>

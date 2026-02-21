@@ -797,6 +797,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .build-wizard-upload-btn {
@@ -809,6 +810,18 @@
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.build-wizard-step-attach-existing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.build-wizard-step-attach-existing select {
+  min-width: 280px;
+  max-width: min(520px, 100%);
 }
 
 .build-wizard-note-editor {
@@ -1608,6 +1621,15 @@
 
   .build-wizard-step-grid {
     grid-template-columns: 1fr;
+  }
+
+  .build-wizard-step-attach-existing {
+    width: 100%;
+  }
+
+  .build-wizard-step-attach-existing select {
+    min-width: 0;
+    width: 100%;
   }
 
   .build-wizard-doc-manager-row {

@@ -2,19 +2,19 @@ import { IBuildWizardStep } from '../../../types/buildWizard';
 import { BuildTabId, StepType } from '../../../types/pages/buildWizardPage';
 
 export const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
-  { id: 'overview', label: '1. Overview' },
-  { id: 'start', label: '2. Start' },
-  { id: 'land', label: '3. Land & Survey' },
-  { id: 'permits', label: '4. Permits' },
-  { id: 'site', label: '5. Site & Foundation' },
-  { id: 'framing', label: '6. Framing & Shell' },
-  { id: 'mep', label: '7. MEP & Inspections' },
-  { id: 'finishes', label: '8. Finishes' },
-  { id: 'desk', label: '9. Project Desk' },
-  { id: 'completed', label: '10. Completed' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'start', label: '1. Start' },
+  { id: 'land', label: '2. Land & Survey' },
+  { id: 'permits', label: '3. Permits' },
+  { id: 'site', label: '4. Site & Foundation' },
+  { id: 'framing', label: '5. Framing & Shell' },
+  { id: 'mep', label: '6. MEP & Inspections' },
+  { id: 'finishes', label: '7. Finishes' },
+  { id: 'desk', label: 'Project Desk' },
+  { id: 'completed', label: '8. Completed' },
 ];
 
-export const PHASE_PROGRESS_ORDER: BuildTabId[] = ['land', 'permits', 'site', 'framing', 'mep', 'finishes', 'desk'];
+export const PHASE_PROGRESS_ORDER: BuildTabId[] = ['land', 'permits', 'site', 'framing', 'mep', 'finishes'];
 
 export const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
   overview: 'var(--catn8-bw-overview-color)',

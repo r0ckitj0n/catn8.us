@@ -5,7 +5,12 @@ import { StandardIconLink } from '../../components/common/StandardIconLink';
 import { WebpImage } from '../../components/common/WebpImage';
 import { ApiClient } from '../ApiClient';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
-import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
+import {
+  IBuildWizardContactAssignment,
+  IBuildWizardContentSearchResult,
+  IBuildWizardDocument,
+  IBuildWizardStep,
+} from '../../types/buildWizard';
 import { IBuildWizardDropdownSettings } from '../../types/buildWizardDropdowns';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { BuildTabId, DocumentDraftMap, LotSizeUnit, StepDraftMap, StepType, WizardView } from '../../types/pages/buildWizardPage';
@@ -68,6 +73,35 @@ type LightboxPreview =
   | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean; format: 'text' | 'hex' }
   | { mode: 'error'; src: string; title: string; message: string };
 
+type BuildWizardSearchResult =
+  | {
+      id: string;
+      score: number;
+      kind: 'phase';
+      title: string;
+      subtitle: string;
+      phaseId: BuildTabId;
+    }
+  | {
+      id: string;
+      score: number;
+      kind: 'step';
+      title: string;
+      subtitle: string;
+      stepId: number;
+      phaseId: BuildTabId;
+    }
+  | {
+      id: string;
+      score: number;
+      kind: 'document';
+      title: string;
+      subtitle: string;
+      document: IBuildWizardDocument;
+      linkedStepId: number;
+      linkedPhaseId: BuildTabId | null;
+    };
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
@@ -79,6 +113,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateProject,
     steps,
     documents,
+    contacts,
+    contactAssignments,
     aiPromptText,
     aiPayloadJson,
     openProject,
@@ -100,6 +136,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
+    searchContent,
+    saveContact,
+    deleteContact,
+    addContactAssignment,
+    deleteContactAssignment,
   } = useBuildWizard(onToast);
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
@@ -122,6 +163,37 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [documentManagerKindFilter, setDocumentManagerKindFilter] = React.useState<string>('all');
   const [documentManagerPhaseFilter, setDocumentManagerPhaseFilter] = React.useState<string>('all');
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
+  const [deskSelectedContactId, setDeskSelectedContactId] = React.useState<number>(0);
+  const [deskContactDraft, setDeskContactDraft] = React.useState<{
+    contact_id?: number;
+    display_name: string;
+    email: string;
+    phone: string;
+    company: string;
+    role_title: string;
+    notes: string;
+    is_vendor: number;
+    is_project_only: number;
+    vendor_type: string;
+    vendor_license: string;
+    vendor_trade: string;
+    vendor_website: string;
+  }>({
+    display_name: '',
+    email: '',
+    phone: '',
+    company: '',
+    role_title: '',
+    notes: '',
+    is_vendor: 0,
+    is_project_only: 1,
+    vendor_type: '',
+    vendor_license: '',
+    vendor_trade: '',
+    vendor_website: '',
+  });
+  const [deskAssignmentPhaseKey, setDeskAssignmentPhaseKey] = React.useState<string>('general');
+  const [deskAssignmentStepId, setDeskAssignmentStepId] = React.useState<number>(0);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
@@ -143,9 +215,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
   const [expandedStepOrderSelectId, setExpandedStepOrderSelectId] = React.useState<number>(0);
+  const [topbarSearchQuery, setTopbarSearchQuery] = React.useState<string>('');
+  const [topbarSearchOpen, setTopbarSearchOpen] = React.useState<boolean>(false);
+  const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
+  const [topbarSearchDocumentResults, setTopbarSearchDocumentResults] = React.useState<IBuildWizardContentSearchResult[]>([]);
+  const [topbarSearchFocusStepId, setTopbarSearchFocusStepId] = React.useState<number>(0);
+  const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | 'contact' | 'vendor'>('all');
+  const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
+  const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
 
   React.useEffect(() => {
@@ -291,6 +371,66 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   }, [steps]);
 
+  React.useEffect(() => {
+    if (!topbarSearchOpen) {
+      return;
+    }
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !topbarSearchBoxRef.current || topbarSearchBoxRef.current.contains(target)) {
+        return;
+      }
+      setTopbarSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [topbarSearchOpen]);
+
+  React.useEffect(() => {
+    if (!topbarSearchFocusStepId || !steps.length) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`build-wizard-step-${topbarSearchFocusStepId}`);
+      if (!el) {
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [topbarSearchFocusStepId, activeTab, steps.length]);
+
+  React.useEffect(() => {
+    const query = topbarSearchQuery.trim();
+    if (query.length < 2 || projectId <= 0) {
+      setTopbarSearchLoading(false);
+      setTopbarSearchDocumentResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setTopbarSearchLoading(true);
+      void searchContent(query, 25)
+        .then((res) => {
+          if (cancelled) {
+            return;
+          }
+          setTopbarSearchDocumentResults(Array.isArray(res?.results) ? res.results : []);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setTopbarSearchLoading(false);
+          }
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [projectId, searchContent, topbarSearchQuery]);
+
   const completedSteps = React.useMemo(() => {
     return steps
       .filter((s) => Number(s.is_completed) === 1)
@@ -413,6 +553,90 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const projectDeskSteps = React.useMemo(() => {
     return steps.filter((step) => stepPhaseBucket(step) === 'desk');
   }, [steps]);
+
+  const deskContacts = React.useMemo(() => {
+    return [...contacts].sort((a, b) => {
+      if (Number(a.is_vendor) !== Number(b.is_vendor)) {
+        return Number(b.is_vendor) - Number(a.is_vendor);
+      }
+      return sortAlpha(String(a.display_name || ''), String(b.display_name || ''));
+    });
+  }, [contacts]);
+
+  const selectedDeskContact = React.useMemo(() => {
+    if (deskSelectedContactId <= 0) {
+      return null;
+    }
+    return deskContacts.find((contact) => contact.id === deskSelectedContactId) || null;
+  }, [deskContacts, deskSelectedContactId]);
+
+  const stepByIdMap = React.useMemo(() => {
+    const map = new Map<number, IBuildWizardStep>();
+    steps.forEach((step) => map.set(step.id, step));
+    return map;
+  }, [steps]);
+
+  const selectedContactAssignments = React.useMemo(() => {
+    if (!selectedDeskContact) {
+      return [] as IBuildWizardContactAssignment[];
+    }
+    return contactAssignments
+      .filter((assignment) => assignment.contact_id === selectedDeskContact.id)
+      .sort((a, b) => a.id - b.id);
+  }, [contactAssignments, selectedDeskContact]);
+
+  const stepAssigneesByStepId = React.useMemo(() => {
+    const normalizePhaseKey = (value: string | null | undefined): string => String(value || '').trim().toLowerCase();
+    const contactMap = new Map<number, typeof contacts[number]>();
+    contacts.forEach((contact) => {
+      contactMap.set(contact.id, contact);
+    });
+    const byStep = new Map<number, Array<{ contact: typeof contacts[number]; source: 'step' | 'phase' }>>();
+
+    steps.forEach((step) => {
+      const phaseKey = normalizePhaseKey(step.phase_key || 'general');
+      const dedupByContact = new Map<number, { contact: typeof contacts[number]; source: 'step' | 'phase' }>();
+
+      contactAssignments.forEach((assignment) => {
+        const assignmentStepId = Number(assignment.step_id || 0);
+        const assignmentPhaseKey = normalizePhaseKey(assignment.phase_key || '');
+        const isStepMatch = assignmentStepId > 0 && assignmentStepId === step.id;
+        const isPhaseMatch = assignmentStepId <= 0 && assignmentPhaseKey !== '' && assignmentPhaseKey === phaseKey;
+        if (!isStepMatch && !isPhaseMatch) {
+          return;
+        }
+        const contact = contactMap.get(assignment.contact_id);
+        if (!contact) {
+          return;
+        }
+        const nextSource: 'step' | 'phase' = isStepMatch ? 'step' : 'phase';
+        const existing = dedupByContact.get(contact.id);
+        if (!existing || (existing.source === 'phase' && nextSource === 'step')) {
+          dedupByContact.set(contact.id, { contact, source: nextSource });
+        }
+      });
+
+      if (dedupByContact.size > 0) {
+        byStep.set(
+          step.id,
+          Array.from(dedupByContact.values()).sort((a, b) => sortAlpha(String(a.contact.display_name || ''), String(b.contact.display_name || ''))),
+        );
+      }
+    });
+
+    return byStep;
+  }, [contactAssignments, contacts, steps]);
+
+  const stepFilterContactOptions = React.useMemo(() => {
+    const inTabContactIds = new Set<number>();
+    filteredTabSteps.forEach((step) => {
+      const assignees = stepAssigneesByStepId.get(step.id) || [];
+      assignees.forEach((entry) => inTabContactIds.add(entry.contact.id));
+    });
+    return contacts
+      .filter((contact) => inTabContactIds.has(contact.id))
+      .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
+  }, [contacts, filteredTabSteps, stepAssigneesByStepId]);
 
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
@@ -661,6 +885,106 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   }, [documents, documentManagerKindFilter, documentManagerPhaseFilter]);
 
+  const topbarSearchResults = React.useMemo<BuildWizardSearchResult[]>(() => {
+    const query = topbarSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+    const tokens = query.split(/\s+/g).filter(Boolean);
+    if (!tokens.length) {
+      return [];
+    }
+    const includesAll = (haystack: string): boolean => tokens.every((token) => haystack.includes(token));
+    const rank = (haystack: string): number => {
+      let score = 0;
+      if (haystack.includes(query)) {
+        score += 20;
+      }
+      tokens.forEach((token) => {
+        if (haystack.includes(token)) {
+          score += 5;
+        }
+      });
+      return score;
+    };
+
+    const results: BuildWizardSearchResult[] = [];
+
+    BUILD_TABS.filter((tab) => tab.id !== 'desk').forEach((tab) => {
+      const normalized = `${String(tab.label || '').toLowerCase()} ${String(prettyPhaseLabel(tab.id)).toLowerCase()}`;
+      if (!includesAll(normalized)) {
+        return;
+      }
+      results.push({
+        id: `phase:${tab.id}`,
+        score: 90 + rank(normalized),
+        kind: 'phase',
+        title: tab.label,
+        subtitle: 'Build Wizard phase',
+        phaseId: tab.id,
+      });
+    });
+
+    steps.forEach((step) => {
+      const phaseId = stepPhaseBucket(step);
+      const notesText = (step.notes || []).map((note) => String(note.note_text || '')).join(' ');
+      const normalized = [
+        step.title,
+        step.description,
+        step.phase_key,
+        prettyPhaseLabel(step.phase_key),
+        step.step_type,
+        notesText,
+      ].map((v) => String(v || '').toLowerCase()).join(' ');
+      if (!includesAll(normalized)) {
+        return;
+      }
+      results.push({
+        id: `step:${step.id}`,
+        score: 70 + rank(normalized),
+        kind: 'step',
+        title: `#${step.step_order} ${step.title}`,
+        subtitle: `${prettyPhaseLabel(step.phase_key)} phase`,
+        stepId: step.id,
+        phaseId,
+      });
+    });
+
+    topbarSearchDocumentResults.forEach((doc) => {
+      const normalized = [
+        doc.original_name,
+        doc.caption,
+        doc.kind,
+        doc.step_title,
+        doc.step_phase_key,
+        prettyPhaseLabel(doc.step_phase_key || 'general'),
+        doc.snippet,
+      ].map((v) => String(v || '').toLowerCase()).join(' ');
+      if (!includesAll(normalized)) {
+        return;
+      }
+      const linkedStepId = Number(doc.step_id || 0);
+      const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
+      const linkedPhaseId = linkedStep ? stepPhaseBucket(linkedStep) : null;
+      results.push({
+        id: `document:${doc.id}`,
+        score: 60 + rank(normalized),
+        kind: 'document',
+        title: doc.original_name || `Document #${doc.id}`,
+        subtitle: linkedStepId > 0
+          ? `${buildWizardTokenLabel(doc.kind, 'Other')} | Linked to ${doc.step_title || `step #${linkedStepId}`}${doc.snippet ? ` | ${doc.snippet}` : ''}`
+          : `${buildWizardTokenLabel(doc.kind, 'Other')} | Project document${doc.snippet ? ` | ${doc.snippet}` : ''}`,
+        document: doc,
+        linkedStepId,
+        linkedPhaseId,
+      });
+    });
+
+    return results
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+  }, [stepById, steps, topbarSearchDocumentResults, topbarSearchQuery]);
+
   React.useEffect(() => {
     if (docStepId <= 0) {
       return;
@@ -687,6 +1011,64 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDocumentManagerKindFilter('all');
     setDocumentManagerPhaseFilter('all');
   }, [documentManagerOpen, documents]);
+
+  React.useEffect(() => {
+    if (!projectDeskOpen) {
+      return;
+    }
+    if (deskSelectedContactId > 0 && deskContacts.some((contact) => contact.id === deskSelectedContactId)) {
+      return;
+    }
+    setDeskSelectedContactId(deskContacts[0]?.id || 0);
+  }, [projectDeskOpen, deskContacts, deskSelectedContactId]);
+
+  React.useEffect(() => {
+    if (!projectDeskOpen) {
+      return;
+    }
+    if (!selectedDeskContact) {
+      setDeskContactDraft({
+        display_name: '',
+        email: '',
+        phone: '',
+        company: '',
+        role_title: '',
+        notes: '',
+        is_vendor: 0,
+        is_project_only: 1,
+        vendor_type: '',
+        vendor_license: '',
+        vendor_trade: '',
+        vendor_website: '',
+      });
+      return;
+    }
+    setDeskContactDraft({
+      contact_id: selectedDeskContact.id,
+      display_name: selectedDeskContact.display_name || '',
+      email: selectedDeskContact.email || '',
+      phone: selectedDeskContact.phone || '',
+      company: selectedDeskContact.company || '',
+      role_title: selectedDeskContact.role_title || '',
+      notes: selectedDeskContact.notes || '',
+      is_vendor: Number(selectedDeskContact.is_vendor) === 1 ? 1 : 0,
+      is_project_only: selectedDeskContact.project_id ? 1 : 0,
+      vendor_type: selectedDeskContact.vendor_type || '',
+      vendor_license: selectedDeskContact.vendor_license || '',
+      vendor_trade: selectedDeskContact.vendor_trade || '',
+      vendor_website: selectedDeskContact.vendor_website || '',
+    });
+  }, [projectDeskOpen, selectedDeskContact]);
+
+  React.useEffect(() => {
+    if (stepCardAssigneeIdFilter <= 0) {
+      return;
+    }
+    const exists = stepFilterContactOptions.some((contact) => contact.id === stepCardAssigneeIdFilter);
+    if (!exists) {
+      setStepCardAssigneeIdFilter(0);
+    }
+  }, [stepCardAssigneeIdFilter, stepFilterContactOptions]);
 
   const openBuild = async (nextProjectId: number) => {
     await openProject(nextProjectId);
@@ -914,6 +1296,32 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, onToast]);
 
+  const selectTopbarSearchResult = React.useCallback((result: BuildWizardSearchResult) => {
+    setTopbarSearchOpen(false);
+
+    if (result.kind === 'phase') {
+      setActiveTab(result.phaseId);
+      return;
+    }
+
+    if (result.kind === 'step') {
+      setActiveTab(result.phaseId);
+      setTopbarSearchFocusStepId(0);
+      window.setTimeout(() => setTopbarSearchFocusStepId(result.stepId), 0);
+      return;
+    }
+
+    if (result.linkedPhaseId) {
+      setActiveTab(result.linkedPhaseId);
+    }
+    if (result.linkedStepId > 0) {
+      setTopbarSearchFocusStepId(0);
+      window.setTimeout(() => setTopbarSearchFocusStepId(result.linkedStepId), 0);
+      return;
+    }
+    void openDocumentPreview(result.document);
+  }, [openDocumentPreview]);
+
   const onDeleteProject = async (projectSummary: { id: number; title: string }) => {
     if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
       return;
@@ -931,6 +1339,87 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setDeletingProjectId(0);
     }
   };
+
+  const onStartNewDeskContact = React.useCallback(() => {
+    setDeskSelectedContactId(0);
+    setDeskContactDraft({
+      display_name: '',
+      email: '',
+      phone: '',
+      company: '',
+      role_title: '',
+      notes: '',
+      is_vendor: 0,
+      is_project_only: 1,
+      vendor_type: '',
+      vendor_license: '',
+      vendor_trade: '',
+      vendor_website: '',
+    });
+  }, []);
+
+  const onSaveDeskContact = React.useCallback(async () => {
+    if (projectId <= 0) {
+      return;
+    }
+    const next = await saveContact({
+      project_id: projectId,
+      contact_id: deskContactDraft.contact_id,
+      display_name: deskContactDraft.display_name,
+      email: toStringOrNull(deskContactDraft.email),
+      phone: toStringOrNull(deskContactDraft.phone),
+      company: toStringOrNull(deskContactDraft.company),
+      role_title: toStringOrNull(deskContactDraft.role_title),
+      notes: toStringOrNull(deskContactDraft.notes),
+      is_vendor: deskContactDraft.is_vendor,
+      is_project_only: deskContactDraft.is_project_only,
+      vendor_type: toStringOrNull(deskContactDraft.vendor_type),
+      vendor_license: toStringOrNull(deskContactDraft.vendor_license),
+      vendor_trade: toStringOrNull(deskContactDraft.vendor_trade),
+      vendor_website: toStringOrNull(deskContactDraft.vendor_website),
+    });
+    if (next?.id) {
+      setDeskSelectedContactId(next.id);
+    }
+  }, [deskContactDraft, projectId, saveContact]);
+
+  const onDeleteDeskContact = React.useCallback(async () => {
+    if (projectId <= 0 || !selectedDeskContact) {
+      return;
+    }
+    const confirmed = window.confirm(`Delete contact "${selectedDeskContact.display_name}"?`);
+    if (!confirmed) {
+      return;
+    }
+    const didDelete = await deleteContact(projectId, selectedDeskContact.id);
+    if (!didDelete) {
+      return;
+    }
+    const fallback = deskContacts.find((contact) => contact.id !== selectedDeskContact.id);
+    setDeskSelectedContactId(fallback?.id || 0);
+  }, [deleteContact, deskContacts, projectId, selectedDeskContact]);
+
+  const onAddDeskPhaseAssignment = React.useCallback(async () => {
+    if (projectId <= 0 || !selectedDeskContact) {
+      return;
+    }
+    await addContactAssignment({
+      project_id: projectId,
+      contact_id: selectedDeskContact.id,
+      phase_key: deskAssignmentPhaseKey,
+    });
+  }, [addContactAssignment, deskAssignmentPhaseKey, projectId, selectedDeskContact]);
+
+  const onAddDeskStepAssignment = React.useCallback(async () => {
+    if (projectId <= 0 || !selectedDeskContact || deskAssignmentStepId <= 0) {
+      return;
+    }
+    await addContactAssignment({
+      project_id: projectId,
+      contact_id: selectedDeskContact.id,
+      step_id: deskAssignmentStepId,
+    });
+  }, [addContactAssignment, deskAssignmentStepId, projectId, selectedDeskContact]);
 
   const onRunSingletreeRecovery = async (apply: boolean) => {
     if (!isAdmin) {
@@ -1243,6 +1732,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (!tabSteps.length) {
       return <div className="build-wizard-muted">No steps in this tab yet.</div>;
     }
+    const hasAssigneeFilters = stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0;
     const rows = activeTabTreeRows;
 
     return (
@@ -1263,6 +1753,20 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         />
         {rows.map((row, rowIndex) => {
           const step = row.step;
+          const allStepAssignees = stepAssigneesByStepId.get(step.id) || [];
+          const visibleStepAssignees = allStepAssignees.filter((entry) => {
+            if (stepCardAssigneeTypeFilter === 'vendor' && Number(entry.contact.is_vendor) !== 1) {
+              return false;
+            }
+            if (stepCardAssigneeTypeFilter === 'contact' && Number(entry.contact.is_vendor) === 1) {
+              return false;
+            }
+            if (stepCardAssigneeIdFilter > 0 && entry.contact.id !== stepCardAssigneeIdFilter) {
+              return false;
+            }
+            return true;
+          });
+          const assigneeFilterMatch = !hasAssigneeFilters || visibleStepAssignees.length > 0;
           const stepReadOnly = Number(step.is_completed) === 1;
           const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
           const draft = stepDrafts[step.id] || step;
@@ -1281,7 +1785,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           return (
             <React.Fragment key={step.id}>
             <div
-              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''}`}
+              id={`build-wizard-step-${step.id}`}
+              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''}`}
               style={{ '--bw-indent-level': String(row.level) } as React.CSSProperties}
               onDragOver={(e) => {
                 if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
@@ -1906,6 +2411,24 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               ) : null}
               </fieldset>
 
+              <div className="build-wizard-step-assignees">
+                <div className="build-wizard-step-assignees-label">Assigned</div>
+                {visibleStepAssignees.length > 0 ? (
+                  <div className="build-wizard-step-assignees-list">
+                    {visibleStepAssignees.map((entry) => (
+                      <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${Number(entry.contact.is_vendor) === 1 ? 'is-vendor' : 'is-contact'}`}>
+                        {Number(entry.contact.is_vendor) === 1 ? 'Vendor' : 'Contact'}: {entry.contact.display_name}
+                        {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="build-wizard-muted">
+                    {allStepAssignees.length > 0 && hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact/vendor assignments.'}
+                  </div>
+                )}
+              </div>
+
               <div className="build-wizard-step-media">
                 {renderDocumentGallery(
                   documents.filter((d) => Number(d.step_id || 0) === step.id),
@@ -2190,6 +2713,57 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           <div className="build-wizard-topbar">
             <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
             <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
+            <div className="build-wizard-topbar-search-shell" ref={topbarSearchBoxRef}>
+              <input
+                type="search"
+                value={topbarSearchQuery}
+                onFocus={() => setTopbarSearchOpen(true)}
+                onChange={(e) => {
+                  setTopbarSearchQuery(e.target.value);
+                  setTopbarSearchOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setTopbarSearchOpen(false);
+                    return;
+                  }
+                  if (e.key === 'Enter' && topbarSearchResults.length > 0) {
+                    e.preventDefault();
+                    selectTopbarSearchResult(topbarSearchResults[0]);
+                  }
+                }}
+                className="form-control form-control-sm build-wizard-topbar-search-input"
+                placeholder="Search docs, steps, phases..."
+                aria-label="Search build wizard content"
+              />
+              {topbarSearchOpen && topbarSearchQuery.trim() ? (
+                <div className="build-wizard-topbar-search-results" role="listbox" aria-label="Build wizard search results">
+                  {topbarSearchResults.length === 0 ? (
+                    <div className="build-wizard-topbar-search-empty">
+                      No matches yet.
+                      {topbarSearchLoading ? ' Searching...' : ''}
+                    </div>
+                  ) : (
+                    topbarSearchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        type="button"
+                        className="build-wizard-topbar-search-result"
+                        onClick={() => selectTopbarSearchResult(result)}
+                      >
+                        <span className="build-wizard-topbar-search-result-kind">
+                          {result.kind === 'document' ? 'Doc' : result.kind === 'step' ? 'Step' : 'Phase'}
+                        </span>
+                        <span className="build-wizard-topbar-search-result-text">
+                          <strong>{result.title}</strong>
+                          <span>{result.subtitle}</span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
             <div className="build-wizard-topbar-actions">
               <button className="btn btn-primary btn-sm" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
                 {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
@@ -2520,6 +3094,41 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               Drag the handle to reorder. Drop on another step card to make it a child.
             </div>
 
+            <div className="build-wizard-step-assignee-filters">
+              <span>Step Card Filters</span>
+              <select
+                value={stepCardAssigneeTypeFilter}
+                onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | 'contact' | 'vendor')}
+              >
+                <option value="all">All Contacts/Vendors</option>
+                <option value="contact">Contacts Only</option>
+                <option value="vendor">Vendors Only</option>
+              </select>
+              <select
+                value={stepCardAssigneeIdFilter > 0 ? String(stepCardAssigneeIdFilter) : ''}
+                onChange={(e) => setStepCardAssigneeIdFilter(Number(e.target.value || '0'))}
+              >
+                <option value="">All Assigned People</option>
+                {stepFilterContactOptions.map((contact) => (
+                  <option key={`step-filter-contact-${contact.id}`} value={contact.id}>
+                    {contact.is_vendor ? 'Vendor' : 'Contact'}: {contact.display_name}
+                  </option>
+                ))}
+              </select>
+              {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0) ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => {
+                    setStepCardAssigneeTypeFilter('all');
+                    setStepCardAssigneeIdFilter(0);
+                  }}
+                >
+                  Clear Filters
+                </button>
+              ) : null}
+            </div>
+
             {activeTab === 'desk' ? (
               <div className="build-wizard-desk-grid">
                 <div>
@@ -2592,6 +3201,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <span>{formatCurrency(step.actual_cost !== null ? step.actual_cost : step.estimated_cost)}</span>
                     </div>
                     <div className="build-wizard-completed-date">Date: {formatDate(step.completed_at || step.expected_end_date || step.expected_start_date)}</div>
+                    <div className="build-wizard-step-assignees">
+                      <div className="build-wizard-step-assignees-label">Assigned</div>
+                      {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (
+                        <div className="build-wizard-step-assignees-list">
+                          {(stepAssigneesByStepId.get(step.id) || []).map((entry) => (
+                            <span key={`completed-${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${Number(entry.contact.is_vendor) === 1 ? 'is-vendor' : 'is-contact'}`}>
+                              {Number(entry.contact.is_vendor) === 1 ? 'Vendor' : 'Contact'}: {entry.contact.display_name}
+                              {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="build-wizard-muted">No contact/vendor assignments.</div>
+                      )}
+                    </div>
                     {step.notes.length ? (
                       <div className="build-wizard-completed-notes">
                         {step.notes.map((note) => (
@@ -2898,6 +3522,192 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <div className="build-wizard-doc-list">
                   {renderDocumentGallery(documents, 'No documents uploaded yet.')}
                 </div>
+              </div>
+              <div>
+                <h3>Contacts & Vendors</h3>
+                <div className="build-wizard-contact-toolbar">
+                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={onStartNewDeskContact}>
+                    New Contact
+                  </button>
+                  <select
+                    value={deskSelectedContactId > 0 ? String(deskSelectedContactId) : ''}
+                    onChange={(e) => setDeskSelectedContactId(Number(e.target.value || '0'))}
+                  >
+                    <option value="">Select contact...</option>
+                    {deskContacts.map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.is_vendor ? 'Vendor' : 'Contact'}: {contact.display_name}
+                        {contact.project_id ? ' (Project)' : ' (Site)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="build-wizard-contact-editor">
+                  <label>
+                    Name
+                    <input
+                      type="text"
+                      value={deskContactDraft.display_name}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, display_name: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={deskContactDraft.email}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, email: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Phone
+                    <input
+                      type="text"
+                      value={deskContactDraft.phone}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Company
+                    <input
+                      type="text"
+                      value={deskContactDraft.company}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, company: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Role
+                    <input
+                      type="text"
+                      value={deskContactDraft.role_title}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, role_title: e.target.value }))}
+                    />
+                  </label>
+                  <div className="build-wizard-contact-flags">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={deskContactDraft.is_project_only === 1}
+                        onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, is_project_only: e.target.checked ? 1 : 0 }))}
+                      />
+                      Project-only contact
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={deskContactDraft.is_vendor === 1}
+                        onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, is_vendor: e.target.checked ? 1 : 0 }))}
+                      />
+                      Vendor
+                    </label>
+                  </div>
+                  {deskContactDraft.is_vendor === 1 ? (
+                    <div className="build-wizard-contact-vendor-fields">
+                      <label>
+                        Vendor Type
+                        <input
+                          type="text"
+                          value={deskContactDraft.vendor_type}
+                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_type: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Trade
+                        <input
+                          type="text"
+                          value={deskContactDraft.vendor_trade}
+                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_trade: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        License
+                        <input
+                          type="text"
+                          value={deskContactDraft.vendor_license}
+                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_license: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        Website
+                        <input
+                          type="url"
+                          value={deskContactDraft.vendor_website}
+                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_website: e.target.value }))}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                  <label>
+                    Notes
+                    <textarea
+                      rows={3}
+                      value={deskContactDraft.notes}
+                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                    />
+                  </label>
+                  <div className="build-wizard-contact-actions">
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => void onSaveDeskContact()}>
+                      Save Contact
+                    </button>
+                    {selectedDeskContact ? (
+                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void onDeleteDeskContact()}>
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {selectedDeskContact ? (
+                  <div className="build-wizard-contact-assignments">
+                    <h4>Assignments</h4>
+                    <div className="build-wizard-contact-assignment-controls">
+                      <select value={deskAssignmentPhaseKey} onChange={(e) => setDeskAssignmentPhaseKey(e.target.value)}>
+                        <option value="general">General</option>
+                        {phaseOptions.map((opt) => (
+                          <option key={`contact-phase-${opt.value}`} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void onAddDeskPhaseAssignment()}>
+                        Assign Phase
+                      </button>
+                    </div>
+                    <div className="build-wizard-contact-assignment-controls">
+                      <select
+                        value={deskAssignmentStepId > 0 ? String(deskAssignmentStepId) : ''}
+                        onChange={(e) => setDeskAssignmentStepId(Number(e.target.value || '0'))}
+                      >
+                        <option value="">Select step...</option>
+                        {linkedStepOptions.map((opt) => (
+                          <option key={`contact-step-${opt.step.id}`} value={opt.step.id}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void onAddDeskStepAssignment()}>
+                        Assign Step
+                      </button>
+                    </div>
+                    <div className="build-wizard-contact-assignment-list">
+                      {selectedContactAssignments.length ? selectedContactAssignments.map((assignment) => {
+                        const assignedStep = assignment.step_id ? stepByIdMap.get(assignment.step_id) : null;
+                        const phaseName = assignment.phase_key ? prettyPhaseLabel(assignment.phase_key) : null;
+                        return (
+                          <div key={assignment.id} className="build-wizard-contact-assignment-item">
+                            <div>
+                              {assignedStep
+                                ? `Step #${assignedStep.step_order} ${assignedStep.title}`
+                                : `Phase: ${phaseName || 'General'}`}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-sm"
+                              onClick={() => void deleteContactAssignment(projectId, assignment.id)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      }) : <div className="build-wizard-muted">No assignments yet.</div>}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div>
                 <h3>AI Package</h3>

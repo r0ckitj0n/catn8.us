@@ -3,6 +3,9 @@ import { ApiClient } from '../ApiClient';
 import {
   IBuildWizardDocumentBlobBackfillResponse,
   IBuildWizardBootstrapResponse,
+  IBuildWizardContentSearchResponse,
+  IBuildWizardContact,
+  IBuildWizardContactAssignment,
   IBuildWizardDocument,
   IBuildWizardFindPurchaseOptionsResponse,
   IBuildWizardHydrateBlobsResponse,
@@ -83,6 +86,26 @@ type ReplaceDocumentResponse = {
   document: IBuildWizardDocument;
 };
 
+type SaveContactResponse = {
+  success: boolean;
+  contact: IBuildWizardContact;
+};
+
+type DeleteContactResponse = {
+  success: boolean;
+  deleted_contact_id: number;
+};
+
+type AddContactAssignmentResponse = {
+  success: boolean;
+  assignment: IBuildWizardContactAssignment;
+};
+
+type DeleteContactAssignmentResponse = {
+  success: boolean;
+  deleted_assignment_id: number;
+};
+
 function toNullableNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -123,6 +146,8 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
   });
   const [steps, setSteps] = React.useState<IBuildWizardStep[]>([]);
   const [documents, setDocuments] = React.useState<IBuildWizardDocument[]>([]);
+  const [contacts, setContacts] = React.useState<IBuildWizardContact[]>([]);
+  const [contactAssignments, setContactAssignments] = React.useState<IBuildWizardContactAssignment[]>([]);
   const [aiPromptText, setAiPromptText] = React.useState<string>('');
   const [aiPayloadJson, setAiPayloadJson] = React.useState<string>('');
 
@@ -160,6 +185,8 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       });
       setSteps(Array.isArray(res?.steps) ? res.steps : []);
       setDocuments(Array.isArray(res?.documents) ? res.documents : []);
+      setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
+      setContactAssignments(Array.isArray(res?.contact_assignments) ? res.contact_assignments : []);
       setAiPromptText(String(res?.project?.ai_prompt_text || ''));
       setAiPayloadJson(String(res?.project?.ai_payload_json || ''));
     } catch (err: any) {
@@ -454,6 +481,8 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         });
         setSteps([]);
         setDocuments([]);
+        setContacts([]);
+        setContactAssignments([]);
         setAiPromptText('');
         setAiPayloadJson('');
       }
@@ -804,6 +833,141 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
   }, [onToast]);
 
+  const searchContent = React.useCallback(async (query: string, limit: number = 20) => {
+    if (projectId <= 0) {
+      return null;
+    }
+    const q = String(query || '').trim();
+    if (q === '') {
+      return { results: [], query: q };
+    }
+    try {
+      const res = await ApiClient.post<IBuildWizardContentSearchResponse>('/api/build_wizard.php?action=search_content', {
+        project_id: projectId,
+        query: q,
+        limit: Number.isFinite(limit) ? Math.max(1, Math.min(50, Math.trunc(limit))) : 20,
+      });
+      return {
+        results: Array.isArray(res?.results) ? res.results : [],
+        query: String(res?.query || q),
+      };
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to search Build Wizard content' });
+      return null;
+    }
+  }, [onToast, projectId]);
+
+  const saveContact = React.useCallback(async (
+    payload: {
+      project_id: number;
+      contact_id?: number;
+      display_name: string;
+      email?: string | null;
+      phone?: string | null;
+      company?: string | null;
+      role_title?: string | null;
+      notes?: string | null;
+      is_vendor?: number;
+      is_project_only?: number;
+      vendor_type?: string | null;
+      vendor_license?: string | null;
+      vendor_trade?: string | null;
+      vendor_website?: string | null;
+    },
+  ) => {
+    if (Number(payload.project_id || 0) <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<SaveContactResponse>('/api/build_wizard.php?action=save_contact', payload);
+      const next = res?.contact || null;
+      if (next) {
+        setContacts((prev) => {
+          const existingIndex = prev.findIndex((item) => item.id === next.id);
+          if (existingIndex >= 0) {
+            const merged = [...prev];
+            merged[existingIndex] = next;
+            return merged;
+          }
+          return [...prev, next];
+        });
+      }
+      onToast?.({ tone: 'success', message: 'Contact saved.' });
+      return next;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to save contact' });
+      return null;
+    }
+  }, [onToast]);
+
+  const deleteContact = React.useCallback(async (projectIdValue: number, contactId: number) => {
+    if (projectIdValue <= 0 || contactId <= 0) {
+      return false;
+    }
+    try {
+      await ApiClient.post<DeleteContactResponse>('/api/build_wizard.php?action=delete_contact', {
+        project_id: projectIdValue,
+        contact_id: contactId,
+      });
+      setContacts((prev) => prev.filter((contact) => contact.id !== contactId));
+      setContactAssignments((prev) => prev.filter((assignment) => assignment.contact_id !== contactId));
+      onToast?.({ tone: 'success', message: 'Contact deleted.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to delete contact' });
+      return false;
+    }
+  }, [onToast]);
+
+  const addContactAssignment = React.useCallback(async (
+    payload: {
+      project_id: number;
+      contact_id: number;
+      step_id?: number | null;
+      phase_key?: string | null;
+    },
+  ) => {
+    if (Number(payload.project_id || 0) <= 0 || Number(payload.contact_id || 0) <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<AddContactAssignmentResponse>('/api/build_wizard.php?action=add_contact_assignment', payload);
+      const next = res?.assignment || null;
+      if (next) {
+        setContactAssignments((prev) => {
+          const exists = prev.some((assignment) => assignment.id === next.id);
+          if (exists) {
+            return prev.map((assignment) => (assignment.id === next.id ? next : assignment));
+          }
+          return [...prev, next];
+        });
+      }
+      onToast?.({ tone: 'success', message: 'Assignment added.' });
+      return next;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to add assignment' });
+      return null;
+    }
+  }, [onToast]);
+
+  const deleteContactAssignment = React.useCallback(async (projectIdValue: number, assignmentId: number) => {
+    if (projectIdValue <= 0 || assignmentId <= 0) {
+      return false;
+    }
+    try {
+      await ApiClient.post<DeleteContactAssignmentResponse>('/api/build_wizard.php?action=delete_contact_assignment', {
+        project_id: projectIdValue,
+        assignment_id: assignmentId,
+      });
+      setContactAssignments((prev) => prev.filter((assignment) => assignment.id !== assignmentId));
+      onToast?.({ tone: 'success', message: 'Assignment removed.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to remove assignment' });
+      return false;
+    }
+  }, [onToast]);
+
   return {
     loading,
     saving,
@@ -817,6 +981,8 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     setQuestionnaire,
     steps,
     documents,
+    contacts,
+    contactAssignments,
     aiPromptText,
     aiPayloadJson,
     openProject,
@@ -843,5 +1009,10 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     recoverSingletreeDocuments,
     fetchSingletreeRecoveryStatus,
     stageSingletreeSourceFiles,
+    searchContent,
+    saveContact,
+    deleteContact,
+    addContactAssignment,
+    deleteContactAssignment,
   };
 }

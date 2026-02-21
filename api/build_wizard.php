@@ -79,6 +79,22 @@ function catn8_build_wizard_tables_ensure(): void
         CONSTRAINT fk_build_wizard_document_blobs_document FOREIGN KEY (document_id) REFERENCES build_wizard_documents(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_document_search_index (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        document_id INT NOT NULL,
+        project_id INT NOT NULL,
+        source_mime VARCHAR(120) NOT NULL DEFAULT 'application/octet-stream',
+        extraction_method VARCHAR(32) NOT NULL DEFAULT 'none',
+        content_hash CHAR(64) NOT NULL DEFAULT '',
+        extracted_text LONGTEXT NULL,
+        indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_document_id (document_id),
+        KEY idx_project_id (project_id),
+        FULLTEXT KEY ft_extracted_text (extracted_text),
+        CONSTRAINT fk_build_wizard_document_search_document FOREIGN KEY (document_id) REFERENCES build_wizard_documents(id) ON DELETE CASCADE,
+        CONSTRAINT fk_build_wizard_document_search_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_steps (
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
@@ -130,6 +146,46 @@ function catn8_build_wizard_tables_ensure(): void
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_step_id (step_id),
         CONSTRAINT fk_build_wizard_step_notes_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_contacts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        project_id INT NULL,
+        display_name VARCHAR(191) NOT NULL,
+        email VARCHAR(191) NULL,
+        phone VARCHAR(64) NULL,
+        company VARCHAR(191) NULL,
+        role_title VARCHAR(120) NULL,
+        notes TEXT NULL,
+        is_vendor TINYINT(1) NOT NULL DEFAULT 0,
+        vendor_type VARCHAR(64) NULL,
+        vendor_license VARCHAR(120) NULL,
+        vendor_trade VARCHAR(120) NULL,
+        vendor_website VARCHAR(500) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_owner_user_id (owner_user_id),
+        KEY idx_project_id (project_id),
+        KEY idx_is_vendor (is_vendor),
+        CONSTRAINT fk_build_wizard_contacts_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_contact_assignments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        contact_id INT NOT NULL,
+        step_id INT NULL,
+        phase_key VARCHAR(64) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_project_id (project_id),
+        KEY idx_contact_id (contact_id),
+        KEY idx_step_id (step_id),
+        KEY idx_phase_key (phase_key),
+        UNIQUE KEY uniq_contact_scope (project_id, contact_id, step_id, phase_key),
+        CONSTRAINT fk_build_wizard_contact_assignments_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE,
+        CONSTRAINT fk_build_wizard_contact_assignments_contact FOREIGN KEY (contact_id) REFERENCES build_wizard_contacts(id) ON DELETE CASCADE,
+        CONSTRAINT fk_build_wizard_contact_assignments_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $hasStepId = Database::queryOne(
@@ -206,12 +262,94 @@ function catn8_build_wizard_tables_ensure(): void
         }
     }
 
+    $contactColumns = [
+        'project_id' => 'ALTER TABLE build_wizard_contacts ADD COLUMN project_id INT NULL AFTER owner_user_id',
+        'display_name' => 'ALTER TABLE build_wizard_contacts ADD COLUMN display_name VARCHAR(191) NOT NULL DEFAULT \'\' AFTER project_id',
+        'email' => 'ALTER TABLE build_wizard_contacts ADD COLUMN email VARCHAR(191) NULL AFTER display_name',
+        'phone' => 'ALTER TABLE build_wizard_contacts ADD COLUMN phone VARCHAR(64) NULL AFTER email',
+        'company' => 'ALTER TABLE build_wizard_contacts ADD COLUMN company VARCHAR(191) NULL AFTER phone',
+        'role_title' => 'ALTER TABLE build_wizard_contacts ADD COLUMN role_title VARCHAR(120) NULL AFTER company',
+        'notes' => 'ALTER TABLE build_wizard_contacts ADD COLUMN notes TEXT NULL AFTER role_title',
+        'is_vendor' => 'ALTER TABLE build_wizard_contacts ADD COLUMN is_vendor TINYINT(1) NOT NULL DEFAULT 0 AFTER notes',
+        'vendor_type' => 'ALTER TABLE build_wizard_contacts ADD COLUMN vendor_type VARCHAR(64) NULL AFTER is_vendor',
+        'vendor_license' => 'ALTER TABLE build_wizard_contacts ADD COLUMN vendor_license VARCHAR(120) NULL AFTER vendor_type',
+        'vendor_trade' => 'ALTER TABLE build_wizard_contacts ADD COLUMN vendor_trade VARCHAR(120) NULL AFTER vendor_license',
+        'vendor_website' => 'ALTER TABLE build_wizard_contacts ADD COLUMN vendor_website VARCHAR(500) NULL AFTER vendor_trade',
+        'updated_at' => 'ALTER TABLE build_wizard_contacts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+    ];
+    foreach ($contactColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_contacts', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
+    }
+
+    $contactIndexes = [
+        'idx_owner_user_id' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_owner_user_id (owner_user_id)',
+        'idx_project_id' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_project_id (project_id)',
+        'idx_is_vendor' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_is_vendor (is_vendor)',
+    ];
+    foreach ($contactIndexes as $indexName => $indexSql) {
+        $exists = Database::queryOne(
+            'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+            ['build_wizard_contacts', $indexName]
+        );
+        if (!$exists) {
+            Database::execute($indexSql);
+        }
+    }
+
+    $assignmentColumns = [
+        'project_id' => 'ALTER TABLE build_wizard_contact_assignments ADD COLUMN project_id INT NOT NULL AFTER id',
+        'contact_id' => 'ALTER TABLE build_wizard_contact_assignments ADD COLUMN contact_id INT NOT NULL AFTER project_id',
+        'step_id' => 'ALTER TABLE build_wizard_contact_assignments ADD COLUMN step_id INT NULL AFTER contact_id',
+        'phase_key' => "ALTER TABLE build_wizard_contact_assignments ADD COLUMN phase_key VARCHAR(64) NULL AFTER step_id",
+        'created_at' => 'ALTER TABLE build_wizard_contact_assignments ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER phase_key',
+    ];
+    foreach ($assignmentColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_contact_assignments', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
+    }
+
+    $assignmentIndexes = [
+        'idx_project_id' => 'ALTER TABLE build_wizard_contact_assignments ADD KEY idx_project_id (project_id)',
+        'idx_contact_id' => 'ALTER TABLE build_wizard_contact_assignments ADD KEY idx_contact_id (contact_id)',
+        'idx_step_id' => 'ALTER TABLE build_wizard_contact_assignments ADD KEY idx_step_id (step_id)',
+        'idx_phase_key' => 'ALTER TABLE build_wizard_contact_assignments ADD KEY idx_phase_key (phase_key)',
+        'uniq_contact_scope' => 'ALTER TABLE build_wizard_contact_assignments ADD UNIQUE KEY uniq_contact_scope (project_id, contact_id, step_id, phase_key)',
+    ];
+    foreach ($assignmentIndexes as $indexName => $indexSql) {
+        $exists = Database::queryOne(
+            'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+            ['build_wizard_contact_assignments', $indexName]
+        );
+        if (!$exists) {
+            Database::execute($indexSql);
+        }
+    }
+
     $hasParentStepIndex = Database::queryOne(
         'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
         ['build_wizard_steps', 'idx_parent_step_id']
     );
     if (!$hasParentStepIndex) {
         Database::execute('ALTER TABLE build_wizard_steps ADD KEY idx_parent_step_id (parent_step_id)');
+    }
+
+    $hasDocSearchFulltext = Database::queryOne(
+        'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+        ['build_wizard_document_search_index', 'ft_extracted_text']
+    );
+    if (!$hasDocSearchFulltext) {
+        Database::execute('ALTER TABLE build_wizard_document_search_index ADD FULLTEXT KEY ft_extracted_text (extracted_text)');
     }
 }
 
@@ -1061,6 +1199,112 @@ function catn8_build_wizard_require_project_access(int $projectId, int $uid): ar
     return $project;
 }
 
+function catn8_build_wizard_contacts_for_project(int $projectId, int $uid): array
+{
+    if ($projectId <= 0 || $uid <= 0) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
+         FROM build_wizard_contacts
+         WHERE owner_user_id = ?
+           AND (project_id IS NULL OR project_id = ?)
+         ORDER BY is_vendor DESC, display_name ASC, id ASC',
+        [$uid, $projectId]
+    );
+
+    $contacts = [];
+    foreach ($rows as $row) {
+        $contacts[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+            'project_id' => $row['project_id'] !== null ? (int)$row['project_id'] : null,
+            'display_name' => (string)($row['display_name'] ?? ''),
+            'email' => $row['email'] !== null ? (string)$row['email'] : null,
+            'phone' => $row['phone'] !== null ? (string)$row['phone'] : null,
+            'company' => $row['company'] !== null ? (string)$row['company'] : null,
+            'role_title' => $row['role_title'] !== null ? (string)$row['role_title'] : null,
+            'notes' => $row['notes'] !== null ? (string)$row['notes'] : null,
+            'is_vendor' => (int)($row['is_vendor'] ?? 0),
+            'vendor_type' => $row['vendor_type'] !== null ? (string)$row['vendor_type'] : null,
+            'vendor_license' => $row['vendor_license'] !== null ? (string)$row['vendor_license'] : null,
+            'vendor_trade' => $row['vendor_trade'] !== null ? (string)$row['vendor_trade'] : null,
+            'vendor_website' => $row['vendor_website'] !== null ? (string)$row['vendor_website'] : null,
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'updated_at' => (string)($row['updated_at'] ?? ''),
+        ];
+    }
+    return $contacts;
+}
+
+function catn8_build_wizard_contact_assignments_for_project(int $projectId, int $uid): array
+{
+    if ($projectId <= 0 || $uid <= 0) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT a.id, a.project_id, a.contact_id, a.step_id, a.phase_key, a.created_at
+         FROM build_wizard_contact_assignments a
+         INNER JOIN build_wizard_contacts c ON c.id = a.contact_id
+         WHERE a.project_id = ?
+           AND c.owner_user_id = ?
+         ORDER BY a.id ASC',
+        [$projectId, $uid]
+    );
+
+    $assignments = [];
+    foreach ($rows as $row) {
+        $assignments[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'project_id' => (int)($row['project_id'] ?? 0),
+            'contact_id' => (int)($row['contact_id'] ?? 0),
+            'step_id' => $row['step_id'] !== null ? (int)$row['step_id'] : null,
+            'phase_key' => $row['phase_key'] !== null ? (string)$row['phase_key'] : null,
+            'created_at' => (string)($row['created_at'] ?? ''),
+        ];
+    }
+    return $assignments;
+}
+
+function catn8_build_wizard_contact_for_project(int $contactId, int $projectId, int $uid): ?array
+{
+    if ($contactId <= 0 || $projectId <= 0 || $uid <= 0) {
+        return null;
+    }
+    $row = Database::queryOne(
+        'SELECT id, owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
+         FROM build_wizard_contacts
+         WHERE id = ?
+           AND owner_user_id = ?
+           AND (project_id IS NULL OR project_id = ?)
+         LIMIT 1',
+        [$contactId, $uid, $projectId]
+    );
+    if (!$row) {
+        return null;
+    }
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+        'project_id' => $row['project_id'] !== null ? (int)$row['project_id'] : null,
+        'display_name' => (string)($row['display_name'] ?? ''),
+        'email' => $row['email'] !== null ? (string)$row['email'] : null,
+        'phone' => $row['phone'] !== null ? (string)$row['phone'] : null,
+        'company' => $row['company'] !== null ? (string)$row['company'] : null,
+        'role_title' => $row['role_title'] !== null ? (string)$row['role_title'] : null,
+        'notes' => $row['notes'] !== null ? (string)$row['notes'] : null,
+        'is_vendor' => (int)($row['is_vendor'] ?? 0),
+        'vendor_type' => $row['vendor_type'] !== null ? (string)$row['vendor_type'] : null,
+        'vendor_license' => $row['vendor_license'] !== null ? (string)$row['vendor_license'] : null,
+        'vendor_trade' => $row['vendor_trade'] !== null ? (string)$row['vendor_trade'] : null,
+        'vendor_website' => $row['vendor_website'] !== null ? (string)$row['vendor_website'] : null,
+        'created_at' => (string)($row['created_at'] ?? ''),
+        'updated_at' => (string)($row['updated_at'] ?? ''),
+    ];
+}
+
 function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
 {
     if (!$stepIds) {
@@ -1656,6 +1900,11 @@ function catn8_build_wizard_backfill_document_blobs(bool $apply, ?int $projectId
              ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
             [$docId, $mime, $bytes, strlen($bytes)]
         );
+        try {
+            catn8_build_wizard_index_document_for_search($docId);
+        } catch (Throwable $e) {
+            error_log('[build_wizard] failed to index document for search (backfill doc ' . $docId . '): ' . $e->getMessage());
+        }
         $written++;
     }
 
@@ -1688,6 +1937,615 @@ function catn8_build_wizard_upsert_document_blob(int $documentId, string $mime, 
          ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), file_blob = VALUES(file_blob), file_size_bytes = VALUES(file_size_bytes)',
         [$documentId, $safeMime, $bytes, strlen($bytes)]
     );
+}
+
+function catn8_build_wizard_find_binary(string $command, array $fallbackPaths = []): ?string
+{
+    if (function_exists('shell_exec')) {
+        $rawPath = shell_exec('command -v ' . escapeshellarg($command) . ' 2>/dev/null');
+        $resolved = trim((string)$rawPath);
+        if ($resolved !== '' && is_executable($resolved)) {
+            return $resolved;
+        }
+    }
+    foreach ($fallbackPaths as $path) {
+        $candidate = trim((string)$path);
+        if ($candidate !== '' && is_executable($candidate)) {
+            return $candidate;
+        }
+    }
+    return null;
+}
+
+function catn8_build_wizard_normalize_search_text(string $text, int $maxLen = 800000): string
+{
+    if ($text === '') {
+        return '';
+    }
+    $clean = str_replace("\0", ' ', $text);
+    $clean = preg_replace('/\s+/u', ' ', $clean);
+    if (!is_string($clean)) {
+        return '';
+    }
+    $clean = trim($clean);
+    if ($clean === '') {
+        return '';
+    }
+    if (strlen($clean) > $maxLen) {
+        $clean = substr($clean, 0, $maxLen);
+    }
+    return $clean;
+}
+
+function catn8_build_wizard_text_from_bytes(string $bytes): string
+{
+    if ($bytes === '') {
+        return '';
+    }
+    if (function_exists('mb_convert_encoding')) {
+        $detected = function_exists('mb_detect_encoding')
+            ? mb_detect_encoding($bytes, ['UTF-8', 'ISO-8859-1', 'WINDOWS-1252', 'ASCII'], true)
+            : false;
+        if (is_string($detected) && $detected !== '' && strtoupper($detected) !== 'UTF-8') {
+            $bytes = mb_convert_encoding($bytes, 'UTF-8', $detected);
+        } elseif (!mb_check_encoding($bytes, 'UTF-8')) {
+            $bytes = mb_convert_encoding($bytes, 'UTF-8', 'UTF-8,ISO-8859-1,WINDOWS-1252,ASCII');
+        }
+    }
+    return catn8_build_wizard_normalize_search_text($bytes, 900000);
+}
+
+function catn8_build_wizard_extract_zip_xml_text(string $path, int $maxLen = 700000): string
+{
+    if ($path === '' || !is_file($path) || !class_exists('ZipArchive')) {
+        return '';
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        return '';
+    }
+    $parts = [];
+    $total = 0;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = strtolower((string)$zip->getNameIndex($i));
+        if ($name === '' || !str_ends_with($name, '.xml')) {
+            continue;
+        }
+        if (
+            !str_starts_with($name, 'word/')
+            && !str_starts_with($name, 'xl/')
+            && !str_starts_with($name, 'ppt/')
+            && !str_starts_with($name, 'content.xml')
+        ) {
+            continue;
+        }
+        $xml = $zip->getFromIndex($i);
+        if (!is_string($xml) || $xml === '') {
+            continue;
+        }
+        $text = html_entity_decode(strip_tags($xml), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = catn8_build_wizard_normalize_search_text($text, 120000);
+        if ($text === '') {
+            continue;
+        }
+        $parts[] = $text;
+        $total += strlen($text);
+        if ($total >= $maxLen) {
+            break;
+        }
+    }
+    $zip->close();
+    return catn8_build_wizard_normalize_search_text(implode(' ', $parts), $maxLen);
+}
+
+function catn8_build_wizard_extract_pdf_text_from_path(string $pdfPath): string
+{
+    if ($pdfPath === '' || !is_file($pdfPath)) {
+        return '';
+    }
+    $bin = catn8_build_wizard_find_binary('pdftotext', [
+        '/usr/bin/pdftotext',
+        '/usr/local/bin/pdftotext',
+        '/opt/homebrew/bin/pdftotext',
+    ]);
+    if ($bin === null || !function_exists('shell_exec')) {
+        return '';
+    }
+    $tmpOut = tempnam(sys_get_temp_dir(), 'bw_pdf_txt_');
+    if (!is_string($tmpOut) || $tmpOut === '') {
+        return '';
+    }
+    $cmd = escapeshellarg($bin)
+        . ' -enc UTF-8 -layout -q '
+        . escapeshellarg($pdfPath) . ' '
+        . escapeshellarg($tmpOut)
+        . ' 2>/dev/null';
+    shell_exec($cmd);
+    $txt = is_file($tmpOut) ? (string)file_get_contents($tmpOut) : '';
+    if (is_file($tmpOut)) {
+        @unlink($tmpOut);
+    }
+    return catn8_build_wizard_text_from_bytes($txt);
+}
+
+function catn8_build_wizard_extract_image_text_with_tesseract(string $imagePath): string
+{
+    if ($imagePath === '' || !is_file($imagePath) || !function_exists('shell_exec')) {
+        return '';
+    }
+    $bin = catn8_build_wizard_find_binary('tesseract', [
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/opt/homebrew/bin/tesseract',
+    ]);
+    if ($bin === null) {
+        return '';
+    }
+    $tmpOutBase = tempnam(sys_get_temp_dir(), 'bw_ocr_');
+    if (!is_string($tmpOutBase) || $tmpOutBase === '') {
+        return '';
+    }
+    @unlink($tmpOutBase);
+    $cmd = escapeshellarg($bin)
+        . ' ' . escapeshellarg($imagePath)
+        . ' ' . escapeshellarg($tmpOutBase)
+        . ' -l eng --psm 6 txt 2>/dev/null';
+    shell_exec($cmd);
+    $txtPath = $tmpOutBase . '.txt';
+    $txt = is_file($txtPath) ? (string)file_get_contents($txtPath) : '';
+    if (is_file($txtPath)) {
+        @unlink($txtPath);
+    }
+    return catn8_build_wizard_text_from_bytes($txt);
+}
+
+function catn8_build_wizard_extract_pdf_text_with_ocr_fallback(string $pdfPath): string
+{
+    $pdftoppm = catn8_build_wizard_find_binary('pdftoppm', [
+        '/usr/bin/pdftoppm',
+        '/usr/local/bin/pdftoppm',
+        '/opt/homebrew/bin/pdftoppm',
+    ]);
+    if ($pdftoppm === null || !function_exists('shell_exec') || $pdfPath === '' || !is_file($pdfPath)) {
+        return '';
+    }
+    $base = tempnam(sys_get_temp_dir(), 'bw_pdf_ocr_');
+    if (!is_string($base) || $base === '') {
+        return '';
+    }
+    @unlink($base);
+    $cmd = escapeshellarg($pdftoppm)
+        . ' -f 1 -singlefile -png '
+        . escapeshellarg($pdfPath) . ' '
+        . escapeshellarg($base)
+        . ' 2>/dev/null';
+    shell_exec($cmd);
+    $pngPath = $base . '.png';
+    $text = is_file($pngPath) ? catn8_build_wizard_extract_image_text_with_tesseract($pngPath) : '';
+    if (is_file($pngPath)) {
+        @unlink($pngPath);
+    }
+    return $text;
+}
+
+function catn8_build_wizard_pdf_unescape_literal(string $input): string
+{
+    $out = '';
+    $len = strlen($input);
+    for ($i = 0; $i < $len; $i++) {
+        $ch = $input[$i];
+        if ($ch !== '\\') {
+            $out .= $ch;
+            continue;
+        }
+        $i++;
+        if ($i >= $len) {
+            break;
+        }
+        $next = $input[$i];
+        if ($next === 'n') {
+            $out .= "\n";
+        } elseif ($next === 'r') {
+            $out .= "\r";
+        } elseif ($next === 't') {
+            $out .= "\t";
+        } elseif ($next === 'b') {
+            $out .= "\b";
+        } elseif ($next === 'f') {
+            $out .= "\f";
+        } elseif ($next === '\\' || $next === '(' || $next === ')') {
+            $out .= $next;
+        } elseif (preg_match('/[0-7]/', $next)) {
+            $oct = $next;
+            for ($k = 0; $k < 2 && ($i + 1) < $len; $k++) {
+                $peek = $input[$i + 1];
+                if (!preg_match('/[0-7]/', $peek)) {
+                    break;
+                }
+                $oct .= $peek;
+                $i++;
+            }
+            $out .= chr(octdec($oct));
+        } else {
+            $out .= $next;
+        }
+    }
+    return $out;
+}
+
+function catn8_build_wizard_extract_pdf_text_basic_from_bytes(string $pdfBytes): string
+{
+    if ($pdfBytes === '' || !str_starts_with($pdfBytes, '%PDF')) {
+        return '';
+    }
+
+    $chunks = [];
+    if (preg_match_all('/stream[\r\n]+(.*?)endstream/s', $pdfBytes, $matches) && isset($matches[1]) && is_array($matches[1])) {
+        $chunks = $matches[1];
+    }
+    if (!$chunks) {
+        $chunks = [$pdfBytes];
+    }
+
+    $parts = [];
+    $maxParts = 250;
+    foreach ($chunks as $rawChunk) {
+        if (!is_string($rawChunk) || $rawChunk === '') {
+            continue;
+        }
+        $candidateTexts = [$rawChunk];
+
+        $zlibDecoded = @zlib_decode($rawChunk);
+        if (is_string($zlibDecoded) && $zlibDecoded !== '') {
+            $candidateTexts[] = $zlibDecoded;
+        }
+        $gzUncompress = @gzuncompress($rawChunk);
+        if (is_string($gzUncompress) && $gzUncompress !== '') {
+            $candidateTexts[] = $gzUncompress;
+        }
+        $gzInflate = @gzinflate($rawChunk);
+        if (is_string($gzInflate) && $gzInflate !== '') {
+            $candidateTexts[] = $gzInflate;
+        }
+
+        foreach ($candidateTexts as $content) {
+            if (!is_string($content) || $content === '') {
+                continue;
+            }
+
+            if (preg_match_all('/\((?:\\\\.|[^\\\\)])*\)\s*Tj/s', $content, $tjMatches) && isset($tjMatches[0])) {
+                foreach ($tjMatches[0] as $expr) {
+                    if (!is_string($expr) || $expr === '') {
+                        continue;
+                    }
+                    if (preg_match('/^\((.*)\)\s*Tj$/s', trim($expr), $m) && isset($m[1])) {
+                        $parts[] = catn8_build_wizard_pdf_unescape_literal((string)$m[1]);
+                    }
+                }
+            }
+
+            if (preg_match_all('/\[(.*?)\]\s*TJ/s', $content, $tjArrayMatches) && isset($tjArrayMatches[1])) {
+                foreach ($tjArrayMatches[1] as $arr) {
+                    if (!is_string($arr) || $arr === '') {
+                        continue;
+                    }
+                    if (preg_match_all('/\((?:\\\\.|[^\\\\)])*\)/s', $arr, $strMatches) && isset($strMatches[0])) {
+                        foreach ($strMatches[0] as $literal) {
+                            $literal = trim((string)$literal);
+                            if (strlen($literal) >= 2 && $literal[0] === '(' && $literal[strlen($literal) - 1] === ')') {
+                                $parts[] = catn8_build_wizard_pdf_unescape_literal(substr($literal, 1, -1));
+                            }
+                        }
+                    }
+                    if (preg_match_all('/<([0-9A-Fa-f]+)>/s', $arr, $hexMatches) && isset($hexMatches[1])) {
+                        foreach ($hexMatches[1] as $hexText) {
+                            $hexText = preg_replace('/[^0-9A-Fa-f]/', '', (string)$hexText);
+                            if (!is_string($hexText) || $hexText === '') {
+                                continue;
+                            }
+                            if (strlen($hexText) % 2 !== 0) {
+                                $hexText .= '0';
+                            }
+                            $decoded = @hex2bin($hexText);
+                            if (is_string($decoded) && $decoded !== '') {
+                                $parts[] = $decoded;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (count($parts) >= $maxParts) {
+                break 2;
+            }
+        }
+    }
+
+    if (!$parts) {
+        return '';
+    }
+    return catn8_build_wizard_text_from_bytes(implode(' ', $parts));
+}
+
+function catn8_build_wizard_extract_document_text(string $bytes, string $mimeType, string $originalName): array
+{
+    $mime = strtolower(trim($mimeType));
+    $name = strtolower(trim($originalName));
+    $ext = strtolower((string)pathinfo($name, PATHINFO_EXTENSION));
+
+    $tempPath = '';
+    $writeTemp = static function () use (&$tempPath, $bytes): string {
+        if ($tempPath !== '') {
+            return $tempPath;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'bw_doc_');
+        if (!is_string($tmp) || $tmp === '') {
+            return '';
+        }
+        $ok = file_put_contents($tmp, $bytes);
+        if ($ok === false || $ok <= 0) {
+            @unlink($tmp);
+            return '';
+        }
+        $tempPath = $tmp;
+        return $tempPath;
+    };
+
+    $method = 'none';
+    $text = '';
+
+    if ($mime !== '' && (str_starts_with($mime, 'text/') || str_contains($mime, 'json') || str_contains($mime, 'xml') || str_contains($mime, 'yaml') || str_contains($mime, 'csv'))) {
+        $method = 'plain_text';
+        $text = catn8_build_wizard_text_from_bytes($bytes);
+    } elseif (in_array($ext, ['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'log', 'plan', 'ini', 'sql'], true)) {
+        $method = 'plain_text';
+        $text = catn8_build_wizard_text_from_bytes($bytes);
+    } elseif (str_contains($mime, 'html') || in_array($ext, ['html', 'htm'], true)) {
+        $method = 'html_strip';
+        $text = catn8_build_wizard_html_to_text(catn8_build_wizard_text_from_bytes($bytes), 800000);
+    } elseif ($mime === 'application/pdf' || $ext === 'pdf') {
+        $tmpPath = $writeTemp();
+        if ($tmpPath !== '') {
+            $method = 'pdf_text';
+            $text = catn8_build_wizard_extract_pdf_text_from_path($tmpPath);
+            if ($text === '') {
+                $method = 'pdf_ocr';
+                $text = catn8_build_wizard_extract_pdf_text_with_ocr_fallback($tmpPath);
+            }
+            if ($text === '') {
+                $method = 'pdf_php_fallback';
+                $text = catn8_build_wizard_extract_pdf_text_basic_from_bytes($bytes);
+            }
+        }
+    } elseif (in_array($ext, ['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'], true) || str_contains($mime, 'officedocument') || str_contains($mime, 'opendocument')) {
+        $tmpPath = $writeTemp();
+        if ($tmpPath !== '') {
+            $method = 'zip_xml';
+            $text = catn8_build_wizard_extract_zip_xml_text($tmpPath);
+        }
+    } elseif (str_starts_with($mime, 'image/') || in_array($ext, ['png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'gif', 'webp'], true)) {
+        $tmpPath = $writeTemp();
+        if ($tmpPath !== '') {
+            $method = 'ocr_image';
+            $text = catn8_build_wizard_extract_image_text_with_tesseract($tmpPath);
+        }
+    }
+
+    if ($text === '') {
+        $method = ($method === 'none') ? 'metadata_only' : $method;
+    }
+
+    if ($tempPath !== '' && is_file($tempPath)) {
+        @unlink($tempPath);
+    }
+
+    return [
+        'method' => $method,
+        'text' => catn8_build_wizard_normalize_search_text($text, 800000),
+    ];
+}
+
+function catn8_build_wizard_document_blob_row(int $documentId): ?array
+{
+    if ($documentId <= 0) {
+        return null;
+    }
+    return Database::queryOne(
+        'SELECT d.id, d.project_id, d.original_name, d.mime_type, d.caption, d.storage_path,
+                db.file_blob, db.mime_type AS file_blob_mime_type,
+                bi.image_blob, bi.mime_type AS image_blob_mime_type
+         FROM build_wizard_documents d
+         LEFT JOIN build_wizard_document_blobs db ON db.document_id = d.id
+         LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
+         WHERE d.id = ?
+         LIMIT 1',
+        [$documentId]
+    );
+}
+
+function catn8_build_wizard_document_bytes_from_row(array $row): array
+{
+    $mime = trim((string)($row['file_blob_mime_type'] ?? $row['mime_type'] ?? 'application/octet-stream'));
+    if ($mime === '') {
+        $mime = 'application/octet-stream';
+    }
+    $bytes = $row['file_blob'] ?? null;
+    if (is_string($bytes) && $bytes !== '') {
+        return [$bytes, $mime];
+    }
+    $imageBytes = $row['image_blob'] ?? null;
+    if (is_string($imageBytes) && $imageBytes !== '') {
+        $imageMime = trim((string)($row['image_blob_mime_type'] ?? ''));
+        if ($imageMime !== '') {
+            $mime = $imageMime;
+        }
+        return [$imageBytes, $mime];
+    }
+    $path = catn8_build_wizard_resolve_document_path((string)($row['storage_path'] ?? ''));
+    if ($path !== '' && is_file($path)) {
+        $fileBytes = @file_get_contents($path);
+        if (is_string($fileBytes) && $fileBytes !== '') {
+            return [$fileBytes, $mime];
+        }
+    }
+    return ['', $mime];
+}
+
+function catn8_build_wizard_index_document_for_search(int $documentId): void
+{
+    $row = catn8_build_wizard_document_blob_row($documentId);
+    if (!$row) {
+        return;
+    }
+    [$bytes, $mime] = catn8_build_wizard_document_bytes_from_row($row);
+    $originalName = (string)($row['original_name'] ?? '');
+    $caption = (string)($row['caption'] ?? '');
+
+    $extracted = '';
+    $method = 'metadata_only';
+    if ($bytes !== '') {
+        $payload = catn8_build_wizard_extract_document_text($bytes, $mime, $originalName);
+        $method = (string)($payload['method'] ?? 'metadata_only');
+        $extracted = (string)($payload['text'] ?? '');
+    }
+
+    $hashInput = implode('|', [
+        (string)($row['id'] ?? ''),
+        (string)($row['project_id'] ?? ''),
+        $mime,
+        $originalName,
+        $caption,
+        hash('sha256', $bytes !== '' ? $bytes : ''),
+        'extractor_v1',
+    ]);
+    $contentHash = hash('sha256', $hashInput);
+
+    Database::execute(
+        'INSERT INTO build_wizard_document_search_index (document_id, project_id, source_mime, extraction_method, content_hash, extracted_text)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           project_id = VALUES(project_id),
+           source_mime = VALUES(source_mime),
+           extraction_method = VALUES(extraction_method),
+           content_hash = VALUES(content_hash),
+           extracted_text = VALUES(extracted_text),
+           indexed_at = CURRENT_TIMESTAMP',
+        [
+            (int)($row['id'] ?? 0),
+            (int)($row['project_id'] ?? 0),
+            $mime,
+            substr($method, 0, 32),
+            $contentHash,
+            $extracted !== '' ? $extracted : null,
+        ]
+    );
+}
+
+function catn8_build_wizard_index_documents_for_project(int $projectId, int $limit = 250): array
+{
+    if ($projectId <= 0) {
+        return ['indexed' => 0, 'errors' => 0];
+    }
+    $boundedLimit = max(1, min(1000, $limit));
+    $rows = Database::queryAll(
+        'SELECT d.id
+         FROM build_wizard_documents d
+         LEFT JOIN build_wizard_document_search_index si ON si.document_id = d.id
+         WHERE d.project_id = ? AND si.document_id IS NULL
+         ORDER BY d.id DESC
+         LIMIT ' . $boundedLimit,
+        [$projectId]
+    );
+    $indexed = 0;
+    $errors = 0;
+    foreach ($rows as $row) {
+        $docId = (int)($row['id'] ?? 0);
+        if ($docId <= 0) {
+            continue;
+        }
+        try {
+            catn8_build_wizard_index_document_for_search($docId);
+            $indexed++;
+        } catch (Throwable $e) {
+            $errors++;
+            error_log('[build_wizard] document indexing failed for doc ' . $docId . ': ' . $e->getMessage());
+        }
+    }
+    return ['indexed' => $indexed, 'errors' => $errors];
+}
+
+function catn8_build_wizard_search_documents(int $projectId, string $query, int $limit = 20): array
+{
+    $q = trim($query);
+    if ($projectId <= 0 || $q === '') {
+        return [];
+    }
+    $safeLimit = max(1, min(50, $limit));
+    $like = '%' . $q . '%';
+    $rows = Database::queryAll(
+        'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
+                si.extraction_method, si.indexed_at,
+                MATCH(si.extracted_text) AGAINST (? IN NATURAL LANGUAGE MODE) AS ft_score,
+                si.extracted_text
+         FROM build_wizard_documents d
+         INNER JOIN build_wizard_projects p ON p.id = d.project_id
+         LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+         LEFT JOIN build_wizard_document_search_index si ON si.document_id = d.id
+         WHERE d.project_id = ?
+           AND p.owner_user_id IS NOT NULL
+           AND (
+               d.original_name LIKE ?
+               OR COALESCE(d.caption, \'\') LIKE ?
+               OR COALESCE(s.title, \'\') LIKE ?
+               OR COALESCE(s.phase_key, \'\') LIKE ?
+               OR (si.extracted_text IS NOT NULL AND MATCH(si.extracted_text) AGAINST (? IN NATURAL LANGUAGE MODE))
+               OR COALESCE(si.extracted_text, \'\') LIKE ?
+           )
+         ORDER BY COALESCE(ft_score, 0) DESC, d.uploaded_at DESC, d.id DESC
+         LIMIT ' . $safeLimit,
+        [$q, $projectId, $like, $like, $like, $like, $q, $like]
+    );
+
+    $results = [];
+    foreach ($rows as $row) {
+        $docId = (int)($row['id'] ?? 0);
+        $snippet = '';
+        $indexedText = (string)($row['extracted_text'] ?? '');
+        if ($indexedText !== '') {
+            $index = stripos($indexedText, $q);
+            if ($index === false) {
+                $snippet = substr($indexedText, 0, 200);
+            } else {
+                $start = max(0, $index - 80);
+                $snippet = substr($indexedText, $start, 220);
+            }
+            $snippet = catn8_build_wizard_normalize_search_text($snippet, 240);
+        }
+        $mimeType = (string)($row['mime_type'] ?? '');
+        $results[] = [
+            'id' => $docId,
+            'project_id' => (int)($row['project_id'] ?? 0),
+            'step_id' => $row['step_id'] !== null ? (int)$row['step_id'] : null,
+            'step_phase_key' => $row['step_phase_key'] !== null ? (string)$row['step_phase_key'] : null,
+            'step_title' => $row['step_title'] !== null ? (string)$row['step_title'] : null,
+            'kind' => (string)($row['kind'] ?? ''),
+            'original_name' => (string)($row['original_name'] ?? ''),
+            'mime_type' => $mimeType,
+            'storage_path' => (string)($row['storage_path'] ?? ''),
+            'file_size_bytes' => (int)($row['file_size_bytes'] ?? 0),
+            'caption' => $row['caption'] !== null ? (string)$row['caption'] : null,
+            'uploaded_at' => (string)($row['uploaded_at'] ?? ''),
+            'public_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId,
+            'thumbnail_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1',
+            'is_image' => strpos(strtolower($mimeType), 'image/') === 0 ? 1 : 0,
+            'snippet' => $snippet,
+            'score' => isset($row['ft_score']) ? (float)$row['ft_score'] : 0.0,
+            'extraction_method' => (string)($row['extraction_method'] ?? 'none'),
+            'indexed_at' => (string)($row['indexed_at'] ?? ''),
+        ];
+    }
+    return $results;
 }
 
 function catn8_build_wizard_normalize_upload_files(string $field): array
@@ -3612,6 +4470,8 @@ try {
             'project' => $project,
             'steps' => catn8_build_wizard_steps_for_project($projectId),
             'documents' => catn8_build_wizard_documents_for_project($projectId),
+            'contacts' => catn8_build_wizard_contacts_for_project($projectId, $viewerId),
+            'contact_assignments' => catn8_build_wizard_contact_assignments_for_project($projectId, $viewerId),
             'leading_questions' => catn8_build_wizard_default_questions(),
         ]);
     }
@@ -4398,6 +5258,211 @@ try {
         catn8_json_response(['success' => true, 'step' => $step]);
     }
 
+    if ($action === 'save_contact') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+        $displayName = trim((string)($body['display_name'] ?? ''));
+        if ($displayName === '') {
+            throw new RuntimeException('display_name is required');
+        }
+        if (strlen($displayName) > 191) {
+            $displayName = substr($displayName, 0, 191);
+        }
+
+        $isProjectOnly = ((int)($body['is_project_only'] ?? 1) === 1) ? 1 : 0;
+        $scopeProjectId = $isProjectOnly === 1 ? $projectId : null;
+        $isVendor = ((int)($body['is_vendor'] ?? 0) === 1) ? 1 : 0;
+
+        if ($contactId > 0) {
+            $existing = catn8_build_wizard_contact_for_project($contactId, $projectId, $viewerId);
+            if (!$existing) {
+                throw new RuntimeException('Contact not found or not authorized');
+            }
+
+            Database::execute(
+                'UPDATE build_wizard_contacts
+                 SET project_id = ?, display_name = ?, email = ?, phone = ?, company = ?, role_title = ?, notes = ?, is_vendor = ?, vendor_type = ?, vendor_license = ?, vendor_trade = ?, vendor_website = ?
+                 WHERE id = ? AND owner_user_id = ?',
+                [
+                    $scopeProjectId,
+                    $displayName,
+                    catn8_build_wizard_text_or_null($body['email'] ?? null, 191),
+                    catn8_build_wizard_text_or_null($body['phone'] ?? null, 64),
+                    catn8_build_wizard_text_or_null($body['company'] ?? null, 191),
+                    catn8_build_wizard_text_or_null($body['role_title'] ?? null, 120),
+                    catn8_build_wizard_text_or_null($body['notes'] ?? null, 4000),
+                    $isVendor,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_type'] ?? null, 64) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_license'] ?? null, 120) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_trade'] ?? null, 120) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_website'] ?? null, 500) : null,
+                    $contactId,
+                    $viewerId,
+                ]
+            );
+        } else {
+            Database::execute(
+                'INSERT INTO build_wizard_contacts
+                    (owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                    $viewerId,
+                    $scopeProjectId,
+                    $displayName,
+                    catn8_build_wizard_text_or_null($body['email'] ?? null, 191),
+                    catn8_build_wizard_text_or_null($body['phone'] ?? null, 64),
+                    catn8_build_wizard_text_or_null($body['company'] ?? null, 191),
+                    catn8_build_wizard_text_or_null($body['role_title'] ?? null, 120),
+                    catn8_build_wizard_text_or_null($body['notes'] ?? null, 4000),
+                    $isVendor,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_type'] ?? null, 64) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_license'] ?? null, 120) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_trade'] ?? null, 120) : null,
+                    $isVendor === 1 ? catn8_build_wizard_text_or_null($body['vendor_website'] ?? null, 500) : null,
+                ]
+            );
+            $contactId = (int)Database::lastInsertId();
+        }
+
+        $contact = catn8_build_wizard_contact_for_project($contactId, $projectId, $viewerId);
+        if (!$contact) {
+            throw new RuntimeException('Contact could not be loaded');
+        }
+        catn8_json_response(['success' => true, 'contact' => $contact]);
+    }
+
+    if ($action === 'delete_contact') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+        if ($contactId <= 0) {
+            throw new RuntimeException('Missing contact_id');
+        }
+        $contact = catn8_build_wizard_contact_for_project($contactId, $projectId, $viewerId);
+        if (!$contact) {
+            throw new RuntimeException('Contact not found or not authorized');
+        }
+
+        Database::execute('DELETE FROM build_wizard_contacts WHERE id = ? AND owner_user_id = ? LIMIT 1', [$contactId, $viewerId]);
+        catn8_json_response(['success' => true, 'deleted_contact_id' => $contactId]);
+    }
+
+    if ($action === 'add_contact_assignment') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+        if ($contactId <= 0) {
+            throw new RuntimeException('Missing contact_id');
+        }
+        $contact = catn8_build_wizard_contact_for_project($contactId, $projectId, $viewerId);
+        if (!$contact) {
+            throw new RuntimeException('Contact not found or not authorized');
+        }
+
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        $phaseKey = isset($body['phase_key']) ? catn8_build_wizard_normalize_phase_key($body['phase_key']) : null;
+        if ($phaseKey === 'general') {
+            $phaseKey = null;
+        }
+        if ($stepId > 0) {
+            $stepRow = Database::queryOne(
+                'SELECT id, phase_key FROM build_wizard_steps WHERE id = ? AND project_id = ? LIMIT 1',
+                [$stepId, $projectId]
+            );
+            if (!$stepRow) {
+                throw new RuntimeException('Invalid step_id for this project');
+            }
+            if ($phaseKey === null) {
+                $phaseKey = catn8_build_wizard_normalize_phase_key((string)($stepRow['phase_key'] ?? 'general'));
+            }
+        }
+
+        if ($stepId <= 0 && $phaseKey === null) {
+            throw new RuntimeException('Provide step_id and/or phase_key for assignment');
+        }
+
+        $existingAssignment = Database::queryOne(
+            'SELECT id
+             FROM build_wizard_contact_assignments
+             WHERE project_id = ?
+               AND contact_id = ?
+               AND ((step_id IS NULL AND ? IS NULL) OR step_id = ?)
+               AND ((phase_key IS NULL AND ? IS NULL) OR phase_key = ?)
+             LIMIT 1',
+            [$projectId, $contactId, ($stepId > 0 ? $stepId : null), ($stepId > 0 ? $stepId : null), $phaseKey, $phaseKey]
+        );
+        if ($existingAssignment) {
+            throw new RuntimeException('That assignment already exists');
+        }
+
+        Database::execute(
+            'INSERT INTO build_wizard_contact_assignments (project_id, contact_id, step_id, phase_key)
+             VALUES (?, ?, ?, ?)',
+            [$projectId, $contactId, ($stepId > 0 ? $stepId : null), $phaseKey]
+        );
+        $assignmentId = (int)Database::lastInsertId();
+        $assignment = Database::queryOne(
+            'SELECT id, project_id, contact_id, step_id, phase_key, created_at
+             FROM build_wizard_contact_assignments
+             WHERE id = ?
+             LIMIT 1',
+            [$assignmentId]
+        );
+        if (!$assignment) {
+            throw new RuntimeException('Assignment could not be loaded');
+        }
+        catn8_json_response([
+            'success' => true,
+            'assignment' => [
+                'id' => (int)($assignment['id'] ?? 0),
+                'project_id' => (int)($assignment['project_id'] ?? 0),
+                'contact_id' => (int)($assignment['contact_id'] ?? 0),
+                'step_id' => $assignment['step_id'] !== null ? (int)$assignment['step_id'] : null,
+                'phase_key' => $assignment['phase_key'] !== null ? (string)$assignment['phase_key'] : null,
+                'created_at' => (string)($assignment['created_at'] ?? ''),
+            ],
+        ]);
+    }
+
+    if ($action === 'delete_contact_assignment') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $assignmentId = isset($body['assignment_id']) ? (int)$body['assignment_id'] : 0;
+        if ($assignmentId <= 0) {
+            throw new RuntimeException('Missing assignment_id');
+        }
+
+        $assignment = Database::queryOne(
+            'SELECT a.id
+             FROM build_wizard_contact_assignments a
+             INNER JOIN build_wizard_contacts c ON c.id = a.contact_id
+             WHERE a.id = ? AND a.project_id = ? AND c.owner_user_id = ?
+             LIMIT 1',
+            [$assignmentId, $projectId, $viewerId]
+        );
+        if (!$assignment) {
+            throw new RuntimeException('Assignment not found or not authorized');
+        }
+
+        Database::execute('DELETE FROM build_wizard_contact_assignments WHERE id = ? LIMIT 1', [$assignmentId]);
+        catn8_json_response(['success' => true, 'deleted_assignment_id' => $assignmentId]);
+    }
+
     if ($action === 'upload_document') {
         catn8_require_method('POST');
 
@@ -4495,6 +5560,11 @@ try {
             throw new RuntimeException('Failed to read uploaded file');
         }
         catn8_build_wizard_upsert_document_blob($docId, $mime, $bytes);
+        try {
+            catn8_build_wizard_index_document_for_search($docId);
+        } catch (Throwable $e) {
+            error_log('[build_wizard] failed to index uploaded document ' . $docId . ': ' . $e->getMessage());
+        }
 
         if (strpos(strtolower($mime), 'image/') === 0) {
             $sizeInfo = @getimagesize($destPath);
@@ -4711,6 +5781,12 @@ try {
             throw $e;
         }
 
+        try {
+            catn8_build_wizard_index_document_for_search($documentId);
+        } catch (Throwable $e) {
+            error_log('[build_wizard] failed to index replaced document ' . $documentId . ': ' . $e->getMessage());
+        }
+
         if ($oldStoragePath !== '' && is_file($oldStoragePath)) {
             $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
             $realStoragePath = realpath($oldStoragePath);
@@ -4919,6 +5995,11 @@ try {
                 }
                 $targetMime = trim((string)($target['mime_type'] ?? ''));
                 catn8_build_wizard_upsert_document_blob($docId, $targetMime !== '' ? $targetMime : $uploadMime, $bytes);
+                try {
+                    catn8_build_wizard_index_document_for_search($docId);
+                } catch (Throwable $e) {
+                    error_log('[build_wizard] failed to index hydrated document ' . $docId . ': ' . $e->getMessage());
+                }
                 $written++;
                 unset($remainingRows[$rowDocId]);
             }
@@ -5023,6 +6104,11 @@ try {
                 $mime = 'application/octet-stream';
             }
             catn8_build_wizard_upsert_document_blob($rowDocId, $mime, $bytes);
+            try {
+                catn8_build_wizard_index_document_for_search($rowDocId);
+            } catch (Throwable $e) {
+                error_log('[build_wizard] failed to index source-hydrated document ' . $rowDocId . ': ' . $e->getMessage());
+            }
             $matched++;
             $written++;
         }
@@ -5035,6 +6121,97 @@ try {
             'matched_documents' => $matched,
             'written_blobs' => $written,
             'ambiguous_documents' => $ambiguousDocs,
+        ]);
+    }
+
+    if ($action === 'search_content') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+
+        $query = trim((string)($body['query'] ?? ''));
+        if ($query === '') {
+            throw new RuntimeException('Missing search query');
+        }
+        if (strlen($query) > 200) {
+            $query = substr($query, 0, 200);
+        }
+        $limit = isset($body['limit']) ? (int)$body['limit'] : 20;
+        $limit = max(1, min(50, $limit));
+
+        $indexing = catn8_build_wizard_index_documents_for_project($projectId, 400);
+        $results = catn8_build_wizard_search_documents($projectId, $query, $limit);
+        $capabilities = [
+            'shell_exec' => function_exists('shell_exec'),
+            'pdftotext' => catn8_build_wizard_find_binary('pdftotext', [
+                '/usr/bin/pdftotext',
+                '/usr/local/bin/pdftotext',
+                '/opt/homebrew/bin/pdftotext',
+            ]) !== null,
+            'pdftoppm' => catn8_build_wizard_find_binary('pdftoppm', [
+                '/usr/bin/pdftoppm',
+                '/usr/local/bin/pdftoppm',
+                '/opt/homebrew/bin/pdftoppm',
+            ]) !== null,
+            'tesseract' => catn8_build_wizard_find_binary('tesseract', [
+                '/usr/bin/tesseract',
+                '/usr/local/bin/tesseract',
+                '/opt/homebrew/bin/tesseract',
+            ]) !== null,
+            'pdf_php_fallback' => true,
+        ];
+
+        catn8_json_response([
+            'success' => true,
+            'query' => $query,
+            'project_id' => $projectId,
+            'results' => $results,
+            'indexing' => [
+                'indexed' => (int)($indexing['indexed'] ?? 0),
+                'errors' => (int)($indexing['errors'] ?? 0),
+            ],
+            'capabilities' => $capabilities,
+        ]);
+    }
+
+    if ($action === 'reindex_document_search') {
+        catn8_require_method('POST');
+        catn8_require_admin();
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        if ($projectId <= 0) {
+            throw new RuntimeException('Missing project_id');
+        }
+        $project = Database::queryOne('SELECT id FROM build_wizard_projects WHERE id = ? LIMIT 1', [$projectId]);
+        if (!$project) {
+            throw new RuntimeException('Project not found');
+        }
+
+        $docRows = Database::queryAll('SELECT id FROM build_wizard_documents WHERE project_id = ? ORDER BY id ASC', [$projectId]);
+        $indexed = 0;
+        $errors = 0;
+        foreach ($docRows as $row) {
+            $docId = (int)($row['id'] ?? 0);
+            if ($docId <= 0) {
+                continue;
+            }
+            try {
+                catn8_build_wizard_index_document_for_search($docId);
+                $indexed++;
+            } catch (Throwable $e) {
+                $errors++;
+                error_log('[build_wizard] failed reindex doc ' . $docId . ': ' . $e->getMessage());
+            }
+        }
+
+        catn8_json_response([
+            'success' => true,
+            'project_id' => $projectId,
+            'indexed' => $indexed,
+            'errors' => $errors,
         ]);
     }
 

@@ -105,6 +105,34 @@ export interface IBuildWizardProjectSummary {
   primary_photo_thumbnail_url: string | null;
 }
 
+export interface IBuildWizardContact {
+  id: number;
+  owner_user_id: number;
+  project_id: number | null;
+  display_name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  role_title: string | null;
+  notes: string | null;
+  is_vendor: number;
+  vendor_type: string | null;
+  vendor_license: string | null;
+  vendor_trade: string | null;
+  vendor_website: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IBuildWizardContactAssignment {
+  id: number;
+  project_id: number;
+  contact_id: number;
+  step_id: number | null;
+  phase_key: string | null;
+  created_at: string;
+}
+
 export interface IBuildWizardQuestionnaire {
   title: string;
   status: string;
@@ -134,6 +162,8 @@ export interface IBuildWizardBootstrapResponse {
   project: IBuildWizardProject;
   steps: IBuildWizardStep[];
   documents: IBuildWizardDocument[];
+  contacts: IBuildWizardContact[];
+  contact_assignments: IBuildWizardContactAssignment[];
   leading_questions: string[];
 }
 
@@ -309,4 +339,22 @@ export interface IBuildWizardSingletreeStageUploadResponse {
   files_saved: number;
   files_skipped: number;
   saved_files: string[];
+}
+
+export interface IBuildWizardContentSearchResult extends IBuildWizardDocument {
+  snippet: string;
+  score: number;
+  extraction_method: string;
+  indexed_at: string;
+}
+
+export interface IBuildWizardContentSearchResponse {
+  success: boolean;
+  query: string;
+  project_id: number;
+  results: IBuildWizardContentSearchResult[];
+  indexing?: {
+    indexed: number;
+    errors: number;
+  };
 }

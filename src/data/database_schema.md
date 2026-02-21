@@ -121,6 +121,38 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### build_wizard_step_notes
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `step_id` (INT, FOREIGN KEY -> build_wizard_steps.id)
+- `note_text` (TEXT)
+- `created_at` (TIMESTAMP)
+
+### build_wizard_contacts
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT)
+- `project_id` (INT, NULLABLE, FOREIGN KEY -> build_wizard_projects.id)
+- `display_name` (VARCHAR(191))
+- `email` (VARCHAR(191), NULLABLE)
+- `phone` (VARCHAR(64), NULLABLE)
+- `company` (VARCHAR(191), NULLABLE)
+- `role_title` (VARCHAR(120), NULLABLE)
+- `notes` (TEXT, NULLABLE)
+- `is_vendor` (TINYINT(1), DEFAULT 0)
+- `vendor_type` (VARCHAR(64), NULLABLE)
+- `vendor_license` (VARCHAR(120), NULLABLE)
+- `vendor_trade` (VARCHAR(120), NULLABLE)
+- `vendor_website` (VARCHAR(500), NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### build_wizard_contact_assignments
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
+- `contact_id` (INT, FOREIGN KEY -> build_wizard_contacts.id)
+- `step_id` (INT, NULLABLE, FOREIGN KEY -> build_wizard_steps.id)
+- `phase_key` (VARCHAR(64), NULLABLE)
+- `created_at` (TIMESTAMP)
+
 ### build_wizard_documents
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
@@ -132,6 +164,16 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `file_size_bytes` (INT)
 - `caption` (VARCHAR(255), NULLABLE)
 - `uploaded_at` (TIMESTAMP)
+
+### build_wizard_document_search_index
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `document_id` (INT, UNIQUE, FOREIGN KEY -> build_wizard_documents.id)
+- `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
+- `source_mime` (VARCHAR(120))
+- `extraction_method` (VARCHAR(32))
+- `content_hash` (CHAR(64))
+- `extracted_text` (LONGTEXT, FULLTEXT INDEX)
+- `indexed_at` (TIMESTAMP)
 
 ## Mystery Game Tables
 

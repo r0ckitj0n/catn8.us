@@ -103,6 +103,15 @@ type BuildWizardSearchResult =
       linkedPhaseId: BuildTabId | null;
     };
 
+type BuildWizardConfirmState = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  confirmButtonClass: string;
+  resolve: (confirmed: boolean) => void;
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
@@ -229,6 +238,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
+  const [confirmState, setConfirmState] = React.useState<BuildWizardConfirmState | null>(null);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -1137,11 +1147,44 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return true;
   };
 
+  const requestConfirmation = React.useCallback((config: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    confirmButtonClass?: string;
+  }) => {
+    return new Promise<boolean>((resolve) => {
+      setConfirmState({
+        title: config.title,
+        message: config.message,
+        confirmLabel: config.confirmLabel || 'Confirm',
+        cancelLabel: config.cancelLabel || 'Cancel',
+        confirmButtonClass: config.confirmButtonClass || 'btn btn-danger',
+        resolve,
+      });
+    });
+  }, []);
+
+  const closeConfirmation = React.useCallback((confirmed: boolean) => {
+    setConfirmState((current) => {
+      if (current) {
+        current.resolve(confirmed);
+      }
+      return null;
+    });
+  }, []);
+
   const onDeleteDocument = async (docId: number, docName: string) => {
     if (docId <= 0 || deletingDocumentId === docId) {
       return;
     }
-    const confirmed = window.confirm(`Delete "${docName}"? This cannot be undone.`);
+    const confirmed = await requestConfirmation({
+      title: 'Delete Document?',
+      message: `Delete "${docName}"?\n\nThis cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmButtonClass: 'btn btn-danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -1323,9 +1366,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
       return;
     }
-    const confirmed = window.confirm(
-      `Delete "${projectSummary.title}"?\n\nThis will permanently purge this project and all related records from the database.`,
-    );
+    const confirmed = await requestConfirmation({
+      title: 'Delete Project?',
+      message: `Delete "${projectSummary.title}"?\n\nThis will permanently purge this project and all related records from the database.`,
+      confirmLabel: 'Delete Project',
+      confirmButtonClass: 'btn btn-danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -1384,7 +1430,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (projectId <= 0 || !selectedDeskContact) {
       return;
     }
-    const confirmed = window.confirm(`Delete contact "${selectedDeskContact.display_name}"?`);
+    const confirmed = await requestConfirmation({
+      title: 'Delete Contact?',
+      message: `Delete contact "${selectedDeskContact.display_name}"?`,
+      confirmLabel: 'Delete Contact',
+      confirmButtonClass: 'btn btn-danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -1394,7 +1445,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
     const fallback = deskContacts.find((contact) => contact.id !== selectedDeskContact.id);
     setDeskSelectedContactId(fallback?.id || 0);
-  }, [deleteContact, deskContacts, projectId, selectedDeskContact]);
+  }, [deleteContact, deskContacts, projectId, requestConfirmation, selectedDeskContact]);
 
   const onAddDeskPhaseAssignment = React.useCallback(async () => {
     if (projectId <= 0 || !selectedDeskContact) {
@@ -1573,9 +1624,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return;
     }
     if (apply) {
-      const confirmed = window.confirm(
-        'Apply Singletree recovery now?\n\nThis will write document mappings/blobs for "Cabin - 91 Singletree Ln".',
-      );
+      const confirmed = await requestConfirmation({
+        title: 'Apply Recovery?',
+        message: 'Apply Singletree recovery now?\n\nThis will write document mappings/blobs for "Cabin - 91 Singletree Ln".',
+        confirmLabel: 'Apply Recovery',
+        confirmButtonClass: 'btn btn-danger',
+      });
       if (!confirmed) {
         return;
       }
@@ -1773,7 +1827,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const onEstimateMissingWithAi = async () => {
-    const confirmed = window.confirm('Ask AI to estimate missing timeline and budget values for this project?');
+    const confirmed = await requestConfirmation({
+      title: 'Estimate Missing Values?',
+      message: 'Ask AI to estimate missing timeline and budget values for this project?',
+      confirmLabel: 'Run AI Estimate',
+      confirmButtonClass: 'btn btn-primary',
+    });
     if (!confirmed) {
       return;
     }
@@ -1781,9 +1840,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const onCompleteWithAi = async () => {
-    const confirmed = window.confirm(
-      'Run Complete w/ AI?\n\nThis can reorder/add/update steps across phases using your project data and documents.',
-    );
+    const confirmed = await requestConfirmation({
+      title: 'Run Complete w/ AI?',
+      message: 'This can reorder/add/update steps across phases using your project data and documents.',
+      confirmLabel: 'Run Complete w/ AI',
+      confirmButtonClass: 'btn btn-primary',
+    });
     if (!confirmed) {
       return;
     }
@@ -2575,10 +2637,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   if (stepReadOnly) {
                     return;
                   }
-                  const ok = window.confirm('Delete this step?');
-                  if (ok) {
-                    void deleteStep(step.id);
-                  }
+                  void (async () => {
+                    const ok = await requestConfirmation({
+                      title: 'Delete Step?',
+                      message: 'Delete this step?',
+                      confirmLabel: 'Delete Step',
+                      confirmButtonClass: 'btn btn-danger',
+                    });
+                    if (ok) {
+                      await deleteStep(step.id);
+                    }
+                  })();
                 }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3960,6 +4029,34 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </div>
             ) : null}
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmState ? (
+        <div className="build-wizard-doc-manager" onClick={() => closeConfirmation(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>{confirmState.title}</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close confirmation dialog"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => closeConfirmation(false)}
+                />
+              </div>
+            </div>
+            <p className="build-wizard-confirm-message">{confirmState.message}</p>
+            <div className="build-wizard-confirm-actions">
+              <button type="button" className="btn btn-outline-secondary" onClick={() => closeConfirmation(false)}>
+                {confirmState.cancelLabel}
+              </button>
+              <button type="button" className={confirmState.confirmButtonClass} onClick={() => closeConfirmation(true)}>
+                {confirmState.confirmLabel}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

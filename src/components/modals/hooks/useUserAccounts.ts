@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IToast } from '../../../types/common';
+import { BrandedConfirmFn } from '../../../hooks/useBrandedConfirm';
 
-export function useUserAccounts(open: boolean, onToast?: (toast: IToast) => void) {
+export function useUserAccounts(open: boolean, confirm: BrandedConfirmFn, onToast?: (toast: IToast) => void) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
@@ -142,7 +143,13 @@ export function useUserAccounts(open: boolean, onToast?: (toast: IToast) => void
   const deleteUser = async (u: any) => {
     const id = Number(u?.id || 0);
     if (!id) return;
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    const confirmed = await confirm({
+      title: 'Delete User?',
+      message: 'Are you sure you want to delete this user?',
+      confirmLabel: 'Delete User',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await ApiClient.post('/api/settings/users.php?action=delete_user', { id });

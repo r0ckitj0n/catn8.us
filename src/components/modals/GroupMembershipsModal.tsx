@@ -5,6 +5,7 @@ import { IToast } from '../../types/common';
 import { useGroupMemberships } from './hooks/useGroupMemberships';
 import { GroupEditSection } from './sections/GroupEditSection';
 import { GroupMemberSection } from './sections/GroupMemberSection';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface GroupMembershipsModalProps {
   open: boolean;
@@ -18,7 +19,8 @@ interface GroupMembershipsModalProps {
  */
 export function GroupMembershipsModal({ open, onClose, onToast }: GroupMembershipsModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
-  const state = useGroupMemberships(open, onToast);
+  const { confirm, confirmDialog } = useBrandedConfirm();
+  const state = useGroupMemberships(open, confirm, onToast);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -79,6 +81,7 @@ export function GroupMembershipsModal({ open, onClose, onToast }: GroupMembershi
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useUserAccounts } from './hooks/useUserAccounts';
 import { UserCreateSection } from './sections/UserCreateSection';
 import { UserEditSection } from './sections/UserEditSection';
 import { UserPasswordSection } from './sections/UserPasswordSection';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface UserAccountsModalProps {
   open: boolean;
@@ -20,7 +21,8 @@ interface UserAccountsModalProps {
  */
 export function UserAccountsModal({ open, onClose, onToast }: UserAccountsModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
-  const state = useUserAccounts(open, onToast);
+  const { confirm, confirmDialog } = useBrandedConfirm();
+  const state = useUserAccounts(open, confirm, onToast);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -159,6 +161,7 @@ export function UserAccountsModal({ open, onClose, onToast }: UserAccountsModalP
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

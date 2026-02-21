@@ -3,6 +3,7 @@ import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface AccountModalProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface AccountModalProps {
 
 export function AccountModal({ open, onClose, viewer, onChanged, onToast }: AccountModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
+  const { confirm, confirmDialog } = useBrandedConfirm();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
@@ -104,7 +106,13 @@ export function AccountModal({ open, onClose, viewer, onChanged, onToast }: Acco
 
   const deleteAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!window.confirm('Are you sure you want to delete your account? This action is permanent.')) return;
+    const confirmed = await confirm({
+      title: 'Delete Your Account?',
+      message: 'Are you sure you want to delete your account?\n\nThis action is permanent.',
+      confirmLabel: 'Delete Account',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError('');
     setMessage('');
@@ -262,6 +270,7 @@ export function AccountModal({ open, onClose, viewer, onChanged, onToast }: Acco
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

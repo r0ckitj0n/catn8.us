@@ -1697,6 +1697,23 @@
   width: min(960px, 100%);
 }
 
+.build-wizard-confirm-modal {
+  width: min(520px, 100%);
+}
+
+.build-wizard-confirm-message {
+  margin: 0;
+  color: var(--catn8-bw-text-strong);
+  white-space: pre-line;
+}
+
+.build-wizard-confirm-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .build-wizard-recovery-json {
   margin: 0;
   border: 1px solid var(--catn8-bw-border-soft);

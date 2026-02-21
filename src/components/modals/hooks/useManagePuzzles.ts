@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IToast } from '../../../types/common';
+import { BrandedConfirmFn } from '../../../hooks/useBrandedConfirm';
 
-export function useManagePuzzles(open: boolean, onToast?: (toast: IToast) => void) {
+export function useManagePuzzles(open: boolean, onToast?: (toast: IToast) => void, confirm?: BrandedConfirmFn) {
   const [busy, setBusy] = React.useState(false);
   const [puzzles, setPuzzles] = useState<any[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -85,7 +86,16 @@ export function useManagePuzzles(open: boolean, onToast?: (toast: IToast) => voi
   };
 
   const remove = async () => {
-    if (!activeId || !window.confirm('Delete this puzzle?')) return;
+    if (!activeId) return;
+    const confirmed = confirm
+      ? await confirm({
+        title: 'Delete Puzzle?',
+        message: 'Delete this puzzle?',
+        confirmLabel: 'Delete Puzzle',
+        tone: 'danger',
+      })
+      : true;
+    if (!confirmed) return;
     setBusy(true);
     try {
       await ApiClient.post('/api/wordsearch/puzzles.php?action=delete', { id: activeId });

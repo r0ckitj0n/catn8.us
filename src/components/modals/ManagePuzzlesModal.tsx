@@ -4,6 +4,7 @@ import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { pickWordsForPage, buildWordSearch } from '../../utils/wordsearchUtils';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface ManagePuzzlesModalProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface ManagePuzzlesModalProps {
 
 export function ManagePuzzlesModal({ open, onClose, topics, puzzles, viewer, onChanged, onToast }: ManagePuzzlesModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
+  const { confirm, confirmDialog } = useBrandedConfirm();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
@@ -140,7 +142,13 @@ export function ManagePuzzlesModal({ open, onClose, topics, puzzles, viewer, onC
 
   const remove = async () => {
     if (!activeId || !canEditActive) return;
-    if (!window.confirm('Are you sure you want to delete this puzzle?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Puzzle?',
+      message: 'Are you sure you want to delete this puzzle?',
+      confirmLabel: 'Delete Puzzle',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError('');
     setMessage('');
@@ -237,6 +245,7 @@ export function ManagePuzzlesModal({ open, onClose, topics, puzzles, viewer, onC
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

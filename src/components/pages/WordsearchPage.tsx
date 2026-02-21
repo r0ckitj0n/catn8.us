@@ -13,6 +13,7 @@ import { WordsearchPrintView } from './sections/wordsearch/WordsearchPrintView';
 import { ApiClient } from '../../core/ApiClient';
 import { pickWordsForPage, buildWordSearch, generateWordsearchQuickFacts } from '../../utils/wordsearchUtils';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface WordsearchPageProps extends AppShellPageProps {
   onToast: (toast: IToast) => void;
@@ -23,6 +24,8 @@ interface WordsearchPageProps extends AppShellPageProps {
  * COMPLIANCE: File size < 250 lines
  */
 export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick, onToast, mysteryTitle }: WordsearchPageProps) {
+  const { confirm, confirmDialog } = useBrandedConfirm();
+
   const showErrorToast = React.useCallback((err: string) => {
     const message = String(err || '').trim();
     if (!message) return;
@@ -68,7 +71,13 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   const deletePage = async () => {
     if (!state.canEditPuzzle || !state.selectedPage) return;
-    if (!window.confirm('Are you sure you want to delete this page?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Page?',
+      message: 'Are you sure you want to delete this page?',
+      confirmLabel: 'Delete Page',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     state.setBusy(true);
     try {
       await ApiClient.post('/api/wordsearch/pages.php?action=delete', { id: state.selectedPage.id });
@@ -82,7 +91,13 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   const deletePuzzle = async () => {
     if (!state.puzzle || !state.canEditPuzzle) return;
-    if (!window.confirm('Are you sure you want to delete this entire puzzle and all its pages?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Puzzle?',
+      message: 'Are you sure you want to delete this entire puzzle and all its pages?',
+      confirmLabel: 'Delete Puzzle',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     state.setBusy(true);
     try {
       await ApiClient.post('/api/wordsearch/puzzles.php?action=delete', { id: state.puzzle.id });
@@ -161,6 +176,7 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
       <ManagePuzzlesModal open={managePuzzlesOpen} onClose={() => setManagePuzzlesOpen(false)} topics={state.topics} puzzles={state.puzzles} viewer={viewer} onToast={onToast}
         onChanged={async () => { state.loadPuzzles(); await state.reloadPages(state.puzzleId); }}
       />
+      {confirmDialog}
     </>
   );
 }

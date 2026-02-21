@@ -5,6 +5,7 @@ import { IToast } from '../../types/common';
 import { useTopicManager } from './hooks/useTopicManager';
 import { TopicListSection } from './sections/TopicListSection';
 import { TopicFormSection } from './sections/TopicFormSection';
+import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 
 interface TopicManagerModalProps {
   open: boolean;
@@ -20,7 +21,8 @@ interface TopicManagerModalProps {
  */
 export function TopicManagerModal({ open, onClose, viewer, onChanged, onToast }: TopicManagerModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
-  const state = useTopicManager(open, onChanged, onToast);
+  const { confirm, confirmDialog } = useBrandedConfirm();
+  const state = useTopicManager(open, onChanged, confirm, onToast);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -62,6 +64,7 @@ export function TopicManagerModal({ open, onClose, viewer, onChanged, onToast }:
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

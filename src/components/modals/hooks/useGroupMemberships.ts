@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IToast } from '../../../types/common';
+import { BrandedConfirmFn } from '../../../hooks/useBrandedConfirm';
 
-export function useGroupMemberships(open: boolean, onToast?: (toast: IToast) => void) {
+export function useGroupMemberships(open: boolean, confirm: BrandedConfirmFn, onToast?: (toast: IToast) => void) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
@@ -128,7 +129,13 @@ export function useGroupMemberships(open: boolean, onToast?: (toast: IToast) => 
 
   const deleteGroup = async () => {
     if (!editGroupId) return;
-    if (!window.confirm('Are you sure you want to delete this group?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Group?',
+      message: 'Are you sure you want to delete this group?',
+      confirmLabel: 'Delete Group',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await ApiClient.post('/api/settings/groups.php?action=delete_group', { id: editGroupId });

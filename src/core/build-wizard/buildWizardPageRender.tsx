@@ -160,7 +160,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
   const [lightboxSpreadsheetSheetIndex, setLightboxSpreadsheetSheetIndex] = React.useState<number>(0);
-  const [documentManagerOpen, setDocumentManagerOpen] = React.useState<boolean>(false);
   const [documentManagerKindFilter, setDocumentManagerKindFilter] = React.useState<string>('all');
   const [documentManagerPhaseFilter, setDocumentManagerPhaseFilter] = React.useState<string>('all');
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
@@ -999,7 +998,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [docStepId, selectableDocSteps]);
 
   React.useEffect(() => {
-    if (!documentManagerOpen) {
+    if (!projectDeskOpen) {
       return;
     }
     const nextDrafts: DocumentDraftMap = {};
@@ -1013,17 +1012,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDocumentDrafts(nextDrafts);
     setDocumentManagerKindFilter('all');
     setDocumentManagerPhaseFilter('all');
-  }, [documentManagerOpen, documents]);
 
-  React.useEffect(() => {
-    if (!projectDeskOpen) {
-      return;
-    }
     if (deskSelectedContactId > 0 && deskContacts.some((contact) => contact.id === deskSelectedContactId)) {
       return;
     }
     setDeskSelectedContactId(deskContacts[0]?.id || 0);
-  }, [projectDeskOpen, deskContacts, deskSelectedContactId]);
+  }, [projectDeskOpen, documents, deskContacts, deskSelectedContactId]);
 
   React.useEffect(() => {
     if (!projectDeskOpen) {
@@ -1425,11 +1419,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [addContactAssignment, deskAssignmentStepId, projectId, selectedDeskContact]);
 
   const onAutoAssignDeskStepsToTimeline = React.useCallback(async () => {
-    if (deskAutoAssignBusy) {
+    if (deskAutoAssignBusy || aiBusy) {
       return;
     }
-    const deskSteps = steps.filter((step) => stepPhaseBucket(step) === 'desk');
-    if (!deskSteps.length) {
+    const initialDeskSteps = steps.filter((step) => stepPhaseBucket(step) === 'desk');
+    if (!initialDeskSteps.length) {
       onToast?.({ tone: 'info', message: 'No Project Desk steps are waiting for timeline placement.' });
       return;
     }
@@ -1447,20 +1441,34 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       'inspections_closeout',
     ];
     const phaseRank = new Map<string, number>(orderedPhaseKeys.map((key, index) => [key, index]));
-    const stepById = new Map<number, IBuildWizardStep>(steps.map((step) => [step.id, step]));
-    const dependentById = new Map<number, number[]>();
-    steps.forEach((candidate) => {
-      (Array.isArray(candidate.depends_on_step_ids) ? candidate.depends_on_step_ids : []).forEach((dependencyId) => {
-        const list = dependentById.get(dependencyId) || [];
-        list.push(candidate.id);
-        dependentById.set(dependencyId, list);
-      });
-    });
-
     setDeskAutoAssignBusy(true);
     let movedCount = 0;
+    let aiPlacedCount = 0;
 
     try {
+      let candidateSteps: IBuildWizardStep[] = steps;
+      const aiResponse = await generateStepsFromAi('fill_missing');
+      if (Array.isArray(aiResponse?.steps) && aiResponse.steps.length > 0) {
+        candidateSteps = aiResponse.steps;
+      }
+      const deskSteps = candidateSteps.filter((step) => stepPhaseBucket(step) === 'desk');
+      aiPlacedCount = Math.max(0, initialDeskSteps.length - deskSteps.length);
+      if (!deskSteps.length) {
+        onToast?.({
+          tone: 'success',
+          message: `Placed ${aiPlacedCount} lost step${aiPlacedCount === 1 ? '' : 's'} on the build timeline with AI.`,
+        });
+        return;
+      }
+      const stepById = new Map<number, IBuildWizardStep>(candidateSteps.map((step) => [step.id, step]));
+      const dependentById = new Map<number, number[]>();
+      candidateSteps.forEach((candidate) => {
+        (Array.isArray(candidate.depends_on_step_ids) ? candidate.depends_on_step_ids : []).forEach((dependencyId) => {
+          const list = dependentById.get(dependencyId) || [];
+          list.push(candidate.id);
+          dependentById.set(dependencyId, list);
+        });
+      });
       const sortedDeskSteps = [...deskSteps].sort((a, b) => {
         if (a.step_order !== b.step_order) {
           return a.step_order - b.step_order;
@@ -1510,7 +1518,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       };
 
       const inferByOrderFallback = (step: IBuildWizardStep): string => {
-        const sortedAll = [...steps].sort((a, b) => {
+        const sortedAll = [...candidateSteps].sort((a, b) => {
           if (a.step_order !== b.step_order) {
             return a.step_order - b.step_order;
           }
@@ -1550,12 +1558,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       }
       onToast?.({
         tone: 'success',
-        message: `Placed ${movedCount} step${movedCount === 1 ? '' : 's'} on the build timeline.`,
+        message: `Placed ${movedCount + aiPlacedCount} lost step${movedCount + aiPlacedCount === 1 ? '' : 's'} on the build timeline.`,
       });
     } finally {
       setDeskAutoAssignBusy(false);
     }
-  }, [deskAutoAssignBusy, onToast, steps, updateStep]);
+  }, [aiBusy, deskAutoAssignBusy, generateStepsFromAi, onToast, steps, updateStep]);
 
   const onRunSingletreeRecovery = async (apply: boolean) => {
     if (!isAdmin) {
@@ -2878,7 +2886,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             </div>
             <div className="build-wizard-topbar-actions">
               <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
-              <button className="btn btn-outline-primary btn-sm" onClick={() => setDocumentManagerOpen(true)}>Document Manager</button>
               <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
               <StandardIconButton
                 iconKey="close"
@@ -3334,244 +3341,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         </div>
       </footer>
 
-      {documentManagerOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setDocumentManagerOpen(false)}>
-          <div className="build-wizard-doc-manager-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Document Manager</h3>
-              <StandardIconButton
-                iconKey="close"
-                ariaLabel="Close document manager"
-                title="Close"
-                className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                onClick={() => setDocumentManagerOpen(false)}
-              />
-            </div>
-            {documents.length ? (
-              <div className="build-wizard-doc-manager-list">
-                <div className="build-wizard-doc-manager-filters">
-                  <label>
-                    Kind
-                    <select
-                      value={documentManagerKindFilter}
-                      onChange={(e) => setDocumentManagerKindFilter(e.target.value)}
-                    >
-                      <option value="all">All</option>
-                      {documentManagerKindOptions.map((kindValue) => (
-                        <option key={kindValue} value={kindValue}>
-                          {buildWizardTokenLabel(kindValue, 'Other')}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Phase
-                    <select
-                      value={documentManagerPhaseFilter}
-                      onChange={(e) => setDocumentManagerPhaseFilter(e.target.value)}
-                    >
-                      <option value="all">All</option>
-                      {documentManagerPhaseOptions.map((phaseKey) => (
-                        <option key={phaseKey} value={phaseKey}>
-                          {prettyPhaseLabel(phaseKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
-                  const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
-                  const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
-                  const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
-
-                  return (
-                    <div className="build-wizard-doc-manager-row" key={doc.id}>
-                      <div className="build-wizard-doc-manager-preview">
-                        {Number(doc.is_image) === 1 ? (
-                          <button
-                            className="build-wizard-doc-thumb-btn"
-                            onClick={() => void openDocumentPreview(doc)}
-                            title="Open preview"
-                          >
-                            <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
-                          </button>
-                        ) : isPdfDocument(doc) ? (
-                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
-                            <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
-                          </a>
-                        ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
-                          <button
-                            type="button"
-                            className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
-                            onClick={() => void openDocumentPreview(doc)}
-                            title="Open preview"
-                          >
-                            <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                              <svg viewBox="0 0 24 24">
-                                <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                                <path d="M9 13h6M9 16h6" />
-                              </svg>
-                            </span>
-                            <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                            <span className="build-wizard-doc-file-open">Open preview</span>
-                          </button>
-                        ) : (
-                          <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
-                            <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                              <svg viewBox="0 0 24 24">
-                                <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                                <path d="M9 13h6M9 16h6" />
-                              </svg>
-                            </span>
-                            <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                            <span className="build-wizard-doc-file-open">Open file</span>
-                          </a>
-                        )}
-                      </div>
-                      <div className="build-wizard-doc-manager-fields">
-                        <div className="build-wizard-doc-manager-title">{doc.original_name}</div>
-                        <div className="build-wizard-doc-manager-meta">Uploaded: {formatTimelineDate(doc.uploaded_at)} | Phase: {phaseLabel}</div>
-                        <div className="build-wizard-doc-manager-grid">
-                          <label>
-                            Kind
-                            <select
-                              value={draft.kind}
-                              onChange={(e) => updateDocumentDraft(doc.id, { kind: e.target.value })}
-                            >
-                              {docKindOptions.map((opt) => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Linked Step
-                            <select
-                              className="build-wizard-doc-manager-step-select"
-                              value={draft.step_id > 0 ? String(draft.step_id) : ''}
-                              onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
-                            >
-                              <option value="">No step linked</option>
-                              {linkedStepOptions.map((option) => (
-                                <option key={option.step.id} value={option.step.id}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="is-wide">
-                            Caption
-                            <input
-                              type="text"
-                              value={draft.caption}
-                              onChange={(e) => updateDocumentDraft(doc.id, { caption: e.target.value })}
-                            />
-                          </label>
-                        </div>
-                        <div className="build-wizard-doc-manager-actions">
-                          {(isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc) || Number(doc.is_image) === 1) ? (
-                            <StandardIconButton
-                              iconKey="view"
-                              ariaLabel={`Open ${doc.original_name}`}
-                              title="Open"
-                              className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                              onClick={() => void openDocumentPreview(doc)}
-                            />
-                          ) : (
-                            <StandardIconLink
-                              iconKey="view"
-                              ariaLabel={`Open ${doc.original_name}`}
-                              title="Open"
-                              className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                              href={doc.public_url}
-                              target="_blank"
-                              rel="noreferrer"
-                            />
-                          )}
-                          <StandardIconLink
-                            iconKey="download"
-                            ariaLabel={`Download ${doc.original_name}`}
-                            title="Download"
-                            className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
-                            href={withDownloadFlag(doc.public_url)}
-                          />
-                          <input
-                            ref={(el) => { replaceFileInputByDocId.current[doc.id] = el; }}
-                            type="file"
-                            className="build-wizard-hidden-file-input"
-                            onChange={(e) => {
-                              const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                              void onReplaceDocumentFile(doc, file);
-                              e.currentTarget.value = '';
-                            }}
-                          />
-                          <StandardIconButton
-                            iconKey={replacingDocumentId === doc.id ? 'refresh' : 'upload'}
-                            ariaLabel={replacingDocumentId === doc.id ? `Replacing ${doc.original_name}` : `Replace ${doc.original_name}`}
-                            title={replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
-                            className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
-                            onClick={() => replaceFileInputByDocId.current[doc.id]?.click()}
-                            disabled={replacingDocumentId === doc.id}
-                          />
-                          {Number(doc.is_image) === 1 ? (
-                            <button
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => void updateProject({ primary_photo_document_id: doc.id })}
-                            >
-                              {Number(project?.primary_photo_document_id || 0) === doc.id ? 'Primary Photo' : 'Set Primary Photo'}
-                            </button>
-                          ) : null}
-                          {String(doc.kind || '') === 'blueprint' ? (
-                            <button
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => void updateProject({ blueprint_document_id: doc.id })}
-                            >
-                              {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
-                            </button>
-                          ) : null}
-                          <StandardIconButton
-                            iconKey={documentSavingId === doc.id ? 'refresh' : 'save'}
-                            ariaLabel={documentSavingId === doc.id ? `Saving ${doc.original_name}` : `Save ${doc.original_name}`}
-                            title={documentSavingId === doc.id ? 'Saving...' : 'Save'}
-                            className="btn btn-success btn-sm catn8-action-icon-btn"
-                            onClick={() => void onSaveDocumentDraft(doc)}
-                            disabled={documentSavingId === doc.id}
-                          />
-                          <StandardIconButton
-                            iconKey={deletingDocumentId === doc.id ? 'refresh' : 'delete'}
-                            ariaLabel={deletingDocumentId === doc.id ? `Deleting ${doc.original_name}` : `Delete ${doc.original_name}`}
-                            title={deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-                            className="btn btn-outline-danger btn-sm catn8-action-icon-btn"
-                            onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
-                            disabled={deletingDocumentId === doc.id}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }) : <div className="build-wizard-muted">No documents match the selected filters.</div>}
-              </div>
-            ) : (
-              <div className="build-wizard-muted">No documents uploaded yet.</div>
-            )}
-          </div>
-        </div>
-      ) : null}
-
       {projectDeskOpen ? (
         <div className="build-wizard-doc-manager" onClick={() => setProjectDeskOpen(false)}>
-          <div className="build-wizard-doc-manager-inner" onClick={(e) => e.stopPropagation()}>
+          <div className="build-wizard-doc-manager-inner build-wizard-project-desk-inner" onClick={(e) => e.stopPropagation()}>
             <div className="build-wizard-doc-manager-head">
               <h3>Project Desk</h3>
               <div className="build-wizard-doc-manager-actions">
-                <button
-                  type="button"
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={() => void onAutoAssignDeskStepsToTimeline()}
-                  disabled={deskAutoAssignBusy}
-                  title="Auto-place Project Desk steps into timeline phases"
-                >
-                  {deskAutoAssignBusy ? 'Placing...' : 'Place Steps on Timeline'}
-                </button>
                 <button
                   type="button"
                   className="build-wizard-phase-add"
@@ -3591,7 +3366,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </div>
             </div>
             <div className="build-wizard-desk-grid">
-              <div>
+              <div className="build-wizard-desk-documents">
                 <h3>Documents</h3>
                 <div className="build-wizard-upload-row">
                   <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
@@ -3621,9 +3396,212 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     }}
                   />
                 </div>
-                <div className="build-wizard-doc-list">
-                  {renderDocumentGallery(documents, 'No documents uploaded yet.')}
-                </div>
+                {documents.length ? (
+                  <div className="build-wizard-doc-manager-list">
+                    <div className="build-wizard-doc-manager-filters">
+                      <label>
+                        Kind
+                        <select
+                          value={documentManagerKindFilter}
+                          onChange={(e) => setDocumentManagerKindFilter(e.target.value)}
+                        >
+                          <option value="all">All</option>
+                          {documentManagerKindOptions.map((kindValue) => (
+                            <option key={kindValue} value={kindValue}>
+                              {buildWizardTokenLabel(kindValue, 'Other')}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Phase
+                        <select
+                          value={documentManagerPhaseFilter}
+                          onChange={(e) => setDocumentManagerPhaseFilter(e.target.value)}
+                        >
+                          <option value="all">All</option>
+                          {documentManagerPhaseOptions.map((phaseKey) => (
+                            <option key={phaseKey} value={phaseKey}>
+                              {prettyPhaseLabel(phaseKey)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
+                      const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
+                      const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
+                      const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
+
+                      return (
+                        <div className="build-wizard-doc-manager-row" key={doc.id}>
+                          <div className="build-wizard-doc-manager-preview">
+                            {Number(doc.is_image) === 1 ? (
+                              <button
+                                className="build-wizard-doc-thumb-btn"
+                                onClick={() => void openDocumentPreview(doc)}
+                                title="Open preview"
+                              >
+                                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
+                              </button>
+                            ) : isPdfDocument(doc) ? (
+                              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
+                                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
+                              </a>
+                            ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
+                              <button
+                                type="button"
+                                className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
+                                onClick={() => void openDocumentPreview(doc)}
+                                title="Open preview"
+                              >
+                                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                                  <svg viewBox="0 0 24 24">
+                                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                                    <path d="M9 13h6M9 16h6" />
+                                  </svg>
+                                </span>
+                                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                                <span className="build-wizard-doc-file-open">Open preview</span>
+                              </button>
+                            ) : (
+                              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
+                                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
+                                  <svg viewBox="0 0 24 24">
+                                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
+                                    <path d="M9 13h6M9 16h6" />
+                                  </svg>
+                                </span>
+                                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
+                                <span className="build-wizard-doc-file-open">Open file</span>
+                              </a>
+                            )}
+                          </div>
+                          <div className="build-wizard-doc-manager-fields">
+                            <div className="build-wizard-doc-manager-title">{doc.original_name}</div>
+                            <div className="build-wizard-doc-manager-meta">Uploaded: {formatTimelineDate(doc.uploaded_at)} | Phase: {phaseLabel}</div>
+                            <div className="build-wizard-doc-manager-grid">
+                              <label>
+                                Kind
+                                <select
+                                  value={draft.kind}
+                                  onChange={(e) => updateDocumentDraft(doc.id, { kind: e.target.value })}
+                                >
+                                  {docKindOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                Linked Step
+                                <select
+                                  className="build-wizard-doc-manager-step-select"
+                                  value={draft.step_id > 0 ? String(draft.step_id) : ''}
+                                  onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
+                                >
+                                  <option value="">No step linked</option>
+                                  {linkedStepOptions.map((option) => (
+                                    <option key={option.step.id} value={option.step.id}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="is-wide">
+                                Caption
+                                <input
+                                  type="text"
+                                  value={draft.caption}
+                                  onChange={(e) => updateDocumentDraft(doc.id, { caption: e.target.value })}
+                                />
+                              </label>
+                            </div>
+                            <div className="build-wizard-doc-manager-actions">
+                              {(isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc) || Number(doc.is_image) === 1) ? (
+                                <StandardIconButton
+                                  iconKey="view"
+                                  ariaLabel={`Open ${doc.original_name}`}
+                                  title="Open"
+                                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                                  onClick={() => void openDocumentPreview(doc)}
+                                />
+                              ) : (
+                                <StandardIconLink
+                                  iconKey="view"
+                                  ariaLabel={`Open ${doc.original_name}`}
+                                  title="Open"
+                                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                                  href={doc.public_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                />
+                              )}
+                              <StandardIconLink
+                                iconKey="download"
+                                ariaLabel={`Download ${doc.original_name}`}
+                                title="Download"
+                                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
+                                href={withDownloadFlag(doc.public_url)}
+                              />
+                              <input
+                                ref={(el) => { replaceFileInputByDocId.current[doc.id] = el; }}
+                                type="file"
+                                className="build-wizard-hidden-file-input"
+                                onChange={(e) => {
+                                  const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                                  void onReplaceDocumentFile(doc, file);
+                                  e.currentTarget.value = '';
+                                }}
+                              />
+                              <StandardIconButton
+                                iconKey={replacingDocumentId === doc.id ? 'refresh' : 'upload'}
+                                ariaLabel={replacingDocumentId === doc.id ? `Replacing ${doc.original_name}` : `Replace ${doc.original_name}`}
+                                title={replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
+                                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
+                                onClick={() => replaceFileInputByDocId.current[doc.id]?.click()}
+                                disabled={replacingDocumentId === doc.id}
+                              />
+                              {Number(doc.is_image) === 1 ? (
+                                <button
+                                  className="btn btn-outline-primary btn-sm"
+                                  onClick={() => void updateProject({ primary_photo_document_id: doc.id })}
+                                >
+                                  {Number(project?.primary_photo_document_id || 0) === doc.id ? 'Primary Photo' : 'Set Primary Photo'}
+                                </button>
+                              ) : null}
+                              {String(doc.kind || '') === 'blueprint' ? (
+                                <button
+                                  className="btn btn-outline-primary btn-sm"
+                                  onClick={() => void updateProject({ blueprint_document_id: doc.id })}
+                                >
+                                  {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
+                                </button>
+                              ) : null}
+                              <StandardIconButton
+                                iconKey={documentSavingId === doc.id ? 'refresh' : 'save'}
+                                ariaLabel={documentSavingId === doc.id ? `Saving ${doc.original_name}` : `Save ${doc.original_name}`}
+                                title={documentSavingId === doc.id ? 'Saving...' : 'Save'}
+                                className="btn btn-success btn-sm catn8-action-icon-btn"
+                                onClick={() => void onSaveDocumentDraft(doc)}
+                                disabled={documentSavingId === doc.id}
+                              />
+                              <StandardIconButton
+                                iconKey={deletingDocumentId === doc.id ? 'refresh' : 'delete'}
+                                ariaLabel={deletingDocumentId === doc.id ? `Deleting ${doc.original_name}` : `Delete ${doc.original_name}`}
+                                title={deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+                                className="btn btn-outline-danger btn-sm catn8-action-icon-btn"
+                                onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
+                                disabled={deletingDocumentId === doc.id}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }) : <div className="build-wizard-muted">No documents match the selected filters.</div>}
+                  </div>
+                ) : (
+                  <div className="build-wizard-muted">No documents uploaded yet.</div>
+                )}
               </div>
               <div>
                 <h3>Contacts & Vendors</h3>
@@ -3840,7 +3818,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   Runs a full AI pass to reorder, add, and refine steps across phases using project data and linked documents.
                 </p>
                 <ol>
-                  <li>Upload key docs in Document Manager.</li>
+                  <li>Upload key docs in Project Desk.</li>
                   <li>Review phase assignments and major milestones.</li>
                   <li>Run Complete w/ AI, then review step changes before final edits.</li>
                 </ol>
@@ -3874,6 +3852,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </ol>
                 <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi('optimize')}>
                   {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest'}
+                </button>
+              </section>
+
+              <section className="build-wizard-ai-tool-card">
+                <h4>Place Lost Steps on Timeline</h4>
+                <p>
+                  Attempts an AI pass to place Project Desk steps into timeline phases, then applies local fallback rules for any remaining lost steps.
+                </p>
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={() => void onAutoAssignDeskStepsToTimeline()}
+                  disabled={deskAutoAssignBusy || aiBusy}
+                  title="AI-assisted placement of Project Desk steps into timeline phases"
+                >
+                  {(deskAutoAssignBusy || aiBusy) ? 'Placing Lost Steps...' : 'Place Lost Steps on Timeline'}
                 </button>
               </section>
 

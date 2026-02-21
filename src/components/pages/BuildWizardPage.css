@@ -1006,9 +1006,13 @@
 
 .build-wizard-desk-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.build-wizard-desk-documents {
+  min-width: 0;
 }
 
 .build-wizard-contact-toolbar {
@@ -1591,6 +1595,10 @@
   padding: 12px;
 }
 
+.build-wizard-project-desk-inner {
+  width: min(1500px, 100%);
+}
+
 .build-wizard-doc-manager-head {
   display: flex;
   align-items: center;
@@ -1937,6 +1945,10 @@
   }
 
   .build-wizard-doc-manager-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-desk-grid {
     grid-template-columns: 1fr;
   }
 

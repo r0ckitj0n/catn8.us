@@ -643,9 +643,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
   }, [projectId, onToast]);
 
-  const generateStepsFromAi = React.useCallback(async (mode: 'optimize' | 'fill_missing' | 'complete' = 'optimize') => {
+  const generateStepsFromAi = React.useCallback(async (mode: 'optimize' | 'fill_missing' | 'complete' = 'optimize'): Promise<BuildWizardAiGenerateResponse | null> => {
     if (projectId <= 0) {
-      return;
+      return null;
     }
     setAiBusy(true);
     try {
@@ -663,8 +663,10 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         message: `${modeLabel} complete (${res?.inserted_count || 0} inserted, ${res?.updated_count || 0} updated${missingFields > 0 ? `, ${missingFields} fields still missing` : ''}).`,
       });
       await refreshCurrentProject();
+      return res || null;
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to run AI step generation' });
+      return null;
     } finally {
       setAiBusy(false);
     }

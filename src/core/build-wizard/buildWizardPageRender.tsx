@@ -45,6 +45,7 @@ import {
   parseUrlState,
   prettyPhaseLabel,
   pushUrlState,
+  recommendPhaseKeyForStep,
   sortAlpha,
   stepPhaseBucket,
   thumbnailKindLabel,
@@ -195,6 +196,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   });
   const [deskAssignmentPhaseKey, setDeskAssignmentPhaseKey] = React.useState<string>('general');
   const [deskAssignmentStepId, setDeskAssignmentStepId] = React.useState<number>(0);
+  const [deskAutoAssignBusy, setDeskAutoAssignBusy] = React.useState<boolean>(false);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
@@ -1422,6 +1424,54 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   }, [addContactAssignment, deskAssignmentStepId, projectId, selectedDeskContact]);
 
+  const onAutoAssignDeskStepsToTimeline = React.useCallback(async () => {
+    if (deskAutoAssignBusy) {
+      return;
+    }
+    const unassignedSteps = steps.filter((step) => {
+      const currentPhaseKey = String(step.phase_key || '').trim().toLowerCase();
+      return currentPhaseKey === '' || currentPhaseKey === 'general';
+    });
+    if (!unassignedSteps.length) {
+      onToast?.({ tone: 'info', message: 'No unassigned steps found. Timeline phases are already set.' });
+      return;
+    }
+
+    setDeskAutoAssignBusy(true);
+    let movedCount = 0;
+    let unresolvedCount = 0;
+
+    try {
+      const sortedDeskSteps = [...unassignedSteps].sort((a, b) => {
+        if (a.step_order !== b.step_order) {
+          return a.step_order - b.step_order;
+        }
+        return a.id - b.id;
+      });
+      for (const step of sortedDeskSteps) {
+        const suggestedPhaseKey = recommendPhaseKeyForStep(step);
+        if (!suggestedPhaseKey || suggestedPhaseKey === 'general') {
+          unresolvedCount += 1;
+          continue;
+        }
+        const currentPhaseKey = String(step.phase_key || '').trim().toLowerCase() || 'general';
+        if (currentPhaseKey === suggestedPhaseKey) {
+          continue;
+        }
+        await updateStep(step.id, { phase_key: suggestedPhaseKey });
+        movedCount += 1;
+      }
+      onToast?.({
+        tone: movedCount > 0 ? 'success' : 'info',
+        message: movedCount > 0
+          ? `Placed ${movedCount} desk step${movedCount === 1 ? '' : 's'} on the build timeline${unresolvedCount > 0 ? ` (${unresolvedCount} still unassigned)` : ''}.`
+          : `No desk steps were moved${unresolvedCount > 0 ? ` (${unresolvedCount} need manual phase selection)` : ''}.`,
+      });
+    } finally {
+      setDeskAutoAssignBusy(false);
+    }
+  }, [deskAutoAssignBusy, onToast, steps, updateStep]);
+
   const onRunSingletreeRecovery = async (apply: boolean) => {
     if (!isAdmin) {
       return;
@@ -1946,8 +1996,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             step_type: nextType,
                           };
                           if (previousDraft) {
-                            if (nextType === 'construction') {
-                              nextPatch.permit_required = Number(previousDraft.permit_required) === 1 ? 1 : 0;
+                            if (nextType === 'permit') {
+                              nextPatch.permit_required = 1;
                               nextPatch.permit_document_id = previousDraft.permit_document_id ?? null;
                               nextPatch.permit_name = previousDraft.permit_name ?? null;
                               nextPatch.permit_authority = previousDraft.permit_authority ?? null;
@@ -1966,7 +2016,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                               nextPatch.source_ref = previousDraft.source_ref ?? null;
                             }
                           }
-                          if (nextType !== 'construction') {
+                          if (nextType !== 'permit') {
                             nextPatch.permit_required = 0;
                             nextPatch.permit_document_id = null;
                             nextPatch.permit_name = null;
@@ -2007,31 +2057,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
                   />
                 </label>
-                {draft.step_type === 'construction' ? (
-                  <label>
-                    Permit Required
-                    <select
-                      value={Number(draft.permit_required) === 1 ? '1' : '0'}
-                      onChange={(e) => {
-                        const next = e.target.value === '1' ? 1 : 0;
-                        const nextPatch: Partial<IBuildWizardStep> = { permit_required: next };
-                        if (next !== 1) {
-                          nextPatch.permit_document_id = null;
-                          nextPatch.permit_name = null;
-                          nextPatch.permit_authority = null;
-                          nextPatch.permit_status = null;
-                          nextPatch.permit_application_url = null;
-                        }
-                        updateStepDraft(step.id, nextPatch);
-                        void commitStep(step.id, nextPatch);
-                      }}
-                    >
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                  </label>
-                ) : null}
-                {draft.step_type === 'construction' && Number(draft.permit_required) === 1 ? (
+                {draft.step_type === 'permit' ? (
                   <>
                     <label>
                       Saved Permit
@@ -3452,6 +3478,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             <div className="build-wizard-doc-manager-head">
               <h3>Project Desk</h3>
               <div className="build-wizard-doc-manager-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => void onAutoAssignDeskStepsToTimeline()}
+                  disabled={deskAutoAssignBusy}
+                  title="Auto-place Project Desk steps into timeline phases"
+                >
+                  {deskAutoAssignBusy ? 'Placing...' : 'Place Steps on Timeline'}
+                </button>
                 <button
                   type="button"
                   className="build-wizard-phase-add"

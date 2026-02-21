@@ -163,25 +163,79 @@ export function calculateDurationDays(startDate: string | null | undefined, endD
   return Math.max(1, days);
 }
 
-export function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
-  const key = String(step.phase_key || '').toLowerCase();
+function includesAny(haystack: string, needles: string[]): boolean {
+  return needles.some((needle) => haystack.includes(needle));
+}
 
-  if (key.includes('land') || key.includes('survey') || key.includes('due_diligence') || key.includes('purchase')) {
+export function recommendPhaseKeyForStep(step: IBuildWizardStep): string | null {
+  const phaseKey = String(step.phase_key || '').trim().toLowerCase();
+  const haystack = `${phaseKey} ${String(step.step_type || '').toLowerCase()} ${String(step.title || '').toLowerCase()} ${String(step.description || '').toLowerCase()}`
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!haystack) {
+    return null;
+  }
+
+  if (
+    step.step_type === 'closeout'
+    || includesAny(haystack, ['closeout', 'final inspection', 'finals', 'certificate of occupancy', 'occupancy', 'co ', 'warranty', 'punch', 'handoff', 'move in'])
+  ) {
+    return 'inspections_closeout';
+  }
+
+  if (
+    includesAny(haystack, ['interior', 'finish', 'fixture', 'cabinet', 'trim', 'paint', 'drywall', 'floor', 'tile', 'countertop', 'siding', 'landscap'])
+  ) {
+    return 'interior_finishes';
+  }
+
+  if (
+    step.step_type === 'utility'
+    || includesAny(haystack, ['mep', 'plumb', 'elect', 'hvac', 'mechanical', 'rough in', 'rough-in', 'breaker panel', 'service panel', 'duct'])
+  ) {
+    return 'mep_rough_in';
+  }
+
+  if (
+    includesAny(haystack, ['framing', 'frame', 'shell', 'dry in', 'dry-in', 'roof', 'sheathing', 'window install', 'door install', 'weather barrier'])
+  ) {
+    return 'framing_shell';
+  }
+
+  if (
+    includesAny(haystack, ['site prep', 'site_preparation', 'foundation', 'footing', 'slab', 'grade', 'grading', 'excavat', 'erosion', 'concrete', 'clearing', 'stakeout'])
+  ) {
+    return 'site_preparation';
+  }
+
+  if (
+    includesAny(haystack, ['land_due_diligence', 'design_preconstruction', 'permit', 'approval', 'application', 'survey', 'soil', 'zoning', 'setback', 'engineering', 'blueprint', 'plan set', 'preconstruction', 'contract'])
+  ) {
+    return 'design_preconstruction';
+  }
+
+  return null;
+}
+
+export function stepPhaseBucket(step: IBuildWizardStep): BuildTabId {
+  const recommendedPhaseKey = recommendPhaseKeyForStep(step);
+  if (recommendedPhaseKey === 'design_preconstruction') {
     return 'land';
   }
-  if (key.includes('permit') || key.includes('approval')) {
+  if (recommendedPhaseKey === 'site_preparation') {
     return 'permits';
   }
-  if (key.includes('site') || key.includes('foundation') || key.includes('grading') || key.includes('excav')) {
+  if (recommendedPhaseKey === 'framing_shell') {
     return 'site';
   }
-  if (key.includes('framing') || key.includes('enclosure') || key.includes('roof') || key.includes('shell')) {
+  if (recommendedPhaseKey === 'mep_rough_in') {
     return 'framing';
   }
-  if (key.includes('plumb') || key.includes('elect') || key.includes('mechanical') || key.includes('hvac') || key.includes('mep') || key.includes('inspection')) {
+  if (recommendedPhaseKey === 'interior_finishes') {
     return 'mep';
   }
-  if (key.includes('finish') || key.includes('interior') || key.includes('paint') || key.includes('cabinet') || key.includes('floor')) {
+  if (recommendedPhaseKey === 'inspections_closeout') {
     return 'finishes';
   }
   return 'desk';

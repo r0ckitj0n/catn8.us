@@ -4,12 +4,12 @@ import { BuildTabId, StepType } from '../../../types/pages/buildWizardPage';
 export const BUILD_TABS: Array<{ id: BuildTabId; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'start', label: '1. Start' },
-  { id: 'land', label: '2. Land & Survey' },
-  { id: 'permits', label: '3. Permits' },
-  { id: 'site', label: '4. Site & Foundation' },
-  { id: 'framing', label: '5. Framing & Shell' },
-  { id: 'mep', label: '6. MEP & Inspections' },
-  { id: 'finishes', label: '7. Finishes' },
+  { id: 'land', label: '2. Planning & Pre-Construction' },
+  { id: 'permits', label: '3. Site Prep & Foundation' },
+  { id: 'site', label: '4. Framing & Exterior' },
+  { id: 'framing', label: '5. MEP & Rough-Ins' },
+  { id: 'mep', label: '6. Finishes & Fixtures' },
+  { id: 'finishes', label: '7. Final Inspections & Closeout' },
   { id: 'desk', label: 'Project Desk' },
   { id: 'completed', label: '8. Completed' },
 ];
@@ -30,12 +30,12 @@ export const TAB_PHASE_COLORS: Record<BuildTabId, string> = {
 };
 
 export const TAB_DEFAULT_PHASE_KEY: Partial<Record<BuildTabId, string>> = {
-  land: 'land_due_diligence',
-  permits: 'dawson_county_permits',
-  site: 'site_preparation',
-  framing: 'framing_shell',
-  mep: 'mep_rough_in',
-  finishes: 'interior_finishes',
+  land: 'design_preconstruction',
+  permits: 'site_preparation',
+  site: 'framing_shell',
+  framing: 'mep_rough_in',
+  mep: 'interior_finishes',
+  finishes: 'inspections_closeout',
   desk: 'general',
 };
 

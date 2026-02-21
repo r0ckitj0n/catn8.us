@@ -4779,7 +4779,9 @@ try {
             $params[] = catn8_build_wizard_text_or_null($body['permit_application_url'] ?? null, 500);
         }
 
-        if ($effectiveStepType !== 'construction') {
+        if ($effectiveStepType === 'permit') {
+            $updates[] = 'permit_required = 1';
+        } else {
             $updates[] = 'permit_required = 0';
             $updates[] = 'permit_document_id = NULL';
             $updates[] = 'permit_name = NULL';
@@ -5058,7 +5060,9 @@ try {
         $stepType = catn8_build_wizard_step_type((string)($body['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, $permitRequired)));
         $permitName = trim((string)($body['permit_name'] ?? ''));
         $permitDocumentId = (int)($body['permit_document_id'] ?? 0);
-        if ($stepType !== 'construction') {
+        if ($stepType === 'permit') {
+            $permitRequired = 1;
+        } else {
             $permitRequired = 0;
             $permitDocumentId = 0;
             $permitName = '';

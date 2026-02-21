@@ -1260,12 +1260,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   </button>
                   {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
 	                  <div className="build-wizard-inline-check">
-	                    <input
-	                      type="checkbox"
-	                      checked={Number(step.is_completed) === 1}
-	                      disabled={completionLocked}
-	                      onChange={(e) => void toggleStep(step, e.target.checked)}
-	                    />
+	                    <label className="build-wizard-inline-complete-toggle">
+	                      <input
+	                        type="checkbox"
+	                        checked={Number(step.is_completed) === 1}
+	                        disabled={completionLocked}
+	                        onChange={(e) => void toggleStep(step, e.target.checked)}
+	                      />
+	                      <span>Complete</span>
+	                    </label>
 	                    <select
 	                      className={`build-wizard-step-order-select ${expandedStepOrderSelectId === step.id ? 'is-expanded' : ''}`}
 	                      value={String(stepDisplayNumber)}
@@ -1286,7 +1289,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 	                        </option>
 	                      ))}
 	                    </select>
-	                    <span>Completed</span>
 	                  </div>
                   {completionLocked ? (
                     <span className="build-wizard-parent-lock-note">

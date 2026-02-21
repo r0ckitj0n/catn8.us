@@ -583,8 +583,25 @@
 
 .build-wizard-inline-check {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+}
+
+.build-wizard-inline-complete-toggle {
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
+  margin: 0;
+}
+
+.build-wizard-inline-complete-toggle input[type="checkbox"] {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0;
   margin: 0;
 }
 

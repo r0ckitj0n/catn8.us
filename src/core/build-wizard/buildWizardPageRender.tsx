@@ -112,6 +112,15 @@ type BuildWizardConfirmState = {
   resolve: (confirmed: boolean) => void;
 };
 
+const LIGHTBOX_ZOOM_MIN = 0.5;
+const LIGHTBOX_ZOOM_MAX = 3;
+const LIGHTBOX_ZOOM_STEP = 0.1;
+const LIGHTBOX_ZOOM_STEP_FAST = 0.2;
+
+const clampLightboxZoom = (value: number): number => {
+  return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
@@ -169,11 +178,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
   const [lightboxSpreadsheetSheetIndex, setLightboxSpreadsheetSheetIndex] = React.useState<number>(0);
+  const [lightboxZoom, setLightboxZoom] = React.useState<number>(1);
   const [documentManagerKindFilter, setDocumentManagerKindFilter] = React.useState<string>('all');
   const [documentManagerPhaseFilter, setDocumentManagerPhaseFilter] = React.useState<string>('all');
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [aiToolsOpen, setAiToolsOpen] = React.useState<boolean>(false);
   const [deskSelectedContactId, setDeskSelectedContactId] = React.useState<number>(0);
+  const [deskContactQuery, setDeskContactQuery] = React.useState<string>('');
+  const [deskContactTypeFilter, setDeskContactTypeFilter] = React.useState<'all' | 'contact' | 'vendor'>('all');
   const [deskContactDraft, setDeskContactDraft] = React.useState<{
     contact_id?: number;
     display_name: string;
@@ -239,6 +251,20 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
   const [confirmState, setConfirmState] = React.useState<BuildWizardConfirmState | null>(null);
+
+  const closeLightbox = React.useCallback(() => {
+    setLightboxDoc(null);
+    setLightboxSpreadsheetSheetIndex(0);
+    setLightboxZoom(1);
+  }, []);
+
+  const zoomLightboxBy = React.useCallback((delta: number) => {
+    setLightboxZoom((prev) => clampLightboxZoom(prev + delta));
+  }, []);
+
+  const resetLightboxZoom = React.useCallback(() => {
+    setLightboxZoom(1);
+  }, []);
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -596,6 +622,37 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       .filter((assignment) => assignment.contact_id === selectedDeskContact.id)
       .sort((a, b) => a.id - b.id);
   }, [contactAssignments, selectedDeskContact]);
+
+  const deskContactAssignmentCountById = React.useMemo(() => {
+    const map = new Map<number, number>();
+    contactAssignments.forEach((assignment) => {
+      map.set(assignment.contact_id, (map.get(assignment.contact_id) || 0) + 1);
+    });
+    return map;
+  }, [contactAssignments]);
+
+  const filteredDeskContacts = React.useMemo(() => {
+    const query = deskContactQuery.trim().toLowerCase();
+    return deskContacts.filter((contact) => {
+      if (deskContactTypeFilter === 'vendor' && Number(contact.is_vendor) !== 1) {
+        return false;
+      }
+      if (deskContactTypeFilter === 'contact' && Number(contact.is_vendor) === 1) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      const haystack = [
+        contact.display_name,
+        contact.company,
+        contact.role_title,
+        contact.email,
+        contact.phone,
+      ].map((value) => String(value || '').toLowerCase()).join(' ');
+      return haystack.includes(query);
+    });
+  }, [deskContactQuery, deskContactTypeFilter, deskContacts]);
 
   const stepAssigneesByStepId = React.useMemo(() => {
     const normalizePhaseKey = (value: string | null | undefined): string => String(value || '').trim().toLowerCase();
@@ -1030,6 +1087,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [projectDeskOpen, documents, deskContacts, deskSelectedContactId]);
 
   React.useEffect(() => {
+    if (!projectDeskOpen || deskSelectedContactId <= 0) {
+      return;
+    }
+    if (filteredDeskContacts.length === 0) {
+      return;
+    }
+    if (filteredDeskContacts.some((contact) => contact.id === deskSelectedContactId)) {
+      return;
+    }
+    setDeskSelectedContactId(filteredDeskContacts[0].id);
+  }, [projectDeskOpen, filteredDeskContacts, deskSelectedContactId]);
+
+  React.useEffect(() => {
     if (!projectDeskOpen) {
       return;
     }
@@ -1230,6 +1300,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
 
     if (Number(doc.is_image) === 1) {
+      setLightboxZoom(1);
       setLightboxDoc({ mode: 'image', src, title });
       return;
     }
@@ -1239,6 +1310,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return;
     }
 
+    setLightboxZoom(1);
     setLightboxDoc({ mode: 'loading', src, title });
     setLightboxSpreadsheetSheetIndex(0);
 
@@ -1335,6 +1407,18 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       onToast?.({ tone: 'warning', message: `${title}: ${detail}` });
     }
   }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, onToast]);
+
+  const lightboxSupportsZoom = Boolean(lightboxDoc && (lightboxDoc.mode === 'image' || lightboxDoc.mode === 'spreadsheet' || lightboxDoc.mode === 'plan'));
+
+  const onLightboxWheelZoom = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!lightboxSupportsZoom) {
+      return;
+    }
+    e.preventDefault();
+    const direction = e.deltaY < 0 ? 1 : -1;
+    const delta = (e.shiftKey ? LIGHTBOX_ZOOM_STEP_FAST : LIGHTBOX_ZOOM_STEP) * direction;
+    setLightboxZoom((prev) => clampLightboxZoom(prev + delta));
+  }, [lightboxSupportsZoom]);
 
   const selectTopbarSearchResult = React.useCallback((result: BuildWizardSearchResult) => {
     setTopbarSearchOpen(false);
@@ -3672,24 +3756,75 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <div className="build-wizard-muted">No documents uploaded yet.</div>
                 )}
               </div>
-              <div>
+              <div className="build-wizard-desk-contacts">
                 <h3>Contacts & Vendors</h3>
+                <div className="build-wizard-contact-summary">
+                  <span className="build-wizard-contact-summary-chip">
+                    Total: {deskContacts.length}
+                  </span>
+                  <span className="build-wizard-contact-summary-chip is-vendor">
+                    Vendors: {deskContacts.filter((contact) => Number(contact.is_vendor) === 1).length}
+                  </span>
+                  <span className="build-wizard-contact-summary-chip is-contact">
+                    Contacts: {deskContacts.filter((contact) => Number(contact.is_vendor) !== 1).length}
+                  </span>
+                </div>
                 <div className="build-wizard-contact-toolbar">
                   <button type="button" className="btn btn-outline-primary btn-sm" onClick={onStartNewDeskContact}>
                     New Contact
                   </button>
-                  <select
-                    value={deskSelectedContactId > 0 ? String(deskSelectedContactId) : ''}
-                    onChange={(e) => setDeskSelectedContactId(Number(e.target.value || '0'))}
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setDeskContactQuery('');
+                      setDeskContactTypeFilter('all');
+                    }}
                   >
-                    <option value="">Select contact...</option>
-                    {deskContacts.map((contact) => (
-                      <option key={contact.id} value={contact.id}>
-                        {contact.is_vendor ? 'Vendor' : 'Contact'}: {contact.display_name}
-                        {contact.project_id ? ' (Project)' : ' (Site)'}
-                      </option>
-                    ))}
+                    Clear Filters
+                  </button>
+                </div>
+                <div className="build-wizard-contact-filter-grid">
+                  <input
+                    type="search"
+                    placeholder="Search name, company, email..."
+                    value={deskContactQuery}
+                    onChange={(e) => setDeskContactQuery(e.target.value)}
+                  />
+                  <select
+                    value={deskContactTypeFilter}
+                    onChange={(e) => setDeskContactTypeFilter(e.target.value as 'all' | 'contact' | 'vendor')}
+                  >
+                    <option value="all">All types</option>
+                    <option value="contact">Contacts only</option>
+                    <option value="vendor">Vendors only</option>
                   </select>
+                </div>
+                <div className="build-wizard-contact-list-nav">
+                  {filteredDeskContacts.length ? filteredDeskContacts.map((contact) => {
+                    const assignmentCount = deskContactAssignmentCountById.get(contact.id) || 0;
+                    const isSelected = contact.id === deskSelectedContactId;
+                    return (
+                      <button
+                        type="button"
+                        key={contact.id}
+                        className={`build-wizard-contact-list-item${isSelected ? ' is-selected' : ''}`}
+                        onClick={() => setDeskSelectedContactId(contact.id)}
+                      >
+                        <span className="build-wizard-contact-list-main">
+                          <strong>{contact.display_name || 'Unnamed contact'}</strong>
+                          <span className="build-wizard-contact-list-sub">
+                            {contact.company ? `${contact.company} | ` : ''}
+                            {contact.is_vendor ? 'Vendor' : 'Contact'}
+                            {contact.project_id ? ' | Project' : ' | Site'}
+                          </span>
+                        </span>
+                        <span className="build-wizard-contact-list-count">
+                          {assignmentCount} assignment{assignmentCount === 1 ? '' : 's'}
+                        </span>
+                      </button>
+                    );
+                  }) : <div className="build-wizard-muted">No contacts match the current filters.</div>}
                 </div>
                 <div className="build-wizard-contact-editor">
                   <label>
@@ -3795,7 +3930,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     />
                   </label>
                   <div className="build-wizard-contact-actions">
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => void onSaveDeskContact()}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => void onSaveDeskContact()}
+                      disabled={!deskContactDraft.display_name.trim()}
+                    >
                       Save Contact
                     </button>
                     {selectedDeskContact ? (
@@ -3957,9 +4097,42 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       ) : null}
 
       {lightboxDoc ? (
-        <div className="build-wizard-lightbox" onClick={() => setLightboxDoc(null)}>
+        <div className="build-wizard-lightbox" onClick={closeLightbox}>
           <div className="build-wizard-lightbox-inner" onClick={(e) => e.stopPropagation()}>
             <div className="build-wizard-lightbox-actions">
+              {lightboxSupportsZoom ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
+                    onClick={() => zoomLightboxBy(-LIGHTBOX_ZOOM_STEP)}
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                    disabled={lightboxZoom <= LIGHTBOX_ZOOM_MIN}
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
+                    onClick={resetLightboxZoom}
+                    title="Reset zoom"
+                    aria-label="Reset zoom"
+                  >
+                    {Math.round(lightboxZoom * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
+                    onClick={() => zoomLightboxBy(LIGHTBOX_ZOOM_STEP)}
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                    disabled={lightboxZoom >= LIGHTBOX_ZOOM_MAX}
+                  >
+                    +
+                  </button>
+                </>
+              ) : null}
               <StandardIconLink
                 iconKey="download"
                 ariaLabel="Download"
@@ -3972,62 +4145,66 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 ariaLabel="Close preview"
                 title="Close"
                 className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-close"
-                onClick={() => setLightboxDoc(null)}
+                onClick={closeLightbox}
               />
             </div>
-            {lightboxDoc.mode === 'image' ? (
-              <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
-            ) : null}
-            {lightboxDoc.mode === 'loading' ? (
-              <div className="build-wizard-lightbox-message">Loading preview...</div>
-            ) : null}
-            {lightboxDoc.mode === 'error' ? (
-              <div className="build-wizard-lightbox-message">
-                <div>{lightboxDoc.message}</div>
-                <div>
-                  <a href={lightboxDoc.src} target="_blank" rel="noreferrer">Open original file</a>
-                </div>
-              </div>
-            ) : null}
-            {lightboxDoc.mode === 'plan' ? (
-              <div className="build-wizard-lightbox-plan-wrap">
-                <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
-                <div className="build-wizard-lightbox-note">
-                  {lightboxDoc.format === 'hex' ? 'Binary .plan preview (hex + ASCII).' : 'Text preview.'}
-                  {lightboxDoc.truncated ? ' Preview truncated for performance.' : ''}
-                </div>
-              </div>
-            ) : null}
-            {lightboxDoc.mode === 'spreadsheet' ? (
-              <div className="build-wizard-lightbox-sheet-wrap">
-                <div className="build-wizard-lightbox-sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
-                  {lightboxDoc.sheets.map((sheet, idx) => (
-                    <button
-                      key={sheet.name}
-                      type="button"
-                      className={`build-wizard-lightbox-sheet-tab ${lightboxSpreadsheetSheetIndex === idx ? 'is-active' : ''}`}
-                      onClick={() => setLightboxSpreadsheetSheetIndex(idx)}
-                    >
-                      {sheet.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="build-wizard-lightbox-sheet-table-wrap">
-                  <table className="build-wizard-lightbox-sheet-table">
-                    <tbody>
-                      {(lightboxDoc.sheets[lightboxSpreadsheetSheetIndex]?.rows || []).map((row, rowIndex) => (
-                        <tr key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}`}>
-                          {row.map((cell, cellIndex) => (
-                            <td key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}-${cellIndex}`}>{cell}</td>
-                          ))}
-                        </tr>
+            <div className={`build-wizard-lightbox-zoom-frame ${lightboxSupportsZoom ? 'is-zoomable' : ''}`} onWheel={onLightboxWheelZoom}>
+              <div className="build-wizard-lightbox-zoom-content" style={lightboxSupportsZoom ? { transform: `scale(${lightboxZoom})` } : undefined}>
+                {lightboxDoc.mode === 'image' ? (
+                  <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
+                ) : null}
+                {lightboxDoc.mode === 'loading' ? (
+                  <div className="build-wizard-lightbox-message">Loading preview...</div>
+                ) : null}
+                {lightboxDoc.mode === 'error' ? (
+                  <div className="build-wizard-lightbox-message">
+                    <div>{lightboxDoc.message}</div>
+                    <div>
+                      <a href={lightboxDoc.src} target="_blank" rel="noreferrer">Open original file</a>
+                    </div>
+                  </div>
+                ) : null}
+                {lightboxDoc.mode === 'plan' ? (
+                  <div className="build-wizard-lightbox-plan-wrap">
+                    <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
+                    <div className="build-wizard-lightbox-note">
+                      {lightboxDoc.format === 'hex' ? 'Binary .plan preview (hex + ASCII).' : 'Text preview.'}
+                      {lightboxDoc.truncated ? ' Preview truncated for performance.' : ''}
+                    </div>
+                  </div>
+                ) : null}
+                {lightboxDoc.mode === 'spreadsheet' ? (
+                  <div className="build-wizard-lightbox-sheet-wrap">
+                    <div className="build-wizard-lightbox-sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
+                      {lightboxDoc.sheets.map((sheet, idx) => (
+                        <button
+                          key={sheet.name}
+                          type="button"
+                          className={`build-wizard-lightbox-sheet-tab ${lightboxSpreadsheetSheetIndex === idx ? 'is-active' : ''}`}
+                          onClick={() => setLightboxSpreadsheetSheetIndex(idx)}
+                        >
+                          {sheet.name}
+                        </button>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-                {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview is limited to 120 rows and 24 columns per sheet.</div> : null}
+                    </div>
+                    <div className="build-wizard-lightbox-sheet-table-wrap">
+                      <table className="build-wizard-lightbox-sheet-table">
+                        <tbody>
+                          {(lightboxDoc.sheets[lightboxSpreadsheetSheetIndex]?.rows || []).map((row, rowIndex) => (
+                            <tr key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}`}>
+                              {row.map((cell, cellIndex) => (
+                                <td key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview is limited to 120 rows and 24 columns per sheet.</div> : null}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
             <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
           </div>
         </div>

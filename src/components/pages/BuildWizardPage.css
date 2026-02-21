@@ -506,6 +506,15 @@
   box-shadow: inset 0 0 0 2px #5f86c5;
 }
 
+.build-wizard-step.is-readonly {
+  background: #f4f6f9;
+  border-color: #b8c2d0;
+}
+
+.build-wizard-step.is-readonly .build-wizard-step-phase-accent {
+  opacity: 0.55;
+}
+
 .build-wizard-step-phase-accent {
   position: absolute;
   left: 0;
@@ -567,6 +576,15 @@
   color: #7a4b0c;
   background: #fff3de;
   border: 1px solid #f0d4a3;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.build-wizard-step-readonly-note {
+  font-size: 0.78rem;
+  color: #495c74;
+  background: #e6edf7;
+  border: 1px solid #c1d0e4;
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -685,6 +703,17 @@
   display: grid;
   grid-template-columns: minmax(220px, 1.6fr) minmax(180px, 1fr) minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr);
   gap: 10px;
+}
+
+.build-wizard-step-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.build-wizard-step-fields[disabled] {
+  opacity: 0.75;
 }
 
 .build-wizard-permit-usage-note {

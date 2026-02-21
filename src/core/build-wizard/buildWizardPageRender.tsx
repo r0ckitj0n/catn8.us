@@ -1210,6 +1210,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         />
         {rows.map((row, rowIndex) => {
           const step = row.step;
+          const stepReadOnly = Number(step.is_completed) === 1;
           const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
           const draft = stepDrafts[step.id] || step;
           const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
@@ -1227,10 +1228,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           return (
             <React.Fragment key={step.id}>
             <div
-              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''}`}
+              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''}`}
               style={{ '--bw-indent-level': String(row.level) } as React.CSSProperties}
               onDragOver={(e) => {
-                if (draggingStepId > 0 && draggingStepId !== step.id) {
+                if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
                   e.preventDefault();
                   setDragOverParentStepId(step.id);
                   setDragOverInsertIndex(-1);
@@ -1249,8 +1250,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     className="build-wizard-step-drag-handle"
                     title="Drag to reorder"
                     aria-label="Drag to reorder"
-                    draggable
+                    draggable={!stepReadOnly}
+                    disabled={stepReadOnly}
                     onDragStart={(e) => {
+                      if (stepReadOnly) {
+                        return;
+                      }
                       e.dataTransfer.effectAllowed = 'move';
                       setDraggingStepId(step.id);
                     }}
@@ -1272,6 +1277,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 	                    <select
 	                      className={`build-wizard-step-order-select ${expandedStepOrderSelectId === step.id ? 'is-expanded' : ''}`}
 	                      value={String(stepDisplayNumber)}
+                        disabled={stepReadOnly}
 	                      onChange={(e) => {
 	                        const targetDisplayNumber = Number(e.target.value || '0');
 	                        if (targetDisplayNumber > 0) {
@@ -1293,6 +1299,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   {completionLocked ? (
                     <span className="build-wizard-parent-lock-note">
                       Complete {incompleteDescendantCount} child step{incompleteDescendantCount === 1 ? '' : 's'} first
+                    </span>
+                  ) : null}
+                  {stepReadOnly ? (
+                    <span className="build-wizard-step-readonly-note">
+                      Read-only (completed)
                     </span>
                   ) : null}
                   <div className="build-wizard-inline-metrics">
@@ -1418,7 +1429,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     className="build-wizard-step-delete"
                     aria-label="Delete step"
                     title="Delete step"
+                    disabled={stepReadOnly}
                     onClick={() => {
+                      if (stepReadOnly) {
+                        return;
+                      }
                       const ok = window.confirm('Delete this step?');
                       if (ok) {
                         void deleteStep(step.id);
@@ -1435,6 +1450,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </div>
               </div>
 
+              <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
               <div className="build-wizard-step-grid">
                 {dependencyTitles.length ? (
                   <div className="build-wizard-type-note">Depends on: {dependencyTitles.join(', ')}</div>
@@ -1821,11 +1837,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   ))}
                 </div>
               ) : null}
+              </fieldset>
 
               <div className="build-wizard-step-media">
                 {renderDocumentGallery(
                   documents.filter((d) => Number(d.step_id || 0) === step.id),
-                  'No media attached to this step yet.'
+                  'No media attached to this step yet.',
+                  stepReadOnly
                 )}
               </div>
 
@@ -1858,7 +1876,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     );
   };
 
-  const renderDocumentGallery = (items: typeof documents, emptyText: string) => {
+  const renderDocumentGallery = (items: typeof documents, emptyText: string, readOnly: boolean = false) => {
     if (!items.length) {
       return <div className="build-wizard-muted">{emptyText}</div>;
     }
@@ -1913,7 +1931,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               title="Delete file"
               aria-label={`Delete ${doc.original_name}`}
               onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
-              disabled={deletingDocumentId === doc.id}
+              disabled={readOnly || deletingDocumentId === doc.id}
             >
               <svg viewBox="0 0 24 24" className="build-wizard-doc-delete-icon" aria-hidden="true">
                 <path d="M9 3h6a1 1 0 0 1 1 1v1h4v2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7H4V5h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-3 2v12h10V7H7Zm2 2h2v8H9V9Zm4 0h2v8h-2V9Z" />

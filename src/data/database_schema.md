@@ -132,6 +132,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `owner_user_id` (INT)
 - `project_id` (INT, NULLABLE, FOREIGN KEY -> build_wizard_projects.id)
 - `display_name` (VARCHAR(191))
+- `contact_type` (VARCHAR(32), DEFAULT 'contact')
 - `email` (VARCHAR(191), NULLABLE)
 - `phone` (VARCHAR(64), NULLABLE)
 - `company` (VARCHAR(191), NULLABLE)

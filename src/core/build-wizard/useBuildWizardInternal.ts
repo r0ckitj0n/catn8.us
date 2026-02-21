@@ -864,6 +864,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       project_id: number;
       contact_id?: number;
       display_name: string;
+      contact_type?: 'contact' | 'vendor' | 'authority';
       email?: string | null;
       phone?: string | null;
       company?: string | null;

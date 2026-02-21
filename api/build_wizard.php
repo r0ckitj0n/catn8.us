@@ -153,6 +153,7 @@ function catn8_build_wizard_tables_ensure(): void
         owner_user_id INT NOT NULL,
         project_id INT NULL,
         display_name VARCHAR(191) NOT NULL,
+        contact_type VARCHAR(32) NOT NULL DEFAULT 'contact',
         email VARCHAR(191) NULL,
         phone VARCHAR(64) NULL,
         company VARCHAR(191) NULL,
@@ -167,6 +168,7 @@ function catn8_build_wizard_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_owner_user_id (owner_user_id),
         KEY idx_project_id (project_id),
+        KEY idx_contact_type (contact_type),
         KEY idx_is_vendor (is_vendor),
         CONSTRAINT fk_build_wizard_contacts_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -265,7 +267,8 @@ function catn8_build_wizard_tables_ensure(): void
     $contactColumns = [
         'project_id' => 'ALTER TABLE build_wizard_contacts ADD COLUMN project_id INT NULL AFTER owner_user_id',
         'display_name' => 'ALTER TABLE build_wizard_contacts ADD COLUMN display_name VARCHAR(191) NOT NULL DEFAULT \'\' AFTER project_id',
-        'email' => 'ALTER TABLE build_wizard_contacts ADD COLUMN email VARCHAR(191) NULL AFTER display_name',
+        'contact_type' => "ALTER TABLE build_wizard_contacts ADD COLUMN contact_type VARCHAR(32) NOT NULL DEFAULT 'contact' AFTER display_name",
+        'email' => 'ALTER TABLE build_wizard_contacts ADD COLUMN email VARCHAR(191) NULL AFTER contact_type',
         'phone' => 'ALTER TABLE build_wizard_contacts ADD COLUMN phone VARCHAR(64) NULL AFTER email',
         'company' => 'ALTER TABLE build_wizard_contacts ADD COLUMN company VARCHAR(191) NULL AFTER phone',
         'role_title' => 'ALTER TABLE build_wizard_contacts ADD COLUMN role_title VARCHAR(120) NULL AFTER company',
@@ -290,6 +293,7 @@ function catn8_build_wizard_tables_ensure(): void
     $contactIndexes = [
         'idx_owner_user_id' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_owner_user_id (owner_user_id)',
         'idx_project_id' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_project_id (project_id)',
+        'idx_contact_type' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_contact_type (contact_type)',
         'idx_is_vendor' => 'ALTER TABLE build_wizard_contacts ADD KEY idx_is_vendor (is_vendor)',
     ];
     foreach ($contactIndexes as $indexName => $indexSql) {
@@ -480,6 +484,17 @@ function catn8_build_wizard_text_or_null($value, int $maxLen = 500): ?string
         $v = substr($v, 0, $maxLen);
     }
     return $v;
+}
+
+function catn8_build_wizard_normalize_contact_type($value, int $isVendor = 0): string
+{
+    $raw = strtolower(trim((string)$value));
+    return match ($raw) {
+        'vendor' => 'vendor',
+        'authority' => 'authority',
+        'contact' => 'contact',
+        default => ($isVendor === 1 ? 'vendor' : 'contact'),
+    };
 }
 
 function catn8_build_wizard_default_questions(): array
@@ -1206,11 +1221,11 @@ function catn8_build_wizard_contacts_for_project(int $projectId, int $uid): arra
     }
 
     $rows = Database::queryAll(
-        'SELECT id, owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
+        'SELECT id, owner_user_id, project_id, display_name, contact_type, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
          FROM build_wizard_contacts
          WHERE owner_user_id = ?
            AND (project_id IS NULL OR project_id = ?)
-         ORDER BY is_vendor DESC, display_name ASC, id ASC',
+         ORDER BY display_name ASC, id ASC',
         [$uid, $projectId]
     );
 
@@ -1221,6 +1236,7 @@ function catn8_build_wizard_contacts_for_project(int $projectId, int $uid): arra
             'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
             'project_id' => $row['project_id'] !== null ? (int)$row['project_id'] : null,
             'display_name' => (string)($row['display_name'] ?? ''),
+            'contact_type' => catn8_build_wizard_normalize_contact_type($row['contact_type'] ?? null, (int)($row['is_vendor'] ?? 0)),
             'email' => $row['email'] !== null ? (string)$row['email'] : null,
             'phone' => $row['phone'] !== null ? (string)$row['phone'] : null,
             'company' => $row['company'] !== null ? (string)$row['company'] : null,
@@ -1274,7 +1290,7 @@ function catn8_build_wizard_contact_for_project(int $contactId, int $projectId, 
         return null;
     }
     $row = Database::queryOne(
-        'SELECT id, owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
+        'SELECT id, owner_user_id, project_id, display_name, contact_type, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website, created_at, updated_at
          FROM build_wizard_contacts
          WHERE id = ?
            AND owner_user_id = ?
@@ -1290,6 +1306,7 @@ function catn8_build_wizard_contact_for_project(int $contactId, int $projectId, 
         'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
         'project_id' => $row['project_id'] !== null ? (int)$row['project_id'] : null,
         'display_name' => (string)($row['display_name'] ?? ''),
+        'contact_type' => catn8_build_wizard_normalize_contact_type($row['contact_type'] ?? null, (int)($row['is_vendor'] ?? 0)),
         'email' => $row['email'] !== null ? (string)$row['email'] : null,
         'phone' => $row['phone'] !== null ? (string)$row['phone'] : null,
         'company' => $row['company'] !== null ? (string)$row['company'] : null,
@@ -5280,7 +5297,8 @@ try {
 
         $isProjectOnly = ((int)($body['is_project_only'] ?? 1) === 1) ? 1 : 0;
         $scopeProjectId = $isProjectOnly === 1 ? $projectId : null;
-        $isVendor = ((int)($body['is_vendor'] ?? 0) === 1) ? 1 : 0;
+        $requestedContactType = catn8_build_wizard_normalize_contact_type($body['contact_type'] ?? null, ((int)($body['is_vendor'] ?? 0) === 1) ? 1 : 0);
+        $isVendor = $requestedContactType === 'vendor' ? 1 : 0;
 
         if ($contactId > 0) {
             $existing = catn8_build_wizard_contact_for_project($contactId, $projectId, $viewerId);
@@ -5290,11 +5308,12 @@ try {
 
             Database::execute(
                 'UPDATE build_wizard_contacts
-                 SET project_id = ?, display_name = ?, email = ?, phone = ?, company = ?, role_title = ?, notes = ?, is_vendor = ?, vendor_type = ?, vendor_license = ?, vendor_trade = ?, vendor_website = ?
+                 SET project_id = ?, display_name = ?, contact_type = ?, email = ?, phone = ?, company = ?, role_title = ?, notes = ?, is_vendor = ?, vendor_type = ?, vendor_license = ?, vendor_trade = ?, vendor_website = ?
                  WHERE id = ? AND owner_user_id = ?',
                 [
                     $scopeProjectId,
                     $displayName,
+                    $requestedContactType,
                     catn8_build_wizard_text_or_null($body['email'] ?? null, 191),
                     catn8_build_wizard_text_or_null($body['phone'] ?? null, 64),
                     catn8_build_wizard_text_or_null($body['company'] ?? null, 191),
@@ -5312,12 +5331,13 @@ try {
         } else {
             Database::execute(
                 'INSERT INTO build_wizard_contacts
-                    (owner_user_id, project_id, display_name, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (owner_user_id, project_id, display_name, contact_type, email, phone, company, role_title, notes, is_vendor, vendor_type, vendor_license, vendor_trade, vendor_website)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [
                     $viewerId,
                     $scopeProjectId,
                     $displayName,
+                    $requestedContactType,
                     catn8_build_wizard_text_or_null($body['email'] ?? null, 191),
                     catn8_build_wizard_text_or_null($body['phone'] ?? null, 64),
                     catn8_build_wizard_text_or_null($body['company'] ?? null, 191),

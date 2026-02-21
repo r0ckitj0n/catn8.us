@@ -6,6 +6,7 @@ import { WebpImage } from '../../components/common/WebpImage';
 import { ApiClient } from '../ApiClient';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import {
+  IBuildWizardContact,
   IBuildWizardContactAssignment,
   IBuildWizardContentSearchResult,
   IBuildWizardDocument,
@@ -121,6 +122,36 @@ const clampLightboxZoom = (value: number): number => {
   return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
 };
 
+type BuildWizardContactType = 'contact' | 'vendor' | 'authority';
+
+const normalizeContactType = (contact: Pick<IBuildWizardContact, 'contact_type' | 'is_vendor'>): BuildWizardContactType => {
+  const raw = String(contact.contact_type || '').trim().toLowerCase();
+  if (raw === 'vendor' || raw === 'authority' || raw === 'contact') {
+    return raw;
+  }
+  return Number(contact.is_vendor) === 1 ? 'vendor' : 'contact';
+};
+
+const contactTypeLabel = (contactType: BuildWizardContactType): string => {
+  if (contactType === 'vendor') {
+    return 'Vendor';
+  }
+  if (contactType === 'authority') {
+    return 'Authority';
+  }
+  return 'Contact';
+};
+
+const contactTypeChipClass = (contactType: BuildWizardContactType): string => {
+  if (contactType === 'vendor') {
+    return 'is-vendor';
+  }
+  if (contactType === 'authority') {
+    return 'is-authority';
+  }
+  return 'is-contact';
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
@@ -184,8 +215,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [aiToolsOpen, setAiToolsOpen] = React.useState<boolean>(false);
   const [deskSelectedContactId, setDeskSelectedContactId] = React.useState<number>(0);
+  const [deskCreateMode, setDeskCreateMode] = React.useState<boolean>(false);
   const [deskContactQuery, setDeskContactQuery] = React.useState<string>('');
-  const [deskContactTypeFilter, setDeskContactTypeFilter] = React.useState<'all' | 'contact' | 'vendor'>('all');
+  const [deskContactTypeFilter, setDeskContactTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [deskContactDraft, setDeskContactDraft] = React.useState<{
     contact_id?: number;
     display_name: string;
@@ -194,6 +226,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     company: string;
     role_title: string;
     notes: string;
+    contact_type: BuildWizardContactType;
     is_vendor: number;
     is_project_only: number;
     vendor_type: string;
@@ -207,6 +240,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     company: '',
     role_title: '',
     notes: '',
+    contact_type: 'contact',
     is_vendor: 0,
     is_project_only: 1,
     vendor_type: '',
@@ -243,7 +277,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
   const [topbarSearchDocumentResults, setTopbarSearchDocumentResults] = React.useState<IBuildWizardContentSearchResult[]>([]);
   const [topbarSearchFocusStepId, setTopbarSearchFocusStepId] = React.useState<number>(0);
-  const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | 'contact' | 'vendor'>('all');
+  const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
@@ -594,9 +628,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const deskContacts = React.useMemo(() => {
     return [...contacts].sort((a, b) => {
-      if (Number(a.is_vendor) !== Number(b.is_vendor)) {
-        return Number(b.is_vendor) - Number(a.is_vendor);
-      }
       return sortAlpha(String(a.display_name || ''), String(b.display_name || ''));
     });
   }, [contacts]);
@@ -634,10 +665,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const filteredDeskContacts = React.useMemo(() => {
     const query = deskContactQuery.trim().toLowerCase();
     return deskContacts.filter((contact) => {
-      if (deskContactTypeFilter === 'vendor' && Number(contact.is_vendor) !== 1) {
-        return false;
-      }
-      if (deskContactTypeFilter === 'contact' && Number(contact.is_vendor) === 1) {
+      const contactType = normalizeContactType(contact);
+      if (deskContactTypeFilter !== 'all' && contactType !== deskContactTypeFilter) {
         return false;
       }
       if (!query) {
@@ -653,6 +682,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return haystack.includes(query);
     });
   }, [deskContactQuery, deskContactTypeFilter, deskContacts]);
+
+  const authorityContacts = React.useMemo(() => {
+    return contacts
+      .filter((contact) => normalizeContactType(contact) === 'authority')
+      .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
+  }, [contacts]);
 
   const stepAssigneesByStepId = React.useMemo(() => {
     const normalizePhaseKey = (value: string | null | undefined): string => String(value || '').trim().toLowerCase();
@@ -1066,6 +1101,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   React.useEffect(() => {
     if (!projectDeskOpen) {
+      setDeskCreateMode(false);
+    }
+  }, [projectDeskOpen]);
+
+  React.useEffect(() => {
+    if (!projectDeskOpen) {
       return;
     }
     const nextDrafts: DocumentDraftMap = {};
@@ -1080,14 +1121,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDocumentManagerKindFilter('all');
     setDocumentManagerPhaseFilter('all');
 
+    if (deskCreateMode) {
+      return;
+    }
     if (deskSelectedContactId > 0 && deskContacts.some((contact) => contact.id === deskSelectedContactId)) {
       return;
     }
     setDeskSelectedContactId(deskContacts[0]?.id || 0);
-  }, [projectDeskOpen, documents, deskContacts, deskSelectedContactId]);
+  }, [projectDeskOpen, documents, deskContacts, deskSelectedContactId, deskCreateMode]);
 
   React.useEffect(() => {
-    if (!projectDeskOpen || deskSelectedContactId <= 0) {
+    if (!projectDeskOpen || deskCreateMode || deskSelectedContactId <= 0) {
       return;
     }
     if (filteredDeskContacts.length === 0) {
@@ -1097,13 +1141,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return;
     }
     setDeskSelectedContactId(filteredDeskContacts[0].id);
-  }, [projectDeskOpen, filteredDeskContacts, deskSelectedContactId]);
+  }, [projectDeskOpen, filteredDeskContacts, deskSelectedContactId, deskCreateMode]);
 
   React.useEffect(() => {
     if (!projectDeskOpen) {
       return;
     }
     if (!selectedDeskContact) {
+      if (deskCreateMode) {
+        return;
+      }
       setDeskContactDraft({
         display_name: '',
         email: '',
@@ -1111,6 +1158,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         company: '',
         role_title: '',
         notes: '',
+        contact_type: 'contact',
         is_vendor: 0,
         is_project_only: 1,
         vendor_type: '',
@@ -1120,6 +1168,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
       return;
     }
+    setDeskCreateMode(false);
     setDeskContactDraft({
       contact_id: selectedDeskContact.id,
       display_name: selectedDeskContact.display_name || '',
@@ -1128,14 +1177,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       company: selectedDeskContact.company || '',
       role_title: selectedDeskContact.role_title || '',
       notes: selectedDeskContact.notes || '',
-      is_vendor: Number(selectedDeskContact.is_vendor) === 1 ? 1 : 0,
+      contact_type: normalizeContactType(selectedDeskContact),
+      is_vendor: normalizeContactType(selectedDeskContact) === 'vendor' ? 1 : 0,
       is_project_only: selectedDeskContact.project_id ? 1 : 0,
       vendor_type: selectedDeskContact.vendor_type || '',
       vendor_license: selectedDeskContact.vendor_license || '',
       vendor_trade: selectedDeskContact.vendor_trade || '',
       vendor_website: selectedDeskContact.vendor_website || '',
     });
-  }, [projectDeskOpen, selectedDeskContact]);
+  }, [projectDeskOpen, selectedDeskContact, deskCreateMode]);
 
   React.useEffect(() => {
     if (stepCardAssigneeIdFilter <= 0) {
@@ -1468,6 +1518,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const onStartNewDeskContact = React.useCallback(() => {
+    setDeskCreateMode(true);
     setDeskSelectedContactId(0);
     setDeskContactDraft({
       display_name: '',
@@ -1476,6 +1527,30 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       company: '',
       role_title: '',
       notes: '',
+      contact_type: 'contact',
+      is_vendor: 0,
+      is_project_only: 1,
+      vendor_type: '',
+      vendor_license: '',
+      vendor_trade: '',
+      vendor_website: '',
+    });
+  }, []);
+
+  const onQuickAddAuthorityContact = React.useCallback(() => {
+    setProjectDeskOpen(true);
+    setDeskContactTypeFilter('authority');
+    setDeskContactQuery('');
+    setDeskCreateMode(true);
+    setDeskSelectedContactId(0);
+    setDeskContactDraft({
+      display_name: '',
+      email: '',
+      phone: '',
+      company: '',
+      role_title: '',
+      notes: '',
+      contact_type: 'authority',
       is_vendor: 0,
       is_project_only: 1,
       vendor_type: '',
@@ -1493,12 +1568,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       project_id: projectId,
       contact_id: deskContactDraft.contact_id,
       display_name: deskContactDraft.display_name,
+      contact_type: deskContactDraft.contact_type,
       email: toStringOrNull(deskContactDraft.email),
       phone: toStringOrNull(deskContactDraft.phone),
       company: toStringOrNull(deskContactDraft.company),
       role_title: toStringOrNull(deskContactDraft.role_title),
       notes: toStringOrNull(deskContactDraft.notes),
-      is_vendor: deskContactDraft.is_vendor,
+      is_vendor: deskContactDraft.contact_type === 'vendor' ? 1 : 0,
       is_project_only: deskContactDraft.is_project_only,
       vendor_type: toStringOrNull(deskContactDraft.vendor_type),
       vendor_license: toStringOrNull(deskContactDraft.vendor_license),
@@ -1506,6 +1582,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       vendor_website: toStringOrNull(deskContactDraft.vendor_website),
     });
     if (next?.id) {
+      setDeskCreateMode(false);
       setDeskSelectedContactId(next.id);
     }
   }, [deskContactDraft, projectId, saveContact]);
@@ -2045,10 +2122,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const step = row.step;
           const allStepAssignees = stepAssigneesByStepId.get(step.id) || [];
           const visibleStepAssignees = allStepAssignees.filter((entry) => {
-            if (stepCardAssigneeTypeFilter === 'vendor' && Number(entry.contact.is_vendor) !== 1) {
-              return false;
-            }
-            if (stepCardAssigneeTypeFilter === 'contact' && Number(entry.contact.is_vendor) === 1) {
+            const contactType = normalizeContactType(entry.contact);
+            if (stepCardAssigneeTypeFilter !== 'all' && contactType !== stepCardAssigneeTypeFilter) {
               return false;
             }
             if (stepCardAssigneeIdFilter > 0 && entry.contact.id !== stepCardAssigneeIdFilter) {
@@ -2332,15 +2407,33 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     ) : (
                       <div className="build-wizard-permit-usage-note">Upload permit documents first to pick from saved permits.</div>
                     )}
-                    <label>
-                      Authority
-                      <input
-                        type="text"
-                        value={draft.permit_authority || ''}
-                        onChange={(e) => updateStepDraft(step.id, { permit_authority: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { permit_authority: toStringOrNull(stepDrafts[step.id]?.permit_authority || '') })}
-                      />
-                    </label>
+                    <div className="build-wizard-inline-field-row">
+                      <label>
+                        Authority
+                        <select
+                          value={draft.permit_authority || ''}
+                          onChange={(e) => {
+                            const nextAuthority = toStringOrNull(e.target.value || '');
+                            updateStepDraft(step.id, { permit_authority: nextAuthority });
+                            void commitStep(step.id, { permit_authority: nextAuthority });
+                          }}
+                        >
+                          <option value="">Select authority</option>
+                          {draft.permit_authority && !authorityContacts.some((contact) => (contact.display_name || '') === draft.permit_authority) ? (
+                            <option value={draft.permit_authority}>{draft.permit_authority}</option>
+                          ) : null}
+                          {authorityContacts.map((contact) => (
+                            <option key={`authority-${contact.id}`} value={contact.display_name || ''}>
+                              {contact.display_name}
+                              {contact.company ? ` (${contact.company})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={onQuickAddAuthorityContact}>
+                        Add Authority
+                      </button>
+                    </div>
                     <label>
                       Permit Status
                       <select
@@ -2682,15 +2775,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {visibleStepAssignees.length > 0 ? (
                   <div className="build-wizard-step-assignees-list">
                     {visibleStepAssignees.map((entry) => (
-                      <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${Number(entry.contact.is_vendor) === 1 ? 'is-vendor' : 'is-contact'}`}>
-                        {Number(entry.contact.is_vendor) === 1 ? 'Vendor' : 'Contact'}: {entry.contact.display_name}
+                      <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
+                        {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
                         {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
                       </span>
                     ))}
                   </div>
                 ) : (
                   <div className="build-wizard-muted">
-                    {allStepAssignees.length > 0 && hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact/vendor assignments.'}
+                    {allStepAssignees.length > 0 && hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact assignments.'}
                   </div>
                 )}
               </div>
@@ -3368,11 +3461,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <span>Step Card Filters</span>
               <select
                 value={stepCardAssigneeTypeFilter}
-                onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | 'contact' | 'vendor')}
+                onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
               >
-                <option value="all">All Contacts/Vendors</option>
+                <option value="all">All Contacts</option>
                 <option value="contact">Contacts Only</option>
                 <option value="vendor">Vendors Only</option>
+                <option value="authority">Authorities Only</option>
               </select>
               <select
                 value={stepCardAssigneeIdFilter > 0 ? String(stepCardAssigneeIdFilter) : ''}
@@ -3381,7 +3475,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <option value="">All Assigned People</option>
                 {stepFilterContactOptions.map((contact) => (
                   <option key={`step-filter-contact-${contact.id}`} value={contact.id}>
-                    {contact.is_vendor ? 'Vendor' : 'Contact'}: {contact.display_name}
+                    {contactTypeLabel(normalizeContactType(contact))}: {contact.display_name}
                   </option>
                 ))}
               </select>
@@ -3459,14 +3553,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (
                         <div className="build-wizard-step-assignees-list">
                           {(stepAssigneesByStepId.get(step.id) || []).map((entry) => (
-                            <span key={`completed-${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${Number(entry.contact.is_vendor) === 1 ? 'is-vendor' : 'is-contact'}`}>
-                              {Number(entry.contact.is_vendor) === 1 ? 'Vendor' : 'Contact'}: {entry.contact.display_name}
+                            <span key={`completed-${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
+                              {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
                               {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <div className="build-wizard-muted">No contact/vendor assignments.</div>
+                        <div className="build-wizard-muted">No contact assignments.</div>
                       )}
                     </div>
                     {step.notes.length ? (
@@ -3757,16 +3851,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 )}
               </div>
               <div className="build-wizard-desk-contacts">
-                <h3>Contacts & Vendors</h3>
+                <h3>Contacts</h3>
                 <div className="build-wizard-contact-summary">
                   <span className="build-wizard-contact-summary-chip">
                     Total: {deskContacts.length}
                   </span>
                   <span className="build-wizard-contact-summary-chip is-vendor">
-                    Vendors: {deskContacts.filter((contact) => Number(contact.is_vendor) === 1).length}
+                    Vendors: {deskContacts.filter((contact) => normalizeContactType(contact) === 'vendor').length}
+                  </span>
+                  <span className="build-wizard-contact-summary-chip is-authority">
+                    Authorities: {deskContacts.filter((contact) => normalizeContactType(contact) === 'authority').length}
                   </span>
                   <span className="build-wizard-contact-summary-chip is-contact">
-                    Contacts: {deskContacts.filter((contact) => Number(contact.is_vendor) !== 1).length}
+                    Contacts: {deskContacts.filter((contact) => normalizeContactType(contact) === 'contact').length}
                   </span>
                 </div>
                 <div className="build-wizard-contact-toolbar">
@@ -3793,11 +3890,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   />
                   <select
                     value={deskContactTypeFilter}
-                    onChange={(e) => setDeskContactTypeFilter(e.target.value as 'all' | 'contact' | 'vendor')}
+                    onChange={(e) => setDeskContactTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
                   >
                     <option value="all">All types</option>
                     <option value="contact">Contacts only</option>
                     <option value="vendor">Vendors only</option>
+                    <option value="authority">Authorities only</option>
                   </select>
                 </div>
                 <div className="build-wizard-contact-list-nav">
@@ -3809,13 +3907,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         type="button"
                         key={contact.id}
                         className={`build-wizard-contact-list-item${isSelected ? ' is-selected' : ''}`}
-                        onClick={() => setDeskSelectedContactId(contact.id)}
+                        onClick={() => {
+                          setDeskCreateMode(false);
+                          setDeskSelectedContactId(contact.id);
+                        }}
                       >
                         <span className="build-wizard-contact-list-main">
                           <strong>{contact.display_name || 'Unnamed contact'}</strong>
                           <span className="build-wizard-contact-list-sub">
                             {contact.company ? `${contact.company} | ` : ''}
-                            {contact.is_vendor ? 'Vendor' : 'Contact'}
+                            {contactTypeLabel(normalizeContactType(contact))}
                             {contact.project_id ? ' | Project' : ' | Site'}
                           </span>
                         </span>
@@ -3869,6 +3970,30 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   </label>
                   <div className="build-wizard-contact-flags">
                     <label>
+                      Type
+                      <select
+                        value={deskContactDraft.contact_type}
+                        onChange={(e) => {
+                          const nextType = e.target.value as BuildWizardContactType;
+                          setDeskContactDraft((prev) => ({
+                            ...prev,
+                            contact_type: nextType,
+                            is_vendor: nextType === 'vendor' ? 1 : 0,
+                            ...(nextType === 'vendor' ? {} : {
+                              vendor_type: '',
+                              vendor_license: '',
+                              vendor_trade: '',
+                              vendor_website: '',
+                            }),
+                          }));
+                        }}
+                      >
+                        <option value="contact">Contact</option>
+                        <option value="vendor">Vendor</option>
+                        <option value="authority">Authority</option>
+                      </select>
+                    </label>
+                    <label>
                       <input
                         type="checkbox"
                         checked={deskContactDraft.is_project_only === 1}
@@ -3876,16 +4001,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       />
                       Project-only contact
                     </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={deskContactDraft.is_vendor === 1}
-                        onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, is_vendor: e.target.checked ? 1 : 0 }))}
-                      />
-                      Vendor
-                    </label>
                   </div>
-                  {deskContactDraft.is_vendor === 1 ? (
+                  {deskContactDraft.contact_type === 'vendor' ? (
                     <div className="build-wizard-contact-vendor-fields">
                       <label>
                         Vendor Type

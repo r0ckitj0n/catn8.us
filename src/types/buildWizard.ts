@@ -110,6 +110,7 @@ export interface IBuildWizardContact {
   owner_user_id: number;
   project_id: number | null;
   display_name: string;
+  contact_type: 'contact' | 'vendor' | 'authority';
   email: string | null;
   phone: string | null;
   company: string | null;

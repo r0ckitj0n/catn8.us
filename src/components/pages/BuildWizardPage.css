@@ -960,6 +960,13 @@
   gap: 6px;
 }
 
+.build-wizard-inline-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
 .build-wizard-step-assignees-label {
   font-size: 0.78rem;
   color: #4a607a;
@@ -993,6 +1000,12 @@
   background: #eef4ff;
   border-color: #b7c9e8;
   color: #284969;
+}
+
+.build-wizard-step-assignee-chip.is-authority {
+  background: #fff6e8;
+  border-color: #e5c48d;
+  color: #6e4a12;
 }
 
 .build-wizard-note-list {
@@ -1049,6 +1062,12 @@
   background: #f2f4fb;
   border-color: #d0d6e8;
   color: #344761;
+}
+
+.build-wizard-contact-summary-chip.is-authority {
+  background: #fff6e8;
+  border-color: #e5c48d;
+  color: #6e4a12;
 }
 
 .build-wizard-contact-toolbar {

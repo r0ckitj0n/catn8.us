@@ -1428,44 +1428,129 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (deskAutoAssignBusy) {
       return;
     }
-    const unassignedSteps = steps.filter((step) => {
-      const currentPhaseKey = String(step.phase_key || '').trim().toLowerCase();
-      return currentPhaseKey === '' || currentPhaseKey === 'general';
-    });
-    if (!unassignedSteps.length) {
-      onToast?.({ tone: 'info', message: 'No unassigned steps found. Timeline phases are already set.' });
+    const deskSteps = steps.filter((step) => stepPhaseBucket(step) === 'desk');
+    if (!deskSteps.length) {
+      onToast?.({ tone: 'info', message: 'No Project Desk steps are waiting for timeline placement.' });
       return;
     }
 
+    const normalizePhaseKey = (value: string | null | undefined): string => {
+      const normalized = String(value || '').trim().toLowerCase();
+      return normalized === '' ? 'general' : normalized;
+    };
+    const orderedPhaseKeys = [
+      'design_preconstruction',
+      'site_preparation',
+      'framing_shell',
+      'mep_rough_in',
+      'interior_finishes',
+      'inspections_closeout',
+    ];
+    const phaseRank = new Map<string, number>(orderedPhaseKeys.map((key, index) => [key, index]));
+    const stepById = new Map<number, IBuildWizardStep>(steps.map((step) => [step.id, step]));
+    const dependentById = new Map<number, number[]>();
+    steps.forEach((candidate) => {
+      (Array.isArray(candidate.depends_on_step_ids) ? candidate.depends_on_step_ids : []).forEach((dependencyId) => {
+        const list = dependentById.get(dependencyId) || [];
+        list.push(candidate.id);
+        dependentById.set(dependencyId, list);
+      });
+    });
+
     setDeskAutoAssignBusy(true);
     let movedCount = 0;
-    let unresolvedCount = 0;
 
     try {
-      const sortedDeskSteps = [...unassignedSteps].sort((a, b) => {
+      const sortedDeskSteps = [...deskSteps].sort((a, b) => {
         if (a.step_order !== b.step_order) {
           return a.step_order - b.step_order;
         }
         return a.id - b.id;
       });
+      const assignedByStepId = new Map<number, string>();
+
+      const inferFromRelatedSteps = (step: IBuildWizardStep): string | null => {
+        const dependencyRanks: number[] = [];
+        (Array.isArray(step.depends_on_step_ids) ? step.depends_on_step_ids : []).forEach((depId) => {
+          const explicit = assignedByStepId.get(depId) || normalizePhaseKey(stepById.get(depId)?.phase_key);
+          const explicitRank = phaseRank.get(explicit);
+          if (typeof explicitRank === 'number') {
+            dependencyRanks.push(explicitRank);
+            return;
+          }
+          const hinted = recommendPhaseKeyForStep(stepById.get(depId) || ({} as IBuildWizardStep));
+          const hintRank = hinted ? phaseRank.get(hinted) : undefined;
+          if (typeof hintRank === 'number') {
+            dependencyRanks.push(hintRank);
+          }
+        });
+        if (dependencyRanks.length) {
+          return orderedPhaseKeys[Math.max(...dependencyRanks)];
+        }
+
+        const dependentRanks: number[] = [];
+        (dependentById.get(step.id) || []).forEach((childId) => {
+          const explicit = assignedByStepId.get(childId) || normalizePhaseKey(stepById.get(childId)?.phase_key);
+          const explicitRank = phaseRank.get(explicit);
+          if (typeof explicitRank === 'number') {
+            dependentRanks.push(explicitRank);
+            return;
+          }
+          const hinted = recommendPhaseKeyForStep(stepById.get(childId) || ({} as IBuildWizardStep));
+          const hintRank = hinted ? phaseRank.get(hinted) : undefined;
+          if (typeof hintRank === 'number') {
+            dependentRanks.push(hintRank);
+          }
+        });
+        if (dependentRanks.length) {
+          const rank = Math.max(0, Math.min(...dependentRanks) - 1);
+          return orderedPhaseKeys[rank];
+        }
+        return null;
+      };
+
+      const inferByOrderFallback = (step: IBuildWizardStep): string => {
+        const sortedAll = [...steps].sort((a, b) => {
+          if (a.step_order !== b.step_order) {
+            return a.step_order - b.step_order;
+          }
+          return a.id - b.id;
+        });
+        const idx = Math.max(0, sortedAll.findIndex((candidate) => candidate.id === step.id));
+        const ratio = sortedAll.length > 1 ? (idx / (sortedAll.length - 1)) : 0;
+        if (ratio < 0.2) {
+          return 'design_preconstruction';
+        }
+        if (ratio < 0.38) {
+          return 'site_preparation';
+        }
+        if (ratio < 0.56) {
+          return 'framing_shell';
+        }
+        if (ratio < 0.74) {
+          return 'mep_rough_in';
+        }
+        if (ratio < 0.9) {
+          return 'interior_finishes';
+        }
+        return 'inspections_closeout';
+      };
+
       for (const step of sortedDeskSteps) {
-        const suggestedPhaseKey = recommendPhaseKeyForStep(step);
-        if (!suggestedPhaseKey || suggestedPhaseKey === 'general') {
-          unresolvedCount += 1;
-          continue;
-        }
+        const suggestedPhaseKey =
+          recommendPhaseKeyForStep(step)
+          || inferFromRelatedSteps(step)
+          || inferByOrderFallback(step);
         const currentPhaseKey = String(step.phase_key || '').trim().toLowerCase() || 'general';
-        if (currentPhaseKey === suggestedPhaseKey) {
-          continue;
+        assignedByStepId.set(step.id, suggestedPhaseKey);
+        if (currentPhaseKey !== suggestedPhaseKey) {
+          await updateStep(step.id, { phase_key: suggestedPhaseKey });
+          movedCount += 1;
         }
-        await updateStep(step.id, { phase_key: suggestedPhaseKey });
-        movedCount += 1;
       }
       onToast?.({
-        tone: movedCount > 0 ? 'success' : 'info',
-        message: movedCount > 0
-          ? `Placed ${movedCount} desk step${movedCount === 1 ? '' : 's'} on the build timeline${unresolvedCount > 0 ? ` (${unresolvedCount} still unassigned)` : ''}.`
-          : `No desk steps were moved${unresolvedCount > 0 ? ` (${unresolvedCount} need manual phase selection)` : ''}.`,
+        tone: 'success',
+        message: `Placed ${movedCount} step${movedCount === 1 ? '' : 's'} on the build timeline.`,
       });
     } finally {
       setDeskAutoAssignBusy(false);

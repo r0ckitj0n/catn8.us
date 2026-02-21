@@ -1318,6 +1318,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         value={draft.expected_start_date || ''}
                         min={childDateMin}
                         max={childDateMax}
+                        disabled={stepReadOnly}
                         onChange={(e) => {
                           const nextStartDate = toStringOrNull(e.target.value);
                           const nextDuration = calculateDurationDays(nextStartDate, draft.expected_end_date) ?? draft.expected_duration_days;
@@ -1345,6 +1346,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         value={draft.expected_end_date || ''}
                         min={childDateMin}
                         max={childDateMax}
+                        disabled={stepReadOnly}
                         onChange={(e) => {
                           const nextEndDate = toStringOrNull(e.target.value);
                           const nextDuration = calculateDurationDays(draft.expected_start_date, nextEndDate) ?? draft.expected_duration_days;
@@ -1369,6 +1371,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       Type
                       <select
                         value={(draft.step_type || 'construction') as StepType}
+                        disabled={stepReadOnly}
                         onChange={(e) => {
                           const nextType = e.target.value as StepType;
                           const previousSameType = [...steps]
@@ -1424,28 +1427,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   </div>
                 </div>
                 <div className="build-wizard-step-header-right">
-                  <button
-                    type="button"
-                    className="build-wizard-step-delete"
-                    aria-label="Delete step"
-                    title="Delete step"
-                    disabled={stepReadOnly}
-                    onClick={() => {
-                      if (stepReadOnly) {
-                        return;
-                      }
-                      const ok = window.confirm('Delete this step?');
-                      if (ok) {
-                        void deleteStep(step.id);
-                      }
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                  </button>
                   <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
                 </div>
               </div>
@@ -1854,6 +1835,29 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   ))}
                 </div>
               ) : null}
+
+              <button
+                type="button"
+                className="build-wizard-step-delete"
+                aria-label="Delete step"
+                title="Delete step"
+                disabled={stepReadOnly}
+                onClick={() => {
+                  if (stepReadOnly) {
+                    return;
+                  }
+                  const ok = window.confirm('Delete this step?');
+                  if (ok) {
+                    void deleteStep(step.id);
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
             </div>
             <div
               className={`build-wizard-drop-zone ${dragOverInsertIndex === rowIndex + 1 ? 'is-active' : ''}`}

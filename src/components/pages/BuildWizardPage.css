@@ -492,7 +492,7 @@
 .build-wizard-step {
   border: 1px solid var(--catn8-bw-border-soft);
   border-radius: 12px;
-  padding: 12px;
+  padding: 12px 12px 44px;
   background: var(--catn8-bw-surface-1);
   position: relative;
   margin-left: calc(var(--bw-indent-level, 0) * 26px);
@@ -682,6 +682,9 @@
   background: var(--catn8-bw-surface-0);
   color: #7f1228;
   padding: 0;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
 }
 
 .build-wizard-step-delete svg {

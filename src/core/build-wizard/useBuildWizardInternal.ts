@@ -524,7 +524,20 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
   }, [load, onToast, projectId, refreshCurrentProject]);
 
-  const uploadDocument = React.useCallback(async (kind: string, file: File, stepId?: number, caption?: string, phaseKey?: string) => {
+  const uploadDocument = React.useCallback(async (
+    kind: string,
+    file: File,
+    stepId?: number,
+    caption?: string,
+    phaseKey?: string,
+    receiptMeta?: {
+      receipt_amount?: number | null;
+      receipt_title?: string | null;
+      receipt_vendor?: string | null;
+      receipt_date?: string | null;
+      receipt_notes?: string | null;
+    },
+  ) => {
     if (!file || projectId <= 0) {
       return;
     }
@@ -540,6 +553,23 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
     if (caption && String(caption).trim() !== '') {
       formData.append('caption', String(caption).trim());
+    }
+    if (receiptMeta) {
+      if (Object.prototype.hasOwnProperty.call(receiptMeta, 'receipt_amount') && receiptMeta.receipt_amount !== null && receiptMeta.receipt_amount !== undefined) {
+        formData.append('receipt_amount', String(receiptMeta.receipt_amount));
+      }
+      if (Object.prototype.hasOwnProperty.call(receiptMeta, 'receipt_title') && String(receiptMeta.receipt_title || '').trim() !== '') {
+        formData.append('receipt_title', String(receiptMeta.receipt_title || '').trim());
+      }
+      if (Object.prototype.hasOwnProperty.call(receiptMeta, 'receipt_vendor') && String(receiptMeta.receipt_vendor || '').trim() !== '') {
+        formData.append('receipt_vendor', String(receiptMeta.receipt_vendor || '').trim());
+      }
+      if (Object.prototype.hasOwnProperty.call(receiptMeta, 'receipt_date') && String(receiptMeta.receipt_date || '').trim() !== '') {
+        formData.append('receipt_date', String(receiptMeta.receipt_date || '').trim());
+      }
+      if (Object.prototype.hasOwnProperty.call(receiptMeta, 'receipt_notes') && String(receiptMeta.receipt_notes || '').trim() !== '') {
+        formData.append('receipt_notes', String(receiptMeta.receipt_notes || '').trim());
+      }
     }
 
     try {
@@ -600,7 +630,16 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
 
   const updateDocument = React.useCallback(async (
     documentId: number,
-    patch: { kind?: string; caption?: string | null; step_id?: number | null; receipt_amount?: number | null },
+    patch: {
+      kind?: string;
+      caption?: string | null;
+      step_id?: number | null;
+      receipt_amount?: number | null;
+      receipt_title?: string | null;
+      receipt_vendor?: string | null;
+      receipt_date?: string | null;
+      receipt_notes?: string | null;
+    },
   ) => {
     if (documentId <= 0) {
       return null;
@@ -617,6 +656,18 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'receipt_amount')) {
       body.receipt_amount = patch.receipt_amount;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_title')) {
+      body.receipt_title = patch.receipt_title;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_vendor')) {
+      body.receipt_vendor = patch.receipt_vendor;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_date')) {
+      body.receipt_date = patch.receipt_date;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_notes')) {
+      body.receipt_notes = patch.receipt_notes;
     }
     if (Object.keys(body).length <= 1) {
       return null;

@@ -1149,6 +1149,111 @@
   margin-top: 10px;
 }
 
+.build-wizard-step-receipts {
+  margin-top: 10px;
+  border: 1px dashed #c8d3e2;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-step-receipts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.build-wizard-step-receipts-summary {
+  font-size: 0.82rem;
+  color: #40546e;
+}
+
+.build-wizard-step-receipt-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.build-wizard-step-receipt-upload-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: #32465f;
+}
+
+.build-wizard-step-receipt-upload-grid label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.build-wizard-step-receipt-upload-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.build-wizard-step-receipt-list {
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-step-receipt-row {
+  border: 1px solid #d7dfeb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-step-receipt-file {
+  display: grid;
+  gap: 2px;
+}
+
+.build-wizard-step-receipt-file span {
+  font-size: 0.78rem;
+  color: #566a83;
+}
+
+.build-wizard-step-receipt-link {
+  justify-self: start;
+  border: 0;
+  background: none;
+  color: #1f4f95;
+  font-weight: 600;
+  padding: 0;
+}
+
+.build-wizard-step-receipt-link:hover {
+  text-decoration: underline;
+}
+
+.build-wizard-step-receipt-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.build-wizard-step-receipt-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: #32465f;
+}
+
+.build-wizard-step-receipt-fields label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.build-wizard-step-receipt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .build-wizard-step-assignees {
   margin-top: 10px;
   border: 1px dashed #c8d3e2;
@@ -2413,6 +2518,16 @@
   .build-wizard-step-attach-existing select {
     min-width: 0;
     width: 100%;
+  }
+
+  .build-wizard-step-receipts-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .build-wizard-step-receipt-upload-grid,
+  .build-wizard-step-receipt-fields {
+    grid-template-columns: 1fr;
   }
 
   .build-wizard-ai-tools-grid {

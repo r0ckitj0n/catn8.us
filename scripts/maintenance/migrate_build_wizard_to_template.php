@@ -161,6 +161,9 @@ function phase_key_bucket(string $phase): string
 function step_type_norm(string $type, string $title): string
 {
     $t = strtolower(trim($type));
+    if ($t === 'receipt') {
+        return 'purchase';
+    }
     if ($t !== '') {
         return $t;
     }

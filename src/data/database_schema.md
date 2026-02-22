@@ -182,6 +182,11 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `storage_path` (VARCHAR(255))
 - `file_size_bytes` (INT)
 - `caption` (VARCHAR(255), NULLABLE)
+- `receipt_amount` (DECIMAL(10,2), NULLABLE)
+- `receipt_title` (VARCHAR(255), NULLABLE)
+- `receipt_vendor` (VARCHAR(191), NULLABLE)
+- `receipt_date` (DATE, NULLABLE)
+- `receipt_notes` (TEXT, NULLABLE)
 - `uploaded_at` (TIMESTAMP)
 
 ### build_wizard_document_search_index

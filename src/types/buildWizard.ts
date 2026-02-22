@@ -71,6 +71,10 @@ export interface IBuildWizardDocument {
   file_size_bytes: number;
   caption: string | null;
   receipt_amount: number | null;
+  receipt_title: string | null;
+  receipt_vendor: string | null;
+  receipt_date: string | null;
+  receipt_notes: string | null;
   uploaded_at: string;
   public_url: string;
   thumbnail_url: string;

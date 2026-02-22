@@ -2339,15 +2339,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               id={`build-wizard-step-${step.id}`}
               className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''} ${!isExpanded ? 'is-collapsed' : ''}`}
               style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
-              draggable={!stepReadOnly}
-              onDragStart={(e) => {
-                if (stepReadOnly) {
-                  return;
-                }
-                e.dataTransfer.effectAllowed = 'move';
-                setDraggingStepId(step.id);
-              }}
-              onDragEnd={() => clearStepDragState()}
               onDragOver={(e) => {
                 if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
                   e.preventDefault();
@@ -2363,15 +2354,35 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
 	          <div className="build-wizard-step-header">
 	            <div className="build-wizard-step-header-left">
-                  <button
-                    type="button"
-                    className="build-wizard-step-expand-btn"
-                    onClick={() => setExpandedStepById((prev) => ({ ...prev, [step.id]: !isExpanded }))}
-                    aria-label={isExpanded ? 'Collapse step card' : 'Expand step card'}
-                    title={isExpanded ? 'Collapse step' : 'Expand step'}
-                  >
-                    {isExpanded ? '▾' : '▸'}
-                  </button>
+                  <div className="build-wizard-step-handle-stack">
+                    <button
+                      type="button"
+                      className="build-wizard-step-drag-handle-btn"
+                      draggable={!stepReadOnly}
+                      disabled={stepReadOnly}
+                      onDragStart={(e) => {
+                        if (stepReadOnly) {
+                          return;
+                        }
+                        e.dataTransfer.effectAllowed = 'move';
+                        setDraggingStepId(step.id);
+                      }}
+                      onDragEnd={() => clearStepDragState()}
+                      aria-label={stepReadOnly ? 'Step is read-only' : 'Drag to reorder step'}
+                      title={stepReadOnly ? 'Read-only step' : 'Drag to reorder'}
+                    >
+                      ⋮⋮
+                    </button>
+                    <button
+                      type="button"
+                      className="build-wizard-step-expand-btn"
+                      onClick={() => setExpandedStepById((prev) => ({ ...prev, [step.id]: !isExpanded }))}
+                      aria-label={isExpanded ? 'Collapse step card' : 'Expand step card'}
+                      title={isExpanded ? 'Collapse step' : 'Expand step'}
+                    >
+                      {isExpanded ? '▾' : '▸'}
+                    </button>
+                  </div>
                   {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
 	                  <div className="build-wizard-inline-check">
 	                    <label className="build-wizard-inline-complete-toggle">
@@ -3712,10 +3723,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
         {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
           <div className="build-wizard-card">
-            <div className="build-wizard-step-drag-hint">
-              Drag a step card to reorder. Drop on another step card to make it a child.
-            </div>
-
             {activeTab === 'desk' ? (
               <div className="build-wizard-desk-grid">
                 <div>

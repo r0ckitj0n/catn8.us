@@ -658,6 +658,39 @@
   background: #e8f1ff;
 }
 
+.build-wizard-step-handle-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.build-wizard-step-drag-handle-btn {
+  width: 24px;
+  height: 18px;
+  border: 1px solid #c3d2e7;
+  border-radius: 6px;
+  background: #f3f8ff;
+  color: #2b4a6f;
+  font-size: 0.74rem;
+  line-height: 1;
+  padding: 0;
+  cursor: grab;
+}
+
+.build-wizard-step-drag-handle-btn:active {
+  cursor: grabbing;
+}
+
+.build-wizard-step-drag-handle-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.build-wizard-step-drag-handle-btn:hover:not(:disabled) {
+  background: #e8f1ff;
+}
+
 .build-wizard-child-glyph {
   color: #3d5f89;
   font-size: 0.95rem;

@@ -809,9 +809,16 @@
 
 .build-wizard-inline-metrics {
   display: grid;
-  grid-template-columns: minmax(220px, 2.2fr) minmax(125px, 1fr) minmax(90px, 0.75fr) minmax(130px, 1fr) minmax(130px, 1fr);
+  grid-template-columns:
+    minmax(180px, 2.1fr)
+    minmax(105px, 0.9fr)
+    minmax(76px, 0.55fr)
+    minmax(106px, 0.8fr)
+    minmax(106px, 0.8fr)
+    minmax(106px, 0.8fr)
+    minmax(106px, 0.8fr);
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -824,6 +831,10 @@
   min-width: 0;
   width: 100%;
   font-size: 0.85rem;
+}
+
+.build-wizard-currency-input {
+  text-align: right;
 }
 
 .build-wizard-meta-chip {

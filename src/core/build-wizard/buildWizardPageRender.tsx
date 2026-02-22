@@ -290,6 +290,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [topbarSearchFocusStepId, setTopbarSearchFocusStepId] = React.useState<number>(0);
   const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
+  const [currencyInputByKey, setCurrencyInputByKey] = React.useState<Record<string, string>>({});
+  const [activeCurrencyInputKey, setActiveCurrencyInputKey] = React.useState<string>('');
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
@@ -2219,6 +2221,61 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDraggingStepId(stepId);
   };
 
+  const parseCurrencyText = (value: string): number | null => {
+    const cleaned = String(value || '')
+      .replace(/[^0-9.-]/g, '')
+      .trim();
+    if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
+      return null;
+    }
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatCurrencyForInput = (value: number | null | undefined): string => {
+    if (value === null || typeof value === 'undefined' || Number.isNaN(Number(value))) {
+      return '';
+    }
+    return Number(value).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  };
+
+  const startCurrencyEdit = (key: string, value: number | null | undefined): void => {
+    setActiveCurrencyInputKey(key);
+    setCurrencyInputByKey((prev) => ({
+      ...prev,
+      [key]: value === null || typeof value === 'undefined' || Number.isNaN(Number(value))
+        ? ''
+        : String(value),
+    }));
+  };
+
+  const changeCurrencyEdit = (key: string, text: string): void => {
+    setCurrencyInputByKey((prev) => ({ ...prev, [key]: text }));
+  };
+
+  const finishCurrencyEdit = (key: string, onCommit: (value: number | null) => void): void => {
+    const parsed = parseCurrencyText(currencyInputByKey[key] ?? '');
+    onCommit(parsed);
+    if (activeCurrencyInputKey === key) {
+      setActiveCurrencyInputKey('');
+    }
+    setCurrencyInputByKey((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, key)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const renderCurrencyInputValue = (key: string, value: number | null | undefined): string => {
+    if (activeCurrencyInputKey === key) {
+      return currencyInputByKey[key] ?? (value === null || typeof value === 'undefined' ? '' : String(value));
+    }
+    return formatCurrencyForInput(value);
+  };
+
   const clampStepDatesWithinRange = (
     step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
     minDate?: string | null,
@@ -2700,6 +2757,38 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         }}
                       />
                     </label>
+                    <label className="build-wizard-date-inline">
+                      Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="build-wizard-currency-input"
+                        value={renderCurrencyInputValue(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
+                        disabled={stepReadOnly}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
+                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-estimated_cost`, e.target.value)}
+                        onBlur={() => finishCurrencyEdit(`step-${step.id}-estimated_cost`, (value) => {
+                          updateStepDraft(step.id, { estimated_cost: value });
+                          void commitStep(step.id, { estimated_cost: value });
+                        })}
+                      />
+                    </label>
+                    <label className="build-wizard-date-inline">
+                      Actual Cost
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="build-wizard-currency-input"
+                        value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        disabled={stepReadOnly}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-actual_cost`, e.target.value)}
+                        onBlur={() => finishCurrencyEdit(`step-${step.id}-actual_cost`, (value) => {
+                          updateStepDraft(step.id, { actual_cost: value });
+                          void commitStep(step.id, { actual_cost: value });
+                        })}
+                      />
+                    </label>
                   </div>
                 </div>
                 <div className="build-wizard-step-header-right">
@@ -2873,11 +2962,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     <label>
                       Unit Price
                       <input
-                        type="number"
-                        step="0.01"
-                        value={draft.purchase_unit_price ?? ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_unit_price: toNumberOrNull(e.target.value) })}
-                        onBlur={() => void commitStep(step.id, { purchase_unit_price: toNumberOrNull(String(stepDrafts[step.id]?.purchase_unit_price ?? '')) })}
+                        type="text"
+                        inputMode="decimal"
+                        className="build-wizard-currency-input"
+                        value={renderCurrencyInputValue(`step-${step.id}-purchase_unit_price`, draft.purchase_unit_price)}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-purchase_unit_price`, draft.purchase_unit_price)}
+                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-purchase_unit_price`, e.target.value)}
+                        onBlur={() => finishCurrencyEdit(`step-${step.id}-purchase_unit_price`, (value) => {
+                          updateStepDraft(step.id, { purchase_unit_price: value });
+                          void commitStep(step.id, { purchase_unit_price: value });
+                        })}
                       />
                     </label>
                     <label>
@@ -2970,21 +3064,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     <label>
                       Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}
                       <input
-                        type="number"
-                        step="0.01"
-                        value={draft.estimated_cost ?? ''}
-                        onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
-                        onBlur={() => void commitStep(step.id, { estimated_cost: toNumberOrNull(String(stepDrafts[step.id]?.estimated_cost ?? '')) })}
+                        type="text"
+                        inputMode="decimal"
+                        className="build-wizard-currency-input"
+                        value={renderCurrencyInputValue(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
+                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-estimated_cost`, e.target.value)}
+                        onBlur={() => finishCurrencyEdit(`step-${step.id}-estimated_cost`, (value) => {
+                          updateStepDraft(step.id, { estimated_cost: value });
+                          void commitStep(step.id, { estimated_cost: value });
+                        })}
                       />
                     </label>
                     <label>
                       Actual Cost
                       <input
-                        type="number"
-                        step="0.01"
-                        value={draft.actual_cost ?? ''}
-                        onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
-                        onBlur={() => void commitStep(step.id, { actual_cost: toNumberOrNull(String(stepDrafts[step.id]?.actual_cost ?? '')) })}
+                        type="text"
+                        inputMode="decimal"
+                        className="build-wizard-currency-input"
+                        value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-actual_cost`, e.target.value)}
+                        onBlur={() => finishCurrencyEdit(`step-${step.id}-actual_cost`, (value) => {
+                          updateStepDraft(step.id, { actual_cost: value });
+                          void commitStep(step.id, { actual_cost: value });
+                        })}
                       />
                     </label>
                   </>
@@ -3838,11 +3942,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <label>
                 HOA Monthly Fee
                 <input
-                  type="number"
-                  step="0.01"
-                  value={projectDraft.hoa_fee_monthly ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, hoa_fee_monthly: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ hoa_fee_monthly: projectDraft.hoa_fee_monthly })}
+                  type="text"
+                  inputMode="decimal"
+                  className="build-wizard-currency-input"
+                  value={renderCurrencyInputValue('project-hoa_fee_monthly', projectDraft.hoa_fee_monthly)}
+                  onFocus={() => startCurrencyEdit('project-hoa_fee_monthly', projectDraft.hoa_fee_monthly)}
+                  onChange={(e) => changeCurrencyEdit('project-hoa_fee_monthly', e.target.value)}
+                  onBlur={() => finishCurrencyEdit('project-hoa_fee_monthly', (value) => {
+                    setProjectDraft((prev) => ({ ...prev, hoa_fee_monthly: value }));
+                    void updateProject({ hoa_fee_monthly: value });
+                  })}
                 />
               </label>
               <label>

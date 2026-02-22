@@ -2209,6 +2209,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDragOverParentStepId(0);
   };
 
+  const beginStepDrag = (e: React.DragEvent<HTMLElement>, stepId: number, stepReadOnly: boolean): void => {
+    if (stepReadOnly || stepId <= 0) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(stepId));
+    setDraggingStepId(stepId);
+  };
+
   const clampStepDatesWithinRange = (
     step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
     minDate?: string | null,
@@ -2268,6 +2278,42 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return clampStepDatesWithinRange(step, lower, upper);
   };
 
+  const buildPhaseReorderIds = (
+    phaseKey: string,
+    preferredIds: number[],
+    movedStepId: number,
+    movedStepPhaseKey: string,
+  ): number[] => {
+    const normalizedPhase = String(phaseKey || '').trim();
+    if (!normalizedPhase) {
+      return [];
+    }
+    const phaseMembers = [...steps]
+      .filter((candidate) => {
+        if (candidate.id === movedStepId) {
+          return movedStepPhaseKey === normalizedPhase;
+        }
+        return (candidate.phase_key || '') === normalizedPhase;
+      })
+      .sort((a, b) => {
+        if (a.step_order !== b.step_order) {
+          return a.step_order - b.step_order;
+        }
+        return a.id - b.id;
+      })
+      .map((candidate) => candidate.id);
+    const memberSet = new Set(phaseMembers);
+    const preferredUnique: number[] = [];
+    preferredIds.forEach((id) => {
+      const stepId = Number(id || 0);
+      if (stepId > 0 && memberSet.has(stepId) && !preferredUnique.includes(stepId)) {
+        preferredUnique.push(stepId);
+      }
+    });
+    const missing = phaseMembers.filter((id) => !preferredUnique.includes(id));
+    return [...preferredUnique, ...missing];
+  };
+
   const onDropReorder = async (insertIndex: number) => {
     if (draggingStepId <= 0) {
       clearStepDragState();
@@ -2302,7 +2348,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return;
     }
 
-    const phaseOrderedIds = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === destinationPhaseKey);
+    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === destinationPhaseKey);
+    const phaseOrderedIds = buildPhaseReorderIds(destinationPhaseKey, preferredPhaseOrder, draggingStepId, destinationPhaseKey);
     try {
       if (draggedStep.phase_key !== destinationPhaseKey || Number(draggedStep.parent_step_id || 0) > 0) {
         await updateStep(draggingStepId, { phase_key: destinationPhaseKey, parent_step_id: null });
@@ -2346,7 +2393,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     const targetIndex = withoutDragged.indexOf(targetStepId);
     const insertIndex = targetIndex >= 0 ? (targetIndex + 1) : withoutDragged.length;
     withoutDragged.splice(insertIndex, 0, draggingStepId);
-    const phaseOrderedIds = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === targetPhaseKey);
+    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === targetPhaseKey);
+    const phaseOrderedIds = buildPhaseReorderIds(targetPhaseKey, preferredPhaseOrder, draggingStepId, targetPhaseKey);
 
     try {
       if (draggedStep.phase_key !== targetPhaseKey) {
@@ -2448,6 +2496,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               id={`build-wizard-step-${step.id}`}
               className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''} ${!isExpanded ? 'is-collapsed' : ''}`}
               style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
+              draggable={!stepReadOnly}
+              onDragStart={(e) => {
+                const target = e.target as HTMLElement | null;
+                const fromHandle = Boolean(target?.closest('.build-wizard-step-drag-handle-btn'));
+                if (!fromHandle) {
+                  e.preventDefault();
+                  return;
+                }
+                beginStepDrag(e as React.DragEvent<HTMLElement>, step.id, stepReadOnly);
+              }}
+              onDragEnd={() => clearStepDragState()}
               onDragOver={(e) => {
                 if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
                   e.preventDefault();
@@ -2470,11 +2529,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       draggable={!stepReadOnly}
                       disabled={stepReadOnly}
                       onDragStart={(e) => {
-                        if (stepReadOnly) {
-                          return;
-                        }
-                        e.dataTransfer.effectAllowed = 'move';
-                        setDraggingStepId(step.id);
+                        beginStepDrag(e as React.DragEvent<HTMLElement>, step.id, stepReadOnly);
                       }}
                       onDragEnd={() => clearStepDragState()}
                       aria-label={stepReadOnly ? 'Step is read-only' : 'Drag to reorder step'}

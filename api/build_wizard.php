@@ -148,6 +148,19 @@ function catn8_build_wizard_tables_ensure(): void
         CONSTRAINT fk_build_wizard_step_notes_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_step_audit_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        step_id INT NOT NULL,
+        actor_user_id INT NULL,
+        action_key VARCHAR(40) NOT NULL DEFAULT 'updated',
+        changes_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_project_step_created (project_id, step_id, created_at),
+        KEY idx_step_id (step_id),
+        CONSTRAINT fk_build_wizard_step_audit_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS build_wizard_contacts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
@@ -398,6 +411,20 @@ function catn8_build_wizard_tables_ensure(): void
     );
     if (!$hasDocSearchFulltext) {
         Database::execute('ALTER TABLE build_wizard_document_search_index ADD FULLTEXT KEY ft_extracted_text (extracted_text)');
+    }
+
+    $stepAuditIndexes = [
+        'idx_project_step_created' => 'ALTER TABLE build_wizard_step_audit_logs ADD KEY idx_project_step_created (project_id, step_id, created_at)',
+        'idx_step_id' => 'ALTER TABLE build_wizard_step_audit_logs ADD KEY idx_step_id (step_id)',
+    ];
+    foreach ($stepAuditIndexes as $indexName => $indexSql) {
+        $exists = Database::queryOne(
+            'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+            ['build_wizard_step_audit_logs', $indexName]
+        );
+        if (!$exists) {
+            Database::execute($indexSql);
+        }
     }
 }
 
@@ -1542,12 +1569,147 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
     return $map;
 }
 
+function catn8_build_wizard_step_audit_logs_by_step_ids(array $stepIds, int $limitPerStep = 150): array
+{
+    $cleanIds = [];
+    foreach ($stepIds as $id) {
+        $n = (int)$id;
+        if ($n > 0) {
+            $cleanIds[] = $n;
+        }
+    }
+    if (!$cleanIds) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($cleanIds), '?'));
+    $rows = Database::queryAll(
+        'SELECT id, project_id, step_id, actor_user_id, action_key, changes_json, created_at
+         FROM build_wizard_step_audit_logs
+         WHERE step_id IN (' . $placeholders . ')
+         ORDER BY created_at DESC, id DESC',
+        $cleanIds
+    );
+
+    $map = [];
+    foreach ($rows as $r) {
+        $sid = (int)($r['step_id'] ?? 0);
+        if (!isset($map[$sid])) {
+            $map[$sid] = [];
+        }
+        if (count($map[$sid]) >= $limitPerStep) {
+            continue;
+        }
+        $decoded = catn8_build_wizard_decode_json_array($r['changes_json'] ?? null);
+        $map[$sid][] = [
+            'id' => (int)($r['id'] ?? 0),
+            'project_id' => (int)($r['project_id'] ?? 0),
+            'step_id' => $sid,
+            'actor_user_id' => $r['actor_user_id'] !== null ? (int)$r['actor_user_id'] : null,
+            'action_key' => trim((string)($r['action_key'] ?? '')) ?: 'updated',
+            'changes' => $decoded !== [] ? $decoded : null,
+            'created_at' => (string)($r['created_at'] ?? ''),
+        ];
+    }
+    return $map;
+}
+
+function catn8_build_wizard_step_change_payload(?array $beforeStep, ?array $afterStep): array
+{
+    if (!$beforeStep || !$afterStep) {
+        return [];
+    }
+
+    $trackFields = [
+        'phase_key',
+        'parent_step_id',
+        'depends_on_step_ids',
+        'step_type',
+        'title',
+        'description',
+        'permit_required',
+        'permit_document_id',
+        'permit_name',
+        'permit_authority',
+        'permit_status',
+        'permit_application_url',
+        'purchase_category',
+        'purchase_brand',
+        'purchase_model',
+        'purchase_sku',
+        'purchase_unit',
+        'purchase_qty',
+        'purchase_unit_price',
+        'purchase_vendor',
+        'purchase_url',
+        'expected_start_date',
+        'expected_end_date',
+        'expected_duration_days',
+        'estimated_cost',
+        'actual_cost',
+        'ai_estimated_fields',
+        'is_completed',
+        'completed_at',
+        'source_ref',
+        'step_order',
+    ];
+
+    $changes = [];
+    foreach ($trackFields as $field) {
+        $beforeValue = $beforeStep[$field] ?? null;
+        $afterValue = $afterStep[$field] ?? null;
+        if ($beforeValue === $afterValue) {
+            continue;
+        }
+
+        if (is_array($beforeValue) || is_array($afterValue)) {
+            $beforeJson = json_encode($beforeValue, JSON_UNESCAPED_SLASHES);
+            $afterJson = json_encode($afterValue, JSON_UNESCAPED_SLASHES);
+            if ($beforeJson === $afterJson) {
+                continue;
+            }
+        }
+
+        $changes[$field] = [
+            'before' => $beforeValue,
+            'after' => $afterValue,
+        ];
+    }
+
+    return $changes;
+}
+
+function catn8_build_wizard_insert_step_audit_log(int $projectId, int $stepId, string $actionKey, ?int $actorUserId, ?array $changes = null): void
+{
+    if ($projectId <= 0 || $stepId <= 0) {
+        return;
+    }
+
+    $normalizedAction = strtolower(trim($actionKey));
+    if ($normalizedAction === '') {
+        $normalizedAction = 'updated';
+    }
+
+    Database::execute(
+        'INSERT INTO build_wizard_step_audit_logs (project_id, step_id, actor_user_id, action_key, changes_json)
+         VALUES (?, ?, ?, ?, ?)',
+        [
+            $projectId,
+            $stepId,
+            ($actorUserId !== null && $actorUserId > 0) ? $actorUserId : null,
+            $normalizedAction,
+            ($changes && count($changes) > 0) ? json_encode($changes, JSON_UNESCAPED_SLASHES) : null,
+        ]
+    );
+}
+
 function catn8_build_wizard_steps_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
         'SELECT id, project_id, step_order, phase_key, parent_step_id, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
-                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref
+                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref,
+                created_at, updated_at
          FROM build_wizard_steps
          WHERE project_id = ?
          ORDER BY step_order ASC, id ASC',
@@ -1556,6 +1718,7 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
 
     $stepIds = array_map(static fn($r) => (int)($r['id'] ?? 0), $rows);
     $notesByStep = catn8_build_wizard_step_notes_by_step_ids($stepIds);
+    $auditLogsByStep = catn8_build_wizard_step_audit_logs_by_step_ids($stepIds);
 
     $steps = [];
     foreach ($rows as $r) {
@@ -1595,7 +1758,10 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'completed_at' => $r['completed_at'] !== null ? (string)$r['completed_at'] : null,
             'ai_generated' => (int)($r['ai_generated'] ?? 0),
             'source_ref' => $r['source_ref'] !== null ? (string)$r['source_ref'] : null,
+            'created_at' => $r['created_at'] !== null ? (string)$r['created_at'] : null,
+            'updated_at' => $r['updated_at'] !== null ? (string)$r['updated_at'] : null,
             'notes' => $notesByStep[$sid] ?? [],
+            'audit_logs' => $auditLogsByStep[$sid] ?? [],
         ];
     }
 
@@ -2947,7 +3113,8 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
     $row = Database::queryOne(
         'SELECT id, project_id, step_order, phase_key, parent_step_id, depends_on_step_ids_json, step_type, title, description, permit_required, permit_document_id, permit_name, permit_authority, permit_status, permit_application_url,
                 purchase_category, purchase_brand, purchase_model, purchase_sku, purchase_unit, purchase_qty, purchase_unit_price, purchase_vendor, purchase_url,
-                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref
+                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref,
+                created_at, updated_at
          FROM build_wizard_steps
          WHERE id = ?
          LIMIT 1',
@@ -2958,6 +3125,7 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
     }
 
     $notesByStep = catn8_build_wizard_step_notes_by_step_ids([$stepId]);
+    $auditLogsByStep = catn8_build_wizard_step_audit_logs_by_step_ids([$stepId]);
 
     return [
         'id' => (int)($row['id'] ?? 0),
@@ -2994,7 +3162,10 @@ function catn8_build_wizard_step_by_id(int $stepId): ?array
         'completed_at' => $row['completed_at'] !== null ? (string)$row['completed_at'] : null,
         'ai_generated' => (int)($row['ai_generated'] ?? 0),
         'source_ref' => $row['source_ref'] !== null ? (string)$row['source_ref'] : null,
+        'created_at' => $row['created_at'] !== null ? (string)$row['created_at'] : null,
+        'updated_at' => $row['updated_at'] !== null ? (string)$row['updated_at'] : null,
         'notes' => $notesByStep[$stepId] ?? [],
+        'audit_logs' => $auditLogsByStep[$stepId] ?? [],
     ];
 }
 
@@ -4903,7 +5074,11 @@ try {
         }
 
         $stepRow = Database::queryOne(
-            'SELECT s.id, s.project_id, s.step_type, s.expected_start_date, s.expected_end_date
+            'SELECT s.id, s.project_id, s.step_type, s.expected_start_date, s.expected_end_date,
+                    s.phase_key, s.parent_step_id, s.depends_on_step_ids_json, s.title, s.description,
+                    s.permit_required, s.permit_document_id, s.permit_name, s.permit_authority, s.permit_status, s.permit_application_url,
+                    s.purchase_category, s.purchase_brand, s.purchase_model, s.purchase_sku, s.purchase_unit, s.purchase_qty, s.purchase_unit_price, s.purchase_vendor, s.purchase_url,
+                    s.expected_duration_days, s.estimated_cost, s.actual_cost, s.ai_estimated_fields_json, s.is_completed, s.completed_at, s.source_ref, s.step_order
              FROM build_wizard_steps s
              INNER JOIN build_wizard_projects p ON p.id = s.project_id
              WHERE s.id = ? AND p.owner_user_id = ?
@@ -5136,6 +5311,7 @@ try {
 
         Database::beginTransaction();
         try {
+            $beforeStep = catn8_build_wizard_step_by_id($stepId);
             $params[] = $stepId;
             Database::execute('UPDATE build_wizard_steps SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
 
@@ -5151,6 +5327,12 @@ try {
             $step = catn8_build_wizard_step_by_id($stepId);
             if (!$step) {
                 throw new RuntimeException('Step not found after update');
+            }
+
+            $changes = catn8_build_wizard_step_change_payload($beforeStep, $step);
+            if ($changes) {
+                catn8_build_wizard_insert_step_audit_log((int)$stepRow['project_id'], $stepId, 'updated', $viewerId, $changes);
+                $step = catn8_build_wizard_step_by_id($stepId) ?: $step;
             }
 
             $response = ['success' => true, 'step' => $step];
@@ -5409,6 +5591,15 @@ try {
             throw new RuntimeException('Step not found after insert');
         }
 
+        catn8_build_wizard_insert_step_audit_log(
+            $projectId,
+            $stepId,
+            'created',
+            $viewerId,
+            ['after' => $step]
+        );
+        $step = catn8_build_wizard_step_by_id($stepId) ?: $step;
+
         catn8_json_response(['success' => true, 'step' => $step]);
     }
 
@@ -5433,8 +5624,18 @@ try {
             throw new RuntimeException('Step not found or not authorized');
         }
         $projectId = (int)($stepRow['project_id'] ?? 0);
+        $deletedStepSnapshot = catn8_build_wizard_step_by_id($stepId);
         Database::beginTransaction();
         try {
+            if ($deletedStepSnapshot) {
+                catn8_build_wizard_insert_step_audit_log(
+                    $projectId,
+                    $stepId,
+                    'deleted',
+                    $viewerId,
+                    ['before' => $deletedStepSnapshot]
+                );
+            }
             Database::execute(
                 'UPDATE build_wizard_steps
                  SET parent_step_id = NULL
@@ -5501,7 +5702,7 @@ try {
         }
 
         $stepRow = Database::queryOne(
-            'SELECT s.id
+            'SELECT s.id, s.project_id
              FROM build_wizard_steps s
              INNER JOIN build_wizard_projects p ON p.id = s.project_id
              WHERE s.id = ? AND p.owner_user_id = ?
@@ -5515,6 +5716,24 @@ try {
         Database::execute(
             'INSERT INTO build_wizard_step_notes (step_id, note_text) VALUES (?, ?)',
             [$stepId, $noteText]
+        );
+
+        $noteRow = Database::queryOne(
+            'SELECT id, created_at FROM build_wizard_step_notes WHERE step_id = ? ORDER BY id DESC LIMIT 1',
+            [$stepId]
+        );
+        catn8_build_wizard_insert_step_audit_log(
+            (int)($stepRow['project_id'] ?? 0),
+            $stepId,
+            'note_added',
+            $viewerId,
+            [
+                'note' => [
+                    'id' => (int)($noteRow['id'] ?? 0),
+                    'note_text' => $noteText,
+                    'created_at' => (string)($noteRow['created_at'] ?? ''),
+                ],
+            ]
         );
 
         $step = catn8_build_wizard_step_by_id($stepId);

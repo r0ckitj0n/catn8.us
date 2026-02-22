@@ -127,6 +127,15 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `note_text` (TEXT)
 - `created_at` (TIMESTAMP)
 
+### build_wizard_step_audit_logs
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `project_id` (INT)
+- `step_id` (INT, FOREIGN KEY -> build_wizard_steps.id)
+- `actor_user_id` (INT, NULLABLE)
+- `action_key` (VARCHAR(40), DEFAULT 'updated')
+- `changes_json` (LONGTEXT, NULLABLE)
+- `created_at` (TIMESTAMP)
+
 ### build_wizard_contacts
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT)

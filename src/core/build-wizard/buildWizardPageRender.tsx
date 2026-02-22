@@ -281,6 +281,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [draggingStepId, setDraggingStepId] = React.useState<number>(0);
   const [dragOverInsertIndex, setDragOverInsertIndex] = React.useState<number>(-1);
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
+  const [expandedStepById, setExpandedStepById] = React.useState<Record<number, boolean>>({});
+  const [stepInfoModalStepId, setStepInfoModalStepId] = React.useState<number>(0);
   const [topbarSearchQuery, setTopbarSearchQuery] = React.useState<string>('');
   const [topbarSearchOpen, setTopbarSearchOpen] = React.useState<boolean>(false);
   const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
@@ -451,6 +453,23 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return next;
     });
   }, [steps]);
+
+  React.useEffect(() => {
+    setExpandedStepById((prev) => {
+      const next: Record<number, boolean> = {};
+      const validIds = new Set(steps.map((step) => step.id));
+      Object.keys(prev).forEach((idText) => {
+        const id = Number(idText);
+        if (validIds.has(id) && prev[id]) {
+          next[id] = true;
+        }
+      });
+      return next;
+    });
+    if (stepInfoModalStepId > 0 && !steps.some((step) => step.id === stepInfoModalStepId)) {
+      setStepInfoModalStepId(0);
+    }
+  }, [stepInfoModalStepId, steps]);
 
   React.useEffect(() => {
     if (!topbarSearchOpen) {
@@ -653,6 +672,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     steps.forEach((step) => map.set(step.id, step));
     return map;
   }, [steps]);
+
+  const stepInfoModalStep = React.useMemo(() => {
+    if (stepInfoModalStepId <= 0) {
+      return null;
+    }
+    return stepByIdMap.get(stepInfoModalStepId) || null;
+  }, [stepInfoModalStepId, stepByIdMap]);
 
   const selectedContactAssignments = React.useMemo(() => {
     if (!selectedDeskContact) {
@@ -1641,6 +1667,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
     if (result.kind === 'step') {
       setActiveTab(result.phaseId);
+      setExpandedStepById((prev) => ({ ...prev, [result.stepId]: true }));
       setTopbarSearchFocusStepId(0);
       window.setTimeout(() => setTopbarSearchFocusStepId(result.stepId), 0);
       return;
@@ -1650,6 +1677,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setActiveTab(result.linkedPhaseId);
     }
     if (result.linkedStepId > 0) {
+      setExpandedStepById((prev) => ({ ...prev, [result.linkedStepId]: true }));
       setTopbarSearchFocusStepId(0);
       window.setTimeout(() => setTopbarSearchFocusStepId(result.linkedStepId), 0);
       return;
@@ -2232,6 +2260,23 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
+  const formatAuditValue = (value: unknown): string => {
+    if (value === null || typeof value === 'undefined') {
+      return 'null';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch (_) {
+      return String(value);
+    }
+  };
+
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
     if (!tabSteps.length) {
       return <div className="build-wizard-muted">No steps in this tab yet.</div>;
@@ -2287,11 +2332,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             .filter((dependency): dependency is IBuildWizardStep => Boolean(dependency))
             .map((dependency) => `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title}`);
           const stepPastelColor = getStepPastelColor(step.id);
+          const isExpanded = expandedStepById[step.id] === true;
           return (
             <React.Fragment key={step.id}>
             <div
               id={`build-wizard-step-${step.id}`}
-              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''}`}
+              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''} ${!isExpanded ? 'is-collapsed' : ''}`}
               style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
               draggable={!stepReadOnly}
               onDragStart={(e) => {
@@ -2317,6 +2363,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
 	          <div className="build-wizard-step-header">
 	            <div className="build-wizard-step-header-left">
+                  <button
+                    type="button"
+                    className="build-wizard-step-expand-btn"
+                    onClick={() => setExpandedStepById((prev) => ({ ...prev, [step.id]: !isExpanded }))}
+                    aria-label={isExpanded ? 'Collapse step card' : 'Expand step card'}
+                    title={isExpanded ? 'Collapse step' : 'Expand step'}
+                  >
+                    {isExpanded ? '▾' : '▸'}
+                  </button>
                   {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
 	                  <div className="build-wizard-inline-check">
 	                    <label className="build-wizard-inline-complete-toggle">
@@ -2343,6 +2398,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     </span>
                   ) : null}
                   <div className="build-wizard-inline-metrics">
+                    <label className="build-wizard-title-inline">
+                      Step Title
+                      <input
+                        type="text"
+                        value={draft.title || ''}
+                        disabled={stepReadOnly}
+                        onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
+                        onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
+                      />
+                    </label>
                     <label className="build-wizard-duration-inline">
                       Duration (Days)
                       <input type="number" value={durationDays ?? ''} readOnly />
@@ -2463,10 +2528,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   </div>
                 </div>
                 <div className="build-wizard-step-header-right">
-                  <span className="build-wizard-meta-chip">Completed At: {formatDate(step.completed_at)}</span>
+                  <button
+                    type="button"
+                    className="build-wizard-step-info-btn"
+                    aria-label="Step information"
+                    title="Step information"
+                    onClick={() => setStepInfoModalStepId(step.id)}
+                  >
+                    i
+                  </button>
                 </div>
               </div>
-
+              {isExpanded ? (
+              <>
               <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
               <div className="build-wizard-step-grid">
                 {dependencyTitles.length ? (
@@ -2475,15 +2549,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {parentStep ? (
                   <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
                 ) : null}
-                <label>
-                  Step Title
-                  <input
-                    type="text"
-                    value={draft.title || ''}
-                    onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
-                    onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
-                  />
-                </label>
                 {draft.step_type === 'permit' ? (
                   <>
                     <label>
@@ -2946,6 +3011,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <line x1="14" y1="11" x2="14" y2="17" />
                 </svg>
               </button>
+              </>
+              ) : null}
             </div>
             <div
               className={`build-wizard-drop-zone ${dragOverInsertIndex === rowIndex + 1 ? 'is-active' : ''}`}
@@ -4372,6 +4439,102 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <textarea value={aiPayloadJson || ''} readOnly rows={10} />
                 </label>
               </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {stepInfoModalStep ? (
+        <div className="build-wizard-doc-manager" onClick={() => setStepInfoModalStepId(0)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-step-info-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Step #{activeTabStepNumbers.get(stepInfoModalStep.id) || stepInfoModalStep.step_order} Information</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close step information"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setStepInfoModalStepId(0)}
+                />
+              </div>
+            </div>
+
+            <div className="build-wizard-step-info-grid">
+              <div className="build-wizard-step-info-card">
+                <h4>Timestamps</h4>
+                <div><strong>Created:</strong> {formatDate(stepInfoModalStep.created_at)}</div>
+                <div><strong>Updated:</strong> {formatDate(stepInfoModalStep.updated_at)}</div>
+                <div><strong>Completed:</strong> {formatDate(stepInfoModalStep.completed_at)}</div>
+              </div>
+
+              <div className="build-wizard-step-info-card">
+                <h4>Record History</h4>
+                {Array.isArray(stepInfoModalStep.audit_logs) && stepInfoModalStep.audit_logs.length > 0 ? (
+                  <div className="build-wizard-step-history-list">
+                    {stepInfoModalStep.audit_logs.map((log) => {
+                      const changeEntries = log.changes && typeof log.changes === 'object'
+                        ? Object.entries(log.changes as Record<string, unknown>)
+                        : [];
+                      return (
+                        <div className="build-wizard-step-history-item" key={`step-log-${log.id}`}>
+                          <div className="build-wizard-step-history-head">
+                            <span>{String(log.action_key || 'updated').replace(/_/g, ' ')}</span>
+                            <span>{formatDate(log.created_at)}</span>
+                          </div>
+                          {changeEntries.length > 0 ? (
+                            <div className="build-wizard-step-history-changes">
+                              {changeEntries.map(([field, value]) => {
+                                const change = value as { before?: unknown; after?: unknown };
+                                const hasBeforeAfter = change && typeof change === 'object'
+                                  && Object.prototype.hasOwnProperty.call(change, 'before')
+                                  && Object.prototype.hasOwnProperty.call(change, 'after');
+                                return (
+                                  <div key={`step-log-${log.id}-${field}`}>
+                                    <strong>{field}</strong>: {hasBeforeAfter
+                                      ? `${formatAuditValue(change.before)} -> ${formatAuditValue(change.after)}`
+                                      : formatAuditValue(value)}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="build-wizard-muted">No field-level delta recorded.</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="build-wizard-muted">No record history yet.</div>
+                )}
+              </div>
+
+              <div className="build-wizard-step-info-card">
+                <h4>Step Notes</h4>
+                {stepInfoModalStep.notes.length > 0 ? (
+                  <div className="build-wizard-step-history-list">
+                    {stepInfoModalStep.notes.map((note) => (
+                      <div className="build-wizard-step-history-item" key={`step-note-modal-${note.id}`}>
+                        <div className="build-wizard-step-history-head">
+                          <span>Note #{note.id}</span>
+                          <span>{formatDate(note.created_at)}</span>
+                        </div>
+                        <div>{note.note_text}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="build-wizard-muted">No notes recorded.</div>
+                )}
+              </div>
+
+              <div className="build-wizard-step-info-card">
+                <h4>Backend Snapshot</h4>
+                <pre className="build-wizard-step-info-json">
+                  {JSON.stringify(stepInfoModalStep, null, 2)}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

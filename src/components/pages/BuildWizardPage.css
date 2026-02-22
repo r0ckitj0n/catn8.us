@@ -585,6 +585,10 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bw-step-phase-color, #9fb2cb) 28%, #ffffff);
 }
 
+.build-wizard-step.is-collapsed {
+  padding-bottom: 12px;
+}
+
 .build-wizard-step.is-child {
   background: linear-gradient(180deg, #f7fbff 0%, #f2f8ff 100%);
 }
@@ -634,6 +638,22 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.build-wizard-step-expand-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #c3d2e7;
+  border-radius: 6px;
+  background: #f3f8ff;
+  color: #2b4a6f;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.build-wizard-step-expand-btn:hover {
+  background: #e8f1ff;
 }
 
 .build-wizard-child-glyph {
@@ -736,6 +756,19 @@
   color: #3d4d63;
 }
 
+.build-wizard-title-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: min(320px, 100%);
+  font-size: 0.85rem;
+}
+
+.build-wizard-title-inline input {
+  min-width: min(320px, 100%);
+}
+
 .build-wizard-inline-metrics {
   display: flex;
   align-items: flex-end;
@@ -755,6 +788,23 @@
 .build-wizard-meta-chip {
   font-size: 0.9rem;
   color: #4f6076;
+}
+
+.build-wizard-step-info-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #b9cce6;
+  background: #eff6ff;
+  color: #284a71;
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.build-wizard-step-info-btn:hover {
+  background: #e1eeff;
 }
 
 .build-wizard-step-delete {
@@ -1909,6 +1959,74 @@
 
 .build-wizard-confirm-modal {
   width: min(520px, 100%);
+}
+
+.build-wizard-step-info-modal {
+  width: min(980px, 100%);
+}
+
+.build-wizard-step-info-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.build-wizard-step-info-card {
+  border: 1px solid #d3deee;
+  border-radius: 10px;
+  background: #f9fcff;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-step-info-card h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.build-wizard-step-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.build-wizard-step-history-item {
+  border: 1px solid #d6e1f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-step-history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #3f5572;
+  text-transform: capitalize;
+}
+
+.build-wizard-step-history-changes {
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+}
+
+.build-wizard-step-info-json {
+  margin: 0;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid #d6e1ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.38;
+  white-space: pre;
 }
 
 .build-wizard-confirm-message {

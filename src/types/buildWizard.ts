@@ -5,6 +5,16 @@ export interface IBuildWizardStepNote {
   created_at: string;
 }
 
+export interface IBuildWizardStepAuditLog {
+  id: number;
+  project_id: number;
+  step_id: number;
+  actor_user_id: number | null;
+  action_key: 'created' | 'updated' | 'note_added' | 'deleted' | string;
+  changes: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface IBuildWizardStep {
   id: number;
   project_id: number;
@@ -40,7 +50,10 @@ export interface IBuildWizardStep {
   completed_at: string | null;
   ai_generated: number;
   source_ref: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   notes: IBuildWizardStepNote[];
+  audit_logs: IBuildWizardStepAuditLog[];
 }
 
 export interface IBuildWizardDocument {

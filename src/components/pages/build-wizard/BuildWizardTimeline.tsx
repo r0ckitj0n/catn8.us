@@ -67,46 +67,69 @@ export function FooterPhaseTimeline({
   const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
   const rangeStartIso = toIsoDate(startDate);
   const rangeEndIso = toIsoDate(endDate);
-  const phaseByDay: Array<Set<BuildTabId>> = Array.from({ length: totalDays }, () => new Set<BuildTabId>());
+  const timelineSteps = steps
+    .filter((step) => {
+      const baseStart = step.expected_start_date || step.expected_end_date;
+      const baseEnd = step.expected_end_date || step.expected_start_date;
+      if (!baseStart || !baseEnd) {
+        return false;
+      }
+      return baseEnd >= rangeStartIso && baseStart <= rangeEndIso;
+    })
+    .sort((a, b) => {
+      const aNum = Number(displayNumberById?.get(a.id) || a.step_order || 0);
+      const bNum = Number(displayNumberById?.get(b.id) || b.step_order || 0);
+      if (aNum !== bNum) {
+        return aNum - bNum;
+      }
+      return a.id - b.id;
+    });
 
-  steps.forEach((step) => {
-    const range = stepDateRange(step);
-    if (!range.start || !range.end) {
+  const stepColorsByDay: Array<Set<string>> = Array.from({ length: totalDays }, () => new Set<string>());
+  timelineSteps.forEach((step) => {
+    const liveDraft = draftDatesByStepId[step.id];
+    const stepStartIso = liveDraft?.start || step.expected_start_date || step.expected_end_date;
+    const stepEndIso = liveDraft?.end || step.expected_end_date || step.expected_start_date;
+    if (!stepStartIso || !stepEndIso) {
       return;
     }
-    if (range.end.getTime() < startDate.getTime() || range.start.getTime() > endDate.getTime()) {
+    const clampedStart = clampIsoDate(stepStartIso, rangeStartIso, rangeEndIso);
+    const clampedEnd = clampIsoDate(stepEndIso, rangeStartIso, rangeEndIso);
+    const safeStart = clampedStart <= clampedEnd ? clampedStart : clampedEnd;
+    const safeEnd = clampedEnd >= clampedStart ? clampedEnd : clampedStart;
+    const safeStartDate = parseDate(safeStart);
+    const safeEndDate = parseDate(safeEnd);
+    if (!safeStartDate || !safeEndDate) {
       return;
     }
-    const clampedStartMs = Math.max(range.start.getTime(), startDate.getTime());
-    const clampedEndMs = Math.min(range.end.getTime(), endDate.getTime());
-    const startOffset = Math.max(0, Math.round((clampedStartMs - startDate.getTime()) / 86400000));
-    const endOffset = Math.min(totalDays - 1, Math.round((clampedEndMs - startDate.getTime()) / 86400000));
-    const phase = stepPhaseBucket(step);
+    const startOffset = Math.max(0, Math.round((safeStartDate.getTime() - startDate.getTime()) / 86400000));
+    const endOffset = Math.min(totalDays - 1, Math.round((safeEndDate.getTime() - startDate.getTime()) / 86400000));
+    const stepColor = getStepPastelColor(step.id);
     for (let day = startOffset; day <= endOffset; day += 1) {
-      phaseByDay[day].add(phase);
+      stepColorsByDay[day].add(stepColor);
     }
   });
 
   const segments: Array<{ leftPercent: number; widthPercent: number; colors: string[]; key: string }> = [];
   let index = 0;
   while (index < totalDays) {
-    const phaseIds = Array.from(phaseByDay[index]).sort() as BuildTabId[];
-    const key = phaseIds.join('|');
+    const dayColors = Array.from(stepColorsByDay[index]);
+    const key = dayColors.join('|');
     let endIndex = index;
     while (endIndex + 1 < totalDays) {
-      const nextIds = Array.from(phaseByDay[endIndex + 1]).sort().join('|');
-      if (nextIds !== key) {
+      const nextColors = Array.from(stepColorsByDay[endIndex + 1]).join('|');
+      if (nextColors !== key) {
         break;
       }
       endIndex += 1;
     }
-    if (phaseIds.length > 0) {
+    if (dayColors.length > 0) {
       const runLen = endIndex - index + 1;
       segments.push({
         key: `${index}-${key}`,
         leftPercent: (index / totalDays) * 100,
         widthPercent: (runLen / totalDays) * 100,
-        colors: phaseIds.map((phaseId) => TAB_PHASE_COLORS[phaseId]),
+        colors: dayColors,
       });
     }
     index = endIndex + 1;
@@ -132,24 +155,6 @@ export function FooterPhaseTimeline({
   const orderedStatusPhases = BUILD_TABS.map((tab) => tab.id).filter(
     (id): id is BuildTabId => id !== 'overview' && id !== 'start' && id !== 'completed' && (phaseStatus.get(id)?.total || 0) > 0,
   );
-
-  const timelineSteps = steps
-    .filter((step) => {
-      const baseStart = step.expected_start_date || step.expected_end_date;
-      const baseEnd = step.expected_end_date || step.expected_start_date;
-      if (!baseStart || !baseEnd) {
-        return false;
-      }
-      return baseEnd >= rangeStartIso && baseStart <= rangeEndIso;
-    })
-    .sort((a, b) => {
-      const aNum = Number(displayNumberById?.get(a.id) || a.step_order || 0);
-      const bNum = Number(displayNumberById?.get(b.id) || b.step_order || 0);
-      if (aNum !== bNum) {
-        return aNum - bNum;
-      }
-      return a.id - b.id;
-    });
 
   const editableRows = editable && timelineSteps.length > 0;
 

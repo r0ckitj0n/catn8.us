@@ -2813,37 +2813,35 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   >
                     i
                   </button>
-                  {isExpanded ? (
-                    <button
-                      type="button"
-                      className="build-wizard-step-delete"
-                      aria-label="Delete step"
-                      title="Delete step"
-                      disabled={stepReadOnly}
-                      onClick={() => {
-                        if (stepReadOnly) {
-                          return;
+                  <button
+                    type="button"
+                    className="build-wizard-step-delete"
+                    aria-label="Delete step"
+                    title="Delete step"
+                    disabled={stepReadOnly}
+                    onClick={() => {
+                      if (stepReadOnly) {
+                        return;
+                      }
+                      void (async () => {
+                        const ok = await requestConfirmation({
+                          title: 'Delete Step?',
+                          message: 'Delete this step?',
+                          confirmLabel: 'Delete Step',
+                          confirmButtonClass: 'btn btn-danger',
+                        });
+                        if (ok) {
+                          await deleteStep(step.id);
                         }
-                        void (async () => {
-                          const ok = await requestConfirmation({
-                            title: 'Delete Step?',
-                            message: 'Delete this step?',
-                            confirmLabel: 'Delete Step',
-                            confirmButtonClass: 'btn btn-danger',
-                          });
-                          if (ok) {
-                            await deleteStep(step.id);
-                          }
-                        })();
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                        <line x1="10" y1="11" x2="10" y2="17" />
-                        <line x1="14" y1="11" x2="14" y2="17" />
-                      </svg>
-                    </button>
-                  ) : null}
+                      })();
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
                 </div>
               </div>
               {isExpanded ? (

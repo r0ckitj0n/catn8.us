@@ -49,6 +49,7 @@ function catn8_build_wizard_tables_ensure(): void
         storage_path VARCHAR(255) NOT NULL,
         file_size_bytes INT NOT NULL DEFAULT 0,
         caption VARCHAR(255) NULL,
+        receipt_amount DECIMAL(10,2) NULL,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_project_id (project_id),
         KEY idx_step_id (step_id),
@@ -231,6 +232,14 @@ function catn8_build_wizard_tables_ensure(): void
     );
     if (!$hasCaption) {
         Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN caption VARCHAR(255) NULL AFTER file_size_bytes');
+    }
+
+    $hasReceiptAmount = Database::queryOne(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+        ['build_wizard_documents', 'receipt_amount']
+    );
+    if (!$hasReceiptAmount) {
+        Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN receipt_amount DECIMAL(10,2) NULL AFTER caption');
     }
 
     $hasPrimaryPhotoDocumentId = Database::queryOne(
@@ -585,9 +594,41 @@ function catn8_build_wizard_seed_data_path(): string
     return dirname(__DIR__) . '/Build Wizard/seed/build_wizard_seed.json';
 }
 
+function catn8_build_wizard_wastewater_kind($value): string
+{
+    $kind = strtolower(trim((string)$value));
+    return match ($kind) {
+        'public_sewer' => 'public_sewer',
+        default => 'septic',
+    };
+}
+
+function catn8_build_wizard_water_kind($value): string
+{
+    $kind = strtolower(trim((string)$value));
+    return match ($kind) {
+        'private_well' => 'private_well',
+        default => 'county_water',
+    };
+}
+
 function catn8_build_wizard_house_template_path(): string
 {
     return dirname(__DIR__) . '/Build Wizard/seed/house_template.json';
+}
+
+function catn8_build_wizard_house_template_override_paths(string $wastewaterKind, string $waterKind): array
+{
+    $paths = [];
+    if (catn8_build_wizard_wastewater_kind($wastewaterKind) === 'public_sewer') {
+        $paths[] = dirname(__DIR__) . '/Build Wizard/seed/house_template_overrides_public_sewer.json';
+    }
+    if (catn8_build_wizard_water_kind($waterKind) === 'private_well') {
+        $paths[] = dirname(__DIR__) . '/Build Wizard/seed/house_template_overrides_private_well.json';
+    } else {
+        $paths[] = dirname(__DIR__) . '/Build Wizard/seed/house_template_overrides_county_water.json';
+    }
+    return $paths;
 }
 
 function catn8_build_wizard_default_house_template_steps(): array
@@ -620,7 +661,87 @@ function catn8_build_wizard_default_house_template_steps(): array
     ];
 }
 
-function catn8_build_wizard_dawsonville_template_steps(): array
+function catn8_build_wizard_apply_single_template_override(array $steps, array $decoded): array
+{
+    $removeStepKeys = [];
+    if (is_array($decoded['remove_step_keys'] ?? null)) {
+        foreach ($decoded['remove_step_keys'] as $key) {
+            $clean = trim((string)$key);
+            if ($clean !== '') {
+                $removeStepKeys[$clean] = true;
+            }
+        }
+    }
+
+    $overridesByKey = [];
+    if (is_array($decoded['step_overrides'] ?? null)) {
+        foreach ($decoded['step_overrides'] as $override) {
+            if (!is_array($override)) {
+                continue;
+            }
+            $key = trim((string)($override['template_step_key'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+            $overridesByKey[$key] = $override;
+        }
+    }
+
+    $out = [];
+    foreach ($steps as $step) {
+        if (!is_array($step)) {
+            continue;
+        }
+        $key = trim((string)($step['template_step_key'] ?? ''));
+        if ($key !== '' && isset($removeStepKeys[$key])) {
+            continue;
+        }
+        if ($key !== '' && isset($overridesByKey[$key])) {
+            $step = array_merge($step, $overridesByKey[$key]);
+        }
+        $out[] = $step;
+    }
+
+    $appendSteps = [];
+    if (is_array($decoded['append_steps'] ?? null)) {
+        foreach ($decoded['append_steps'] as $appendStep) {
+            if (!is_array($appendStep)) {
+                continue;
+            }
+            $title = trim((string)($appendStep['title'] ?? ''));
+            $key = trim((string)($appendStep['template_step_key'] ?? ''));
+            if ($title === '' || $key === '') {
+                continue;
+            }
+            $appendSteps[] = $appendStep;
+        }
+    }
+
+    return array_merge($out, $appendSteps);
+}
+
+function catn8_build_wizard_apply_template_overrides(array $steps, string $wastewaterKind, string $waterKind): array
+{
+    $paths = catn8_build_wizard_house_template_override_paths($wastewaterKind, $waterKind);
+    $out = $steps;
+    foreach ($paths as $overridePath) {
+        if (!is_string($overridePath) || $overridePath === '' || !is_file($overridePath)) {
+            continue;
+        }
+        $raw = file_get_contents($overridePath);
+        if (!is_string($raw) || trim($raw) === '') {
+            continue;
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        $out = catn8_build_wizard_apply_single_template_override($out, $decoded);
+    }
+    return $out;
+}
+
+function catn8_build_wizard_dawsonville_template_steps(string $wastewaterKind = 'septic', string $waterKind = 'county_water'): array
 {
     $path = catn8_build_wizard_house_template_path();
     if (!is_file($path)) {
@@ -639,6 +760,7 @@ function catn8_build_wizard_dawsonville_template_steps(): array
     if (!is_array($steps) || !$steps) {
         return catn8_build_wizard_default_house_template_steps();
     }
+    $steps = catn8_build_wizard_apply_template_overrides($steps, $wastewaterKind, $waterKind);
 
     $normalized = [];
     foreach ($steps as $step) {
@@ -1206,13 +1328,13 @@ function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $ski
     return $inserted;
 }
 
-function catn8_build_wizard_seed_dawsonville_checklist(int $projectId): void
+function catn8_build_wizard_seed_dawsonville_checklist(int $projectId, string $wastewaterKind = 'septic', string $waterKind = 'county_water'): void
 {
-    $templateSteps = catn8_build_wizard_dawsonville_template_steps();
+    $templateSteps = catn8_build_wizard_dawsonville_template_steps($wastewaterKind, $waterKind);
     catn8_build_wizard_insert_steps($projectId, $templateSteps, true);
 }
 
-function catn8_build_wizard_seed_project_from_file(int $projectId): void
+function catn8_build_wizard_seed_project_from_file(int $projectId, string $wastewaterKind = 'septic', string $waterKind = 'county_water'): void
 {
     $seedPath = catn8_build_wizard_seed_data_path();
     if (!is_file($seedPath)) {
@@ -1278,7 +1400,7 @@ function catn8_build_wizard_seed_project_from_file(int $projectId): void
     }
 
     catn8_build_wizard_insert_steps($projectId, $normalizedSeedSteps, false);
-    catn8_build_wizard_seed_dawsonville_checklist($projectId);
+    catn8_build_wizard_seed_dawsonville_checklist($projectId, $wastewaterKind, $waterKind);
 }
 
 function catn8_build_wizard_list_projects(int $uid): array
@@ -1320,7 +1442,13 @@ function catn8_build_wizard_list_projects(int $uid): array
     return $list;
 }
 
-function catn8_build_wizard_create_project(int $uid, string $title, bool $seedFromSpreadsheet): array
+function catn8_build_wizard_create_project(
+    int $uid,
+    string $title,
+    bool $seedFromSpreadsheet,
+    string $wastewaterKind = 'septic',
+    string $waterKind = 'county_water'
+): array
 {
     $cleanTitle = trim($title);
     if ($cleanTitle === '') {
@@ -1337,9 +1465,9 @@ function catn8_build_wizard_create_project(int $uid, string $title, bool $seedFr
     }
 
     if ($seedFromSpreadsheet) {
-        catn8_build_wizard_seed_project_from_file($id);
+        catn8_build_wizard_seed_project_from_file($id, $wastewaterKind, $waterKind);
     } else {
-        catn8_build_wizard_insert_steps($id, catn8_build_wizard_dawsonville_template_steps(), false);
+        catn8_build_wizard_insert_steps($id, catn8_build_wizard_dawsonville_template_steps($wastewaterKind, $waterKind), false);
     }
 
     $created = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$id]);
@@ -1720,9 +1848,12 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
     $notesByStep = catn8_build_wizard_step_notes_by_step_ids($stepIds);
     $auditLogsByStep = catn8_build_wizard_step_audit_logs_by_step_ids($stepIds);
 
+    $receiptTotalsByStepId = catn8_build_wizard_step_receipt_totals($projectId);
     $steps = [];
     foreach ($rows as $r) {
         $sid = (int)($r['id'] ?? 0);
+        $receiptTotal = $receiptTotalsByStepId[$sid]['receipt_total'] ?? 0.0;
+        $receiptCount = $receiptTotalsByStepId[$sid]['receipt_count'] ?? 0;
         $steps[] = [
             'id' => $sid,
             'project_id' => (int)($r['project_id'] ?? 0),
@@ -1758,6 +1889,8 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'completed_at' => $r['completed_at'] !== null ? (string)$r['completed_at'] : null,
             'ai_generated' => (int)($r['ai_generated'] ?? 0),
             'source_ref' => $r['source_ref'] !== null ? (string)$r['source_ref'] : null,
+            'receipt_total' => (float)$receiptTotal,
+            'receipt_count' => (int)$receiptCount,
             'created_at' => $r['created_at'] !== null ? (string)$r['created_at'] : null,
             'updated_at' => $r['updated_at'] !== null ? (string)$r['updated_at'] : null,
             'notes' => $notesByStep[$sid] ?? [],
@@ -1768,11 +1901,37 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
     return $steps;
 }
 
+function catn8_build_wizard_step_receipt_totals(int $projectId): array
+{
+    if ($projectId <= 0) {
+        return [];
+    }
+    $rows = Database::queryAll(
+        'SELECT step_id, COUNT(*) AS receipt_count, SUM(receipt_amount) AS receipt_total
+         FROM build_wizard_documents
+         WHERE project_id = ? AND step_id IS NOT NULL AND kind = ? AND receipt_amount IS NOT NULL
+         GROUP BY step_id',
+        [$projectId, 'receipt']
+    );
+    $out = [];
+    foreach ($rows as $row) {
+        $stepId = (int)($row['step_id'] ?? 0);
+        if ($stepId <= 0) {
+            continue;
+        }
+        $out[$stepId] = [
+            'receipt_count' => (int)($row['receipt_count'] ?? 0),
+            'receipt_total' => (float)($row['receipt_total'] ?? 0),
+        ];
+    }
+    return $out;
+}
+
 function catn8_build_wizard_documents_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
         'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
+                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.uploaded_at,
                 CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
          FROM build_wizard_documents d
          LEFT JOIN build_wizard_steps s ON s.id = d.step_id
@@ -1798,6 +1957,7 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
             'storage_path' => (string)($r['storage_path'] ?? ''),
             'file_size_bytes' => (int)($r['file_size_bytes'] ?? 0),
             'caption' => $r['caption'] !== null ? (string)$r['caption'] : null,
+            'receipt_amount' => $r['receipt_amount'] !== null ? (float)$r['receipt_amount'] : null,
             'uploaded_at' => (string)($r['uploaded_at'] ?? ''),
             'public_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId,
             'thumbnail_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1',
@@ -2846,7 +3006,7 @@ function catn8_build_wizard_search_documents(int $projectId, string $query, int 
     $like = '%' . $q . '%';
     $rows = Database::queryAll(
         'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at,
+                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.uploaded_at,
                 si.extraction_method, si.indexed_at,
                 MATCH(si.extracted_text) AGAINST (? IN NATURAL LANGUAGE MODE) AS ft_score,
                 si.extracted_text
@@ -2897,6 +3057,7 @@ function catn8_build_wizard_search_documents(int $projectId, string $query, int 
             'storage_path' => (string)($row['storage_path'] ?? ''),
             'file_size_bytes' => (int)($row['file_size_bytes'] ?? 0),
             'caption' => $row['caption'] !== null ? (string)$row['caption'] : null,
+            'receipt_amount' => $row['receipt_amount'] !== null ? (float)$row['receipt_amount'] : null,
             'uploaded_at' => (string)($row['uploaded_at'] ?? ''),
             'public_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId,
             'thumbnail_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1',
@@ -4850,11 +5011,13 @@ try {
         $body = catn8_read_json_body();
         $title = trim((string)($body['title'] ?? ''));
         $seedMode = strtolower(trim((string)($body['seed_mode'] ?? 'blank')));
+        $wastewaterKind = catn8_build_wizard_wastewater_kind($body['wastewater_kind'] ?? ($body['template_kind'] ?? 'septic'));
+        $waterKind = catn8_build_wizard_water_kind($body['water_kind'] ?? 'county_water');
         if (!in_array($seedMode, ['blank', 'spreadsheet'], true)) {
             $seedMode = 'blank';
         }
 
-        $project = catn8_build_wizard_create_project($viewerId, $title, $seedMode === 'spreadsheet');
+        $project = catn8_build_wizard_create_project($viewerId, $title, $seedMode === 'spreadsheet', $wastewaterKind, $waterKind);
         $projectId = (int)($project['id'] ?? 0);
 
         catn8_json_response([
@@ -5985,6 +6148,10 @@ try {
         if ($caption === '') {
             $caption = null;
         }
+        $receiptAmount = null;
+        if ($kind === 'receipt') {
+            $receiptAmount = catn8_build_wizard_to_decimal_or_null($_POST['receipt_amount'] ?? null);
+        }
         if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
             throw new RuntimeException('No file uploaded');
         }
@@ -6030,8 +6197,8 @@ try {
         }
 
         Database::execute(
-            'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [$projectId, ($stepId > 0 ? $stepId : null), $kind, $origName, $mime, $destPath, $size, $caption]
+            'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$projectId, ($stepId > 0 ? $stepId : null), $kind, $origName, $mime, $destPath, $size, $caption, $receiptAmount]
         );
 
         $docId = (int)Database::lastInsertId();
@@ -6078,7 +6245,7 @@ try {
 
         $doc = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
              WHERE d.id = ?',
@@ -6091,6 +6258,7 @@ try {
         $doc['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId;
         $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
         $doc['is_image'] = (strpos(strtolower((string)($doc['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $doc['receipt_amount'] = $doc['receipt_amount'] !== null ? (float)$doc['receipt_amount'] : null;
         catn8_json_response(['success' => true, 'document' => $doc]);
     }
 
@@ -6126,6 +6294,11 @@ try {
             $params[] = ($caption !== '' ? substr($caption, 0, 255) : null);
         }
 
+        if (array_key_exists('receipt_amount', $body)) {
+            $updates[] = 'receipt_amount = ?';
+            $params[] = catn8_build_wizard_to_decimal_or_null($body['receipt_amount'] ?? null);
+        }
+
         if (array_key_exists('step_id', $body)) {
             $nextStepId = (int)($body['step_id'] ?? 0);
             if ($nextStepId > 0) {
@@ -6152,7 +6325,7 @@ try {
 
         $updated = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
              WHERE d.id = ? LIMIT 1',
@@ -6164,6 +6337,7 @@ try {
         $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
         $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
         $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $updated['receipt_amount'] = $updated['receipt_amount'] !== null ? (float)$updated['receipt_amount'] : null;
 
         catn8_json_response(['success' => true, 'document' => $updated]);
     }
@@ -6290,7 +6464,7 @@ try {
 
         $updated = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.uploaded_at
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
              WHERE d.id = ? LIMIT 1',
@@ -6302,6 +6476,7 @@ try {
         $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
         $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
         $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $updated['receipt_amount'] = $updated['receipt_amount'] !== null ? (float)$updated['receipt_amount'] : null;
 
         catn8_json_response(['success' => true, 'document' => $updated]);
     }

@@ -1,0 +1,68 @@
+{
+  "template_kind": "private_well",
+  "description": "Water-source override for private well projects. Adds well permitting, drilling, and testing milestones.",
+  "step_overrides": [
+    {
+      "template_step_key": "utility_availability",
+      "description": "Confirm power, telecom, and private-well feasibility/authority requirements before permit submittal."
+    },
+    {
+      "template_step_key": "water_service_connection",
+      "title": "Complete private well tie-in, pressure tank, and potable water service",
+      "description": "Finalize well water service components and connect potable water service for inspections and occupancy.",
+      "depends_on_keys": [
+        "plumbing_trim_fixtures",
+        "well_yield_water_quality_test"
+      ]
+    },
+    {
+      "template_step_key": "well_final_approval",
+      "depends_on_keys": [
+        "water_service_connection"
+      ]
+    }
+  ],
+  "append_steps": [
+    {
+      "template_step_key": "well_permit",
+      "phase_key": "dawson_county_permits",
+      "step_type": "permit",
+      "title": "Obtain private well permit/authorization",
+      "description": "Secure required private well approvals before drilling activities.",
+      "permit_required": 1,
+      "permit_name": "Private Well Permit",
+      "expected_duration_days": 5,
+      "depends_on_keys": [
+        "plans_engineering"
+      ],
+      "source_ref": "Private well workflow"
+    },
+    {
+      "template_step_key": "well_drilling_install",
+      "phase_key": "move_in",
+      "step_type": "construction",
+      "title": "Drill well and install casing/pump",
+      "description": "Complete well drilling and core equipment installation.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "site_clear_grade",
+        "well_permit"
+      ],
+      "source_ref": "Private well workflow"
+    },
+    {
+      "template_step_key": "well_yield_water_quality_test",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Complete well yield and water quality testing",
+      "description": "Verify well output and potability requirements before final occupancy approvals.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "well_drilling_install"
+      ],
+      "source_ref": "Private well workflow"
+    }
+  ]
+}

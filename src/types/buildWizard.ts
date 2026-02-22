@@ -50,6 +50,8 @@ export interface IBuildWizardStep {
   completed_at: string | null;
   ai_generated: number;
   source_ref: string | null;
+  receipt_total?: number;
+  receipt_count?: number;
   created_at: string | null;
   updated_at: string | null;
   notes: IBuildWizardStepNote[];
@@ -68,6 +70,7 @@ export interface IBuildWizardDocument {
   storage_path: string;
   file_size_bytes: number;
   caption: string | null;
+  receipt_amount: number | null;
   uploaded_at: string;
   public_url: string;
   thumbnail_url: string;

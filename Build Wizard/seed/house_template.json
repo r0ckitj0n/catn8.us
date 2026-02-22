@@ -1,466 +1,895 @@
 {
-  "template_version": "house_template_v3",
-  "description": "Default house build template with dependency-safe sequencing.",
+  "template_version": "house_template_v5_dawson_ga_balanced_light",
+  "description": "Balanced-light Dawson County, GA new-home template with complete build coverage and reduced tracking overhead through merged milestone steps.",
   "steps": [
     {
       "template_step_key": "land_contract",
       "phase_key": "land_due_diligence",
       "step_type": "documentation",
-      "title": "Confirm lot ownership, zoning, setbacks, and deed restrictions",
-      "description": "Verify legal build rights before design and permitting spend.",
+      "title": "Confirm lot ownership, zoning, setbacks, easements, and deed restrictions",
+      "description": "Verify legal build rights and constraints before spending on design and permitting.",
       "permit_required": 0,
       "expected_duration_days": 5,
-      "source_ref": "House template v3"
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "addressing_approval",
+      "phase_key": "land_due_diligence",
+      "step_type": "documentation",
+      "title": "Obtain approved Dawson County addressing form (E-911)",
+      "description": "Address assignment is listed in the county residential permit checklist.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "land_contract"
+      ],
+      "source_ref": "Dawson County required documents checklist"
     },
     {
       "template_step_key": "survey_topo",
       "phase_key": "land_due_diligence",
       "step_type": "documentation",
       "title": "Complete boundary and topographic survey",
-      "description": "Capture buildable area, elevations, and site constraints.",
+      "description": "Capture buildable area, contours, and constraints used for site plan and engineering.",
       "permit_required": 0,
       "expected_duration_days": 7,
-      "depends_on_keys": ["land_contract"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "land_contract"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "soil_eval",
       "phase_key": "land_due_diligence",
       "step_type": "inspection",
       "title": "Perform soil/percolation and geotechnical checks",
-      "description": "Validate septic feasibility and foundation assumptions.",
+      "description": "Validate septic feasibility and foundation assumptions for plan design.",
       "permit_required": 0,
       "expected_duration_days": 7,
-      "depends_on_keys": ["survey_topo"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "survey_topo"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "utility_availability",
+      "phase_key": "design_preconstruction",
+      "step_type": "utility",
+      "title": "Confirm utility availability and service paths (power, water/sewer or well, gas, telecom)",
+      "description": "Collect utility availability and connection requirements prior to permit submittal.",
+      "permit_required": 0,
+      "expected_duration_days": 5,
+      "depends_on_keys": [
+        "survey_topo"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "plans_engineering",
       "phase_key": "design_preconstruction",
       "step_type": "blueprints",
       "title": "Finalize architectural and engineered plan set",
-      "description": "Stamped plans with structural, site, and utility details.",
+      "description": "Prepare complete plan package including structural details and site plan.",
       "permit_required": 0,
       "expected_duration_days": 14,
-      "depends_on_keys": ["soil_eval"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "soil_eval",
+        "utility_availability"
+      ],
+      "source_ref": "House template v4"
     },
     {
-      "template_step_key": "permit_packet",
-      "phase_key": "dawson_county_permits",
-      "step_type": "permit",
-      "title": "Obtain municipal and state permits",
-      "description": "Submit full permit package to local authority having jurisdiction.",
-      "permit_required": 1,
-      "permit_name": "Residential Building Permit",
-      "expected_duration_days": 14,
-      "depends_on_keys": ["plans_engineering"],
-      "source_ref": "House template v3"
+      "template_step_key": "financing_budget_baseline",
+      "phase_key": "design_preconstruction",
+      "step_type": "documentation",
+      "title": "Finalize construction budget, contracts, draw schedule, and contingency plan",
+      "description": "Lock budget baseline, execute core builder/subcontract scope agreements, confirm draw timing, and set contingency controls before major commitments.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "land_contract",
+        "plans_engineering"
+      ],
+      "source_ref": "House template v5"
+    },
+    {
+      "template_step_key": "finish_selections_allowances",
+      "phase_key": "design_preconstruction",
+      "step_type": "documentation",
+      "title": "Finalize owner selections and allowance decisions",
+      "description": "Finalize key finish and fixture selections to reduce field changes and schedule risk.",
+      "permit_required": 0,
+      "expected_duration_days": 5,
+      "depends_on_keys": [
+        "financing_budget_baseline"
+      ],
+      "source_ref": "House template v5"
+    },
+    {
+      "template_step_key": "builder_docs",
+      "phase_key": "design_preconstruction",
+      "step_type": "documentation",
+      "title": "Prepare contractor affidavits, licenses, and insurance/workers comp documents",
+      "description": "County checklist includes affidavits and contractor credential documentation for permit issuance.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "financing_budget_baseline"
+      ],
+      "source_ref": "Dawson County required documents checklist"
     },
     {
       "template_step_key": "driveway_approval",
       "phase_key": "dawson_county_permits",
       "step_type": "permit",
-      "title": "Obtain driveway/right-of-way approval",
-      "description": "Secure transportation access approvals where required.",
+      "title": "Obtain driveway/encroachment permit",
+      "description": "Required by Dawson County Public Works for county road access (and GDOT permit if on a state route).",
       "permit_required": 1,
       "permit_name": "Driveway / Encroachment Permit",
       "expected_duration_days": 7,
-      "depends_on_keys": ["plans_engineering"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "plans_engineering"
+      ],
+      "source_ref": "Dawson County Public Works driveway permit page"
     },
     {
-      "template_step_key": "utility_approvals",
+      "template_step_key": "septic_permit",
       "phase_key": "dawson_county_permits",
       "step_type": "permit",
-      "title": "Obtain utility and septic/sewer approvals",
-      "description": "Finalize utility and environmental approvals before excavation.",
+      "title": "Obtain septic permit or sewer connection approval",
+      "description": "County checklist requires environmental health permit for septic systems where sewer is unavailable.",
       "permit_required": 1,
-      "permit_name": "Utility/Septic Approval",
+      "permit_name": "Septic Permit / Sewer Approval",
       "expected_duration_days": 10,
-      "depends_on_keys": ["plans_engineering"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "soil_eval",
+        "plans_engineering"
+      ],
+      "source_ref": "Dawson County required documents checklist"
     },
     {
-      "template_step_key": "erosion_plan",
-      "phase_key": "site_preparation",
+      "template_step_key": "land_disturbance_permit",
+      "phase_key": "dawson_county_permits",
       "step_type": "permit",
-      "title": "Erosion controls in place.",
-      "description": "Install BMPs before grading and excavation.",
+      "title": "Obtain land disturbance permit (LDP)",
+      "description": "Required before grading/site disturbance. Include NOI and 7-day letter if disturbing over 1 acre.",
       "permit_required": 1,
-      "permit_name": "Erosion / Land Disturbance Approval",
-      "expected_duration_days": 5,
-      "depends_on_keys": ["permit_packet", "utility_approvals"],
-      "source_ref": "House template v3"
+      "permit_name": "Land Disturbance Permit",
+      "expected_duration_days": 10,
+      "depends_on_keys": [
+        "plans_engineering"
+      ],
+      "source_ref": "Dawson County development forms and LDP guidance"
+    },
+    {
+      "template_step_key": "npdes_noi",
+      "phase_key": "dawson_county_permits",
+      "step_type": "permit",
+      "title": "File NPDES NOI and EPD 7-day letter (if disturbed area is over 1 acre)",
+      "description": "Georgia EPD stormwater documentation is required with county land-disturbance workflows above threshold.",
+      "permit_required": 1,
+      "permit_name": "NPDES NOI / 7-Day Letter",
+      "expected_duration_days": 7,
+      "depends_on_keys": [
+        "land_disturbance_permit"
+      ],
+      "source_ref": "Dawson County required documents checklist"
+    },
+    {
+      "template_step_key": "building_permit_application",
+      "phase_key": "dawson_county_permits",
+      "step_type": "permit",
+      "title": "Submit residential building permit application packet",
+      "description": "Submit plans, forms, and required supporting documents listed by Dawson County.",
+      "permit_required": 1,
+      "permit_name": "Residential Building Permit Application",
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "builder_docs",
+        "addressing_approval",
+        "driveway_approval",
+        "septic_permit",
+        "land_disturbance_permit"
+      ],
+      "source_ref": "Dawson County residential permit packet/checklist"
+    },
+    {
+      "template_step_key": "building_permit_issued",
+      "phase_key": "dawson_county_permits",
+      "step_type": "permit",
+      "title": "Receive approved residential building permit",
+      "description": "Do not start site construction until permit approval is issued.",
+      "permit_required": 1,
+      "permit_name": "Residential Building Permit",
+      "expected_duration_days": 10,
+      "depends_on_keys": [
+        "building_permit_application"
+      ],
+      "source_ref": "Dawson County permitting"
+    },
+    {
+      "template_step_key": "long_lead_procurement",
+      "phase_key": "site_preparation",
+      "step_type": "purchase",
+      "title": "Release long-lead material and equipment orders",
+      "description": "Place orders for long-lead items such as windows/doors, trusses, panels, HVAC equipment, and specialty fixtures.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "building_permit_issued",
+        "finish_selections_allowances"
+      ],
+      "source_ref": "House template v5"
+    },
+    {
+      "template_step_key": "utility_locate_811",
+      "phase_key": "site_preparation",
+      "step_type": "documentation",
+      "title": "Set up jobsite logistics/safety and complete 811 utility locates before excavation",
+      "description": "Establish site access, sanitation, dumpster/safety controls, then confirm utility locate marks before mechanized excavation/trenching.",
+      "permit_required": 0,
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "building_permit_issued"
+      ],
+      "source_ref": "Georgia 811 / House template v5"
+    },
+    {
+      "template_step_key": "erosion_bmps_install",
+      "phase_key": "site_preparation",
+      "step_type": "construction",
+      "title": "Install erosion and sediment control BMPs",
+      "description": "Install and maintain controls before clearing/grading per LDP requirements.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "building_permit_issued"
+      ],
+      "source_ref": "Dawson County LDP guidance"
+    },
+    {
+      "template_step_key": "temp_power_release",
+      "phase_key": "site_preparation",
+      "step_type": "inspection",
+      "title": "Install temporary power pole and pass temporary electrical inspection",
+      "description": "Temporary service inspection is listed on county inspection guidance for construction power.",
+      "permit_required": 1,
+      "permit_name": "Temporary Electrical Inspection",
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "building_permit_issued"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
     },
     {
       "template_step_key": "site_clear_grade",
       "phase_key": "site_preparation",
       "step_type": "construction",
-      "title": "Begin site work and excavation",
-      "description": "Prepare the site pad and stake finished floor elevations.",
+      "title": "Clear, grub, and rough-grade homesite",
+      "description": "Prepare house pad, construction access, and preliminary drainage.",
       "permit_required": 0,
       "expected_duration_days": 7,
-      "depends_on_keys": ["erosion_plan"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "erosion_bmps_install",
+        "temp_power_release",
+        "utility_locate_811"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "footings",
       "phase_key": "foundation",
       "step_type": "construction",
-      "title": "Excavate and pour footings",
-      "description": "Place footing steel and concrete per structural schedule.",
+      "title": "Excavate and form footings with reinforcement",
+      "description": "Set footing depth, rebar, and forms per engineered plans.",
       "permit_required": 0,
       "expected_duration_days": 4,
-      "depends_on_keys": ["site_clear_grade"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "site_clear_grade"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "footing_inspection",
       "phase_key": "foundation",
       "step_type": "inspection",
       "title": "Pass footing inspection",
-      "description": "Inspection gate before continuing foundation work.",
+      "description": "County-required inspection gate prior to concrete placement progression.",
       "permit_required": 1,
       "permit_name": "Footing Inspection",
       "expected_duration_days": 2,
-      "depends_on_keys": ["footings"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "footings"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "foundation_formwork",
+      "phase_key": "foundation",
+      "step_type": "construction",
+      "title": "Complete foundation/slab formwork and under-slab prep",
+      "description": "Set forms, plumbing penetrations, moisture barrier prep, and reinforcement layout.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "footing_inspection"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "plumbing_underground_install",
+      "phase_key": "mep_rough_in",
+      "step_type": "construction",
+      "title": "Install underground plumbing and drain/waste/vent stub-outs",
+      "description": "Install below-slab sanitary and water lines prior to slab pour.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "foundation_formwork",
+        "septic_permit"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "plumbing_underground_inspection",
+      "phase_key": "mep_rough_in",
+      "step_type": "inspection",
+      "title": "Pass underground plumbing inspection",
+      "description": "County-required plumbing inspection before slab placement.",
+      "permit_required": 1,
+      "permit_name": "Underground Plumbing Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "plumbing_underground_install"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "slab_reinforcement_vapor",
+      "phase_key": "foundation",
+      "step_type": "construction",
+      "title": "Install slab reinforcement and vapor barrier",
+      "description": "Complete pre-pour slab assembly including vapor barrier and reinforcement.",
+      "permit_required": 0,
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "plumbing_underground_inspection"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "foundation_pour",
       "phase_key": "foundation",
       "step_type": "construction",
-      "title": "Slab poured.",
-      "description": "Walls/slab, moisture control, and anchor details.",
+      "title": "Pour slab/foundation concrete",
+      "description": "Place and finish foundation concrete after pre-pour inspections are complete.",
       "permit_required": 0,
-      "expected_duration_days": 7,
-      "depends_on_keys": ["footing_inspection"],
-      "source_ref": "House template v3"
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "slab_reinforcement_vapor"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "foundation_inspection",
       "phase_key": "foundation",
       "step_type": "inspection",
       "title": "Pass foundation inspection",
-      "description": "Approval required before framing starts.",
+      "description": "Approval gate before framing begins.",
       "permit_required": 1,
       "permit_name": "Foundation Inspection",
       "expected_duration_days": 2,
-      "depends_on_keys": ["foundation_pour"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "foundation_pour"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
     },
     {
       "template_step_key": "framing_shell",
       "phase_key": "framing_shell",
       "step_type": "construction",
-      "title": "Frame walls, roof and ceilings, including all door and window rough openings",
-      "description": "Frame house, install roof deck, and weather barrier.",
+      "title": "Frame floors, walls, roof, and rough openings",
+      "description": "Build structural shell and install roof decking/sheathing.",
       "permit_required": 0,
       "expected_duration_days": 14,
-      "depends_on_keys": ["foundation_inspection"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "foundation_inspection",
+        "long_lead_procurement"
+      ],
+      "source_ref": "House template v4"
     },
     {
-      "template_step_key": "roofing_material_order",
+      "template_step_key": "dry_in_shell",
       "phase_key": "framing_shell",
-      "step_type": "purchase",
-      "title": "Order roofing materials after foundation completion",
-      "description": "Procure shingles/metal, underlayment, and flashing.",
+      "step_type": "construction",
+      "title": "Dry-in shell (roofing underlayment, windows, doors, weather barrier)",
+      "description": "Protect structure from weather before rough MEP progresses.",
       "permit_required": 0,
+      "expected_duration_days": 7,
+      "depends_on_keys": [
+        "framing_shell"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "rough_hvac",
+      "phase_key": "mep_rough_in",
+      "step_type": "construction",
+      "title": "Install rough mechanical/HVAC systems and ductwork",
+      "description": "Set equipment rough-in, duct trunks/branches, and condensate routing.",
+      "permit_required": 0,
+      "expected_duration_days": 6,
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "rough_plumbing",
+      "phase_key": "mep_rough_in",
+      "step_type": "construction",
+      "title": "Install rough plumbing in walls/ceilings",
+      "description": "Complete DWV, vent, and water distribution rough-in.",
+      "permit_required": 0,
+      "expected_duration_days": 6,
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "rough_electrical",
+      "phase_key": "mep_rough_in",
+      "step_type": "construction",
+      "title": "Install rough electrical wiring, panel, and branch circuits",
+      "description": "Run branch circuits, panel feeders, grounding, and device boxes.",
+      "permit_required": 0,
+      "expected_duration_days": 6,
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "rough_gas_pressure_test",
+      "phase_key": "mep_rough_in",
+      "step_type": "inspection",
+      "title": "Complete rough gas piping pressure test and inspection (if gas service is used)",
+      "description": "Gas systems require pressure testing and approval before concealment.",
+      "permit_required": 1,
+      "permit_name": "Rough Gas Inspection",
       "expected_duration_days": 2,
-      "depends_on_keys": ["foundation_inspection"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "rough_plumbing"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
     },
     {
       "template_step_key": "framing_inspection",
       "phase_key": "framing_shell",
       "step_type": "inspection",
-      "title": "Rough frame inspections (municipal inspections: mechanical, plumbing, electrical and frame) completed.",
-      "description": "Inspection gate before rough-in trades.",
+      "title": "Pass framing inspection",
+      "description": "Structural framing inspection required before concealment.",
       "permit_required": 1,
       "permit_name": "Framing Inspection",
       "expected_duration_days": 2,
-      "depends_on_keys": ["framing_shell"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
     },
     {
-      "template_step_key": "electrical_supply_workbox_outlet_single",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox outlet single (qty 24)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_workbox_switch_single",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox switch single",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_workbox_outlet_double",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox outlet double (qty 3)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_workbox_switch_double",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox switch double",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_can_lights",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: can lights (qty 14)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_workbox_stove",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox stove (qty 1)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_workbox_dryer",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: workbox dryer (qty 1)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_kitchen_window_pendant",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: kitchen window pendant lights (qty 2)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_dining_pendant",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: dining pendant light (qty 1)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_outside_security_lights",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: outside security lights (qty 4)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_outside_front_door_side_lights",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: outside front door side lights (qty 2)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_bedroom_ceiling_fan",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: bedroom ceiling fan (qty 1)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_bedroom_sconce",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: bedroom sconce (qty 2)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_bathroom_mirror_light",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: bathroom mirror light (qty 2)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_shower_light_vent",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: shower light vent (qty 1)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_attic_light_boxes",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: light boxes for attic (qty 4)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "electrical_supply_three_way_switches",
-      "phase_key": "mep_rough_in",
-      "step_type": "purchase",
-      "title": "Electrical supply: 3-way switches (qty 3)",
-      "description": "Handwritten electrical shopping list item.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "Electrical shopping list"
-    },
-    {
-      "template_step_key": "mep_rough",
-      "phase_key": "mep_rough_in",
-      "step_type": "construction",
-      "title": "Rough-in remaining electrical and plumbing lines in wall, ceiling and floor cavities",
-      "description": "Install and route all rough-in systems to code.",
-      "permit_required": 0,
-      "expected_duration_days": 14,
-      "depends_on_keys": ["framing_inspection"],
-      "source_ref": "House template v3"
-    },
-    {
-      "template_step_key": "mep_inspection",
+      "template_step_key": "rough_mechanical_inspection",
       "phase_key": "mep_rough_in",
       "step_type": "inspection",
-      "title": "Pre-drywall Inspections",
-      "description": "Required before insulation and drywall.",
+      "title": "Pass rough mechanical inspection",
+      "description": "Mechanical/HVAC rough inspection gate.",
       "permit_required": 1,
-      "permit_name": "Rough MEP Inspection",
-      "expected_duration_days": 3,
-      "depends_on_keys": ["mep_rough"],
-      "source_ref": "House template v3"
+      "permit_name": "Rough Mechanical Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "rough_hvac"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
     },
     {
-      "template_step_key": "insulation_drywall",
+      "template_step_key": "rough_plumbing_inspection",
+      "phase_key": "mep_rough_in",
+      "step_type": "inspection",
+      "title": "Pass rough plumbing inspection",
+      "description": "Plumbing rough inspection gate prior to insulation/drywall.",
+      "permit_required": 1,
+      "permit_name": "Rough Plumbing Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "rough_plumbing"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "rough_electrical_inspection",
+      "phase_key": "mep_rough_in",
+      "step_type": "inspection",
+      "title": "Pass rough electrical inspection",
+      "description": "Electrical rough inspection gate prior to insulation/drywall.",
+      "permit_required": 1,
+      "permit_name": "Rough Electrical Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "rough_electrical"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "pre_drywall_gate",
+      "phase_key": "mep_rough_in",
+      "step_type": "milestone",
+      "title": "Pre-drywall gate complete (inspections + photo documentation)",
+      "description": "All framing/rough MEP inspections passed and photo documentation captured before insulation/drywall.",
+      "permit_required": 0,
+      "expected_duration_days": 1,
+      "depends_on_keys": [
+        "framing_inspection",
+        "rough_mechanical_inspection",
+        "rough_plumbing_inspection",
+        "rough_electrical_inspection"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "insulation_install",
       "phase_key": "interior_finishes",
       "step_type": "construction",
-      "title": "Drywall installed throughout the home.",
-      "description": "Thermal envelope and drywall finishing sequence.",
+      "title": "Install wall/ceiling insulation and air sealing",
+      "description": "Install thermal envelope components per energy code.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "pre_drywall_gate"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "insulation_inspection",
+      "phase_key": "interior_finishes",
+      "step_type": "inspection",
+      "title": "Pass insulation inspection",
+      "description": "County-required inspection before drywall coverage.",
+      "permit_required": 1,
+      "permit_name": "Insulation Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "insulation_install"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "drywall_install",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Hang, tape, and finish drywall",
+      "description": "Complete interior wall/ceiling drywall installation.",
       "permit_required": 0,
       "expected_duration_days": 10,
-      "depends_on_keys": ["mep_inspection"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "insulation_inspection"
+      ],
+      "source_ref": "House template v4"
     },
     {
-      "template_step_key": "interior_finishes",
+      "template_step_key": "exterior_cladding",
       "phase_key": "interior_finishes",
       "step_type": "construction",
-      "title": "Finish plumbing and electrical work",
-      "description": "Cabinets, flooring, trim, paint, and fixture install.",
-      "permit_required": 0,
-      "expected_duration_days": 21,
-      "depends_on_keys": ["insulation_drywall"],
-      "source_ref": "House template v3"
-    },
-    {
-      "template_step_key": "exterior_site_finishes",
-      "phase_key": "move_in",
-      "step_type": "construction",
-      "title": "Exterior finishes will be started (brick, cementatious finish, stone or siding).",
-      "description": "Siding/paint touch-up, drainage, driveway, and basic landscape completion.",
+      "title": "Install exterior cladding/veneer and weatherproof details",
+      "description": "Complete exterior finish systems and flashing details.",
       "permit_required": 0,
       "expected_duration_days": 8,
-      "depends_on_keys": ["roofing_material_order", "interior_finishes"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "House template v4"
     },
     {
-      "template_step_key": "final_inspections",
+      "template_step_key": "interior_trim_cabinets",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Install interior trim, doors, cabinets, and paint",
+      "description": "Complete major interior finish carpentry and paint work.",
+      "permit_required": 0,
+      "expected_duration_days": 12,
+      "depends_on_keys": [
+        "drywall_install"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "finish_flooring_tile",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Install flooring and tile finishes",
+      "description": "Install final floor coverings and wet-area tile work.",
+      "permit_required": 0,
+      "expected_duration_days": 7,
+      "depends_on_keys": [
+        "interior_trim_cabinets"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "plumbing_trim_fixtures",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Install plumbing fixtures and trim-out",
+      "description": "Set fixtures, trim valves, and complete plumbing finish connections.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "finish_flooring_tile"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "electrical_trim_devices",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Install electrical devices, lighting, and panel terminations",
+      "description": "Complete receptacles, switches, fixtures, breakers, and labeling.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "interior_trim_cabinets"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "hvac_trim_startup",
+      "phase_key": "interior_finishes",
+      "step_type": "construction",
+      "title": "Complete HVAC trim-out, startup, and balancing",
+      "description": "Set equipment, registers, controls, and startup commissioning.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "interior_trim_cabinets"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "water_service_connection",
+      "phase_key": "move_in",
+      "step_type": "utility",
+      "title": "Complete permanent water service (or well completion) and meter setup",
+      "description": "Finalize potable water service needed for final plumbing and occupancy.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "plumbing_trim_fixtures"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "septic_installation",
+      "phase_key": "move_in",
+      "step_type": "construction",
+      "title": "Install septic system and field lines (if not already installed)",
+      "description": "Complete septic construction to approved permit design.",
+      "permit_required": 0,
+      "expected_duration_days": 5,
+      "depends_on_keys": [
+        "site_clear_grade",
+        "septic_permit"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "driveway_installation",
+      "phase_key": "move_in",
+      "step_type": "construction",
+      "title": "Construct permanent driveway and tie-in",
+      "description": "Finish driveway required for safe permanent access and final approvals.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "exterior_cladding",
+        "driveway_approval"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "final_grading_stabilization",
+      "phase_key": "move_in",
+      "step_type": "construction",
+      "title": "Complete final grading, drainage stabilization, and site cleanup",
+      "description": "Finalize site drainage and stabilization for closeout and erosion compliance.",
+      "permit_required": 0,
+      "expected_duration_days": 4,
+      "depends_on_keys": [
+        "driveway_installation",
+        "septic_installation"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "final_plumbing_inspection",
       "phase_key": "inspections_closeout",
       "step_type": "inspection",
-      "title": "Final Inspection",
-      "description": "Resolve final punch items and pass trade/building finals.",
+      "title": "Pass final plumbing inspection",
+      "description": "Final county plumbing approval.",
       "permit_required": 1,
-      "permit_name": "Final Inspections",
-      "expected_duration_days": 4,
-      "depends_on_keys": ["exterior_site_finishes"],
-      "source_ref": "House template v3"
+      "permit_name": "Final Plumbing Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "plumbing_trim_fixtures",
+        "water_service_connection"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "final_electrical_inspection",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass final electrical inspection",
+      "description": "Final county electrical approval for permanent service and occupancy.",
+      "permit_required": 1,
+      "permit_name": "Final Electrical Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "electrical_trim_devices"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "electrical_service_release",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass electrical service release inspection for permanent power",
+      "description": "County inspection guidance includes service release coordination before utility energization.",
+      "permit_required": 1,
+      "permit_name": "Electrical Service Release",
+      "expected_duration_days": 1,
+      "depends_on_keys": [
+        "final_electrical_inspection"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "final_mechanical_inspection",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass final mechanical inspection and verify HVAC/envelope performance",
+      "description": "Complete final mechanical approval and required performance verification (for example blower-door/duct leakage/system balancing as applicable).",
+      "permit_required": 1,
+      "permit_name": "Final Mechanical Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "hvac_trim_startup"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "final_gas_inspection",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass final gas inspection (if gas service is used)",
+      "description": "Gas final approval where gas systems are part of the build.",
+      "permit_required": 1,
+      "permit_name": "Final Gas Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "rough_gas_pressure_test",
+        "plumbing_trim_fixtures"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "septic_final_approval",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Obtain septic final approval (if septic system is used)",
+      "description": "Environmental health final approval required for occupied septic-served homes.",
+      "permit_required": 1,
+      "permit_name": "Septic Final Approval",
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "septic_installation"
+      ],
+      "source_ref": "Dawson County required documents checklist"
+    },
+    {
+      "template_step_key": "well_final_approval",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Obtain well completion/final approval (if private well is used)",
+      "description": "Complete any required well authority approvals for private well water systems.",
+      "permit_required": 0,
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "water_service_connection"
+      ],
+      "source_ref": "House template v4"
+    },
+    {
+      "template_step_key": "final_building_inspection",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass final building inspection",
+      "description": "Final building inspection after trade finals and site completion.",
+      "permit_required": 1,
+      "permit_name": "Final Building Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "final_plumbing_inspection",
+        "electrical_service_release",
+        "final_mechanical_inspection",
+        "final_grading_stabilization"
+      ],
+      "source_ref": "Dawson County residential inspection checklist"
+    },
+    {
+      "template_step_key": "erosion_closeout",
+      "phase_key": "inspections_closeout",
+      "step_type": "permit",
+      "title": "Complete erosion-control closeout/NOC (when required by disturbed acreage)",
+      "description": "Close stormwater permit obligations after final stabilization when applicable.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "final_grading_stabilization"
+      ],
+      "source_ref": "Dawson County development forms and LDP guidance"
     },
     {
       "template_step_key": "certificate_occupancy",
       "phase_key": "inspections_closeout",
       "step_type": "permit",
       "title": "Receive certificate of occupancy",
-      "description": "Obtain occupancy authorization after final approvals.",
+      "description": "Occupancy authorization after all required final approvals are complete.",
       "permit_required": 1,
       "permit_name": "Certificate of Occupancy",
       "expected_duration_days": 2,
-      "depends_on_keys": ["final_inspections"],
-      "source_ref": "House template v3"
+      "depends_on_keys": [
+        "final_building_inspection"
+      ],
+      "source_ref": "Dawson County residential permitting"
+    },
+    {
+      "template_step_key": "owner_system_orientation",
+      "phase_key": "move_in",
+      "step_type": "closeout",
+      "title": "Complete final cleaning plus owner systems orientation and maintenance handoff",
+      "description": "Prepare turnover-ready home, then walk through panel labeling, shutoffs, filters, controls, and routine maintenance requirements.",
+      "permit_required": 0,
+      "expected_duration_days": 1,
+      "depends_on_keys": [
+        "certificate_occupancy"
+      ],
+      "source_ref": "House template v5"
+    },
+    {
+      "template_step_key": "owner_walkthrough",
+      "phase_key": "move_in",
+      "step_type": "closeout",
+      "title": "Owner final walk-through and punch list completion",
+      "description": "Verify all work items and documentation before move-in.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "owner_system_orientation"
+      ],
+      "source_ref": "House template v4"
     },
     {
       "template_step_key": "closeout_docs",
       "phase_key": "move_in",
       "step_type": "closeout",
-      "title": "Owner final walk-through",
-      "description": "Store permits, inspections, manuals, and warranty records.",
+      "title": "Collect closeout package (permits, inspection cards, manuals, warranties, as-builts)",
+      "description": "Store all final records required for operations, warranty, and resale.",
       "permit_required": 0,
-      "expected_duration_days": 3,
-      "depends_on_keys": ["certificate_occupancy"],
-      "source_ref": "House template v3"
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "owner_walkthrough"
+      ],
+      "source_ref": "House template v4"
     }
   ]
 }

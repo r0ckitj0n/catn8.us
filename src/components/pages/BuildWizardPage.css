@@ -51,6 +51,18 @@
   color: var(--catn8-bw-text-muted);
 }
 
+.build-wizard-launcher-template-picker {
+  margin-top: 16px;
+  width: min(460px, 100%);
+}
+
+.build-wizard-launcher-template-picker label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--catn8-bw-text-strong);
+}
+
 .build-wizard-launcher-grid {
   margin-top: 18px;
   display: grid;

@@ -1,0 +1,18 @@
+{
+  "template_kind": "county_water",
+  "description": "Water-source override for county/municipal water service via Etowah Water & Sewer.",
+  "remove_step_keys": [
+    "well_final_approval"
+  ],
+  "step_overrides": [
+    {
+      "template_step_key": "utility_availability",
+      "description": "Collect utility availability letters and connection requirements, including Etowah Water & Sewer capacity/tap requirements when applicable."
+    },
+    {
+      "template_step_key": "water_service_connection",
+      "title": "Complete county water service and meter setup (Etowah Water & Sewer)",
+      "description": "Finalize municipal/county potable water service, meter, and service-line connection required for finals and occupancy."
+    }
+  ]
+}

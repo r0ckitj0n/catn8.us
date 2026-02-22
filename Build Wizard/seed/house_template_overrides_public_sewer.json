@@ -1,0 +1,24 @@
+{
+  "template_kind": "public_sewer",
+  "description": "Override only the wastewater/utility deltas for public sewer projects.",
+  "remove_step_keys": [
+    "septic_installation",
+    "septic_final_approval"
+  ],
+  "step_overrides": [
+    {
+      "template_step_key": "septic_permit",
+      "title": "Obtain public sewer availability/connection approval",
+      "description": "Obtain utility authority approval, tap requirements, and service commitments for sanitary sewer connection.",
+      "permit_name": "Public Sewer Connection Approval",
+      "source_ref": "Dawson County utility approval requirements"
+    },
+    {
+      "template_step_key": "final_grading_stabilization",
+      "depends_on_keys": [
+        "driveway_installation",
+        "water_service_connection"
+      ]
+    }
+  ]
+}

@@ -16,7 +16,7 @@ export type BuildTabId =
 
 export type StepDraftMap = Record<number, IBuildWizardStep>;
 
-export type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number }>;
+export type DocumentDraftMap = Record<number, { kind: string; caption: string; step_id: number; receipt_amount: string }>;
 
 export type StepType = IBuildWizardStep['step_type'];
 

@@ -228,23 +228,33 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     await load(nextProjectId);
   }, [load]);
 
-  const createProject = React.useCallback(async (title: string, seedMode: 'blank' | 'spreadsheet' = 'blank') => {
-    try {
-      const res = await ApiClient.post<CreateProjectResponse>('/api/build_wizard.php?action=create_project', {
-        title,
-        seed_mode: seedMode,
-      });
-      const nextId = Number(res?.project_id || 0);
-      if (nextId > 0) {
-        await load(nextId);
+  const createProject = React.useCallback(
+    async (
+      title: string,
+      seedMode: 'blank' | 'spreadsheet' = 'blank',
+      wastewaterKind: 'septic' | 'public_sewer' = 'septic',
+      waterKind: 'county_water' | 'private_well' = 'county_water',
+    ) => {
+      try {
+        const res = await ApiClient.post<CreateProjectResponse>('/api/build_wizard.php?action=create_project', {
+          title,
+          seed_mode: seedMode,
+          wastewater_kind: wastewaterKind,
+          water_kind: waterKind,
+        });
+        const nextId = Number(res?.project_id || 0);
+        if (nextId > 0) {
+          await load(nextId);
+        }
+        onToast?.({ tone: 'success', message: 'New build created.' });
+        return nextId;
+      } catch (err: any) {
+        onToast?.({ tone: 'error', message: err?.message || 'Failed to create build' });
+        return 0;
       }
-      onToast?.({ tone: 'success', message: 'New build created.' });
-      return nextId;
-    } catch (err: any) {
-      onToast?.({ tone: 'error', message: err?.message || 'Failed to create build' });
-      return 0;
-    }
-  }, [load, onToast]);
+    },
+    [load, onToast],
+  );
 
   const saveQuestionnaire = React.useCallback(async () => {
     if (projectId <= 0) {
@@ -590,7 +600,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
 
   const updateDocument = React.useCallback(async (
     documentId: number,
-    patch: { kind?: string; caption?: string | null; step_id?: number | null },
+    patch: { kind?: string; caption?: string | null; step_id?: number | null; receipt_amount?: number | null },
   ) => {
     if (documentId <= 0) {
       return null;
@@ -604,6 +614,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'step_id')) {
       body.step_id = patch.step_id;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_amount')) {
+      body.receipt_amount = patch.receipt_amount;
     }
     if (Object.keys(body).length <= 1) {
       return null;

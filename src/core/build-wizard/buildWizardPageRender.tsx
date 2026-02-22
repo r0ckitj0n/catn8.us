@@ -205,6 +205,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
   const [view, setView] = React.useState<WizardView>(initialUrlState.view);
   const [activeTab, setActiveTab] = React.useState<BuildTabId>('start');
+  const [newHomeWastewaterKind, setNewHomeWastewaterKind] = React.useState<'septic' | 'public_sewer'>('septic');
+  const [newHomeWaterKind, setNewHomeWaterKind] = React.useState<'county_water' | 'private_well'>('county_water');
   const [docKind, setDocKind] = React.useState<string>('blueprint');
   const [docPhaseKey, setDocPhaseKey] = React.useState<string>('general');
   const [docStepId, setDocStepId] = React.useState<number>(0);
@@ -1268,6 +1270,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         kind: doc.kind || 'other',
         caption: doc.caption || '',
         step_id: Number(doc.step_id || 0),
+        receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
+          ? String(doc.receipt_amount)
+          : '',
       };
     });
     setDocumentDrafts(nextDrafts);
@@ -1359,7 +1364,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const onCreateNewBuild = async () => {
     const today = toIsoDate(new Date());
-    const nextId = await createProject(`New Home Plan ${today}`, 'blank');
+    const nextId = await createProject(`New Home Plan ${today}`, 'blank', newHomeWastewaterKind, newHomeWaterKind);
     if (nextId > 0) {
       setActiveTab('start');
       setView('build');
@@ -2092,7 +2097,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     };
   }, [recoveryJobId, recoveryStatus, recoveryPolling, fetchSingletreeRecoveryStatus]);
 
-  const onSaveDocument = async (documentId: number, patch: { kind?: string; caption?: string | null; step_id?: number | null }) => {
+  const onSaveDocument = async (documentId: number, patch: { kind?: string; caption?: string | null; step_id?: number | null; receipt_amount?: number | null }) => {
     if (documentSavingId === documentId) {
       return;
     }
@@ -2104,23 +2109,32 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
-  const updateDocumentDraft = (documentId: number, patch: Partial<{ kind: string; caption: string; step_id: number }>) => {
+  const updateDocumentDraft = (documentId: number, patch: Partial<{ kind: string; caption: string; step_id: number; receipt_amount: string }>) => {
     setDocumentDrafts((prev) => ({
       ...prev,
       [documentId]: {
         kind: patch.kind ?? (prev[documentId]?.kind || 'other'),
         caption: patch.caption ?? (prev[documentId]?.caption || ''),
         step_id: patch.step_id ?? (prev[documentId]?.step_id || 0),
+        receipt_amount: patch.receipt_amount ?? (prev[documentId]?.receipt_amount || ''),
       },
     }));
   };
 
   const onSaveDocumentDraft = async (doc: IBuildWizardDocument) => {
-    const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
+    const draft = documentDrafts[doc.id] || {
+      kind: doc.kind || 'other',
+      caption: doc.caption || '',
+      step_id: Number(doc.step_id || 0),
+      receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
+        ? String(doc.receipt_amount)
+        : '',
+    };
     await onSaveDocument(doc.id, {
       kind: draft.kind,
       caption: draft.caption.trim() || null,
       step_id: draft.step_id > 0 ? draft.step_id : null,
+      receipt_amount: draft.kind === 'receipt' ? toNumberOrNull(draft.receipt_amount) : null,
     });
   };
 
@@ -3132,6 +3146,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         })}
                       />
                     </label>
+                    <div className="build-wizard-type-note">
+                      Receipts: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
+                    </div>
                   </>
                 ) : null}
               </div>
@@ -3175,6 +3192,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           : (draft.step_type === 'photos' ? 'photo' : 'progress_photo');
                         void uploadDocument(uploadKind, file, step.id, step.title, step.phase_key);
                       }
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
+                  Upload Receipts
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      files.forEach((file) => {
+                        void uploadDocument('receipt', file, step.id, step.title, step.phase_key);
+                      });
                       e.currentTarget.value = '';
                     }}
                   />
@@ -3482,6 +3514,36 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         </div>
         <h1>Build Wizard</h1>
         <p>Choose an existing build or start a new build.</p>
+        <div className="build-wizard-launcher-template-picker">
+          <label htmlFor="build-wizard-template-wastewater-kind">Wastewater setup</label>
+          <select
+            id="build-wizard-template-wastewater-kind"
+            className="form-select form-select-sm"
+            value={newHomeWastewaterKind}
+            onChange={(e) => {
+              const next = String(e.target.value || '').trim();
+              setNewHomeWastewaterKind(next === 'public_sewer' ? 'public_sewer' : 'septic');
+            }}
+          >
+            <option value="septic">Dawson County Home - Septic</option>
+            <option value="public_sewer">Dawson County Home - Public Sewer</option>
+          </select>
+        </div>
+        <div className="build-wizard-launcher-template-picker">
+          <label htmlFor="build-wizard-template-water-kind">Water source</label>
+          <select
+            id="build-wizard-template-water-kind"
+            className="form-select form-select-sm"
+            value={newHomeWaterKind}
+            onChange={(e) => {
+              const next = String(e.target.value || '').trim();
+              setNewHomeWaterKind(next === 'private_well' ? 'private_well' : 'county_water');
+            }}
+          >
+            <option value="county_water">County Water (Etowah Water &amp; Sewer)</option>
+            <option value="private_well">Private Well</option>
+          </select>
+        </div>
 
         <div className="build-wizard-launcher-grid">
           <button className="build-wizard-launch-card is-new" onClick={() => void onCreateNewBuild()}>
@@ -4199,7 +4261,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       </label>
                     </div>
                     {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
-                      const draft = documentDrafts[doc.id] || { kind: doc.kind || 'other', caption: doc.caption || '', step_id: Number(doc.step_id || 0) };
+                      const draft = documentDrafts[doc.id] || {
+                        kind: doc.kind || 'other',
+                        caption: doc.caption || '',
+                        step_id: Number(doc.step_id || 0),
+                        receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
+                          ? String(doc.receipt_amount)
+                          : '',
+                      };
                       const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
                       const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
 
@@ -4285,6 +4354,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   onChange={(e) => updateDocumentDraft(doc.id, { caption: e.target.value })}
                                 />
                               </label>
+                              {draft.kind === 'receipt' ? (
+                                <label>
+                                  Receipt Amount
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={draft.receipt_amount}
+                                    onChange={(e) => updateDocumentDraft(doc.id, { receipt_amount: e.target.value })}
+                                  />
+                                </label>
+                              ) : null}
                             </div>
                             <div className="build-wizard-doc-manager-actions">
                               {(isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc) || Number(doc.is_image) === 1) ? (

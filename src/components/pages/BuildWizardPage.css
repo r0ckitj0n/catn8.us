@@ -173,6 +173,39 @@
 .build-wizard-launch-card.is-new {
   border-color: #2868c8;
   background: #edf4ff;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: left;
+  padding: 18px;
+  gap: 14px;
+}
+
+.build-wizard-launch-card.is-new .build-wizard-launch-title {
+  margin: 0;
+}
+
+.build-wizard-launch-card.is-new .build-wizard-launcher-template-picker {
+  margin-top: 0;
+  width: 100%;
+}
+
+.build-wizard-launch-icon-btn {
+  all: unset;
+  align-self: flex-start;
+  display: inline-flex;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.build-wizard-launch-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(23, 39, 63, 0.16);
+}
+
+.build-wizard-launch-icon-btn:focus-visible {
+  outline: 2px solid var(--catn8-bw-brand);
+  outline-offset: 3px;
 }
 
 .build-wizard-launch-title {

@@ -3514,45 +3514,52 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         </div>
         <h1>Build Wizard</h1>
         <p>Choose an existing build or start a new build.</p>
-        <div className="build-wizard-launcher-template-picker">
-          <label htmlFor="build-wizard-template-wastewater-kind">Wastewater setup</label>
-          <select
-            id="build-wizard-template-wastewater-kind"
-            className="form-select form-select-sm"
-            value={newHomeWastewaterKind}
-            onChange={(e) => {
-              const next = String(e.target.value || '').trim();
-              setNewHomeWastewaterKind(next === 'public_sewer' ? 'public_sewer' : 'septic');
-            }}
-          >
-            <option value="septic">Dawson County Home - Septic</option>
-            <option value="public_sewer">Dawson County Home - Public Sewer</option>
-          </select>
-        </div>
-        <div className="build-wizard-launcher-template-picker">
-          <label htmlFor="build-wizard-template-water-kind">Water source</label>
-          <select
-            id="build-wizard-template-water-kind"
-            className="form-select form-select-sm"
-            value={newHomeWaterKind}
-            onChange={(e) => {
-              const next = String(e.target.value || '').trim();
-              setNewHomeWaterKind(next === 'private_well' ? 'private_well' : 'county_water');
-            }}
-          >
-            <option value="county_water">County Water (Etowah Water &amp; Sewer)</option>
-            <option value="private_well">Private Well</option>
-          </select>
-        </div>
-
         <div className="build-wizard-launcher-grid">
-          <button className="build-wizard-launch-card is-new" onClick={() => void onCreateNewBuild()}>
-            <div className="build-wizard-thumb">
-              <div className="build-wizard-thumb-roof" />
-              <div className="build-wizard-thumb-body" />
-            </div>
+          <div className="build-wizard-launch-card is-new">
+            <button
+              type="button"
+              className="build-wizard-launch-icon-btn"
+              onClick={() => void onCreateNewBuild()}
+              aria-label="Create a new home build project"
+              title="Create a new home build project"
+            >
+              <div className="build-wizard-thumb">
+                <div className="build-wizard-thumb-roof" />
+                <div className="build-wizard-thumb-body" />
+              </div>
+            </button>
             <span className="build-wizard-launch-title">Build a New Home</span>
-          </button>
+            <div className="build-wizard-launcher-template-picker">
+              <label htmlFor="build-wizard-template-wastewater-kind">Wastewater setup</label>
+              <select
+                id="build-wizard-template-wastewater-kind"
+                className="form-select form-select-sm"
+                value={newHomeWastewaterKind}
+                onChange={(e) => {
+                  const next = String(e.target.value || '').trim();
+                  setNewHomeWastewaterKind(next === 'public_sewer' ? 'public_sewer' : 'septic');
+                }}
+              >
+                <option value="septic">Dawson County Home - Septic</option>
+                <option value="public_sewer">Dawson County Home - Public Sewer</option>
+              </select>
+            </div>
+            <div className="build-wizard-launcher-template-picker">
+              <label htmlFor="build-wizard-template-water-kind">Water source</label>
+              <select
+                id="build-wizard-template-water-kind"
+                className="form-select form-select-sm"
+                value={newHomeWaterKind}
+                onChange={(e) => {
+                  const next = String(e.target.value || '').trim();
+                  setNewHomeWaterKind(next === 'private_well' ? 'private_well' : 'county_water');
+                }}
+              >
+                <option value="county_water">County Water (Etowah Water &amp; Sewer)</option>
+                <option value="private_well">Private Well</option>
+              </select>
+            </div>
+          </div>
 
           {projects.map((p) => (
             <div

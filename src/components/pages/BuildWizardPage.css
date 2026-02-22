@@ -629,8 +629,9 @@
 
 .build-wizard-step-header-right {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .build-wizard-step-header-left {
@@ -859,6 +860,28 @@
   background: #e1eeff;
 }
 
+.build-wizard-step-attachment-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #b9cce6;
+  background: #f2f8ff;
+  color: #2e4f74;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.build-wizard-step-attachment-indicator svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .build-wizard-step-delete {
   width: 26px;
   height: 26px;
@@ -870,9 +893,6 @@
   background: var(--catn8-bw-surface-0);
   color: #7f1228;
   padding: 0;
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
 }
 
 .build-wizard-step-delete svg {

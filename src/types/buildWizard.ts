@@ -3,6 +3,7 @@ export interface IBuildWizardStepNote {
   step_id: number;
   note_text: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface IBuildWizardStepAuditLog {
@@ -62,6 +63,7 @@ export interface IBuildWizardDocument {
   id: number;
   project_id: number;
   step_id: number | null;
+  receipt_parent_document_id: number | null;
   step_phase_key: string | null;
   step_title: string | null;
   kind: string;

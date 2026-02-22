@@ -184,6 +184,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     deleteStep,
     deleteProject,
     addStepNote,
+    updateStepNote,
+    deleteStepNote,
+    createStepReceipt,
     uploadDocument,
     replaceDocument,
     deleteDocument,
@@ -215,6 +218,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [lotSizeInput, setLotSizeInput] = React.useState<string>(lotSizeSqftToDisplayInput(questionnaire.lot_size_sqft));
   const [stepDrafts, setStepDrafts] = React.useState<StepDraftMap>({});
   const [noteDraftByStep, setNoteDraftByStep] = React.useState<Record<number, string>>({});
+  const [editingNoteTextById, setEditingNoteTextById] = React.useState<Record<number, string>>({});
+  const [savingNoteId, setSavingNoteId] = React.useState<number>(0);
+  const [deletingNoteId, setDeletingNoteId] = React.useState<number>(0);
   const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
@@ -263,13 +269,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [deskAssignmentStepId, setDeskAssignmentStepId] = React.useState<number>(0);
   const [deskAutoAssignBusy, setDeskAutoAssignBusy] = React.useState<boolean>(false);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
-  const [receiptUploadDraftByStep, setReceiptUploadDraftByStep] = React.useState<Record<number, {
+  const [receiptEditorOpenByStep, setReceiptEditorOpenByStep] = React.useState<Record<number, boolean>>({});
+  const [editingReceiptDocumentIdByStep, setEditingReceiptDocumentIdByStep] = React.useState<Record<number, number>>({});
+  const [receiptDraftByStep, setReceiptDraftByStep] = React.useState<Record<number, {
     receipt_title: string;
     receipt_vendor: string;
     receipt_date: string;
     receipt_amount: string;
     receipt_notes: string;
   }>>({});
+  const [receiptAttachmentDraftByStep, setReceiptAttachmentDraftByStep] = React.useState<Record<number, File[]>>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [unlinkingDocumentId, setUnlinkingDocumentId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
@@ -466,9 +475,29 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [steps]);
 
   React.useEffect(() => {
-    setReceiptUploadDraftByStep((prev) => {
+    const validIds = new Set(steps.map((step) => step.id));
+    setReceiptEditorOpenByStep((prev) => {
       const next: typeof prev = {};
-      const validIds = new Set(steps.map((step) => step.id));
+      Object.keys(prev).forEach((idText) => {
+        const stepId = Number(idText);
+        if (validIds.has(stepId) && prev[stepId]) {
+          next[stepId] = true;
+        }
+      });
+      return next;
+    });
+    setReceiptDraftByStep((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const stepId = Number(idText);
+        if (validIds.has(stepId)) {
+          next[stepId] = prev[stepId];
+        }
+      });
+      return next;
+    });
+    setReceiptAttachmentDraftByStep((prev) => {
+      const next: typeof prev = {};
       Object.keys(prev).forEach((idText) => {
         const stepId = Number(idText);
         if (validIds.has(stepId)) {
@@ -1116,7 +1145,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [linkedStepOptions]);
 
   const attachableProjectDocuments = React.useMemo(() => {
-    return [...documents].sort((a, b) => {
+    return documents
+      .filter((doc) => String(doc.kind || '').trim() !== 'receipt_attachment')
+      .sort((a, b) => {
       const nameCmp = sortAlpha(String(a.original_name || ''), String(b.original_name || ''));
       if (nameCmp !== 0) {
         return nameCmp;
@@ -1127,6 +1158,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const documentManagerKindOptions = React.useMemo(() => {
     const fromDocs = documents
+      .filter((doc) => String(doc.kind || '').trim() !== 'receipt_attachment')
       .map((doc) => String(doc.kind || '').trim())
       .filter(Boolean);
     const fromSettings = docKindOptions
@@ -1154,6 +1186,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const filteredDocumentManagerDocs = React.useMemo(() => {
     return documents.filter((doc) => {
       const docKindValue = String(doc.kind || '').trim();
+      if (docKindValue === 'receipt_attachment') {
+        return false;
+      }
       if (documentManagerKindFilter !== 'all' && docKindValue !== documentManagerKindFilter) {
         return false;
       }
@@ -1474,6 +1509,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return true;
   };
 
+  const noteEditedAtLabel = React.useCallback((note: { created_at: string; updated_at?: string | null }): string => {
+    const createdAt = String(note.created_at || '').trim();
+    const updatedAt = String(note.updated_at || '').trim();
+    if (!createdAt || !updatedAt || createdAt === updatedAt) {
+      return '';
+    }
+    return formatDate(updatedAt);
+  }, []);
+
   const requestConfirmation = React.useCallback((config: {
     title: string;
     message: string;
@@ -1501,6 +1545,60 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return null;
     });
   }, []);
+
+  const onStartEditNote = (noteId: number, noteText: string) => {
+    setEditingNoteTextById((prev) => ({ ...prev, [noteId]: noteText }));
+  };
+
+  const onCancelEditNote = (noteId: number) => {
+    setEditingNoteTextById((prev) => {
+      const next = { ...prev };
+      delete next[noteId];
+      return next;
+    });
+  };
+
+  const onSaveEditedNote = async (stepId: number, noteId: number) => {
+    if (savingNoteId === noteId) {
+      return;
+    }
+    const draft = String(editingNoteTextById[noteId] || '').trim();
+    if (!draft) {
+      onToast?.({ tone: 'warning', message: 'Note cannot be empty.' });
+      return;
+    }
+    setSavingNoteId(noteId);
+    try {
+      const ok = await updateStepNote(stepId, noteId, draft);
+      if (ok) {
+        onCancelEditNote(noteId);
+      }
+    } finally {
+      setSavingNoteId(0);
+    }
+  };
+
+  const onDeleteStepNoteById = async (stepId: number, noteId: number) => {
+    if (deletingNoteId === noteId) {
+      return;
+    }
+    const confirmed = await requestConfirmation({
+      title: 'Delete Note?',
+      message: 'Delete this note?\n\nThis cannot be undone.',
+      confirmLabel: 'Delete',
+      confirmButtonClass: 'btn btn-danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+    setDeletingNoteId(noteId);
+    try {
+      await deleteStepNote(stepId, noteId);
+      onCancelEditNote(noteId);
+    } finally {
+      setDeletingNoteId(0);
+    }
+  };
 
   const onDeleteDocument = async (docId: number, docName: string) => {
     if (docId <= 0 || deletingDocumentId === docId) {
@@ -2136,11 +2234,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     },
   ) => {
     if (documentSavingId === documentId) {
-      return;
+      return null;
     }
     setDocumentSavingId(documentId);
     try {
-      await updateDocument(documentId, patch);
+      return await updateDocument(documentId, patch);
     } finally {
       setDocumentSavingId(0);
     }
@@ -2203,26 +2301,109 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   };
 
-  const onUploadStepReceipts = (step: IBuildWizardStep, files: FileList | null) => {
-    if (!files || files.length === 0) {
+  const onSaveReceiptForStep = async (step: IBuildWizardStep) => {
+    if (projectId <= 0) {
       return;
     }
-    const uploadDraft = receiptUploadDraftByStep[step.id] || {
+    const draft = receiptDraftByStep[step.id] || {
       receipt_title: '',
       receipt_vendor: '',
       receipt_date: '',
       receipt_amount: '',
       receipt_notes: '',
     };
-    const receiptMeta = {
-      receipt_amount: toNumberOrNull(uploadDraft.receipt_amount),
-      receipt_title: toStringOrNull(uploadDraft.receipt_title),
-      receipt_vendor: toStringOrNull(uploadDraft.receipt_vendor),
-      receipt_date: toStringOrNull(uploadDraft.receipt_date),
-      receipt_notes: toStringOrNull(uploadDraft.receipt_notes),
-    };
+    const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
+    const existingReceipt = editingReceiptDocumentId > 0
+      ? documents.find((doc) => doc.id === editingReceiptDocumentId)
+      : null;
+    let receiptId = 0;
+
+    if (existingReceipt) {
+      const updated = await onSaveDocument(existingReceipt.id, {
+        kind: 'receipt',
+        step_id: step.id,
+        caption: toStringOrNull(draft.receipt_title || step.title),
+        receipt_title: toStringOrNull(draft.receipt_title),
+        receipt_vendor: toStringOrNull(draft.receipt_vendor),
+        receipt_date: toStringOrNull(draft.receipt_date),
+        receipt_amount: toNumberOrNull(draft.receipt_amount),
+        receipt_notes: toStringOrNull(draft.receipt_notes),
+      });
+      if (!updated) {
+        return;
+      }
+      receiptId = existingReceipt.id;
+    } else {
+      const created = await createStepReceipt({
+        project_id: projectId,
+        step_id: step.id,
+        receipt_title: toStringOrNull(draft.receipt_title),
+        receipt_vendor: toStringOrNull(draft.receipt_vendor),
+        receipt_date: toStringOrNull(draft.receipt_date),
+        receipt_amount: toNumberOrNull(draft.receipt_amount),
+        receipt_notes: toStringOrNull(draft.receipt_notes),
+        caption: toStringOrNull(draft.receipt_title || step.title),
+      });
+      if (!created?.id) {
+        return;
+      }
+      receiptId = created.id;
+    }
+
+    const files = receiptAttachmentDraftByStep[step.id] || [];
+    for (const file of files) {
+      await uploadDocument(
+        'receipt_attachment',
+        file,
+        step.id,
+        `Attachment: ${draft.receipt_title || step.title}`,
+        step.phase_key,
+        undefined,
+        { receipt_parent_document_id: receiptId },
+      );
+    }
+    setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
+      receipt_title: '',
+      receipt_vendor: '',
+      receipt_date: '',
+      receipt_amount: '',
+      receipt_notes: '',
+    } }));
+    setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
+    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
+    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
+  };
+
+  const onStartEditReceiptForStep = (step: IBuildWizardStep, doc: IBuildWizardDocument) => {
+    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: doc.id }));
+    setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
+      receipt_title: doc.receipt_title || '',
+      receipt_vendor: doc.receipt_vendor || '',
+      receipt_date: doc.receipt_date || '',
+      receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
+        ? String(doc.receipt_amount)
+        : '',
+      receipt_notes: doc.receipt_notes || '',
+    } }));
+    setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
+    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: true }));
+  };
+
+  const onUploadReceiptAttachments = (receiptDoc: IBuildWizardDocument, files: FileList | null) => {
+    if (!files || files.length === 0) {
+      return;
+    }
+    const stepId = Number(receiptDoc.step_id || 0);
     Array.from(files).forEach((file) => {
-      void uploadDocument('receipt', file, step.id, step.title, step.phase_key, receiptMeta);
+      void uploadDocument(
+        'receipt_attachment',
+        file,
+        stepId > 0 ? stepId : undefined,
+        `Attachment: ${receiptDoc.receipt_title || receiptDoc.original_name}`,
+        receiptDoc.step_phase_key || undefined,
+        undefined,
+        { receipt_parent_document_id: receiptDoc.id },
+      );
     });
   };
 
@@ -2576,9 +2757,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
-  const formatAuditValue = (value: unknown): string => {
+  const currencyAuditFields = new Set([
+    'estimated_cost',
+    'actual_cost',
+    'purchase_unit_price',
+    'receipt_total',
+    'receipt_amount',
+    'hoa_fee_monthly',
+  ]);
+
+  const formatAuditValue = (value: unknown, fieldName?: string): string => {
     if (value === null || typeof value === 'undefined') {
       return 'null';
+    }
+    const normalizedField = String(fieldName || '').trim().toLowerCase();
+    if (normalizedField && currencyAuditFields.has(normalizedField)) {
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue)) {
+        return formatCurrency(numericValue);
+      }
     }
     if (typeof value === 'string') {
       return value;
@@ -2651,14 +2848,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const isExpanded = expandedStepById[step.id] === true;
           const stepAttachmentCount = documents.reduce((count, doc) => (Number(doc.step_id || 0) === step.id ? count + 1 : count), 0);
           const stepReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt');
-          const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt');
-          const receiptUploadDraft = receiptUploadDraftByStep[step.id] || {
+          const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
+          const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
+          const stepReceiptTotal = stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0);
+          const receiptDraft = receiptDraftByStep[step.id] || {
             receipt_title: '',
             receipt_vendor: '',
             receipt_date: '',
             receipt_amount: '',
             receipt_notes: '',
           };
+          const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
           return (
             <React.Fragment key={step.id}>
             <div
@@ -3267,6 +3467,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 >
                   Add Note
                 </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  disabled={stepReadOnly}
+                  onClick={() => {
+                    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
+                    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: !prev[step.id] }));
+                  }}
+                >
+                  {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Receipt' : 'Add Receipt'}
+                </button>
                 {draft.step_type === 'purchase' ? (
                   <button
                     className="btn btn-outline-primary btn-sm"
@@ -3404,87 +3614,109 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <div className="build-wizard-step-receipts-head">
                   <div className="build-wizard-step-assignees-label">Receipts</div>
                   <div className="build-wizard-step-receipts-summary">
-                    {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | {formatCurrency(Number(draft.receipt_total || 0))}
+                    {stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {formatCurrency(stepReceiptTotal)}
                   </div>
                 </div>
-                <div className="build-wizard-step-receipt-upload-grid">
-                  <label>
-                    Title
-                    <input
-                      type="text"
-                      value={receiptUploadDraft.receipt_title}
-                      onChange={(e) => setReceiptUploadDraftByStep((prev) => ({
-                        ...prev,
-                        [step.id]: { ...receiptUploadDraft, receipt_title: e.target.value },
-                      }))}
-                    />
-                  </label>
-                  <label>
-                    Vendor
-                    <input
-                      type="text"
-                      value={receiptUploadDraft.receipt_vendor}
-                      onChange={(e) => setReceiptUploadDraftByStep((prev) => ({
-                        ...prev,
-                        [step.id]: { ...receiptUploadDraft, receipt_vendor: e.target.value },
-                      }))}
-                    />
-                  </label>
-                  <label>
-                    Date
-                    <input
-                      type="date"
-                      value={receiptUploadDraft.receipt_date}
-                      onChange={(e) => setReceiptUploadDraftByStep((prev) => ({
-                        ...prev,
-                        [step.id]: { ...receiptUploadDraft, receipt_date: e.target.value },
-                      }))}
-                    />
-                  </label>
-                  <label>
-                    Amount
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={receiptUploadDraft.receipt_amount}
-                      onChange={(e) => setReceiptUploadDraftByStep((prev) => ({
-                        ...prev,
-                        [step.id]: { ...receiptUploadDraft, receipt_amount: e.target.value },
-                      }))}
-                    />
-                  </label>
-                  <label className="is-wide">
-                    Notes
-                    <input
-                      type="text"
-                      value={receiptUploadDraft.receipt_notes}
-                      onChange={(e) => setReceiptUploadDraftByStep((prev) => ({
-                        ...prev,
-                        [step.id]: { ...receiptUploadDraft, receipt_notes: e.target.value },
-                      }))}
-                    />
-                  </label>
-                </div>
-                <div className="build-wizard-step-receipt-upload-actions">
-                  <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
-                    Upload Receipts
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      multiple
-                      onChange={(e) => {
-                        onUploadStepReceipts(step, e.target.files);
-                        e.currentTarget.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
+                {receiptEditorOpen ? (
+                  <div className="build-wizard-note-editor">
+                    <div className="build-wizard-muted">
+                      {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing receipt' : 'New receipt'}
+                    </div>
+                    <div className="build-wizard-step-receipt-upload-grid">
+                      <label>
+                        Title
+                        <input
+                          type="text"
+                          value={receiptDraft.receipt_title}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: { ...receiptDraft, receipt_title: e.target.value },
+                          }))}
+                        />
+                      </label>
+                      <label>
+                        Vendor
+                        <input
+                          type="text"
+                          value={receiptDraft.receipt_vendor}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: { ...receiptDraft, receipt_vendor: e.target.value },
+                          }))}
+                        />
+                      </label>
+                      <label>
+                        Date
+                        <input
+                          type="date"
+                          value={receiptDraft.receipt_date}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: { ...receiptDraft, receipt_date: e.target.value },
+                          }))}
+                        />
+                      </label>
+                      <label>
+                        Amount
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={receiptDraft.receipt_amount}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: { ...receiptDraft, receipt_amount: e.target.value },
+                          }))}
+                        />
+                      </label>
+                      <label className="is-wide">
+                        Notes
+                        <input
+                          type="text"
+                          value={receiptDraft.receipt_notes}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: { ...receiptDraft, receipt_notes: e.target.value },
+                          }))}
+                        />
+                      </label>
+                      <label className="is-wide">
+                        Receipt Attachment(s)
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: files }));
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="build-wizard-note-editor-actions">
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => { void onSaveReceiptForStep(step); }}
+                      >
+                        {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Receipt' : 'Save Receipt'}
+                      </button>
+                      <button
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => {
+                          setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
+                          setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {stepReceiptDocuments.length > 0 ? (
                   <div className="build-wizard-step-receipt-list">
                     {stepReceiptDocuments.map((doc) => {
-                      const draftDoc = buildDocumentDraft(doc);
+                      const attachments = stepReceiptAttachmentDocuments.filter((attachment) => Number(attachment.receipt_parent_document_id || 0) === doc.id);
                       return (
                         <div className="build-wizard-step-receipt-row" key={`step-${step.id}-receipt-${doc.id}`}>
                           <div className="build-wizard-step-receipt-file">
@@ -3494,64 +3726,55 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                               onClick={() => void openDocumentPreview(doc)}
                               title={doc.original_name}
                             >
-                              {draftDoc.receipt_title?.trim() || doc.original_name}
+                              {doc.receipt_title?.trim() || doc.caption || doc.original_name}
                             </button>
-                            <span>{doc.original_name}</span>
+                            <span>
+                              Vendor: {doc.receipt_vendor || '-'} | Date: {doc.receipt_date || '-'} | Amount: {formatCurrency(Number(doc.receipt_amount || 0))}
+                            </span>
                           </div>
-                          <div className="build-wizard-step-receipt-fields">
-                            <label>
-                              Title
-                              <input
-                                type="text"
-                                value={draftDoc.receipt_title}
-                                onChange={(e) => updateDocumentDraft(doc.id, { receipt_title: e.target.value })}
-                              />
-                            </label>
-                            <label>
-                              Vendor
-                              <input
-                                type="text"
-                                value={draftDoc.receipt_vendor}
-                                onChange={(e) => updateDocumentDraft(doc.id, { receipt_vendor: e.target.value })}
-                              />
-                            </label>
-                            <label>
-                              Date
-                              <input
-                                type="date"
-                                value={draftDoc.receipt_date}
-                                onChange={(e) => updateDocumentDraft(doc.id, { receipt_date: e.target.value })}
-                              />
-                            </label>
-                            <label>
-                              Amount
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                inputMode="decimal"
-                                value={draftDoc.receipt_amount}
-                                onChange={(e) => updateDocumentDraft(doc.id, { receipt_amount: e.target.value })}
-                              />
-                            </label>
-                            <label className="is-wide">
-                              Notes
-                              <input
-                                type="text"
-                                value={draftDoc.receipt_notes}
-                                onChange={(e) => updateDocumentDraft(doc.id, { receipt_notes: e.target.value })}
-                              />
-                            </label>
+                          <div className="build-wizard-step-receipt-attachments">
+                            <div className="build-wizard-step-receipt-attachments-label">
+                              Attachments ({attachments.length})
+                            </div>
+                            {attachments.length > 0 ? (
+                              <div className="build-wizard-step-receipt-attachments-list">
+                                {attachments.map((attachment) => (
+                                  <button
+                                    key={`receipt-${doc.id}-attachment-${attachment.id}`}
+                                    type="button"
+                                    className="build-wizard-step-receipt-link"
+                                    onClick={() => void openDocumentPreview(attachment)}
+                                    title={attachment.original_name}
+                                  >
+                                    {attachment.original_name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="build-wizard-muted">No attachments uploaded yet.</div>
+                            )}
                           </div>
                           <div className="build-wizard-step-receipt-actions">
                             <button
                               type="button"
-                              className="btn btn-outline-success btn-sm"
-                              onClick={() => void onSaveDocumentDraft(doc)}
-                              disabled={documentSavingId === doc.id}
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => onStartEditReceiptForStep(step, doc)}
+                              disabled={stepReadOnly}
                             >
-                              {documentSavingId === doc.id ? 'Saving...' : 'Save'}
+                              Edit
                             </button>
+                            <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
+                              Upload Attachment
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                multiple
+                                onChange={(e) => {
+                                  onUploadReceiptAttachments(doc, e.target.files);
+                                  e.currentTarget.value = '';
+                                }}
+                              />
+                            </label>
                             <button
                               type="button"
                               className="btn btn-outline-danger btn-sm"
@@ -3581,7 +3804,76 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               {step.notes.length > 0 ? (
                 <div className="build-wizard-note-list">
                   {step.notes.map((n) => (
-                    <div key={n.id}><strong>{n.created_at}</strong>: {n.note_text}</div>
+                    <div key={n.id}>
+                      <strong>{formatDate(n.created_at)}</strong>:
+                      {Object.prototype.hasOwnProperty.call(editingNoteTextById, n.id) ? (
+                        <div className="build-wizard-note-editor">
+                          <textarea
+                            rows={2}
+                            value={editingNoteTextById[n.id] || ''}
+                            onChange={(e) => setEditingNoteTextById((prev) => ({ ...prev, [n.id]: e.target.value }))}
+                          />
+                          <div className="build-wizard-note-editor-actions">
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => { void onSaveEditedNote(step.id, n.id); }}
+                              disabled={savingNoteId === n.id}
+                            >
+                              {savingNoteId === n.id ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => onCancelEditNote(n.id)}
+                              disabled={savingNoteId === n.id}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-sm"
+                              onClick={() => { void onDeleteStepNoteById(step.id, n.id); }}
+                              disabled={deletingNoteId === n.id || savingNoteId === n.id}
+                            >
+                              {deletingNoteId === n.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {' '}
+                          {n.note_text}
+                          {noteEditedAtLabel(n) ? (
+                            <>
+                              {' '}
+                              <em>(Edited {noteEditedAtLabel(n)})</em>
+                            </>
+                          ) : null}
+                          {!stepReadOnly ? (
+                            <>
+                              {' '}
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => onStartEditNote(n.id, n.note_text)}
+                              >
+                                Edit
+                              </button>
+                              {' '}
+                              <button
+                                type="button"
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => { void onDeleteStepNoteById(step.id, n.id); }}
+                                disabled={deletingNoteId === n.id}
+                              >
+                                {deletingNoteId === n.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -4401,8 +4693,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     </div>
                     {step.notes.length ? (
                       <div className="build-wizard-completed-notes">
-                        {step.notes.map((note) => (
-                          <div key={note.id}><strong>{note.created_at}</strong>: {note.note_text}</div>
+                    {step.notes.map((note) => (
+                          <div key={note.id}>
+                            <strong>{formatDate(note.created_at)}</strong>: {note.note_text}
+                            {noteEditedAtLabel(note) ? ` (Edited ${noteEditedAtLabel(note)})` : ''}
+                          </div>
                         ))}
                       </div>
                     ) : <div className="build-wizard-muted">No notes on this step.</div>}
@@ -5152,8 +5447,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                 return (
                                   <div key={`step-log-${log.id}-${field}`}>
                                     <strong>{field}</strong>: {hasBeforeAfter
-                                      ? `${formatAuditValue(change.before)} -> ${formatAuditValue(change.after)}`
-                                      : formatAuditValue(value)}
+                                      ? `${formatAuditValue(change.before, field)} -> ${formatAuditValue(change.after, field)}`
+                                      : formatAuditValue(value, field)}
                                   </div>
                                 );
                               })}
@@ -5178,7 +5473,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <div className="build-wizard-step-history-item" key={`step-note-modal-${note.id}`}>
                         <div className="build-wizard-step-history-head">
                           <span>Note #{note.id}</span>
-                          <span>{formatDate(note.created_at)}</span>
+                          <span>
+                            Created {formatDate(note.created_at)}
+                            {noteEditedAtLabel(note) ? ` | Edited ${noteEditedAtLabel(note)}` : ''}
+                          </span>
                         </div>
                         <div>{note.note_text}</div>
                       </div>

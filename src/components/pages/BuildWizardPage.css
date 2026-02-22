@@ -1254,6 +1254,22 @@
   align-items: center;
 }
 
+.build-wizard-step-receipt-attachments {
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-step-receipt-attachments-label {
+  font-size: 0.8rem;
+  color: #4b6078;
+  font-weight: 600;
+}
+
+.build-wizard-step-receipt-attachments-list {
+  display: grid;
+  gap: 4px;
+}
+
 .build-wizard-step-assignees {
   margin-top: 10px;
   border: 1px dashed #c8d3e2;

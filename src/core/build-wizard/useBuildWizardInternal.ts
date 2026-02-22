@@ -389,6 +389,46 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
   }, [onToast]);
 
+  const updateStepNote = React.useCallback(async (stepId: number, noteId: number, noteText: string) => {
+    const t = String(noteText || '').trim();
+    if (stepId <= 0 || noteId <= 0 || !t) {
+      return;
+    }
+    try {
+      const res = await ApiClient.post<{ success: boolean; step: IBuildWizardStep }>('/api/build_wizard.php?action=update_step_note', {
+        step_id: stepId,
+        note_id: noteId,
+        note_text: t,
+      });
+      const next = res?.step ? normalizeBuildWizardStep(res.step) : null;
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
+      onToast?.({ tone: 'success', message: 'Note updated.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to update note' });
+      return false;
+    }
+  }, [onToast]);
+
+  const deleteStepNote = React.useCallback(async (stepId: number, noteId: number) => {
+    if (stepId <= 0 || noteId <= 0) {
+      return false;
+    }
+    try {
+      const res = await ApiClient.post<{ success: boolean; step: IBuildWizardStep }>('/api/build_wizard.php?action=delete_step_note', {
+        step_id: stepId,
+        note_id: noteId,
+      });
+      const next = res?.step ? normalizeBuildWizardStep(res.step) : null;
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
+      onToast?.({ tone: 'success', message: 'Note deleted.' });
+      return true;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to delete note' });
+      return false;
+    }
+  }, [onToast]);
+
   const addStep = React.useCallback(async (phaseKey: string) => {
     if (projectId <= 0) {
       return;
@@ -537,6 +577,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       receipt_date?: string | null;
       receipt_notes?: string | null;
     },
+    options?: {
+      receipt_parent_document_id?: number | null;
+    },
   ) => {
     if (!file || projectId <= 0) {
       return;
@@ -571,6 +614,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
         formData.append('receipt_notes', String(receiptMeta.receipt_notes || '').trim());
       }
     }
+    if (options && Number(options.receipt_parent_document_id || 0) > 0) {
+      formData.append('receipt_parent_document_id', String(Number(options.receipt_parent_document_id)));
+    }
 
     try {
       const res = await ApiClient.postFormData<{ success: boolean; document: IBuildWizardDocument }>('/api/build_wizard.php?action=upload_document', formData);
@@ -582,6 +628,34 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       onToast?.({ tone: 'error', message: err?.message || 'Upload failed' });
     }
   }, [projectId, onToast]);
+
+  const createStepReceipt = React.useCallback(async (
+    payload: {
+      project_id: number;
+      step_id: number;
+      receipt_title?: string | null;
+      receipt_vendor?: string | null;
+      receipt_date?: string | null;
+      receipt_amount?: number | null;
+      receipt_notes?: string | null;
+      caption?: string | null;
+    },
+  ) => {
+    if (Number(payload.project_id || 0) <= 0 || Number(payload.step_id || 0) <= 0) {
+      return null;
+    }
+    try {
+      const res = await ApiClient.post<UpdateDocumentResponse>('/api/build_wizard.php?action=create_step_receipt', payload);
+      if (res?.document) {
+        setDocuments((prev) => [res.document, ...prev]);
+      }
+      onToast?.({ tone: 'success', message: 'Receipt added.' });
+      return res?.document || null;
+    } catch (err: any) {
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to add receipt' });
+      return null;
+    }
+  }, [onToast]);
 
   const deleteDocument = React.useCallback(async (documentId: number) => {
     if (documentId <= 0) {
@@ -1114,6 +1188,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     deleteStep,
     deleteProject,
     addStepNote,
+    updateStepNote,
+    deleteStepNote,
+    createStepReceipt,
     uploadDocument,
     replaceDocument,
     deleteDocument,

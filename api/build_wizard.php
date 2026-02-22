@@ -43,6 +43,7 @@ function catn8_build_wizard_tables_ensure(): void
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
         step_id INT NULL,
+        receipt_parent_document_id INT NULL,
         kind VARCHAR(32) NOT NULL DEFAULT 'other',
         original_name VARCHAR(255) NOT NULL,
         mime_type VARCHAR(120) NOT NULL DEFAULT '',
@@ -57,6 +58,7 @@ function catn8_build_wizard_tables_ensure(): void
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_project_id (project_id),
         KEY idx_step_id (step_id),
+        KEY idx_receipt_parent_document_id (receipt_parent_document_id),
         CONSTRAINT fk_build_wizard_documents_project FOREIGN KEY (project_id) REFERENCES build_wizard_projects(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
@@ -149,6 +151,7 @@ function catn8_build_wizard_tables_ensure(): void
         step_id INT NOT NULL,
         note_text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_step_id (step_id),
         CONSTRAINT fk_build_wizard_step_notes_step FOREIGN KEY (step_id) REFERENCES build_wizard_steps(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -228,6 +231,14 @@ function catn8_build_wizard_tables_ensure(): void
     if (!$hasStepId) {
         Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN step_id INT NULL AFTER project_id');
         Database::execute('ALTER TABLE build_wizard_documents ADD KEY idx_step_id (step_id)');
+    }
+
+    $hasReceiptParentDocumentId = Database::queryOne(
+        'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+        ['build_wizard_documents', 'receipt_parent_document_id']
+    );
+    if (!$hasReceiptParentDocumentId) {
+        Database::execute('ALTER TABLE build_wizard_documents ADD COLUMN receipt_parent_document_id INT NULL AFTER step_id');
     }
 
     $hasCaption = Database::queryOne(
@@ -313,6 +324,19 @@ function catn8_build_wizard_tables_ensure(): void
         $exists = Database::queryOne(
             'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
             ['build_wizard_steps', $column]
+        );
+        if (!$exists) {
+            Database::execute($alterSql);
+        }
+    }
+
+    $stepNoteColumns = [
+        'updated_at' => 'ALTER TABLE build_wizard_step_notes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+    ];
+    foreach ($stepNoteColumns as $column => $alterSql) {
+        $exists = Database::queryOne(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            ['build_wizard_step_notes', $column]
         );
         if (!$exists) {
             Database::execute($alterSql);
@@ -434,6 +458,14 @@ function catn8_build_wizard_tables_ensure(): void
         Database::execute('ALTER TABLE build_wizard_steps ADD KEY idx_parent_step_id (parent_step_id)');
     }
 
+    $hasReceiptParentIndex = Database::queryOne(
+        'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+        ['build_wizard_documents', 'idx_receipt_parent_document_id']
+    );
+    if (!$hasReceiptParentIndex) {
+        Database::execute('ALTER TABLE build_wizard_documents ADD KEY idx_receipt_parent_document_id (receipt_parent_document_id)');
+    }
+
     $hasDocSearchFulltext = Database::queryOne(
         'SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
         ['build_wizard_document_search_index', 'ft_extracted_text']
@@ -476,7 +508,7 @@ function catn8_build_wizard_document_kind($value): string
 {
     $raw = strtolower(trim((string)$value));
     return match ($raw) {
-        'blueprint', 'document', 'home_photo', 'other', 'permit', 'photo', 'progress_photo', 'receipt', 'site_photo', 'spec_sheet', 'survey' => $raw,
+        'blueprint', 'document', 'home_photo', 'other', 'permit', 'photo', 'progress_photo', 'receipt', 'receipt_attachment', 'site_photo', 'spec_sheet', 'survey' => $raw,
         default => 'other',
     };
 }
@@ -1700,7 +1732,7 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
 
     $placeholders = implode(',', array_fill(0, count($cleanIds), '?'));
     $rows = Database::queryAll(
-        'SELECT id, step_id, note_text, created_at
+        'SELECT id, step_id, note_text, created_at, updated_at
          FROM build_wizard_step_notes
          WHERE step_id IN (' . $placeholders . ')
          ORDER BY created_at ASC, id ASC',
@@ -1718,6 +1750,7 @@ function catn8_build_wizard_step_notes_by_step_ids(array $stepIds): array
             'step_id' => $sid,
             'note_text' => (string)($r['note_text'] ?? ''),
             'created_at' => (string)($r['created_at'] ?? ''),
+            'updated_at' => (string)($r['updated_at'] ?? ''),
         ];
     }
     return $map;
@@ -1956,7 +1989,7 @@ function catn8_build_wizard_step_receipt_totals(int $projectId): array
 function catn8_build_wizard_documents_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+        'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                 d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at,
                 CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
          FROM build_wizard_documents d
@@ -1975,6 +2008,7 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
             'id' => $docId,
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_id' => $r['step_id'] !== null ? (int)$r['step_id'] : null,
+            'receipt_parent_document_id' => $r['receipt_parent_document_id'] !== null ? (int)$r['receipt_parent_document_id'] : null,
             'step_phase_key' => $r['step_phase_key'] !== null ? (string)$r['step_phase_key'] : null,
             'step_title' => $r['step_title'] !== null ? (string)$r['step_title'] : null,
             'kind' => (string)($r['kind'] ?? ''),
@@ -3035,7 +3069,7 @@ function catn8_build_wizard_search_documents(int $projectId, string $query, int 
     $safeLimit = max(1, min(50, $limit));
     $like = '%' . $q . '%';
     $rows = Database::queryAll(
-        'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+        'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                 d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at,
                 si.extraction_method, si.indexed_at,
                 MATCH(si.extracted_text) AGAINST (? IN NATURAL LANGUAGE MODE) AS ft_score,
@@ -3079,6 +3113,7 @@ function catn8_build_wizard_search_documents(int $projectId, string $query, int 
             'id' => $docId,
             'project_id' => (int)($row['project_id'] ?? 0),
             'step_id' => $row['step_id'] !== null ? (int)$row['step_id'] : null,
+            'receipt_parent_document_id' => $row['receipt_parent_document_id'] !== null ? (int)$row['receipt_parent_document_id'] : null,
             'step_phase_key' => $row['step_phase_key'] !== null ? (string)$row['step_phase_key'] : null,
             'step_title' => $row['step_title'] !== null ? (string)$row['step_title'] : null,
             'kind' => (string)($row['kind'] ?? ''),
@@ -5916,7 +5951,7 @@ try {
         );
 
         $noteRow = Database::queryOne(
-            'SELECT id, created_at FROM build_wizard_step_notes WHERE step_id = ? ORDER BY id DESC LIMIT 1',
+            'SELECT id, created_at, updated_at FROM build_wizard_step_notes WHERE step_id = ? ORDER BY id DESC LIMIT 1',
             [$stepId]
         );
         catn8_build_wizard_insert_step_audit_log(
@@ -5929,6 +5964,7 @@ try {
                     'id' => (int)($noteRow['id'] ?? 0),
                     'note_text' => $noteText,
                     'created_at' => (string)($noteRow['created_at'] ?? ''),
+                    'updated_at' => (string)($noteRow['updated_at'] ?? ''),
                 ],
             ]
         );
@@ -5939,6 +5975,211 @@ try {
         }
 
         catn8_json_response(['success' => true, 'step' => $step]);
+    }
+
+    if ($action === 'update_step_note') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        $noteId = isset($body['note_id']) ? (int)$body['note_id'] : 0;
+        $noteText = trim((string)($body['note_text'] ?? ''));
+        if ($stepId <= 0) {
+            throw new RuntimeException('Missing step_id');
+        }
+        if ($noteId <= 0) {
+            throw new RuntimeException('Missing note_id');
+        }
+        if ($noteText === '') {
+            throw new RuntimeException('Missing note_text');
+        }
+
+        $noteRow = Database::queryOne(
+            'SELECT n.id, n.step_id, n.note_text, n.created_at, n.updated_at, s.project_id
+             FROM build_wizard_step_notes n
+             INNER JOIN build_wizard_steps s ON s.id = n.step_id
+             INNER JOIN build_wizard_projects p ON p.id = s.project_id
+             WHERE n.id = ? AND p.owner_user_id = ?
+             LIMIT 1',
+            [$noteId, $viewerId]
+        );
+        if (!$noteRow) {
+            throw new RuntimeException('Note not found or not authorized');
+        }
+
+        $noteStepId = (int)($noteRow['step_id'] ?? 0);
+        if ($noteStepId !== $stepId) {
+            throw new RuntimeException('note_id does not belong to step_id');
+        }
+
+        Database::execute(
+            'UPDATE build_wizard_step_notes SET note_text = ? WHERE id = ?',
+            [$noteText, $noteId]
+        );
+
+        catn8_build_wizard_insert_step_audit_log(
+            (int)($noteRow['project_id'] ?? 0),
+            $stepId,
+            'note_updated',
+            $viewerId,
+            [
+                'note_id' => $noteId,
+                'before' => [
+                    'note_text' => (string)($noteRow['note_text'] ?? ''),
+                ],
+                'after' => [
+                    'note_text' => $noteText,
+                ],
+            ]
+        );
+
+        $step = catn8_build_wizard_step_by_id($stepId);
+        if (!$step) {
+            throw new RuntimeException('Step not found after note update');
+        }
+
+        catn8_json_response(['success' => true, 'step' => $step]);
+    }
+
+    if ($action === 'delete_step_note') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        $noteId = isset($body['note_id']) ? (int)$body['note_id'] : 0;
+        if ($stepId <= 0) {
+            throw new RuntimeException('Missing step_id');
+        }
+        if ($noteId <= 0) {
+            throw new RuntimeException('Missing note_id');
+        }
+
+        $noteRow = Database::queryOne(
+            'SELECT n.id, n.step_id, n.note_text, n.created_at, n.updated_at, s.project_id
+             FROM build_wizard_step_notes n
+             INNER JOIN build_wizard_steps s ON s.id = n.step_id
+             INNER JOIN build_wizard_projects p ON p.id = s.project_id
+             WHERE n.id = ? AND p.owner_user_id = ?
+             LIMIT 1',
+            [$noteId, $viewerId]
+        );
+        if (!$noteRow) {
+            throw new RuntimeException('Note not found or not authorized');
+        }
+
+        $noteStepId = (int)($noteRow['step_id'] ?? 0);
+        if ($noteStepId !== $stepId) {
+            throw new RuntimeException('note_id does not belong to step_id');
+        }
+
+        Database::execute('DELETE FROM build_wizard_step_notes WHERE id = ?', [$noteId]);
+
+        catn8_build_wizard_insert_step_audit_log(
+            (int)($noteRow['project_id'] ?? 0),
+            $stepId,
+            'note_deleted',
+            $viewerId,
+            [
+                'note' => [
+                    'id' => $noteId,
+                    'note_text' => (string)($noteRow['note_text'] ?? ''),
+                    'created_at' => (string)($noteRow['created_at'] ?? ''),
+                    'updated_at' => (string)($noteRow['updated_at'] ?? ''),
+                ],
+            ]
+        );
+
+        $step = catn8_build_wizard_step_by_id($stepId);
+        if (!$step) {
+            throw new RuntimeException('Step not found after note delete');
+        }
+
+        catn8_json_response(['success' => true, 'step' => $step]);
+    }
+
+    if ($action === 'create_step_receipt') {
+        catn8_require_method('POST');
+
+        $body = catn8_read_json_body();
+        $projectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        catn8_build_wizard_require_project_access($projectId, $viewerId);
+        $stepId = isset($body['step_id']) ? (int)$body['step_id'] : 0;
+        if ($stepId <= 0) {
+            throw new RuntimeException('Missing step_id');
+        }
+        $stepRow = Database::queryOne(
+            'SELECT id, title
+             FROM build_wizard_steps
+             WHERE id = ? AND project_id = ?
+             LIMIT 1',
+            [$stepId, $projectId]
+        );
+        if (!$stepRow) {
+            throw new RuntimeException('Invalid step_id for this project');
+        }
+
+        $receiptTitle = catn8_build_wizard_text_or_null($body['receipt_title'] ?? null, 255);
+        $receiptVendor = catn8_build_wizard_text_or_null($body['receipt_vendor'] ?? null, 191);
+        $receiptDate = catn8_build_wizard_parse_date_or_null($body['receipt_date'] ?? null);
+        $receiptAmount = catn8_build_wizard_to_decimal_or_null($body['receipt_amount'] ?? null);
+        $receiptNotes = catn8_build_wizard_text_or_null($body['receipt_notes'] ?? null, 4000);
+        $caption = catn8_build_wizard_text_or_null($body['caption'] ?? null, 255);
+
+        $displayTitle = $receiptTitle !== null ? $receiptTitle : (string)($stepRow['title'] ?? 'Receipt');
+        $originalName = $displayTitle !== '' ? ($displayTitle . ' Receipt') : 'Receipt';
+
+        Database::execute(
+            'INSERT INTO build_wizard_documents
+                (project_id, step_id, receipt_parent_document_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount, receipt_title, receipt_vendor, receipt_date, receipt_notes)
+             VALUES (?, ?, NULL, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)',
+            [
+                $projectId,
+                $stepId,
+                'receipt',
+                substr($originalName, 0, 255),
+                'text/plain',
+                '',
+                ($caption !== null ? $caption : $displayTitle),
+                $receiptAmount,
+                $receiptTitle,
+                $receiptVendor,
+                $receiptDate,
+                $receiptNotes,
+            ]
+        );
+        $docId = (int)Database::lastInsertId();
+
+        $receiptBody = "Receipt record\n"
+            . 'Title: ' . ($receiptTitle ?? $displayTitle) . "\n"
+            . 'Vendor: ' . ($receiptVendor ?? '') . "\n"
+            . 'Date: ' . ($receiptDate ?? '') . "\n"
+            . 'Amount: ' . ($receiptAmount !== null ? (string)$receiptAmount : '') . "\n"
+            . 'Notes: ' . ($receiptNotes ?? '') . "\n";
+        catn8_build_wizard_upsert_document_blob($docId, 'text/plain', $receiptBody);
+
+        $doc = Database::queryOne(
+            'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                    d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
+             FROM build_wizard_documents d
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             WHERE d.id = ?
+             LIMIT 1',
+            [$docId]
+        );
+        if (!$doc) {
+            throw new RuntimeException('Created receipt not found');
+        }
+        $doc['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId;
+        $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
+        $doc['is_image'] = 0;
+        $doc['receipt_parent_document_id'] = $doc['receipt_parent_document_id'] !== null ? (int)$doc['receipt_parent_document_id'] : null;
+        $doc['receipt_amount'] = $doc['receipt_amount'] !== null ? (float)$doc['receipt_amount'] : null;
+        $doc['receipt_title'] = $doc['receipt_title'] !== null ? (string)$doc['receipt_title'] : null;
+        $doc['receipt_vendor'] = $doc['receipt_vendor'] !== null ? (string)$doc['receipt_vendor'] : null;
+        $doc['receipt_date'] = $doc['receipt_date'] !== null ? (string)$doc['receipt_date'] : null;
+        $doc['receipt_notes'] = $doc['receipt_notes'] !== null ? (string)$doc['receipt_notes'] : null;
+
+        catn8_json_response(['success' => true, 'document' => $doc]);
     }
 
     if ($action === 'save_contact') {
@@ -6169,6 +6410,28 @@ try {
         }
 
         $kind = catn8_build_wizard_document_kind($_POST['kind'] ?? 'other');
+        $receiptParentDocumentId = isset($_POST['receipt_parent_document_id']) ? (int)$_POST['receipt_parent_document_id'] : 0;
+        if ($kind === 'receipt_attachment') {
+            if ($receiptParentDocumentId <= 0) {
+                throw new RuntimeException('receipt_parent_document_id is required for receipt attachments');
+            }
+            $parentDoc = Database::queryOne(
+                'SELECT id, project_id, kind, step_id
+                 FROM build_wizard_documents
+                 WHERE id = ?
+                 LIMIT 1',
+                [$receiptParentDocumentId]
+            );
+            if (!$parentDoc || (int)($parentDoc['project_id'] ?? 0) !== $projectId || strtolower(trim((string)($parentDoc['kind'] ?? ''))) !== 'receipt') {
+                throw new RuntimeException('Invalid receipt_parent_document_id');
+            }
+            $parentStepId = (int)($parentDoc['step_id'] ?? 0);
+            if ($stepId <= 0 && $parentStepId > 0) {
+                $stepId = $parentStepId;
+            }
+        } else {
+            $receiptParentDocumentId = 0;
+        }
         if ($stepId <= 0) {
             if ($phaseKey === 'general') {
                 $phaseKey = catn8_build_wizard_default_phase_for_kind($kind);
@@ -6193,6 +6456,8 @@ try {
             $receiptVendor = catn8_build_wizard_text_or_null($_POST['receipt_vendor'] ?? null, 191);
             $receiptDate = catn8_build_wizard_parse_date_or_null($_POST['receipt_date'] ?? null);
             $receiptNotes = catn8_build_wizard_text_or_null($_POST['receipt_notes'] ?? null, 4000);
+        } else if ($kind === 'receipt_attachment' && $receiptParentDocumentId > 0) {
+            $receiptNotes = '[attachment-for-receipt:' . $receiptParentDocumentId . ']';
         }
         if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
             throw new RuntimeException('No file uploaded');
@@ -6239,8 +6504,8 @@ try {
         }
 
         Database::execute(
-            'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount, receipt_title, receipt_vendor, receipt_date, receipt_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [$projectId, ($stepId > 0 ? $stepId : null), $kind, $origName, $mime, $destPath, $size, $caption, $receiptAmount, $receiptTitle, $receiptVendor, $receiptDate, $receiptNotes]
+            'INSERT INTO build_wizard_documents (project_id, step_id, receipt_parent_document_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount, receipt_title, receipt_vendor, receipt_date, receipt_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$projectId, ($stepId > 0 ? $stepId : null), ($receiptParentDocumentId > 0 ? $receiptParentDocumentId : null), $kind, $origName, $mime, $destPath, $size, $caption, $receiptAmount, $receiptTitle, $receiptVendor, $receiptDate, $receiptNotes]
         );
 
         $docId = (int)Database::lastInsertId();
@@ -6286,7 +6551,7 @@ try {
         }
 
         $doc = Database::queryOne(
-            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+            'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
@@ -6300,6 +6565,7 @@ try {
         $doc['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId;
         $doc['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1';
         $doc['is_image'] = (strpos(strtolower((string)($doc['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $doc['receipt_parent_document_id'] = $doc['receipt_parent_document_id'] !== null ? (int)$doc['receipt_parent_document_id'] : null;
         $doc['receipt_amount'] = $doc['receipt_amount'] !== null ? (float)$doc['receipt_amount'] : null;
         $doc['receipt_title'] = $doc['receipt_title'] !== null ? (string)$doc['receipt_title'] : null;
         $doc['receipt_vendor'] = $doc['receipt_vendor'] !== null ? (string)$doc['receipt_vendor'] : null;
@@ -6386,7 +6652,7 @@ try {
         Database::execute('UPDATE build_wizard_documents SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
 
         $updated = Database::queryOne(
-            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+            'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
@@ -6399,6 +6665,7 @@ try {
         $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
         $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
         $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $updated['receipt_parent_document_id'] = $updated['receipt_parent_document_id'] !== null ? (int)$updated['receipt_parent_document_id'] : null;
         $updated['receipt_amount'] = $updated['receipt_amount'] !== null ? (float)$updated['receipt_amount'] : null;
         $updated['receipt_title'] = $updated['receipt_title'] !== null ? (string)$updated['receipt_title'] : null;
         $updated['receipt_vendor'] = $updated['receipt_vendor'] !== null ? (string)$updated['receipt_vendor'] : null;
@@ -6529,7 +6796,7 @@ try {
         }
 
         $updated = Database::queryOne(
-            'SELECT d.id, d.project_id, d.step_id, s.phase_key AS step_phase_key, s.title AS step_title,
+            'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
              LEFT JOIN build_wizard_steps s ON s.id = d.step_id
@@ -6542,6 +6809,7 @@ try {
         $updated['public_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId;
         $updated['thumbnail_url'] = '/api/build_wizard.php?action=get_document&document_id=' . $documentId . '&thumb=1';
         $updated['is_image'] = (strpos(strtolower((string)($updated['mime_type'] ?? '')), 'image/') === 0) ? 1 : 0;
+        $updated['receipt_parent_document_id'] = $updated['receipt_parent_document_id'] !== null ? (int)$updated['receipt_parent_document_id'] : null;
         $updated['receipt_amount'] = $updated['receipt_amount'] !== null ? (float)$updated['receipt_amount'] : null;
         $updated['receipt_title'] = $updated['receipt_title'] !== null ? (string)$updated['receipt_title'] : null;
         $updated['receipt_vendor'] = $updated['receipt_vendor'] !== null ? (string)$updated['receipt_vendor'] : null;
@@ -6566,7 +6834,36 @@ try {
         }
 
         $projectId = (int)($doc['project_id'] ?? 0);
+        $docKind = strtolower(trim((string)($doc['kind'] ?? '')));
         $storagePath = trim((string)($doc['storage_path'] ?? ''));
+        if ($docKind === 'receipt') {
+            $childRows = Database::queryAll(
+                'SELECT storage_path
+                 FROM build_wizard_documents
+                 WHERE project_id = ? AND receipt_parent_document_id = ?',
+                [$projectId, $documentId]
+            );
+            Database::execute(
+                'DELETE FROM build_wizard_documents
+                 WHERE project_id = ? AND receipt_parent_document_id = ?',
+                [$projectId, $documentId]
+            );
+            $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
+            foreach ($childRows as $childRow) {
+                $childPath = trim((string)($childRow['storage_path'] ?? ''));
+                if ($childPath === '' || !is_file($childPath)) {
+                    continue;
+                }
+                $realChildPath = realpath($childPath);
+                if (
+                    $uploadRoot !== false
+                    && $realChildPath !== false
+                    && str_starts_with($realChildPath, $uploadRoot . DIRECTORY_SEPARATOR)
+                ) {
+                    @unlink($realChildPath);
+                }
+            }
+        }
         Database::execute('DELETE FROM build_wizard_documents WHERE id = ?', [$documentId]);
         if ($projectId > 0) {
             Database::execute(

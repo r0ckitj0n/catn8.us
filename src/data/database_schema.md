@@ -126,6 +126,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `step_id` (INT, FOREIGN KEY -> build_wizard_steps.id)
 - `note_text` (TEXT)
 - `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
 
 ### build_wizard_step_audit_logs
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
@@ -176,6 +177,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
 - `step_id` (INT, NULLABLE)
+- `receipt_parent_document_id` (INT, NULLABLE)
 - `kind` (VARCHAR(32))
 - `original_name` (VARCHAR(255))
 - `mime_type` (VARCHAR(120))

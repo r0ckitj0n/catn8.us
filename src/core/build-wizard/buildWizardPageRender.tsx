@@ -2209,6 +2209,65 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDragOverParentStepId(0);
   };
 
+  const clampStepDatesWithinRange = (
+    step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
+    minDate?: string | null,
+    maxDate?: string | null,
+  ): Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date' | 'expected_duration_days'> | null => {
+    const lower = toStringOrNull(minDate || '');
+    const upper = toStringOrNull(maxDate || '');
+    if (!lower && !upper) {
+      return null;
+    }
+
+    let nextStart = toStringOrNull(step.expected_start_date || '');
+    let nextEnd = toStringOrNull(step.expected_end_date || '');
+
+    if (!nextStart) {
+      nextStart = lower || upper || null;
+    }
+    if (!nextEnd) {
+      nextEnd = nextStart;
+    }
+
+    if (lower && nextStart && nextStart < lower) {
+      nextStart = lower;
+    }
+    if (upper && nextStart && nextStart > upper) {
+      nextStart = upper;
+    }
+    if (lower && nextEnd && nextEnd < lower) {
+      nextEnd = lower;
+    }
+    if (upper && nextEnd && nextEnd > upper) {
+      nextEnd = upper;
+    }
+    if (nextStart && nextEnd && nextEnd < nextStart) {
+      nextEnd = nextStart;
+    }
+
+    const changed = nextStart !== toStringOrNull(step.expected_start_date || '')
+      || nextEnd !== toStringOrNull(step.expected_end_date || '');
+    if (!changed) {
+      return null;
+    }
+    return {
+      expected_start_date: nextStart,
+      expected_end_date: nextEnd,
+      expected_duration_days: calculateDurationDays(nextStart, nextEnd) ?? null,
+    };
+  };
+
+  const clampStepDatesBetweenNeighbors = (
+    step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
+    previousStep: IBuildWizardStep | null,
+    nextStep: IBuildWizardStep | null,
+  ): Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date' | 'expected_duration_days'> | null => {
+    const lower = previousStep?.expected_end_date || previousStep?.expected_start_date || null;
+    const upper = nextStep?.expected_start_date || nextStep?.expected_end_date || null;
+    return clampStepDatesWithinRange(step, lower, upper);
+  };
+
   const onDropReorder = async (insertIndex: number) => {
     if (draggingStepId <= 0) {
       clearStepDragState();
@@ -2219,17 +2278,47 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       clearStepDragState();
       return;
     }
+    const draggedStep = stepById.get(draggingStepId);
+    if (!draggedStep) {
+      clearStepDragState();
+      return;
+    }
     const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
     const boundedInsertIndex = Math.max(0, Math.min(insertIndex, withoutDragged.length));
     withoutDragged.splice(boundedInsertIndex, 0, draggingStepId);
 
-    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
+    const previousVisibleStepId = boundedInsertIndex > 0 ? withoutDragged[boundedInsertIndex - 1] : 0;
+    const nextVisibleStepId = boundedInsertIndex < (withoutDragged.length - 1) ? withoutDragged[boundedInsertIndex + 1] : 0;
+    const previousVisibleStep = previousVisibleStepId > 0 ? stepById.get(previousVisibleStepId) || null : null;
+    const nextVisibleStep = nextVisibleStepId > 0 ? stepById.get(nextVisibleStepId) || null : null;
+    const destinationPhaseKey = (
+      previousVisibleStep?.phase_key
+      || nextVisibleStep?.phase_key
+      || draggedStep.phase_key
+      || ''
+    );
+    if (!destinationPhaseKey) {
+      clearStepDragState();
+      return;
+    }
+
+    const phaseOrderedIds = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === destinationPhaseKey);
     try {
-      const draggedStep = stepById.get(draggingStepId);
-      if (draggedStep && Number(draggedStep.parent_step_id || 0) > 0) {
-        await updateStep(draggingStepId, { parent_step_id: null });
+      if (draggedStep.phase_key !== destinationPhaseKey || Number(draggedStep.parent_step_id || 0) > 0) {
+        await updateStep(draggingStepId, { phase_key: destinationPhaseKey, parent_step_id: null });
       }
-      await reorderSteps(activePhaseKey, withoutDragged);
+      if (phaseOrderedIds.length > 0) {
+        await reorderSteps(destinationPhaseKey, phaseOrderedIds);
+        const movedIndex = phaseOrderedIds.indexOf(draggingStepId);
+        const prevPhaseStep = movedIndex > 0 ? (stepById.get(phaseOrderedIds[movedIndex - 1]) || null) : null;
+        const nextPhaseStep = movedIndex >= 0 && movedIndex < (phaseOrderedIds.length - 1)
+          ? (stepById.get(phaseOrderedIds[movedIndex + 1]) || null)
+          : null;
+        const datePatch = clampStepDatesBetweenNeighbors(draggedStep, prevPhaseStep, nextPhaseStep);
+        if (datePatch) {
+          await updateStep(draggingStepId, datePatch);
+        }
+      }
     } finally {
       clearStepDragState();
     }
@@ -2245,16 +2334,36 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       clearStepDragState();
       return;
     }
+    const draggedStep = stepById.get(draggingStepId);
+    const targetStep = stepById.get(targetStepId);
+    const targetPhaseKey = targetStep?.phase_key || '';
+    if (!draggedStep || !targetStep || !targetPhaseKey) {
+      clearStepDragState();
+      return;
+    }
 
-    const activePhaseKey = TAB_DEFAULT_PHASE_KEY[activeTab] || 'general';
     const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
     const targetIndex = withoutDragged.indexOf(targetStepId);
     const insertIndex = targetIndex >= 0 ? (targetIndex + 1) : withoutDragged.length;
     withoutDragged.splice(insertIndex, 0, draggingStepId);
+    const phaseOrderedIds = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === targetPhaseKey);
 
     try {
-      await updateStep(draggingStepId, { parent_step_id: targetStepId });
-      await reorderSteps(activePhaseKey, withoutDragged);
+      if (draggedStep.phase_key !== targetPhaseKey) {
+        await updateStep(draggingStepId, { phase_key: targetPhaseKey });
+      }
+      const childDatePatch = clampStepDatesWithinRange(
+        draggedStep,
+        targetStep.expected_start_date,
+        targetStep.expected_end_date,
+      );
+      await updateStep(draggingStepId, {
+        ...(childDatePatch || {}),
+        parent_step_id: targetStepId,
+      });
+      if (phaseOrderedIds.length > 0) {
+        await reorderSteps(targetPhaseKey, phaseOrderedIds);
+      }
     } finally {
       clearStepDragState();
     }

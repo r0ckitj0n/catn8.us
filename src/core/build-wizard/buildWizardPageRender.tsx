@@ -3413,36 +3413,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 ) : null}
                 {['construction', 'purchase', 'inspection', 'permit', 'documentation', 'utility', 'delivery'].includes(draft.step_type) ? (
                   <>
-                    <label>
-                      Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="build-wizard-currency-input"
-                        value={renderCurrencyInputValue(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
-                        onFocus={() => startCurrencyEdit(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
-                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-estimated_cost`, e.target.value)}
-                        onBlur={() => finishCurrencyEdit(`step-${step.id}-estimated_cost`, (value) => {
-                          updateStepDraft(step.id, { estimated_cost: value });
-                          void commitStep(step.id, { estimated_cost: value });
-                        })}
-                      />
-                    </label>
-                    <label>
-                      Actual Cost
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="build-wizard-currency-input"
-                        value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, draft.actual_cost)}
-                        onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, draft.actual_cost)}
-                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-actual_cost`, e.target.value)}
-                        onBlur={() => finishCurrencyEdit(`step-${step.id}-actual_cost`, (value) => {
-                          updateStepDraft(step.id, { actual_cost: value });
-                          void commitStep(step.id, { actual_cost: value });
-                        })}
-                      />
-                    </label>
                     <div className="build-wizard-type-note">
                       Receipts: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
                     </div>

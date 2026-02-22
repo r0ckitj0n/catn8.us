@@ -638,6 +638,8 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
 }
 
 .build-wizard-step-expand-btn {
@@ -746,12 +748,13 @@
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  min-width: 120px;
+  min-width: 0;
+  width: 100%;
   font-size: 0.85rem;
 }
 
 .build-wizard-duration-inline input {
-  width: 110px;
+  width: 100%;
   background: #f2f6fb;
   color: #3d4d63;
 }
@@ -761,19 +764,23 @@
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  min-width: min(320px, 100%);
+  min-width: 0;
+  width: 100%;
   font-size: 0.85rem;
 }
 
 .build-wizard-title-inline input {
-  min-width: min(320px, 100%);
+  width: 100%;
+  min-width: 0;
 }
 
 .build-wizard-inline-metrics {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(220px, 2.2fr) minmax(125px, 1fr) minmax(90px, 0.75fr) minmax(130px, 1fr) minmax(130px, 1fr);
   align-items: flex-end;
   gap: 10px;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .build-wizard-date-inline {
@@ -781,7 +788,8 @@
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  min-width: 160px;
+  min-width: 0;
+  width: 100%;
   font-size: 0.85rem;
 }
 

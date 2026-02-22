@@ -2408,6 +2408,63 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
                       />
                     </label>
+                    <label className="build-wizard-date-inline">
+                      Type
+                      <select
+                        value={(draft.step_type || 'construction') as StepType}
+                        disabled={stepReadOnly}
+                        onChange={(e) => {
+                          const nextType = e.target.value as StepType;
+                          const previousSameType = [...steps]
+                            .filter((candidate) => candidate.id !== step.id && ((stepDrafts[candidate.id]?.step_type || candidate.step_type) === nextType))
+                            .sort((a, b) => {
+                              if (a.step_order !== b.step_order) {
+                                return b.step_order - a.step_order;
+                              }
+                              return b.id - a.id;
+                            })[0];
+                          const previousDraft = previousSameType ? (stepDrafts[previousSameType.id] || previousSameType) : null;
+                          const nextPatch: Partial<IBuildWizardStep> = {
+                            step_type: nextType,
+                          };
+                          if (previousDraft) {
+                            if (nextType === 'permit') {
+                              nextPatch.permit_required = 1;
+                              nextPatch.permit_document_id = previousDraft.permit_document_id ?? null;
+                              nextPatch.permit_name = previousDraft.permit_name ?? null;
+                              nextPatch.permit_authority = previousDraft.permit_authority ?? null;
+                              nextPatch.permit_status = previousDraft.permit_status ?? null;
+                              nextPatch.permit_application_url = previousDraft.permit_application_url ?? null;
+                            } else if (nextType === 'purchase') {
+                              nextPatch.purchase_category = previousDraft.purchase_category ?? null;
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.purchase_unit = previousDraft.purchase_unit ?? null;
+                            } else if (nextType === 'utility') {
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.purchase_url = previousDraft.purchase_url ?? null;
+                              nextPatch.source_ref = previousDraft.source_ref ?? null;
+                            } else if (nextType === 'delivery') {
+                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
+                              nextPatch.source_ref = previousDraft.source_ref ?? null;
+                            }
+                          }
+                          if (nextType !== 'permit') {
+                            nextPatch.permit_required = 0;
+                            nextPatch.permit_document_id = null;
+                            nextPatch.permit_name = null;
+                            nextPatch.permit_authority = null;
+                            nextPatch.permit_status = null;
+                            nextPatch.permit_application_url = null;
+                          }
+                          updateStepDraft(step.id, nextPatch);
+                          void commitStep(step.id, nextPatch);
+                        }}
+                      >
+                        {STEP_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </label>
                     <label className="build-wizard-duration-inline">
                       Duration (Days)
                       <input type="number" value={durationDays ?? ''} readOnly />
@@ -2467,63 +2524,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           });
                         }}
                       />
-                    </label>
-                    <label className="build-wizard-date-inline">
-                      Type
-                      <select
-                        value={(draft.step_type || 'construction') as StepType}
-                        disabled={stepReadOnly}
-                        onChange={(e) => {
-                          const nextType = e.target.value as StepType;
-                          const previousSameType = [...steps]
-                            .filter((candidate) => candidate.id !== step.id && ((stepDrafts[candidate.id]?.step_type || candidate.step_type) === nextType))
-                            .sort((a, b) => {
-                              if (a.step_order !== b.step_order) {
-                                return b.step_order - a.step_order;
-                              }
-                              return b.id - a.id;
-                            })[0];
-                          const previousDraft = previousSameType ? (stepDrafts[previousSameType.id] || previousSameType) : null;
-                          const nextPatch: Partial<IBuildWizardStep> = {
-                            step_type: nextType,
-                          };
-                          if (previousDraft) {
-                            if (nextType === 'permit') {
-                              nextPatch.permit_required = 1;
-                              nextPatch.permit_document_id = previousDraft.permit_document_id ?? null;
-                              nextPatch.permit_name = previousDraft.permit_name ?? null;
-                              nextPatch.permit_authority = previousDraft.permit_authority ?? null;
-                              nextPatch.permit_status = previousDraft.permit_status ?? null;
-                              nextPatch.permit_application_url = previousDraft.permit_application_url ?? null;
-                            } else if (nextType === 'purchase') {
-                              nextPatch.purchase_category = previousDraft.purchase_category ?? null;
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.purchase_unit = previousDraft.purchase_unit ?? null;
-                            } else if (nextType === 'utility') {
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.purchase_url = previousDraft.purchase_url ?? null;
-                              nextPatch.source_ref = previousDraft.source_ref ?? null;
-                            } else if (nextType === 'delivery') {
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.source_ref = previousDraft.source_ref ?? null;
-                            }
-                          }
-                          if (nextType !== 'permit') {
-                            nextPatch.permit_required = 0;
-                            nextPatch.permit_document_id = null;
-                            nextPatch.permit_name = null;
-                            nextPatch.permit_authority = null;
-                            nextPatch.permit_status = null;
-                            nextPatch.permit_application_url = null;
-                          }
-                          updateStepDraft(step.id, nextPatch);
-                          void commitStep(step.id, nextPatch);
-                        }}
-                      >
-                        {STEP_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
                     </label>
                   </div>
                 </div>

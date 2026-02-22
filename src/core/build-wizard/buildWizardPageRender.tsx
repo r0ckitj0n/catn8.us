@@ -262,6 +262,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [deskAutoAssignBusy, setDeskAutoAssignBusy] = React.useState<boolean>(false);
   const [documentDrafts, setDocumentDrafts] = React.useState<DocumentDraftMap>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
+  const [unlinkingDocumentId, setUnlinkingDocumentId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
   const [deletingProjectId, setDeletingProjectId] = React.useState<number>(0);
   const [findingStepId, setFindingStepId] = React.useState<number>(0);
@@ -1464,6 +1465,18 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
+  const onRemoveDocumentFromStep = async (docId: number, docName: string) => {
+    if (docId <= 0 || unlinkingDocumentId === docId) {
+      return;
+    }
+    setUnlinkingDocumentId(docId);
+    try {
+      await updateDocument(docId, { step_id: null });
+    } finally {
+      setUnlinkingDocumentId(0);
+    }
+  };
+
   const onReplaceDocumentFile = async (doc: IBuildWizardDocument, file: File | null) => {
     if (!file || replacingDocumentId === doc.id) {
       return;
@@ -2280,6 +2293,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               id={`build-wizard-step-${step.id}`}
               className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''}`}
               style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
+              draggable={!stepReadOnly}
+              onDragStart={(e) => {
+                if (stepReadOnly) {
+                  return;
+                }
+                e.dataTransfer.effectAllowed = 'move';
+                setDraggingStepId(step.id);
+              }}
+              onDragEnd={() => clearStepDragState()}
               onDragOver={(e) => {
                 if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
                   e.preventDefault();
@@ -2295,24 +2317,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
 	          <div className="build-wizard-step-header">
 	            <div className="build-wizard-step-header-left">
-                  <button
-                    type="button"
-                    className="build-wizard-step-drag-handle"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
-                    draggable={!stepReadOnly}
-                    disabled={stepReadOnly}
-                    onDragStart={(e) => {
-                      if (stepReadOnly) {
-                        return;
-                      }
-                      e.dataTransfer.effectAllowed = 'move';
-                      setDraggingStepId(step.id);
-                    }}
-                    onDragEnd={() => clearStepDragState()}
-                  >
-                    <span aria-hidden="true">⋮⋮</span>
-                  </button>
                   {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
 	                  <div className="build-wizard-inline-check">
 	                    <label className="build-wizard-inline-complete-toggle">
@@ -3016,10 +3020,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             <button
               type="button"
               className="build-wizard-doc-delete-btn"
-              title="Delete file"
-              aria-label={`Delete ${doc.original_name}`}
-              onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
-              disabled={readOnly || deletingDocumentId === doc.id}
+              title={unlinkingDocumentId === doc.id ? 'Removing...' : 'Remove from step'}
+              aria-label={unlinkingDocumentId === doc.id ? `Removing ${doc.original_name} from step` : `Remove ${doc.original_name} from step`}
+              onClick={() => void onRemoveDocumentFromStep(doc.id, doc.original_name)}
+              disabled={readOnly || unlinkingDocumentId === doc.id}
             >
               <svg viewBox="0 0 24 24" className="build-wizard-doc-delete-icon" aria-hidden="true">
                 <path d="M9 3h6a1 1 0 0 1 1 1v1h4v2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7H4V5h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-3 2v12h10V7H7Zm2 2h2v8H9V9Zm4 0h2v8h-2V9Z" />
@@ -3642,7 +3646,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
           <div className="build-wizard-card">
             <div className="build-wizard-step-drag-hint">
-              Drag the handle to reorder. Drop on another step card to make it a child.
+              Drag a step card to reorder. Drop on another step card to make it a child.
             </div>
 
             {activeTab === 'desk' ? (

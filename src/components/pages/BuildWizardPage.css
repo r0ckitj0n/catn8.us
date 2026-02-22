@@ -636,26 +636,6 @@
   flex-wrap: wrap;
 }
 
-.build-wizard-step-drag-handle {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #c6d5ea;
-  border-radius: 8px;
-  background: #eef5ff;
-  color: #1d487e;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0;
-  cursor: grab;
-}
-
-.build-wizard-step-drag-handle:active {
-  cursor: grabbing;
-}
-
 .build-wizard-child-glyph {
   color: #3d5f89;
   font-size: 0.95rem;

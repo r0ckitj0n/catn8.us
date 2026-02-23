@@ -305,6 +305,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [dependencyCandidateByStepId, setDependencyCandidateByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByReceiptId, setAttachExistingDocByReceiptId] = React.useState<Record<number, string>>({});
+  const [attachExistingDocFilterByStepId, setAttachExistingDocFilterByStepId] = React.useState<Record<number, string>>({});
+  const [attachExistingDocFilterByReceiptId, setAttachExistingDocFilterByReceiptId] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
@@ -575,6 +577,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
       return next;
     });
+    setAttachExistingDocFilterByStepId((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const stepId = Number(idText);
+        if (validIds.has(stepId)) {
+          next[stepId] = prev[stepId];
+        }
+      });
+      return next;
+    });
     setReceiptEditorOpenByStep((prev) => {
       const next: typeof prev = {};
       Object.keys(prev).forEach((idText) => {
@@ -623,6 +635,20 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setStepInfoModalStepId(0);
     }
   }, [stepInfoModalStepId, steps]);
+
+  React.useEffect(() => {
+    const validDocumentIds = new Set<number>(documents.map((doc) => doc.id));
+    setAttachExistingDocFilterByReceiptId((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const documentId = Number(idText);
+        if (validDocumentIds.has(documentId)) {
+          next[documentId] = prev[documentId];
+        }
+      });
+      return next;
+    });
+  }, [documents]);
 
   React.useEffect(() => {
     if (!topbarSearchOpen) {
@@ -3015,6 +3041,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               label: dependency ? formatDependencyLabel(dependency) : `#${dependencyId} (missing step)`,
             };
           });
+          const hasDependencies = dependencyItems.length > 0;
           const selectedDependencyCandidateId = Number(dependencyCandidateByStepId[step.id] || 0);
           const dependencyCandidateOptions = steps
             .filter((candidate) => candidate.id !== step.id && !dependencyIds.includes(candidate.id))
@@ -3049,6 +3076,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             receipt_notes: '',
             task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
           };
+          const stepAttachmentFilter = String(attachExistingDocFilterByStepId[step.id] || '').trim().toLowerCase();
+          const filteredAttachableProjectDocuments = stepAttachmentFilter
+            ? attachableProjectDocuments.filter((doc) => {
+              const linkedStepId = Number(doc.step_id || 0);
+              const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
+              const haystack = `${doc.original_name} ${buildWizardTokenLabel(doc.kind, 'Other')} ${linkedStep?.title || ''}`.toLowerCase();
+              return haystack.includes(stepAttachmentFilter);
+            })
+            : attachableProjectDocuments;
           const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
           return (
             <React.Fragment key={step.id}>
@@ -3296,10 +3332,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <>
               <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
               <div className="build-wizard-step-grid">
-                <div className="build-wizard-type-note build-wizard-dependency-note">
+                <div className={`build-wizard-type-note build-wizard-dependency-note ${hasDependencies ? '' : 'is-empty-inline'}`}>
                   <div className="build-wizard-dependency-head">
                     <span>Depends on:</span>
-                    {dependencyItems.length ? (
+                    {hasDependencies ? (
                       <button
                         type="button"
                         className="btn btn-link btn-sm"
@@ -3309,7 +3345,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       </button>
                     ) : null}
                   </div>
-                  {dependencyItems.length ? (
+                  {hasDependencies ? (
                     <div className="build-wizard-dependency-chip-list">
                       {dependencyItems.map((dependencyItem) => (
                         <span key={`${step.id}-dependency-${dependencyItem.id}`} className="build-wizard-dependency-chip">
@@ -3362,9 +3398,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {parentStep ? (
                   <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
                 ) : null}
-                <div className="build-wizard-type-note">
-                  Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
-                </div>
+                {(stepReceiptDocuments.length > 0 || Number(draft.receipt_total || 0) > 0) ? (
+                  <div className="build-wizard-type-note">
+                    Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
+                  </div>
+                ) : null}
               </div>
 
               <label className="build-wizard-notes-field">
@@ -3413,12 +3451,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </label>
                 {attachableProjectDocuments.length ? (
                   <div className="build-wizard-step-attach-existing">
+                    <input
+                      type="text"
+                      className="build-wizard-attach-filter-input"
+                      placeholder="Filter attachments..."
+                      value={attachExistingDocFilterByStepId[step.id] || ''}
+                      onChange={(e) => setAttachExistingDocFilterByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                    />
                     <select
                       value={attachExistingDocByStepId[step.id] || ''}
                       onChange={(e) => setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
                     >
                       <option value="">Attach existing document...</option>
-                      {attachableProjectDocuments.map((doc) => {
+                      {filteredAttachableProjectDocuments.map((doc) => {
                         const linkedStepId = Number(doc.step_id || 0);
                         const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
                         const linkedStepNumber = linkedStepId > 0
@@ -3890,6 +3935,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           && Number(candidate.receipt_parent_document_id || 0) === doc.id;
                         return !isAlreadyAttached;
                       });
+                      const receiptAttachmentFilter = String(attachExistingDocFilterByReceiptId[doc.id] || '').trim().toLowerCase();
+                      const filteredAttachableTaskDocuments = receiptAttachmentFilter
+                        ? attachableTaskDocuments.filter((candidate) => {
+                          const haystack = `${candidate.original_name} ${buildWizardTokenLabel(candidate.kind, 'Other')}`.toLowerCase();
+                          return haystack.includes(receiptAttachmentFilter);
+                        })
+                        : attachableTaskDocuments;
                       return (
                         <div className="build-wizard-step-receipt-row" key={`step-${step.id}-receipt-${doc.id}`}>
                           <div className="build-wizard-step-receipt-file">
@@ -3931,12 +3983,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             )}
                             {attachableTaskDocuments.length > 0 ? (
                               <div className="build-wizard-step-attach-existing">
+                                <input
+                                  type="text"
+                                  className="build-wizard-attach-filter-input"
+                                  placeholder="Filter attachments..."
+                                  value={attachExistingDocFilterByReceiptId[doc.id] || ''}
+                                  onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                                />
                                 <select
                                   value={attachExistingDocByReceiptId[doc.id] || ''}
                                   onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
                                 >
                                   <option value="">Attach existing document...</option>
-                                  {attachableTaskDocuments.map((candidate) => (
+                                  {filteredAttachableTaskDocuments.map((candidate) => (
                                     <option key={`task-attach-${doc.id}-${candidate.id}`} value={String(candidate.id)}>
                                       {candidate.original_name} ({buildWizardTokenLabel(candidate.kind, 'Other')})
                                     </option>

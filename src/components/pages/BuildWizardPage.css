@@ -994,12 +994,24 @@
   gap: 8px;
 }
 
+.build-wizard-dependency-note.is-empty-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+}
+
 .build-wizard-dependency-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   font-weight: 600;
+}
+
+.build-wizard-dependency-note.is-empty-inline .build-wizard-dependency-head {
+  justify-content: flex-start;
 }
 
 .build-wizard-dependency-head .btn-link {
@@ -1050,9 +1062,20 @@
   align-items: center;
 }
 
+.build-wizard-dependency-note.is-empty-inline .build-wizard-dependency-controls {
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
 .build-wizard-dependency-controls select {
   min-width: min(520px, 100%);
   max-width: 100%;
+}
+
+.build-wizard-dependency-note.is-empty-inline .build-wizard-dependency-controls select {
+  min-width: 320px;
+  width: 420px;
+  max-width: 420px;
 }
 
 .build-wizard-phase-head {
@@ -1180,15 +1203,30 @@
 }
 
 .build-wizard-step-attach-existing {
-  display: inline-flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-areas:
+    "filter button"
+    "select button";
+  align-items: end;
   gap: 8px;
   max-width: 100%;
 }
 
-.build-wizard-step-attach-existing select {
-  min-width: 280px;
+.build-wizard-attach-filter-input {
+  grid-area: filter;
+  min-width: 260px;
   max-width: min(520px, 100%);
+}
+
+.build-wizard-step-attach-existing select {
+  grid-area: select;
+  min-width: 260px;
+  max-width: min(520px, 100%);
+}
+
+.build-wizard-step-attach-existing button {
+  grid-area: button;
 }
 
 .build-wizard-note-editor {
@@ -2603,9 +2641,15 @@
   }
 
   .build-wizard-step-attach-existing {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "filter"
+      "select"
+      "button";
     width: 100%;
   }
 
+  .build-wizard-attach-filter-input,
   .build-wizard-step-attach-existing select {
     min-width: 0;
     width: 100%;

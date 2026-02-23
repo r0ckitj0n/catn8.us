@@ -167,14 +167,56 @@ function includesAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
 }
 
+function normalizePhaseKeyHint(rawPhaseKey: string | null | undefined): string | null {
+  const phaseKey = String(rawPhaseKey || '').trim().toLowerCase();
+  if (!phaseKey) {
+    return null;
+  }
+  const phaseMap: Record<string, string> = {
+    land_due_diligence: 'design_preconstruction',
+    design_preconstruction: 'design_preconstruction',
+    dawson_county_permits: 'design_preconstruction',
+    permits: 'design_preconstruction',
+    site_preparation: 'site_preparation',
+    sitework: 'site_preparation',
+    foundation: 'site_preparation',
+    framing_shell: 'framing_shell',
+    framing: 'framing_shell',
+    enclosure: 'framing_shell',
+    roofing: 'framing_shell',
+    mep_rough_in: 'mep_rough_in',
+    plumbing: 'mep_rough_in',
+    electrical: 'mep_rough_in',
+    hvac: 'mep_rough_in',
+    interior_finishes: 'interior_finishes',
+    interior: 'interior_finishes',
+    move_in: 'interior_finishes',
+    inspections_closeout: 'inspections_closeout',
+    closeout: 'inspections_closeout',
+  };
+  return phaseMap[phaseKey] || null;
+}
+
 export function recommendPhaseKeyForStep(step: IBuildWizardStep): string | null {
   const phaseKey = String(step.phase_key || '').trim().toLowerCase();
+  const mappedPhaseKey = normalizePhaseKeyHint(phaseKey);
+  if (mappedPhaseKey) {
+    return mappedPhaseKey;
+  }
+
   const haystack = `${phaseKey} ${String(step.step_type || '').toLowerCase()} ${String(step.title || '').toLowerCase()} ${String(step.description || '').toLowerCase()}`
     .replace(/\s+/g, ' ')
     .trim();
 
   if (!haystack) {
     return null;
+  }
+
+  if (
+    step.step_type === 'permit'
+    || includesAny(haystack, [' permit ', 'permit', 'approval', 'application', 'zoning', 'setback', 'survey', 'engineering', 'blueprint'])
+  ) {
+    return 'design_preconstruction';
   }
 
   if (

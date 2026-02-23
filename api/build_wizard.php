@@ -4430,6 +4430,40 @@ function catn8_build_wizard_refine_phase_order(): array
     ];
 }
 
+function catn8_build_wizard_refine_phase_key_hint(string $phaseKeyRaw): ?string
+{
+    $phaseKey = strtolower(trim($phaseKeyRaw));
+    if ($phaseKey === '') {
+        return null;
+    }
+
+    $phaseMap = [
+        'land_due_diligence' => 'land_due_diligence',
+        'design_preconstruction' => 'design_preconstruction',
+        'dawson_county_permits' => 'dawson_county_permits',
+        'permits' => 'dawson_county_permits',
+        'site_preparation' => 'site_preparation',
+        'sitework' => 'site_preparation',
+        'foundation' => 'foundation',
+        'framing_shell' => 'framing_shell',
+        'framing' => 'framing_shell',
+        'enclosure' => 'framing_shell',
+        'roofing' => 'framing_shell',
+        'mep_rough_in' => 'mep_rough_in',
+        'plumbing' => 'mep_rough_in',
+        'electrical' => 'mep_rough_in',
+        'hvac' => 'mep_rough_in',
+        'interior_finishes' => 'interior_finishes',
+        'interior' => 'interior_finishes',
+        'move_in' => 'move_in',
+        'inspections_closeout' => 'inspections_closeout',
+        'closeout' => 'inspections_closeout',
+        'general' => 'general',
+    ];
+
+    return $phaseMap[$phaseKey] ?? null;
+}
+
 function catn8_build_wizard_refine_legacy_phase_key(array $step): string
 {
     $title = strtolower(trim((string)($step['title'] ?? '')));
@@ -4438,6 +4472,11 @@ function catn8_build_wizard_refine_legacy_phase_key(array $step): string
     $stepType = catn8_build_wizard_step_type((string)($step['step_type'] ?? 'construction'));
     $permitRequired = !empty($step['permit_required']) ? 1 : 0;
     $text = trim($title . ' ' . $description . ' ' . $phase);
+
+    $phaseHint = catn8_build_wizard_refine_phase_key_hint($phase);
+    if ($phaseHint !== null && $phaseHint !== 'general') {
+        return $phaseHint;
+    }
 
     $isLikelyChore = str_contains($text, 'tammy')
         || str_contains($text, 'angela')

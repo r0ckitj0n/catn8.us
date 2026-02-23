@@ -39,7 +39,7 @@
     },
     {
       "template_step_key": "well_drilling_install",
-      "phase_key": "move_in",
+      "phase_key": "site_preparation",
       "step_type": "construction",
       "title": "Drill well and install casing/pump",
       "description": "Complete well drilling and core equipment installation.",
@@ -53,10 +53,10 @@
     },
     {
       "template_step_key": "well_yield_water_quality_test",
-      "phase_key": "inspections_closeout",
+      "phase_key": "site_preparation",
       "step_type": "inspection",
       "title": "Complete well yield and water quality testing",
-      "description": "Verify well output and potability requirements before final occupancy approvals.",
+      "description": "Verify well output and baseline potability requirements before rough utility/service planning.",
       "permit_required": 0,
       "expected_duration_days": 3,
       "depends_on_keys": [

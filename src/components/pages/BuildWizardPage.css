@@ -2131,6 +2131,11 @@
   max-width: 100%;
 }
 
+.build-wizard-doc-manager-filters input[type="search"] {
+  width: 100%;
+  max-width: 100%;
+}
+
 .build-wizard-doc-manager-row {
   border: 1px solid var(--catn8-bw-border-soft);
   border-radius: 10px;

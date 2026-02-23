@@ -9,6 +9,7 @@ function bw_recover_usage(): void
     echo "Usage:\n";
     echo "  php scripts/maintenance/recover_build_wizard_singletree_documents.php [--apply] [--db-env=live|local]\n";
     echo "      [--project-title=\"Cabin - 91 Singletree Ln\"] [--source-root=\"/Users/jongraves/Documents/Home/91 Singletree Ln\"]\n";
+    echo "      [--source-list-file=\"/abs/path/list.tsv\"]\n";
     echo "      [--owner-user-id=<id>] [--include-archives]\n";
     echo "\n";
     echo "Notes:\n";
@@ -24,6 +25,7 @@ function bw_recover_parse_args(array $argv): array
         'db_env' => 'live',
         'project_title' => 'Cabin - 91 Singletree Ln',
         'source_root' => '/Users/jongraves/Documents/Home/91 Singletree Ln',
+        'source_list_file' => '',
         'owner_user_id' => null,
         'include_archives' => false,
     ];
@@ -59,6 +61,13 @@ function bw_recover_parse_args(array $argv): array
             $v = trim((string)substr($arg, 14));
             if ($v !== '') {
                 $opts['source_root'] = $v;
+            }
+            continue;
+        }
+        if (str_starts_with($arg, '--source-list-file=')) {
+            $v = trim((string)substr($arg, 19));
+            if ($v !== '') {
+                $opts['source_list_file'] = $v;
             }
             continue;
         }
@@ -319,12 +328,52 @@ function bw_recover_is_supported(string $path, bool $includeArchives): bool
     return in_array($ext, $allowed, true);
 }
 
+function bw_recover_collect_sources_from_list_file(string $listFilePath, bool $includeArchives): array
+{
+    if (!is_file($listFilePath)) {
+        throw new RuntimeException('Source list file not found: ' . $listFilePath);
+    }
+    $lines = @file($listFilePath, FILE_IGNORE_NEW_LINES);
+    if (!is_array($lines)) {
+        throw new RuntimeException('Failed reading source list file: ' . $listFilePath);
+    }
+    $out = [];
+    foreach ($lines as $lineRaw) {
+        $line = trim((string)$lineRaw);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+        $candidate = '';
+        if (str_contains($line, "\t")) {
+            $parts = explode("\t", $line);
+            $first = trim((string)($parts[0] ?? ''));
+            if ($first === '' || strtolower($first) === 'path') {
+                continue;
+            }
+            $candidate = $first;
+        } else {
+            $candidate = $line;
+        }
+        if ($candidate === '' || !is_file($candidate)) {
+            continue;
+        }
+        if (!bw_recover_is_supported($candidate, $includeArchives)) {
+            continue;
+        }
+        $out[] = $candidate;
+    }
+    $out = array_values(array_unique($out));
+    sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}
+
 $args = $argv;
 array_shift($args);
 $opt = bw_recover_parse_args($args);
 
 $sourceRoot = rtrim((string)$opt['source_root'], '/');
-if (!is_dir($sourceRoot)) {
+$sourceListFile = trim((string)($opt['source_list_file'] ?? ''));
+if ($sourceListFile === '' && !is_dir($sourceRoot)) {
     fwrite(STDERR, "Source root not found: {$sourceRoot}\n");
     exit(1);
 }
@@ -391,18 +440,27 @@ foreach ($existingDocs as $doc) {
 }
 
 $sourceFiles = [];
-$iter = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($sourceRoot, FilesystemIterator::SKIP_DOTS));
-foreach ($iter as $info) {
-    if (!$info instanceof SplFileInfo || !$info->isFile()) {
-        continue;
+if ($sourceListFile !== '') {
+    try {
+        $sourceFiles = bw_recover_collect_sources_from_list_file($sourceListFile, (bool)$opt['include_archives']);
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Source list load failed: " . $e->getMessage() . "\n");
+        exit(1);
     }
-    $path = $info->getPathname();
-    if (!bw_recover_is_supported($path, (bool)$opt['include_archives'])) {
-        continue;
+} else {
+    $iter = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($sourceRoot, FilesystemIterator::SKIP_DOTS));
+    foreach ($iter as $info) {
+        if (!$info instanceof SplFileInfo || !$info->isFile()) {
+            continue;
+        }
+        $path = $info->getPathname();
+        if (!bw_recover_is_supported($path, (bool)$opt['include_archives'])) {
+            continue;
+        }
+        $sourceFiles[] = $path;
     }
-    $sourceFiles[] = $path;
+    sort($sourceFiles, SORT_NATURAL | SORT_FLAG_CASE);
 }
-sort($sourceFiles, SORT_NATURAL | SORT_FLAG_CASE);
 
 $apply = (bool)$opt['apply'];
 $stats = [
@@ -410,6 +468,7 @@ $stats = [
     'project_title' => $projectTitle,
     'apply' => $apply ? 1 : 0,
     'source_root' => $sourceRoot,
+    'source_list_file' => ($sourceListFile !== '' ? $sourceListFile : null),
     'source_files_considered' => count($sourceFiles),
     'existing_documents_before' => count($existingDocs),
     'matched_existing' => 0,
@@ -550,6 +609,7 @@ try {
 
         $storedName = bw_recover_safe_storage_name($baseName);
         $destPath = $uploadDir . '/' . $storedName;
+        $storagePath = 'images/build-wizard/' . $storedName;
         if (!copy($path, $destPath)) {
             throw new RuntimeException('Failed to copy source file into uploads: ' . $path);
         }
@@ -558,7 +618,7 @@ try {
             $pdo,
             'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [$projectId, ($stepId !== null && $stepId > 0 ? $stepId : null), $kind, $baseName, $mime, $destPath, $size, null]
+            [$projectId, ($stepId !== null && $stepId > 0 ? $stepId : null), $kind, $baseName, $mime, $storagePath, $size, null]
         );
         $docId = (int)$pdo->lastInsertId();
         if ($docId <= 0) {

@@ -306,6 +306,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
   const [topbarSearchDocumentResults, setTopbarSearchDocumentResults] = React.useState<IBuildWizardContentSearchResult[]>([]);
   const [topbarSearchFocusStepId, setTopbarSearchFocusStepId] = React.useState<number>(0);
+  const [documentManagerQuery, setDocumentManagerQuery] = React.useState<string>('');
+  const [documentManagerSearchLoading, setDocumentManagerSearchLoading] = React.useState<boolean>(false);
+  const [documentManagerSearchResults, setDocumentManagerSearchResults] = React.useState<IBuildWizardContentSearchResult[]>([]);
   const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
   const [currencyInputByKey, setCurrencyInputByKey] = React.useState<Record<string, string>>({});
@@ -584,6 +587,37 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       window.clearTimeout(timer);
     };
   }, [projectId, searchContent, topbarSearchQuery]);
+
+  React.useEffect(() => {
+    const query = documentManagerQuery.trim();
+    if (query.length < 2 || projectId <= 0) {
+      setDocumentManagerSearchLoading(false);
+      setDocumentManagerSearchResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setDocumentManagerSearchLoading(true);
+      void searchContent(query, 200)
+        .then((res) => {
+          if (cancelled) {
+            return;
+          }
+          setDocumentManagerSearchResults(Array.isArray(res?.results) ? res.results : []);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setDocumentManagerSearchLoading(false);
+          }
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [documentManagerQuery, projectId, searchContent]);
 
   const completedSteps = React.useMemo(() => {
     return steps
@@ -1183,7 +1217,28 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return Array.from(keys).sort((a, b) => sortAlpha(prettyPhaseLabel(a), prettyPhaseLabel(b)));
   }, [documents, steps]);
 
+  const documentManagerSearchIds = React.useMemo(() => {
+    const ids = new Set<number>();
+    documentManagerSearchResults.forEach((doc) => {
+      if (Number(doc.id) > 0) {
+        ids.add(Number(doc.id));
+      }
+    });
+    return ids;
+  }, [documentManagerSearchResults]);
+
+  const documentManagerSearchResultById = React.useMemo(() => {
+    const map = new Map<number, IBuildWizardContentSearchResult>();
+    documentManagerSearchResults.forEach((doc) => {
+      if (Number(doc.id) > 0) {
+        map.set(Number(doc.id), doc);
+      }
+    });
+    return map;
+  }, [documentManagerSearchResults]);
+
   const filteredDocumentManagerDocs = React.useMemo(() => {
+    const query = documentManagerQuery.trim();
     return documents.filter((doc) => {
       const docKindValue = String(doc.kind || '').trim();
       if (docKindValue === 'receipt_attachment') {
@@ -1196,9 +1251,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       if (documentManagerPhaseFilter !== 'all' && docPhaseValue !== documentManagerPhaseFilter) {
         return false;
       }
+      if (query.length >= 2 && !documentManagerSearchIds.has(Number(doc.id))) {
+        return false;
+      }
       return true;
     });
-  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter]);
+  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter, documentManagerQuery, documentManagerSearchIds]);
 
   const topbarSearchResults = React.useMemo<BuildWizardSearchResult[]>(() => {
     const query = topbarSearchQuery.trim().toLowerCase();
@@ -4185,6 +4243,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               ) : null}
             </div>
             <div className="build-wizard-topbar-actions">
+              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Documents</button>
               <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
               <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
               <StandardIconButton
@@ -4471,7 +4530,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   type="number"
                   value={projectDraft.kitchens_count ?? ''}
                   onChange={(e) => setProjectDraft((prev) => ({ ...prev, kitchens_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ kitchens_count: projectDraft.kitchens_count })}
+                  onBlur={(e) => void updateProject({ kitchens_count: toNumberOrNull(e.currentTarget.value) })}
                 />
               </label>
               <label>
@@ -4783,11 +4842,28 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           ))}
                         </select>
                       </label>
+                      <label>
+                        Query Index
+                        <input
+                          type="search"
+                          value={documentManagerQuery}
+                          onChange={(e) => setDocumentManagerQuery(e.target.value)}
+                          placeholder="Search indexed document text..."
+                        />
+                      </label>
                     </div>
+                    {documentManagerQuery.trim().length >= 2 ? (
+                      <div className="build-wizard-muted">
+                        {documentManagerSearchLoading
+                          ? 'Searching index...'
+                          : `Index matches: ${filteredDocumentManagerDocs.length}`}
+                      </div>
+                    ) : null}
                     {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
                       const draft = buildDocumentDraft(doc);
                       const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
                       const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
+                      const indexedHit = documentManagerSearchResultById.get(doc.id);
 
                       return (
                         <div className="build-wizard-doc-manager-row" key={doc.id}>
@@ -4836,6 +4912,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           <div className="build-wizard-doc-manager-fields">
                             <div className="build-wizard-doc-manager-title">{doc.original_name}</div>
                             <div className="build-wizard-doc-manager-meta">Uploaded: {formatTimelineDate(doc.uploaded_at)} | Phase: {phaseLabel}</div>
+                            {indexedHit?.snippet ? (
+                              <div className="build-wizard-muted">{indexedHit.snippet}</div>
+                            ) : null}
                             <div className="build-wizard-doc-manager-grid">
                               <label>
                                 Kind
@@ -4980,6 +5059,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
                                 </button>
                               ) : null}
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => void onSaveDocumentDraft(doc)}
+                                disabled={documentSavingId === doc.id || Number(draft.step_id || 0) <= 0}
+                                title={Number(draft.step_id || 0) > 0 ? 'Attach this document to the selected step' : 'Select a step first'}
+                              >
+                                Attach to Step
+                              </button>
                               <StandardIconButton
                                 iconKey={documentSavingId === doc.id ? 'refresh' : 'save'}
                                 ariaLabel={documentSavingId === doc.id ? `Saving ${doc.original_name}` : `Save ${doc.original_name}`}

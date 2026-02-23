@@ -229,6 +229,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [lightboxZoom, setLightboxZoom] = React.useState<number>(1);
   const [documentManagerKindFilter, setDocumentManagerKindFilter] = React.useState<string>('all');
   const [documentManagerPhaseFilter, setDocumentManagerPhaseFilter] = React.useState<string>('all');
+  const [documentManagerStepFilter, setDocumentManagerStepFilter] = React.useState<string>('all');
+  const [documentUploadModalOpen, setDocumentUploadModalOpen] = React.useState<boolean>(false);
+  const [documentUploadFile, setDocumentUploadFile] = React.useState<File | null>(null);
+  const [documentUploadBusy, setDocumentUploadBusy] = React.useState<boolean>(false);
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [aiToolsOpen, setAiToolsOpen] = React.useState<boolean>(false);
   const [deskSelectedContactId, setDeskSelectedContactId] = React.useState<number>(0);
@@ -1251,12 +1255,22 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       if (documentManagerPhaseFilter !== 'all' && docPhaseValue !== documentManagerPhaseFilter) {
         return false;
       }
+      if (documentManagerStepFilter === 'unlinked' && Number(doc.step_id || 0) > 0) {
+        return false;
+      }
+      if (
+        documentManagerStepFilter !== 'all'
+        && documentManagerStepFilter !== 'unlinked'
+        && Number(doc.step_id || 0) !== Number(documentManagerStepFilter)
+      ) {
+        return false;
+      }
       if (query.length >= 2 && !documentManagerSearchIds.has(Number(doc.id))) {
         return false;
       }
       return true;
     });
-  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter, documentManagerQuery, documentManagerSearchIds]);
+  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter, documentManagerQuery, documentManagerSearchIds, documentManagerStepFilter]);
 
   const topbarSearchResults = React.useMemo<BuildWizardSearchResult[]>(() => {
     const query = topbarSearchQuery.trim().toLowerCase();
@@ -1396,6 +1410,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setDocumentDrafts(nextDrafts);
     setDocumentManagerKindFilter('all');
     setDocumentManagerPhaseFilter('all');
+    setDocumentManagerStepFilter('all');
+    setDocumentManagerQuery('');
+    setDocumentUploadModalOpen(false);
+    setDocumentUploadFile(null);
 
     if (deskCreateMode) {
       return;
@@ -4243,7 +4261,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               ) : null}
             </div>
             <div className="build-wizard-topbar-actions">
-              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Documents</button>
               <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
               <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
               <StandardIconButton
@@ -4782,34 +4799,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             </div>
             <div className="build-wizard-desk-grid">
               <div className="build-wizard-desk-documents">
-                <h3>Documents</h3>
-                <div className="build-wizard-upload-row">
-                  <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                    {docKindOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
-                    {phaseOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
-                    <option value="">Auto-link by phase</option>
-                    {selectableDocSteps.map((step) => (
-                      <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="file"
-                    onChange={(e) => {
-                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                      if (file) {
-                        void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
-                      }
-                      e.currentTarget.value = '';
-                    }}
-                  />
+                <div className="build-wizard-doc-manager-head">
+                  <h3>Documents</h3>
+                  <div className="build-wizard-doc-manager-actions">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      onClick={() => setDocumentUploadModalOpen(true)}
+                    >
+                      Upload Document
+                    </button>
+                  </div>
                 </div>
                 {documents.length ? (
                   <div className="build-wizard-doc-manager-list">
@@ -4838,6 +4838,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           {documentManagerPhaseOptions.map((phaseKey) => (
                             <option key={phaseKey} value={phaseKey}>
                               {prettyPhaseLabel(phaseKey)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Linked Step
+                        <select
+                          value={documentManagerStepFilter}
+                          onChange={(e) => setDocumentManagerStepFilter(e.target.value)}
+                        >
+                          <option value="all">All</option>
+                          <option value="unlinked">No step linked</option>
+                          {linkedStepOptions.map((option) => (
+                            <option key={`doc-filter-step-${option.step.id}`} value={String(option.step.id)}>
+                              {option.label}
                             </option>
                           ))}
                         </select>
@@ -5361,6 +5376,90 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </div>
             </div>
             {renderEditableStepCards(projectDeskSteps)}
+          </div>
+        </div>
+      ) : null}
+
+      {documentUploadModalOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setDocumentUploadModalOpen(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-upload-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Upload Document</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close upload dialog"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setDocumentUploadModalOpen(false)}
+                />
+              </div>
+            </div>
+            <div className="build-wizard-doc-manager-grid">
+              <label>
+                Kind
+                <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+                  {docKindOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Phase
+                <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
+                  {phaseOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="is-wide">
+                Linked Step
+                <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
+                  <option value="">Auto-link by phase</option>
+                  {selectableDocSteps.map((step) => (
+                    <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="is-wide">
+                File
+                <input
+                  type="file"
+                  onChange={(e) => setDocumentUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                />
+              </label>
+            </div>
+            <div className="build-wizard-doc-manager-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={documentUploadBusy || !documentUploadFile}
+                onClick={() => {
+                  if (!documentUploadFile || documentUploadBusy) {
+                    return;
+                  }
+                  setDocumentUploadBusy(true);
+                  void uploadDocument(docKind, documentUploadFile, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey)
+                    .then(() => {
+                      setDocumentUploadModalOpen(false);
+                      setDocumentUploadFile(null);
+                    })
+                    .finally(() => setDocumentUploadBusy(false));
+                }}
+              >
+                {documentUploadBusy ? 'Uploading...' : 'Upload'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => {
+                  setDocumentUploadModalOpen(false);
+                  setDocumentUploadFile(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

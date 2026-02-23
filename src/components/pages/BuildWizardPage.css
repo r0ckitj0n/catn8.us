@@ -1204,25 +1204,28 @@
 
 .build-wizard-step-attach-existing {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(260px, 520px) auto;
   grid-template-areas:
-    "filter button"
+    "filter filter"
     "select button";
   align-items: end;
   gap: 8px;
+  width: fit-content;
   max-width: 100%;
 }
 
 .build-wizard-attach-filter-input {
   grid-area: filter;
   min-width: 260px;
-  max-width: min(520px, 100%);
+  width: min(520px, 100%);
+  max-width: 100%;
 }
 
 .build-wizard-step-attach-existing select {
   grid-area: select;
   min-width: 260px;
-  max-width: min(520px, 100%);
+  width: min(520px, 100%);
+  max-width: 100%;
 }
 
 .build-wizard-step-attach-existing button {

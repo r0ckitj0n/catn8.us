@@ -307,6 +307,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [attachExistingDocByReceiptId, setAttachExistingDocByReceiptId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByStepId, setAttachExistingDocFilterByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByReceiptId, setAttachExistingDocFilterByReceiptId] = React.useState<Record<number, string>>({});
+  const [attachExistingPickerOpenByStepId, setAttachExistingPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
+  const [attachExistingPickerOpenByReceiptId, setAttachExistingPickerOpenByReceiptId] = React.useState<Record<number, boolean>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
@@ -587,6 +589,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
       return next;
     });
+    setAttachExistingPickerOpenByStepId((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const stepId = Number(idText);
+        if (validIds.has(stepId) && prev[stepId]) {
+          next[stepId] = true;
+        }
+      });
+      return next;
+    });
     setReceiptEditorOpenByStep((prev) => {
       const next: typeof prev = {};
       Object.keys(prev).forEach((idText) => {
@@ -644,6 +656,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         const documentId = Number(idText);
         if (validDocumentIds.has(documentId)) {
           next[documentId] = prev[documentId];
+        }
+      });
+      return next;
+    });
+    setAttachExistingPickerOpenByReceiptId((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const documentId = Number(idText);
+        if (validDocumentIds.has(documentId) && prev[documentId]) {
+          next[documentId] = true;
         }
       });
       return next;
@@ -3451,15 +3473,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </label>
                 {attachableProjectDocuments.length ? (
                   <div className="build-wizard-step-attach-existing">
-                    <input
-                      type="text"
-                      className="build-wizard-attach-filter-input"
-                      placeholder="Filter attachments..."
-                      value={attachExistingDocFilterByStepId[step.id] || ''}
-                      onChange={(e) => setAttachExistingDocFilterByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                    />
+                    {attachExistingPickerOpenByStepId[step.id] ? (
+                      <input
+                        type="text"
+                        className="build-wizard-attach-filter-input"
+                        placeholder="Filter attachments..."
+                        value={attachExistingDocFilterByStepId[step.id] || ''}
+                        onChange={(e) => setAttachExistingDocFilterByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                      />
+                    ) : null}
                     <select
                       value={attachExistingDocByStepId[step.id] || ''}
+                      onFocus={() => setAttachExistingPickerOpenByStepId((prev) => ({ ...prev, [step.id]: true }))}
+                      onMouseDown={() => setAttachExistingPickerOpenByStepId((prev) => ({ ...prev, [step.id]: true }))}
                       onChange={(e) => setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
                     >
                       <option value="">Attach existing document...</option>
@@ -3983,15 +4009,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             )}
                             {attachableTaskDocuments.length > 0 ? (
                               <div className="build-wizard-step-attach-existing">
-                                <input
-                                  type="text"
-                                  className="build-wizard-attach-filter-input"
-                                  placeholder="Filter attachments..."
-                                  value={attachExistingDocFilterByReceiptId[doc.id] || ''}
-                                  onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                                />
+                                {attachExistingPickerOpenByReceiptId[doc.id] ? (
+                                  <input
+                                    type="text"
+                                    className="build-wizard-attach-filter-input"
+                                    placeholder="Filter attachments..."
+                                    value={attachExistingDocFilterByReceiptId[doc.id] || ''}
+                                    onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                                  />
+                                ) : null}
                                 <select
                                   value={attachExistingDocByReceiptId[doc.id] || ''}
+                                  onFocus={() => setAttachExistingPickerOpenByReceiptId((prev) => ({ ...prev, [doc.id]: true }))}
+                                  onMouseDown={() => setAttachExistingPickerOpenByReceiptId((prev) => ({ ...prev, [doc.id]: true }))}
                                   onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
                                 >
                                   <option value="">Attach existing document...</option>

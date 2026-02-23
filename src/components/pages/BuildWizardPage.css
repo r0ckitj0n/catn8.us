@@ -989,6 +989,72 @@
   padding: 8px 10px;
 }
 
+.build-wizard-dependency-note {
+  display: grid;
+  gap: 8px;
+}
+
+.build-wizard-dependency-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.build-wizard-dependency-head .btn-link {
+  font-size: 0.75rem;
+  padding: 0;
+  line-height: 1.2;
+}
+
+.build-wizard-dependency-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.build-wizard-dependency-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid #b7c9e8;
+  background: #ffffff;
+  color: #284969;
+  padding: 3px 8px;
+}
+
+.build-wizard-dependency-chip-remove {
+  border: 0;
+  background: transparent;
+  color: #496283;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.build-wizard-dependency-chip-remove:hover {
+  color: #c32545;
+}
+
+.build-wizard-dependency-empty {
+  font-size: 0.8rem;
+  color: #5a6f88;
+}
+
+.build-wizard-dependency-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.build-wizard-dependency-controls select {
+  min-width: min(520px, 100%);
+  max-width: 100%;
+}
+
 .build-wizard-phase-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

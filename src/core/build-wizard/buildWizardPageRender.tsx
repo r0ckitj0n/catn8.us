@@ -56,7 +56,6 @@ import {
   toStringOrNull,
   withDownloadFlag,
 } from '../../components/pages/build-wizard/buildWizardUtils';
-import { sanitizeBuildWizardStepTitle } from './buildWizardSanitizers';
 import { DateRangeChart, FooterPhaseTimeline } from '../../components/pages/build-wizard/BuildWizardTimeline';
 import '../../components/pages/BuildWizardPage.css';
 
@@ -159,6 +158,89 @@ const contactTypeChipClass = (contactType: BuildWizardContactType): string => {
   return 'is-contact';
 };
 
+type BuildWizardTaskType = StepType;
+
+type BuildWizardTaskMeta = {
+  task_type: BuildWizardTaskType;
+  permit_document_id: number | null;
+  permit_name: string | null;
+  permit_authority: string | null;
+  permit_status: string | null;
+  permit_application_url: string | null;
+  purchase_category: string | null;
+  purchase_brand: string | null;
+  purchase_model: string | null;
+  purchase_sku: string | null;
+  purchase_unit: string | null;
+  purchase_qty: number | null;
+  purchase_unit_price: number | null;
+  purchase_vendor: string | null;
+  purchase_url: string | null;
+  source_ref: string | null;
+};
+
+const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
+
+const defaultTaskMeta = (taskType: BuildWizardTaskType = 'construction'): BuildWizardTaskMeta => ({
+  task_type: taskType,
+  permit_document_id: null,
+  permit_name: null,
+  permit_authority: null,
+  permit_status: null,
+  permit_application_url: null,
+  purchase_category: null,
+  purchase_brand: null,
+  purchase_model: null,
+  purchase_sku: null,
+  purchase_unit: null,
+  purchase_qty: null,
+  purchase_unit_price: null,
+  purchase_vendor: null,
+  purchase_url: null,
+  source_ref: null,
+});
+
+const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined): { taskMeta: BuildWizardTaskMeta; plainNotes: string } => {
+  const raw = String(notes || '');
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith(BUILD_WIZARD_TASK_META_PREFIX)) {
+    return {
+      taskMeta: defaultTaskMeta(),
+      plainNotes: raw,
+    };
+  }
+  const newlineIndex = trimmed.indexOf('\n');
+  const jsonPart = (newlineIndex >= 0 ? trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length, newlineIndex) : trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length)).trim();
+  const plainNotes = newlineIndex >= 0 ? trimmed.slice(newlineIndex + 1) : '';
+  try {
+    const decoded = JSON.parse(jsonPart);
+    const seed = defaultTaskMeta();
+    if (!decoded || typeof decoded !== 'object') {
+      return { taskMeta: seed, plainNotes };
+    }
+    const taskType = String((decoded as Record<string, unknown>).task_type || '').trim() as BuildWizardTaskType;
+    return {
+      taskMeta: {
+        ...seed,
+        ...(decoded as Partial<BuildWizardTaskMeta>),
+        task_type: (STEP_TYPE_OPTIONS.some((option) => option.value === taskType) ? taskType : 'construction'),
+      },
+      plainNotes,
+    };
+  } catch (_err) {
+    return {
+      taskMeta: defaultTaskMeta(),
+      plainNotes: raw,
+    };
+  }
+};
+
+const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, plainNotes: string): string => {
+  const json = JSON.stringify(taskMeta);
+  const notes = plainNotes.trim();
+  return notes ? `${BUILD_WIZARD_TASK_META_PREFIX}${json}\n${notes}` : `${BUILD_WIZARD_TASK_META_PREFIX}${json}`;
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     aiBusy,
@@ -191,7 +273,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     replaceDocument,
     deleteDocument,
     updateDocument,
-    findPurchaseOptions,
     packageForAi,
     generateStepsFromAi,
     recoverSingletreeDocuments,
@@ -221,7 +302,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [editingNoteTextById, setEditingNoteTextById] = React.useState<Record<number, string>>({});
   const [savingNoteId, setSavingNoteId] = React.useState<number>(0);
   const [deletingNoteId, setDeletingNoteId] = React.useState<number>(0);
+  const [dependencyCandidateByStepId, setDependencyCandidateByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
+  const [attachExistingDocByReceiptId, setAttachExistingDocByReceiptId] = React.useState<Record<number, string>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
@@ -281,14 +364,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     receipt_date: string;
     receipt_amount: string;
     receipt_notes: string;
+    task_meta: BuildWizardTaskMeta;
   }>>({});
   const [receiptAttachmentDraftByStep, setReceiptAttachmentDraftByStep] = React.useState<Record<number, File[]>>({});
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [unlinkingDocumentId, setUnlinkingDocumentId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
   const [deletingProjectId, setDeletingProjectId] = React.useState<number>(0);
-  const [findingStepId, setFindingStepId] = React.useState<number>(0);
-  const [purchaseOptionsByStep, setPurchaseOptionsByStep] = React.useState<Record<number, Array<any>>>({});
   const [recoveryReportOpen, setRecoveryReportOpen] = React.useState<boolean>(false);
   const [recoveryReportJson, setRecoveryReportJson] = React.useState<string>('');
   const [recoveryJobId, setRecoveryJobId] = React.useState<string>('');
@@ -483,6 +565,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   React.useEffect(() => {
     const validIds = new Set(steps.map((step) => step.id));
+    setDependencyCandidateByStepId((prev) => {
+      const next: typeof prev = {};
+      Object.keys(prev).forEach((idText) => {
+        const stepId = Number(idText);
+        if (validIds.has(stepId)) {
+          next[stepId] = prev[stepId];
+        }
+      });
+      return next;
+    });
     setReceiptEditorOpenByStep((prev) => {
       const next: typeof prev = {};
       Object.keys(prev).forEach((idText) => {
@@ -1096,18 +1188,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       .filter((d) => String(d.kind || '') === 'permit')
       .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
   }, [documents]);
-
-  const permitUsageByDocumentId = React.useMemo(() => {
-    const usage = new Map<number, number>();
-    steps.forEach((step) => {
-      const permitDocumentId = Number(step.permit_document_id || 0);
-      if (permitDocumentId <= 0) {
-        return;
-      }
-      usage.set(permitDocumentId, (usage.get(permitDocumentId) || 0) + 1);
-    });
-    return usage;
-  }, [steps]);
 
   const primaryPhotoChoices = React.useMemo(() => {
     return documents
@@ -1958,29 +2038,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     });
   }, []);
 
-  const onQuickAddAuthorityContact = React.useCallback(() => {
-    setProjectDeskOpen(true);
-    setDeskContactTypeFilter('authority');
-    setDeskContactQuery('');
-    setDeskCreateMode(true);
-    setDeskSelectedContactId(0);
-    setDeskContactDraft({
-      display_name: '',
-      email: '',
-      phone: '',
-      company: '',
-      role_title: '',
-      notes: '',
-      contact_type: 'authority',
-      is_vendor: 0,
-      is_project_only: 1,
-      vendor_type: '',
-      vendor_license: '',
-      vendor_trade: '',
-      vendor_website: '',
-    });
-  }, []);
-
   const onSaveDeskContact = React.useCallback(async () => {
     if (projectId <= 0) {
       return;
@@ -2328,6 +2385,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       kind?: string;
       caption?: string | null;
       step_id?: number | null;
+      receipt_parent_document_id?: number | null;
       receipt_amount?: number | null;
       receipt_title?: string | null;
       receipt_vendor?: string | null;
@@ -2413,6 +2471,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       receipt_date: '',
       receipt_amount: '',
       receipt_notes: '',
+      task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
     };
     const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
     const existingReceipt = editingReceiptDocumentId > 0
@@ -2429,7 +2488,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         receipt_vendor: toStringOrNull(draft.receipt_vendor),
         receipt_date: toStringOrNull(draft.receipt_date),
         receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(draft.receipt_notes),
+        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta(draft.task_meta, draft.receipt_notes)),
       });
       if (!updated) {
         return;
@@ -2443,7 +2502,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         receipt_vendor: toStringOrNull(draft.receipt_vendor),
         receipt_date: toStringOrNull(draft.receipt_date),
         receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(draft.receipt_notes),
+        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta(draft.task_meta, draft.receipt_notes)),
         caption: toStringOrNull(draft.receipt_title || step.title),
       });
       if (!created?.id) {
@@ -2470,6 +2529,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       receipt_date: '',
       receipt_amount: '',
       receipt_notes: '',
+      task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
     } }));
     setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
     setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
@@ -2477,6 +2537,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const onStartEditReceiptForStep = (step: IBuildWizardStep, doc: IBuildWizardDocument) => {
+    const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
     setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: doc.id }));
     setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
       receipt_title: doc.receipt_title || '',
@@ -2485,10 +2546,39 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
         ? String(doc.receipt_amount)
         : '',
-      receipt_notes: doc.receipt_notes || '',
+      receipt_notes: parsed.plainNotes || '',
+      task_meta: parsed.taskMeta,
     } }));
     setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
     setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: true }));
+  };
+
+  const onAttachExistingDocumentToReceipt = async (step: IBuildWizardStep, receiptDoc: IBuildWizardDocument) => {
+    const selectedDocumentId = Number(attachExistingDocByReceiptId[receiptDoc.id] || 0);
+    if (selectedDocumentId <= 0) {
+      return;
+    }
+    if (selectedDocumentId === receiptDoc.id) {
+      onToast?.({ tone: 'warning', message: 'A task cannot attach itself.' });
+      return;
+    }
+    const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId);
+    if (!selectedDocument) {
+      onToast?.({ tone: 'warning', message: 'Selected document is no longer available. Refresh and try again.' });
+      return;
+    }
+    const alreadyAttachedToThisTask = String(selectedDocument.kind || '').trim() === 'receipt_attachment'
+      && Number(selectedDocument.receipt_parent_document_id || 0) === receiptDoc.id;
+    if (alreadyAttachedToThisTask) {
+      onToast?.({ tone: 'info', message: 'Document is already attached to this task.' });
+      return;
+    }
+    await onSaveDocument(selectedDocumentId, {
+      kind: 'receipt_attachment',
+      step_id: step.id,
+      receipt_parent_document_id: receiptDoc.id,
+    });
+    setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
   };
 
   const onUploadReceiptAttachments = (receiptDoc: IBuildWizardDocument, files: FileList | null) => {
@@ -2525,43 +2615,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
     await onSaveDocument(selectedDocumentId, { step_id: step.id });
     setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: '' }));
-  };
-
-  const onFindPurchase = async (step: IBuildWizardStep) => {
-    if (findingStepId === step.id) {
-      return;
-    }
-    setFindingStepId(step.id);
-    try {
-      const draft = stepDrafts[step.id] || step;
-      const res = await findPurchaseOptions(step.id, draft.purchase_url || '');
-      if (!res) {
-        return;
-      }
-      setPurchaseOptionsByStep((prev) => ({ ...prev, [step.id]: res.options || [] }));
-      if (res.step) {
-        setStepDrafts((prev) => ({ ...prev, [step.id]: { ...res.step! } }));
-      }
-      if (!res.options.length) {
-        onToast?.({ tone: 'warning', message: 'No product options found for this step.' });
-      }
-    } finally {
-      setFindingStepId(0);
-    }
-  };
-
-  const onUsePurchaseOption = async (step: IBuildWizardStep, option: any) => {
-    const nextTitle = sanitizeBuildWizardStepTitle(option?.title || step.title, step.step_type || 'purchase');
-    const patch: Partial<IBuildWizardStep> = {
-      title: nextTitle || step.title,
-      purchase_url: option.url || null,
-      purchase_vendor: option.vendor || null,
-      purchase_unit_price: typeof option.unit_price === 'number' ? option.unit_price : (step.purchase_unit_price ?? null),
-      purchase_brand: step.purchase_brand || null,
-      purchase_model: step.purchase_model || null,
-    };
-    updateStepDraft(step.id, patch);
-    await commitStep(step.id, patch);
   };
 
   const onEstimateMissingWithAi = async () => {
@@ -2942,10 +2995,40 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
             ?? (draft.expected_duration_days ?? null);
           const aiEstimated = new Set(Array.isArray(draft.ai_estimated_fields) ? draft.ai_estimated_fields : []);
-          const dependencyTitles = (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
-            .map((id) => steps.find((candidate) => candidate.id === id))
-            .filter((dependency): dependency is IBuildWizardStep => Boolean(dependency))
-            .map((dependency) => `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title}`);
+          const dependencyIds = Array.from(
+            new Set(
+              (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
+                .map((rawId) => Number(rawId || 0))
+                .filter((id) => id > 0 && id !== step.id),
+            ),
+          );
+          const formatDependencyLabel = (dependency: IBuildWizardStep): string => {
+            const phaseId = stepPhaseBucket(dependency);
+            const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
+            const phaseLabel = phase ? phase.label : prettyPhaseLabel(dependency.phase_key);
+            return `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phaseLabel})`;
+          };
+          const dependencyItems = dependencyIds.map((dependencyId) => {
+            const dependency = stepById.get(dependencyId) || null;
+            return {
+              id: dependencyId,
+              label: dependency ? formatDependencyLabel(dependency) : `#${dependencyId} (missing step)`,
+            };
+          });
+          const selectedDependencyCandidateId = Number(dependencyCandidateByStepId[step.id] || 0);
+          const dependencyCandidateOptions = steps
+            .filter((candidate) => candidate.id !== step.id && !dependencyIds.includes(candidate.id))
+            .sort((a, b) => {
+              if (a.step_order !== b.step_order) {
+                return a.step_order - b.step_order;
+              }
+              return a.id - b.id;
+            });
+          const commitDependencies = (nextIds: number[]) => {
+            const normalized = Array.from(new Set(nextIds.map((value) => Number(value || 0)).filter((id) => id > 0 && id !== step.id)));
+            updateStepDraft(step.id, { depends_on_step_ids: normalized });
+            void commitStep(step.id, { depends_on_step_ids: normalized });
+          };
           const stepPastelColor = getStepPastelColor(step.id);
           const isExpanded = expandedStepById[step.id] === true;
           const stepAttachmentCount = documents.reduce((count, doc) => (Number(doc.step_id || 0) === step.id ? count + 1 : count), 0);
@@ -2964,6 +3047,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             receipt_date: '',
             receipt_amount: '',
             receipt_notes: '',
+            task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
           };
           const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
           return (
@@ -3058,63 +3142,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
                         onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
                       />
-                    </label>
-                    <label className="build-wizard-date-inline">
-                      Type
-                      <select
-                        value={(draft.step_type || 'construction') as StepType}
-                        disabled={stepReadOnly}
-                        onChange={(e) => {
-                          const nextType = e.target.value as StepType;
-                          const previousSameType = [...steps]
-                            .filter((candidate) => candidate.id !== step.id && ((stepDrafts[candidate.id]?.step_type || candidate.step_type) === nextType))
-                            .sort((a, b) => {
-                              if (a.step_order !== b.step_order) {
-                                return b.step_order - a.step_order;
-                              }
-                              return b.id - a.id;
-                            })[0];
-                          const previousDraft = previousSameType ? (stepDrafts[previousSameType.id] || previousSameType) : null;
-                          const nextPatch: Partial<IBuildWizardStep> = {
-                            step_type: nextType,
-                          };
-                          if (previousDraft) {
-                            if (nextType === 'permit') {
-                              nextPatch.permit_required = 1;
-                              nextPatch.permit_document_id = previousDraft.permit_document_id ?? null;
-                              nextPatch.permit_name = previousDraft.permit_name ?? null;
-                              nextPatch.permit_authority = previousDraft.permit_authority ?? null;
-                              nextPatch.permit_status = previousDraft.permit_status ?? null;
-                              nextPatch.permit_application_url = previousDraft.permit_application_url ?? null;
-                            } else if (nextType === 'purchase') {
-                              nextPatch.purchase_category = previousDraft.purchase_category ?? null;
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.purchase_unit = previousDraft.purchase_unit ?? null;
-                            } else if (nextType === 'utility') {
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.purchase_url = previousDraft.purchase_url ?? null;
-                              nextPatch.source_ref = previousDraft.source_ref ?? null;
-                            } else if (nextType === 'delivery') {
-                              nextPatch.purchase_vendor = previousDraft.purchase_vendor ?? null;
-                              nextPatch.source_ref = previousDraft.source_ref ?? null;
-                            }
-                          }
-                          if (nextType !== 'permit') {
-                            nextPatch.permit_required = 0;
-                            nextPatch.permit_document_id = null;
-                            nextPatch.permit_name = null;
-                            nextPatch.permit_authority = null;
-                            nextPatch.permit_status = null;
-                            nextPatch.permit_application_url = null;
-                          }
-                          updateStepDraft(step.id, nextPatch);
-                          void commitStep(step.id, nextPatch);
-                        }}
-                      >
-                        {STEP_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
                     </label>
                     <label className="build-wizard-duration-inline">
                       Duration (Days)
@@ -3269,265 +3296,75 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <>
               <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
               <div className="build-wizard-step-grid">
-                {dependencyTitles.length ? (
-                  <div className="build-wizard-type-note">Depends on: {dependencyTitles.join(', ')}</div>
-                ) : null}
+                <div className="build-wizard-type-note build-wizard-dependency-note">
+                  <div className="build-wizard-dependency-head">
+                    <span>Depends on:</span>
+                    {dependencyItems.length ? (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm"
+                        onClick={() => commitDependencies([])}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                  {dependencyItems.length ? (
+                    <div className="build-wizard-dependency-chip-list">
+                      {dependencyItems.map((dependencyItem) => (
+                        <span key={`${step.id}-dependency-${dependencyItem.id}`} className="build-wizard-dependency-chip">
+                          {dependencyItem.label}
+                          <button
+                            type="button"
+                            className="build-wizard-dependency-chip-remove"
+                            aria-label={`Remove dependency ${dependencyItem.label}`}
+                            title="Remove dependency"
+                            onClick={() => {
+                              commitDependencies(dependencyIds.filter((id) => id !== dependencyItem.id));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="build-wizard-dependency-empty">No dependencies set.</div>
+                  )}
+                  <div className="build-wizard-dependency-controls">
+                    <select
+                      value={dependencyCandidateByStepId[step.id] || ''}
+                      onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                    >
+                      <option value="">Add dependency step...</option>
+                      {dependencyCandidateOptions.map((candidate) => (
+                        <option key={candidate.id} value={String(candidate.id)}>
+                          {formatDependencyLabel(candidate)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      disabled={selectedDependencyCandidateId <= 0}
+                      onClick={() => {
+                        if (selectedDependencyCandidateId <= 0 || dependencyIds.includes(selectedDependencyCandidateId)) {
+                          return;
+                        }
+                        commitDependencies([...dependencyIds, selectedDependencyCandidateId]);
+                        setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: '' }));
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
                 {parentStep ? (
                   <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
                 ) : null}
-                {draft.step_type === 'permit' ? (
-                  <>
-                    <label>
-                      Saved Permit
-                      <select
-                        value={Number(draft.permit_document_id || 0) > 0 ? String(draft.permit_document_id) : ''}
-                        onChange={(e) => {
-                          const permitDocumentId = Number(e.target.value || '0');
-                          const selectedPermitDoc = permitDocuments.find((doc) => doc.id === permitDocumentId);
-                          const nextPatch: Partial<IBuildWizardStep> = {
-                            permit_document_id: permitDocumentId > 0 ? permitDocumentId : null,
-                            permit_name: permitDocumentId > 0 ? (selectedPermitDoc?.original_name || draft.permit_name || null) : null,
-                            permit_application_url: permitDocumentId > 0 ? (selectedPermitDoc?.public_url || draft.permit_application_url || null) : null,
-                          };
-                          updateStepDraft(step.id, nextPatch);
-                          void commitStep(step.id, nextPatch);
-                        }}
-                      >
-                        <option value="">Select permit</option>
-                        {permitDocuments.map((doc) => {
-                          const usageCount = permitUsageByDocumentId.get(doc.id) || 0;
-                          const currentDocId = Number(draft.permit_document_id || 0);
-                          const usedElsewhere = usageCount > 0 && currentDocId !== doc.id;
-                          return (
-                            <option key={doc.id} value={doc.id}>
-                              {usedElsewhere ? '✓ ' : ''}{doc.original_name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    {permitDocuments.length ? (
-                      <div className="build-wizard-permit-usage-note">✓ means this permit is already linked to another step.</div>
-                    ) : (
-                      <div className="build-wizard-permit-usage-note">Upload permit documents first to pick from saved permits.</div>
-                    )}
-                    <div className="build-wizard-inline-field-row">
-                      <label>
-                        Authority
-                        <select
-                          value={draft.permit_authority || ''}
-                          onChange={(e) => {
-                            const nextAuthority = toStringOrNull(e.target.value || '');
-                            updateStepDraft(step.id, { permit_authority: nextAuthority });
-                            void commitStep(step.id, { permit_authority: nextAuthority });
-                          }}
-                        >
-                          <option value="">Select authority</option>
-                          {draft.permit_authority && !authorityContacts.some((contact) => (contact.display_name || '') === draft.permit_authority) ? (
-                            <option value={draft.permit_authority}>{draft.permit_authority}</option>
-                          ) : null}
-                          {authorityContacts.map((contact) => (
-                            <option key={`authority-${contact.id}`} value={contact.display_name || ''}>
-                              {contact.display_name}
-                              {contact.company ? ` (${contact.company})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={onQuickAddAuthorityContact}>
-                        Add Authority
-                      </button>
-                    </div>
-                    <label>
-                      Permit Status
-                      <select
-                        value={draft.permit_status || ''}
-                        onChange={(e) => updateStepDraft(step.id, { permit_status: e.target.value || null })}
-                        onBlur={() => void commitStep(step.id, { permit_status: toStringOrNull(stepDrafts[step.id]?.permit_status || '') })}
-                      >
-                        {permitStatusOptions.map((status) => (
-                          <option key={status} value={status}>{status === '' ? 'Select status' : status}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Permit URL
-                      <input
-                        type="url"
-                        value={draft.permit_application_url || ''}
-                        onChange={(e) => updateStepDraft(step.id, { permit_application_url: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { permit_application_url: toStringOrNull(stepDrafts[step.id]?.permit_application_url || '') })}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {draft.step_type === 'purchase' ? (
-                  <>
-                    <label>
-                      Category
-                      <input
-                        type="text"
-                        value={draft.purchase_category || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_category: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_category: toStringOrNull(stepDrafts[step.id]?.purchase_category || '') })}
-                      />
-                    </label>
-                    <label>
-                      Brand
-                      <input
-                        type="text"
-                        value={draft.purchase_brand || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_brand: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_brand: toStringOrNull(stepDrafts[step.id]?.purchase_brand || '') })}
-                      />
-                    </label>
-                    <label>
-                      Model
-                      <input
-                        type="text"
-                        value={draft.purchase_model || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_model: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_model: toStringOrNull(stepDrafts[step.id]?.purchase_model || '') })}
-                      />
-                    </label>
-                    <label>
-                      SKU
-                      <input
-                        type="text"
-                        value={draft.purchase_sku || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_sku: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_sku: toStringOrNull(stepDrafts[step.id]?.purchase_sku || '') })}
-                      />
-                    </label>
-                    <label>
-                      Qty
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={draft.purchase_qty ?? ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_qty: toNumberOrNull(e.target.value) })}
-                        onBlur={() => void commitStep(step.id, { purchase_qty: toNumberOrNull(String(stepDrafts[step.id]?.purchase_qty ?? '')) })}
-                      />
-                    </label>
-                    <label>
-                      Unit
-                      <select
-                        value={draft.purchase_unit || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_unit: e.target.value || null })}
-                        onBlur={() => void commitStep(step.id, { purchase_unit: toStringOrNull(stepDrafts[step.id]?.purchase_unit || '') })}
-                      >
-                        {purchaseUnitOptions.map((unit) => (
-                          <option key={unit} value={unit}>{unit === '' ? 'Select unit' : unit}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Unit Price
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="build-wizard-currency-input"
-                        value={renderCurrencyInputValue(`step-${step.id}-purchase_unit_price`, draft.purchase_unit_price)}
-                        onFocus={() => startCurrencyEdit(`step-${step.id}-purchase_unit_price`, draft.purchase_unit_price)}
-                        onChange={(e) => changeCurrencyEdit(`step-${step.id}-purchase_unit_price`, e.target.value)}
-                        onBlur={() => finishCurrencyEdit(`step-${step.id}-purchase_unit_price`, (value) => {
-                          updateStepDraft(step.id, { purchase_unit_price: value });
-                          void commitStep(step.id, { purchase_unit_price: value });
-                        })}
-                      />
-                    </label>
-                    <label>
-                      Vendor
-                      <input
-                        type="text"
-                        value={draft.purchase_vendor || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
-                      />
-                    </label>
-                    <label>
-                      Product URL
-                      <input
-                        type="url"
-                        value={draft.purchase_url || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_url: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_url: toStringOrNull(stepDrafts[step.id]?.purchase_url || '') })}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {draft.step_type === 'utility' ? (
-                  <>
-                    <label>
-                      Utility Provider
-                      <input
-                        type="text"
-                        value={draft.purchase_vendor || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
-                      />
-                    </label>
-                    <label>
-                      Utility Account / Ref
-                      <input
-                        type="text"
-                        value={draft.source_ref || ''}
-                        onChange={(e) => updateStepDraft(step.id, { source_ref: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { source_ref: toStringOrNull(stepDrafts[step.id]?.source_ref || '') })}
-                      />
-                    </label>
-                    <label>
-                      Utility Portal URL
-                      <input
-                        type="url"
-                        value={draft.purchase_url || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_url: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_url: toStringOrNull(stepDrafts[step.id]?.purchase_url || '') })}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {draft.step_type === 'delivery' ? (
-                  <>
-                    <label>
-                      Delivery Vendor
-                      <input
-                        type="text"
-                        value={draft.purchase_vendor || ''}
-                        onChange={(e) => updateStepDraft(step.id, { purchase_vendor: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { purchase_vendor: toStringOrNull(stepDrafts[step.id]?.purchase_vendor || '') })}
-                      />
-                    </label>
-                    <label>
-                      Delivery Ref / Tracking
-                      <input
-                        type="text"
-                        value={draft.source_ref || ''}
-                        onChange={(e) => updateStepDraft(step.id, { source_ref: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { source_ref: toStringOrNull(stepDrafts[step.id]?.source_ref || '') })}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {draft.step_type === 'photos' ? (
-                  <div className="build-wizard-type-note">Photos step: upload site/progress images and keep notes minimal.</div>
-                ) : null}
-                {draft.step_type === 'blueprints' ? (
-                  <div className="build-wizard-type-note">Blueprints step: upload plans/specs and mark a primary blueprint on the Start tab.</div>
-                ) : null}
-                {draft.step_type === 'milestone' ? (
-                  <div className="build-wizard-type-note">Milestone step: keep title/date simple and mark complete when achieved.</div>
-                ) : null}
-                {draft.step_type === 'closeout' ? (
-                  <div className="build-wizard-type-note">Closeout step: final docs, warranties, and handoff items.</div>
-                ) : null}
-                {['construction', 'purchase', 'inspection', 'permit', 'documentation', 'utility', 'delivery'].includes(draft.step_type) ? (
-                  <>
-                    <div className="build-wizard-type-note">
-                      Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
-                    </div>
-                  </>
-                ) : null}
+                <div className="build-wizard-type-note">
+                  Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
+                </div>
               </div>
 
               <label className="build-wizard-notes-field">
@@ -3557,15 +3394,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 >
                   {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Task' : 'Add Task'}
                 </button>
-                {draft.step_type === 'purchase' ? (
-                  <button
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => void onFindPurchase(step)}
-                    disabled={findingStepId === step.id}
-                  >
-                    {findingStepId === step.id ? 'Finding...' : 'Find'}
-                  </button>
-                ) : null}
                 <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
                   Upload
                   <input
@@ -3649,47 +3477,29 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </div>
               ) : null}
 
-              {draft.step_type === 'purchase' && (purchaseOptionsByStep[step.id] || []).length > 0 ? (
-                <div className="build-wizard-purchase-options">
-                  {(purchaseOptionsByStep[step.id] || []).map((opt: any, idx: number) => (
-                    <div className="build-wizard-purchase-option" key={`${step.id}-opt-${idx}`}>
-                      <div className="build-wizard-purchase-option-title">
-                        <span>{sanitizeBuildWizardStepTitle(opt.title || '', 'purchase')}</span>
-                        <span className={`build-wizard-purchase-tier is-${String(opt.tier || '').toLowerCase() || 'standard'}`}>
-                          {opt.tier_label || 'Standard'}
-                        </span>
-                      </div>
-                      <div className="build-wizard-purchase-option-meta">
-                        <span>{opt.vendor || 'Unknown vendor'}</span>
-                        <span>{typeof opt.unit_price === 'number' ? formatCurrency(opt.unit_price) : '-'}</span>
-                        <a href={opt.url} target="_blank" rel="noreferrer">Open</a>
-                      </div>
-                      <div className="build-wizard-purchase-option-summary">{opt.summary || ''}</div>
-                      <button className="btn btn-sm btn-outline-success" onClick={() => void onUsePurchaseOption(step, opt)}>Use Option</button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
               </fieldset>
 
-              <div className="build-wizard-step-assignees">
-                <div className="build-wizard-step-assignees-label">Assigned</div>
-                {visibleStepAssignees.length > 0 ? (
-                  <div className="build-wizard-step-assignees-list">
-                    {visibleStepAssignees.map((entry) => (
-                      <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
-                        {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
-                        {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="build-wizard-muted">
-                    {allStepAssignees.length > 0 && hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact assignments.'}
-                  </div>
-                )}
-              </div>
+              {allStepAssignees.length > 0 ? (
+                <div className="build-wizard-step-assignees">
+                  <div className="build-wizard-step-assignees-label">Assigned</div>
+                  {visibleStepAssignees.length > 0 ? (
+                    <div className="build-wizard-step-assignees-list">
+                      {visibleStepAssignees.map((entry) => (
+                        <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
+                          {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
+                          {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="build-wizard-muted">
+                      {hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact assignments.'}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
+              {(stepReceiptDocuments.length > 0 || receiptEditorOpen) ? (
               <div className="build-wizard-step-receipts">
                 <div className="build-wizard-step-receipts-head">
                   <div className="build-wizard-step-assignees-label">Tasks</div>
@@ -3750,6 +3560,276 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           }))}
                         />
                       </label>
+                      <label>
+                        Type
+                        <select
+                          value={receiptDraft.task_meta.task_type}
+                          onChange={(e) => setReceiptDraftByStep((prev) => ({
+                            ...prev,
+                            [step.id]: {
+                              ...receiptDraft,
+                              task_meta: {
+                                ...receiptDraft.task_meta,
+                                task_type: e.target.value as BuildWizardTaskType,
+                              },
+                            },
+                          }))}
+                        >
+                          {STEP_TYPE_OPTIONS.map((opt) => (
+                            <option key={`task-type-${opt.value}`} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      {receiptDraft.task_meta.task_type === 'permit' ? (
+                        <>
+                          <label>
+                            Saved Permit
+                            <select
+                              value={Number(receiptDraft.task_meta.permit_document_id || 0) > 0 ? String(receiptDraft.task_meta.permit_document_id) : ''}
+                              onChange={(e) => {
+                                const permitDocumentId = Number(e.target.value || '0');
+                                const selectedPermitDoc = permitDocuments.find((doc) => doc.id === permitDocumentId);
+                                setReceiptDraftByStep((prev) => ({
+                                  ...prev,
+                                  [step.id]: {
+                                    ...receiptDraft,
+                                    task_meta: {
+                                      ...receiptDraft.task_meta,
+                                      permit_document_id: permitDocumentId > 0 ? permitDocumentId : null,
+                                      permit_name: permitDocumentId > 0 ? (selectedPermitDoc?.original_name || null) : receiptDraft.task_meta.permit_name,
+                                      permit_application_url: permitDocumentId > 0 ? (selectedPermitDoc?.public_url || null) : receiptDraft.task_meta.permit_application_url,
+                                    },
+                                  },
+                                }));
+                              }}
+                            >
+                              <option value="">Select permit</option>
+                              {permitDocuments.map((doc) => (
+                                <option key={`task-permit-${doc.id}`} value={doc.id}>{doc.original_name}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Permit Name
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.permit_name || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, permit_name: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Authority
+                            <select
+                              value={receiptDraft.task_meta.permit_authority || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, permit_authority: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            >
+                              <option value="">Select authority</option>
+                              {authorityContacts.map((contact) => (
+                                <option key={`task-authority-${contact.id}`} value={contact.display_name || ''}>
+                                  {contact.display_name}
+                                  {contact.company ? ` (${contact.company})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Permit Status
+                            <select
+                              value={receiptDraft.task_meta.permit_status || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, permit_status: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            >
+                              {permitStatusOptions.map((status) => (
+                                <option key={`task-status-${status}`} value={status}>{status === '' ? 'Select status' : status}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Permit URL
+                            <input
+                              type="url"
+                              value={receiptDraft.task_meta.permit_application_url || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, permit_application_url: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                        </>
+                      ) : null}
+                      {['purchase', 'utility', 'delivery'].includes(receiptDraft.task_meta.task_type) ? (
+                        <>
+                          <label>
+                            Category
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.purchase_category || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_category: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Brand
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.purchase_brand || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_brand: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Model
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.purchase_model || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_model: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            SKU
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.purchase_sku || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_sku: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Qty
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={receiptDraft.task_meta.purchase_qty ?? ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_qty: toNumberOrNull(e.target.value) },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Unit
+                            <select
+                              value={receiptDraft.task_meta.purchase_unit || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_unit: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            >
+                              {purchaseUnitOptions.map((unit) => (
+                                <option key={`task-unit-${unit}`} value={unit}>{unit === '' ? 'Select unit' : unit}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Unit Price
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              value={receiptDraft.task_meta.purchase_unit_price ?? ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_unit_price: toNumberOrNull(e.target.value) },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            Vendor
+                            <input
+                              type="text"
+                              value={receiptDraft.task_meta.purchase_vendor || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_vendor: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                          <label>
+                            URL
+                            <input
+                              type="url"
+                              value={receiptDraft.task_meta.purchase_url || ''}
+                              onChange={(e) => setReceiptDraftByStep((prev) => ({
+                                ...prev,
+                                [step.id]: {
+                                  ...receiptDraft,
+                                  task_meta: { ...receiptDraft.task_meta, purchase_url: toStringOrNull(e.target.value || '') },
+                                },
+                              }))}
+                            />
+                          </label>
+                        </>
+                      ) : null}
+                      {['utility', 'delivery'].includes(receiptDraft.task_meta.task_type) ? (
+                        <label className="is-wide">
+                          Reference / Tracking
+                          <input
+                            type="text"
+                            value={receiptDraft.task_meta.source_ref || ''}
+                            onChange={(e) => setReceiptDraftByStep((prev) => ({
+                              ...prev,
+                              [step.id]: {
+                                ...receiptDraft,
+                                task_meta: { ...receiptDraft.task_meta, source_ref: toStringOrNull(e.target.value || '') },
+                              },
+                            }))}
+                          />
+                        </label>
+                      ) : null}
                       <label className="is-wide">
                         Notes
                         <input
@@ -3797,6 +3877,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <div className="build-wizard-step-receipt-list">
                     {stepReceiptDocuments.map((doc) => {
                       const attachments = stepReceiptAttachmentDocuments.filter((attachment) => Number(attachment.receipt_parent_document_id || 0) === doc.id);
+                      const parsedTask = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
+                      const taskTypeLabel = STEP_TYPE_OPTIONS.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
+                      const attachableTaskDocuments = attachableProjectDocuments.filter((candidate) => {
+                        if (candidate.id === doc.id) {
+                          return false;
+                        }
+                        if (String(candidate.kind || '').trim() === 'receipt') {
+                          return false;
+                        }
+                        const isAlreadyAttached = String(candidate.kind || '').trim() === 'receipt_attachment'
+                          && Number(candidate.receipt_parent_document_id || 0) === doc.id;
+                        return !isAlreadyAttached;
+                      });
                       return (
                         <div className="build-wizard-step-receipt-row" key={`step-${step.id}-receipt-${doc.id}`}>
                           <div className="build-wizard-step-receipt-file">
@@ -3810,6 +3903,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             </button>
                             <span>
                               Vendor: {doc.receipt_vendor || '-'} | Date: {doc.receipt_date || '-'} | Amount: {formatCurrency(Number(doc.receipt_amount || 0))}
+                            </span>
+                            <span>
+                              Type: {taskTypeLabel}
                             </span>
                           </div>
                           <div className="build-wizard-step-receipt-attachments">
@@ -3833,6 +3929,29 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             ) : (
                               <div className="build-wizard-muted">No attachments uploaded yet.</div>
                             )}
+                            {attachableTaskDocuments.length > 0 ? (
+                              <div className="build-wizard-step-attach-existing">
+                                <select
+                                  value={attachExistingDocByReceiptId[doc.id] || ''}
+                                  onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                                >
+                                  <option value="">Attach existing document...</option>
+                                  {attachableTaskDocuments.map((candidate) => (
+                                    <option key={`task-attach-${doc.id}-${candidate.id}`} value={String(candidate.id)}>
+                                      {candidate.original_name} ({buildWizardTokenLabel(candidate.kind, 'Other')})
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm"
+                                  onClick={() => void onAttachExistingDocumentToReceipt(step, doc)}
+                                  disabled={!attachExistingDocByReceiptId[doc.id]}
+                                >
+                                  Attach
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                           <div className="build-wizard-step-receipt-actions">
                             <button
@@ -3868,18 +3987,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="build-wizard-muted">No tasks attached to this step yet.</div>
-                )}
+                ) : null}
               </div>
+              ) : null}
 
-              <div className="build-wizard-step-media">
-                {renderDocumentGallery(
-                  stepNonReceiptDocuments,
-                  'No media attached to this step yet.',
-                  stepReadOnly
-                )}
-              </div>
+              {stepNonReceiptDocuments.length > 0 ? (
+                <div className="build-wizard-step-media">
+                  {renderDocumentGallery(
+                    stepNonReceiptDocuments,
+                    '',
+                    stepReadOnly
+                  )}
+                </div>
+              ) : null}
 
               {step.notes.length > 0 ? (
                 <div className="build-wizard-note-list">
@@ -4756,9 +4876,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       <span>{formatCurrency(step.actual_cost !== null ? step.actual_cost : step.estimated_cost)}</span>
                     </div>
                     <div className="build-wizard-completed-date">Date: {formatDate(step.completed_at || step.expected_end_date || step.expected_start_date)}</div>
-                    <div className="build-wizard-step-assignees">
-                      <div className="build-wizard-step-assignees-label">Assigned</div>
-                      {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (
+                    {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (
+                      <div className="build-wizard-step-assignees">
+                        <div className="build-wizard-step-assignees-label">Assigned</div>
                         <div className="build-wizard-step-assignees-list">
                           {(stepAssigneesByStepId.get(step.id) || []).map((entry) => (
                             <span key={`completed-${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
@@ -4767,10 +4887,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             </span>
                           ))}
                         </div>
-                      ) : (
-                        <div className="build-wizard-muted">No contact assignments.</div>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                     {step.notes.length ? (
                       <div className="build-wizard-completed-notes">
                     {step.notes.map((note) => (

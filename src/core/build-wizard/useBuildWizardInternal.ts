@@ -734,6 +734,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       kind?: string;
       caption?: string | null;
       step_id?: number | null;
+      receipt_parent_document_id?: number | null;
       receipt_amount?: number | null;
       receipt_title?: string | null;
       receipt_vendor?: string | null;
@@ -753,6 +754,9 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'step_id')) {
       body.step_id = patch.step_id;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'receipt_parent_document_id')) {
+      body.receipt_parent_document_id = patch.receipt_parent_document_id;
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'receipt_amount')) {
       body.receipt_amount = patch.receipt_amount;

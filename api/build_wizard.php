@@ -2121,7 +2121,7 @@ function catn8_build_wizard_document_for_user(int $documentId, int $uid): ?array
     }
 
     return Database::queryOne(
-        'SELECT d.id, d.project_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
+        'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
                 db.file_blob, db.mime_type AS file_blob_mime_type,
                 bi.image_blob, bi.mime_type AS blob_mime_type
          FROM build_wizard_documents d
@@ -6791,9 +6791,46 @@ try {
         $updates = [];
         $params = [];
 
+        $currentKind = catn8_build_wizard_document_kind($doc['kind'] ?? 'other');
+        $nextKind = $currentKind;
         if (array_key_exists('kind', $body)) {
+            $nextKind = catn8_build_wizard_document_kind($body['kind'] ?? 'other');
             $updates[] = 'kind = ?';
-            $params[] = catn8_build_wizard_document_kind($body['kind'] ?? 'other');
+            $params[] = $nextKind;
+        }
+
+        $currentReceiptParentDocumentId = isset($doc['receipt_parent_document_id']) ? (int)$doc['receipt_parent_document_id'] : 0;
+        $nextReceiptParentDocumentId = $currentReceiptParentDocumentId;
+        if (array_key_exists('receipt_parent_document_id', $body)) {
+            $nextReceiptParentDocumentId = (int)($body['receipt_parent_document_id'] ?? 0);
+            if ($nextReceiptParentDocumentId > 0) {
+                if ($nextReceiptParentDocumentId === $documentId) {
+                    throw new RuntimeException('Document cannot attach to itself');
+                }
+                $parentDoc = Database::queryOne(
+                    'SELECT id, project_id, kind
+                     FROM build_wizard_documents
+                     WHERE id = ?
+                     LIMIT 1',
+                    [$nextReceiptParentDocumentId]
+                );
+                if (
+                    !$parentDoc
+                    || (int)($parentDoc['project_id'] ?? 0) !== $projectId
+                    || catn8_build_wizard_document_kind($parentDoc['kind'] ?? 'other') !== 'receipt'
+                ) {
+                    throw new RuntimeException('Invalid receipt_parent_document_id');
+                }
+            }
+            $updates[] = 'receipt_parent_document_id = ?';
+            $params[] = ($nextReceiptParentDocumentId > 0 ? $nextReceiptParentDocumentId : null);
+        }
+
+        if ($nextKind === 'receipt_attachment' && $nextReceiptParentDocumentId <= 0) {
+            throw new RuntimeException('receipt_parent_document_id is required for receipt attachments');
+        }
+        if ($nextKind === 'receipt' && $nextReceiptParentDocumentId > 0) {
+            throw new RuntimeException('A receipt cannot be attached to another receipt');
         }
 
         if (array_key_exists('caption', $body)) {

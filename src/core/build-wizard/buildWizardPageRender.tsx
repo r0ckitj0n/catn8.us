@@ -3414,7 +3414,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {['construction', 'purchase', 'inspection', 'permit', 'documentation', 'utility', 'delivery'].includes(draft.step_type) ? (
                   <>
                     <div className="build-wizard-type-note">
-                      Receipts: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
+                      Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
                     </div>
                   </>
                 ) : null}
@@ -3445,7 +3445,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: !prev[step.id] }));
                   }}
                 >
-                  {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Receipt' : 'Add Receipt'}
+                  {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Task' : 'Add Task'}
                 </button>
                 {draft.step_type === 'purchase' ? (
                   <button
@@ -3582,7 +3582,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
               <div className="build-wizard-step-receipts">
                 <div className="build-wizard-step-receipts-head">
-                  <div className="build-wizard-step-assignees-label">Receipts</div>
+                  <div className="build-wizard-step-assignees-label">Tasks</div>
                   <div className="build-wizard-step-receipts-summary">
                     {stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {formatCurrency(stepReceiptTotal)}
                   </div>
@@ -3590,7 +3590,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {receiptEditorOpen ? (
                   <div className="build-wizard-note-editor">
                     <div className="build-wizard-muted">
-                      {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing receipt' : 'New receipt'}
+                      {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing task' : 'New task'}
                     </div>
                     <div className="build-wizard-step-receipt-upload-grid">
                       <label>
@@ -3652,7 +3652,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         />
                       </label>
                       <label className="is-wide">
-                        Receipt Attachment(s)
+                        Task Attachment(s)
                         <input
                           type="file"
                           accept="image/*,.pdf"
@@ -3669,7 +3669,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         className="btn btn-primary btn-sm"
                         onClick={() => { void onSaveReceiptForStep(step); }}
                       >
-                        {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Receipt' : 'Save Receipt'}
+                        {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Task' : 'Save Task'}
                       </button>
                       <button
                         className="btn btn-outline-secondary btn-sm"
@@ -3759,7 +3759,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     })}
                   </div>
                 ) : (
-                  <div className="build-wizard-muted">No receipts attached to this step yet.</div>
+                  <div className="build-wizard-muted">No tasks attached to this step yet.</div>
                 )}
               </div>
 

@@ -649,10 +649,10 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       if (res?.document) {
         setDocuments((prev) => [res.document, ...prev]);
       }
-      onToast?.({ tone: 'success', message: 'Receipt added.' });
+      onToast?.({ tone: 'success', message: 'Task added.' });
       return res?.document || null;
     } catch (err: any) {
-      onToast?.({ tone: 'error', message: err?.message || 'Failed to add receipt' });
+      onToast?.({ tone: 'error', message: err?.message || 'Failed to add task' });
       return null;
     }
   }, [onToast]);

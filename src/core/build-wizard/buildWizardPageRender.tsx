@@ -3084,6 +3084,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const stepReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt');
           const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
           const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
+          const stepTaskCount = Math.max(stepReceiptDocuments.length, Number(draft.receipt_count || 0));
+          const hasStepTasks = stepTaskCount > 0;
           const stepReceiptTotal = stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0);
           const actualCostFloor = Math.max(0, stepReceiptTotal);
           const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
@@ -3155,6 +3157,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     >
                       ⋮⋮
                     </button>
+                    {hasStepTasks ? (
+                      <span
+                        className="build-wizard-step-task-indicator"
+                        aria-label={`Step has ${stepTaskCount} task${stepTaskCount === 1 ? '' : 's'}`}
+                        title={`Has ${stepTaskCount} task${stepTaskCount === 1 ? '' : 's'}`}
+                      />
+                    ) : null}
                     <button
                       type="button"
                       className="build-wizard-step-expand-btn"

@@ -737,6 +737,15 @@
   background: #e8f1ff;
 }
 
+.build-wizard-step-task-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid #21804b;
+  background: #31b15f;
+  box-shadow: 0 0 0 2px #eaf8ef;
+}
+
 .build-wizard-child-glyph {
   color: #3d5f89;
   font-size: 0.95rem;

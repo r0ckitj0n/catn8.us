@@ -2025,7 +2025,7 @@
   height: calc(100% + 4px);
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  background: inherit;
   cursor: ew-resize;
   padding: 0;
 }

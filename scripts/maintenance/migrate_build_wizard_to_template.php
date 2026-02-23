@@ -214,6 +214,16 @@ function ensure_project_columns(PDO $pdo): void
     }
 }
 
+function table_exists(PDO $pdo, string $tableName): bool
+{
+    $row = qOne(
+        $pdo,
+        'SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
+        [$tableName]
+    );
+    return $row !== null;
+}
+
 $args = $argv;
 array_shift($args);
 
@@ -584,8 +594,8 @@ try {
 
         execSql(
             $pdo,
-            'INSERT INTO build_wizard_documents (project_id, step_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount, uploaded_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO build_wizard_documents (project_id, step_id, receipt_parent_document_id, kind, original_name, mime_type, storage_path, file_size_bytes, caption, receipt_amount, receipt_title, receipt_vendor, receipt_date, receipt_notes, uploaded_at)
+             VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $targetProjectId,
                 $targetStepId > 0 ? $targetStepId : null,
@@ -596,6 +606,10 @@ try {
                 (int)($doc['file_size_bytes'] ?? 0),
                 $doc['caption'] !== null ? (string)$doc['caption'] : null,
                 $doc['receipt_amount'] !== null ? (string)$doc['receipt_amount'] : null,
+                $doc['receipt_title'] !== null ? (string)$doc['receipt_title'] : null,
+                $doc['receipt_vendor'] !== null ? (string)$doc['receipt_vendor'] : null,
+                $doc['receipt_date'] ?? null,
+                $doc['receipt_notes'] !== null ? (string)$doc['receipt_notes'] : null,
                 (string)($doc['uploaded_at'] ?? gmdate('Y-m-d H:i:s')),
             ]
         );
@@ -645,6 +659,32 @@ try {
         'UPDATE build_wizard_projects SET blueprint_document_id = ?, primary_photo_document_id = ? WHERE id = ?',
         [$targetPrimaryBlueprint > 0 ? $targetPrimaryBlueprint : null, $targetPrimaryPhoto > 0 ? $targetPrimaryPhoto : null, $targetProjectId]
     );
+
+    if (table_exists($pdo, 'build_wizard_phase_date_ranges')) {
+        $sourcePhaseRanges = qAll(
+            $pdo,
+            'SELECT phase_tab, start_date, end_date FROM build_wizard_phase_date_ranges WHERE project_id = ?',
+            [$sourceProjectId]
+        );
+        foreach ($sourcePhaseRanges as $range) {
+            $phaseTab = trim((string)($range['phase_tab'] ?? ''));
+            if ($phaseTab === '') {
+                continue;
+            }
+            execSql(
+                $pdo,
+                'INSERT INTO build_wizard_phase_date_ranges (project_id, phase_tab, start_date, end_date)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE start_date = VALUES(start_date), end_date = VALUES(end_date)',
+                [
+                    $targetProjectId,
+                    $phaseTab,
+                    $range['start_date'] ?? null,
+                    $range['end_date'] ?? null,
+                ]
+            );
+        }
+    }
 
     $pdo->commit();
 

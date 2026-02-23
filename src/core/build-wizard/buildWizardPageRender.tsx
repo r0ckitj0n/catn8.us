@@ -1221,6 +1221,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return Array.from(keys).sort((a, b) => sortAlpha(prettyPhaseLabel(a), prettyPhaseLabel(b)));
   }, [documents, steps]);
 
+  const documentManagerLinkedStepFilterOptions = React.useMemo(() => {
+    const linkedIds = new Set<number>();
+    documents.forEach((doc) => {
+      const stepId = Number(doc.step_id || 0);
+      if (stepId > 0) {
+        linkedIds.add(stepId);
+      }
+    });
+    return linkedStepOptions.filter((option) => linkedIds.has(option.step.id));
+  }, [documents, linkedStepOptions]);
+
   const documentManagerSearchIds = React.useMemo(() => {
     const ids = new Set<number>();
     documentManagerSearchResults.forEach((doc) => {
@@ -1423,6 +1434,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
     setDeskSelectedContactId(deskContacts[0]?.id || 0);
   }, [projectDeskOpen, documents, deskContacts, deskSelectedContactId, deskCreateMode]);
+
+  React.useEffect(() => {
+    if (documentManagerStepFilter === 'all' || documentManagerStepFilter === 'unlinked') {
+      return;
+    }
+    const selectedStepId = Number(documentManagerStepFilter);
+    if (selectedStepId <= 0) {
+      setDocumentManagerStepFilter('all');
+      return;
+    }
+    const stillValid = documentManagerLinkedStepFilterOptions.some((option) => option.step.id === selectedStepId);
+    if (!stillValid) {
+      setDocumentManagerStepFilter('all');
+    }
+  }, [documentManagerStepFilter, documentManagerLinkedStepFilterOptions]);
 
   React.useEffect(() => {
     if (!projectDeskOpen || deskCreateMode || deskSelectedContactId <= 0) {
@@ -2927,6 +2953,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
           const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
           const stepReceiptTotal = stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0);
+          const actualCostFloor = Math.max(0, stepReceiptTotal);
+          const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
+          const effectiveActualCost = draftActualCost === null
+            ? (actualCostFloor > 0 ? actualCostFloor : null)
+            : Math.max(draftActualCost, actualCostFloor);
           const receiptDraft = receiptDraftByStep[step.id] || {
             receipt_title: '',
             receipt_vendor: '',
@@ -3167,13 +3198,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         type="text"
                         inputMode="decimal"
                         className="build-wizard-currency-input"
-                        value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, effectiveActualCost)}
                         disabled={stepReadOnly}
-                        onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, draft.actual_cost)}
+                        onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, effectiveActualCost)}
                         onChange={(e) => changeCurrencyEdit(`step-${step.id}-actual_cost`, e.target.value)}
                         onBlur={() => finishCurrencyEdit(`step-${step.id}-actual_cost`, (value) => {
-                          updateStepDraft(step.id, { actual_cost: value });
-                          void commitStep(step.id, { actual_cost: value });
+                          const nextActual = value === null
+                            ? (actualCostFloor > 0 ? actualCostFloor : null)
+                            : Math.max(value, actualCostFloor);
+                          updateStepDraft(step.id, { actual_cost: nextActual });
+                          void commitStep(step.id, { actual_cost: nextActual });
                         })}
                       />
                     </label>
@@ -4850,7 +4884,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         >
                           <option value="all">All</option>
                           <option value="unlinked">No step linked</option>
-                          {linkedStepOptions.map((option) => (
+                          {documentManagerLinkedStepFilterOptions.map((option) => (
                             <option key={`doc-filter-step-${option.step.id}`} value={String(option.step.id)}>
                               {option.label}
                             </option>

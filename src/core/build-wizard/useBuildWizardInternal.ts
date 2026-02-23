@@ -85,6 +85,8 @@ type DeleteProjectResponse = {
 type UpdateDocumentResponse = {
   success: boolean;
   document: IBuildWizardDocument;
+  step?: IBuildWizardStep | null;
+  steps?: IBuildWizardStep[];
 };
 
 type ReplaceDocumentResponse = {
@@ -372,6 +374,28 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     await updateStep(step.id, { is_completed: checked ? 1 : 0 });
   }, [updateStep]);
 
+  const applyStepUpdatesFromDocumentResponse = React.useCallback((res: { step?: IBuildWizardStep | null; steps?: IBuildWizardStep[] } | null | undefined) => {
+    if (Array.isArray(res?.steps) && res?.steps.length > 0) {
+      const normalized = normalizeBuildWizardSteps(res.steps);
+      setSteps((prev) => {
+        const map = new Map<number, IBuildWizardStep>();
+        prev.forEach((step) => map.set(step.id, step));
+        normalized.forEach((step) => map.set(step.id, step));
+        return Array.from(map.values()).sort((a, b) => {
+          if (a.step_order !== b.step_order) {
+            return a.step_order - b.step_order;
+          }
+          return a.id - b.id;
+        });
+      });
+      return;
+    }
+    if (res?.step) {
+      const normalized = normalizeBuildWizardStep(res.step);
+      setSteps((prev) => prev.map((step) => (step.id === normalized.id ? normalized : step)));
+    }
+  }, []);
+
   const addStepNote = React.useCallback(async (stepId: number, noteText: string) => {
     const t = String(noteText || '').trim();
     if (!t) {
@@ -619,15 +643,16 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     }
 
     try {
-      const res = await ApiClient.postFormData<{ success: boolean; document: IBuildWizardDocument }>('/api/build_wizard.php?action=upload_document', formData);
+      const res = await ApiClient.postFormData<UpdateDocumentResponse>('/api/build_wizard.php?action=upload_document', formData);
       if (res?.document) {
         setDocuments((prev) => [res.document, ...prev]);
       }
+      applyStepUpdatesFromDocumentResponse(res);
       onToast?.({ tone: 'success', message: 'Document uploaded.' });
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Upload failed' });
     }
-  }, [projectId, onToast]);
+  }, [projectId, onToast, applyStepUpdatesFromDocumentResponse]);
 
   const createStepReceipt = React.useCallback(async (
     payload: {
@@ -649,13 +674,14 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       if (res?.document) {
         setDocuments((prev) => [res.document, ...prev]);
       }
+      applyStepUpdatesFromDocumentResponse(res);
       onToast?.({ tone: 'success', message: 'Task added.' });
       return res?.document || null;
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to add task' });
       return null;
     }
-  }, [onToast]);
+  }, [onToast, applyStepUpdatesFromDocumentResponse]);
 
   const deleteDocument = React.useCallback(async (documentId: number) => {
     if (documentId <= 0) {
@@ -752,6 +778,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       if (res?.document) {
         setDocuments((prev) => prev.map((doc) => (doc.id === documentId ? res.document : doc)));
       }
+      applyStepUpdatesFromDocumentResponse(res);
       onToast?.({ tone: 'success', message: 'Document updated.' });
       return res?.document || null;
     } catch (err: any) {
@@ -759,7 +786,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       await refreshCurrentProject();
       return null;
     }
-  }, [onToast, refreshCurrentProject]);
+  }, [onToast, refreshCurrentProject, applyStepUpdatesFromDocumentResponse]);
 
   const findPurchaseOptions = React.useCallback(async (stepId: number, productUrl?: string): Promise<{ options: IBuildWizardPurchaseOption[]; step: IBuildWizardStep | null } | null> => {
     if (stepId <= 0) {

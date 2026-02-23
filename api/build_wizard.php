@@ -635,6 +635,48 @@ function catn8_build_wizard_normalize_contact_type($value, int $isVendor = 0): s
     };
 }
 
+function catn8_build_wizard_table_exists(string $tableName): bool
+{
+    if ($tableName === '') {
+        return false;
+    }
+    $row = Database::queryOne(
+        'SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
+        [$tableName]
+    );
+    return $row !== null;
+}
+
+function catn8_build_wizard_upload_roots(): array
+{
+    $projectRoot = dirname(__DIR__);
+    return [
+        $projectRoot . '/images/build-wizard',
+        $projectRoot . '/uploads/build-wizard',
+    ];
+}
+
+function catn8_build_wizard_path_within_any_root(string $path, array $roots): bool
+{
+    if ($path === '') {
+        return false;
+    }
+    $realPath = realpath($path);
+    if ($realPath === false) {
+        return false;
+    }
+    foreach ($roots as $root) {
+        $realRoot = realpath((string)$root);
+        if ($realRoot === false) {
+            continue;
+        }
+        if ($realPath === $realRoot || str_starts_with($realPath, $realRoot . DIRECTORY_SEPARATOR)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function catn8_build_wizard_default_questions(): array
 {
     return [
@@ -1984,6 +2026,47 @@ function catn8_build_wizard_step_receipt_totals(int $projectId): array
         ];
     }
     return $out;
+}
+
+function catn8_build_wizard_receipt_total_for_step(int $stepId): float
+{
+    if ($stepId <= 0) {
+        return 0.0;
+    }
+    $row = Database::queryOne(
+        'SELECT COALESCE(SUM(COALESCE(receipt_amount, 0)), 0) AS receipt_total
+         FROM build_wizard_documents
+         WHERE step_id = ? AND kind = ?',
+        [$stepId, 'receipt']
+    );
+    return (float)($row['receipt_total'] ?? 0);
+}
+
+function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId): void
+{
+    if ($stepId <= 0) {
+        return;
+    }
+    $stepRow = Database::queryOne(
+        'SELECT id, actual_cost
+         FROM build_wizard_steps
+         WHERE id = ?
+         LIMIT 1',
+        [$stepId]
+    );
+    if (!$stepRow) {
+        return;
+    }
+    $receiptTotal = catn8_build_wizard_receipt_total_for_step($stepId);
+    $actualCost = $stepRow['actual_cost'] !== null ? (float)$stepRow['actual_cost'] : null;
+    if ($receiptTotal > 0 && ($actualCost === null || $actualCost < $receiptTotal)) {
+        Database::execute(
+            'UPDATE build_wizard_steps
+             SET actual_cost = ?
+             WHERE id = ?',
+            [$receiptTotal, $stepId]
+        );
+    }
 }
 
 function catn8_build_wizard_documents_for_project(int $projectId): array
@@ -5278,18 +5361,71 @@ try {
         }
 
         catn8_build_wizard_require_project_access($projectId, $viewerId);
-        $docRows = Database::queryAll('SELECT storage_path FROM build_wizard_documents WHERE project_id = ?', [$projectId]);
+        $docRows = Database::queryAll(
+            'SELECT id, storage_path, file_size_bytes FROM build_wizard_documents WHERE project_id = ?',
+            [$projectId]
+        );
 
-        $paths = [];
+        $docPaths = [];
+        $cachePaths = [];
         foreach ($docRows as $row) {
             $storagePath = trim((string)($row['storage_path'] ?? ''));
             if ($storagePath !== '') {
-                $paths[$storagePath] = true;
+                $docPaths[$storagePath] = true;
+            }
+            $docId = (int)($row['id'] ?? 0);
+            $fileSizeBytes = (int)($row['file_size_bytes'] ?? 0);
+            if ($docId > 0) {
+                $thumbPath = catn8_build_wizard_pdf_thumb_cache_path($docId, $fileSizeBytes);
+                if ($thumbPath !== '') {
+                    $cachePaths[$thumbPath] = true;
+                }
             }
         }
 
         Database::beginTransaction();
         try {
+            if (catn8_build_wizard_table_exists('build_wizard_document_search_index')) {
+                Database::execute('DELETE FROM build_wizard_document_search_index WHERE project_id = ?', [$projectId]);
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_document_images')) {
+                Database::execute(
+                    'DELETE bi FROM build_wizard_document_images bi
+                     INNER JOIN build_wizard_documents d ON d.id = bi.document_id
+                     WHERE d.project_id = ?',
+                    [$projectId]
+                );
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_document_blobs')) {
+                Database::execute(
+                    'DELETE bb FROM build_wizard_document_blobs bb
+                     INNER JOIN build_wizard_documents d ON d.id = bb.document_id
+                     WHERE d.project_id = ?',
+                    [$projectId]
+                );
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_step_notes')) {
+                Database::execute(
+                    'DELETE sn FROM build_wizard_step_notes sn
+                     INNER JOIN build_wizard_steps s ON s.id = sn.step_id
+                     WHERE s.project_id = ?',
+                    [$projectId]
+                );
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_step_audit_logs')) {
+                Database::execute('DELETE FROM build_wizard_step_audit_logs WHERE project_id = ?', [$projectId]);
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_contact_assignments')) {
+                Database::execute('DELETE FROM build_wizard_contact_assignments WHERE project_id = ?', [$projectId]);
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_phase_date_ranges')) {
+                Database::execute('DELETE FROM build_wizard_phase_date_ranges WHERE project_id = ?', [$projectId]);
+            }
+            if (catn8_build_wizard_table_exists('build_wizard_contacts')) {
+                Database::execute('DELETE FROM build_wizard_contacts WHERE project_id = ?', [$projectId]);
+            }
+            Database::execute('DELETE FROM build_wizard_documents WHERE project_id = ?', [$projectId]);
+            Database::execute('DELETE FROM build_wizard_steps WHERE project_id = ?', [$projectId]);
             Database::execute('DELETE FROM build_wizard_projects WHERE id = ? AND owner_user_id = ? LIMIT 1', [$projectId, $viewerId]);
             Database::commit();
         } catch (Throwable $e) {
@@ -5301,24 +5437,35 @@ try {
 
         $deletedFileCount = 0;
         $fileDeleteErrorCount = 0;
-        $uploadRoot = realpath(dirname(__DIR__) . '/images/build-wizard');
-        if ($uploadRoot !== false) {
-            foreach (array_keys($paths) as $storagePath) {
-                if (!is_file($storagePath)) {
-                    continue;
-                }
-                $realStoragePath = realpath($storagePath);
-                if (
-                    $realStoragePath === false
-                    || !str_starts_with($realStoragePath, $uploadRoot . DIRECTORY_SEPARATOR)
-                ) {
-                    continue;
-                }
-                if (@unlink($realStoragePath)) {
-                    $deletedFileCount++;
-                } else {
-                    $fileDeleteErrorCount++;
-                }
+        $uploadRoots = catn8_build_wizard_upload_roots();
+        foreach (array_keys($docPaths) as $storagePath) {
+            if (!is_file($storagePath)) {
+                continue;
+            }
+            if (!catn8_build_wizard_path_within_any_root($storagePath, $uploadRoots)) {
+                continue;
+            }
+            $stillReferenced = Database::queryOne(
+                'SELECT id FROM build_wizard_documents WHERE storage_path = ? LIMIT 1',
+                [$storagePath]
+            );
+            if ($stillReferenced) {
+                continue;
+            }
+            if (@unlink($storagePath)) {
+                $deletedFileCount++;
+            } else {
+                $fileDeleteErrorCount++;
+            }
+        }
+        foreach (array_keys($cachePaths) as $cachePath) {
+            if (!is_file($cachePath)) {
+                continue;
+            }
+            if (@unlink($cachePath)) {
+                $deletedFileCount++;
+            } else {
+                $fileDeleteErrorCount++;
             }
         }
 
@@ -5562,8 +5709,13 @@ try {
         }
 
         if (array_key_exists('actual_cost', $body)) {
+            $nextActualCost = catn8_build_wizard_to_decimal_or_null($body['actual_cost']);
+            $receiptTotalFloor = catn8_build_wizard_receipt_total_for_step($stepId);
+            if ($receiptTotalFloor > 0 && ($nextActualCost === null || (float)$nextActualCost < $receiptTotalFloor)) {
+                $nextActualCost = $receiptTotalFloor;
+            }
             $updates[] = 'actual_cost = ?';
-            $params[] = catn8_build_wizard_to_decimal_or_null($body['actual_cost']);
+            $params[] = $nextActualCost;
         }
 
         if (!$updates) {
@@ -6195,6 +6347,7 @@ try {
             . 'Amount: ' . ($receiptAmount !== null ? (string)$receiptAmount : '') . "\n"
             . 'Notes: ' . ($receiptNotes ?? '') . "\n";
         catn8_build_wizard_upsert_document_blob($docId, 'text/plain', $receiptBody);
+        catn8_build_wizard_sync_step_actual_cost_from_receipts($stepId);
 
         $doc = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
@@ -6217,8 +6370,8 @@ try {
         $doc['receipt_vendor'] = $doc['receipt_vendor'] !== null ? (string)$doc['receipt_vendor'] : null;
         $doc['receipt_date'] = $doc['receipt_date'] !== null ? (string)$doc['receipt_date'] : null;
         $doc['receipt_notes'] = $doc['receipt_notes'] !== null ? (string)$doc['receipt_notes'] : null;
-
-        catn8_json_response(['success' => true, 'document' => $doc]);
+        $step = catn8_build_wizard_step_by_id($stepId);
+        catn8_json_response(['success' => true, 'document' => $doc, 'step' => $step]);
     }
 
     if ($action === 'save_contact') {
@@ -6588,6 +6741,9 @@ try {
                 );
             }
         }
+        if ($kind === 'receipt' && $stepId > 0) {
+            catn8_build_wizard_sync_step_actual_cost_from_receipts($stepId);
+        }
 
         $doc = Database::queryOne(
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
@@ -6610,7 +6766,8 @@ try {
         $doc['receipt_vendor'] = $doc['receipt_vendor'] !== null ? (string)$doc['receipt_vendor'] : null;
         $doc['receipt_date'] = $doc['receipt_date'] !== null ? (string)$doc['receipt_date'] : null;
         $doc['receipt_notes'] = $doc['receipt_notes'] !== null ? (string)$doc['receipt_notes'] : null;
-        catn8_json_response(['success' => true, 'document' => $doc]);
+        $step = ($kind === 'receipt' && $stepId > 0) ? catn8_build_wizard_step_by_id($stepId) : null;
+        catn8_json_response(['success' => true, 'document' => $doc, 'step' => $step]);
     }
 
     if ($action === 'update_document') {
@@ -6687,6 +6844,8 @@ try {
             throw new RuntimeException('No document fields provided');
         }
 
+        $beforeStepId = (int)($doc['step_id'] ?? 0);
+        $beforeKind = strtolower(trim((string)($doc['kind'] ?? '')));
         $params[] = $documentId;
         Database::execute('UPDATE build_wizard_documents SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
 
@@ -6710,8 +6869,30 @@ try {
         $updated['receipt_vendor'] = $updated['receipt_vendor'] !== null ? (string)$updated['receipt_vendor'] : null;
         $updated['receipt_date'] = $updated['receipt_date'] !== null ? (string)$updated['receipt_date'] : null;
         $updated['receipt_notes'] = $updated['receipt_notes'] !== null ? (string)$updated['receipt_notes'] : null;
+        $afterStepId = $updated['step_id'] !== null ? (int)$updated['step_id'] : 0;
+        $afterKind = strtolower(trim((string)($updated['kind'] ?? '')));
+        $stepIdsToSync = [];
+        if ($beforeKind === 'receipt' && $beforeStepId > 0) {
+            $stepIdsToSync[] = $beforeStepId;
+        }
+        if ($afterKind === 'receipt' && $afterStepId > 0) {
+            $stepIdsToSync[] = $afterStepId;
+        }
+        $stepIdsToSync = array_values(array_unique(array_filter($stepIdsToSync, static fn($v): bool => (int)$v > 0)));
+        $updatedSteps = [];
+        foreach ($stepIdsToSync as $syncStepId) {
+            $syncStepId = (int)$syncStepId;
+            if ($syncStepId <= 0) {
+                continue;
+            }
+            catn8_build_wizard_sync_step_actual_cost_from_receipts($syncStepId);
+            $syncedStep = catn8_build_wizard_step_by_id($syncStepId);
+            if ($syncedStep) {
+                $updatedSteps[] = $syncedStep;
+            }
+        }
 
-        catn8_json_response(['success' => true, 'document' => $updated]);
+        catn8_json_response(['success' => true, 'document' => $updated, 'steps' => $updatedSteps]);
     }
 
     if ($action === 'replace_document') {

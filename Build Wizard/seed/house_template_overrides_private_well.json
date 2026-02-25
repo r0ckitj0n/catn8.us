@@ -35,7 +35,8 @@
       "depends_on_keys": [
         "plans_engineering"
       ],
-      "source_ref": "Private well workflow"
+      "source_ref": "Private well workflow",
+      "estimated_cost": 472.78
     },
     {
       "template_step_key": "well_drilling_install",
@@ -49,7 +50,8 @@
         "site_clear_grade",
         "well_permit"
       ],
-      "source_ref": "Private well workflow"
+      "source_ref": "Private well workflow",
+      "estimated_cost": 2013.44
     },
     {
       "template_step_key": "well_yield_water_quality_test",
@@ -62,7 +64,8 @@
       "depends_on_keys": [
         "well_drilling_install"
       ],
-      "source_ref": "Private well workflow"
+      "source_ref": "Private well workflow",
+      "estimated_cost": 472.78
     }
   ]
 }

@@ -439,8 +439,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
   const [stepCardTextFilter, setStepCardTextFilter] = React.useState<string>('');
-  const [moveStepCandidateId, setMoveStepCandidateId] = React.useState<number>(0);
-  const [moveStepTargetTab, setMoveStepTargetTab] = React.useState<BuildTabId>('land');
+  const [moveStepModalStepId, setMoveStepModalStepId] = React.useState<number>(0);
+  const [moveStepModalTargetTab, setMoveStepModalTargetTab] = React.useState<BuildTabId>('land');
   const [movingStep, setMovingStep] = React.useState<boolean>(false);
   const [stepContactPickerOpenByStepId, setStepContactPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
   const [stepContactCandidateByStepId, setStepContactCandidateByStepId] = React.useState<Record<number, string>>({});
@@ -960,6 +960,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return stepByIdMap.get(stepInfoModalStepId) || null;
   }, [stepInfoModalStepId, stepByIdMap]);
 
+  const moveStepModalStep = React.useMemo(() => {
+    if (moveStepModalStepId <= 0) {
+      return null;
+    }
+    return stepByIdMap.get(moveStepModalStepId) || null;
+  }, [moveStepModalStepId, stepByIdMap]);
+
   const selectedContactAssignments = React.useMemo(() => {
     if (!selectedDeskContact) {
       return [] as IBuildWizardContactAssignment[];
@@ -1087,24 +1094,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [contacts, filteredTabSteps, stepAssigneesByStepId]);
 
   const moveStepPhaseTabOptions = React.useMemo(() => {
-    return BUILD_TABS
-      .filter((tab) => tab.id !== 'overview' && tab.id !== 'start' && tab.id !== 'completed')
-      .map((tab) => ({ value: tab.id, label: tab.label }));
+    return PHASE_PROGRESS_ORDER.map((tabId) => {
+      const tab = BUILD_TABS.find((candidate) => candidate.id === tabId);
+      return {
+        value: tabId,
+        label: tab?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId),
+      };
+    });
   }, []);
-
-  const moveStepOptions = React.useMemo(() => {
-    return [...filteredTabSteps]
-      .sort((a, b) => {
-        if (a.step_order !== b.step_order) {
-          return a.step_order - b.step_order;
-        }
-        return a.id - b.id;
-      })
-      .map((step) => ({
-        id: step.id,
-        label: `#${activeTabStepNumbers.get(step.id) || step.step_order} ${String(step.title || '').trim() || 'Untitled step'}`,
-      }));
-  }, [activeTabStepNumbers, filteredTabSteps]);
 
   const stepCardTextFilterTokens = React.useMemo(() => {
     return stepCardTextFilter
@@ -1282,16 +1279,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     void savePhaseDateRange(projectId, activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
   }, [activeTab, projectId, resolvePhaseDateRange, savePhaseDateRange]);
 
-  const onMoveSelectedStep = React.useCallback(async () => {
+  const onOpenMoveStepModal = React.useCallback((stepId: number) => {
+    if (stepId <= 0) {
+      return;
+    }
+    const step = stepById.get(stepId);
+    if (!step) {
+      return;
+    }
+    const tab = stepPhaseBucket(step);
+    if (PHASE_PROGRESS_ORDER.includes(tab)) {
+      setMoveStepModalTargetTab(tab);
+    }
+    setMoveStepModalStepId(stepId);
+  }, [stepById]);
+
+  const onMoveStepFromModal = React.useCallback(async () => {
     if (movingStep) {
       return;
     }
-    const stepId = Number(moveStepCandidateId || 0);
+    const stepId = Number(moveStepModalStepId || 0);
     if (stepId <= 0) {
       onToast?.({ tone: 'warning', message: 'Choose a step to move.' });
       return;
     }
-    const targetPhaseKey = String(TAB_DEFAULT_PHASE_KEY[moveStepTargetTab] || '').trim();
+    const targetPhaseKey = String(TAB_DEFAULT_PHASE_KEY[moveStepModalTargetTab] || '').trim();
     if (!targetPhaseKey) {
       onToast?.({ tone: 'warning', message: 'Choose a valid target phase.' });
       return;
@@ -1321,12 +1333,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setMovingStep(true);
     try {
       await updateStep(stepId, patch);
-      setActiveTab(moveStepTargetTab);
+      setActiveTab(moveStepModalTargetTab);
+      setMoveStepModalStepId(0);
       onToast?.({ tone: 'success', message: 'Step moved and re-placed on timeline.' });
     } finally {
       setMovingStep(false);
     }
-  }, [moveStepCandidateId, moveStepTargetTab, movingStep, onToast, stepById, updateStep]);
+  }, [moveStepModalStepId, moveStepModalTargetTab, movingStep, onToast, stepById, updateStep]);
 
   const footerTimelineSteps = React.useMemo(() => {
     if (activeTab === 'start' || activeTab === 'completed' || activeTab === 'overview') {
@@ -1830,29 +1843,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [stepCardAssigneeIdFilter, stepFilterContactOptions]);
 
   React.useEffect(() => {
-    if (moveStepOptions.length === 0) {
-      setMoveStepCandidateId(0);
+    if (moveStepModalStepId <= 0) {
       return;
     }
-    const exists = moveStepOptions.some((option) => option.id === moveStepCandidateId);
-    if (!exists) {
-      setMoveStepCandidateId(moveStepOptions[0].id);
-    }
-  }, [moveStepCandidateId, moveStepOptions]);
-
-  React.useEffect(() => {
-    if (moveStepCandidateId <= 0) {
-      return;
-    }
-    const selected = stepById.get(moveStepCandidateId);
+    const selected = stepById.get(moveStepModalStepId);
     if (!selected) {
+      setMoveStepModalStepId(0);
       return;
     }
     const tab = stepPhaseBucket(selected);
-    if (tab !== 'overview' && tab !== 'start' && tab !== 'completed') {
-      setMoveStepTargetTab(tab);
+    if (PHASE_PROGRESS_ORDER.includes(tab)) {
+      setMoveStepModalTargetTab(tab);
     }
-  }, [moveStepCandidateId, stepById]);
+  }, [moveStepModalStepId, stepById]);
 
   const launcherProjects = React.useMemo(() => {
     return projects.filter((candidate) => Number(candidate.is_template || 0) !== 1);
@@ -1883,7 +1886,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
-  const onOpenTemplateEditor = () => {
+  const onOpenTemplateEditor = async () => {
+    if (templateProjects.length === 0) {
+      await createProject('Build a House Template', 'blank', 'septic', 'county_water', true);
+    }
     setBuildEntryPoint('template_editor');
     setView('template_editor');
     pushUrlState('template_editor', null);
@@ -3614,6 +3620,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   ) : null}
                   <button
                     type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    aria-label="Move step"
+                    title="Move step to another phase"
+                    disabled={stepReadOnly}
+                    onClick={() => onOpenMoveStepModal(step.id)}
+                  >
+                    Move
+                  </button>
+                  <button
+                    type="button"
                     className="build-wizard-step-info-btn"
                     aria-label="Step information"
                     title="Step information"
@@ -5024,44 +5040,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     </option>
                   ))}
                 </select>
-                <div className="build-wizard-step-move-controls">
-                  <select
-                    value={moveStepCandidateId > 0 ? String(moveStepCandidateId) : ''}
-                    onChange={(e) => setMoveStepCandidateId(Number(e.target.value || '0'))}
-                    disabled={movingStep || moveStepOptions.length === 0}
-                    aria-label="Choose step to move"
-                    title="Choose step to move"
-                  >
-                    <option value="">Choose step...</option>
-                    {moveStepOptions.map((option) => (
-                      <option key={`move-step-${option.id}`} value={String(option.id)}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={moveStepTargetTab}
-                    onChange={(e) => setMoveStepTargetTab(e.target.value as BuildTabId)}
-                    disabled={movingStep}
-                    aria-label="Choose destination phase"
-                    title="Choose destination phase"
-                  >
-                    {moveStepPhaseTabOptions.map((option) => (
-                      <option key={`move-phase-${option.value}`} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => void onMoveSelectedStep()}
-                    disabled={movingStep || moveStepCandidateId <= 0}
-                    title="Move step to selected phase and place by timeline dates"
-                  >
-                    {movingStep ? 'Moving...' : 'Move'}
-                  </button>
-                </div>
                 <input
                   type="search"
                   className="form-control form-control-sm build-wizard-step-text-filter-input"
@@ -6502,6 +6480,64 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </button>
               <button type="button" className={confirmState.confirmButtonClass} onClick={() => closeConfirmation(true)}>
                 {confirmState.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {moveStepModalStep ? (
+        <div className="build-wizard-doc-manager" onClick={() => !movingStep && setMoveStepModalStepId(0)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Move Step</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close move step dialog"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => {
+                    if (!movingStep) {
+                      setMoveStepModalStepId(0);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <p className="build-wizard-confirm-message">
+              {`Where do you want to move "#${activeTabStepNumbers.get(moveStepModalStep.id) || moveStepModalStep.step_order} ${moveStepModalStep.title}"?`}
+            </p>
+            <label className="build-wizard-move-modal-field">
+              Target phase
+              <select
+                value={moveStepModalTargetTab}
+                onChange={(e) => setMoveStepModalTargetTab(e.target.value as BuildTabId)}
+                disabled={movingStep}
+              >
+                {moveStepPhaseTabOptions.map((option) => (
+                  <option key={`move-modal-phase-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="build-wizard-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setMoveStepModalStepId(0)}
+                disabled={movingStep}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void onMoveStepFromModal()}
+                disabled={movingStep}
+              >
+                {movingStep ? 'Moving...' : 'Move Step'}
               </button>
             </div>
           </div>

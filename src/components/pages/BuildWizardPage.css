@@ -1266,17 +1266,6 @@
   min-width: 190px;
 }
 
-.build-wizard-step-move-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.build-wizard-step-move-controls select {
-  min-width: 170px;
-}
-
 .build-wizard-step-text-filter-input {
   min-width: 220px;
   max-width: 360px;
@@ -2577,6 +2566,16 @@
   gap: 8px;
 }
 
+.build-wizard-move-modal-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.build-wizard-move-modal-field select {
+  width: 100%;
+}
+
 .build-wizard-recovery-json {
   margin: 0;
   border: 1px solid var(--catn8-bw-border-soft);
@@ -2820,17 +2819,6 @@
   }
 
   .build-wizard-step-assignee-filters select {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .build-wizard-step-move-controls {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .build-wizard-step-move-controls select {
     min-width: 0;
     width: 100%;
   }

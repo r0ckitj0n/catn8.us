@@ -29,7 +29,6 @@ import {
   TAB_DEFAULT_PHASE_KEY,
   TAB_PHASE_COLORS,
   isAiEstimatedField,
-  stepCostTotal,
 } from '../../components/pages/build-wizard/buildWizardConstants';
 import {
   calculateDurationDays,
@@ -191,7 +190,7 @@ const contactTypeChipClass = (contactType: BuildWizardContactType): string => {
   return 'is-contact';
 };
 
-type BuildWizardTaskType = StepType;
+type BuildWizardTaskType = StepType | 'quote';
 
 type BuildWizardTaskMeta = {
   task_type: BuildWizardTaskType;
@@ -213,6 +212,15 @@ type BuildWizardTaskMeta = {
 };
 
 const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
+
+const TASK_TYPE_OPTIONS: Array<{ value: BuildWizardTaskType; label: string }> = [
+  ...STEP_TYPE_OPTIONS.map((option): { value: BuildWizardTaskType; label: string } => ({
+    value: option.value as BuildWizardTaskType,
+    label: option.label,
+  })),
+  { value: 'quote', label: 'Quote' },
+];
+TASK_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
 const defaultTaskMeta = (taskType: BuildWizardTaskType = 'construction'): BuildWizardTaskMeta => ({
   task_type: taskType,
@@ -256,7 +264,7 @@ const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined): { task
       taskMeta: {
         ...seed,
         ...(decoded as Partial<BuildWizardTaskMeta>),
-        task_type: (STEP_TYPE_OPTIONS.some((option) => option.value === taskType) ? taskType : 'construction'),
+        task_type: (TASK_TYPE_OPTIONS.some((option) => option.value === taskType) ? taskType : 'construction'),
       },
       plainNotes,
     };
@@ -1178,24 +1186,91 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return byId;
   }, [documents, stepAssigneesByStepId, steps]);
 
+  const receiptMetricsByStepId = React.useMemo(() => {
+    const map = new Map<number, {
+      allCount: number;
+      nonQuoteCount: number;
+      quoteCount: number;
+      allTotal: number;
+      nonQuoteTotal: number;
+      quoteTotal: number;
+    }>();
+    documents.forEach((documentItem) => {
+      if (String(documentItem.kind || '').trim() !== 'receipt') {
+        return;
+      }
+      const stepId = Number(documentItem.step_id || 0);
+      if (stepId <= 0) {
+        return;
+      }
+      const existing = map.get(stepId) || {
+        allCount: 0,
+        nonQuoteCount: 0,
+        quoteCount: 0,
+        allTotal: 0,
+        nonQuoteTotal: 0,
+        quoteTotal: 0,
+      };
+      const parsed = parseTaskMetaFromReceiptNotes(documentItem.receipt_notes || '');
+      const isQuote = parsed.taskMeta.task_type === 'quote';
+      const amount = Number(documentItem.receipt_amount || 0);
+      const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+      existing.allCount += 1;
+      existing.allTotal += normalizedAmount;
+      if (isQuote) {
+        existing.quoteCount += 1;
+        existing.quoteTotal += normalizedAmount;
+      } else {
+        existing.nonQuoteCount += 1;
+        existing.nonQuoteTotal += normalizedAmount;
+      }
+      map.set(stepId, existing);
+    });
+    return map;
+  }, [documents]);
+
+  const getStepQuoteTotal = React.useCallback((stepId: number): number => {
+    return receiptMetricsByStepId.get(stepId)?.quoteTotal || 0;
+  }, [receiptMetricsByStepId]);
+
+  const getStepActualExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
+    const actual = Number(step.actual_cost);
+    const normalizedActual = Number.isFinite(actual) && actual > 0 ? actual : 0;
+    return Math.max(0, normalizedActual - getStepQuoteTotal(step.id));
+  }, [getStepQuoteTotal]);
+
+  const getStepEstimatedExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
+    const estimated = Number(step.estimated_cost);
+    const normalizedEstimated = Number.isFinite(estimated) && estimated > 0 ? estimated : 0;
+    return Math.max(0, normalizedEstimated - getStepQuoteTotal(step.id));
+  }, [getStepQuoteTotal]);
+
+  const stepCostTotalExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
+    const actual = getStepActualExcludingQuotes(step);
+    if (actual > 0) {
+      return actual;
+    }
+    return getStepEstimatedExcludingQuotes(step);
+  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes]);
+
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
       return { phaseTotal: 0, projectToDateTotal: 0 };
     }
 
     const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
-    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + stepCostTotal(step), 0);
+    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + stepCostTotalExcludingQuotes(step), 0);
     const projectToDateTotal = steps.reduce((sum, step) => {
       const stepPhase = stepPhaseBucket(step);
       const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhase);
       if (stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex) {
-        return sum + stepCostTotal(step);
+        return sum + stepCostTotalExcludingQuotes(step);
       }
       return sum;
     }, 0);
 
     return { phaseTotal, projectToDateTotal };
-  }, [activeTab, filteredTabSteps, steps]);
+  }, [activeTab, filteredTabSteps, stepCostTotalExcludingQuotes, steps]);
 
   const stepDocumentCountByStepId = React.useMemo(() => {
     const map = new Map<number, number>();
@@ -1259,7 +1334,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           startIso,
           endIso,
           durationDays: calculateDurationDays(startIso, endIso),
-          totalCost: stepCostTotal(step),
+          totalCost: stepCostTotalExcludingQuotes(step),
           costMode,
           assigneeCount: (stepAssigneesByStepId.get(step.id) || []).length,
           documentCount: stepDocumentCountByStepId.get(step.id) || 0,
@@ -1284,7 +1359,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         rows,
       };
     }).filter((section) => section.stepCount > 0);
-  }, [projectOverviewRange.end, projectOverviewRange.start, stepAssigneesByStepId, stepDocumentCountByStepId, steps]);
+  }, [projectOverviewRange.end, projectOverviewRange.start, stepAssigneesByStepId, stepCostTotalExcludingQuotes, stepDocumentCountByStepId, steps]);
 
   const projectOverviewTotals = React.useMemo(() => {
     return projectOverviewSections.reduce(
@@ -1489,8 +1564,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [steps, footerTimelineSteps]);
 
   const projectTotals = React.useMemo(() => {
-    const totalEstimated = steps.reduce((sum, s) => sum + (Number(s.estimated_cost) || 0), 0);
-    const totalActual = steps.reduce((sum, s) => sum + (Number(s.actual_cost) || 0), 0);
+    const totalEstimated = steps.reduce((sum, s) => sum + getStepEstimatedExcludingQuotes(s), 0);
+    const totalActual = steps.reduce((sum, s) => sum + getStepActualExcludingQuotes(s), 0);
     const doneCount = steps.filter((s) => Number(s.is_completed) === 1).length;
     return {
       totalEstimated,
@@ -1498,7 +1573,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       doneCount,
       totalCount: steps.length,
     };
-  }, [steps]);
+  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, steps]);
 
   const overviewMetrics = React.useMemo(() => {
     const today = new Date();
@@ -1530,13 +1605,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         return aStart - bStart;
       })[0] || null;
 
-    const spentActual = steps.reduce((sum, s) => sum + Math.max(0, Number(s.actual_cost) || 0), 0);
+    const spentActual = steps.reduce((sum, s) => sum + getStepActualExcludingQuotes(s), 0);
     const projectedTotal = steps.reduce((sum, s) => {
-      const actual = Number(s.actual_cost);
-      if (Number.isFinite(actual) && actual > 0) {
+      const actual = getStepActualExcludingQuotes(s);
+      if (actual > 0) {
         return sum + actual;
       }
-      return sum + Math.max(0, Number(s.estimated_cost) || 0);
+      return sum + getStepEstimatedExcludingQuotes(s);
     }, 0);
     const remainingProjected = Math.max(0, projectedTotal - spentActual);
 
@@ -1557,7 +1632,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       missingEstimateCount,
       missingTimelineCount,
     };
-  }, [project?.target_completion_date, project?.target_start_date, steps]);
+  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, project?.target_completion_date, project?.target_start_date, steps]);
 
   const projectDocuments = React.useMemo(() => {
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
@@ -3509,9 +3584,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const stepReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt');
           const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
           const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
+          const stepReceiptMetrics = receiptMetricsByStepId.get(step.id) || {
+            allCount: stepReceiptDocuments.length,
+            nonQuoteCount: stepReceiptDocuments.length,
+            quoteCount: 0,
+            allTotal: stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0),
+            nonQuoteTotal: stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0),
+            quoteTotal: 0,
+          };
           const stepTaskCount = Math.max(stepReceiptDocuments.length, Number(draft.receipt_count || 0));
           const hasStepTasks = stepTaskCount > 0;
-          const stepReceiptTotal = stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0);
+          const stepReceiptTotal = stepReceiptMetrics.nonQuoteTotal;
           const actualCostFloor = Math.max(0, stepReceiptTotal);
           const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
           const effectiveActualCost = draftActualCost === null
@@ -3873,9 +3956,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 {parentStep ? (
                   <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
                 ) : null}
-                {(stepReceiptDocuments.length > 0 || Number(draft.receipt_total || 0) > 0) ? (
+                {(stepReceiptDocuments.length > 0 || stepReceiptTotal > 0) ? (
                   <div className="build-wizard-type-note">
-                    Tasks: {Number(draft.receipt_count || 0)} file{Number(draft.receipt_count || 0) === 1 ? '' : 's'} | Total {formatCurrency(Number(draft.receipt_total || 0))}
+                    Tasks: {stepTaskCount} file{stepTaskCount === 1 ? '' : 's'} | Total {formatCurrency(stepReceiptTotal)}
                   </div>
                 ) : null}
               </div>
@@ -4138,7 +4221,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             },
                           }))}
                         >
-                          {STEP_TYPE_OPTIONS.map((opt) => (
+                          {TASK_TYPE_OPTIONS.map((opt) => (
                             <option key={`task-type-${opt.value}`} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
@@ -4240,7 +4323,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           </label>
                         </>
                       ) : null}
-                      {['purchase', 'utility', 'delivery'].includes(receiptDraft.task_meta.task_type) ? (
+                      {['purchase', 'utility', 'delivery', 'quote'].includes(receiptDraft.task_meta.task_type) ? (
                         <>
                           <label>
                             Category
@@ -4441,7 +4524,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     {stepReceiptDocuments.map((doc) => {
                       const attachments = stepReceiptAttachmentDocuments.filter((attachment) => Number(attachment.receipt_parent_document_id || 0) === doc.id);
                       const parsedTask = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
-                      const taskTypeLabel = STEP_TYPE_OPTIONS.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
+                      const taskTypeLabel = TASK_TYPE_OPTIONS.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
+                      const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
                       const attachableTaskDocuments = attachableProjectDocuments.filter((candidate) => {
                         if (candidate.id === doc.id) {
                           return false;
@@ -4472,7 +4556,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                               {doc.receipt_title?.trim() || doc.caption || doc.original_name}
                             </button>
                             <span>
-                              Vendor: {doc.receipt_vendor || '-'} | Date: {doc.receipt_date || '-'} | Amount: {formatCurrency(Number(doc.receipt_amount || 0))}
+                              Vendor: {doc.receipt_vendor || '-'} | Date: {doc.receipt_date || '-'} | Amount:{' '}
+                              <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
                             </span>
                             <span>
                               Type: {taskTypeLabel}
@@ -4496,9 +4581,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   </button>
                                 ))}
                               </div>
-                            ) : (
-                              <div className="build-wizard-muted">No attachments uploaded yet.</div>
-                            )}
+                            ) : null}
                             {attachableTaskDocuments.length > 0 ? (
                               <div className="build-wizard-step-attach-existing">
                                 {attachExistingPickerOpenByReceiptId[doc.id] ? (
@@ -5546,7 +5629,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <div className="build-wizard-completed-item" key={step.id}>
                     <div className="build-wizard-completed-head">
                       <strong>#{step.step_order} {step.title}</strong>
-                      <span>{formatCurrency(step.actual_cost !== null ? step.actual_cost : step.estimated_cost)}</span>
+                      <span>{formatCurrency(stepCostTotalExcludingQuotes(step))}</span>
                     </div>
                     <div className="build-wizard-completed-date">Date: {formatDate(step.completed_at || step.expected_end_date || step.expected_start_date)}</div>
                     {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (

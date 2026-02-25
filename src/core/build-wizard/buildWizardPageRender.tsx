@@ -210,6 +210,7 @@ type BuildWizardTaskMeta = {
   purchase_url: string | null;
   source_ref: string | null;
 };
+type InlineReceiptField = 'vendor' | 'type' | 'date' | 'amount';
 
 const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
 
@@ -450,6 +451,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     task_meta: BuildWizardTaskMeta;
   }>>({});
   const [receiptAttachmentDraftByStep, setReceiptAttachmentDraftByStep] = React.useState<Record<number, File[]>>({});
+  const [inlineEditingReceiptFieldByDocId, setInlineEditingReceiptFieldByDocId] = React.useState<Record<number, InlineReceiptField | null>>({});
+  const [inlineReceiptDraftByDocId, setInlineReceiptDraftByDocId] = React.useState<Record<number, {
+    vendor: string;
+    date: string;
+    amount: string;
+    taskType: BuildWizardTaskType;
+    plainNotes: string;
+    taskMeta: BuildWizardTaskMeta;
+  }>>({});
+  const [pendingScrollReceiptId, setPendingScrollReceiptId] = React.useState<number>(0);
   const [documentSavingId, setDocumentSavingId] = React.useState<number>(0);
   const [unlinkingDocumentId, setUnlinkingDocumentId] = React.useState<number>(0);
   const [deletingDocumentId, setDeletingDocumentId] = React.useState<number>(0);
@@ -490,6 +501,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [activeCurrencyInputKey, setActiveCurrencyInputKey] = React.useState<string>('');
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
+  const receiptEditorRefByStepId = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const receiptRowRefByDocId = React.useRef<Record<number, HTMLDivElement | null>>({});
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -2939,6 +2952,113 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
+  const taskVendorOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    contacts.forEach((contact) => {
+      const name = String(contact.display_name || '').trim();
+      if (name !== '') {
+        set.add(name);
+      }
+      const company = String(contact.company || '').trim();
+      if (company !== '') {
+        set.add(company);
+      }
+    });
+    documents.forEach((doc) => {
+      if (String(doc.kind || '').trim() !== 'receipt') {
+        return;
+      }
+      const vendor = String(doc.receipt_vendor || '').trim();
+      if (vendor !== '') {
+        set.add(vendor);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [contacts, documents]);
+
+  React.useEffect(() => {
+    if (pendingScrollReceiptId <= 0) {
+      return;
+    }
+    const rowEl = receiptRowRefByDocId.current[pendingScrollReceiptId];
+    if (rowEl) {
+      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollReceiptId(0);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const delayedEl = receiptRowRefByDocId.current[pendingScrollReceiptId];
+      if (delayedEl) {
+        delayedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setPendingScrollReceiptId(0);
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [documents, pendingScrollReceiptId]);
+
+  const startInlineReceiptEdit = (
+    doc: IBuildWizardDocument,
+    parsed: { taskMeta: BuildWizardTaskMeta; plainNotes: string },
+    field: InlineReceiptField,
+  ) => {
+    setInlineReceiptDraftByDocId((prev) => ({
+      ...prev,
+      [doc.id]: {
+        vendor: doc.receipt_vendor || '',
+        date: doc.receipt_date || '',
+        amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
+        taskType: parsed.taskMeta.task_type,
+        plainNotes: parsed.plainNotes || '',
+        taskMeta: parsed.taskMeta,
+      },
+    }));
+    setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: field }));
+  };
+
+  const saveInlineReceiptEdit = async (
+    doc: IBuildWizardDocument,
+    field: InlineReceiptField,
+    overrides?: Partial<{
+      vendor: string;
+      date: string;
+      amount: string;
+      taskType: BuildWizardTaskType;
+    }>,
+  ) => {
+    const baseDraft = inlineReceiptDraftByDocId[doc.id];
+    const draft = baseDraft ? { ...baseDraft, ...(overrides || {}) } : null;
+    if (!draft) {
+      setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: null }));
+      return;
+    }
+
+    const patch: {
+      receipt_vendor?: string | null;
+      receipt_date?: string | null;
+      receipt_amount?: number | null;
+      receipt_notes?: string | null;
+    } = {};
+
+    if (field === 'vendor') {
+      patch.receipt_vendor = toStringOrNull(draft.vendor);
+    } else if (field === 'date') {
+      patch.receipt_date = toStringOrNull(draft.date);
+    } else if (field === 'amount') {
+      patch.receipt_amount = toNumberOrNull(draft.amount);
+    } else if (field === 'type') {
+      const nextMeta: BuildWizardTaskMeta = {
+        ...draft.taskMeta,
+        task_type: draft.taskType,
+      };
+      patch.receipt_notes = toStringOrNull(composeReceiptNotesWithTaskMeta(nextMeta, draft.plainNotes));
+    }
+
+    await onSaveDocument(doc.id, patch);
+    setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: null }));
+  };
+
   const updateDocumentDraft = (
     documentId: number,
     patch: Partial<{
@@ -3012,6 +3132,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     const existingReceipt = editingReceiptDocumentId > 0
       ? documents.find((doc) => doc.id === editingReceiptDocumentId)
       : null;
+    const shouldScrollBackToReceipt = existingReceipt !== null;
     let receiptId = 0;
 
     if (existingReceipt) {
@@ -3069,6 +3190,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
     setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
     setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
+    if (shouldScrollBackToReceipt && receiptId > 0) {
+      setPendingScrollReceiptId(receiptId);
+    }
   };
 
   const onStartEditReceiptForStep = (step: IBuildWizardStep, doc: IBuildWizardDocument) => {
@@ -3086,6 +3210,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     } }));
     setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
     setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: true }));
+    window.setTimeout(() => {
+      const editorEl = receiptEditorRefByStepId.current[step.id];
+      if (editorEl) {
+        editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
   };
 
   const onAttachExistingDocumentToReceipt = async (step: IBuildWizardStep, receiptDoc: IBuildWizardDocument) => {
@@ -4154,7 +4284,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   </div>
                 </div>
                 {receiptEditorOpen ? (
-                  <div className="build-wizard-note-editor">
+                  <div
+                    className="build-wizard-note-editor"
+                    ref={(el) => { receiptEditorRefByStepId.current[step.id] = el; }}
+                  >
                     <div className="build-wizard-muted">
                       {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing task' : 'New task'}
                     </div>
@@ -4526,6 +4659,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       const parsedTask = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
                       const taskTypeLabel = TASK_TYPE_OPTIONS.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
                       const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
+                      const inlineEditingField = inlineEditingReceiptFieldByDocId[doc.id] || null;
+                      const inlineDraft = inlineReceiptDraftByDocId[doc.id] || {
+                        vendor: doc.receipt_vendor || '',
+                        date: doc.receipt_date || '',
+                        amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
+                        taskType: parsedTask.taskMeta.task_type,
+                        plainNotes: parsedTask.plainNotes || '',
+                        taskMeta: parsedTask.taskMeta,
+                      };
                       const attachableTaskDocuments = attachableProjectDocuments.filter((candidate) => {
                         if (candidate.id === doc.id) {
                           return false;
@@ -4545,7 +4687,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         })
                         : attachableTaskDocuments;
                       return (
-                        <div className="build-wizard-step-receipt-row" key={`step-${step.id}-receipt-${doc.id}`}>
+                        <div
+                          className="build-wizard-step-receipt-row"
+                          key={`step-${step.id}-receipt-${doc.id}`}
+                          ref={(el) => { receiptRowRefByDocId.current[doc.id] = el; }}
+                        >
                           <div className="build-wizard-step-receipt-file">
                             <button
                               type="button"
@@ -4556,11 +4702,126 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                               {doc.receipt_title?.trim() || doc.caption || doc.original_name}
                             </button>
                             <span>
-                              Vendor: {doc.receipt_vendor || '-'} | Date: {doc.receipt_date || '-'} | Amount:{' '}
-                              <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
+                              Vendor:{' '}
+                              {inlineEditingField === 'vendor' ? (
+                                <select
+                                  autoFocus
+                                  value={inlineDraft.vendor}
+                                  onChange={(e) => {
+                                    const nextValue = e.target.value;
+                                    setInlineReceiptDraftByDocId((prev) => ({
+                                      ...prev,
+                                      [doc.id]: { ...inlineDraft, vendor: nextValue },
+                                    }));
+                                    void saveInlineReceiptEdit(doc, 'vendor', { vendor: nextValue });
+                                  }}
+                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'vendor'); }}
+                                >
+                                  <option value="">-</option>
+                                  {taskVendorOptions.map((vendorName) => (
+                                    <option key={`vendor-opt-${doc.id}-${vendorName}`} value={vendorName}>{vendorName}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="build-wizard-inline-edit-trigger"
+                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'vendor')}
+                                >
+                                  {doc.receipt_vendor || '-'}
+                                </button>
+                              )}
+                              {' '}| Date:{' '}
+                              {inlineEditingField === 'date' ? (
+                                <input
+                                  type="date"
+                                  autoFocus
+                                  value={inlineDraft.date}
+                                  onChange={(e) => {
+                                    const nextValue = e.target.value;
+                                    setInlineReceiptDraftByDocId((prev) => ({
+                                      ...prev,
+                                      [doc.id]: { ...inlineDraft, date: nextValue },
+                                    }));
+                                  }}
+                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'date'); }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="build-wizard-inline-edit-trigger"
+                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'date')}
+                                >
+                                  {doc.receipt_date || '-'}
+                                </button>
+                              )}
+                              {' '}| Amount:{' '}
+                              {inlineEditingField === 'amount' ? (
+                                <input
+                                  type="number"
+                                  autoFocus
+                                  min="0"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={inlineDraft.amount}
+                                  onChange={(e) => {
+                                    const nextValue = e.target.value;
+                                    setInlineReceiptDraftByDocId((prev) => ({
+                                      ...prev,
+                                      [doc.id]: { ...inlineDraft, amount: nextValue },
+                                    }));
+                                  }}
+                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'amount'); }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="build-wizard-inline-edit-trigger"
+                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'amount')}
+                                >
+                                  <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
+                                </button>
+                              )}
                             </span>
                             <span>
-                              Type: {taskTypeLabel}
+                              Type:{' '}
+                              {inlineEditingField === 'type' ? (
+                                <select
+                                  autoFocus
+                                  value={inlineDraft.taskType}
+                                  onChange={(e) => {
+                                    const nextType = e.target.value as BuildWizardTaskType;
+                                    setInlineReceiptDraftByDocId((prev) => ({
+                                      ...prev,
+                                      [doc.id]: { ...inlineDraft, taskType: nextType },
+                                    }));
+                                    void saveInlineReceiptEdit(doc, 'type', { taskType: nextType });
+                                  }}
+                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'type'); }}
+                                >
+                                  {TASK_TYPE_OPTIONS.map((opt) => (
+                                    <option key={`inline-task-type-${doc.id}-${opt.value}`} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="build-wizard-inline-edit-trigger"
+                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'type')}
+                                >
+                                  {taskTypeLabel}
+                                </button>
+                              )}
                             </span>
                           </div>
                           <div className="build-wizard-step-receipt-attachments">

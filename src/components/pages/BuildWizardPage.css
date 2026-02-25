@@ -1437,6 +1437,27 @@
   color: #566a83;
 }
 
+.build-wizard-step-receipt-file input,
+.build-wizard-step-receipt-file select {
+  font-size: 0.78rem;
+  max-width: 170px;
+}
+
+.build-wizard-inline-edit-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  border-bottom: 1px dashed rgba(46, 86, 133, 0.5);
+  cursor: pointer;
+}
+
+.build-wizard-inline-edit-trigger:hover {
+  color: #1f4f95;
+}
+
 .build-wizard-quote-amount {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;

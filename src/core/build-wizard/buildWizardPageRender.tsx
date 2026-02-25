@@ -70,11 +70,25 @@ type SpreadsheetPreviewSheet = {
   rows: string[][];
 };
 
+type TaskDocumentField = {
+  label: string;
+  value: string;
+};
+
+type TaskDocumentPreview = {
+  summaryFields: TaskDocumentField[];
+  noteLines: string[];
+  metaFields: TaskDocumentField[];
+  systemLines: string[];
+};
+
 type LightboxPreview =
   | { mode: 'image'; src: string; title: string }
+  | { mode: 'embed'; src: string; title: string }
   | { mode: 'loading'; src: string; title: string }
   | { mode: 'spreadsheet'; src: string; title: string; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
   | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean; format: 'text' | 'hex' }
+  | { mode: 'text'; src: string; title: string; text: string; truncated: boolean; taskPreview: TaskDocumentPreview | null }
   | { mode: 'error'; src: string; title: string; message: string };
 
 type BuildWizardSearchResult =
@@ -213,6 +227,27 @@ type BuildWizardTaskMeta = {
 type InlineReceiptField = 'vendor' | 'type' | 'date' | 'amount';
 
 const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
+const LIGHTBOX_TEXT_PREVIEW_MAX_CHARS = 120000;
+const TEXT_PREVIEW_EXTENSIONS = new Set(['TXT', 'MD', 'JSON', 'CSV', 'LOG', 'XML', 'YAML', 'YML']);
+
+const TASK_META_FIELD_LABELS: Record<keyof BuildWizardTaskMeta, string> = {
+  task_type: 'Task Type',
+  permit_document_id: 'Permit Document',
+  permit_name: 'Permit Name',
+  permit_authority: 'Permit Authority',
+  permit_status: 'Permit Status',
+  permit_application_url: 'Permit URL',
+  purchase_category: 'Purchase Category',
+  purchase_brand: 'Brand',
+  purchase_model: 'Model',
+  purchase_sku: 'SKU',
+  purchase_unit: 'Unit',
+  purchase_qty: 'Quantity',
+  purchase_unit_price: 'Unit Price',
+  purchase_vendor: 'Vendor',
+  purchase_url: 'Purchase URL',
+  source_ref: 'Source Ref',
+};
 
 const TASK_TYPE_OPTIONS: Array<{ value: BuildWizardTaskType; label: string }> = [
   ...STEP_TYPE_OPTIONS.map((option): { value: BuildWizardTaskType; label: string } => ({
@@ -281,6 +316,119 @@ const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, plainNot
   const json = JSON.stringify(taskMeta);
   const notes = plainNotes.trim();
   return notes ? `${BUILD_WIZARD_TASK_META_PREFIX}${json}\n${notes}` : `${BUILD_WIZARD_TASK_META_PREFIX}${json}`;
+};
+
+const isTextLikeMime = (mime: string): boolean => {
+  const normalized = String(mime || '').trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.startsWith('text/')
+    || normalized.includes('json')
+    || normalized.includes('xml')
+    || normalized.includes('yaml')
+    || normalized.includes('csv')
+    || normalized.includes('javascript');
+};
+
+const normalizeTaskMetaValue = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : '';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  return '';
+};
+
+const parseTaskDocumentPreview = (text: string): TaskDocumentPreview | null => {
+  const normalized = String(text || '').replace(/\r\n?/g, '\n');
+  if (!normalized.trim()) {
+    return null;
+  }
+
+  const lines = normalized.split('\n');
+  const summaryFields: TaskDocumentField[] = [];
+  const summaryPrefixes: Array<{ label: string; regex: RegExp }> = [
+    { label: 'Task', regex: /^Task:\s*(.+)\s*$/i },
+    { label: 'Vendor', regex: /^Vendor:\s*(.+)\s*$/i },
+    { label: 'Date', regex: /^Date:\s*(.+)\s*$/i },
+    { label: 'Amount', regex: /^Amount:\s*(.+)\s*$/i },
+  ];
+  summaryPrefixes.forEach(({ label, regex }) => {
+    const match = lines.find((line) => regex.test(line));
+    if (!match) {
+      return;
+    }
+    const value = (match.match(regex)?.[1] || '').trim();
+    if (value) {
+      summaryFields.push({ label, value });
+    }
+  });
+
+  const notesStart = lines.findIndex((line) => /^Notes:\s*$/i.test(line.trim()));
+  const trailingLines = notesStart >= 0 ? lines.slice(notesStart + 1) : [];
+  const noteLines: string[] = [];
+  const systemLines: string[] = [];
+  let decodedMeta: Partial<BuildWizardTaskMeta> | null = null;
+
+  trailingLines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (trimmed.startsWith(BUILD_WIZARD_TASK_META_PREFIX)) {
+      const metaJson = trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length).trim();
+      if (!metaJson) {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(metaJson);
+        if (parsed && typeof parsed === 'object') {
+          decodedMeta = parsed as Partial<BuildWizardTaskMeta>;
+        }
+      } catch {
+        noteLines.push(trimmed);
+      }
+      return;
+    }
+    if (/^Imported from mapped note\b/i.test(trimmed) || /^Generated repair document\b/i.test(trimmed)) {
+      systemLines.push(trimmed);
+      return;
+    }
+    noteLines.push(trimmed);
+  });
+
+  const metaFields: TaskDocumentField[] = decodedMeta
+    ? (Object.keys(TASK_META_FIELD_LABELS) as Array<keyof BuildWizardTaskMeta>)
+      .map((fieldKey): TaskDocumentField | null => {
+        const rawValue = normalizeTaskMetaValue(decodedMeta?.[fieldKey]);
+        if (!rawValue) {
+          return null;
+        }
+        return {
+          label: TASK_META_FIELD_LABELS[fieldKey],
+          value: rawValue,
+        };
+      })
+      .filter((entry): entry is TaskDocumentField => entry !== null)
+    : [];
+
+  if (!summaryFields.length && !noteLines.length && !metaFields.length && !systemLines.length) {
+    return null;
+  }
+  return {
+    summaryFields,
+    noteLines,
+    metaFields,
+    systemLines,
+  };
 };
 
 const appendSearchTextParts = (
@@ -2389,6 +2537,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return fileExtensionFromName(doc.original_name) === 'PLAN';
   }, []);
 
+  const isTextPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
+    const ext = fileExtensionFromName(doc.original_name);
+    if (TEXT_PREVIEW_EXTENSIONS.has(ext)) {
+      return true;
+    }
+    return isTextLikeMime(doc.mime_type || '');
+  }, []);
+
   const openDocumentPreview = React.useCallback(async (doc: IBuildWizardDocument) => {
     const src = String(doc.public_url || '').trim();
     const title = String(doc.original_name || 'Document');
@@ -2403,8 +2559,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return;
     }
 
-    if (!isSpreadsheetPreviewDoc(doc) && !isPlanPreviewDoc(doc)) {
-      window.open(src, '_blank', 'noopener,noreferrer');
+    if (isPdfDocument(doc)) {
+      setLightboxDoc({ mode: 'embed', src, title });
       return;
     }
 
@@ -2413,6 +2569,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setLightboxSpreadsheetSheetIndex(0);
 
     try {
+      if (!isSpreadsheetPreviewDoc(doc) && !isPlanPreviewDoc(doc) && !isTextPreviewDoc(doc)) {
+        setLightboxDoc({ mode: 'embed', src, title });
+        return;
+      }
+
       const blob = await ApiClient.getBlob(src);
 
       if (isSpreadsheetPreviewDoc(doc)) {
@@ -2454,45 +2615,66 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         return;
       }
 
-      const textRaw = await blob.text();
-      const text = textRaw.replace(/\u0000/g, '').trim();
-      if (!text) {
-        throw new Error('Plan file appears empty');
-      }
-
-      const sample = text.slice(0, 2000);
-      const nonPrintableCount = sample.replace(/[\t\r\n\x20-\x7E]/g, '').length;
-      if (sample.length > 0 && nonPrintableCount / sample.length > 0.2) {
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const maxBytes = 4096;
-        const bounded = bytes.slice(0, maxBytes);
-        const lines: string[] = [];
-        for (let offset = 0; offset < bounded.length; offset += 16) {
-          const chunk = bounded.slice(offset, offset + 16);
-          const hex = Array.from(chunk).map((b) => b.toString(16).padStart(2, '0')).join(' ');
-          const ascii = Array.from(chunk).map((b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('');
-          lines.push(`${offset.toString(16).padStart(6, '0')}  ${hex.padEnd(47, ' ')}  ${ascii}`);
+      if (isPlanPreviewDoc(doc)) {
+        const textRaw = await blob.text();
+        const text = textRaw.replace(/\u0000/g, '').trim();
+        if (!text) {
+          throw new Error('Plan file appears empty');
         }
+
+        const sample = text.slice(0, 2000);
+        const nonPrintableCount = sample.replace(/[\t\r\n\x20-\x7E]/g, '').length;
+        if (sample.length > 0 && nonPrintableCount / sample.length > 0.2) {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          const maxBytes = 4096;
+          const bounded = bytes.slice(0, maxBytes);
+          const lines: string[] = [];
+          for (let offset = 0; offset < bounded.length; offset += 16) {
+            const chunk = bounded.slice(offset, offset + 16);
+            const hex = Array.from(chunk).map((b) => b.toString(16).padStart(2, '0')).join(' ');
+            const ascii = Array.from(chunk).map((b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('');
+            lines.push(`${offset.toString(16).padStart(6, '0')}  ${hex.padEnd(47, ' ')}  ${ascii}`);
+          }
+          setLightboxDoc({
+            mode: 'plan',
+            src,
+            title,
+            text: lines.join('\n'),
+            truncated: bytes.length > maxBytes,
+            format: 'hex',
+          });
+          return;
+        }
+
+        const maxChars = 60000;
+        const truncated = text.length > maxChars;
         setLightboxDoc({
           mode: 'plan',
           src,
           title,
-          text: lines.join('\n'),
-          truncated: bytes.length > maxBytes,
-          format: 'hex',
+          text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
+          truncated,
+          format: 'text',
         });
         return;
       }
 
-      const maxChars = 60000;
-      const truncated = text.length > maxChars;
+      const textRaw = await blob.text();
+      const cleanedText = textRaw.replace(/\u0000/g, '');
+      if (!cleanedText.trim()) {
+        throw new Error('Text file appears empty');
+      }
+      const truncated = cleanedText.length > LIGHTBOX_TEXT_PREVIEW_MAX_CHARS;
+      const boundedText = truncated
+        ? `${cleanedText.slice(0, LIGHTBOX_TEXT_PREVIEW_MAX_CHARS)}\n\n...truncated for preview...`
+        : cleanedText;
       setLightboxDoc({
-        mode: 'plan',
+        mode: 'text',
         src,
         title,
-        text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
+        text: boundedText,
         truncated,
-        format: 'text',
+        taskPreview: parseTaskDocumentPreview(boundedText),
       });
     } catch (err: any) {
       const detail = String(err?.message || '').trim() || 'Failed to load file preview';
@@ -2504,7 +2686,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
       onToast?.({ tone: 'warning', message: `${title}: ${detail}` });
     }
-  }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, onToast]);
+  }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, isTextPreviewDoc, onToast]);
 
   const lightboxSupportsZoom = Boolean(lightboxDoc && (lightboxDoc.mode === 'image' || lightboxDoc.mode === 'spreadsheet' || lightboxDoc.mode === 'plan'));
 
@@ -5407,9 +5589,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
               </button>
             ) : isPdfDocument(doc) ? (
-              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
+              <button type="button" className="build-wizard-doc-thumb-link" onClick={() => void openDocumentPreview(doc)} title="Open preview">
                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
-              </a>
+              </button>
             ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
               <button
                 type="button"
@@ -5427,7 +5609,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <span className="build-wizard-doc-file-open">Open preview</span>
               </button>
             ) : (
-              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
+              <button type="button" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich" onClick={() => void openDocumentPreview(doc)}>
                 <span className="build-wizard-doc-file-glyph" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
@@ -5436,7 +5618,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </span>
                 <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
                 <span className="build-wizard-doc-file-open">Open file</span>
-              </a>
+              </button>
             )}
             <button
               type="button"
@@ -6423,9 +6605,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
                               </button>
                             ) : isPdfDocument(doc) ? (
-                              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-thumb-link" title="Open PDF">
+                              <button type="button" className="build-wizard-doc-thumb-link" onClick={() => void openDocumentPreview(doc)} title="Open preview">
                                 <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
-                              </a>
+                              </button>
                             ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
                               <button
                                 type="button"
@@ -6443,7 +6625,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                 <span className="build-wizard-doc-file-open">Open preview</span>
                               </button>
                             ) : (
-                              <a href={doc.public_url} target="_blank" rel="noreferrer" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich">
+                              <button type="button" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich" onClick={() => void openDocumentPreview(doc)}>
                                 <span className="build-wizard-doc-file-glyph" aria-hidden="true">
                                   <svg viewBox="0 0 24 24">
                                     <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
@@ -6452,7 +6634,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                 </span>
                                 <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
                                 <span className="build-wizard-doc-file-open">Open file</span>
-                              </a>
+                              </button>
                             )}
                           </div>
                           <div className="build-wizard-doc-manager-fields">
@@ -6554,14 +6736,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   onClick={() => void openDocumentPreview(doc)}
                                 />
                               ) : (
-                                <StandardIconLink
+                                <StandardIconButton
                                   iconKey="view"
                                   ariaLabel={`Open ${doc.original_name}`}
                                   title="Open"
                                   className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                                  href={doc.public_url}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                  onClick={() => void openDocumentPreview(doc)}
                                 />
                               )}
                               <StandardIconLink
@@ -7359,6 +7539,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     </div>
                   </div>
                 ) : null}
+                {lightboxDoc.mode === 'embed' ? (
+                  <div className="build-wizard-lightbox-embed-wrap">
+                    <iframe
+                      src={lightboxDoc.src}
+                      title={lightboxDoc.title}
+                      className="build-wizard-lightbox-embed"
+                    />
+                  </div>
+                ) : null}
                 {lightboxDoc.mode === 'plan' ? (
                   <div className="build-wizard-lightbox-plan-wrap">
                     <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
@@ -7366,6 +7555,67 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       {lightboxDoc.format === 'hex' ? 'Binary .plan preview (hex + ASCII).' : 'Text preview.'}
                       {lightboxDoc.truncated ? ' Preview truncated for performance.' : ''}
                     </div>
+                  </div>
+                ) : null}
+                {lightboxDoc.mode === 'text' ? (
+                  <div className="build-wizard-lightbox-text-wrap">
+                    {lightboxDoc.taskPreview ? (
+                      <div className="build-wizard-lightbox-task-preview">
+                        {lightboxDoc.taskPreview.summaryFields.length ? (
+                          <section>
+                            <h4>Task Summary</h4>
+                            <dl className="build-wizard-lightbox-task-fields">
+                              {lightboxDoc.taskPreview.summaryFields.map((field) => (
+                                <React.Fragment key={`summary-${field.label}`}>
+                                  <dt>{field.label}</dt>
+                                  <dd>{field.value}</dd>
+                                </React.Fragment>
+                              ))}
+                            </dl>
+                          </section>
+                        ) : null}
+                        {lightboxDoc.taskPreview.noteLines.length ? (
+                          <section>
+                            <h4>Notes</h4>
+                            <div className="build-wizard-lightbox-task-notes">
+                              {lightboxDoc.taskPreview.noteLines.map((line, idx) => (
+                                <p key={`note-${idx}`}>{line}</p>
+                              ))}
+                            </div>
+                          </section>
+                        ) : null}
+                        {lightboxDoc.taskPreview.metaFields.length ? (
+                          <section>
+                            <h4>Task Metadata</h4>
+                            <dl className="build-wizard-lightbox-task-fields">
+                              {lightboxDoc.taskPreview.metaFields.map((field) => (
+                                <React.Fragment key={`meta-${field.label}`}>
+                                  <dt>{field.label}</dt>
+                                  <dd>{field.value}</dd>
+                                </React.Fragment>
+                              ))}
+                            </dl>
+                          </section>
+                        ) : null}
+                        {lightboxDoc.taskPreview.systemLines.length ? (
+                          <section>
+                            <h4>Source</h4>
+                            <ul className="build-wizard-lightbox-task-system">
+                              {lightboxDoc.taskPreview.systemLines.map((line, idx) => (
+                                <li key={`source-${idx}`}>{line}</li>
+                              ))}
+                            </ul>
+                          </section>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <details className="build-wizard-lightbox-text-raw">
+                      <summary>Raw document text</summary>
+                      <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
+                    </details>
+                    {lightboxDoc.truncated ? (
+                      <div className="build-wizard-lightbox-note">Text preview truncated for performance.</div>
+                    ) : null}
                   </div>
                 ) : null}
                 {lightboxDoc.mode === 'spreadsheet' ? (

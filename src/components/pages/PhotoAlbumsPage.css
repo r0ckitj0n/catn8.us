@@ -1,0 +1,175 @@
+.catn8-photo-albums-page {
+  --catn8-albums-paper: #fffdf4;
+  --catn8-albums-ink: #2f2945;
+  --catn8-albums-accent: color-mix(in srgb, var(--fun-purple) 65%, #ffffff);
+  --catn8-albums-leaf: color-mix(in srgb, var(--fun-green) 60%, #f5ffef);
+}
+
+.catn8-photo-albums-hero {
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.72), transparent 45%),
+    linear-gradient(130deg, color-mix(in srgb, var(--fun-purple) 26%, white), color-mix(in srgb, var(--fun-green) 26%, white));
+}
+
+.catn8-photo-albums-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1rem;
+}
+
+.catn8-photo-albums-sidebar,
+.catn8-photo-albums-main {
+  padding: 1rem;
+}
+
+.catn8-album-shelf-list {
+  display: grid;
+  gap: 0.7rem;
+  max-height: 70vh;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.catn8-album-shelf-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem;
+  border: 1px solid rgba(31, 29, 53, 0.15);
+  border-radius: 12px;
+  background: var(--catn8-albums-paper);
+}
+
+.catn8-album-shelf-item.is-active {
+  border-color: var(--catn8-albums-accent);
+  box-shadow: 0 8px 24px rgba(52, 47, 99, 0.15);
+}
+
+.catn8-album-shelf-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, var(--catn8-albums-accent), var(--catn8-albums-leaf));
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.catn8-album-shelf-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.catn8-album-shelf-meta span {
+  font-size: 0.85rem;
+  color: rgba(47, 41, 69, 0.72);
+}
+
+.catn8-album-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.catn8-album-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.catn8-zoom-label {
+  min-width: 56px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--catn8-albums-ink);
+}
+
+.catn8-scrapbook-viewer {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 236, 0.94)),
+    repeating-linear-gradient(0deg, rgba(88, 77, 118, 0.05), rgba(88, 77, 118, 0.05) 1px, transparent 1px, transparent 22px);
+  transform-origin: top center;
+}
+
+.catn8-scrapbook-page-left,
+.catn8-scrapbook-page-right {
+  border-radius: 16px;
+  border: 1px solid rgba(31, 29, 53, 0.14);
+  padding: 1rem;
+  background: var(--catn8-albums-paper);
+}
+
+.catn8-scrapbook-page-tag {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.28rem 0.58rem;
+  border-radius: 999px;
+  margin-bottom: 0.8rem;
+  background: color-mix(in srgb, var(--fun-green) 32%, white);
+}
+
+.catn8-scrapbook-chip-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.catn8-scrapbook-chip {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--fun-purple) 18%, white);
+}
+
+.catn8-polaroid-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.catn8-polaroid {
+  background: #fff;
+  border: 1px solid rgba(31, 29, 53, 0.15);
+  border-radius: 8px;
+  padding: 0.4rem;
+  box-shadow: 0 6px 20px rgba(31, 29, 53, 0.1);
+}
+
+.catn8-polaroid-photo {
+  height: 90px;
+  border-radius: 4px;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--fun-purple) 20%, white), color-mix(in srgb, var(--fun-green) 20%, white));
+}
+
+.catn8-polaroid-caption {
+  font-size: 0.78rem;
+  margin-top: 0.35rem;
+  color: rgba(47, 41, 69, 0.8);
+}
+
+.catn8-album-admin {
+  padding: 1rem;
+}
+
+@media (max-width: 1199px) {
+  .catn8-photo-albums-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .catn8-scrapbook-viewer {
+    grid-template-columns: 1fr;
+  }
+}

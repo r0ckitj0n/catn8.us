@@ -4,6 +4,7 @@ export interface IViewer {
   email: string;
   is_admin?: number;
   is_administrator?: number;
+  is_photo_albums_user?: number;
   [key: string]: any;
 }
 

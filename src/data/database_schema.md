@@ -52,6 +52,21 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+## Photo Albums Tables
+
+### photo_albums
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `title` (VARCHAR(191))
+- `slug` (VARCHAR(120), UNIQUE)
+- `summary` (TEXT)
+- `cover_image_url` (MEDIUMTEXT)
+- `cover_prompt` (TEXT)
+- `spec_json` (LONGTEXT/JSON)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_by_user_id` (INT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ## Build Wizard Tables
 
 ### build_wizard_projects

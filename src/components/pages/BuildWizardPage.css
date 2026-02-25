@@ -1901,6 +1901,13 @@
   width: 100%;
 }
 
+.build-wizard-doc-thumb-link[type="button"] {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
 .build-wizard-doc-thumb {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -2924,6 +2931,20 @@
   gap: 6px;
 }
 
+.build-wizard-lightbox-embed-wrap {
+  border: 1px solid var(--catn8-bw-border-soft);
+  border-radius: 8px;
+  background: #f7fafc;
+  overflow: hidden;
+}
+
+.build-wizard-lightbox-embed {
+  width: 100%;
+  min-height: 72vh;
+  border: 0;
+  background: #fff;
+}
+
 .build-wizard-lightbox-plan-wrap {
   border: 1px solid var(--catn8-bw-border-soft);
   border-radius: 8px;
@@ -2939,6 +2960,71 @@
   word-break: break-word;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.build-wizard-lightbox-text-wrap {
+  border: 1px solid var(--catn8-bw-border-soft);
+  border-radius: 8px;
+  background: #f7fafc;
+  overflow: hidden;
+}
+
+.build-wizard-lightbox-task-preview {
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.build-wizard-lightbox-task-preview h4 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: #2a3f5a;
+}
+
+.build-wizard-lightbox-task-fields {
+  margin: 0;
+  display: grid;
+  gap: 4px 8px;
+  grid-template-columns: minmax(120px, auto) 1fr;
+}
+
+.build-wizard-lightbox-task-fields dt {
+  font-weight: 700;
+  color: #334c68;
+}
+
+.build-wizard-lightbox-task-fields dd {
+  margin: 0;
+  color: #1f2f43;
+  overflow-wrap: anywhere;
+}
+
+.build-wizard-lightbox-task-notes {
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-lightbox-task-notes p {
+  margin: 0;
+  color: #1f2f43;
+}
+
+.build-wizard-lightbox-task-system {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.build-wizard-lightbox-text-raw {
+  border-top: 1px solid var(--catn8-bw-border-soft);
+}
+
+.build-wizard-lightbox-text-raw > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #2f4865;
 }
 
 .build-wizard-lightbox-sheet-wrap {

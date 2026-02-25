@@ -25,7 +25,9 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isMysteryGameUser = Number(viewer?.is_mystery_game_user || 0) === 1;
   const isWordsearchUser = Number(viewer?.is_wordsearch_user || 0) === 1;
   const isBuildWizardUser = Number(viewer?.is_build_wizard_user || 0) === 1;
+  const isPhotoAlbumsUser = Number(viewer?.is_photo_albums_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
+  const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
 
   const links = [
     { key: 'about', href: 'about.php', label: 'About' },
@@ -51,6 +53,9 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       : []),
     ...(canUseBuildWizard
       ? [{ key: 'build_wizard', label: 'Build Wizard', href: 'build-wizard.php' }]
+      : []),
+    ...(canUsePhotoAlbums
+      ? [{ key: 'photo_albums', label: 'Photo Albums', href: 'photo-albums.php' }]
       : []),
     ...((active === 'mystery' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [

@@ -15,6 +15,7 @@ import { FroggerPage } from '../components/pages/FroggerPage';
 import { GamesPage } from '../components/pages/GamesPage';
 import { HomePage } from '../components/pages/HomePage';
 import { MysteryPage } from '../components/pages/MysteryPage';
+import { PhotoAlbumsPage } from '../components/pages/PhotoAlbumsPage';
 import { ResetPage } from '../components/pages/ResetPage';
 import { SettingsPage } from '../components/pages/SettingsPage';
 import { SheriffStationPage } from '../components/pages/SheriffStationPage';
@@ -39,6 +40,7 @@ type AppPage =
   | 'build_wizard'
   | 'login'
   | 'mystery'
+  | 'photo_albums'
   | 'sheriff_station'
   | 'settings'
   | 'wordsearch'
@@ -75,6 +77,7 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   activities: ActivitiesPage,
   coloring: ColoringPage,
   wordsearch: WordsearchPage,
+  photo_albums: PhotoAlbumsPage,
   frogger: FroggerPage,
   asteroids: AsteroidsPage,
   tetris: TetrisPage,

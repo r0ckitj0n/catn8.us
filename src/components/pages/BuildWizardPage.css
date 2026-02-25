@@ -38,6 +38,8 @@
   z-index: 20;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   padding: 12px 24px 0;
 }
 
@@ -71,6 +73,73 @@
   gap: 14px;
 }
 
+.build-wizard-launch-empty {
+  width: min(500px, 100%);
+  border: 1px dashed #c7d3e3;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 20px;
+  color: var(--catn8-bw-text-muted);
+}
+
+.build-wizard-template-editor-head {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.build-wizard-template-editor-list {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 980px;
+}
+
+.build-wizard-template-editor-row {
+  border: 1px solid #c7d3e3;
+  border-radius: 14px;
+  background: var(--catn8-bw-surface-0);
+  box-shadow: 0 4px 14px rgba(31, 42, 55, 0.06);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.build-wizard-template-editor-meta {
+  min-width: 0;
+}
+
+.build-wizard-template-editor-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.build-wizard-template-editor-sub {
+  margin-top: 4px;
+  color: var(--catn8-bw-text-muted);
+  font-size: 0.92rem;
+}
+
+.build-wizard-template-editor-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.build-wizard-template-editor-empty {
+  border: 1px dashed #c7d3e3;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 18px;
+  color: var(--catn8-bw-text-muted);
+}
+
 .build-wizard-launch-card {
   width: 500px;
   height: 500px;
@@ -95,6 +164,16 @@
 
   .build-wizard-launch-card {
     justify-self: center;
+  }
+
+  .build-wizard-template-editor-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .build-wizard-template-editor-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -1187,6 +1266,22 @@
   min-width: 190px;
 }
 
+.build-wizard-step-move-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.build-wizard-step-move-controls select {
+  min-width: 170px;
+}
+
+.build-wizard-step-text-filter-input {
+  min-width: 220px;
+  max-width: 360px;
+}
+
 .build-wizard-phase-add-in-filters {
   margin-left: auto;
 }
@@ -1197,6 +1292,18 @@
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.build-wizard-step-contact-picker {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.build-wizard-step-contact-picker select {
+  min-width: 240px;
 }
 
 .build-wizard-upload-btn {
@@ -1416,6 +1523,53 @@
   gap: 6px;
 }
 
+.build-wizard-step-assignee-list {
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-step-assignee-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid #b7cde8;
+  padding: 6px 8px;
+  background: #eef4ff;
+}
+
+.build-wizard-step-assignee-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.build-wizard-step-assignee-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.build-wizard-step-assignee-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.build-wizard-step-assignee-source {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
 .build-wizard-step-assignee-chip {
   display: inline-flex;
   align-items: center;
@@ -1439,6 +1593,24 @@
 }
 
 .build-wizard-step-assignee-chip.is-authority {
+  background: #fff6e8;
+  border-color: #e5c48d;
+  color: #6e4a12;
+}
+
+.build-wizard-step-assignee-row.is-vendor {
+  background: #edf8f1;
+  border-color: #9cd4b0;
+  color: #20583a;
+}
+
+.build-wizard-step-assignee-row.is-contact {
+  background: #eef4ff;
+  border-color: #b7c9e8;
+  color: #284969;
+}
+
+.build-wizard-step-assignee-row.is-authority {
   background: #fff6e8;
   border-color: #e5c48d;
   color: #6e4a12;
@@ -2650,6 +2822,23 @@
   .build-wizard-step-assignee-filters select {
     min-width: 0;
     width: 100%;
+  }
+
+  .build-wizard-step-move-controls {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-step-move-controls select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .build-wizard-step-text-filter-input {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
   }
 
   .build-wizard-step-attach-existing {

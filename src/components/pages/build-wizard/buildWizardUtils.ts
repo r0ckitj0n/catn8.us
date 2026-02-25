@@ -343,7 +343,7 @@ export function parseUrlState(): { view: WizardView; projectId: number | null } 
   const viewParam = String(url.searchParams.get('view') || '').toLowerCase();
   const projectIdParam = Number(url.searchParams.get('project_id') || '0');
   return {
-    view: viewParam === 'build' ? 'build' : 'launcher',
+    view: viewParam === 'build' ? 'build' : (viewParam === 'template_editor' ? 'template_editor' : 'launcher'),
     projectId: Number.isFinite(projectIdParam) && projectIdParam > 0 ? projectIdParam : null,
   };
 }
@@ -357,6 +357,9 @@ export function pushUrlState(view: WizardView, projectId: number | null): void {
   if (view === 'build' && projectId && projectId > 0) {
     url.searchParams.set('view', 'build');
     url.searchParams.set('project_id', String(projectId));
+  } else if (view === 'template_editor') {
+    url.searchParams.set('view', 'template_editor');
+    url.searchParams.delete('project_id');
   } else {
     url.searchParams.delete('view');
     url.searchParams.delete('project_id');

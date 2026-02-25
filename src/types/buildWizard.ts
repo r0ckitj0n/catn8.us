@@ -88,6 +88,7 @@ export interface IBuildWizardProject {
   owner_user_id: number | null;
   title: string;
   status: string;
+  is_template: number;
   square_feet: number | null;
   home_style: string;
   home_type: string;
@@ -117,6 +118,7 @@ export interface IBuildWizardProjectSummary {
   id: number;
   title: string;
   status: string;
+  is_template: number;
   created_at: string;
   updated_at: string;
   step_count: number;

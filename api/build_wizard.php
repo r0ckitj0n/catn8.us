@@ -13,6 +13,7 @@ function catn8_build_wizard_tables_ensure(): void
         owner_user_id INT NOT NULL,
         title VARCHAR(191) NOT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'planning',
+        is_template TINYINT(1) NOT NULL DEFAULT 0,
         square_feet INT NULL,
         home_style VARCHAR(120) NOT NULL DEFAULT '',
         home_type VARCHAR(64) NOT NULL DEFAULT '',
@@ -282,6 +283,7 @@ function catn8_build_wizard_tables_ensure(): void
     }
 
     $projectColumns = [
+        'is_template' => 'ALTER TABLE build_wizard_projects ADD COLUMN is_template TINYINT(1) NOT NULL DEFAULT 0 AFTER status',
         'home_type' => "ALTER TABLE build_wizard_projects ADD COLUMN home_type VARCHAR(64) NOT NULL DEFAULT '' AFTER home_style",
         'bedrooms_count' => 'ALTER TABLE build_wizard_projects ADD COLUMN bedrooms_count INT NULL AFTER room_count',
         'kitchens_count' => 'ALTER TABLE build_wizard_projects ADD COLUMN kitchens_count INT NULL AFTER bedrooms_count',
@@ -1506,14 +1508,14 @@ function catn8_build_wizard_seed_project_from_file(int $projectId, string $waste
 function catn8_build_wizard_list_projects(int $uid): array
 {
     $rows = Database::queryAll(
-        'SELECT p.id, p.title, p.status, p.created_at, p.updated_at,
+        'SELECT p.id, p.title, p.status, p.is_template, p.created_at, p.updated_at,
                 p.blueprint_document_id, p.primary_photo_document_id,
                 COUNT(s.id) AS step_count,
                 SUM(CASE WHEN s.is_completed = 1 THEN 1 ELSE 0 END) AS completed_step_count
          FROM build_wizard_projects p
          LEFT JOIN build_wizard_steps s ON s.project_id = p.id
          WHERE p.owner_user_id = ?
-         GROUP BY p.id, p.title, p.status, p.created_at, p.updated_at, p.blueprint_document_id, p.primary_photo_document_id
+         GROUP BY p.id, p.title, p.status, p.is_template, p.created_at, p.updated_at, p.blueprint_document_id, p.primary_photo_document_id
          ORDER BY p.updated_at DESC, p.id DESC',
         [$uid]
     );
@@ -1524,6 +1526,7 @@ function catn8_build_wizard_list_projects(int $uid): array
             'id' => (int)($r['id'] ?? 0),
             'title' => (string)($r['title'] ?? ''),
             'status' => (string)($r['status'] ?? 'planning'),
+            'is_template' => (int)($r['is_template'] ?? 0) === 1 ? 1 : 0,
             'created_at' => (string)($r['created_at'] ?? ''),
             'updated_at' => (string)($r['updated_at'] ?? ''),
             'step_count' => (int)($r['step_count'] ?? 0),
@@ -1547,7 +1550,8 @@ function catn8_build_wizard_create_project(
     string $title,
     bool $seedFromSpreadsheet,
     string $wastewaterKind = 'septic',
-    string $waterKind = 'county_water'
+    string $waterKind = 'county_water',
+    bool $isTemplate = false
 ): array
 {
     $cleanTitle = trim($title);
@@ -1556,8 +1560,8 @@ function catn8_build_wizard_create_project(
     }
 
     Database::execute(
-        'INSERT INTO build_wizard_projects (owner_user_id, title, status, home_style, lot_address, wizard_notes) VALUES (?, ?, ?, ?, ?, ?)',
-        [$uid, $cleanTitle, 'planning', '', '', '']
+        'INSERT INTO build_wizard_projects (owner_user_id, title, status, is_template, home_style, lot_address, wizard_notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$uid, $cleanTitle, 'planning', $isTemplate ? 1 : 0, '', '', '']
     );
     $id = (int)Database::lastInsertId();
     if ($id <= 0) {
@@ -5204,11 +5208,12 @@ try {
         $seedMode = strtolower(trim((string)($body['seed_mode'] ?? 'blank')));
         $wastewaterKind = catn8_build_wizard_wastewater_kind($body['wastewater_kind'] ?? ($body['template_kind'] ?? 'septic'));
         $waterKind = catn8_build_wizard_water_kind($body['water_kind'] ?? 'county_water');
+        $isTemplate = (int)($body['is_template'] ?? 0) === 1;
         if (!in_array($seedMode, ['blank', 'spreadsheet'], true)) {
             $seedMode = 'blank';
         }
 
-        $project = catn8_build_wizard_create_project($viewerId, $title, $seedMode === 'spreadsheet', $wastewaterKind, $waterKind);
+        $project = catn8_build_wizard_create_project($viewerId, $title, $seedMode === 'spreadsheet', $wastewaterKind, $waterKind, $isTemplate);
         $projectId = (int)($project['id'] ?? 0);
 
         catn8_json_response([
@@ -5228,6 +5233,13 @@ try {
         $allowedStatuses = ['planning', 'active', 'on_hold', 'completed'];
         if (!in_array($status, $allowedStatuses, true)) {
             $status = 'planning';
+        }
+        $isTemplate = null;
+        if (array_key_exists('is_template', $body)) {
+            $isTemplate = (int)($body['is_template'] ?? 0) === 1 ? 1 : 0;
+        } else {
+            $existingTemplate = Database::queryOne('SELECT is_template FROM build_wizard_projects WHERE id = ? LIMIT 1', [$projectId]);
+            $isTemplate = isset($existingTemplate['is_template']) ? ((int)$existingTemplate['is_template'] === 1 ? 1 : 0) : 0;
         }
 
         $blueprintDocumentId = null;
@@ -5278,11 +5290,12 @@ try {
 
         Database::execute(
             'UPDATE build_wizard_projects
-             SET title = ?, status = ?, square_feet = ?, home_style = ?, home_type = ?, room_count = ?, bedrooms_count = ?, kitchens_count = ?, bathroom_count = ?, stories_count = ?, lot_size_sqft = ?, garage_spaces = ?, parking_spaces = ?, year_built = ?, hoa_fee_monthly = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?, blueprint_document_id = ?, primary_photo_document_id = ?
+             SET title = ?, status = ?, is_template = ?, square_feet = ?, home_style = ?, home_type = ?, room_count = ?, bedrooms_count = ?, kitchens_count = ?, bathroom_count = ?, stories_count = ?, lot_size_sqft = ?, garage_spaces = ?, parking_spaces = ?, year_built = ?, hoa_fee_monthly = ?, lot_address = ?, target_start_date = ?, target_completion_date = ?, wizard_notes = ?, blueprint_document_id = ?, primary_photo_document_id = ?
              WHERE id = ?',
             [
                 trim((string)($body['title'] ?? 'Build Wizard Project')),
                 $status,
+                $isTemplate,
                 isset($body['square_feet']) && is_numeric($body['square_feet']) ? (int)$body['square_feet'] : null,
                 trim((string)($body['home_style'] ?? '')),
                 trim((string)($body['home_type'] ?? '')),

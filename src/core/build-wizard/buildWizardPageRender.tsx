@@ -241,8 +241,42 @@ const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, plainNot
   return notes ? `${BUILD_WIZARD_TASK_META_PREFIX}${json}\n${notes}` : `${BUILD_WIZARD_TASK_META_PREFIX}${json}`;
 };
 
+const appendSearchTextParts = (
+  target: string[],
+  value: unknown,
+  seen: WeakSet<object>,
+): void => {
+  if (value === null || typeof value === 'undefined') {
+    return;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    target.push(String(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => appendSearchTextParts(target, entry, seen));
+    return;
+  }
+  if (typeof value === 'object') {
+    const objectValue = value as Record<string, unknown>;
+    if (seen.has(objectValue)) {
+      return;
+    }
+    seen.add(objectValue);
+    Object.values(objectValue).forEach((entry) => appendSearchTextParts(target, entry, seen));
+  }
+};
+
+const buildSearchText = (...values: unknown[]): string => {
+  const parts: string[] = [];
+  const seen = new WeakSet<object>();
+  values.forEach((value) => appendSearchTextParts(parts, value, seen));
+  return parts.join(' ').toLowerCase();
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
+    saving,
     aiBusy,
     recoveryBusy,
     projectId,
@@ -288,6 +322,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const initialUrlState = React.useMemo(() => parseUrlState(), []);
   const [view, setView] = React.useState<WizardView>(initialUrlState.view);
+  const [buildEntryPoint, setBuildEntryPoint] = React.useState<'launcher' | 'template_editor'>(
+    initialUrlState.view === 'template_editor' ? 'template_editor' : 'launcher',
+  );
   const [activeTab, setActiveTab] = React.useState<BuildTabId>('start');
   const [newHomeWastewaterKind, setNewHomeWastewaterKind] = React.useState<'septic' | 'public_sewer'>('septic');
   const [newHomeWaterKind, setNewHomeWaterKind] = React.useState<'county_water' | 'private_well'>('county_water');
@@ -401,6 +438,12 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [documentManagerSearchResults, setDocumentManagerSearchResults] = React.useState<IBuildWizardContentSearchResult[]>([]);
   const [stepCardAssigneeTypeFilter, setStepCardAssigneeTypeFilter] = React.useState<'all' | BuildWizardContactType>('all');
   const [stepCardAssigneeIdFilter, setStepCardAssigneeIdFilter] = React.useState<number>(0);
+  const [stepCardTextFilter, setStepCardTextFilter] = React.useState<string>('');
+  const [moveStepCandidateId, setMoveStepCandidateId] = React.useState<number>(0);
+  const [moveStepTargetTab, setMoveStepTargetTab] = React.useState<BuildTabId>('land');
+  const [movingStep, setMovingStep] = React.useState<boolean>(false);
+  const [stepContactPickerOpenByStepId, setStepContactPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
+  const [stepContactCandidateByStepId, setStepContactCandidateByStepId] = React.useState<Record<number, string>>({});
   const [currencyInputByKey, setCurrencyInputByKey] = React.useState<Record<string, string>>({});
   const [activeCurrencyInputKey, setActiveCurrencyInputKey] = React.useState<string>('');
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -477,6 +520,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     const onPopState = () => {
       const state = parseUrlState();
       setView(state.view);
+      if (state.view === 'template_editor') {
+        setBuildEntryPoint('template_editor');
+      } else if (state.view === 'launcher') {
+        setBuildEntryPoint('launcher');
+      }
       if (state.view === 'build' && state.projectId && state.projectId !== projectId) {
         void openProject(state.projectId);
         setActiveTab('overview');
@@ -998,6 +1046,35 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return byStep;
   }, [contactAssignments, contacts, steps]);
 
+  const stepDirectAssigneesByStepId = React.useMemo(() => {
+    const contactMap = new Map<number, IBuildWizardContact>();
+    contacts.forEach((contact) => {
+      contactMap.set(contact.id, contact);
+    });
+
+    const byStep = new Map<number, Array<{ assignment: IBuildWizardContactAssignment; contact: IBuildWizardContact }>>();
+    contactAssignments.forEach((assignment) => {
+      const stepId = Number(assignment.step_id || 0);
+      if (stepId <= 0) {
+        return;
+      }
+      const contact = contactMap.get(assignment.contact_id);
+      if (!contact) {
+        return;
+      }
+      const rows = byStep.get(stepId) || [];
+      rows.push({ assignment, contact });
+      byStep.set(stepId, rows);
+    });
+
+    byStep.forEach((rows, stepId) => {
+      const sortedRows = [...rows].sort((a, b) => sortAlpha(String(a.contact.display_name || ''), String(b.contact.display_name || '')));
+      byStep.set(stepId, sortedRows);
+    });
+
+    return byStep;
+  }, [contactAssignments, contacts]);
+
   const stepFilterContactOptions = React.useMemo(() => {
     const inTabContactIds = new Set<number>();
     filteredTabSteps.forEach((step) => {
@@ -1008,6 +1085,67 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       .filter((contact) => inTabContactIds.has(contact.id))
       .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
   }, [contacts, filteredTabSteps, stepAssigneesByStepId]);
+
+  const moveStepPhaseTabOptions = React.useMemo(() => {
+    return BUILD_TABS
+      .filter((tab) => tab.id !== 'overview' && tab.id !== 'start' && tab.id !== 'completed')
+      .map((tab) => ({ value: tab.id, label: tab.label }));
+  }, []);
+
+  const moveStepOptions = React.useMemo(() => {
+    return [...filteredTabSteps]
+      .sort((a, b) => {
+        if (a.step_order !== b.step_order) {
+          return a.step_order - b.step_order;
+        }
+        return a.id - b.id;
+      })
+      .map((step) => ({
+        id: step.id,
+        label: `#${activeTabStepNumbers.get(step.id) || step.step_order} ${String(step.title || '').trim() || 'Untitled step'}`,
+      }));
+  }, [activeTabStepNumbers, filteredTabSteps]);
+
+  const stepCardTextFilterTokens = React.useMemo(() => {
+    return stepCardTextFilter
+      .trim()
+      .toLowerCase()
+      .split(/\s+/g)
+      .filter(Boolean);
+  }, [stepCardTextFilter]);
+
+  const stepSearchTextById = React.useMemo(() => {
+    const documentsByStepId = new Map<number, IBuildWizardDocument[]>();
+    documents.forEach((documentItem) => {
+      const stepId = Number(documentItem.step_id || 0);
+      if (stepId <= 0) {
+        return;
+      }
+      const rows = documentsByStepId.get(stepId) || [];
+      rows.push(documentItem);
+      documentsByStepId.set(stepId, rows);
+    });
+
+    const byId = new Map<number, string>();
+    steps.forEach((step) => {
+      const stepDocuments = documentsByStepId.get(step.id) || [];
+      const stepAssignees = stepAssigneesByStepId.get(step.id) || [];
+      const parsedReceiptData = stepDocuments
+        .filter((documentItem) => String(documentItem.kind || '').trim() === 'receipt')
+        .map((documentItem) => parseTaskMetaFromReceiptNotes(documentItem.receipt_notes));
+      byId.set(
+        step.id,
+        buildSearchText(
+          step,
+          stepDocuments,
+          stepAssignees.map((entry) => entry.contact),
+          parsedReceiptData,
+          prettyPhaseLabel(step.phase_key),
+        ),
+      );
+    });
+    return byId;
+  }, [documents, stepAssigneesByStepId, steps]);
 
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
@@ -1143,6 +1281,52 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
     void savePhaseDateRange(projectId, activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
   }, [activeTab, projectId, resolvePhaseDateRange, savePhaseDateRange]);
+
+  const onMoveSelectedStep = React.useCallback(async () => {
+    if (movingStep) {
+      return;
+    }
+    const stepId = Number(moveStepCandidateId || 0);
+    if (stepId <= 0) {
+      onToast?.({ tone: 'warning', message: 'Choose a step to move.' });
+      return;
+    }
+    const targetPhaseKey = String(TAB_DEFAULT_PHASE_KEY[moveStepTargetTab] || '').trim();
+    if (!targetPhaseKey) {
+      onToast?.({ tone: 'warning', message: 'Choose a valid target phase.' });
+      return;
+    }
+    const step = stepById.get(stepId);
+    if (!step) {
+      onToast?.({ tone: 'warning', message: 'Selected step no longer exists.' });
+      return;
+    }
+    if (String(step.phase_key || '').trim() === targetPhaseKey) {
+      onToast?.({ tone: 'info', message: 'Step is already in that phase.' });
+      return;
+    }
+
+    const startDate = toStringOrNull(step.expected_start_date || '');
+    const endDate = toStringOrNull(step.expected_end_date || '');
+    const patch: Partial<IBuildWizardStep> = {
+      phase_key: targetPhaseKey,
+      expected_start_date: startDate,
+      expected_end_date: endDate,
+      expected_duration_days: calculateDurationDays(startDate, endDate) ?? null,
+    };
+    if (Number(step.parent_step_id || 0) > 0) {
+      patch.parent_step_id = null;
+    }
+
+    setMovingStep(true);
+    try {
+      await updateStep(stepId, patch);
+      setActiveTab(moveStepTargetTab);
+      onToast?.({ tone: 'success', message: 'Step moved and re-placed on timeline.' });
+    } finally {
+      setMovingStep(false);
+    }
+  }, [moveStepCandidateId, moveStepTargetTab, movingStep, onToast, stepById, updateStep]);
 
   const footerTimelineSteps = React.useMemo(() => {
     if (activeTab === 'start' || activeTab === 'completed' || activeTab === 'overview') {
@@ -1645,9 +1829,45 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   }, [stepCardAssigneeIdFilter, stepFilterContactOptions]);
 
-  const openBuild = async (nextProjectId: number) => {
+  React.useEffect(() => {
+    if (moveStepOptions.length === 0) {
+      setMoveStepCandidateId(0);
+      return;
+    }
+    const exists = moveStepOptions.some((option) => option.id === moveStepCandidateId);
+    if (!exists) {
+      setMoveStepCandidateId(moveStepOptions[0].id);
+    }
+  }, [moveStepCandidateId, moveStepOptions]);
+
+  React.useEffect(() => {
+    if (moveStepCandidateId <= 0) {
+      return;
+    }
+    const selected = stepById.get(moveStepCandidateId);
+    if (!selected) {
+      return;
+    }
+    const tab = stepPhaseBucket(selected);
+    if (tab !== 'overview' && tab !== 'start' && tab !== 'completed') {
+      setMoveStepTargetTab(tab);
+    }
+  }, [moveStepCandidateId, stepById]);
+
+  const launcherProjects = React.useMemo(() => {
+    return projects.filter((candidate) => Number(candidate.is_template || 0) !== 1);
+  }, [projects]);
+
+  const templateProjects = React.useMemo(() => {
+    return projects.filter((candidate) => Number(candidate.is_template || 0) === 1);
+  }, [projects]);
+
+  const isTemplateProject = Number(project?.is_template || 0) === 1;
+
+  const openBuild = async (nextProjectId: number, source: 'launcher' | 'template_editor' = 'launcher') => {
     await openProject(nextProjectId);
     setActiveTab('overview');
+    setBuildEntryPoint(source);
     setView('build');
     pushUrlState('build', nextProjectId);
   };
@@ -1657,6 +1877,24 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     const nextId = await createProject(`New Home Plan ${today}`, 'blank', newHomeWastewaterKind, newHomeWaterKind);
     if (nextId > 0) {
       setActiveTab('start');
+      setBuildEntryPoint('launcher');
+      setView('build');
+      pushUrlState('build', nextId);
+    }
+  };
+
+  const onOpenTemplateEditor = () => {
+    setBuildEntryPoint('template_editor');
+    setView('template_editor');
+    pushUrlState('template_editor', null);
+  };
+
+  const onCreateTemplate = async () => {
+    const today = toIsoDate(new Date());
+    const nextId = await createProject(`New Template ${today}`, 'blank', 'septic', 'county_water', true);
+    if (nextId > 0) {
+      setActiveTab('start');
+      setBuildEntryPoint('template_editor');
       setView('build');
       pushUrlState('build', nextId);
     }
@@ -1664,7 +1902,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const onBackToLauncher = () => {
     setView('launcher');
+    setBuildEntryPoint('launcher');
     pushUrlState('launcher', null);
+  };
+
+  const onBackFromWorkspace = () => {
+    if (isTemplateProject || buildEntryPoint === 'template_editor') {
+      setView('template_editor');
+      setBuildEntryPoint('template_editor');
+      pushUrlState('template_editor', null);
+      return;
+    }
+    onBackToLauncher();
+  };
+
+  const onSaveTemplate = async () => {
+    if (projectId <= 0) {
+      return;
+    }
+    await updateProject({ is_template: 1 });
   };
 
   const onCloseWizard = React.useCallback(() => {
@@ -2155,6 +2411,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       step_id: deskAssignmentStepId,
     });
   }, [addContactAssignment, deskAssignmentStepId, projectId, selectedDeskContact]);
+
+  const onAddContactToStep = React.useCallback(async (stepId: number, contactId: number) => {
+    if (projectId <= 0 || stepId <= 0 || contactId <= 0) {
+      return;
+    }
+    const saved = await addContactAssignment({
+      project_id: projectId,
+      contact_id: contactId,
+      step_id: stepId,
+    });
+    if (saved) {
+      setStepContactCandidateByStepId((prev) => ({ ...prev, [stepId]: '' }));
+      setStepContactPickerOpenByStepId((prev) => ({ ...prev, [stepId]: false }));
+    }
+  }, [addContactAssignment, projectId]);
 
   const onAutoAssignDeskStepsToTimeline = React.useCallback(async () => {
     if (deskAutoAssignBusy || aiBusy) {
@@ -2998,7 +3269,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return <div className="build-wizard-muted">No steps in this tab yet.</div>;
     }
     const hasAssigneeFilters = stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0;
+    const hasTextFilter = stepCardTextFilterTokens.length > 0;
     const rows = activeTabTreeRows;
+    const visibleRows = rows.filter((row) => {
+      if (!hasTextFilter) {
+        return true;
+      }
+      const haystack = stepSearchTextById.get(row.step.id) || '';
+      return stepCardTextFilterTokens.every((token) => haystack.includes(token));
+    });
+
+    if (!visibleRows.length) {
+      return <div className="build-wizard-muted">No steps match the current filter.</div>;
+    }
 
     return (
       <div className="build-wizard-step-list">
@@ -3016,9 +3299,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             void onDropReorder(0);
           }}
         />
-        {rows.map((row, rowIndex) => {
+        {visibleRows.map((row, rowIndex) => {
           const step = row.step;
           const allStepAssignees = stepAssigneesByStepId.get(step.id) || [];
+          const directStepAssignees = stepDirectAssigneesByStepId.get(step.id) || [];
           const visibleStepAssignees = allStepAssignees.filter((entry) => {
             const contactType = normalizeContactType(entry.contact);
             if (stepCardAssigneeTypeFilter !== 'all' && contactType !== stepCardAssigneeTypeFilter) {
@@ -3110,6 +3394,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             })
             : attachableProjectDocuments;
           const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
+          const stepDirectContactIdSet = new Set<number>(directStepAssignees.map((entry) => entry.contact.id));
+          const addableStepContacts = contacts
+            .filter((contact) => !stepDirectContactIdSet.has(contact.id))
+            .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
+          const selectedStepContactCandidateId = Number(stepContactCandidateByStepId[step.id] || 0);
+          const effectiveStepContactCandidateId = selectedStepContactCandidateId > 0
+            && addableStepContacts.some((contact) => contact.id === selectedStepContactCandidateId)
+            ? selectedStepContactCandidateId
+            : (addableStepContacts[0]?.id || 0);
           return (
             <React.Fragment key={step.id}>
             <div
@@ -3463,6 +3756,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 >
                   {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Task' : 'Add Task'}
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  disabled={stepReadOnly}
+                  onClick={() => setStepContactPickerOpenByStepId((prev) => ({ ...prev, [step.id]: !prev[step.id] }))}
+                >
+                  Add Contact
+                </button>
                 <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
                   Upload
                   <input
@@ -3526,6 +3827,30 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 ) : null}
               </div>
 
+              {stepContactPickerOpenByStepId[step.id] ? (
+                <div className="build-wizard-step-contact-picker">
+                  <select
+                    value={effectiveStepContactCandidateId > 0 ? String(effectiveStepContactCandidateId) : ''}
+                    onChange={(e) => setStepContactCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                  >
+                    <option value="">Select contact...</option>
+                    {addableStepContacts.map((contact) => (
+                      <option key={`step-contact-${step.id}-${contact.id}`} value={String(contact.id)}>
+                        {contact.display_name} ({contactTypeLabel(normalizeContactType(contact))})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    disabled={stepReadOnly || effectiveStepContactCandidateId <= 0}
+                    onClick={() => { void onAddContactToStep(step.id, effectiveStepContactCandidateId); }}
+                  >
+                    Assign
+                  </button>
+                </div>
+              ) : null}
+
               {noteEditorOpenByStep[step.id] ? (
                 <div className="build-wizard-note-editor">
                   <textarea
@@ -3561,14 +3886,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
               {allStepAssignees.length > 0 ? (
                 <div className="build-wizard-step-assignees">
-                  <div className="build-wizard-step-assignees-label">Assigned</div>
+                  <div className="build-wizard-step-assignees-label">Contacts</div>
                   {visibleStepAssignees.length > 0 ? (
-                    <div className="build-wizard-step-assignees-list">
+                    <div className="build-wizard-step-assignee-list">
                       {visibleStepAssignees.map((entry) => (
-                        <span key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
-                          {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
-                          {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
-                        </span>
+                        <div key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-row ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
+                          <span className="build-wizard-step-assignee-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                              <path d="M12 12c2.5 0 4.5-2 4.5-4.5S14.5 3 12 3 7.5 5 7.5 7.5 9.5 12 12 12Zm0 2c-4.1 0-7.5 2.9-7.5 6.5V21h15v-.5c0-3.6-3.4-6.5-7.5-6.5Z" />
+                            </svg>
+                          </span>
+                          <span className="build-wizard-step-assignee-text">{entry.contact.display_name}</span>
+                          <span className="build-wizard-step-assignee-source">
+                            {entry.source === 'phase' ? 'Phase' : 'Step'}
+                          </span>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -4346,6 +4678,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     <div className="build-wizard-shell">
       <div className="build-wizard-launcher">
         <div className="build-wizard-page-close">
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={onOpenTemplateEditor}
+          >
+            Template Editor
+          </button>
           <StandardIconButton
             iconKey="close"
             ariaLabel="Close Build Wizard"
@@ -4403,7 +4742,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             </div>
           </div>
 
-          {projects.map((p) => (
+          {launcherProjects.map((p) => (
             <div
               key={p.id}
               className="build-wizard-launch-card build-wizard-launch-card-with-delete"
@@ -4412,7 +4751,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <button
                 type="button"
                 className="build-wizard-launch-card-open"
-                onClick={() => void openBuild(p.id)}
+                onClick={() => void openBuild(p.id, 'launcher')}
                 title={`Open ${p.title}`}
               >
                 <div className="build-wizard-thumb build-wizard-thumb-media">
@@ -4449,6 +4788,74 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </button>
             </div>
           ))}
+          {launcherProjects.length === 0 ? (
+            <div className="build-wizard-launch-empty">
+              No home builds yet. Use <strong>Build a New Home</strong> to create your first project.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTemplateEditor = () => (
+    <div className="build-wizard-shell">
+      <div className="build-wizard-launcher">
+        <div className="build-wizard-page-close">
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            onClick={onBackToLauncher}
+          >
+            Back to Launcher
+          </button>
+          <StandardIconButton
+            iconKey="close"
+            ariaLabel="Close Build Wizard"
+            title="Close Build Wizard"
+            className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+            onClick={onCloseWizard}
+          />
+        </div>
+        <div className="build-wizard-template-editor-head">
+          <h1>Template Editor</h1>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void onCreateTemplate()}>
+            Create Template
+          </button>
+        </div>
+        <p>Manage reusable Build Wizard templates.</p>
+        <div className="build-wizard-template-editor-list">
+          {templateProjects.length === 0 ? (
+            <div className="build-wizard-template-editor-empty">No templates yet. Create your first template to get started.</div>
+          ) : (
+            templateProjects.map((template) => (
+              <div key={template.id} className="build-wizard-template-editor-row">
+                <div className="build-wizard-template-editor-meta">
+                  <div className="build-wizard-template-editor-title">{template.title}</div>
+                  <div className="build-wizard-template-editor-sub">
+                    {template.step_count} step{template.step_count === 1 ? '' : 's'} | Updated {formatDate(template.updated_at)}
+                  </div>
+                </div>
+                <div className="build-wizard-template-editor-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => void openBuild(template.id, 'template_editor')}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm"
+                    onClick={() => void onDeleteProject({ id: template.id, title: template.title })}
+                    disabled={deletingProjectId === template.id}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -4459,7 +4866,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       <div className="build-wizard-workspace">
         <div className="build-wizard-sticky-head" ref={stickyHeadRef}>
           <div className="build-wizard-topbar">
-            <button className="btn btn-outline-secondary" onClick={onBackToLauncher}>Back to Launcher</button>
+            <button className="btn btn-outline-secondary" onClick={onBackFromWorkspace}>
+              {isTemplateProject || buildEntryPoint === 'template_editor' ? 'Back to Template Editor' : 'Back to Launcher'}
+            </button>
             <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
             <div className="build-wizard-topbar-search-shell" ref={topbarSearchBoxRef}>
               <input
@@ -4513,6 +4922,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               ) : null}
             </div>
             <div className="build-wizard-topbar-actions">
+              {isTemplateProject ? (
+                <button className="btn btn-success btn-sm" onClick={() => void onSaveTemplate()} disabled={saving}>
+                  {saving ? 'Saving...' : 'Save Template'}
+                </button>
+              ) : null}
               <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
               <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
               <StandardIconButton
@@ -4610,13 +5024,60 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     </option>
                   ))}
                 </select>
-                {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0) ? (
+                <div className="build-wizard-step-move-controls">
+                  <select
+                    value={moveStepCandidateId > 0 ? String(moveStepCandidateId) : ''}
+                    onChange={(e) => setMoveStepCandidateId(Number(e.target.value || '0'))}
+                    disabled={movingStep || moveStepOptions.length === 0}
+                    aria-label="Choose step to move"
+                    title="Choose step to move"
+                  >
+                    <option value="">Choose step...</option>
+                    {moveStepOptions.map((option) => (
+                      <option key={`move-step-${option.id}`} value={String(option.id)}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={moveStepTargetTab}
+                    onChange={(e) => setMoveStepTargetTab(e.target.value as BuildTabId)}
+                    disabled={movingStep}
+                    aria-label="Choose destination phase"
+                    title="Choose destination phase"
+                  >
+                    {moveStepPhaseTabOptions.map((option) => (
+                      <option key={`move-phase-${option.value}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => void onMoveSelectedStep()}
+                    disabled={movingStep || moveStepCandidateId <= 0}
+                    title="Move step to selected phase and place by timeline dates"
+                  >
+                    {movingStep ? 'Moving...' : 'Move'}
+                  </button>
+                </div>
+                <input
+                  type="search"
+                  className="form-control form-control-sm build-wizard-step-text-filter-input"
+                  placeholder="Filter step text..."
+                  aria-label="Filter steps by text"
+                  value={stepCardTextFilter}
+                  onChange={(e) => setStepCardTextFilter(e.target.value)}
+                />
+                {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0 || stepCardTextFilterTokens.length > 0) ? (
                   <button
                     type="button"
                     className="btn btn-outline-secondary btn-sm"
                     onClick={() => {
                       setStepCardAssigneeTypeFilter('all');
                       setStepCardAssigneeIdFilter(0);
+                      setStepCardTextFilter('');
                     }}
                   >
                     Clear Filters
@@ -6126,5 +6587,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     </div>
   );
 
-  return view === 'launcher' ? renderLauncher() : renderBuildWorkspace();
+  if (view === 'launcher') {
+    return renderLauncher();
+  }
+  if (view === 'template_editor') {
+    return renderTemplateEditor();
+  }
+  return renderBuildWorkspace();
 }

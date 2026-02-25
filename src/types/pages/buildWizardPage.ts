@@ -1,6 +1,6 @@
 import { IBuildWizardDocument, IBuildWizardStep } from '../buildWizard';
 
-export type WizardView = 'launcher' | 'build';
+export type WizardView = 'launcher' | 'build' | 'template_editor';
 
 export type BuildTabId =
   | 'overview'

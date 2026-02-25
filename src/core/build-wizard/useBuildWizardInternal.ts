@@ -236,6 +236,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       seedMode: 'blank' | 'spreadsheet' = 'blank',
       wastewaterKind: 'septic' | 'public_sewer' = 'septic',
       waterKind: 'county_water' | 'private_well' = 'county_water',
+      isTemplate: boolean = false,
     ) => {
       try {
         const res = await ApiClient.post<CreateProjectResponse>('/api/build_wizard.php?action=create_project', {
@@ -243,15 +244,16 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
           seed_mode: seedMode,
           wastewater_kind: wastewaterKind,
           water_kind: waterKind,
+          is_template: isTemplate ? 1 : 0,
         });
         const nextId = Number(res?.project_id || 0);
         if (nextId > 0) {
           await load(nextId);
         }
-        onToast?.({ tone: 'success', message: 'New build created.' });
+        onToast?.({ tone: 'success', message: isTemplate ? 'New template created.' : 'New build created.' });
         return nextId;
       } catch (err: any) {
-        onToast?.({ tone: 'error', message: err?.message || 'Failed to create build' });
+        onToast?.({ tone: 'error', message: err?.message || (isTemplate ? 'Failed to create template' : 'Failed to create build') });
         return 0;
       }
     },

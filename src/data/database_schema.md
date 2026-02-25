@@ -59,6 +59,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `owner_user_id` (INT)
 - `title` (VARCHAR(191))
 - `status` (VARCHAR(32), DEFAULT 'planning')
+- `is_template` (TINYINT(1), DEFAULT 0)
 - `square_feet` (INT, NULLABLE)
 - `home_style` (VARCHAR(120))
 - `home_type` (VARCHAR(64))

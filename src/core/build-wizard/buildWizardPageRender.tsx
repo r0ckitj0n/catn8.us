@@ -503,6 +503,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const receiptEditorRefByStepId = React.useRef<Record<number, HTMLDivElement | null>>({});
   const receiptRowRefByDocId = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const timelineReconciledProjectIdsRef = React.useRef<Set<number>>(new Set());
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
@@ -1493,14 +1494,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     let nextStart = toStringOrNull((patch.start ?? current.start) || '');
     let nextEnd = toStringOrNull((patch.end ?? current.end) || '');
     if (nextStart && nextEnd && nextStart > nextEnd) {
-      if (Object.prototype.hasOwnProperty.call(patch, 'start')) {
-        nextEnd = nextStart;
-      } else {
-        nextStart = nextEnd;
+      onToast?.({ tone: 'warning', message: 'Phase start date cannot be after phase end date.' });
+      return;
+    }
+
+    const phaseSteps = steps.filter((step) => stepPhaseBucket(step) === activeTab);
+    const outOfRangeStep = phaseSteps.find((step) => {
+      const stepStart = toStringOrNull(step.expected_start_date || '');
+      const stepEnd = toStringOrNull(step.expected_end_date || '') || stepStart;
+      if (nextStart && ((stepStart && stepStart < nextStart) || (stepEnd && stepEnd < nextStart))) {
+        return true;
       }
+      if (nextEnd && ((stepStart && stepStart > nextEnd) || (stepEnd && stepEnd > nextEnd))) {
+        return true;
+      }
+      return false;
+    });
+    if (outOfRangeStep) {
+      onToast?.({
+        tone: 'error',
+        message: `Phase date range cannot exclude step "${outOfRangeStep.title}". Update that step or its task dates first.`,
+      });
+      return;
     }
     void savePhaseDateRange(projectId, activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
-  }, [activeTab, projectId, resolvePhaseDateRange, savePhaseDateRange]);
+  }, [activeTab, onToast, projectId, resolvePhaseDateRange, savePhaseDateRange, steps]);
 
   const onOpenMoveStepModal = React.useCallback((stepId: number) => {
     if (stepId <= 0) {
@@ -2199,10 +2217,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (!step || Number(step.is_completed) === 1) {
       return;
     }
-    const tabId = stepPhaseBucket(step);
-    const phaseDateRange = PHASE_PROGRESS_ORDER.includes(tabId) ? resolvePhaseDateRange(tabId) : { start: null, end: null };
-    const nextStart = clampDateToRange(patch.expected_start_date, phaseDateRange.start, phaseDateRange.end);
-    const nextEnd = clampDateToRange(patch.expected_end_date, phaseDateRange.start, phaseDateRange.end);
+    const nextStart = toStringOrNull(patch.expected_start_date || '');
+    const nextEnd = toStringOrNull(patch.expected_end_date || '');
     const normalizedEnd = (nextStart && nextEnd && nextEnd < nextStart) ? nextStart : nextEnd;
     const nextPatch = {
       ...patch,
@@ -2212,7 +2228,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     };
     updateStepDraft(stepId, nextPatch);
     void commitStep(stepId, nextPatch);
-  }, [clampDateToRange, resolvePhaseDateRange, stepById]);
+  }, [stepById]);
 
   const onSubmitNote = async (step: IBuildWizardStep): Promise<boolean> => {
     const draft = String(noteDraftByStep[step.id] || '').trim();
@@ -2927,6 +2943,95 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     };
   }, [recoveryJobId, recoveryStatus, recoveryPolling, fetchSingletreeRecoveryStatus]);
 
+  const expandPhaseRangeForStep = React.useCallback(async (
+    step: IBuildWizardStep,
+    overrides?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
+  ) => {
+    const tabId = stepPhaseBucket(step);
+    if (!PHASE_PROGRESS_ORDER.includes(tabId)) {
+      return;
+    }
+    const stepStart = toStringOrNull((overrides?.expected_start_date ?? step.expected_start_date) || '');
+    const stepEnd = toStringOrNull((overrides?.expected_end_date ?? step.expected_end_date) || '') || stepStart;
+    if (!stepStart && !stepEnd) {
+      return;
+    }
+    const currentRange = resolvePhaseDateRange(tabId);
+    const nextStart = stepStart
+      ? (currentRange.start ? (stepStart < currentRange.start ? stepStart : currentRange.start) : stepStart)
+      : currentRange.start;
+    const nextEnd = stepEnd
+      ? (currentRange.end ? (stepEnd > currentRange.end ? stepEnd : currentRange.end) : stepEnd)
+      : currentRange.end;
+    if (nextStart === currentRange.start && nextEnd === currentRange.end) {
+      return;
+    }
+    await savePhaseDateRange(projectId, tabId as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart || null, nextEnd || null);
+  }, [projectId, resolvePhaseDateRange, savePhaseDateRange]);
+
+  const reconcileStepFromTaskDates = React.useCallback(async (
+    stepId: number,
+    documentOverrides?: Map<number, IBuildWizardDocument>,
+  ) => {
+    const step = stepById.get(stepId);
+    if (!step || stepId <= 0) {
+      return;
+    }
+    const mergedDocuments = documents.map((doc) => documentOverrides?.get(doc.id) || doc);
+    if (documentOverrides && documentOverrides.size > 0) {
+      documentOverrides.forEach((doc, id) => {
+        if (!mergedDocuments.some((existing) => existing.id === id)) {
+          mergedDocuments.push(doc);
+        }
+      });
+    }
+    const receiptsForStep = mergedDocuments
+      .filter((doc) => String(doc.kind || '').trim() === 'receipt' && Number(doc.step_id || 0) === stepId);
+    const taskDates = receiptsForStep
+      .map((doc) => toStringOrNull(doc.receipt_date || ''))
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => a.localeCompare(b));
+
+    let nextStart = toStringOrNull(step.expected_start_date || '');
+    let nextEnd = toStringOrNull(step.expected_end_date || '');
+    if (taskDates.length > 0) {
+      const minTaskDate = taskDates[0];
+      const maxTaskDate = taskDates[taskDates.length - 1];
+      if (!nextStart || nextStart > minTaskDate) {
+        nextStart = minTaskDate;
+      }
+      if (!nextEnd || nextEnd < maxTaskDate) {
+        nextEnd = maxTaskDate;
+      }
+    }
+    if (nextStart && nextEnd && nextEnd < nextStart) {
+      nextEnd = nextStart;
+    }
+    const nextDuration = calculateDurationDays(nextStart, nextEnd);
+    const startChanged = nextStart !== toStringOrNull(step.expected_start_date || '');
+    const endChanged = nextEnd !== toStringOrNull(step.expected_end_date || '');
+    const durationChanged = nextDuration !== (step.expected_duration_days ?? null);
+    if (!startChanged && !endChanged && !durationChanged) {
+      if (taskDates.length > 0) {
+        await expandPhaseRangeForStep(step, { expected_start_date: nextStart, expected_end_date: nextEnd });
+      }
+      return;
+    }
+
+    const patch: Partial<IBuildWizardStep> = {};
+    if (startChanged) {
+      patch.expected_start_date = nextStart;
+    }
+    if (endChanged) {
+      patch.expected_end_date = nextEnd;
+    }
+    if (durationChanged) {
+      patch.expected_duration_days = nextDuration;
+    }
+    await updateStep(stepId, patch);
+    await expandPhaseRangeForStep(step, { expected_start_date: nextStart, expected_end_date: nextEnd });
+  }, [documents, expandPhaseRangeForStep, stepById, updateStep]);
+
   const onSaveDocument = async (
     documentId: number,
     patch: {
@@ -2944,9 +3049,38 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (documentSavingId === documentId) {
       return null;
     }
+    const previousDocument = documents.find((doc) => doc.id === documentId) || null;
     setDocumentSavingId(documentId);
     try {
-      return await updateDocument(documentId, patch);
+      const savedDocument = await updateDocument(documentId, patch);
+      if (savedDocument) {
+        const touchesTaskDateAuthority = Object.prototype.hasOwnProperty.call(patch, 'receipt_date')
+          || Object.prototype.hasOwnProperty.call(patch, 'step_id')
+          || Object.prototype.hasOwnProperty.call(patch, 'kind');
+        const previousWasTask = String(previousDocument?.kind || '').trim() === 'receipt';
+        const currentIsTask = String(savedDocument.kind || '').trim() === 'receipt';
+        if (touchesTaskDateAuthority && (previousWasTask || currentIsTask)) {
+          const impactedStepIds = new Set<number>();
+          if (previousWasTask) {
+            const previousStepId = Number(previousDocument?.step_id || 0);
+            if (previousStepId > 0) {
+              impactedStepIds.add(previousStepId);
+            }
+          }
+          if (currentIsTask) {
+            const currentStepId = Number(savedDocument.step_id || 0);
+            if (currentStepId > 0) {
+              impactedStepIds.add(currentStepId);
+            }
+          }
+          const overrides = new Map<number, IBuildWizardDocument>();
+          overrides.set(savedDocument.id, savedDocument);
+          for (const stepId of impactedStepIds) {
+            await reconcileStepFromTaskDates(stepId, overrides);
+          }
+        }
+      }
+      return savedDocument;
     } finally {
       setDocumentSavingId(0);
     }
@@ -3165,6 +3299,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         return;
       }
       receiptId = created.id;
+      const overrides = new Map<number, IBuildWizardDocument>();
+      overrides.set(created.id, created);
+      await reconcileStepFromTaskDates(step.id, overrides);
     }
 
     const files = receiptAttachmentDraftByStep[step.id] || [];
@@ -3474,6 +3611,190 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return [...preferredUnique, ...missing];
   };
 
+  const timelineAnchorForStep = (
+    step: IBuildWizardStep,
+    overrides?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
+  ): { anchor: string | null; start: string | null; end: string | null } => {
+    const start = toStringOrNull((overrides?.expected_start_date ?? step.expected_start_date) || '');
+    const end = toStringOrNull((overrides?.expected_end_date ?? step.expected_end_date) || '');
+    return {
+      anchor: start || end,
+      start,
+      end,
+    };
+  };
+
+  const compareStepsByTimeline = React.useCallback((
+    left: IBuildWizardStep,
+    right: IBuildWizardStep,
+    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
+  ): number => {
+    const leftTimeline = timelineAnchorForStep(left, overridesByStepId?.get(left.id));
+    const rightTimeline = timelineAnchorForStep(right, overridesByStepId?.get(right.id));
+
+    if (leftTimeline.anchor === null && rightTimeline.anchor !== null) {
+      return 1;
+    }
+    if (leftTimeline.anchor !== null && rightTimeline.anchor === null) {
+      return -1;
+    }
+    if (leftTimeline.anchor !== null && rightTimeline.anchor !== null && leftTimeline.anchor !== rightTimeline.anchor) {
+      return leftTimeline.anchor.localeCompare(rightTimeline.anchor);
+    }
+
+    if (leftTimeline.start === null && rightTimeline.start !== null) {
+      return 1;
+    }
+    if (leftTimeline.start !== null && rightTimeline.start === null) {
+      return -1;
+    }
+    if (leftTimeline.start !== null && rightTimeline.start !== null && leftTimeline.start !== rightTimeline.start) {
+      return leftTimeline.start.localeCompare(rightTimeline.start);
+    }
+
+    if (leftTimeline.end === null && rightTimeline.end !== null) {
+      return 1;
+    }
+    if (leftTimeline.end !== null && rightTimeline.end === null) {
+      return -1;
+    }
+    if (leftTimeline.end !== null && rightTimeline.end !== null && leftTimeline.end !== rightTimeline.end) {
+      return leftTimeline.end.localeCompare(rightTimeline.end);
+    }
+
+    if (left.step_order !== right.step_order) {
+      return left.step_order - right.step_order;
+    }
+    return left.id - right.id;
+  }, []);
+
+  const autoReorderPhaseByTimeline = React.useCallback(async (
+    phaseKey: string,
+    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
+  ) => {
+    const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
+    const phaseSteps = steps
+      .filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase)
+      .sort((a, b) => compareStepsByTimeline(a, b, overridesByStepId));
+    const orderedIds = phaseSteps.map((candidate) => candidate.id);
+    if (orderedIds.length > 1) {
+      await reorderSteps(normalizedPhase, orderedIds);
+    }
+  }, [compareStepsByTimeline, reorderSteps, steps]);
+
+  React.useEffect(() => {
+    if (projectId <= 0 || steps.length === 0) {
+      return;
+    }
+    if (timelineReconciledProjectIdsRef.current.has(projectId)) {
+      return;
+    }
+    timelineReconciledProjectIdsRef.current.add(projectId);
+
+    void (async () => {
+      const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
+      const fixes: Array<{ stepId: number; patch: Partial<IBuildWizardStep> }> = [];
+
+      steps.forEach((step) => {
+        let start = toStringOrNull(step.expected_start_date || '');
+        let end = toStringOrNull(step.expected_end_date || '');
+        const taskDates = documents
+          .filter((doc) => String(doc.kind || '').trim() === 'receipt' && Number(doc.step_id || 0) === step.id)
+          .map((doc) => toStringOrNull(doc.receipt_date || ''))
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => a.localeCompare(b));
+        if (taskDates.length > 0) {
+          const minTaskDate = taskDates[0];
+          const maxTaskDate = taskDates[taskDates.length - 1];
+          if (!start || start > minTaskDate) {
+            start = minTaskDate;
+          }
+          if (!end || end < maxTaskDate) {
+            end = maxTaskDate;
+          }
+        }
+        if (start && end && end < start) {
+          end = start;
+        }
+        const duration = calculateDurationDays(start, end);
+        const startChanged = start !== toStringOrNull(step.expected_start_date || '');
+        const currentDuration = step.expected_duration_days ?? null;
+        const endChanged = end !== toStringOrNull(step.expected_end_date || '');
+        const durationChanged = duration !== currentDuration;
+        if (!startChanged && !endChanged && !durationChanged) {
+          return;
+        }
+        const patch: Partial<IBuildWizardStep> = {};
+        if (startChanged) {
+          patch.expected_start_date = start;
+        }
+        if (endChanged) {
+          patch.expected_end_date = end;
+        }
+        if (durationChanged) {
+          patch.expected_duration_days = duration;
+        }
+        timelineOverrides.set(step.id, {
+          expected_start_date: start,
+          expected_end_date: end,
+        });
+        fixes.push({ stepId: step.id, patch });
+      });
+
+      for (const fix of fixes) {
+        await updateStep(fix.stepId, fix.patch);
+      }
+
+      const phaseKeys = Array.from(new Set(
+        steps.map((step) => String(step.phase_key || '').trim().toLowerCase() || 'general'),
+      ));
+      for (const phaseKey of phaseKeys) {
+        await autoReorderPhaseByTimeline(phaseKey, timelineOverrides);
+      }
+    })();
+  }, [autoReorderPhaseByTimeline, documents, projectId, steps, updateStep]);
+
+  React.useEffect(() => {
+    if (projectId <= 0 || steps.length === 0) {
+      return;
+    }
+    void (async () => {
+      const phaseTabs = Array.from(new Set(steps.map((step) => stepPhaseBucket(step)).filter((tab) => PHASE_PROGRESS_ORDER.includes(tab))));
+      for (const phaseTab of phaseTabs) {
+        const phaseSteps = steps.filter((step) => stepPhaseBucket(step) === phaseTab);
+        const phaseAnchors = phaseSteps
+          .map((step) => {
+            const start = toStringOrNull(step.expected_start_date || '');
+            const end = toStringOrNull(step.expected_end_date || '') || start;
+            return { start, end };
+          })
+          .filter((entry) => entry.start || entry.end);
+        if (phaseAnchors.length === 0) {
+          continue;
+        }
+        const minStepDate = phaseAnchors
+          .map((entry) => entry.start || entry.end)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => a.localeCompare(b))[0] || null;
+        const maxStepDate = phaseAnchors
+          .map((entry) => entry.end || entry.start)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => a.localeCompare(b))
+          .pop() || null;
+        const current = resolvePhaseDateRange(phaseTab);
+        const nextStart = minStepDate
+          ? (current.start ? (minStepDate < current.start ? minStepDate : current.start) : minStepDate)
+          : current.start;
+        const nextEnd = maxStepDate
+          ? (current.end ? (maxStepDate > current.end ? maxStepDate : current.end) : maxStepDate)
+          : current.end;
+        if (nextStart !== current.start || nextEnd !== current.end) {
+          await savePhaseDateRange(projectId, phaseTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
+        }
+      }
+    })();
+  }, [projectId, resolvePhaseDateRange, savePhaseDateRange, steps]);
+
   const onDropReorder = async (insertIndex: number) => {
     if (draggingStepId <= 0) {
       clearStepDragState();
@@ -3666,8 +3987,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
           const childDateMin = parentStep?.expected_start_date || undefined;
           const childDateMax = parentStep?.expected_end_date || undefined;
-          const stepDateMin = mergeDateMin(childDateMin, activePhaseDateRange.start);
-          const stepDateMax = mergeDateMax(childDateMax, activePhaseDateRange.end);
+          const stepDateMin = mergeDateMin(childDateMin, null);
+          const stepDateMax = mergeDateMax(childDateMax, null);
           const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
           const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
@@ -3711,7 +4032,26 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const stepPastelColor = getStepPastelColor(step.id);
           const isExpanded = expandedStepById[step.id] === true;
           const stepAttachmentCount = documents.reduce((count, doc) => (Number(doc.step_id || 0) === step.id ? count + 1 : count), 0);
-          const stepReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt');
+          const stepReceiptDocuments = documents
+            .filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt')
+            .sort((a, b) => {
+              const aDate = toStringOrNull(a.receipt_date || '');
+              const bDate = toStringOrNull(b.receipt_date || '');
+              if (aDate && bDate && aDate !== bDate) {
+                return aDate.localeCompare(bDate);
+              }
+              if (aDate && !bDate) {
+                return -1;
+              }
+              if (!aDate && bDate) {
+                return 1;
+              }
+              const uploadedCmp = String(a.uploaded_at || '').localeCompare(String(b.uploaded_at || ''));
+              if (uploadedCmp !== 0) {
+                return uploadedCmp;
+              }
+              return a.id - b.id;
+            });
           const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
           const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
           const stepReceiptMetrics = receiptMetricsByStepId.get(step.id) || {
@@ -3880,12 +4220,23 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         onBlur={() => {
                           const nextDraft = stepDrafts[step.id] || step;
                           const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
+                          const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
                           const nextDuration = calculateDurationDays(nextStartDate, nextDraft.expected_end_date)
                             ?? (nextDraft.expected_duration_days ?? null);
-                          void commitStep(step.id, {
+                          const nextPatch = {
                             expected_start_date: nextStartDate,
                             expected_duration_days: nextDuration,
+                          };
+                          const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
+                          timelineOverrides.set(step.id, {
+                            expected_start_date: nextStartDate,
+                            expected_end_date: nextEndDate,
                           });
+                          void (async () => {
+                            await commitStep(step.id, nextPatch);
+                            await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
+                            await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
+                          })();
                         }}
                       />
                     </label>
@@ -3907,13 +4258,24 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         }}
                         onBlur={() => {
                           const nextDraft = stepDrafts[step.id] || step;
+                          const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
                           const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
                           const nextDuration = calculateDurationDays(nextDraft.expected_start_date, nextEndDate)
                             ?? (nextDraft.expected_duration_days ?? null);
-                          void commitStep(step.id, {
+                          const nextPatch = {
                             expected_end_date: nextEndDate,
                             expected_duration_days: nextDuration,
+                          };
+                          const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
+                          timelineOverrides.set(step.id, {
+                            expected_start_date: nextStartDate,
+                            expected_end_date: nextEndDate,
                           });
+                          void (async () => {
+                            await commitStep(step.id, nextPatch);
+                            await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
+                            await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
+                          })();
                         }}
                       />
                     </label>

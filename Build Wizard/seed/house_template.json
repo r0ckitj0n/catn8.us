@@ -11,7 +11,7 @@
       "permit_required": 0,
       "expected_duration_days": 5,
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
+      "estimated_cost": 1200
     },
     {
       "template_step_key": "survey_topo",
@@ -25,7 +25,7 @@
         "land_contract"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
+      "estimated_cost": 2800
     },
     {
       "template_step_key": "soil_eval",
@@ -39,7 +39,7 @@
         "survey_topo"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
+      "estimated_cost": 3200
     },
     {
       "template_step_key": "utility_availability",
@@ -53,7 +53,7 @@
         "survey_topo"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 5500
+      "estimated_cost": 1800
     },
     {
       "template_step_key": "plans_engineering",
@@ -68,7 +68,7 @@
         "utility_availability"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 1851.73
+      "estimated_cost": 14500
     },
     {
       "template_step_key": "financing_budget_baseline",
@@ -82,7 +82,7 @@
         "plans_engineering"
       ],
       "source_ref": "House template v5",
-      "estimated_cost": 472.78
+      "estimated_cost": 1500
     },
     {
       "template_step_key": "finish_selections_allowances",
@@ -97,7 +97,7 @@
         "financing_budget_baseline"
       ],
       "source_ref": "House template v5",
-      "estimated_cost": 472.78
+      "estimated_cost": 1800
     },
     {
       "template_step_key": "builder_docs",
@@ -111,7 +111,7 @@
         "plans_engineering"
       ],
       "source_ref": "Dawson County required documents checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 900
     },
     {
       "template_step_key": "addressing_approval",
@@ -125,7 +125,7 @@
         "land_contract"
       ],
       "source_ref": "Dawson County required documents checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 125
     },
     {
       "template_step_key": "driveway_approval",
@@ -140,7 +140,7 @@
         "plans_engineering"
       ],
       "source_ref": "Dawson County Public Works driveway permit page",
-      "estimated_cost": 472.78
+      "estimated_cost": 525
     },
     {
       "template_step_key": "septic_permit",
@@ -156,7 +156,7 @@
         "plans_engineering"
       ],
       "source_ref": "Dawson County required documents checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 950
     },
     {
       "template_step_key": "land_disturbance_permit",
@@ -171,7 +171,7 @@
         "plans_engineering"
       ],
       "source_ref": "Dawson County development forms and LDP guidance",
-      "estimated_cost": 472.78
+      "estimated_cost": 2200
     },
     {
       "template_step_key": "npdes_noi",
@@ -186,7 +186,7 @@
         "land_disturbance_permit"
       ],
       "source_ref": "Dawson County required documents checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 850
     },
     {
       "template_step_key": "building_permit_application",
@@ -206,7 +206,7 @@
         "land_disturbance_permit"
       ],
       "source_ref": "Dawson County residential permit packet/checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 1200
     },
     {
       "template_step_key": "building_permit_issued",
@@ -221,7 +221,7 @@
         "building_permit_application"
       ],
       "source_ref": "Dawson County permitting",
-      "estimated_cost": 472.78
+      "estimated_cost": 4200
     },
     {
       "template_step_key": "long_lead_procurement",
@@ -236,7 +236,7 @@
         "finish_selections_allowances"
       ],
       "source_ref": "House template v5",
-      "estimated_cost": 1676.97
+      "estimated_cost": 22000
     },
     {
       "template_step_key": "utility_locate_811",
@@ -250,7 +250,7 @@
         "building_permit_issued"
       ],
       "source_ref": "Georgia 811 / House template v5",
-      "estimated_cost": 472.78
+      "estimated_cost": 650
     },
     {
       "template_step_key": "erosion_bmps_install",
@@ -264,7 +264,7 @@
         "building_permit_issued"
       ],
       "source_ref": "Dawson County LDP guidance",
-      "estimated_cost": 2013.44
+      "estimated_cost": 4800
     },
     {
       "template_step_key": "temp_power_release",
@@ -280,7 +280,7 @@
         "utility_locate_811"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 2600
     },
     {
       "template_step_key": "site_clear_grade",
@@ -295,7 +295,7 @@
         "utility_locate_811"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 12000
     },
     {
       "template_step_key": "footings",
@@ -309,7 +309,7 @@
         "site_clear_grade"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 11000
     },
     {
       "template_step_key": "footing_inspection",
@@ -324,7 +324,7 @@
         "footings"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 275
     },
     {
       "template_step_key": "foundation_formwork",
@@ -338,7 +338,7 @@
         "footing_inspection"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 9000
     },
     {
       "template_step_key": "plumbing_underground_install",
@@ -353,7 +353,7 @@
         "septic_permit"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 2013.44
+      "estimated_cost": 7500
     },
     {
       "template_step_key": "plumbing_underground_inspection",
@@ -368,7 +368,7 @@
         "plumbing_underground_install"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 325
     },
     {
       "template_step_key": "slab_reinforcement_vapor",
@@ -382,7 +382,7 @@
         "plumbing_underground_inspection"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 5000
     },
     {
       "template_step_key": "foundation_pour",
@@ -396,7 +396,7 @@
         "slab_reinforcement_vapor"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 13500
     },
     {
       "template_step_key": "foundation_inspection",
@@ -411,7 +411,7 @@
         "foundation_pour"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 300
     },
     {
       "template_step_key": "framing_shell",
@@ -426,7 +426,7 @@
         "long_lead_procurement"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 62000
     },
     {
       "template_step_key": "dry_in_shell",
@@ -440,7 +440,7 @@
         "framing_shell"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 28500
     },
     {
       "template_step_key": "exterior_cladding",
@@ -454,7 +454,7 @@
         "dry_in_shell"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 23000
     },
     {
       "template_step_key": "rough_hvac",
@@ -468,7 +468,7 @@
         "dry_in_shell"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 2013.44
+      "estimated_cost": 14000
     },
     {
       "template_step_key": "rough_plumbing",
@@ -482,7 +482,7 @@
         "dry_in_shell"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 2013.44
+      "estimated_cost": 12000
     },
     {
       "template_step_key": "rough_electrical",
@@ -496,7 +496,7 @@
         "dry_in_shell"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 2013.44
+      "estimated_cost": 13000
     },
     {
       "template_step_key": "rough_gas_pressure_test",
@@ -511,7 +511,7 @@
         "rough_plumbing"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 420
     },
     {
       "template_step_key": "rough_mechanical_inspection",
@@ -526,7 +526,7 @@
         "rough_hvac"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 275
     },
     {
       "template_step_key": "rough_plumbing_inspection",
@@ -541,7 +541,7 @@
         "rough_plumbing"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 260
     },
     {
       "template_step_key": "rough_electrical_inspection",
@@ -556,7 +556,7 @@
         "rough_electrical"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 285
     },
     {
       "template_step_key": "framing_inspection",
@@ -574,7 +574,7 @@
         "rough_electrical"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 315
     },
     {
       "template_step_key": "pre_drywall_gate",
@@ -591,7 +591,7 @@
         "rough_electrical_inspection"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
+      "estimated_cost": 550
     },
     {
       "template_step_key": "insulation_install",
@@ -605,7 +605,7 @@
         "pre_drywall_gate"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 7000
     },
     {
       "template_step_key": "insulation_inspection",
@@ -620,7 +620,7 @@
         "insulation_install"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 240
     },
     {
       "template_step_key": "drywall_install",
@@ -634,7 +634,7 @@
         "insulation_inspection"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 16000
     },
     {
       "template_step_key": "interior_trim_cabinets",
@@ -649,7 +649,7 @@
         "exterior_cladding"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 52000
     },
     {
       "template_step_key": "finish_flooring_tile",
@@ -663,7 +663,7 @@
         "interior_trim_cabinets"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 19000
     },
     {
       "template_step_key": "plumbing_trim_fixtures",
@@ -677,7 +677,7 @@
         "finish_flooring_tile"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 11000
     },
     {
       "template_step_key": "electrical_trim_devices",
@@ -691,7 +691,7 @@
         "interior_trim_cabinets"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 9000
     },
     {
       "template_step_key": "hvac_trim_startup",
@@ -705,7 +705,7 @@
         "interior_trim_cabinets"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 6500
     },
     {
       "template_step_key": "water_service_connection",
@@ -719,7 +719,7 @@
         "plumbing_trim_fixtures"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 5500
+      "estimated_cost": 7800
     },
     {
       "template_step_key": "septic_installation",
@@ -735,7 +735,7 @@
         "exterior_cladding"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 14000
     },
     {
       "template_step_key": "driveway_installation",
@@ -750,7 +750,7 @@
         "driveway_approval"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 12000
     },
     {
       "template_step_key": "final_grading_stabilization",
@@ -766,7 +766,7 @@
         "exterior_cladding"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 2013.44
+      "estimated_cost": 7500
     },
     {
       "template_step_key": "final_plumbing_inspection",
@@ -782,7 +782,7 @@
         "water_service_connection"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 290
     },
     {
       "template_step_key": "final_electrical_inspection",
@@ -797,7 +797,7 @@
         "electrical_trim_devices"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 310
     },
     {
       "template_step_key": "electrical_service_release",
@@ -812,7 +812,7 @@
         "final_electrical_inspection"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 350
     },
     {
       "template_step_key": "final_mechanical_inspection",
@@ -827,7 +827,7 @@
         "hvac_trim_startup"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 295
     },
     {
       "template_step_key": "final_gas_inspection",
@@ -843,7 +843,7 @@
         "plumbing_trim_fixtures"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 265
     },
     {
       "template_step_key": "septic_final_approval",
@@ -858,7 +858,7 @@
         "septic_installation"
       ],
       "source_ref": "Dawson County required documents checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 340
     },
     {
       "template_step_key": "well_final_approval",
@@ -872,7 +872,7 @@
         "water_service_connection"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
+      "estimated_cost": 1800
     },
     {
       "template_step_key": "erosion_closeout",
@@ -886,7 +886,7 @@
         "final_grading_stabilization"
       ],
       "source_ref": "Dawson County development forms and LDP guidance",
-      "estimated_cost": 472.78
+      "estimated_cost": 1200
     },
     {
       "template_step_key": "final_building_inspection",
@@ -906,7 +906,7 @@
         "final_grading_stabilization"
       ],
       "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
+      "estimated_cost": 330
     },
     {
       "template_step_key": "certificate_occupancy",
@@ -922,7 +922,7 @@
         "erosion_closeout"
       ],
       "source_ref": "Dawson County residential permitting",
-      "estimated_cost": 472.78
+      "estimated_cost": 480
     },
     {
       "template_step_key": "owner_walkthrough",
@@ -936,7 +936,7 @@
         "certificate_occupancy"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 1711.47
+      "estimated_cost": 900
     },
     {
       "template_step_key": "owner_system_orientation",
@@ -950,7 +950,7 @@
         "owner_walkthrough"
       ],
       "source_ref": "House template v5",
-      "estimated_cost": 1711.47
+      "estimated_cost": 850
     },
     {
       "template_step_key": "closeout_docs",
@@ -964,7 +964,7 @@
         "owner_system_orientation"
       ],
       "source_ref": "House template v4",
-      "estimated_cost": 1711.47
+      "estimated_cost": 650
     }
   ]
 }

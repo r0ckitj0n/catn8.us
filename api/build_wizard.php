@@ -107,6 +107,7 @@ function catn8_build_wizard_tables_ensure(): void
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NOT NULL,
         step_order INT NOT NULL,
+        template_step_key VARCHAR(128) NULL,
         phase_key VARCHAR(64) NOT NULL DEFAULT 'general',
         parent_step_id INT NULL,
         depends_on_step_ids_json LONGTEXT NULL,
@@ -304,6 +305,7 @@ function catn8_build_wizard_tables_ensure(): void
     }
 
     $stepColumns = [
+        'template_step_key' => "ALTER TABLE build_wizard_steps ADD COLUMN template_step_key VARCHAR(128) NULL AFTER step_order",
         'parent_step_id' => "ALTER TABLE build_wizard_steps ADD COLUMN parent_step_id INT NULL AFTER phase_key",
         'depends_on_step_ids_json' => "ALTER TABLE build_wizard_steps ADD COLUMN depends_on_step_ids_json LONGTEXT NULL AFTER phase_key",
         'step_type' => "ALTER TABLE build_wizard_steps ADD COLUMN step_type VARCHAR(32) NOT NULL DEFAULT 'construction' AFTER phase_key",
@@ -719,6 +721,94 @@ function catn8_build_wizard_house_template_path(): string
     return dirname(__DIR__) . '/Build Wizard/seed/house_template.json';
 }
 
+function catn8_build_wizard_template_project_titles(): array
+{
+    return ['Build a House', 'Build a House Template'];
+}
+
+function catn8_build_wizard_template_steps_from_db(): array
+{
+    $titles = catn8_build_wizard_template_project_titles();
+    if (!$titles) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($titles), '?'));
+    $projectRow = Database::queryOne(
+        'SELECT id
+         FROM build_wizard_projects
+         WHERE is_template = 1 AND title IN (' . $placeholders . ')
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1',
+        $titles
+    );
+    $projectId = (int)($projectRow['id'] ?? 0);
+    if ($projectId <= 0) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, step_order, template_step_key, phase_key, step_type, title, description, permit_required, permit_name,
+                expected_start_date, expected_end_date, expected_duration_days, estimated_cost, depends_on_step_ids_json, source_ref
+         FROM build_wizard_steps
+         WHERE project_id = ?
+         ORDER BY step_order ASC, id ASC',
+        [$projectId]
+    );
+    if (!$rows) {
+        return [];
+    }
+
+    $stepKeyById = [];
+    foreach ($rows as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        if ($sid <= 0) {
+            continue;
+        }
+        $key = trim((string)($row['template_step_key'] ?? ''));
+        if ($key === '') {
+            $key = 'template_step_' . max(1, (int)($row['step_order'] ?? 0));
+        }
+        $stepKeyById[$sid] = $key;
+    }
+
+    $steps = [];
+    foreach ($rows as $row) {
+        $sid = (int)($row['id'] ?? 0);
+        if ($sid <= 0) {
+            continue;
+        }
+        $title = trim((string)($row['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $dependsOnKeys = [];
+        $depIds = catn8_build_wizard_normalize_int_array(catn8_build_wizard_decode_json_array($row['depends_on_step_ids_json'] ?? null));
+        foreach ($depIds as $depId) {
+            $depKey = trim((string)($stepKeyById[$depId] ?? ''));
+            if ($depKey !== '') {
+                $dependsOnKeys[] = $depKey;
+            }
+        }
+        $steps[] = [
+            'template_step_key' => trim((string)($stepKeyById[$sid] ?? '')),
+            'phase_key' => catn8_build_wizard_normalize_phase_key($row['phase_key'] ?? 'general'),
+            'step_type' => catn8_build_wizard_step_type((string)($row['step_type'] ?? 'construction')),
+            'title' => $title,
+            'description' => trim((string)($row['description'] ?? '')),
+            'permit_required' => ((int)($row['permit_required'] ?? 0) === 1 ? 1 : 0),
+            'permit_name' => catn8_build_wizard_text_or_null($row['permit_name'] ?? null, 191),
+            'expected_start_date' => catn8_build_wizard_parse_date_or_null($row['expected_start_date'] ?? null),
+            'expected_end_date' => catn8_build_wizard_parse_date_or_null($row['expected_end_date'] ?? null),
+            'expected_duration_days' => isset($row['expected_duration_days']) && is_numeric($row['expected_duration_days']) ? max(1, min(3650, (int)$row['expected_duration_days'])) : null,
+            'estimated_cost' => catn8_build_wizard_to_decimal_or_null($row['estimated_cost'] ?? null),
+            'depends_on_keys' => array_values(array_unique($dependsOnKeys)),
+            'source_ref' => catn8_build_wizard_text_or_null($row['source_ref'] ?? 'House template DB seed', 255),
+        ];
+    }
+
+    return $steps;
+}
+
 function catn8_build_wizard_house_template_override_paths(string $wastewaterKind, string $waterKind): array
 {
     $paths = [];
@@ -845,22 +935,25 @@ function catn8_build_wizard_apply_template_overrides(array $steps, string $waste
 
 function catn8_build_wizard_dawsonville_template_steps(string $wastewaterKind = 'septic', string $waterKind = 'county_water'): array
 {
-    $path = catn8_build_wizard_house_template_path();
-    if (!is_file($path)) {
-        return catn8_build_wizard_default_house_template_steps();
-    }
+    $steps = catn8_build_wizard_template_steps_from_db();
+    if (!$steps) {
+        $path = catn8_build_wizard_house_template_path();
+        if (!is_file($path)) {
+            return catn8_build_wizard_default_house_template_steps();
+        }
 
-    $raw = file_get_contents($path);
-    if (!is_string($raw) || trim($raw) === '') {
-        return catn8_build_wizard_default_house_template_steps();
-    }
-    $decoded = json_decode($raw, true);
-    if (!is_array($decoded)) {
-        return catn8_build_wizard_default_house_template_steps();
-    }
-    $steps = $decoded['steps'] ?? null;
-    if (!is_array($steps) || !$steps) {
-        return catn8_build_wizard_default_house_template_steps();
+        $raw = file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            return catn8_build_wizard_default_house_template_steps();
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return catn8_build_wizard_default_house_template_steps();
+        }
+        $steps = $decoded['steps'] ?? null;
+        if (!is_array($steps) || !$steps) {
+            return catn8_build_wizard_default_house_template_steps();
+        }
     }
     $steps = catn8_build_wizard_apply_template_overrides($steps, $wastewaterKind, $waterKind);
 
@@ -1374,11 +1467,12 @@ function catn8_build_wizard_insert_steps(int $projectId, array $steps, bool $ski
 
         Database::execute(
             'INSERT INTO build_wizard_steps
-                (project_id, step_order, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref)
-             VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, 0, ?)',
+                (project_id, step_order, template_step_key, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref)
+             VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, 0, ?)',
             [
                 $projectId,
                 $stepOrder,
+                catn8_build_wizard_text_or_null($s['template_step_key'] ?? null, 128),
                 $phaseKey = catn8_build_wizard_normalize_phase_key($s['phase_key'] ?? 'general'),
                 catn8_build_wizard_step_type((string)($s['step_type'] ?? catn8_build_wizard_infer_step_type($title, $phaseKey, !empty($s['permit_required']) ? 1 : 0))),
                 $title,
@@ -4392,6 +4486,7 @@ function catn8_build_wizard_align_project_to_template(int $projectId): array
         foreach ($assignments as $assignment) {
             $tpl = is_array($assignment['template'] ?? null) ? $assignment['template'] : [];
             $existingId = (int)($assignment['existing_id'] ?? 0);
+            $templateKey = trim((string)($tpl['template_step_key'] ?? ''));
             $phaseKey = catn8_build_wizard_normalize_phase_key($tpl['phase_key'] ?? 'general');
             $stepType = catn8_build_wizard_step_type((string)($tpl['step_type'] ?? catn8_build_wizard_infer_step_type((string)($tpl['title'] ?? ''), $phaseKey, !empty($tpl['permit_required']) ? 1 : 0)));
             $title = trim((string)($tpl['title'] ?? ''));
@@ -4406,24 +4501,23 @@ function catn8_build_wizard_align_project_to_template(int $projectId): array
             if ($existingId > 0) {
                 Database::execute(
                     'UPDATE build_wizard_steps
-                     SET step_order = ?, phase_key = ?, step_type = ?, title = ?, description = ?, permit_required = ?, permit_name = ?, source_ref = ?
+                     SET step_order = ?, template_step_key = ?, phase_key = ?, step_type = ?, title = ?, description = ?, permit_required = ?, permit_name = ?, source_ref = ?
                      WHERE id = ?',
-                    [$order, $phaseKey, $stepType, $title, $description, $permitRequired, $permitName, $sourceRef, $existingId]
+                    [$order, catn8_build_wizard_text_or_null($templateKey, 128), $phaseKey, $stepType, $title, $description, $permitRequired, $permitName, $sourceRef, $existingId]
                 );
                 $updated++;
                 $stepId = $existingId;
             } else {
                 Database::execute(
                     'INSERT INTO build_wizard_steps
-                        (project_id, step_order, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref)
-                     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, ?)',
-                    [$projectId, $order, $phaseKey, $stepType, $title, $description, $permitRequired, $permitName, $sourceRef]
+                        (project_id, step_order, template_step_key, phase_key, depends_on_step_ids_json, step_type, title, description, permit_required, permit_name, expected_start_date, expected_end_date, expected_duration_days, estimated_cost, actual_cost, ai_estimated_fields_json, is_completed, completed_at, ai_generated, source_ref)
+                     VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, ?)',
+                    [$projectId, $order, catn8_build_wizard_text_or_null($templateKey, 128), $phaseKey, $stepType, $title, $description, $permitRequired, $permitName, $sourceRef]
                 );
                 $inserted++;
                 $stepId = (int)Database::lastInsertId();
             }
 
-            $templateKey = trim((string)($tpl['template_step_key'] ?? ''));
             if ($templateKey !== '' && $stepId > 0) {
                 $templateStepIdByKey[$templateKey] = $stepId;
             }

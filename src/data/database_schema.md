@@ -88,6 +88,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
 - `step_order` (INT)
+- `template_step_key` (VARCHAR(128), NULLABLE)
 - `phase_key` (VARCHAR(64))
 - `parent_step_id` (INT, NULLABLE)
 - `depends_on_step_ids_json` (LONGTEXT, NULLABLE)

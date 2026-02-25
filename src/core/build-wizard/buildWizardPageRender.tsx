@@ -49,6 +49,8 @@ import {
   pushUrlState,
   recommendPhaseKeyForStep,
   sortAlpha,
+  tabLabelShort,
+  stepDateRange,
   stepPhaseBucket,
   thumbnailKindLabel,
   toIsoDate,
@@ -119,10 +121,41 @@ type PhaseDateRange = {
   end: string | null;
 };
 
+type ProjectOverviewStepRow = {
+  stepId: number;
+  displayOrder: number;
+  title: string;
+  stepType: StepType;
+  startIso: string | null;
+  endIso: string | null;
+  durationDays: number | null;
+  totalCost: number;
+  costMode: 'actual' | 'estimated' | 'missing';
+  assigneeCount: number;
+  documentCount: number;
+  isCompleted: boolean;
+  hasTimeline: boolean;
+  leftPercent: number;
+  widthPercent: number;
+};
+
+type ProjectOverviewPhaseSection = {
+  tabId: BuildTabId;
+  label: string;
+  phaseColor: string;
+  stepCount: number;
+  completedCount: number;
+  totalCost: number;
+  startIso: string | null;
+  endIso: string | null;
+  rows: ProjectOverviewStepRow[];
+};
+
 const LIGHTBOX_ZOOM_MIN = 0.5;
 const LIGHTBOX_ZOOM_MAX = 3;
 const LIGHTBOX_ZOOM_STEP = 0.1;
 const LIGHTBOX_ZOOM_STEP_FAST = 0.2;
+const PROJECT_OVERVIEW_TAB_ORDER: BuildTabId[] = [...PHASE_PROGRESS_ORDER, 'desk'];
 
 const clampLightboxZoom = (value: number): number => {
   return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
@@ -359,6 +392,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [documentUploadBusy, setDocumentUploadBusy] = React.useState<boolean>(false);
   const [projectDeskOpen, setProjectDeskOpen] = React.useState<boolean>(false);
   const [aiToolsOpen, setAiToolsOpen] = React.useState<boolean>(false);
+  const [projectOverviewOpen, setProjectOverviewOpen] = React.useState<boolean>(false);
   const [deskSelectedContactId, setDeskSelectedContactId] = React.useState<number>(0);
   const [deskCreateMode, setDeskCreateMode] = React.useState<boolean>(false);
   const [deskContactQuery, setDeskContactQuery] = React.useState<string>('');
@@ -1162,6 +1196,107 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
     return { phaseTotal, projectToDateTotal };
   }, [activeTab, filteredTabSteps, steps]);
+
+  const stepDocumentCountByStepId = React.useMemo(() => {
+    const map = new Map<number, number>();
+    documents.forEach((documentItem) => {
+      const linkedStepId = Number(documentItem.step_id || 0);
+      if (linkedStepId <= 0) {
+        return;
+      }
+      map.set(linkedStepId, (map.get(linkedStepId) || 0) + 1);
+    });
+    return map;
+  }, [documents]);
+
+  const projectOverviewRange = React.useMemo(() => getDefaultRange(steps), [steps]);
+
+  const projectOverviewSections = React.useMemo<ProjectOverviewPhaseSection[]>(() => {
+    const rangeStartDate = parseDate(projectOverviewRange.start);
+    const rangeEndDate = parseDate(projectOverviewRange.end);
+    const hasRange = Boolean(rangeStartDate && rangeEndDate && rangeEndDate.getTime() >= rangeStartDate.getTime());
+    const totalDays = hasRange
+      ? Math.max(1, Math.round((rangeEndDate!.getTime() - rangeStartDate!.getTime()) / 86400000) + 1)
+      : 1;
+
+    return PROJECT_OVERVIEW_TAB_ORDER.map((tabId) => {
+      const phaseSteps = steps
+        .filter((step) => stepPhaseBucket(step) === tabId)
+        .sort((a, b) => {
+          if (a.step_order !== b.step_order) {
+            return a.step_order - b.step_order;
+          }
+          return a.id - b.id;
+        });
+
+      const rows: ProjectOverviewStepRow[] = phaseSteps.map((step, index) => {
+        const range = stepDateRange(step);
+        const startIso = range.start ? toIsoDate(range.start) : null;
+        const endIso = range.end ? toIsoDate(range.end) : null;
+        const hasTimeline = Boolean(startIso && endIso && hasRange);
+        let leftPercent = 0;
+        let widthPercent = 0;
+        if (hasTimeline && rangeStartDate && range.start && range.end) {
+          const clampedStartMs = Math.max(rangeStartDate.getTime(), range.start.getTime());
+          const clampedEndMs = Math.min(rangeEndDate!.getTime(), range.end.getTime());
+          if (clampedEndMs >= clampedStartMs) {
+            const leftDays = Math.max(0, Math.round((clampedStartMs - rangeStartDate.getTime()) / 86400000));
+            const widthDays = Math.max(1, Math.round((clampedEndMs - clampedStartMs) / 86400000) + 1);
+            leftPercent = (leftDays / totalDays) * 100;
+            widthPercent = (widthDays / totalDays) * 100;
+          }
+        }
+        const actualCost = Number(step.actual_cost);
+        const estimatedCost = Number(step.estimated_cost);
+        const costMode: ProjectOverviewStepRow['costMode'] = Number.isFinite(actualCost) && actualCost > 0
+          ? 'actual'
+          : (Number.isFinite(estimatedCost) && estimatedCost > 0 ? 'estimated' : 'missing');
+        return {
+          stepId: step.id,
+          displayOrder: index + 1,
+          title: step.title,
+          stepType: step.step_type,
+          startIso,
+          endIso,
+          durationDays: calculateDurationDays(startIso, endIso),
+          totalCost: stepCostTotal(step),
+          costMode,
+          assigneeCount: (stepAssigneesByStepId.get(step.id) || []).length,
+          documentCount: stepDocumentCountByStepId.get(step.id) || 0,
+          isCompleted: Number(step.is_completed) === 1,
+          hasTimeline,
+          leftPercent,
+          widthPercent,
+        };
+      });
+
+      const rowStarts = rows.map((row) => row.startIso).filter((value): value is string => Boolean(value)).sort();
+      const rowEnds = rows.map((row) => row.endIso).filter((value): value is string => Boolean(value)).sort();
+      return {
+        tabId,
+        label: tabLabelShort(tabId),
+        phaseColor: TAB_PHASE_COLORS[tabId],
+        stepCount: rows.length,
+        completedCount: rows.filter((row) => row.isCompleted).length,
+        totalCost: rows.reduce((sum, row) => sum + row.totalCost, 0),
+        startIso: rowStarts.length ? rowStarts[0] : null,
+        endIso: rowEnds.length ? rowEnds[rowEnds.length - 1] : null,
+        rows,
+      };
+    }).filter((section) => section.stepCount > 0);
+  }, [projectOverviewRange.end, projectOverviewRange.start, stepAssigneesByStepId, stepDocumentCountByStepId, steps]);
+
+  const projectOverviewTotals = React.useMemo(() => {
+    return projectOverviewSections.reduce(
+      (totals, section) => {
+        totals.stepCount += section.stepCount;
+        totals.completedCount += section.completedCount;
+        totals.totalCost += section.totalCost;
+        return totals;
+      },
+      { stepCount: 0, completedCount: 0, totalCost: 0 },
+    );
+  }, [projectOverviewSections]);
 
   const derivePhaseDateRange = React.useCallback((tabId: BuildTabId): PhaseDateRange => {
     const tabSteps = steps.filter((step) => stepPhaseBucket(step) === tabId);
@@ -4944,6 +5079,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </button>
               ) : null}
               <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
+              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectOverviewOpen(true)}>Project Overview</button>
               <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
               <StandardIconButton
                 iconKey="close"
@@ -6065,6 +6201,111 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               </div>
             </div>
             {renderEditableStepCards(projectDeskSteps)}
+          </div>
+        </div>
+      ) : null}
+
+      {projectOverviewOpen ? (
+        <div className="build-wizard-doc-manager" onClick={() => setProjectOverviewOpen(false)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-project-overview-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Project Overview</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close project overview"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setProjectOverviewOpen(false)}
+                />
+              </div>
+            </div>
+
+            <div className="build-wizard-project-overview-summary">
+              <div className="build-wizard-project-overview-summary-item">
+                <span>Total Steps</span>
+                <strong>{projectOverviewTotals.stepCount}</strong>
+              </div>
+              <div className="build-wizard-project-overview-summary-item">
+                <span>Completed</span>
+                <strong>{projectOverviewTotals.completedCount}</strong>
+              </div>
+              <div className="build-wizard-project-overview-summary-item">
+                <span>Projected Cost</span>
+                <strong>{formatCurrency(projectOverviewTotals.totalCost)}</strong>
+              </div>
+              <div className="build-wizard-project-overview-summary-item">
+                <span>Range</span>
+                <strong>{formatTimelineDate(projectOverviewRange.start)} - {formatTimelineDate(projectOverviewRange.end)}</strong>
+              </div>
+            </div>
+
+            <div className="build-wizard-project-overview-timeline-card">
+              <h4>Master Timeline</h4>
+              <FooterPhaseTimeline
+                steps={steps}
+                rangeStart={projectOverviewRange.start}
+                rangeEnd={projectOverviewRange.end}
+                activeTab="overview"
+                editable={false}
+              />
+            </div>
+
+            <div className="build-wizard-project-overview-phase-list">
+              {projectOverviewSections.map((section) => (
+                <section key={section.tabId} className="build-wizard-project-overview-phase">
+                  <header className="build-wizard-project-overview-phase-head">
+                    <h4>
+                      <span className="build-wizard-project-overview-phase-dot" style={{ background: section.phaseColor }} />
+                      {section.label}
+                    </h4>
+                    <div className="build-wizard-project-overview-phase-meta">
+                      <span>{section.completedCount}/{section.stepCount} complete</span>
+                      <span>{formatTimelineDate(section.startIso)} - {formatTimelineDate(section.endIso)}</span>
+                      <span>{formatCurrency(section.totalCost)}</span>
+                    </div>
+                  </header>
+                  <div className="build-wizard-project-overview-step-list">
+                    {section.rows.map((row) => (
+                      <article key={row.stepId} className={`build-wizard-project-overview-step-row${row.isCompleted ? ' is-completed' : ''}`}>
+                        <div className="build-wizard-project-overview-step-title">
+                          <div className="build-wizard-project-overview-step-main">
+                            <span className="build-wizard-project-overview-step-number">#{row.displayOrder}</span>
+                            <strong>{row.title}</strong>
+                            <span className="build-wizard-project-overview-step-type">{buildWizardTokenLabel(row.stepType, 'Other')}</span>
+                            {row.isCompleted ? <span className="build-wizard-project-overview-step-status">Completed</span> : null}
+                          </div>
+                          <div className="build-wizard-project-overview-step-meta">
+                            <span>{formatDate(row.startIso)} - {formatDate(row.endIso)}</span>
+                            <span>{row.durationDays ? `${row.durationDays} day(s)` : 'No duration'}</span>
+                            <span>{row.assigneeCount} assignee(s)</span>
+                            <span>{row.documentCount} doc(s)</span>
+                          </div>
+                        </div>
+                        <div className="build-wizard-project-overview-step-cost">
+                          <div>{formatCurrency(row.totalCost)}</div>
+                          <span>{row.costMode === 'actual' ? 'Actual' : (row.costMode === 'estimated' ? 'Estimated' : 'Missing')}</span>
+                        </div>
+                        <div className="build-wizard-project-overview-step-timeline">
+                          {row.hasTimeline ? (
+                            <div
+                              className="build-wizard-project-overview-step-bar"
+                              style={{
+                                left: `${row.leftPercent}%`,
+                                width: `${row.widthPercent}%`,
+                                background: section.phaseColor,
+                              }}
+                            />
+                          ) : (
+                            <div className="build-wizard-project-overview-step-no-timeline">No timeline dates</div>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}

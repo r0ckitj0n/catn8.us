@@ -1,6 +1,6 @@
 {
-  "template_version": "house_template_v5_dawson_ga_balanced_light",
-  "description": "Balanced-light Dawson County, GA new-home template with complete build coverage and reduced tracking overhead through merged milestone steps.",
+  "template_version": "house_template_v6_dawson_ga_builder_flow",
+  "description": "Builder-first Dawson County, GA template with corrected phase placement, practical dependency gates, and cleaner turnover sequencing for tracking subcontracted work.",
   "steps": [
     {
       "template_step_key": "land_contract",
@@ -11,20 +11,6 @@
       "permit_required": 0,
       "expected_duration_days": 5,
       "source_ref": "House template v4",
-      "estimated_cost": 472.78
-    },
-    {
-      "template_step_key": "addressing_approval",
-      "phase_key": "land_due_diligence",
-      "step_type": "documentation",
-      "title": "Obtain approved Dawson County addressing form (E-911)",
-      "description": "Address assignment is listed in the county residential permit checklist.",
-      "permit_required": 0,
-      "expected_duration_days": 3,
-      "depends_on_keys": [
-        "land_contract"
-      ],
-      "source_ref": "Dawson County required documents checklist",
       "estimated_cost": 472.78
     },
     {
@@ -93,7 +79,6 @@
       "permit_required": 0,
       "expected_duration_days": 4,
       "depends_on_keys": [
-        "land_contract",
         "plans_engineering"
       ],
       "source_ref": "House template v5",
@@ -108,6 +93,7 @@
       "permit_required": 0,
       "expected_duration_days": 5,
       "depends_on_keys": [
+        "plans_engineering",
         "financing_budget_baseline"
       ],
       "source_ref": "House template v5",
@@ -122,7 +108,21 @@
       "permit_required": 0,
       "expected_duration_days": 4,
       "depends_on_keys": [
-        "financing_budget_baseline"
+        "plans_engineering"
+      ],
+      "source_ref": "Dawson County required documents checklist",
+      "estimated_cost": 472.78
+    },
+    {
+      "template_step_key": "addressing_approval",
+      "phase_key": "land_due_diligence",
+      "step_type": "documentation",
+      "title": "Obtain approved Dawson County addressing form (E-911)",
+      "description": "Address assignment is listed in the county residential permit checklist.",
+      "permit_required": 0,
+      "expected_duration_days": 3,
+      "depends_on_keys": [
+        "land_contract"
       ],
       "source_ref": "Dawson County required documents checklist",
       "estimated_cost": 472.78
@@ -198,6 +198,7 @@
       "permit_name": "Residential Building Permit Application",
       "expected_duration_days": 3,
       "depends_on_keys": [
+        "plans_engineering",
         "builder_docs",
         "addressing_approval",
         "driveway_approval",
@@ -275,7 +276,8 @@
       "permit_name": "Temporary Electrical Inspection",
       "expected_duration_days": 3,
       "depends_on_keys": [
-        "building_permit_issued"
+        "building_permit_issued",
+        "utility_locate_811"
       ],
       "source_ref": "Dawson County residential inspection checklist",
       "estimated_cost": 472.78
@@ -290,7 +292,6 @@
       "expected_duration_days": 7,
       "depends_on_keys": [
         "erosion_bmps_install",
-        "temp_power_release",
         "utility_locate_811"
       ],
       "source_ref": "House template v4",
@@ -341,7 +342,7 @@
     },
     {
       "template_step_key": "plumbing_underground_install",
-      "phase_key": "mep_rough_in",
+      "phase_key": "foundation",
       "step_type": "construction",
       "title": "Install underground plumbing and drain/waste/vent stub-outs",
       "description": "Install below-slab sanitary and water lines prior to slab pour.",
@@ -356,7 +357,7 @@
     },
     {
       "template_step_key": "plumbing_underground_inspection",
-      "phase_key": "mep_rough_in",
+      "phase_key": "foundation",
       "step_type": "inspection",
       "title": "Pass underground plumbing inspection",
       "description": "County-required plumbing inspection before slab placement.",
@@ -442,6 +443,20 @@
       "estimated_cost": 2013.44
     },
     {
+      "template_step_key": "exterior_cladding",
+      "phase_key": "framing_shell",
+      "step_type": "construction",
+      "title": "Install exterior cladding/veneer and weatherproof details",
+      "description": "Complete exterior finish systems and flashing details.",
+      "permit_required": 0,
+      "expected_duration_days": 8,
+      "depends_on_keys": [
+        "dry_in_shell"
+      ],
+      "source_ref": "House template v4",
+      "estimated_cost": 2013.44
+    },
+    {
       "template_step_key": "rough_hvac",
       "phase_key": "mep_rough_in",
       "step_type": "construction",
@@ -499,21 +514,6 @@
       "estimated_cost": 472.78
     },
     {
-      "template_step_key": "framing_inspection",
-      "phase_key": "framing_shell",
-      "step_type": "inspection",
-      "title": "Pass framing inspection",
-      "description": "Structural framing inspection required before concealment.",
-      "permit_required": 1,
-      "permit_name": "Framing Inspection",
-      "expected_duration_days": 2,
-      "depends_on_keys": [
-        "dry_in_shell"
-      ],
-      "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
-    },
-    {
       "template_step_key": "rough_mechanical_inspection",
       "phase_key": "mep_rough_in",
       "step_type": "inspection",
@@ -553,6 +553,24 @@
       "permit_name": "Rough Electrical Inspection",
       "expected_duration_days": 2,
       "depends_on_keys": [
+        "rough_electrical"
+      ],
+      "source_ref": "Dawson County residential inspection checklist",
+      "estimated_cost": 472.78
+    },
+    {
+      "template_step_key": "framing_inspection",
+      "phase_key": "framing_shell",
+      "step_type": "inspection",
+      "title": "Pass framing inspection",
+      "description": "Structural framing inspection required before concealment.",
+      "permit_required": 1,
+      "permit_name": "Framing Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "dry_in_shell",
+        "rough_hvac",
+        "rough_plumbing",
         "rough_electrical"
       ],
       "source_ref": "Dawson County residential inspection checklist",
@@ -619,20 +637,6 @@
       "estimated_cost": 2013.44
     },
     {
-      "template_step_key": "exterior_cladding",
-      "phase_key": "interior_finishes",
-      "step_type": "construction",
-      "title": "Install exterior cladding/veneer and weatherproof details",
-      "description": "Complete exterior finish systems and flashing details.",
-      "permit_required": 0,
-      "expected_duration_days": 8,
-      "depends_on_keys": [
-        "dry_in_shell"
-      ],
-      "source_ref": "House template v4",
-      "estimated_cost": 2013.44
-    },
-    {
       "template_step_key": "interior_trim_cabinets",
       "phase_key": "interior_finishes",
       "step_type": "construction",
@@ -641,7 +645,8 @@
       "permit_required": 0,
       "expected_duration_days": 12,
       "depends_on_keys": [
-        "drywall_install"
+        "drywall_install",
+        "exterior_cladding"
       ],
       "source_ref": "House template v4",
       "estimated_cost": 2013.44
@@ -726,7 +731,8 @@
       "expected_duration_days": 5,
       "depends_on_keys": [
         "site_clear_grade",
-        "septic_permit"
+        "septic_permit",
+        "exterior_cladding"
       ],
       "source_ref": "House template v4",
       "estimated_cost": 2013.44
@@ -756,7 +762,8 @@
       "expected_duration_days": 4,
       "depends_on_keys": [
         "driveway_installation",
-        "septic_installation"
+        "septic_installation",
+        "exterior_cladding"
       ],
       "source_ref": "House template v4",
       "estimated_cost": 2013.44
@@ -868,24 +875,6 @@
       "estimated_cost": 472.78
     },
     {
-      "template_step_key": "final_building_inspection",
-      "phase_key": "inspections_closeout",
-      "step_type": "inspection",
-      "title": "Pass final building inspection",
-      "description": "Final building inspection after trade finals and site completion.",
-      "permit_required": 1,
-      "permit_name": "Final Building Inspection",
-      "expected_duration_days": 2,
-      "depends_on_keys": [
-        "final_plumbing_inspection",
-        "electrical_service_release",
-        "final_mechanical_inspection",
-        "final_grading_stabilization"
-      ],
-      "source_ref": "Dawson County residential inspection checklist",
-      "estimated_cost": 472.78
-    },
-    {
       "template_step_key": "erosion_closeout",
       "phase_key": "inspections_closeout",
       "step_type": "permit",
@@ -900,6 +889,26 @@
       "estimated_cost": 472.78
     },
     {
+      "template_step_key": "final_building_inspection",
+      "phase_key": "inspections_closeout",
+      "step_type": "inspection",
+      "title": "Pass final building inspection",
+      "description": "Final building inspection after trade finals and site completion.",
+      "permit_required": 1,
+      "permit_name": "Final Building Inspection",
+      "expected_duration_days": 2,
+      "depends_on_keys": [
+        "final_plumbing_inspection",
+        "electrical_service_release",
+        "final_mechanical_inspection",
+        "final_gas_inspection",
+        "septic_final_approval",
+        "final_grading_stabilization"
+      ],
+      "source_ref": "Dawson County residential inspection checklist",
+      "estimated_cost": 472.78
+    },
+    {
       "template_step_key": "certificate_occupancy",
       "phase_key": "inspections_closeout",
       "step_type": "permit",
@@ -909,49 +918,50 @@
       "permit_name": "Certificate of Occupancy",
       "expected_duration_days": 2,
       "depends_on_keys": [
-        "final_building_inspection"
+        "final_building_inspection",
+        "erosion_closeout"
       ],
       "source_ref": "Dawson County residential permitting",
       "estimated_cost": 472.78
     },
     {
-      "template_step_key": "owner_system_orientation",
-      "phase_key": "move_in",
-      "step_type": "closeout",
-      "title": "Complete final cleaning plus owner systems orientation and maintenance handoff",
-      "description": "Prepare turnover-ready home, then walk through panel labeling, shutoffs, filters, controls, and routine maintenance requirements.",
-      "permit_required": 0,
-      "expected_duration_days": 1,
-      "depends_on_keys": [
-        "certificate_occupancy"
-      ],
-      "source_ref": "House template v5",
-      "estimated_cost": 1711.47
-    },
-    {
       "template_step_key": "owner_walkthrough",
       "phase_key": "move_in",
       "step_type": "closeout",
-      "title": "Owner final walk-through and punch list completion",
-      "description": "Verify all work items and documentation before move-in.",
+      "title": "Owner final walk-through, punch list signoff, and turnover readiness check",
+      "description": "Confirm contract scope completion, document any final punch items, and sign turnover readiness before occupancy handoff.",
       "permit_required": 0,
       "expected_duration_days": 3,
       "depends_on_keys": [
-        "owner_system_orientation"
+        "certificate_occupancy"
       ],
       "source_ref": "House template v4",
+      "estimated_cost": 1711.47
+    },
+    {
+      "template_step_key": "owner_system_orientation",
+      "phase_key": "move_in",
+      "step_type": "closeout",
+      "title": "Complete owner systems orientation, maintenance training, and final cleaning handoff",
+      "description": "Train owner on panel/shutoffs/HVAC/filter cycles, provide operating guidance, and hand over a move-in-ready cleaned home.",
+      "permit_required": 0,
+      "expected_duration_days": 1,
+      "depends_on_keys": [
+        "owner_walkthrough"
+      ],
+      "source_ref": "House template v5",
       "estimated_cost": 1711.47
     },
     {
       "template_step_key": "closeout_docs",
       "phase_key": "move_in",
       "step_type": "closeout",
-      "title": "Collect closeout package (permits, inspection cards, manuals, warranties, as-builts)",
-      "description": "Store all final records required for operations, warranty, and resale.",
+      "title": "Deliver consolidated closeout package (permits, cards, manuals, warranties, as-builts)",
+      "description": "Deliver one final turnover package with all approved records and warranty documentation for long-term operations and resale.",
       "permit_required": 0,
       "expected_duration_days": 2,
       "depends_on_keys": [
-        "owner_walkthrough"
+        "owner_system_orientation"
       ],
       "source_ref": "House template v4",
       "estimated_cost": 1711.47

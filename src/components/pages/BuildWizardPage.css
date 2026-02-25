@@ -2378,6 +2378,219 @@
   width: min(1500px, 100%);
 }
 
+.build-wizard-project-overview-inner {
+  width: min(1680px, 100%);
+}
+
+.build-wizard-project-overview-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.build-wizard-project-overview-summary-item {
+  border: 1px solid #d1dceb;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 9px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.build-wizard-project-overview-summary-item span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4e6480;
+}
+
+.build-wizard-project-overview-summary-item strong {
+  font-size: 0.95rem;
+  color: #1d2c40;
+}
+
+.build-wizard-project-overview-timeline-card {
+  border: 1px solid #d2ddeb;
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 10px;
+}
+
+.build-wizard-project-overview-timeline-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.98rem;
+}
+
+.build-wizard-project-overview-phase-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.build-wizard-project-overview-phase {
+  border: 1px solid #d1dceb;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.build-wizard-project-overview-phase-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.build-wizard-project-overview-phase-head h4 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.96rem;
+}
+
+.build-wizard-project-overview-phase-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.build-wizard-project-overview-phase-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: #4d617a;
+  font-size: 0.8rem;
+}
+
+.build-wizard-project-overview-phase-meta span {
+  border: 1px solid #d7e2f1;
+  background: #f5f9ff;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.build-wizard-project-overview-step-list {
+  display: grid;
+  gap: 6px;
+}
+
+.build-wizard-project-overview-step-row {
+  border: 1px solid #d9e2ee;
+  border-radius: 10px;
+  background: #fdfefe;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.45fr) minmax(110px, 0.5fr) minmax(260px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.build-wizard-project-overview-step-row.is-completed {
+  background: #f4fbf1;
+  border-color: #c8dfc2;
+}
+
+.build-wizard-project-overview-step-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.build-wizard-project-overview-step-main strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.build-wizard-project-overview-step-number {
+  font-size: 0.74rem;
+  border-radius: 999px;
+  border: 1px solid #c4d2e6;
+  background: #f4f8ff;
+  color: #3f5876;
+  padding: 2px 7px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.build-wizard-project-overview-step-type,
+.build-wizard-project-overview-step-status {
+  font-size: 0.72rem;
+  border-radius: 999px;
+  padding: 2px 7px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.build-wizard-project-overview-step-type {
+  border: 1px solid #d4deec;
+  background: #f4f8ff;
+  color: #3a5678;
+}
+
+.build-wizard-project-overview-step-status {
+  border: 1px solid #bfd9b8;
+  background: #eaf8e6;
+  color: #2b5f30;
+}
+
+.build-wizard-project-overview-step-meta {
+  margin-top: 3px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #536981;
+  font-size: 0.77rem;
+}
+
+.build-wizard-project-overview-step-cost {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+
+.build-wizard-project-overview-step-cost > div {
+  font-weight: 700;
+  color: #1f3045;
+}
+
+.build-wizard-project-overview-step-cost > span {
+  font-size: 0.75rem;
+  color: #5a7089;
+}
+
+.build-wizard-project-overview-step-timeline {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  background: #e9f0fb;
+  overflow: hidden;
+}
+
+.build-wizard-project-overview-step-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #18324c 20%, transparent);
+}
+
+.build-wizard-project-overview-step-no-timeline {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.73rem;
+  color: #5d748e;
+}
+
 .build-wizard-doc-manager-head {
   display: flex;
   align-items: center;
@@ -2864,6 +3077,16 @@
 
   .build-wizard-doc-manager-grid {
     grid-template-columns: 1fr;
+  }
+
+  .build-wizard-project-overview-step-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .build-wizard-project-overview-step-cost {
+    justify-items: start;
+    text-align: left;
   }
 
   .build-wizard-desk-grid {

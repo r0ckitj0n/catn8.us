@@ -192,6 +192,10 @@
   background: linear-gradient(140deg, #d2b18f, #f5e7d1);
 }
 
+.catn8-polaroid-video {
+  background: #000;
+}
+
 .catn8-polaroid-photo.is-placeholder {
   background: linear-gradient(140deg, #d8c8b4, #f6ecdf);
 }
@@ -201,6 +205,16 @@
   margin-top: 0.45rem;
   color: rgba(47, 41, 69, 0.88);
   line-height: 1.45;
+}
+
+.catn8-live-toggle {
+  margin-top: 0.5rem;
+  border: 1px solid rgba(74, 48, 28, 0.3);
+  background: #f7ead8;
+  color: #4b2f1e;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
 }
 
 .catn8-album-admin {

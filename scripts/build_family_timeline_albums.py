@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 PRE_BIRTH_DAYS = 7
 DEFAULT_MAX_PAGES = 5000
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
+VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".3gp", ".avi", ".mkv", ".webm"}
 
 
 @dataclass
@@ -43,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-pages-per-album", type=int, default=DEFAULT_MAX_PAGES)
     p.add_argument("--max-albums", type=int, default=0, help="0 means no cap")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--skip-deploy", action="store_true", help="Do not run scripts/deploy.sh after successful live import")
     return p.parse_args()
 
 
@@ -301,6 +304,77 @@ def resolve_message_attachment_path(raw_path: str) -> Optional[Path]:
     return None
 
 
+def classify_attachment(filename: str, mime_type: str) -> str:
+    ext = Path(filename or "").suffix.lower()
+    mime = (mime_type or "").lower().strip()
+    if mime.startswith("image/") or ext in IMAGE_EXTS:
+        return "image"
+    if mime.startswith("video/") or ext in VIDEO_EXTS:
+        return "video"
+    return "other"
+
+
+def build_messages_attachment_index(root: Path) -> Dict[str, List[Path]]:
+    out: Dict[str, List[Path]] = {}
+    if not root.exists() or not root.is_dir():
+        return out
+
+    for p in root.rglob("*"):
+        if not p.is_file():
+            continue
+        name = p.name.lower()
+        stem = p.stem.lower()
+        out.setdefault(name, []).append(p)
+        if stem:
+            out.setdefault(stem, []).append(p)
+    return out
+
+
+def lookup_attachment_from_index(index: Dict[str, List[Path]], raw_name: str) -> Optional[Path]:
+    if not raw_name:
+        return None
+    keys = [raw_name.lower(), Path(raw_name).stem.lower()]
+    candidates: List[Path] = []
+    for k in keys:
+        for p in index.get(k, []):
+            if p not in candidates:
+                candidates.append(p)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def find_live_video_companion(image_path: Path, raw_name: str, index: Dict[str, List[Path]]) -> Optional[Path]:
+    stems: List[str] = []
+    for stem in [image_path.stem.lower(), Path(raw_name).stem.lower()]:
+        if stem and stem not in stems:
+            stems.append(stem)
+
+    # Try same directory first for common Live Photo pairing.
+    for stem in stems:
+        for ext in VIDEO_EXTS:
+            candidate = image_path.with_name(f"{stem}{ext}")
+            if candidate.exists() and candidate.is_file():
+                return candidate
+            candidate_upper = image_path.with_name(f"{stem.upper()}{ext.upper()}")
+            if candidate_upper.exists() and candidate_upper.is_file():
+                return candidate_upper
+
+    # Fallback to indexed Messages attachments.
+    candidates: List[Path] = []
+    for stem in stems:
+        for p in index.get(stem, []):
+            if p == image_path:
+                continue
+            if p.suffix.lower() in VIDEO_EXTS and p not in candidates:
+                candidates.append(p)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
 def convert_to_png(src: Path, dst: Path) -> bool:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.suffix.lower() == ".png":
@@ -311,6 +385,17 @@ def convert_to_png(src: Path, dst: Path) -> bool:
         return True
     p = subprocess.run(["sips", "-s", "format", "png", str(src), "--out", str(dst)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return p.returncode == 0
+
+
+def copy_media(src: Path, dst: Path) -> bool:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        return True
+    try:
+        dst.write_bytes(src.read_bytes())
+        return True
+    except Exception:
+        return False
 
 
 def make_caption(messages: Sequence[MessageRow], idx: int, attach_note: str) -> str:
@@ -471,6 +556,16 @@ def upload_sql(sql_text: str, state_dir: Path) -> None:
         raise RuntimeError(f"Maintenance restore failed: {payload}")
 
 
+def run_deploy(root_dir: Path) -> None:
+    deploy_script = root_dir / "scripts" / "deploy.sh"
+    if not deploy_script.exists():
+        raise RuntimeError(f"Deploy script not found: {deploy_script}")
+    p = subprocess.run([str(deploy_script)], cwd=str(root_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if p.returncode != 0:
+        detail = p.stderr.strip() or p.stdout.strip() or f"exit code {p.returncode}"
+        raise RuntimeError(f"Deploy failed: {detail}")
+
+
 def load_state(state_file: Path) -> Dict[str, object]:
     if not state_file.exists():
         return {"completed_albums": [], "updated_at": ""}
@@ -496,6 +591,7 @@ def main() -> None:
     args = parse_args()
 
     state_file = Path(args.state_file).expanduser().resolve()
+    project_root = Path(__file__).resolve().parents[1]
     state = load_state(state_file)
     completed = set(str(x) for x in state.get("completed_albums", []))
 
@@ -516,11 +612,15 @@ def main() -> None:
 
     contact_handles_cache: Dict[str, List[str]] = {}
     alias_map = load_photos_alias_map(photos_db)
+    attachments_root = Path(os.path.expanduser("~/Library/Messages/Attachments")).resolve()
+    attachment_index = build_messages_attachment_index(attachments_root)
     print(f"Loaded {len(alias_map)} Photos filename aliases.")
+    print(f"Indexed {len(attachment_index)} Messages attachment keys from {attachments_root}")
 
     album_count = 0
+    uploaded_album_count = 0
     exported_cache: Dict[str, Optional[Path]] = {}
-    page_seq = 0
+    media_seq = 0
 
     sql_prefix = """
 CREATE TABLE IF NOT EXISTS photo_album_permissions (
@@ -573,10 +673,18 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             unavailable_images = 0
             conversion_failures = 0
             direct_attachment_hits = 0
+            attachment_index_hits = 0
             photos_export_hits = 0
+            non_media_attachments = 0
+            linked_videos = 0
+            live_companion_hits = 0
             for i, msg in enumerate(messages):
                 attach_note = ""
                 image_rel = ""
+                display_rel = ""
+                original_rel = ""
+                live_video_rel = ""
+                media_type = "image"
                 src_name = ""
 
                 raw_name = Path(msg.attachment_filename).name if msg.attachment_filename else ""
@@ -584,6 +692,23 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                     attachment_rows += 1
                     src_name = raw_name
                     attach_note = f"Attachment referenced: {raw_name}."
+                    kind = classify_attachment(raw_name, msg.attachment_mime)
+                    if kind == "other":
+                        non_media_attachments += 1
+                        attach_note = f"Attachment referenced: {raw_name} (non-media attachment)."
+                        caption = make_caption(messages, i, attach_note)
+                        pages.append((msg.sent_at, caption, image_rel, src_name, msg.text, media_type, display_rel, original_rel, live_video_rel))
+                        if (i + 1) == 1 or (i + 1) % 25 == 0 or (i + 1) == len(messages):
+                            print(
+                                f"[{title}] progress {i + 1}/{len(messages)} rows | "
+                                f"attachments={attachment_rows} linked={linked_images} "
+                                f"unavailable={unavailable_images} convert_fail={conversion_failures} "
+                                f"direct_hits={direct_attachment_hits} idx_hits={attachment_index_hits} "
+                                f"photos_hits={photos_export_hits} non_media={non_media_attachments} "
+                                f"video_linked={linked_videos} live_companions={live_companion_hits}"
+                            )
+                        continue
+
                     cands: List[str] = []
                     for key in (raw_name.lower(), Path(raw_name).stem.lower()):
                         for cand in alias_map.get(key, []):
@@ -598,37 +723,83 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                         exported = local_attachment
                         direct_attachment_hits += 1
                     else:
-                        cache_key = (cands[0] if cands else raw_name).lower()
-                        exported = exported_cache.get(cache_key)
-                        if cache_key not in exported_cache:
-                            exported = safe_photos_export(cands, export_dir)
-                            exported_cache[cache_key] = exported
-                        if exported:
-                            photos_export_hits += 1
+                        idx_hit = lookup_attachment_from_index(attachment_index, raw_name)
+                        if idx_hit:
+                            exported = idx_hit
+                            attachment_index_hits += 1
+                        else:
+                            cache_key = (cands[0] if cands else raw_name).lower()
+                            exported = exported_cache.get(cache_key)
+                            if cache_key not in exported_cache:
+                                exported = safe_photos_export(cands, export_dir)
+                                exported_cache[cache_key] = exported
+                            if exported:
+                                photos_export_hits += 1
 
                     if exported and exported.exists():
-                        page_seq += 1
-                        out_name = f"family_page_{page_seq:06d}.png"
-                        out_path = stage_dir / out_name
-                        if convert_to_png(exported, out_path):
-                            image_rel = f"/photo_albums/{out_name}"
-                            attach_note = f"Attachment linked: {raw_name}."
-                            linked_images += 1
+                        media_seq += 1
+                        if kind == "video":
+                            media_type = "video"
+                            video_ext = exported.suffix.lower() or Path(raw_name).suffix.lower() or ".mov"
+                            if video_ext not in VIDEO_EXTS:
+                                video_ext = ".mov"
+                            out_name = f"family_video_{media_seq:06d}{video_ext}"
+                            out_path = stage_dir / out_name
+                            if copy_media(exported, out_path):
+                                image_rel = f"/photo_albums/{out_name}"
+                                display_rel = image_rel
+                                original_rel = image_rel
+                                attach_note = f"Video linked: {raw_name}."
+                                linked_videos += 1
+                            else:
+                                attach_note = f"Attachment referenced: {raw_name} (video copy unavailable)."
+                                conversion_failures += 1
                         else:
-                            attach_note = f"Attachment referenced: {raw_name} (image conversion unavailable)."
-                            conversion_failures += 1
+                            original_ext = exported.suffix.lower() or Path(raw_name).suffix.lower() or ".heic"
+                            if not original_ext.startswith("."):
+                                original_ext = f".{original_ext}"
+                            original_name = f"family_original_{media_seq:06d}{original_ext}"
+                            original_path = stage_dir / original_name
+                            if copy_media(exported, original_path):
+                                original_rel = f"/photo_albums/{original_name}"
+
+                            out_name = f"family_page_{media_seq:06d}.png"
+                            out_path = stage_dir / out_name
+                            if convert_to_png(exported, out_path):
+                                display_rel = f"/photo_albums/{out_name}"
+                                image_rel = display_rel
+                                attach_note = f"Attachment linked: {raw_name}."
+                                linked_images += 1
+                            else:
+                                if original_rel:
+                                    image_rel = original_rel
+                                attach_note = f"Attachment referenced: {raw_name} (image conversion unavailable)."
+                                conversion_failures += 1
+
+                            companion = find_live_video_companion(exported, raw_name, attachment_index)
+                            if companion and companion.exists():
+                                live_ext = companion.suffix.lower() or ".mov"
+                                if live_ext not in VIDEO_EXTS:
+                                    live_ext = ".mov"
+                                live_name = f"family_live_{media_seq:06d}{live_ext}"
+                                live_path = stage_dir / live_name
+                                if copy_media(companion, live_path):
+                                    live_video_rel = f"/photo_albums/{live_name}"
+                                    live_companion_hits += 1
                     else:
-                        attach_note = f"Attachment referenced: {raw_name} (image currently unavailable)."
+                        attach_note = f"Attachment referenced: {raw_name} (media currently unavailable)."
                         unavailable_images += 1
 
                 caption = make_caption(messages, i, attach_note)
-                pages.append((msg.sent_at, caption, image_rel, src_name, msg.text))
+                pages.append((msg.sent_at, caption, image_rel, src_name, msg.text, media_type, display_rel, original_rel, live_video_rel))
                 if (i + 1) == 1 or (i + 1) % 25 == 0 or (i + 1) == len(messages):
                     print(
                         f"[{title}] progress {i + 1}/{len(messages)} rows | "
                         f"attachments={attachment_rows} linked={linked_images} "
                         f"unavailable={unavailable_images} convert_fail={conversion_failures} "
-                        f"direct_hits={direct_attachment_hits} photos_hits={photos_export_hits}"
+                        f"direct_hits={direct_attachment_hits} idx_hits={attachment_index_hits} "
+                        f"photos_hits={photos_export_hits} non_media={non_media_attachments} "
+                        f"video_linked={linked_videos} live_companions={live_companion_hits}"
                     )
 
             if not pages:
@@ -647,12 +818,17 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             motifs = normalize_csv_tokens(style["motif_keywords"], ["tiny footprints", "blankets", "first days"])
 
             spreads = []
-            for sidx, (sent_at, caption, image_rel, src_name, raw_text) in enumerate(pages, start=1):
+            for sidx, (sent_at, caption, image_rel, src_name, raw_text, media_type, display_rel, original_rel, live_video_rel) in enumerate(pages, start=1):
                 images = []
                 if image_rel:
                     images.append(
                         {
                             "src": image_rel,
+                            "media_type": media_type,
+                            "display_src": display_rel,
+                            "original_src": original_rel,
+                            "live_video_src": live_video_rel,
+                            "live_photo_available": bool(live_video_rel),
                             "captured_at": sent_at.isoformat(),
                             "source_filename": src_name,
                             "caption": caption,
@@ -711,7 +887,9 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 f"[{title}] prepared {len(pages)} page(s), "
                 f"linked_images={linked_images}, unavailable_images={unavailable_images}, "
                 f"conversion_failures={conversion_failures}, "
-                f"direct_attachment_hits={direct_attachment_hits}, photos_export_hits={photos_export_hits}"
+                f"direct_attachment_hits={direct_attachment_hits}, attachment_index_hits={attachment_index_hits}, "
+                f"photos_export_hits={photos_export_hits}, non_media_attachments={non_media_attachments}, "
+                f"linked_videos={linked_videos}, live_companions={live_companion_hits}"
             )
 
             if args.dry_run:
@@ -720,11 +898,25 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 continue
 
             upload_sql(full_sql, state_dir)
+            uploaded_album_count += 1
             completed.add(title)
             state["completed_albums"] = sorted(completed)
             save_state(state_file, state)
             album_count += 1
             print(f"Completed: {title} ({len(pages)} pages)")
+
+    if args.dry_run:
+        print("Dry run finished; live database was not updated and deploy was skipped.")
+    else:
+        print(f"Live database updates applied for {uploaded_album_count} album(s).")
+        if not args.skip_deploy and uploaded_album_count > 0:
+            print("Running deploy.sh to sync media and site updates...")
+            run_deploy(project_root)
+            print("Deploy completed.")
+        elif args.skip_deploy:
+            print("Deploy skipped by --skip-deploy.")
+        else:
+            print("No new albums uploaded in this run; deploy not required.")
 
     print("Timeline import finished.")
 

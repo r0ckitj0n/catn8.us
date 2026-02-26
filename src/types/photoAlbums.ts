@@ -41,6 +41,11 @@ export interface PhotoAlbumSpec {
     background_prompt: string;
     images?: Array<{
       src: string;
+      media_type?: 'image' | 'video';
+      display_src?: string;
+      original_src?: string;
+      live_video_src?: string;
+      live_photo_available?: boolean;
       captured_at?: string;
       source_filename?: string;
       caption?: string;

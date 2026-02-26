@@ -16,6 +16,13 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   document.body.removeChild(link);
 }
 
+function isVideoMedia(src: string, mediaType?: string): boolean {
+  if (mediaType === 'video') {
+    return true;
+  }
+  return /\.(mov|mp4|m4v|3gp|avi|mkv|webm)(\?.*)?$/i.test(src || '');
+}
+
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
@@ -24,6 +31,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
 
   const viewerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [livePlayback, setLivePlayback] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     const handleFs = () => {
@@ -44,6 +52,10 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
       // no-op: fullscreen can fail on unsupported/blocked contexts
     }
   }, []);
+
+  React.useEffect(() => {
+    setLivePlayback({});
+  }, [state.selectedId, state.pageIndex]);
 
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -134,11 +146,38 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           <div className="catn8-polaroid-grid">
                             {(spreadImages.length > 0 ? spreadImages : [{ src: '', caption: 'No image' }]).map((image, idx) => (
                               <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-${idx}`}>
+                                {(() => {
+                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-${idx}`;
+                                  const hasLiveVideo = Boolean(image.live_video_src);
+                                  const showLiveVideo = Boolean(hasLiveVideo && livePlayback[mediaKey]);
+                                  const imageSrc = image.display_src || image.src;
+                                  return (
+                                    <>
                                 {image.src ? (
-                                  <img className="catn8-polaroid-photo" src={image.src} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
+                                  showLiveVideo ? (
+                                    <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
+                                  ) : isVideoMedia(imageSrc, image.media_type) ? (
+                                    <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
+                                  ) : (
+                                    <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
+                                  )
                                 ) : (
                                   <div className="catn8-polaroid-photo is-placeholder" />
                                 )}
+                                      {hasLiveVideo ? (
+                                        <button
+                                          type="button"
+                                          className="catn8-live-toggle"
+                                          onClick={() => {
+                                            setLivePlayback((prev) => ({ ...prev, [mediaKey]: !showLiveVideo }));
+                                          }}
+                                        >
+                                          {showLiveVideo ? 'Show Photo' : 'Play Live'}
+                                        </button>
+                                      ) : null}
+                                    </>
+                                  );
+                                })()}
                                 <figcaption className="catn8-polaroid-caption">{image.caption || image.memory_text || selectedSpread?.caption || `Memory #${idx + 1}`}</figcaption>
                               </figure>
                             ))}

@@ -42,6 +42,10 @@ start_import() {
   fi
 
   echo "Starting family timeline import..."
+  {
+    echo ""
+    echo "===== Family timeline import started: $(date '+%Y-%m-%d %H:%M:%S') ====="
+  } >> "$LOG_FILE"
   (
     cd "$ROOT_DIR"
     nohup python3 -u "$PY_SCRIPT" --state-file "$STATE_FILE" "$@" >> "$LOG_FILE" 2>&1 &

@@ -28,6 +28,15 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const selectedAlbum = state.selectedAlbum;
   const selectedSpread = state.selectedSpread;
   const spreadImages = Array.isArray(selectedSpread?.images) ? selectedSpread!.images : [];
+  const safeImages = spreadImages.length > 0 ? spreadImages : [{ src: '', caption: 'No image' }];
+  const midpoint = Math.ceil(safeImages.length / 2);
+  const leftImages = safeImages.slice(0, midpoint);
+  const rightImages = safeImages.slice(midpoint);
+  const spreadNotes = (selectedSpread?.caption || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => Boolean(line) && !line.startsWith('Attachment') && line.length > 2)
+    .slice(0, 8);
 
   const viewerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
@@ -135,35 +144,67 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         <div className="catn8-scrapbook-page-left">
                           <div className="catn8-scrapbook-page-tag">Spread {state.pageIndex + 1} / {state.totalSpreads}</div>
                           <h3>{selectedSpread?.title || 'Untitled Spread'}</h3>
-                          <p className="catn8-memory-text">{selectedSpread?.caption || 'This spread is ready for your photos and notes.'}</p>
-                          <div className="catn8-scrapbook-chip-row">
-                            {(selectedSpread?.embellishments || selectedAlbum.spec?.style_guide?.materials || []).slice(0, 4).map((material) => (
-                              <span key={material} className="catn8-scrapbook-chip">{material}</span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="catn8-scrapbook-page-right">
                           <div className="catn8-polaroid-grid">
-                            {(spreadImages.length > 0 ? spreadImages : [{ src: '', caption: 'No image' }]).map((image, idx) => (
-                              <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-${idx}`}>
+                            {leftImages.map((image, idx) => (
+                              <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-left-${idx}`}>
                                 {(() => {
-                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-${idx}`;
+                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-left-${idx}`;
                                   const hasLiveVideo = Boolean(image.live_video_src);
                                   const showLiveVideo = Boolean(hasLiveVideo && livePlayback[mediaKey]);
                                   const imageSrc = image.display_src || image.src;
                                   return (
                                     <>
-                                {image.src ? (
-                                  showLiveVideo ? (
-                                    <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
-                                  ) : isVideoMedia(imageSrc, image.media_type) ? (
-                                    <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
-                                  ) : (
-                                    <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
-                                  )
-                                ) : (
-                                  <div className="catn8-polaroid-photo is-placeholder" />
-                                )}
+                                      {image.src ? (
+                                        showLiveVideo ? (
+                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
+                                        ) : isVideoMedia(imageSrc, image.media_type) ? (
+                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
+                                        ) : (
+                                          <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
+                                        )
+                                      ) : (
+                                        <div className="catn8-polaroid-photo is-placeholder" />
+                                      )}
+                                      {hasLiveVideo ? (
+                                        <button type="button" className="catn8-live-toggle" onClick={() => setLivePlayback((prev) => ({ ...prev, [mediaKey]: !showLiveVideo }))}>
+                                          {showLiveVideo ? 'Show Photo' : 'Play Live'}
+                                        </button>
+                                      ) : null}
+                                      <figcaption className="catn8-polaroid-caption">{image.caption || image.memory_text || selectedSpread?.caption || `Memory #${idx + 1}`}</figcaption>
+                                    </>
+                                  );
+                                })()}
+                              </figure>
+                            ))}
+                          </div>
+                          <div className="catn8-scrapbook-notes">
+                            {spreadNotes.map((note, idx) => (
+                              <div className="catn8-scrapbook-note" key={`note-${idx}`}>{note}</div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="catn8-scrapbook-page-right">
+                          <div className="catn8-polaroid-grid">
+                            {(rightImages.length > 0 ? rightImages : []).map((image, idx) => (
+                              <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-right-${idx}`}>
+                                {(() => {
+                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-right-${idx}`;
+                                  const hasLiveVideo = Boolean(image.live_video_src);
+                                  const showLiveVideo = Boolean(hasLiveVideo && livePlayback[mediaKey]);
+                                  const imageSrc = image.display_src || image.src;
+                                  return (
+                                    <>
+                                      {image.src ? (
+                                        showLiveVideo ? (
+                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
+                                        ) : isVideoMedia(imageSrc, image.media_type) ? (
+                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
+                                        ) : (
+                                          <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
+                                        )
+                                      ) : (
+                                        <div className="catn8-polaroid-photo is-placeholder" />
+                                      )}
                                       {hasLiveVideo ? (
                                         <button
                                           type="button"

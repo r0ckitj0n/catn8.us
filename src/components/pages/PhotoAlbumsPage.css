@@ -1,15 +1,15 @@
 .catn8-photo-albums-page {
-  --catn8-albums-paper: #fffdf4;
-  --catn8-albums-ink: #2f2945;
-  --catn8-albums-accent: color-mix(in srgb, var(--fun-purple) 65%, #ffffff);
-  --catn8-albums-leaf: color-mix(in srgb, var(--fun-green) 60%, #f5ffef);
+  --catn8-albums-paper: #fff8ea;
+  --catn8-albums-ink: #2d2419;
+  --catn8-albums-shadow: rgba(35, 21, 8, 0.18);
+  --catn8-albums-wood: #8f6848;
 }
 
 .catn8-photo-albums-hero {
   padding: 1.5rem;
   background:
-    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.72), transparent 45%),
-    linear-gradient(130deg, color-mix(in srgb, var(--fun-purple) 26%, white), color-mix(in srgb, var(--fun-green) 26%, white));
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.7), transparent 40%),
+    linear-gradient(130deg, #eed5b8, #d3b38e);
 }
 
 .catn8-photo-albums-layout {
@@ -18,9 +18,17 @@
   gap: 1rem;
 }
 
+.catn8-photo-albums-layout.is-fullscreen {
+  grid-template-columns: 1fr;
+}
+
 .catn8-photo-albums-sidebar,
 .catn8-photo-albums-main {
   padding: 1rem;
+}
+
+.catn8-photo-albums-main.is-fullscreen {
+  padding: 0;
 }
 
 .catn8-album-shelf-list {
@@ -44,7 +52,7 @@
 }
 
 .catn8-album-shelf-item.is-active {
-  border-color: var(--catn8-albums-accent);
+  border-color: #7b5234;
   box-shadow: 0 8px 24px rgba(52, 47, 99, 0.15);
 }
 
@@ -52,7 +60,7 @@
   width: 56px;
   height: 56px;
   border-radius: 8px;
-  background: linear-gradient(160deg, var(--catn8-albums-accent), var(--catn8-albums-leaf));
+  background: linear-gradient(160deg, #d4a97f, #b88458);
   background-size: cover;
   background-position: center;
   flex-shrink: 0;
@@ -76,6 +84,11 @@
   padding: 1rem;
 }
 
+.catn8-album-toolbar.is-fullscreen {
+  border-radius: 0;
+  margin: 0;
+}
+
 .catn8-album-controls {
   display: flex;
   align-items: center;
@@ -91,22 +104,36 @@
   color: var(--catn8-albums-ink);
 }
 
-.catn8-scrapbook-viewer {
+.catn8-scrapbook-stage {
   margin-top: 1rem;
+}
+
+.catn8-scrapbook-stage.is-fullscreen {
+  margin-top: 0;
+  min-height: calc(100vh - 80px);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 247, 229, 0.4), transparent 38%),
+    linear-gradient(140deg, #4a2f1f, #27170c);
+  padding: 1rem;
+}
+
+.catn8-scrapbook-viewer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 0.95fr 1.05fr;
   gap: 1rem;
   padding: 1rem;
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 236, 0.94)),
-    repeating-linear-gradient(0deg, rgba(88, 77, 118, 0.05), rgba(88, 77, 118, 0.05) 1px, transparent 1px, transparent 22px);
+    linear-gradient(115deg, rgba(255, 250, 237, 0.97), rgba(247, 232, 206, 0.96)),
+    repeating-linear-gradient(0deg, rgba(108, 75, 46, 0.08), rgba(108, 75, 46, 0.08) 1px, transparent 1px, transparent 22px);
   transform-origin: top center;
+  border: 6px solid var(--catn8-albums-wood);
+  box-shadow: 0 18px 40px var(--catn8-albums-shadow);
 }
 
 .catn8-scrapbook-page-left,
 .catn8-scrapbook-page-right {
-  border-radius: 16px;
-  border: 1px solid rgba(31, 29, 53, 0.14);
+  border-radius: 12px;
+  border: 1px solid rgba(74, 48, 28, 0.18);
   padding: 1rem;
   background: var(--catn8-albums-paper);
 }
@@ -118,7 +145,13 @@
   padding: 0.28rem 0.58rem;
   border-radius: 999px;
   margin-bottom: 0.8rem;
-  background: color-mix(in srgb, var(--fun-green) 32%, white);
+  background: #e3ccb0;
+  color: #51331d;
+}
+
+.catn8-memory-text {
+  white-space: pre-wrap;
+  line-height: 1.55;
 }
 
 .catn8-scrapbook-chip-row {
@@ -131,33 +164,43 @@
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
   font-size: 0.8rem;
-  background: color-mix(in srgb, var(--fun-purple) 18%, white);
+  background: #efddc6;
+  color: #5b3f2a;
 }
 
 .catn8-polaroid-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.85rem;
 }
 
 .catn8-polaroid {
+  margin: 0;
   background: #fff;
-  border: 1px solid rgba(31, 29, 53, 0.15);
+  border: 1px solid rgba(56, 42, 27, 0.2);
   border-radius: 8px;
   padding: 0.4rem;
-  box-shadow: 0 6px 20px rgba(31, 29, 53, 0.1);
+  box-shadow: 0 10px 24px rgba(31, 29, 53, 0.12);
 }
 
 .catn8-polaroid-photo {
-  height: 90px;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
   border-radius: 4px;
-  background: linear-gradient(140deg, color-mix(in srgb, var(--fun-purple) 20%, white), color-mix(in srgb, var(--fun-green) 20%, white));
+  display: block;
+  background: linear-gradient(140deg, #d2b18f, #f5e7d1);
+}
+
+.catn8-polaroid-photo.is-placeholder {
+  background: linear-gradient(140deg, #d8c8b4, #f6ecdf);
 }
 
 .catn8-polaroid-caption {
-  font-size: 0.78rem;
-  margin-top: 0.35rem;
-  color: rgba(47, 41, 69, 0.8);
+  font-size: 0.82rem;
+  margin-top: 0.45rem;
+  color: rgba(47, 41, 69, 0.88);
+  line-height: 1.45;
 }
 
 .catn8-album-admin {

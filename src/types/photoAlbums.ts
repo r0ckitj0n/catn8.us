@@ -39,6 +39,13 @@ export interface PhotoAlbumSpec {
     photo_slots: number;
     embellishments: string[];
     background_prompt: string;
+    images?: Array<{
+      src: string;
+      captured_at?: string;
+      source_filename?: string;
+      caption?: string;
+      memory_text?: string;
+    }>;
   }>;
 }
 

@@ -187,40 +187,56 @@ def load_messages(messages_db: Path, contact_handles: Sequence[str]) -> List[Mes
     return out
 
 
-def load_face_assets_filename_map(photos_db: Path) -> Dict[str, str]:
+def load_photos_filename_alias_map(photos_db: Path) -> Dict[str, List[str]]:
     conn = sqlite_ro(photos_db)
     try:
         sql = """
         SELECT DISTINCT
-          LOWER(COALESCE(aa.ZORIGINALFILENAME, a.ZFILENAME, '')) AS key_name,
-          COALESCE(aa.ZORIGINALFILENAME, a.ZFILENAME, '') AS export_name
-        FROM ZDETECTEDFACE df
-        INNER JOIN ZASSET a ON a.Z_PK = df.ZASSETFORFACE
+          COALESCE(aa.ZORIGINALFILENAME, '') AS original_name,
+          COALESCE(a.ZFILENAME, '') AS asset_name
+        FROM ZASSET a
         LEFT JOIN ZADDITIONALASSETATTRIBUTES aa ON aa.Z_PK = a.ZADDITIONALATTRIBUTES
-        WHERE df.ZPERSONFORFACE IN (?, ?)
-          AND TRIM(COALESCE(aa.ZORIGINALFILENAME, a.ZFILENAME, '')) <> ''
+        WHERE TRIM(COALESCE(aa.ZORIGINALFILENAME, a.ZFILENAME, '')) <> ''
         """
-        rows = conn.execute(sql, (VIOLET_FACE_ID, ELEANOR_FACE_ID)).fetchall()
+        rows = conn.execute(sql).fetchall()
     finally:
         conn.close()
 
-    out: Dict[str, str] = {}
+    out: Dict[str, List[str]] = {}
     for r in rows:
-        key = str(r["key_name"] or "").strip().lower()
-        val = str(r["export_name"] or "").strip()
-        if key and val and key not in out:
-            out[key] = val
+        names = []
+        original_name = str(r["original_name"] or "").strip()
+        asset_name = str(r["asset_name"] or "").strip()
+        if original_name:
+            names.append(original_name)
+        if asset_name:
+            names.append(asset_name)
+        for source_name in names:
+            key_full = source_name.lower()
+            key_stem = Path(source_name).stem.lower()
+            if key_full not in out:
+                out[key_full] = []
+            if source_name not in out[key_full]:
+                out[key_full].append(source_name)
+            if key_stem:
+                if key_stem not in out:
+                    out[key_stem] = []
+                if source_name not in out[key_stem]:
+                    out[key_stem].append(source_name)
     return out
 
 
-def safe_photos_export(filename: str, export_dir: Path) -> Optional[Path]:
-    filename = filename.strip()
-    if not filename:
-        return None
+def safe_photos_export(filenames: Sequence[str], export_dir: Path) -> Optional[Path]:
     export_dir.mkdir(parents=True, exist_ok=True)
     out_dir = str(export_dir).replace('"', '\\"')
-    target = filename.replace('"', "")
-    script = f'''
+    last_file: Optional[Path] = None
+
+    for filename in filenames:
+        filename = filename.strip()
+        if not filename:
+            continue
+        target = filename.replace('"', "")
+        script = f'''
 set outFolder to POSIX file "{out_dir}"
 tell application "Photos"
   set matches to every media item whose filename is "{target}"
@@ -231,15 +247,19 @@ tell application "Photos"
   return "ok"
 end tell
 '''
-    try:
-        proc = subprocess.run(["osascript", "-e", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
-    except subprocess.TimeoutExpired:
-        return None
-    if proc.returncode != 0:
-        return None
+        try:
+            proc = subprocess.run(["osascript", "-e", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            continue
+        if proc.returncode != 0:
+            continue
 
-    candidates = sorted([p for p in export_dir.glob("*") if p.is_file() and p.name.lower().startswith(Path(filename).stem.lower())], key=lambda p: p.stat().st_mtime, reverse=True)
-    return candidates[0] if candidates else None
+        candidates = sorted([p for p in export_dir.glob("*") if p.is_file() and p.name.lower().startswith(Path(filename).stem.lower())], key=lambda p: p.stat().st_mtime, reverse=True)
+        if candidates:
+            last_file = candidates[0]
+            break
+
+    return last_file
 
 
 def convert_to_png(src: Path, dst: Path) -> bool:
@@ -285,7 +305,7 @@ def message_has_image_attachment(msg: MessageRow) -> bool:
     return msg.attachment_mime.startswith("image/")
 
 
-def build_pages(messages: Sequence[MessageRow], filename_map: Dict[str, str], stage_dir: Path) -> List[PageRow]:
+def build_pages(messages: Sequence[MessageRow], filename_map: Dict[str, List[str]], stage_dir: Path) -> List[PageRow]:
     export_dir = Path(".local/state/photos_timeline_exports")
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -308,9 +328,16 @@ def build_pages(messages: Sequence[MessageRow], filename_map: Dict[str, str], st
             raw_name = Path(msg.attachment_filename).name
             src_name = raw_name
             attach_note = f"Attachment referenced: {raw_name}."
-            key = raw_name.lower()
-            export_name = filename_map.get(key) or raw_name
-            exported = safe_photos_export(export_name, export_dir)
+            key_full = raw_name.lower()
+            key_stem = Path(raw_name).stem.lower()
+            candidates: List[str] = []
+            for k in (key_full, key_stem):
+                for c in filename_map.get(k, []):
+                    if c not in candidates:
+                        candidates.append(c)
+            if raw_name not in candidates:
+                candidates.append(raw_name)
+            exported = safe_photos_export(candidates, export_dir)
             if exported and exported.exists():
                 page_counter += 1
                 out_name = f"page_{page_counter:04d}.png"
@@ -319,9 +346,9 @@ def build_pages(messages: Sequence[MessageRow], filename_map: Dict[str, str], st
                     image_rel = f"/photo_albums/{out_name}"
                     attach_note = f"Attachment linked: {raw_name}."
                 else:
-                    attach_note = f"Attachment referenced: {raw_name} (conversion failed)."
+                    attach_note = f"Attachment referenced: {raw_name} (image conversion unavailable)."
             else:
-                attach_note = f"Attachment referenced: {raw_name} (not exportable from Photos yet)."
+                attach_note = f"Attachment referenced: {raw_name} (image currently unavailable)."
 
         # Always keep memory page if keyword or attachment exists
         caption_parts = []
@@ -542,8 +569,8 @@ def main() -> None:
     messages = load_messages(messages_db, contact_handles)
     print(f"Loaded {len(messages)} messages in window {START_DATE}..{END_DATE}.")
 
-    filename_map = load_face_assets_filename_map(photos_db)
-    print(f"Loaded {len(filename_map)} face-linked filenames from Photos DB.")
+    filename_map = load_photos_filename_alias_map(photos_db)
+    print(f"Loaded {len(filename_map)} filename aliases from Photos DB.")
 
     pages = build_pages(messages, filename_map, stage_dir)
     print(f"Built {len(pages)} candidate pages.")

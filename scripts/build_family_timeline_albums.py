@@ -9,6 +9,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -282,6 +283,24 @@ end tell
     return None
 
 
+def resolve_message_attachment_path(raw_path: str) -> Optional[Path]:
+    raw = (raw_path or "").strip()
+    if not raw:
+        return None
+
+    candidate = raw
+    if raw.startswith("file://"):
+        try:
+            candidate = urllib.parse.unquote(urllib.parse.urlparse(raw).path or "")
+        except Exception:
+            candidate = raw.replace("file://", "", 1)
+
+    p = Path(os.path.expanduser(candidate))
+    if p.exists() and p.is_file():
+        return p.resolve()
+    return None
+
+
 def convert_to_png(src: Path, dst: Path) -> bool:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.suffix.lower() == ".png":
@@ -547,7 +566,14 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 print(f"Skip {title}: no messages")
                 continue
 
+            print(f"[{child.name}] Building '{title}' ({start.isoformat()} to {end.isoformat()}) with {len(messages)} message row(s)")
             pages = []
+            attachment_rows = 0
+            linked_images = 0
+            unavailable_images = 0
+            conversion_failures = 0
+            direct_attachment_hits = 0
+            photos_export_hits = 0
             for i, msg in enumerate(messages):
                 attach_note = ""
                 image_rel = ""
@@ -555,6 +581,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
 
                 raw_name = Path(msg.attachment_filename).name if msg.attachment_filename else ""
                 if raw_name:
+                    attachment_rows += 1
                     src_name = raw_name
                     attach_note = f"Attachment referenced: {raw_name}."
                     cands: List[str] = []
@@ -565,11 +592,19 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                     if raw_name not in cands:
                         cands.append(raw_name)
 
-                    cache_key = (cands[0] if cands else raw_name).lower()
-                    exported = exported_cache.get(cache_key)
-                    if cache_key not in exported_cache:
-                        exported = safe_photos_export(cands, export_dir)
-                        exported_cache[cache_key] = exported
+                    exported = None
+                    local_attachment = resolve_message_attachment_path(msg.attachment_filename)
+                    if local_attachment:
+                        exported = local_attachment
+                        direct_attachment_hits += 1
+                    else:
+                        cache_key = (cands[0] if cands else raw_name).lower()
+                        exported = exported_cache.get(cache_key)
+                        if cache_key not in exported_cache:
+                            exported = safe_photos_export(cands, export_dir)
+                            exported_cache[cache_key] = exported
+                        if exported:
+                            photos_export_hits += 1
 
                     if exported and exported.exists():
                         page_seq += 1
@@ -578,13 +613,23 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                         if convert_to_png(exported, out_path):
                             image_rel = f"/photo_albums/{out_name}"
                             attach_note = f"Attachment linked: {raw_name}."
+                            linked_images += 1
                         else:
                             attach_note = f"Attachment referenced: {raw_name} (image conversion unavailable)."
+                            conversion_failures += 1
                     else:
                         attach_note = f"Attachment referenced: {raw_name} (image currently unavailable)."
+                        unavailable_images += 1
 
                 caption = make_caption(messages, i, attach_note)
                 pages.append((msg.sent_at, caption, image_rel, src_name, msg.text))
+                if (i + 1) == 1 or (i + 1) % 25 == 0 or (i + 1) == len(messages):
+                    print(
+                        f"[{title}] progress {i + 1}/{len(messages)} rows | "
+                        f"attachments={attachment_rows} linked={linked_images} "
+                        f"unavailable={unavailable_images} convert_fail={conversion_failures} "
+                        f"direct_hits={direct_attachment_hits} photos_hits={photos_export_hits}"
+                    )
 
             if not pages:
                 completed.add(title)
@@ -662,6 +707,12 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             slug = sanitize_slug(title)
             album_sql = build_album_sql(title, slug, summary, cover_src, cp, json.dumps(spec, ensure_ascii=True))
             full_sql = sql_prefix + "\n\n" + album_sql + "\n"
+            print(
+                f"[{title}] prepared {len(pages)} page(s), "
+                f"linked_images={linked_images}, unavailable_images={unavailable_images}, "
+                f"conversion_failures={conversion_failures}, "
+                f"direct_attachment_hits={direct_attachment_hits}, photos_export_hits={photos_export_hits}"
+            )
 
             if args.dry_run:
                 print(f"DRY RUN prepared: {title} ({len(pages)} pages)")

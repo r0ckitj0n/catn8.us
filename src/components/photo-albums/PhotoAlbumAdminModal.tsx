@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
+import { auditPhotoAlbum } from '../../utils/photoAlbumAudit';
 import { sanitizeAlbumMessageText } from '../../utils/photoAlbumText';
 import { PhotoAlbumStage } from './PhotoAlbumStage';
 
@@ -14,6 +15,7 @@ interface PhotoAlbumAdminModalProps {
   canNext: boolean;
   onPrevPage: () => void;
   onNextPage: () => void;
+  onFullscreenPreview: () => void;
   onClose: () => void;
   onSave: () => void;
   onDelete: () => void;
@@ -31,6 +33,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     canNext,
     onPrevPage,
     onNextPage,
+    onFullscreenPreview,
     onClose,
     onSave,
     onDelete,
@@ -43,17 +46,40 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
 
   const spread = album.spec.spreads[pageIndex] || null;
   const images = Array.isArray(spread?.images) ? spread.images : [];
+  const audit = React.useMemo(() => auditPhotoAlbum(album), [album]);
 
   return (
     <div className="catn8-admin-modal-overlay" role="dialog" aria-modal="true">
       <div className="catn8-admin-modal-shell">
         <div className="catn8-admin-modal-header">
           <h2 className="h4 m-0">Edit Photo Album</h2>
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+          <div className="d-flex gap-2">
+            <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+          </div>
         </div>
 
         <div className="catn8-admin-modal-body">
           <div className="catn8-admin-editor-panel">
+            <div className="catn8-card p-3 mb-3">
+              <h3 className="h6">Album Wiring Audit</h3>
+              <div className="small">
+                Spreads: {audit.totalSpreads} | Missing media spreads: {audit.spreadsMissingMedia.length} | Missing text spreads: {audit.spreadsMissingText.length} | Missing both: {audit.spreadsMissingBoth.length}
+              </div>
+              <div className="small text-muted mt-1">
+                Empty media refs: {audit.mediaEntriesMissingSource} | Questionable media paths: {audit.mediaEntriesQuestionableSource}
+              </div>
+              {audit.spreadsMissingBoth.length > 0 ? (
+                <div className="form-text">Spreads missing both media and text: {audit.spreadsMissingBoth.slice(0, 20).join(', ')}</div>
+              ) : null}
+              {audit.spreadsMissingMedia.length > 0 ? (
+                <div className="form-text">Spreads missing media: {audit.spreadsMissingMedia.slice(0, 20).join(', ')}</div>
+              ) : null}
+              {audit.spreadsMissingText.length > 0 ? (
+                <div className="form-text">Spreads missing readable text: {audit.spreadsMissingText.slice(0, 20).join(', ')}</div>
+              ) : null}
+            </div>
+
             <div className="catn8-card p-3 mb-3">
               <label className="form-label">Album Title</label>
               <input
@@ -205,7 +231,15 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
           </div>
 
           <div className="catn8-admin-preview-panel">
-            <PhotoAlbumStage album={album} spreadIndex={pageIndex} zoom={zoom} />
+            <PhotoAlbumStage
+              album={album}
+              spreadIndex={pageIndex}
+              zoom={zoom}
+              canPrev={canPrev}
+              canNext={canNext}
+              onPrev={onPrevPage}
+              onNext={onNextPage}
+            />
           </div>
         </div>
       </div>

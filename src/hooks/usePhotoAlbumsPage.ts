@@ -140,6 +140,14 @@ export function usePhotoAlbumsPage(
     setAdminDraft(null);
   }, []);
 
+  const openSelectedInViewer = React.useCallback(() => {
+    if (!selectedAlbum && !adminDraft) {
+      return;
+    }
+    setShowAdminModal(false);
+    setShowAlbumViewer(true);
+  }, [adminDraft, selectedAlbum]);
+
   const { createWithAi, saveAdminEdits, deleteSelectedAlbum } = usePhotoAlbumsMutations({
     isAdmin,
     createForm,
@@ -191,6 +199,7 @@ export function usePhotoAlbumsPage(
     showAdminModal,
     adminDraft,
     openAlbum,
+    openSelectedInViewer,
     closeAlbumViewer,
     closeAdminModal,
     saveAdminEdits,

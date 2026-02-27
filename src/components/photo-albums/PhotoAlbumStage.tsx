@@ -2,11 +2,17 @@ import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
 import { inferAlbumTheme, sanitizeAlbumMessageText, splitAlbumMessages } from '../../utils/photoAlbumText';
+import { PhotoAlbumElementViewer } from './PhotoAlbumElementViewer';
+import { PreparedMediaItem, ViewerTarget, ViewerType } from './types';
 
 interface PhotoAlbumStageProps {
   album: PhotoAlbum;
   spreadIndex: number;
   zoom: number;
+  canPrev?: boolean;
+  canNext?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 function isVideoMedia(src: string, mediaType?: string): boolean {
@@ -50,7 +56,7 @@ function seededScatterStyle(seed: string, index: number, width: number, zBoost =
     top: `${top}%`,
     left: `${left}%`,
     width: `${width}px`,
-    transform: `rotate(${rotate}deg)`,
+    transform: `rotate(${rotate}deg) scale(var(--catn8-card-scale, 1))`,
     zIndex: 5 + (index % 5) + zBoost,
   };
 }
@@ -73,20 +79,123 @@ function uniqueMessages(values: string[]): string[] {
   return out;
 }
 
-export function PhotoAlbumStage({ album, spreadIndex, zoom }: PhotoAlbumStageProps) {
-  const spread = album.spec.spreads[spreadIndex] || null;
+function spreadMessages(album: PhotoAlbum, targetSpreadIndex: number): string[] {
+  const spread = album.spec?.spreads?.[targetSpreadIndex];
   const images = Array.isArray(spread?.images) ? spread.images : [];
-
-  const messages = uniqueMessages([
+  return uniqueMessages([
     ...splitAlbumMessages(spread?.caption || ''),
     ...images.map((image) => splitAlbumMessages(image.memory_text || image.caption || '')).flat(),
   ]);
+}
 
+function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMediaItem[] {
+  const spread = album.spec?.spreads?.[targetSpreadIndex];
+  const images = Array.isArray(spread?.images) ? spread.images : [];
+  const list: PreparedMediaItem[] = [];
+  images.forEach((image, index) => {
+    const src = String(image.display_src || image.src || '').trim();
+    if (!src) {
+      return;
+    }
+    const caption = sanitizeAlbumMessageText(image.caption || image.memory_text || `Memory ${index + 1}`);
+    list.push({
+      key: `${album.id}-${targetSpreadIndex}-${index}-${src}`,
+      src,
+      mediaType: image.media_type,
+      caption,
+    });
+  });
+  return list;
+}
+
+function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1): ViewerTarget | null {
+  const spreads = Array.isArray(album.spec?.spreads) ? album.spec.spreads : [];
+  const itemListAt = (type: ViewerType, sidx: number): number => (type === 'media' ? spreadMedia(album, sidx).length : spreadMessages(album, sidx).length);
+
+  const currentCount = itemListAt(current.type, current.spreadIndex);
+  if (direction === 1 && current.itemIndex + 1 < currentCount) {
+    return { ...current, itemIndex: current.itemIndex + 1 };
+  }
+  if (direction === -1 && current.itemIndex - 1 >= 0) {
+    return { ...current, itemIndex: current.itemIndex - 1 };
+  }
+
+  const start = current.spreadIndex + direction;
+  for (let sidx = start; sidx >= 0 && sidx < spreads.length; sidx += direction) {
+    const count = itemListAt(current.type, sidx);
+    if (count > 0) {
+      return {
+        type: current.type,
+        spreadIndex: sidx,
+        itemIndex: direction === 1 ? 0 : count - 1,
+      };
+    }
+  }
+
+  return null;
+}
+
+export function PhotoAlbumStage({
+  album,
+  spreadIndex,
+  zoom,
+  canPrev = false,
+  canNext = false,
+  onPrev,
+  onNext,
+}: PhotoAlbumStageProps) {
+  const spread = album.spec.spreads[spreadIndex] || null;
+  const images = spreadMedia(album, spreadIndex);
+  const messages = spreadMessages(album, spreadIndex);
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...messages].join(' '));
+
+  const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
+
+  React.useEffect(() => {
+    setViewerTarget(null);
+  }, [album.id, spreadIndex]);
+
+  const activeMedia = React.useMemo(() => {
+    if (!viewerTarget || viewerTarget.type !== 'media') {
+      return null;
+    }
+    const list = spreadMedia(album, viewerTarget.spreadIndex);
+    return list[viewerTarget.itemIndex] || null;
+  }, [album, viewerTarget]);
+
+  const activeNote = React.useMemo(() => {
+    if (!viewerTarget || viewerTarget.type !== 'note') {
+      return null;
+    }
+    const list = spreadMessages(album, viewerTarget.spreadIndex);
+    return list[viewerTarget.itemIndex] || '';
+  }, [album, viewerTarget]);
+
+  const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1) : null;
+  const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1) : null;
 
   return (
     <div className="catn8-scrapbook-stage catn8-scrapbook-stage-user">
       <div className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={{ transform: `scale(${zoom})` }}>
+        <button
+          type="button"
+          className="catn8-stage-nav catn8-stage-nav-prev"
+          onClick={onPrev}
+          disabled={!canPrev || typeof onPrev !== 'function'}
+          aria-label="Previous spread"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="catn8-stage-nav catn8-stage-nav-next"
+          onClick={onNext}
+          disabled={!canNext || typeof onNext !== 'function'}
+          aria-label="Next spread"
+        >
+          ›
+        </button>
+
         <div className="catn8-scrapbook-stage-header">
           <span className="catn8-scrapbook-page-tag">Spread {spreadIndex + 1}</span>
           <h3>{sanitizeAlbumMessageText(spread?.title || 'Untitled Spread')}</h3>
@@ -99,24 +208,20 @@ export function PhotoAlbumStage({ album, spreadIndex, zoom }: PhotoAlbumStagePro
         </div>
 
         <div className="catn8-scatter-canvas">
-          {images.map((image, index) => {
-            const mediaKey = `${album.id}-${spreadIndex}-${index}-${image.src || image.display_src || 'media'}`;
-            const imageSrc = image.display_src || image.src;
-            const caption = sanitizeAlbumMessageText(image.caption || image.memory_text || 'Memory');
+          {images.map((item, index) => {
+            const imageSrc = item.src;
+            const caption = item.caption;
             return (
               <figure
                 className="catn8-scatter-card catn8-scatter-media"
-                key={mediaKey}
-                style={seededScatterStyle(mediaKey, index, 250)}
+                key={item.key}
+                style={seededScatterStyle(item.key, index, 250)}
+                onClick={() => setViewerTarget({ type: 'media', spreadIndex, itemIndex: index })}
               >
-                {imageSrc ? (
-                  isVideoMedia(imageSrc, image.media_type) ? (
-                    <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
-                  ) : (
-                    <img className="catn8-polaroid-photo" src={imageSrc} alt={caption || `Memory ${index + 1}`} loading="lazy" />
-                  )
+                {isVideoMedia(imageSrc, item.mediaType) ? (
+                  <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
                 ) : (
-                  <div className="catn8-polaroid-photo is-placeholder" />
+                  <img className="catn8-polaroid-photo" src={imageSrc} alt={caption || `Memory ${index + 1}`} loading="lazy" />
                 )}
                 <figcaption className="catn8-polaroid-caption">{caption || 'Memory'}</figcaption>
               </figure>
@@ -130,6 +235,7 @@ export function PhotoAlbumStage({ album, spreadIndex, zoom }: PhotoAlbumStagePro
                 className="catn8-scatter-card catn8-scatter-note"
                 key={key}
                 style={seededScatterStyle(key, index + images.length, 230, 3)}
+                onClick={() => setViewerTarget({ type: 'note', spreadIndex, itemIndex: index })}
               >
                 <div className="catn8-scatter-note-inner" style={{ borderColor: theme.borderColor, backgroundColor: theme.accentColor }}>
                   <span className="catn8-scatter-note-emoji">{theme.emojis[index % theme.emojis.length]}</span>
@@ -138,8 +244,32 @@ export function PhotoAlbumStage({ album, spreadIndex, zoom }: PhotoAlbumStagePro
               </div>
             );
           })}
+
+          {images.length === 0 ? (
+            <div className="catn8-scatter-empty" style={seededScatterStyle(`${album.id}-${spreadIndex}-no-media`, 0, 260, 2)}>
+              No photo/video linked on this spread yet.
+            </div>
+          ) : null}
+
+          {messages.length === 0 ? (
+            <div className="catn8-scatter-empty" style={seededScatterStyle(`${album.id}-${spreadIndex}-no-text`, 1, 260, 2)}>
+              No readable text found on this spread.
+            </div>
+          ) : null}
         </div>
       </div>
+
+      {viewerTarget ? (
+        <PhotoAlbumElementViewer
+          target={viewerTarget}
+          activeMedia={activeMedia}
+          activeNote={activeNote}
+          prevTarget={prevTarget}
+          nextTarget={nextTarget}
+          onClose={() => setViewerTarget(null)}
+          onNavigate={setViewerTarget}
+        />
+      ) : null}
     </div>
   );
 }

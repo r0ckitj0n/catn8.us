@@ -57,6 +57,17 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     }
   }, [state]);
 
+  const openAdminFullscreenPreview = React.useCallback(async () => {
+    state.openSelectedInViewer();
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // fullscreen can be blocked by browser context
+    }
+  }, [state]);
+
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section catn8-photo-albums-page">
@@ -126,7 +137,15 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 </div>
               </div>
 
-              <PhotoAlbumStage album={selectedAlbum} spreadIndex={state.pageIndex} zoom={state.zoom} />
+              <PhotoAlbumStage
+                album={selectedAlbum}
+                spreadIndex={state.pageIndex}
+                zoom={state.zoom}
+                canPrev={state.canPrev}
+                canNext={state.canNext}
+                onPrev={state.prevPage}
+                onNext={state.nextPage}
+              />
             </div>
           ) : null}
         </div>
@@ -151,6 +170,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         canNext={state.canNext}
         onPrevPage={state.prevPage}
         onNextPage={state.nextPage}
+        onFullscreenPreview={() => { void openAdminFullscreenPreview(); }}
         onClose={state.closeAdminModal}
         onSave={state.saveAdminEdits}
         onDelete={state.deleteSelectedAlbum}

@@ -11,4 +11,5 @@ export interface PreparedMediaItem {
   src: string;
   mediaType?: 'image' | 'video';
   caption: string;
+  capturedAtMs?: number;
 }

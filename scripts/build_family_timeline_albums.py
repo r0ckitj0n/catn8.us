@@ -138,10 +138,22 @@ def sanitize_message_text(value: str) -> str:
     v = (value or "").replace("\r", " ").replace("\n", " ").replace("\x00", " ").strip()
     if not v:
         return ""
+    v = v.replace("\ufffc", " ")
     # Remove frequent attributed-string serialization garbage.
     v = re.sub(r"\b(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData)\b", " ", v)
     v = re.sub(r"\bkIM[A-Za-z0-9_]+\b", " ", v)
     v = re.sub(r"\biI\b", " ", v)
+    v = re.split(r"\b(?:NSObject|NSDictionary|NSNumber|NSValue|kIM[A-Za-z0-9_]+)\b", v, maxsplit=1)[0]
+    v = re.split(r"Z\$classname|DDScannerResult|NS\.objects", v, maxsplit=1)[0]
+    v = re.sub(r"\s+[A-Za-z]?NSObject.*$", "", v)
+    v = re.sub(r"^[0-9a-z><]+\s*(?=[A-Z])", "", v)
+    v = re.sub(r"^[0-9]+[\"'`]+\s*(?=[A-Za-z])", "", v)
+    v = re.sub(r"^[\);\:]+\s*(?=[A-Z])", "", v)
+    v = re.sub(r"^[`~!@#$%^&*_=+|\\/:;\"',.?-]+\s*(?=[A-Za-z])", "", v)
+    v = re.sub(r"^[A-Z](?=[A-Z][a-z])", "", v)
+    v = re.sub(r"^[A-HJ-Z]\s+(?=[A-Z][a-z])", "", v)
+    v = re.sub(r"^[A-HJ-Z]\s+(?=I\s+[a-z])", "", v)
+    v = re.sub(r"^[A-Za-z](?=https?://)", "", v)
     v = re.sub(r"\s+", " ", v).strip()
     # Drop lines that are mostly token junk.
     token_hits = len(re.findall(r"\b(NS|NSMutable|NSDictionary|kIM|streamtyped)\w*\b", v))
@@ -186,15 +198,20 @@ def extract_text_from_attributed_body(blob: bytes) -> str:
     except Exception:
         pass
 
-    # Fallback: extract common NSString payload segments from opaque blobs.
+    # Fallback: extract streamtyped/NSString payload segments from opaque blobs.
     try:
         decoded = blob.decode("utf-8", errors="ignore").replace("\x00", " ")
     except Exception:
         return ""
-    segments = re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded)
-    cleaned = []
+
+    segments: List[str] = []
+    segments.extend(re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded, flags=re.S))
+    # Older streamtyped attributed bodies often encode content after '+' and before iI/NSDictionary tokens.
+    segments.extend(re.findall(r"\+[\x00-\x1f]*(.+?)(?:\x02iI|\x01iI|\siI\s|\x02\x0cNSDictionary|\x01\x0cNSDictionary|$)", decoded, flags=re.S))
+
+    cleaned: List[str] = []
     for seg in segments:
-        c = sanitize_message_text(seg)
+        c = sanitize_message_text(re.sub(r"^[\x00-\x1f]+", "", seg))
         if c:
             cleaned.append(c)
     if not cleaned:
@@ -632,23 +649,17 @@ def copy_media(src: Path, dst: Path) -> bool:
 
 def make_caption(messages: Sequence[MessageRow], idx: int, attach_notes: Sequence[str]) -> str:
     focal = messages[idx]
-    speaker = "Jon" if focal.is_from_me else "Contact"
+    speaker = "Jon" if focal.is_from_me else "Trinity"
 
     lines: List[str] = []
-    for j in range(max(0, idx - 2), min(len(messages), idx + 3)):
-        m = messages[j]
-        t = (m.text or "").strip()
-        if not t:
-            continue
-        who = "Jon" if m.is_from_me else "Contact"
-        lines.append(f"{who}: {t}")
-
-    if not lines and focal.text.strip():
-        lines = [f"{speaker}: {focal.text.strip()}"]
+    focal_text = (focal.text or "").strip()
+    if focal_text:
+        stamp = focal.sent_at.strftime("%I:%M %p").lstrip("0")
+        lines = [f"{speaker} ({stamp}): {focal_text}"]
 
     parts: List[str] = []
     if lines:
-        parts.append("\n".join(lines[:6]))
+        parts.append(lines[0])
     if attach_notes:
         parts.append("\n".join(attach_notes[:6]))
     return "\n\n".join([p for p in parts if p.strip()]) or f"{speaker}: (no message text)"
@@ -701,16 +712,34 @@ def aggregate_pages_by_day(
             bucket["images"].append(image)
 
     out: List[Tuple[dt.datetime, str, List[Dict[str, str]], str]] = []
+    seen_lines: Set[str] = set()
     for day in sorted(buckets.keys()):
         bucket = buckets[day]
         images = list(bucket["images"])[:max_images_per_day]
-        captions = list(bucket["captions"])[:12]
-        raw_texts = list(bucket["raw_texts"])[:20]
+        raw_captions = list(bucket["captions"])[:24]
+        raw_texts = list(bucket["raw_texts"])[:24]
+
+        captions: List[str] = []
+        for line in raw_captions:
+            key = sanitize_message_text(line).lower()
+            if not key or key in seen_lines:
+                continue
+            seen_lines.add(key)
+            captions.append(line)
+            if len(captions) >= 12:
+                break
 
         if not captions and raw_texts:
-            captions = raw_texts[:12]
+            for line in raw_texts:
+                key = sanitize_message_text(line).lower()
+                if not key or key in seen_lines:
+                    continue
+                seen_lines.add(key)
+                captions.append(line)
+                if len(captions) >= 12:
+                    break
         caption = "\n".join(captions).strip() or "(no message text)"
-        raw_joined = " | ".join(raw_texts)
+        raw_joined = " | ".join(captions[:20])
 
         # Keep only days with usable content.
         if not images and caption == "(no message text)":
@@ -959,6 +988,7 @@ def main() -> None:
 
     album_count = 0
     uploaded_album_count = 0
+    reached_max_cap = False
     exported_cache: Dict[str, Optional[Path]] = {}
     media_seq = 0
 
@@ -996,7 +1026,8 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             if args.max_albums > 0 and album_count >= args.max_albums:
                 save_state(state_file, state)
                 print(f"Reached max albums cap ({args.max_albums}).")
-                return
+                reached_max_cap = True
+                break
 
             messages = load_messages(messages_db, child_handles, start, end)
             if not messages:
@@ -1265,6 +1296,9 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             save_state(state_file, state)
             album_count += 1
             print(f"Completed: {title} ({len(pages)} pages)")
+
+        if reached_max_cap:
+            break
 
     if args.dry_run:
         print("Dry run finished; live database was not updated and deploy was skipped.")

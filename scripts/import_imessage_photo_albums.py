@@ -141,15 +141,33 @@ def apple_ts_to_datetime(value: Any) -> Optional[dt.datetime]:
         raw = int(value)
     except Exception:
         return None
+    epoch = dt.datetime(2001, 1, 1, tzinfo=dt.timezone.utc)
+    secs = raw / 1_000_000_000 if raw > 10_000_000_000 else float(raw)
+    try:
+        return (epoch + dt.timedelta(seconds=secs)).astimezone()
+    except Exception:
+        return None
 
 
 def sanitize_message_text(value: str) -> str:
     v = (value or "").replace("\r", " ").replace("\n", " ").replace("\x00", " ").strip()
     if not v:
         return ""
+    v = v.replace("\ufffc", " ")
     v = re.sub(r"\b(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData)\b", " ", v)
     v = re.sub(r"\bkIM[A-Za-z0-9_]+\b", " ", v)
     v = re.sub(r"\biI\b", " ", v)
+    v = re.split(r"\b(?:NSObject|NSDictionary|NSNumber|NSValue|kIM[A-Za-z0-9_]+)\b", v, maxsplit=1)[0]
+    v = re.split(r"Z\$classname|DDScannerResult|NS\.objects", v, maxsplit=1)[0]
+    v = re.sub(r"\s+[A-Za-z]?NSObject.*$", "", v)
+    v = re.sub(r"^[0-9a-z><]+\s*(?=[A-Z])", "", v)
+    v = re.sub(r"^[0-9]+[\"'`]+\s*(?=[A-Za-z])", "", v)
+    v = re.sub(r"^[\);\:]+\s*(?=[A-Z])", "", v)
+    v = re.sub(r"^[`~!@#$%^&*_=+|\\/:;\"',.?-]+\s*(?=[A-Za-z])", "", v)
+    v = re.sub(r"^[A-Z](?=[A-Z][a-z])", "", v)
+    v = re.sub(r"^[A-HJ-Z]\s+(?=[A-Z][a-z])", "", v)
+    v = re.sub(r"^[A-HJ-Z]\s+(?=I\s+[a-z])", "", v)
+    v = re.sub(r"^[A-Za-z](?=https?://)", "", v)
     v = re.sub(r"\s+", " ", v).strip()
     token_hits = len(re.findall(r"\b(NS|NSMutable|NSDictionary|kIM|streamtyped)\w*\b", v))
     if token_hits >= 3:
@@ -195,21 +213,17 @@ def extract_text_from_attributed_body(blob: bytes) -> str:
         decoded = blob.decode("utf-8", errors="ignore").replace("\x00", " ")
     except Exception:
         return ""
-    segments = re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded)
+    segments: List[str] = []
+    segments.extend(re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded, flags=re.S))
+    segments.extend(re.findall(r"\+[\x00-\x1f]*(.+?)(?:\x02iI|\x01iI|\siI\s|\x02\x0cNSDictionary|\x01\x0cNSDictionary|$)", decoded, flags=re.S))
     out: List[str] = []
     seen2: set[str] = set()
     for seg in segments:
-        c = sanitize_message_text(seg)
+        c = sanitize_message_text(re.sub(r"^[\x00-\x1f]+", "", seg))
         if c and c not in seen2:
             seen2.add(c)
             out.append(c)
     return " ".join(out[:8]).strip()
-    epoch = dt.datetime(2001, 1, 1, tzinfo=dt.timezone.utc)
-    secs = raw / 1_000_000_000 if raw > 10_000_000_000 else float(raw)
-    try:
-        return (epoch + dt.timedelta(seconds=secs)).astimezone()
-    except Exception:
-        return None
 
 
 def load_named_faces(photos_conn: sqlite3.Connection) -> List[FacePerson]:
@@ -446,28 +460,13 @@ def is_image_path(path: Optional[Path], mime: str) -> bool:
 
 
 def build_rich_caption(messages: Sequence[MessageRow], index: int) -> str:
-    snippets: List[str] = []
     focal = messages[index]
-    for j in range(max(0, index - 4), min(len(messages), index + 5)):
-        t = (messages[j].text or "").strip()
-        if not t:
-            continue
-        if abs((messages[j].sent_at - focal.sent_at).total_seconds()) > 12 * 3600:
-            continue
-        snippets.append(t)
-    if not snippets:
+    text = (focal.text or "").strip()
+    if not text:
         return "(no caption)"
-    uniq: List[str] = []
-    seen: set[str] = set()
-    for s in snippets:
-        k = s.lower().strip()
-        if k in seen:
-            continue
-        seen.add(k)
-        uniq.append(s)
-        if len(uniq) >= 4:
-            break
-    return " | ".join(uniq)
+    speaker = "Jon" if int(focal.is_from_me or 0) else "Trinity"
+    stamp = focal.sent_at.strftime("%I:%M %p").lstrip("0")
+    return f"{speaker} ({stamp}): {text}"
 
 
 def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 24) -> List[AlbumPage]:
@@ -491,9 +490,19 @@ def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: 
             bucket["media_items"].append((rel_path, source_name))
 
     out: List[AlbumPage] = []
+    seen_lines: set[str] = set()
     for day in sorted(buckets.keys()):
         bucket = buckets[day]
-        caption = " | ".join(bucket["captions"][:12]).strip() or "(no caption)"
+        unique_captions: List[str] = []
+        for line in bucket["captions"]:
+            k = sanitize_message_text(line).lower()
+            if not k or k in seen_lines:
+                continue
+            seen_lines.add(k)
+            unique_captions.append(line)
+            if len(unique_captions) >= 12:
+                break
+        caption = "\\n".join(unique_captions).strip() or "(no caption)"
         media_items = list(bucket["media_items"])[:max_media_per_day]
         if not media_items and caption == "(no caption)":
             continue

@@ -5,6 +5,21 @@
   --catn8-albums-wood: #8f6848;
 }
 
+body.catn8-photo-albums-fullscreen .navbar.sticky-top {
+  display: none !important;
+}
+
+body.catn8-photo-albums-fullscreen .catn8-photo-albums-page {
+  padding: 0;
+}
+
+body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
 .catn8-photo-albums-list-shell {
   padding: 1.25rem;
   background:
@@ -70,6 +85,21 @@
 
 .catn8-photo-albums-main.is-fullscreen {
   padding: 0;
+}
+
+.catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-stage-user {
+  margin-top: 0;
+  min-height: 100dvh;
+}
+
+.catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-scatter {
+  min-height: 100dvh;
+  border-width: 0;
+  box-shadow: none;
+}
+
+.catn8-photo-albums-main.is-fullscreen .catn8-scatter-canvas {
+  min-height: calc(100dvh - 5.5rem);
 }
 
 .catn8-album-toolbar {
@@ -185,6 +215,11 @@
   color: #51331d;
 }
 
+.catn8-scrapbook-page-tag-button {
+  border: 0;
+  cursor: pointer;
+}
+
 .catn8-scrapbook-stage-header h3 {
   margin: 0;
   font-size: 1.1rem;
@@ -200,8 +235,10 @@
 }
 
 .catn8-scatter-emoji {
+  position: absolute;
   font-size: 1.25rem;
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.18));
+  user-select: none;
 }
 
 .catn8-scatter-canvas {
@@ -253,6 +290,7 @@
   margin-top: 0.45rem;
   color: rgba(47, 41, 69, 0.88);
   line-height: 1.45;
+  white-space: pre-line;
 }
 
 .catn8-scatter-note {
@@ -276,6 +314,7 @@
   color: #2f2535;
   font-size: 0.84rem;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .catn8-scatter-empty {
@@ -447,15 +486,15 @@
     min-height: 92vh;
   }
 
-  .catn8-scatter-media,
-  .catn8-scatter-note {
+  body:not(.catn8-photo-albums-fullscreen) .catn8-scatter-media,
+  body:not(.catn8-photo-albums-fullscreen) .catn8-scatter-note {
     position: static;
     width: auto;
     transform: none !important;
     margin-bottom: 0.7rem;
   }
 
-  .catn8-scatter-empty {
+  body:not(.catn8-photo-albums-fullscreen) .catn8-scatter-empty {
     position: static;
     width: auto;
     transform: none !important;
@@ -470,5 +509,13 @@
   .catn8-stage-nav {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .catn8-photo-albums-main.is-fullscreen .catn8-scatter-media,
+  .catn8-photo-albums-main.is-fullscreen .catn8-scatter-note,
+  .catn8-photo-albums-main.is-fullscreen .catn8-scatter-empty {
+    position: absolute;
+    width: auto;
+    margin-bottom: 0;
   }
 }

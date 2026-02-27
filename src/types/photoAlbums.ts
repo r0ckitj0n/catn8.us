@@ -39,6 +39,27 @@ export interface PhotoAlbumSpec {
     photo_slots: number;
     embellishments: string[];
     background_prompt: string;
+    text_items?: Array<{
+      id: string;
+      text: string;
+      speaker?: string;
+      time?: string;
+      x?: number;
+      y?: number;
+      w?: number;
+      rotation?: number;
+      border_color?: string;
+      bg_color?: string;
+      side?: 'left' | 'right';
+    }>;
+    decor_items?: Array<{
+      id: string;
+      emoji: string;
+      x?: number;
+      y?: number;
+      size?: number;
+      rotation?: number;
+    }>;
     images?: Array<{
       src: string;
       media_type?: 'image' | 'video';
@@ -50,6 +71,11 @@ export interface PhotoAlbumSpec {
       source_filename?: string;
       caption?: string;
       memory_text?: string;
+      x?: number;
+      y?: number;
+      w?: number;
+      rotation?: number;
+      border_color?: string;
     }>;
   }>;
 }

@@ -32,6 +32,14 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     return () => document.removeEventListener('fullscreenchange', handleFs);
   }, []);
 
+  React.useEffect(() => {
+    const shouldHideChrome = isFullscreen && state.showAlbumViewer;
+    document.body.classList.toggle('catn8-photo-albums-fullscreen', shouldHideChrome);
+    return () => {
+      document.body.classList.remove('catn8-photo-albums-fullscreen');
+    };
+  }, [isFullscreen, state.showAlbumViewer]);
+
   const openAlbum = React.useCallback(async (albumId: number) => {
     state.openAlbum(albumId);
     if (state.isAdmin) {
@@ -112,30 +120,32 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
 
           {!state.loading && state.showAlbumViewer && selectedAlbum ? (
             <div className={isFullscreen ? 'catn8-photo-albums-main is-fullscreen' : 'catn8-photo-albums-main'}>
-              <div className={isFullscreen ? 'catn8-album-toolbar catn8-card is-fullscreen' : 'catn8-album-toolbar catn8-card'}>
-                <div>
-                  <h2 className="h4 mb-1">{selectedAlbum.title}</h2>
-                  <div className="small text-muted">{selectedAlbum.summary}</div>
+              {!isFullscreen ? (
+                <div className="catn8-album-toolbar catn8-card">
+                  <div>
+                    <h2 className="h4 mb-1">{selectedAlbum.title}</h2>
+                    <div className="small text-muted">{selectedAlbum.summary}</div>
+                  </div>
+                  <div className="catn8-album-controls">
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.prevPage} disabled={!state.canPrev}>Prev Page</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.nextPage} disabled={!state.canNext}>Next Page</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
+                    <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
+                    <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => void closeViewer()}>
+                      Back to Albums
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => downloadDataUrl(selectedAlbum.cover_image_url, `${selectedAlbum.slug}-cover.png`)}
+                      disabled={!selectedAlbum.cover_image_url}
+                    >
+                      Download Cover
+                    </button>
+                  </div>
                 </div>
-                <div className="catn8-album-controls">
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.prevPage} disabled={!state.canPrev}>Prev Page</button>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.nextPage} disabled={!state.canNext}>Next Page</button>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
-                  <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
-                  <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => void closeViewer()}>
-                    {isFullscreen ? 'Exit Fullscreen' : 'Back to Albums'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => downloadDataUrl(selectedAlbum.cover_image_url, `${selectedAlbum.slug}-cover.png`)}
-                    disabled={!selectedAlbum.cover_image_url}
-                  >
-                    Download Cover
-                  </button>
-                </div>
-              </div>
+              ) : null}
 
               <PhotoAlbumStage
                 album={selectedAlbum}
@@ -145,6 +155,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 canNext={state.canNext}
                 onPrev={state.prevPage}
                 onNext={state.nextPage}
+                onBackToAlbums={() => { void closeViewer(); }}
               />
             </div>
           ) : null}

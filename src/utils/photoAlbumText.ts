@@ -1,6 +1,8 @@
 const JUNK_TOKENS = /(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData|CF\$UID|NSInlineData)/gi;
 const JUNK_IM_TOKENS = /\bkIM[A-Za-z0-9_]+\b/g;
 const JUNK_LABELS = /\b(iI|typedstream)\b/gi;
+const SPEAKER_ALIAS = /\bContact\s*:/gi;
+const SPEAKER_BOUNDARY = /\s+(Jon|Trinity|Contact)\s*:\s*/gi;
 
 function cleanWhitespace(value: string): string {
   return value
@@ -22,6 +24,7 @@ export function sanitizeAlbumMessageText(value: unknown): string {
     .replace(JUNK_TOKENS, ' ')
     .replace(JUNK_IM_TOKENS, ' ')
     .replace(JUNK_LABELS, ' ')
+    .replace(SPEAKER_ALIAS, 'Trinity:')
     .replace(/\s*\|\s*/g, ' | ')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -47,9 +50,10 @@ export function splitAlbumMessages(value: unknown): string[] {
     return [];
   }
 
-  const parts = cleaned
+  const speakerSplit = cleaned.replace(SPEAKER_BOUNDARY, '\n$1: ');
+  const parts = speakerSplit
     .split(/\s+\|\s+|\n+/)
-    .map((part) => sanitizeAlbumMessageText(part))
+    .map((part) => sanitizeAlbumMessageText(part).replace(SPEAKER_ALIAS, 'Trinity:'))
     .filter((part) => part.length > 1);
 
   const seen = new Set<string>();
@@ -64,6 +68,14 @@ export function splitAlbumMessages(value: unknown): string[] {
   }
 
   return unique;
+}
+
+export function formatAlbumCaption(value: unknown, maxLines = 4): string {
+  const lines = splitAlbumMessages(value);
+  if (lines.length === 0) {
+    return sanitizeAlbumMessageText(value);
+  }
+  return lines.slice(0, Math.max(1, maxLines)).join('\n');
 }
 
 export interface AlbumTheme {

@@ -40,13 +40,63 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onAlbumChange,
   } = props;
 
+  const spread = album?.spec.spreads[pageIndex] || null;
+  const images = Array.isArray(spread?.images) ? spread.images : [];
+  const audit = React.useMemo(() => {
+    if (!album) {
+      return {
+        totalSpreads: 0,
+        spreadsMissingMedia: [] as number[],
+        spreadsMissingText: [] as number[],
+        spreadsMissingBoth: [] as number[],
+        mediaEntriesMissingSource: 0,
+        mediaEntriesQuestionableSource: 0,
+      };
+    }
+    return auditPhotoAlbum(album);
+  }, [album]);
+  const textItems = Array.isArray(spread?.text_items) ? spread.text_items : [];
+  const decorItems = Array.isArray(spread?.decor_items) ? spread.decor_items : [];
+
+  React.useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  const ensureTextItems = React.useCallback(() => {
+    if (!album) {
+      return;
+    }
+    onAlbumChange((prev) => {
+      const next = structuredClone(prev);
+      const target = next.spec.spreads[pageIndex];
+      if (!target) {
+        return prev;
+      }
+      if (Array.isArray(target.text_items) && target.text_items.length > 0) {
+        return next;
+      }
+      const lines = sanitizeAlbumMessageText(target.caption || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      target.text_items = lines.map((line, index) => ({
+        id: `note-${Date.now()}-${index}`,
+        text: line.replace(/^Contact\s*:/i, 'Trinity:'),
+      }));
+      return next;
+    });
+  }, [album, onAlbumChange, pageIndex]);
+
   if (!open || !album) {
     return null;
   }
-
-  const spread = album.spec.spreads[pageIndex] || null;
-  const images = Array.isArray(spread?.images) ? spread.images : [];
-  const audit = React.useMemo(() => auditPhotoAlbum(album), [album]);
 
   return (
     <div className="catn8-admin-modal-overlay" role="dialog" aria-modal="true">
@@ -172,6 +222,73 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
 
             <div className="catn8-card p-3 mb-3">
               <h3 className="h6">Media + Text</h3>
+              <div className="d-flex gap-2 mb-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={ensureTextItems}
+                  disabled={busy}
+                >
+                  Init Text Items
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => onAlbumChange((prev) => {
+                    const next = structuredClone(prev);
+                    const target = next.spec.spreads[pageIndex];
+                    if (!target) {
+                      return prev;
+                    }
+                    if (!Array.isArray(target.decor_items)) {
+                      target.decor_items = [];
+                    }
+                    target.decor_items.push({ id: `decor-${Date.now()}`, emoji: '✨', x: 20, y: 20, size: 1 });
+                    return next;
+                  })}
+                  disabled={busy}
+                >
+                  Add Clipart
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => onAlbumChange((prev) => {
+                    const next = structuredClone(prev);
+                    const target = next.spec.spreads[pageIndex];
+                    if (!target) {
+                      return prev;
+                    }
+                    if (!Array.isArray(target.images)) {
+                      target.images = [];
+                    }
+                    target.images.push({ src: '', media_type: 'image', caption: '', memory_text: '', x: 12, y: 12, w: 18 });
+                    return next;
+                  })}
+                  disabled={busy}
+                >
+                  Add Media
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => onAlbumChange((prev) => {
+                    const next = structuredClone(prev);
+                    const target = next.spec.spreads[pageIndex];
+                    if (!target) {
+                      return prev;
+                    }
+                    if (!Array.isArray(target.text_items)) {
+                      target.text_items = [];
+                    }
+                    target.text_items.push({ id: `note-${Date.now()}`, text: 'Jon: New note', x: 10, y: 10, w: 20 });
+                    return next;
+                  })}
+                  disabled={busy}
+                >
+                  Add Text
+                </button>
+              </div>
               {images.map((image, index) => (
                 <div className="catn8-admin-image-editor" key={`admin-image-${index}`}>
                   <label className="form-label">Media URL {index + 1}</label>
@@ -220,6 +337,202 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                       return next;
                     })}
                   />
+                  <div className="row g-2 mt-1">
+                    <div className="col-4">
+                      <label className="form-label">X%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(image.x ?? 10)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.images?.[index];
+                          if (target) {
+                            target.x = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label">Y%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(image.y ?? 10)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.images?.[index];
+                          if (target) {
+                            target.y = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label">W%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(image.w ?? 18)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.images?.[index];
+                          if (target) {
+                            target.w = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex justify-content-end mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      disabled={busy}
+                      onClick={() => onAlbumChange((prev) => {
+                        const next = structuredClone(prev);
+                        const target = next.spec.spreads[pageIndex];
+                        if (target?.images) {
+                          target.images.splice(index, 1);
+                        }
+                        return next;
+                      })}
+                    >
+                      Delete Media
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {textItems.map((item, index) => (
+                <div className="catn8-admin-image-editor" key={item.id || `text-item-${index}`}>
+                  <label className="form-label">Text {index + 1}</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    value={item.text || ''}
+                    disabled={busy}
+                    onChange={(event) => onAlbumChange((prev) => {
+                      const next = structuredClone(prev);
+                      const target = next.spec.spreads[pageIndex]?.text_items?.[index];
+                      if (target) {
+                        target.text = event.target.value;
+                      }
+                      return next;
+                    })}
+                  />
+                  <div className="row g-2 mt-1">
+                    <div className="col-4">
+                      <label className="form-label">X%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(item.x ?? 10)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.text_items?.[index];
+                          if (target) {
+                            target.x = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label">Y%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(item.y ?? 10)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.text_items?.[index];
+                          if (target) {
+                            target.y = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label">W%</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={Number(item.w ?? 20)}
+                        disabled={busy}
+                        onChange={(event) => onAlbumChange((prev) => {
+                          const next = structuredClone(prev);
+                          const target = next.spec.spreads[pageIndex]?.text_items?.[index];
+                          if (target) {
+                            target.w = Number(event.target.value);
+                          }
+                          return next;
+                        })}
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex justify-content-end mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      disabled={busy}
+                      onClick={() => onAlbumChange((prev) => {
+                        const next = structuredClone(prev);
+                        const target = next.spec.spreads[pageIndex];
+                        if (target?.text_items) {
+                          target.text_items.splice(index, 1);
+                        }
+                        return next;
+                      })}
+                    >
+                      Delete Text
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {decorItems.map((item, index) => (
+                <div className="catn8-admin-image-editor" key={item.id || `decor-${index}`}>
+                  <label className="form-label">Clipart Emoji</label>
+                  <input
+                    className="form-control"
+                    value={item.emoji || '✨'}
+                    disabled={busy}
+                    onChange={(event) => onAlbumChange((prev) => {
+                      const next = structuredClone(prev);
+                      const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
+                      if (target) {
+                        target.emoji = event.target.value || '✨';
+                      }
+                      return next;
+                    })}
+                  />
+                  <div className="d-flex justify-content-end mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      disabled={busy}
+                      onClick={() => onAlbumChange((prev) => {
+                        const next = structuredClone(prev);
+                        const target = next.spec.spreads[pageIndex];
+                        if (target?.decor_items) {
+                          target.decor_items.splice(index, 1);
+                        }
+                        return next;
+                      })}
+                    >
+                      Delete Clipart
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -239,6 +552,57 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               canNext={canNext}
               onPrev={onPrevPage}
               onNext={onNextPage}
+              editable
+              onMoveMedia={(index, patch) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const target = next.spec.spreads[pageIndex]?.images?.[index];
+                if (target) {
+                  target.x = patch.x;
+                  target.y = patch.y;
+                }
+                return next;
+              })}
+              onMoveNote={(index, patch) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread) {
+                  return prev;
+                }
+                if (!Array.isArray(targetSpread.text_items)) {
+                  targetSpread.text_items = [];
+                }
+                if (!targetSpread.text_items[index]) {
+                  targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: '' };
+                }
+                targetSpread.text_items[index].x = patch.x;
+                targetSpread.text_items[index].y = patch.y;
+                return next;
+              })}
+              onMoveDecor={(index, patch) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
+                if (target) {
+                  target.x = patch.x;
+                  target.y = patch.y;
+                }
+                return next;
+              })}
+              onEditNoteText={(index, nextText) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread) {
+                  return prev;
+                }
+                if (!Array.isArray(targetSpread.text_items)) {
+                  targetSpread.text_items = [];
+                }
+                if (!targetSpread.text_items[index]) {
+                  targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: nextText };
+                } else {
+                  targetSpread.text_items[index].text = nextText;
+                }
+                return next;
+              })}
             />
           </div>
         </div>

@@ -115,17 +115,15 @@ function parseClockToMinutes(value?: string): number | null {
   return (hour * 60) + minute;
 }
 
-function positionByFlow(index: number, total: number, seed: string): { x: number; y: number; rotate: number } {
-  const hash = hashValue(`${seed}-${index}`);
+function positionByFlow(index: number, total: number, groupCenterX: number, seed: string): { x: number; y: number; rotate: number } {
+  const hash = hashValue(`${seed}-${index}-${groupCenterX}`);
   const progress = total <= 1 ? 0.5 : index / (total - 1);
-  const baseX = 5 + (progress * 84);
   const baseY = 5 + (progress * 84);
-  const jitterX = (((Math.floor(hash / 37) % 100) / 100) - 0.5) * 20;
-  const jitterY = (((Math.floor(hash / 101) % 100) / 100) - 0.5) * 12;
-  const minDiagX = 4 + (progress * 46);
-  const minDiagY = 4 + (progress * 52);
-  const x = clamp(Math.max(baseX + jitterX, minDiagX), 3, 90);
-  const y = clamp(Math.max(baseY + jitterY, minDiagY), 4, 90);
+  const clusterWidth = 7;
+  const jitterX = (((Math.floor(hash / 37) % 100) / 100) - 0.5) * clusterWidth;
+  const jitterY = (((Math.floor(hash / 101) % 100) / 100) - 0.5) * 8;
+  const x = clamp(groupCenterX + jitterX, 3, 90);
+  const y = clamp(baseY + jitterY, 4, 90);
   const rotate = ((Math.floor(hash / 19) % 13) - 6);
   return { x, y, rotate };
 }
@@ -376,29 +374,43 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
 function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], spreadTitle: string): {
   mediaOrder: Map<number, number>;
   noteOrder: Map<number, number>;
+  mediaGroup: Map<number, number>;
+  noteGroup: Map<number, number>;
+  groupCenterXByIndex: Map<number, number>;
   total: number;
+  totalGroups: number;
 } {
   const mediaOrder = new Map<number, number>();
   const noteOrder = new Map<number, number>();
-  const timeline: Array<{ type: 'media' | 'note'; index: number; orderKey: number }> = [];
+  const mediaGroup = new Map<number, number>();
+  const noteGroup = new Map<number, number>();
+  const timeline: Array<{ type: 'media' | 'note'; index: number; orderKey: number; groupKey: number }> = [];
   const spreadDateMs = Date.parse(String(spreadTitle || '').trim());
+  const halfHourMs = 30 * 60 * 1000;
+  let fallbackCursor = 0;
 
   mediaItems.forEach((item, index) => {
     const fallback = 10_000_000_000 + index;
+    const timed = typeof item.capturedAtMs === 'number' ? item.capturedAtMs : null;
+    const groupKey = timed !== null ? Math.floor(timed / halfHourMs) : 9_000_000 + Math.floor(fallbackCursor / 2);
+    fallbackCursor += 1;
     timeline.push({
       type: 'media',
       index,
-      orderKey: typeof item.capturedAtMs === 'number' ? item.capturedAtMs : fallback,
+      orderKey: timed !== null ? timed : fallback,
+      groupKey,
     });
   });
 
   notes.forEach((note, index) => {
     const minuteOffset = parseClockToMinutes(note.time);
     const fallback = 20_000_000_000 + index;
-    const orderKey = Number.isFinite(spreadDateMs) && minuteOffset !== null
+    const timedOrderKey = Number.isFinite(spreadDateMs) && minuteOffset !== null
       ? (spreadDateMs + (minuteOffset * 60 * 1000))
-      : fallback;
-    timeline.push({ type: 'note', index, orderKey });
+      : null;
+    const groupKey = timedOrderKey !== null ? Math.floor(timedOrderKey / halfHourMs) : 9_000_000 + Math.floor(fallbackCursor / 2);
+    fallbackCursor += 1;
+    timeline.push({ type: 'note', index, orderKey: timedOrderKey !== null ? timedOrderKey : fallback, groupKey });
   });
 
   timeline.sort((a, b) => {
@@ -411,13 +423,53 @@ function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], sp
   timeline.forEach((entry, flowIndex) => {
     if (entry.type === 'media') {
       mediaOrder.set(entry.index, flowIndex);
+      mediaGroup.set(entry.index, entry.groupKey);
     } else {
       noteOrder.set(entry.index, flowIndex);
+      noteGroup.set(entry.index, entry.groupKey);
     }
   });
 
+  const groupKeys = Array.from(new Set(timeline.map((entry) => entry.groupKey))).sort((a, b) => a - b);
+  const groupIndexByKey = new Map<number, number>();
+  groupKeys.forEach((key, idx) => {
+    groupIndexByKey.set(key, idx);
+  });
+
+  const groupCenterXByIndex = new Map<number, number>();
+  const groupKeysForX = [...groupKeys].sort((a, b) => {
+    const ah = hashValue(`gx-${a}`);
+    const bh = hashValue(`gx-${b}`);
+    return ah - bh;
+  });
+  const slotByGroupKey = new Map<number, number>();
+  groupKeysForX.forEach((key, slot) => {
+    slotByGroupKey.set(key, slot);
+  });
+  groupKeys.forEach((key, chronologicalIndex) => {
+    const slot = slotByGroupKey.get(key) ?? 0;
+    const denom = Math.max(1, groupKeys.length - 1);
+    const centerX = groupKeys.length <= 1 ? 50 : (6 + ((slot / denom) * 86));
+    groupCenterXByIndex.set(chronologicalIndex, centerX);
+  });
+
+  mediaGroup.forEach((key, index) => {
+    mediaGroup.set(index, groupIndexByKey.get(key) ?? 0);
+  });
+  noteGroup.forEach((key, index) => {
+    noteGroup.set(index, groupIndexByKey.get(key) ?? 0);
+  });
+
   const total = Math.max(1, timeline.length);
-  return { mediaOrder, noteOrder, total };
+  return {
+    mediaOrder,
+    noteOrder,
+    mediaGroup,
+    noteGroup,
+    groupCenterXByIndex,
+    total,
+    totalGroups: Math.max(1, groupKeys.length),
+  };
 }
 
 export function PhotoAlbumStage({
@@ -449,8 +501,9 @@ export function PhotoAlbumStage({
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...notes.map((n) => n.text)].join(' '));
   const decorItems = React.useMemo(() => spreadDecor(album, spreadIndex, theme.emojis), [album, spreadIndex, theme.emojis]);
 
-  const mediaWidthPct = notes.length + mediaItems.length >= 16 ? 14 : notes.length + mediaItems.length >= 10 ? 18 : 22;
-  const noteWidthPct = notes.length >= 12 ? 16 : notes.length >= 8 ? 18 : 22;
+  const densityCount = notes.length + mediaItems.length;
+  const mediaWidthPct = densityCount >= 16 ? 11 : densityCount >= 10 ? 13 : 16;
+  const noteWidthPct = densityCount >= 16 ? 12 : densityCount >= 10 ? 14 : 17;
 
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
   const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number; sourceIndex?: number }>(null);
@@ -471,8 +524,10 @@ export function PhotoAlbumStage({
     const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
       const source = spread?.images?.[item.sourceIndex];
       const flowIndex = flow.mediaOrder.get(index) ?? index;
-      const fallback = positionByFlow(flowIndex, flow.total, `${album.id}-${spreadIndex}-flow`);
-      const w = clamp(Number(source?.w ?? mediaWidthPct), 12, 26);
+      const groupIndex = flow.mediaGroup.get(index) ?? 0;
+      const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
+      const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
+      const w = clamp(Number(source?.w ?? mediaWidthPct), 10, 24);
       return {
         id: `media-${item.sourceIndex}`,
         type: 'media',
@@ -487,8 +542,10 @@ export function PhotoAlbumStage({
     });
     const noteLayout: LayoutItem[] = notes.map((note, index) => {
       const flowIndex = flow.noteOrder.get(index) ?? (mediaItems.length + index);
-      const fallback = positionByFlow(flowIndex, flow.total, `${album.id}-${spreadIndex}-flow`);
-      const w = clamp(Number(note.w ?? noteWidthPct), 14, 28);
+      const groupIndex = flow.noteGroup.get(index) ?? 0;
+      const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
+      const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
+      const w = clamp(Number(note.w ?? noteWidthPct), 11, 24);
       return {
         id: `note-${index}`,
         type: 'note',

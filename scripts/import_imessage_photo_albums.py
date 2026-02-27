@@ -6,6 +6,7 @@ import datetime as dt
 import glob
 import json
 import os
+import plistlib
 import re
 import shutil
 import sqlite3
@@ -49,8 +50,7 @@ class MessageRow:
 class AlbumPage:
     sent_at: dt.datetime
     caption: str
-    source_path: Path
-    output_rel_path: str
+    media_items: List[Tuple[str, str]]
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,6 +141,69 @@ def apple_ts_to_datetime(value: Any) -> Optional[dt.datetime]:
         raw = int(value)
     except Exception:
         return None
+
+
+def sanitize_message_text(value: str) -> str:
+    v = (value or "").replace("\r", " ").replace("\n", " ").replace("\x00", " ").strip()
+    if not v:
+        return ""
+    v = re.sub(r"\b(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData)\b", " ", v)
+    v = re.sub(r"\bkIM[A-Za-z0-9_]+\b", " ", v)
+    v = re.sub(r"\biI\b", " ", v)
+    v = re.sub(r"\s+", " ", v).strip()
+    token_hits = len(re.findall(r"\b(NS|NSMutable|NSDictionary|kIM|streamtyped)\w*\b", v))
+    if token_hits >= 3:
+        return ""
+    return v
+
+
+def extract_text_from_attributed_body(blob: bytes) -> str:
+    if not blob:
+        return ""
+
+    try:
+        if blob[:6] == b"bplist":
+            obj = plistlib.loads(blob)
+            strings: List[str] = []
+
+            def walk(v: object) -> None:
+                if isinstance(v, str):
+                    s = v.strip()
+                    if s:
+                        strings.append(s)
+                elif isinstance(v, dict):
+                    for vv in v.values():
+                        walk(vv)
+                elif isinstance(v, (list, tuple)):
+                    for vv in v:
+                        walk(vv)
+
+            walk(obj)
+            if strings:
+                uniq: List[str] = []
+                seen: set[str] = set()
+                for s in strings:
+                    c = sanitize_message_text(s)
+                    if c and c not in seen:
+                        seen.add(c)
+                        uniq.append(c)
+                return " ".join(uniq[:16]).strip()
+    except Exception:
+        pass
+
+    try:
+        decoded = blob.decode("utf-8", errors="ignore").replace("\x00", " ")
+    except Exception:
+        return ""
+    segments = re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded)
+    out: List[str] = []
+    seen2: set[str] = set()
+    for seg in segments:
+        c = sanitize_message_text(seg)
+        if c and c not in seen2:
+            seen2.add(c)
+            out.append(c)
+    return " ".join(out[:8]).strip()
     epoch = dt.datetime(2001, 1, 1, tzinfo=dt.timezone.utc)
     secs = raw / 1_000_000_000 if raw > 10_000_000_000 else float(raw)
     try:
@@ -302,6 +365,7 @@ def load_messages(messages_db: Path, contact: str, years: int, contact_handles: 
             sql = f"""
             SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                    m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
+                   m.attributedBody AS attributed_body,
                    COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime
             FROM message m
             LEFT JOIN handle h ON h.ROWID = m.handle_id
@@ -322,6 +386,7 @@ def load_messages(messages_db: Path, contact: str, years: int, contact_handles: 
                 """
                 SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                        m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
+                       m.attributedBody AS attributed_body,
                        COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime
                 FROM message m
                 LEFT JOIN handle h ON h.ROWID = m.handle_id
@@ -351,11 +416,18 @@ def load_messages(messages_db: Path, contact: str, years: int, contact_handles: 
             if not ap.is_absolute():
                 ap = Path.home() / "Library" / "Messages" / raw
             ap = ap.resolve()
+        text_value = sanitize_message_text(str(r["text"] or ""))
+        if not text_value and r["attributed_body"] is not None:
+            attr = r["attributed_body"]
+            if isinstance(attr, memoryview):
+                attr = bytes(attr)
+            if isinstance(attr, (bytes, bytearray)):
+                text_value = sanitize_message_text(extract_text_from_attributed_body(bytes(attr)))
         out.append(
             MessageRow(
                 message_id=int(r["message_id"]),
                 handle_id=str(r["handle_id"]),
-                text=str(r["text"] or "").strip(),
+                text=text_value,
                 sent_at=sent,
                 is_from_me=int(r["is_from_me"] or 0),
                 attachment_path=ap,
@@ -396,6 +468,37 @@ def build_rich_caption(messages: Sequence[MessageRow], index: int) -> str:
         if len(uniq) >= 4:
             break
     return " | ".join(uniq)
+
+
+def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 24) -> List[AlbumPage]:
+    buckets: Dict[dt.date, Dict[str, Any]] = {}
+    for page in pages:
+        day = page.sent_at.date()
+        bucket = buckets.get(day)
+        if bucket is None:
+            bucket = {"sent_at": page.sent_at, "captions": [], "media_items": [], "media_keys": set()}
+            buckets[day] = bucket
+        if page.sent_at < bucket["sent_at"]:
+            bucket["sent_at"] = page.sent_at
+        c = sanitize_message_text(page.caption)
+        if c and c not in bucket["captions"]:
+            bucket["captions"].append(c)
+        for rel_path, source_name in page.media_items:
+            key = (rel_path, source_name)
+            if key in bucket["media_keys"]:
+                continue
+            bucket["media_keys"].add(key)
+            bucket["media_items"].append((rel_path, source_name))
+
+    out: List[AlbumPage] = []
+    for day in sorted(buckets.keys()):
+        bucket = buckets[day]
+        caption = " | ".join(bucket["captions"][:12]).strip() or "(no caption)"
+        media_items = list(bucket["media_items"])[:max_media_per_day]
+        if not media_items and caption == "(no caption)":
+            continue
+        out.append(AlbumPage(sent_at=bucket["sent_at"], caption=caption, media_items=media_items))
+    return out
 
 
 def photos_export_by_filename(filename: str, out_dir: Path) -> Optional[Path]:
@@ -632,12 +735,21 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
 
         spreads = []
         for i, page in enumerate(pages, start=1):
+            images = []
+            for rel_path, source_name in page.media_items[:24]:
+                images.append({
+                    "src": rel_path,
+                    "captured_at": page.sent_at.isoformat(),
+                    "source_filename": source_name,
+                    "caption": page.caption,
+                    "memory_text": page.caption,
+                })
             spreads.append(
                 {
                     "spread_number": i,
                     "title": "Opening Notes" if i == 1 else f"Memory Spread {i}",
                     "caption": page.caption,
-                    "photo_slots": 1,
+                    "photo_slots": max(1, len(images)),
                     "embellishments": [motifs[(i - 1) % len(motifs)], materials[(i - 1) % len(materials)]],
                     "background_prompt": " | ".join([
                         "[CATN8_SCRAPBOOK_SPREAD_BG_V1]",
@@ -648,7 +760,7 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
                         f"Materials: {', '.join(materials)}",
                         f"Motifs: {', '.join(motifs)}",
                     ]),
-                    "images": [{"src": page.output_rel_path, "captured_at": page.sent_at.isoformat(), "source_filename": page.source_path.name, "caption": page.caption, "memory_text": page.caption}],
+                    "images": images,
                 }
             )
 
@@ -668,7 +780,7 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
             "title": title,
             "summary": summary,
             "slug": slug,
-            "cover_image_url": pages[0].output_rel_path,
+            "cover_image_url": pages[0].media_items[0][0] if pages[0].media_items else "",
             "cover_prompt": build_cover_prompt_template(title, summary, style),
             "spec_json": json.dumps(spec, ensure_ascii=True),
         })
@@ -775,8 +887,8 @@ def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Pat
         out_name = f"page_{len(pages)+1:04d}.png"
         out_path = staging_dir / out_name
         convert_to_png(msg.attachment_path, out_path)
-        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, source_path=msg.attachment_path, output_rel_path=f"/photo_albums/{out_name}"))
-    return pages
+        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name)]))
+    return aggregate_album_pages_by_day(pages)
 
 
 def pages_from_photos_timeline(
@@ -837,11 +949,11 @@ def pages_from_photos_timeline(
         out_name = f"page_{len(pages)+1:04d}.png"
         out_path = staging_dir / out_name
         convert_to_png(source, out_path)
-        pages.append(AlbumPage(sent_at=anchor, caption=caption, source_path=source, output_rel_path=f"/photo_albums/{out_name}"))
+        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name)]))
         if len(pages) % 5 == 0:
             print(f"photos_timeline progress: exported {len(pages)} page(s)...")
 
-    return pages
+    return aggregate_album_pages_by_day(pages)
 
 
 def main() -> None:

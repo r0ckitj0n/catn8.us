@@ -148,6 +148,9 @@ export function PhotoAlbumStage({
   const images = spreadMedia(album, spreadIndex);
   const messages = spreadMessages(album, spreadIndex);
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...messages].join(' '));
+  const totalCards = images.length + messages.length;
+  const mediaWidth = totalCards >= 20 ? 150 : totalCards >= 14 ? 180 : totalCards >= 9 ? 210 : 250;
+  const noteWidth = totalCards >= 20 ? 180 : totalCards >= 14 ? 200 : 230;
 
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
 
@@ -215,7 +218,7 @@ export function PhotoAlbumStage({
               <figure
                 className="catn8-scatter-card catn8-scatter-media"
                 key={item.key}
-                style={seededScatterStyle(item.key, index, 250)}
+                style={seededScatterStyle(item.key, index, mediaWidth)}
                 onClick={() => setViewerTarget({ type: 'media', spreadIndex, itemIndex: index })}
               >
                 {isVideoMedia(imageSrc, item.mediaType) ? (
@@ -234,7 +237,7 @@ export function PhotoAlbumStage({
               <div
                 className="catn8-scatter-card catn8-scatter-note"
                 key={key}
-                style={seededScatterStyle(key, index + images.length, 230, 3)}
+                style={seededScatterStyle(key, index + images.length, noteWidth, 3)}
                 onClick={() => setViewerTarget({ type: 'note', spreadIndex, itemIndex: index })}
               >
                 <div className="catn8-scatter-note-inner" style={{ borderColor: theme.borderColor, backgroundColor: theme.accentColor }}>

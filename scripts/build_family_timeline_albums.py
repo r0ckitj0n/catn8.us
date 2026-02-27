@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 PRE_BIRTH_DAYS = 7
 DEFAULT_MAX_PAGES = 5000
@@ -46,6 +46,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--messages-db", default="~/Library/Messages/chat.db")
     p.add_argument("--max-pages-per-album", type=int, default=DEFAULT_MAX_PAGES)
     p.add_argument("--max-albums", type=int, default=0, help="0 means no cap")
+    p.add_argument("--allow-photos-fallback", action="store_true", help="Allow Photos-library filename export fallback when message attachment files cannot be found")
+    p.add_argument("--photos-fallback-max-days-delta", type=int, default=21, help="Maximum day delta allowed between message timestamp and Photos asset timestamp for fallback matching")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--skip-deploy", action="store_true", help="Do not run scripts/deploy.sh after successful live import")
     p.add_argument("--reprocess-existing", action="store_true", help="Ignore checkpoint skip list and rebuild existing timeline albums")
@@ -357,6 +359,83 @@ def load_photos_alias_map(photos_db: Path) -> Dict[str, List[str]]:
     return out
 
 
+def load_photos_name_timestamps(photos_db: Path) -> Dict[str, List[dt.datetime]]:
+    conn = sqlite_ro(photos_db)
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                COALESCE(aa.ZORIGINALFILENAME,'') original_name,
+                COALESCE(a.ZFILENAME,'') asset_name,
+                a.ZDATECREATED date_created
+            FROM ZASSET a
+            LEFT JOIN ZADDITIONALASSETATTRIBUTES aa ON aa.Z_PK=a.ZADDITIONALATTRIBUTES
+            WHERE TRIM(COALESCE(aa.ZORIGINALFILENAME,a.ZFILENAME,'')) <> ''
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    out: Dict[str, List[dt.datetime]] = {}
+    for r in rows:
+        ts = apple_ts_to_datetime(r["date_created"])
+        if ts is None:
+            continue
+        names = [str(r["original_name"] or "").strip(), str(r["asset_name"] or "").strip()]
+        for name in names:
+            if not name:
+                continue
+            full = name.lower()
+            stem = Path(name).stem.lower()
+            out.setdefault(full, []).append(ts)
+            if stem:
+                out.setdefault(stem, []).append(ts)
+    return out
+
+
+def is_high_confidence_photos_fallback(
+    raw_name: str,
+    sent_at: dt.datetime,
+    photo_name_timestamps: Dict[str, List[dt.datetime]],
+    max_days_delta: int,
+) -> bool:
+    if not raw_name:
+        return False
+    keys = [raw_name.lower(), Path(raw_name).stem.lower()]
+    candidates: List[dt.datetime] = []
+    for key in keys:
+        for ts in photo_name_timestamps.get(key, []):
+            candidates.append(ts)
+    if not candidates:
+        return False
+
+    # Deduplicate identical timestamps while preserving order.
+    seen: Set[str] = set()
+    unique_ts: List[dt.datetime] = []
+    for ts in candidates:
+        token = ts.isoformat()
+        if token in seen:
+            continue
+        seen.add(token)
+        unique_ts.append(ts)
+
+    # Too many same-name assets is ambiguous; skip fallback.
+    if len(unique_ts) > 3:
+        return False
+
+    target = sent_at.timestamp()
+    deltas_days = sorted(abs(ts.timestamp() - target) / 86400.0 for ts in unique_ts)
+    if not deltas_days:
+        return False
+
+    # Accept near-time matches; stricter when multiple candidates exist.
+    if len(deltas_days) == 1:
+        return deltas_days[0] <= float(max_days_delta)
+    if len(deltas_days) == 2:
+        return deltas_days[0] <= float(max_days_delta) and deltas_days[1] >= deltas_days[0] * 1.8
+    return deltas_days[0] <= float(max_days_delta) and deltas_days[1] >= deltas_days[0] * 2.3
+
+
 def safe_photos_export(candidates: Sequence[str], export_dir: Path) -> Optional[Path]:
     export_dir.mkdir(parents=True, exist_ok=True)
     out_dir = str(export_dir).replace('"', '\\"')
@@ -403,6 +482,16 @@ def resolve_message_attachment_path(raw_path: str) -> Optional[Path]:
     p = Path(os.path.expanduser(candidate))
     if p.exists() and p.is_file():
         return p.resolve()
+
+    # Common chat.db variants can be relative to ~/Library/Messages or Attachments/.
+    trimmed = candidate.lstrip("/")
+    fallback_candidates = [
+        Path.home() / "Library" / "Messages" / trimmed,
+        Path.home() / "Library" / "Messages" / "Attachments" / trimmed,
+    ]
+    for fp in fallback_candidates:
+        if fp.exists() and fp.is_file():
+            return fp.resolve()
     return None
 
 
@@ -432,18 +521,34 @@ def build_messages_attachment_index(root: Path) -> Dict[str, List[Path]]:
     return out
 
 
-def lookup_attachment_from_index(index: Dict[str, List[Path]], raw_name: str) -> Optional[Path]:
+def lookup_attachment_from_index(index: Dict[str, List[Path]], raw_name: str, sent_at: Optional[dt.datetime] = None) -> Optional[Path]:
     if not raw_name:
         return None
-    keys = [raw_name.lower(), Path(raw_name).stem.lower()]
+    name_key = raw_name.lower()
+    stem_key = Path(raw_name).stem.lower()
+    name_hits = list(index.get(name_key, []))
+    stem_hits = list(index.get(stem_key, []))
     candidates: List[Path] = []
-    for k in keys:
-        for p in index.get(k, []):
-            if p not in candidates:
-                candidates.append(p)
+    for p in name_hits + stem_hits:
+        if p not in candidates:
+            candidates.append(p)
     if not candidates:
         return None
-    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if sent_at is not None:
+        target_ts = sent_at.timestamp()
+
+        def score(path: Path) -> Tuple[int, float]:
+            try:
+                mtime = path.stat().st_mtime
+            except Exception:
+                mtime = 0.0
+            exact = 0 if path.name.lower() == name_key else 1
+            return (exact, abs(mtime - target_ts))
+
+        candidates.sort(key=score)
+    else:
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0]
 
 
@@ -547,6 +652,73 @@ def make_caption(messages: Sequence[MessageRow], idx: int, attach_notes: Sequenc
     if attach_notes:
         parts.append("\n".join(attach_notes[:6]))
     return "\n\n".join([p for p in parts if p.strip()]) or f"{speaker}: (no message text)"
+
+
+def aggregate_pages_by_day(
+    pages: Sequence[Tuple[dt.datetime, str, List[Dict[str, str]], str]],
+    max_images_per_day: int = 24,
+) -> List[Tuple[dt.datetime, str, List[Dict[str, str]], str]]:
+    buckets: Dict[dt.date, Dict[str, Any]] = {}
+
+    for sent_at, caption, page_images, raw_text in pages:
+        day = sent_at.date()
+        bucket = buckets.get(day)
+        if bucket is None:
+            bucket = {
+                "sent_at": sent_at,
+                "captions": [],
+                "raw_texts": [],
+                "images": [],
+                "image_keys": set(),
+            }
+            buckets[day] = bucket
+
+        if sent_at < bucket["sent_at"]:
+            bucket["sent_at"] = sent_at
+
+        c = sanitize_message_text(caption)
+        if c and c not in bucket["captions"]:
+            bucket["captions"].append(c)
+
+        r = sanitize_message_text(raw_text)
+        if r and r not in bucket["raw_texts"]:
+            bucket["raw_texts"].append(r)
+
+        for image in page_images:
+            src = str(image.get("src", "")).strip()
+            if not src:
+                continue
+            key = (
+                src,
+                str(image.get("media_type", "image")).strip(),
+                str(image.get("display_src", "")).strip(),
+                str(image.get("original_src", "")).strip(),
+                str(image.get("live_video_src", "")).strip(),
+            )
+            if key in bucket["image_keys"]:
+                continue
+            bucket["image_keys"].add(key)
+            bucket["images"].append(image)
+
+    out: List[Tuple[dt.datetime, str, List[Dict[str, str]], str]] = []
+    for day in sorted(buckets.keys()):
+        bucket = buckets[day]
+        images = list(bucket["images"])[:max_images_per_day]
+        captions = list(bucket["captions"])[:12]
+        raw_texts = list(bucket["raw_texts"])[:20]
+
+        if not captions and raw_texts:
+            captions = raw_texts[:12]
+        caption = "\n".join(captions).strip() or "(no message text)"
+        raw_joined = " | ".join(raw_texts)
+
+        # Keep only days with usable content.
+        if not images and caption == "(no message text)":
+            continue
+
+        out.append((bucket["sent_at"], caption, images, raw_joined))
+
+    return out
 
 
 def infer_style(captions: Sequence[str], child_name: str) -> Dict[str, str]:
@@ -775,10 +947,14 @@ def main() -> None:
     ]
 
     contact_handles_cache: Dict[str, List[str]] = {}
-    alias_map = load_photos_alias_map(photos_db)
+    alias_map = load_photos_alias_map(photos_db) if args.allow_photos_fallback else {}
+    photo_name_timestamps = load_photos_name_timestamps(photos_db) if args.allow_photos_fallback else {}
     attachments_root = Path(os.path.expanduser("~/Library/Messages/Attachments")).resolve()
     attachment_index = build_messages_attachment_index(attachments_root)
     print(f"Loaded {len(alias_map)} Photos filename aliases.")
+    print(f"Photos filename fallback enabled: {'yes' if args.allow_photos_fallback else 'no'}")
+    if args.allow_photos_fallback:
+        print(f"Photos fallback confidence window: {args.photos_fallback_max_days_delta} day(s)")
     print(f"Indexed {len(attachment_index)} Messages attachment keys from {attachments_root}")
 
     album_count = 0
@@ -871,11 +1047,16 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                         exported = local_attachment
                         direct_attachment_hits += 1
                     else:
-                        idx_hit = lookup_attachment_from_index(attachment_index, raw_name)
+                        idx_hit = lookup_attachment_from_index(attachment_index, raw_name, msg.sent_at)
                         if idx_hit:
                             exported = idx_hit
                             attachment_index_hits += 1
-                        else:
+                        elif args.allow_photos_fallback and is_high_confidence_photos_fallback(
+                            raw_name,
+                            msg.sent_at,
+                            photo_name_timestamps,
+                            max_days_delta=max(1, int(args.photos_fallback_max_days_delta)),
+                        ):
                             cache_key = (cands[0] if cands else raw_name).lower()
                             exported = exported_cache.get(cache_key)
                             if cache_key not in exported_cache:
@@ -978,6 +1159,13 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 continue
 
             pages.sort(key=lambda x: x[0])
+            pages = aggregate_pages_by_day(pages, max_images_per_day=24)
+            if not pages:
+                completed.add(title)
+                state["completed_albums"] = sorted(completed)
+                save_state(state_file, state)
+                print(f"Skip {title}: no daily pages after aggregation")
+                continue
             pages = pages[: max(1, args.max_pages_per_album)]
 
             style = infer_style([p[1] for p in pages], child.name)
@@ -1045,7 +1233,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 "spreads": spreads,
             }
 
-            summary = f"Auto timeline import for {child.name} ({start.isoformat()} to {end.isoformat()}). {len(pages)} pages."
+            summary = f"Auto timeline import for {child.name} ({start.isoformat()} to {end.isoformat()}). {len(pages)} days."
             cover_src = ""
             for _, _, imgs, _ in pages:
                 if imgs:
@@ -1057,7 +1245,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             album_sql = build_album_sql(title, slug, summary, cover_src, cp, json.dumps(spec, ensure_ascii=True))
             full_sql = sql_prefix + "\n\n" + album_sql + "\n"
             print(
-                f"[{title}] prepared {len(pages)} page(s), "
+                f"[{title}] prepared {len(pages)} daily page(s), "
                 f"linked_images={linked_images}, unavailable_images={unavailable_images}, "
                 f"conversion_failures={conversion_failures}, "
                 f"direct_attachment_hits={direct_attachment_hits}, attachment_index_hits={attachment_index_hits}, "

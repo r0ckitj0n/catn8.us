@@ -85,17 +85,16 @@ function formatNoteText(note: NoteItem): string {
 
 function positionByFlow(index: number, total: number, seed: string): { x: number; y: number; rotate: number } {
   const hash = hashValue(`${seed}-${index}`);
-  const cols = total >= 12 ? 4 : total >= 6 ? 3 : 2;
-  const rows = Math.max(1, Math.ceil(Math.max(1, total) / cols));
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  const rowProgress = rows <= 1 ? 0.5 : row / (rows - 1);
-  const colWidth = 82 / cols;
-  const jitterX = ((hash % 100) / 100 - 0.5) * Math.min(6, colWidth * 0.25);
-  const jitterY = (((Math.floor(hash / 100) % 100) / 100) - 0.5) * 4;
-  const x = clamp(7 + (col * colWidth) + (colWidth * 0.1) + jitterX, 3, 90);
-  const y = clamp(7 + (rowProgress * 78) + jitterY, 4, 90);
-  const rotate = ((Math.floor(hash / 19) % 9) - 4);
+  const spreadStep = 75 / Math.max(2, total + 1);
+  const laneCount = total >= 14 ? 5 : total >= 8 ? 4 : 3;
+  const lane = Math.floor(hash / 19) % laneCount;
+  const laneWidth = 80 / laneCount;
+  const baseY = 6 + (index * spreadStep);
+  const jitterY = (((Math.floor(hash / 101) % 100) / 100) - 0.5) * 7;
+  const driftX = (((Math.floor(hash / 37) % 100) / 100) - 0.5) * 18;
+  const x = clamp(7 + (lane * laneWidth) + (laneWidth * 0.5) + driftX, 3, 90);
+  const y = clamp(baseY + jitterY, 4, 90);
+  const rotate = ((Math.floor(hash / 19) % 13) - 6);
   return { x, y, rotate };
 }
 
@@ -656,17 +655,6 @@ export function PhotoAlbumStage({
             );
           })}
 
-          {mediaItems.length === 0 ? (
-            <div className="catn8-scatter-empty" style={{ left: '8%', top: '20%', width: '28%' }}>
-              No photo/video linked on this spread yet.
-            </div>
-          ) : null}
-
-          {notes.length === 0 ? (
-            <div className="catn8-scatter-empty" style={{ left: '58%', top: '20%', width: '28%' }}>
-              No readable text found on this spread.
-            </div>
-          ) : null}
         </div>
       </div>
 

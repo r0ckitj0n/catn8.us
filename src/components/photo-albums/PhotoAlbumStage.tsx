@@ -91,6 +91,14 @@ function formatNoteText(note: NoteItem): string {
   return `${note.speaker}${timePart}: ${note.text}`;
 }
 
+function shouldHideNoteText(value: string): boolean {
+  const normalized = sanitizeAlbumMessageText(value).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  return normalized.includes('attachment media currently unavailable');
+}
+
 function parseClockToMinutes(value?: string): number | null {
   if (!value) {
     return null;
@@ -187,6 +195,10 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
     return spreadTextItems
       .map((item, index) => {
         const parsed = parseSpeakerLine(item.text || '');
+        const fullText = `${(item.speaker as string) || parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`;
+        if (shouldHideNoteText(fullText)) {
+          return null;
+        }
         return {
           id: item.id || `${album.id}-${targetSpreadIndex}-text-${index}`,
           text: parsed.body,
@@ -198,7 +210,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           rotation: item.rotation,
         } as NoteItem;
       })
-      .filter((item) => item.text);
+      .filter((item): item is NoteItem => Boolean(item && item.text));
   }
 
   const imageTextSet = new Set<string>();
@@ -212,6 +224,9 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
   rawLines.forEach((line, index) => {
     const parsed = parseSpeakerLine(line);
     if (!parsed.body) {
+      return;
+    }
+    if (shouldHideNoteText(`${parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`)) {
       return;
     }
     const canonical = `${parsed.speaker}:${parsed.time || ''}:${parsed.body}`.toLowerCase();
@@ -312,7 +327,16 @@ const CANVAS_MIN_X = 2;
 const CANVAS_MAX_X = 98;
 const CANVAS_MIN_Y = 4;
 const CANVAS_MAX_Y = 94;
-const MAX_COVERAGE = 0.1;
+const MAX_COVERAGE = 0.06;
+
+function estimateNoteHeightPct(note: NoteItem, widthPct: number): number {
+  const text = formatNoteText(note);
+  const charsPerLine = Math.max(12, Math.floor(widthPct * 2.4));
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  const base = 4.8;
+  const lineHeight = 2.25;
+  return clamp(base + (lines * lineHeight), 9, 34);
+}
 
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
   const left = Math.max(a.x, b.x);
@@ -337,11 +361,16 @@ function constrainLayout(item: LayoutItem): LayoutItem {
 
 function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
   const resolved = items.map((item) => constrainLayout({ ...item }));
-  for (let pass = 0; pass < 36; pass += 1) {
+  for (let pass = 0; pass < 72; pass += 1) {
     let changed = false;
     for (let i = 0; i < resolved.length; i += 1) {
       const current = resolved[i];
-      for (let j = 0; j < i; j += 1) {
+      let pushX = 0;
+      let pushY = 0;
+      for (let j = 0; j < resolved.length; j += 1) {
+        if (i === j) {
+          continue;
+        }
         const placed = resolved[j];
         const overlap = overlapArea(current, placed);
         if (!overlap) {
@@ -353,16 +382,62 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
           continue;
         }
         const hash = hashValue(`${seed}-${current.id}-${placed.id}-${pass}-${j}`);
-        const driftX = ((hash % 2 === 0) ? 1 : -1) * (2 + (hash % 4));
-        const driftY = 2 + (Math.floor(hash / 7) % 4);
-        current.x += driftX;
-        current.y += driftY;
+        const currentCx = current.x + (current.w / 2);
+        const currentCy = current.y + (current.h / 2);
+        const placedCx = placed.x + (placed.w / 2);
+        const placedCy = placed.y + (placed.h / 2);
+        let dx = currentCx - placedCx;
+        let dy = currentCy - placedCy;
+        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+          dx = (hash % 2 === 0) ? 1 : -1;
+          dy = (Math.floor(hash / 11) % 2 === 0) ? 1 : -1;
+        }
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        const severity = Math.max(currentCoverage, placedCoverage) - MAX_COVERAGE;
+        const push = 0.8 + (severity * 14);
+        pushX += (dx / len) * push;
+        pushY += (dy / len) * push;
+      }
+      if (Math.abs(pushX) > 0.01 || Math.abs(pushY) > 0.01) {
+        current.x += pushX;
+        current.y += pushY;
         const bounded = constrainLayout(current);
         current.x = bounded.x;
         current.y = bounded.y;
         changed = true;
       }
       resolved[i] = constrainLayout(current);
+    }
+    if (!changed && pass > 6) {
+      break;
+    }
+    if (pass % 12 === 11) {
+      for (let i = 0; i < resolved.length; i += 1) {
+        const current = resolved[i];
+        if (current.type === 'decor') {
+          continue;
+        }
+        let violation = 0;
+        for (let j = 0; j < resolved.length; j += 1) {
+          if (i === j) {
+            continue;
+          }
+          const overlap = overlapArea(current, resolved[j]);
+          if (!overlap) {
+            continue;
+          }
+          const coverage = overlap / Math.max(1, current.w * current.h);
+          if (coverage > MAX_COVERAGE) {
+            violation += (coverage - MAX_COVERAGE);
+          }
+        }
+        if (violation > 0.02) {
+          current.w = Math.max(current.type === 'media' ? 9.5 : 10, current.w * 0.96);
+          current.h = Math.max(current.type === 'media' ? 10 : 8, current.h * 0.96);
+          resolved[i] = constrainLayout(current);
+          changed = true;
+        }
+      }
     }
     if (!changed) {
       break;
@@ -553,7 +628,7 @@ export function PhotoAlbumStage({
         x: Number(note.x ?? fallback.x),
         y: Number(note.y ?? fallback.y),
         w,
-        h: clamp((w * 0.62) + 2, 10, 26),
+        h: estimateNoteHeightPct(note, w),
         rotation: clamp(Number(note.rotation ?? fallback.rotate), -7, 7),
       };
     });

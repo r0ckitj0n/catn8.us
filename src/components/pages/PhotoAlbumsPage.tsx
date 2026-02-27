@@ -4,6 +4,8 @@ import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
+import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
+import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
 
@@ -16,34 +18,11 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   document.body.removeChild(link);
 }
 
-function isVideoMedia(src: string, mediaType?: string): boolean {
-  if (mediaType === 'video') {
-    return true;
-  }
-  return /\.(mov|mp4|m4v|3gp|avi|mkv|webm)(\?.*)?$/i.test(src || '');
-}
-
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
-  const selectedSpread = state.selectedSpread;
-  const spreadImages = Array.isArray(selectedSpread?.images) ? selectedSpread!.images : [];
-  const safeImages = spreadImages.length > 0 ? spreadImages : [{ src: '', caption: 'No image' }];
-  const midpoint = Math.ceil(safeImages.length / 2);
-  const leftImages = safeImages.slice(0, midpoint);
-  const rightImages = safeImages.slice(midpoint);
-  const spreadNotes = (selectedSpread?.caption || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => Boolean(line) && !line.startsWith('Attachment') && line.length > 2)
-    .slice(0, 8);
-  const notesMidpoint = Math.ceil(spreadNotes.length / 2);
-  const leftNotes = spreadNotes.slice(0, notesMidpoint);
-  const rightNotes = spreadNotes.slice(notesMidpoint);
 
-  const viewerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
-  const [livePlayback, setLivePlayback] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     const handleFs = () => {
@@ -53,213 +32,101 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     return () => document.removeEventListener('fullscreenchange', handleFs);
   }, []);
 
-  const toggleFullscreen = React.useCallback(async () => {
+  const openAlbum = React.useCallback(async (albumId: number) => {
+    state.openAlbum(albumId);
+    if (state.isAdmin) {
+      return;
+    }
     try {
-      if (!document.fullscreenElement && viewerRef.current) {
-        await viewerRef.current.requestFullscreen();
-      } else if (document.fullscreenElement) {
-        await document.exitFullscreen();
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
       }
     } catch {
-      // no-op: fullscreen can fail on unsupported/blocked contexts
+      // fullscreen can be blocked by browser context
     }
-  }, []);
+  }, [state]);
 
-  React.useEffect(() => {
-    setLivePlayback({});
-  }, [state.selectedId, state.pageIndex]);
+  const closeViewer = React.useCallback(async () => {
+    state.closeAlbumViewer();
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // no-op
+      }
+    }
+  }, [state]);
 
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section catn8-photo-albums-page">
         <div className="container">
-          {!isFullscreen ? (
-            <div className="catn8-photo-albums-hero catn8-card">
-              <h1 className="section-title mb-2">Photo Albums</h1>
-              <p className="lead mb-0">Scrapbook-style memory albums with page switching, zoom controls, and downloadable keepsakes.</p>
+          {state.loading ? <div className="catn8-card p-4 mt-3">Loading albums...</div> : null}
+
+          {!state.loading && !state.showAlbumViewer ? (
+            <div className="catn8-card catn8-photo-albums-list-shell">
+              <div className="catn8-photo-albums-list-header">
+                <div>
+                  <h1 className="section-title mb-1">Photo Albums</h1>
+                  <p className="mb-0">Choose an album to open it. Admins open an editable scrapbook modal; Photo Albums users open fullscreen view.</p>
+                </div>
+                {state.isAdmin ? (
+                  <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
+                    Create Photo Album
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="catn8-photo-albums-card-grid">
+                {state.albums.map((album) => (
+                  <button
+                    key={album.id}
+                    type="button"
+                    className="catn8-photo-album-card"
+                    onClick={() => {
+                      void openAlbum(album.id);
+                    }}
+                  >
+                    <div className="catn8-photo-album-card-image" style={{ backgroundImage: album.cover_image_url ? `url(${album.cover_image_url})` : undefined }} />
+                    <div className="catn8-photo-album-card-body">
+                      <h2>{album.title}</h2>
+                      <p>{album.summary || 'No summary yet.'}</p>
+                    </div>
+                  </button>
+                ))}
+                {state.albums.length === 0 ? <div className="catn8-card p-4">No photo albums available yet.</div> : null}
+              </div>
             </div>
           ) : null}
 
-          {state.loading ? <div className="catn8-card p-4 mt-3">Loading albums...</div> : null}
-
-          {!state.loading ? (
-            <div className={isFullscreen ? 'catn8-photo-albums-layout mt-3 is-fullscreen' : 'catn8-photo-albums-layout mt-3'}>
-              {!isFullscreen ? (
-                <aside className="catn8-photo-albums-sidebar catn8-card">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h2 className="h5 m-0">Album Shelf</h2>
-                    {state.isAdmin ? (
-                      <button type="button" className="btn btn-sm btn-primary" onClick={() => state.setShowCreateModal(true)}>
-                        Create Photo Album
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="catn8-album-shelf-list">
-                    {state.albums.map((album) => (
-                      <button
-                        key={album.id}
-                        type="button"
-                        className={album.id === state.selectedId ? 'catn8-album-shelf-item is-active' : 'catn8-album-shelf-item'}
-                        onClick={() => state.setSelectedId(album.id)}
-                      >
-                        <div className="catn8-album-shelf-thumb" style={{ backgroundImage: album.cover_image_url ? `url(${album.cover_image_url})` : undefined }} />
-                        <div className="catn8-album-shelf-meta">
-                          <strong>{album.title}</strong>
-                          <span>{album.spec?.style_guide?.memory_era || 'Memories'}</span>
-                        </div>
-                      </button>
-                    ))}
-
-                    {state.albums.length === 0 ? <div className="text-muted small">No albums yet.</div> : null}
-                  </div>
-                </aside>
-              ) : null}
-
-              <div className={isFullscreen ? 'catn8-photo-albums-main is-fullscreen' : 'catn8-photo-albums-main'}>
-                {selectedAlbum ? (
-                  <>
-                    <div className={isFullscreen ? 'catn8-album-toolbar catn8-card is-fullscreen' : 'catn8-album-toolbar catn8-card'}>
-                      <div>
-                        <h2 className="h4 mb-1">{selectedAlbum.title}</h2>
-                        <div className="small text-muted">{selectedAlbum.summary}</div>
-                      </div>
-                      <div className="catn8-album-controls">
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.prevPage} disabled={!state.canPrev}>Prev Page</button>
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.nextPage} disabled={!state.canNext}>Next Page</button>
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
-                        <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
-                        <button type="button" className="btn btn-sm btn-outline-dark" onClick={toggleFullscreen}>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => downloadDataUrl(selectedAlbum.cover_image_url, `${selectedAlbum.slug}-cover.png`)}
-                          disabled={!selectedAlbum.cover_image_url}
-                        >
-                          Download Cover
-                        </button>
-                      </div>
-                    </div>
-
-                    <div ref={viewerRef} className={isFullscreen ? 'catn8-scrapbook-stage is-fullscreen' : 'catn8-scrapbook-stage'}>
-                      <div className="catn8-scrapbook-viewer catn8-card" style={{ transform: `scale(${state.zoom})` }}>
-                        <div className="catn8-scrapbook-page-left">
-                          <div className="catn8-scrapbook-page-tag">Spread {state.pageIndex + 1} / {state.totalSpreads}</div>
-                          <h3>{selectedSpread?.title || 'Untitled Spread'}</h3>
-                          <div className="catn8-polaroid-grid">
-                            {leftImages.map((image, idx) => (
-                              <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-left-${idx}`}>
-                                {(() => {
-                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-left-${idx}`;
-                                  const hasLiveVideo = Boolean(image.live_video_src);
-                                  const showLiveVideo = Boolean(hasLiveVideo && livePlayback[mediaKey]);
-                                  const imageSrc = image.display_src || image.src;
-                                  return (
-                                    <>
-                                      {image.src ? (
-                                        showLiveVideo ? (
-                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
-                                        ) : isVideoMedia(imageSrc, image.media_type) ? (
-                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
-                                        ) : (
-                                          <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
-                                        )
-                                      ) : (
-                                        <div className="catn8-polaroid-photo is-placeholder" />
-                                      )}
-                                      {hasLiveVideo ? (
-                                        <button type="button" className="catn8-live-toggle" onClick={() => setLivePlayback((prev) => ({ ...prev, [mediaKey]: !showLiveVideo }))}>
-                                          {showLiveVideo ? 'Show Photo' : 'Play Live'}
-                                        </button>
-                                      ) : null}
-                                      <figcaption className="catn8-polaroid-caption">{image.caption || image.memory_text || selectedSpread?.caption || `Memory #${idx + 1}`}</figcaption>
-                                    </>
-                                  );
-                                })()}
-                              </figure>
-                            ))}
-                          </div>
-                          <div className="catn8-scrapbook-notes">
-                            {leftNotes.map((note, idx) => (
-                              <div className="catn8-scrapbook-note" key={`note-${idx}`}>{note}</div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="catn8-scrapbook-page-right">
-                          <div className="catn8-polaroid-grid">
-                            {(rightImages.length > 0 ? rightImages : leftImages.slice(0, 1)).map((image, idx) => (
-                              <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-right-${idx}`}>
-                                {(() => {
-                                  const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-right-${idx}`;
-                                  const hasLiveVideo = Boolean(image.live_video_src);
-                                  const showLiveVideo = Boolean(hasLiveVideo && livePlayback[mediaKey]);
-                                  const imageSrc = image.display_src || image.src;
-                                  return (
-                                    <>
-                                      {image.src ? (
-                                        showLiveVideo ? (
-                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={image.live_video_src} controls preload="metadata" autoPlay playsInline />
-                                        ) : isVideoMedia(imageSrc, image.media_type) ? (
-                                          <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
-                                        ) : (
-                                          <img className="catn8-polaroid-photo" src={imageSrc} alt={image.caption || selectedSpread?.title || `Memory ${idx + 1}`} loading="lazy" />
-                                        )
-                                      ) : (
-                                        <div className="catn8-polaroid-photo is-placeholder" />
-                                      )}
-                                      {hasLiveVideo ? (
-                                        <button
-                                          type="button"
-                                          className="catn8-live-toggle"
-                                          onClick={() => {
-                                            setLivePlayback((prev) => ({ ...prev, [mediaKey]: !showLiveVideo }));
-                                          }}
-                                        >
-                                          {showLiveVideo ? 'Show Photo' : 'Play Live'}
-                                        </button>
-                                      ) : null}
-                                    </>
-                                  );
-                                })()}
-                                <figcaption className="catn8-polaroid-caption">{image.caption || image.memory_text || selectedSpread?.caption || `Memory #${idx + 1}`}</figcaption>
-                              </figure>
-                            ))}
-                          </div>
-                          <div className="catn8-scrapbook-notes">
-                            {(rightNotes.length > 0 ? rightNotes : leftNotes.slice(0, 2)).map((note, idx) => (
-                              <div className="catn8-scrapbook-note" key={`r-note-${idx}`}>{note}</div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {!isFullscreen && state.isAdmin ? (
-                      <div className="catn8-album-admin catn8-card mt-3">
-                        <h3 className="h5">Admin Album Menu</h3>
-                        <div className="row g-2">
-                          <div className="col-md-4">
-                            <label className="form-label">Title</label>
-                            <input className="form-control" value={state.adminTitle} onChange={(e) => state.setAdminTitle(e.target.value)} disabled={state.busy} />
-                          </div>
-                          <div className="col-md-8">
-                            <label className="form-label">Summary</label>
-                            <input className="form-control" value={state.adminSummary} onChange={(e) => state.setAdminSummary(e.target.value)} disabled={state.busy} />
-                          </div>
-                        </div>
-                        <div className="d-flex gap-2 mt-3">
-                          <button type="button" className="btn btn-primary" onClick={state.saveAdminEdits} disabled={state.busy}>Update Photo Album</button>
-                          <button type="button" className="btn btn-outline-danger" onClick={state.deleteSelectedAlbum} disabled={state.busy}>Delete Photo Album</button>
-                          <button type="button" className="btn btn-outline-secondary" onClick={() => state.setShowCreateModal(true)} disabled={state.busy}>Create Photo Album</button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="catn8-card p-4">No photo albums available yet.</div>
-                )}
+          {!state.loading && state.showAlbumViewer && selectedAlbum ? (
+            <div className={isFullscreen ? 'catn8-photo-albums-main is-fullscreen' : 'catn8-photo-albums-main'}>
+              <div className={isFullscreen ? 'catn8-album-toolbar catn8-card is-fullscreen' : 'catn8-album-toolbar catn8-card'}>
+                <div>
+                  <h2 className="h4 mb-1">{selectedAlbum.title}</h2>
+                  <div className="small text-muted">{selectedAlbum.summary}</div>
+                </div>
+                <div className="catn8-album-controls">
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.prevPage} disabled={!state.canPrev}>Prev Page</button>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.nextPage} disabled={!state.canNext}>Next Page</button>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
+                  <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
+                  <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => void closeViewer()}>
+                    {isFullscreen ? 'Exit Fullscreen' : 'Back to Albums'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => downloadDataUrl(selectedAlbum.cover_image_url, `${selectedAlbum.slug}-cover.png`)}
+                    disabled={!selectedAlbum.cover_image_url}
+                  >
+                    Download Cover
+                  </button>
+                </div>
               </div>
+
+              <PhotoAlbumStage album={selectedAlbum} spreadIndex={state.pageIndex} zoom={state.zoom} />
             </div>
           ) : null}
         </div>
@@ -272,6 +139,22 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         onChange={state.setCreateForm}
         onClose={() => state.setShowCreateModal(false)}
         onCreate={state.createWithAi}
+      />
+
+      <PhotoAlbumAdminModal
+        open={state.showAdminModal}
+        busy={state.busy}
+        album={state.adminDraft}
+        pageIndex={state.pageIndex}
+        zoom={state.zoom}
+        canPrev={state.canPrev}
+        canNext={state.canNext}
+        onPrevPage={state.prevPage}
+        onNextPage={state.nextPage}
+        onClose={state.closeAdminModal}
+        onSave={state.saveAdminEdits}
+        onDelete={state.deleteSelectedAlbum}
+        onAlbumChange={state.updateAdminDraft}
       />
     </PageLayout>
   );

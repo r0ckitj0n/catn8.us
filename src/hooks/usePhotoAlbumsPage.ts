@@ -1,13 +1,13 @@
 import React from 'react';
 
-import { ApiClient } from '../core/ApiClient';
 import {
   PhotoAlbum,
   PhotoAlbumAiCreateRequest,
   PhotoAlbumListResponse,
-  PhotoAlbumMutationResponse,
 } from '../types/photoAlbums';
 import { IToast } from '../types/common';
+import { ApiClient } from '../core/ApiClient';
+import { usePhotoAlbumsMutations } from './usePhotoAlbumsMutations';
 
 const DEFAULT_CREATE_FORM: PhotoAlbumAiCreateRequest = {
   title: '',
@@ -24,6 +24,10 @@ const DEFAULT_CREATE_FORM: PhotoAlbumAiCreateRequest = {
   texture_intensity: 'balanced',
 };
 
+function cloneAlbum(album: PhotoAlbum): PhotoAlbum {
+  return JSON.parse(JSON.stringify(album)) as PhotoAlbum;
+}
+
 export function usePhotoAlbumsPage(
   viewer: any,
   onToast?: (toast: IToast) => void,
@@ -35,9 +39,10 @@ export function usePhotoAlbumsPage(
   const [pageIndex, setPageIndex] = React.useState(0);
   const [zoom, setZoom] = React.useState(1);
   const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [showAdminModal, setShowAdminModal] = React.useState(false);
+  const [showAlbumViewer, setShowAlbumViewer] = React.useState(false);
   const [createForm, setCreateForm] = React.useState<PhotoAlbumAiCreateRequest>(DEFAULT_CREATE_FORM);
-  const [adminTitle, setAdminTitle] = React.useState('');
-  const [adminSummary, setAdminSummary] = React.useState('');
+  const [adminDraft, setAdminDraft] = React.useState<PhotoAlbum | null>(null);
 
   const isAdmin = React.useMemo(
     () => Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1,
@@ -82,16 +87,14 @@ export function usePhotoAlbumsPage(
   }, [loadAlbums]);
 
   const selectedAlbum = React.useMemo(() => albums.find((album) => album.id === selectedId) || null, [albums, selectedId]);
-
-  const spreads = selectedAlbum?.spec?.spreads || [];
+  const workingAlbum = showAdminModal ? adminDraft : selectedAlbum;
+  const spreads = workingAlbum?.spec?.spreads || [];
   const selectedSpread = spreads[pageIndex] || null;
 
   React.useEffect(() => {
     const initialZoom = Number(selectedAlbum?.spec?.controls?.zoom?.initial || 1);
     setZoom(Number.isFinite(initialZoom) ? initialZoom : 1);
     setPageIndex(0);
-    setAdminTitle(selectedAlbum?.title || '');
-    setAdminSummary(selectedAlbum?.summary || '');
   }, [selectedAlbum?.id]);
 
   const totalSpreads = spreads.length;
@@ -107,94 +110,76 @@ export function usePhotoAlbumsPage(
   }, [totalSpreads]);
 
   const adjustZoom = React.useCallback((delta: number) => {
-    const minZoom = Number(selectedAlbum?.spec?.controls?.zoom?.min || 0.75);
-    const maxZoom = Number(selectedAlbum?.spec?.controls?.zoom?.max || 2.5);
-    const step = Number(selectedAlbum?.spec?.controls?.zoom?.step || 0.25);
+    const minZoom = Number(workingAlbum?.spec?.controls?.zoom?.min || 0.75);
+    const maxZoom = Number(workingAlbum?.spec?.controls?.zoom?.max || 2.5);
+    const step = Number(workingAlbum?.spec?.controls?.zoom?.step || 0.25);
     const next = zoom + (step * delta);
     setZoom(Math.max(minZoom, Math.min(maxZoom, Number(next.toFixed(2)))));
-  }, [selectedAlbum, zoom]);
+  }, [workingAlbum, zoom]);
 
-  const createWithAi = React.useCallback(async () => {
-    if (!isAdmin) {
+  const openAlbum = React.useCallback((albumId: number) => {
+    setSelectedId(albumId);
+    setPageIndex(0);
+    if (isAdmin) {
+      const album = albums.find((candidate) => candidate.id === albumId);
+      setAdminDraft(album ? cloneAlbum(album) : null);
+      setShowAdminModal(true);
+      setShowAlbumViewer(false);
       return;
     }
+    setShowAlbumViewer(true);
+    setShowAdminModal(false);
+  }, [albums, isAdmin]);
 
-    setBusy(true);
-    try {
-      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=create_with_ai', createForm);
-      const created = res?.album;
-      if (created?.id) {
-        toast('success', 'Photo album created with AI design');
+  const closeAlbumViewer = React.useCallback(() => {
+    setShowAlbumViewer(false);
+  }, []);
+
+  const closeAdminModal = React.useCallback(() => {
+    setShowAdminModal(false);
+    setAdminDraft(null);
+  }, []);
+
+  const { createWithAi, saveAdminEdits, deleteSelectedAlbum } = usePhotoAlbumsMutations({
+    isAdmin,
+    createForm,
+    defaultCreateForm: DEFAULT_CREATE_FORM,
+    adminDraft,
+    selectedAlbum,
+    setBusy,
+    setShowCreateModal,
+    setCreateForm,
+    setSelectedId,
+    setShowAdminModal,
+    setAdminDraft,
+    setShowAlbumViewer,
+    loadAlbums,
+    toast,
+  });
+
+  const updateAdminDraft = React.useCallback((updater: (prev: PhotoAlbum) => PhotoAlbum) => {
+    setAdminDraft((prev) => {
+      if (!prev) {
+        return prev;
       }
-      setShowCreateModal(false);
-      setCreateForm(DEFAULT_CREATE_FORM);
-      await loadAlbums();
-      if (created?.id) {
-        setSelectedId(created.id);
-      }
-    } catch (error: any) {
-      toast('error', error?.message || 'Failed to create album');
-    } finally {
-      setBusy(false);
-    }
-  }, [createForm, isAdmin, loadAlbums, toast]);
-
-  const saveAdminEdits = React.useCallback(async () => {
-    if (!isAdmin || !selectedAlbum) {
-      return;
-    }
-
-    setBusy(true);
-    try {
-      await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=update', {
-        id: selectedAlbum.id,
-        title: adminTitle,
-        summary: adminSummary,
-        cover_image_url: selectedAlbum.cover_image_url,
-        cover_prompt: selectedAlbum.cover_prompt,
-        is_active: selectedAlbum.is_active,
-        spec: selectedAlbum.spec,
-      });
-      toast('success', 'Photo album updated');
-      await loadAlbums();
-    } catch (error: any) {
-      toast('error', error?.message || 'Failed to update album');
-    } finally {
-      setBusy(false);
-    }
-  }, [adminSummary, adminTitle, isAdmin, loadAlbums, selectedAlbum, toast]);
-
-  const deleteSelectedAlbum = React.useCallback(async () => {
-    if (!isAdmin || !selectedAlbum) {
-      return;
-    }
-
-    const proceed = window.confirm(`Delete album "${selectedAlbum.title}"?`);
-    if (!proceed) {
-      return;
-    }
-
-    setBusy(true);
-    try {
-      await ApiClient.post('/api/photo_albums.php?action=delete', { id: selectedAlbum.id });
-      toast('success', 'Photo album deleted');
-      await loadAlbums();
-    } catch (error: any) {
-      toast('error', error?.message || 'Failed to delete album');
-    } finally {
-      setBusy(false);
-    }
-  }, [isAdmin, loadAlbums, selectedAlbum, toast]);
+      return updater(prev);
+    });
+  }, []);
 
   return {
     loading,
     busy,
     albums,
     selectedId,
-    setSelectedId,
     selectedAlbum,
-    pageIndex,
     selectedSpread,
+    showCreateModal,
+    setShowCreateModal,
+    createForm,
+    setCreateForm,
+    createWithAi,
+    isAdmin,
+    pageIndex,
     totalSpreads,
     canPrev,
     canNext,
@@ -202,17 +187,14 @@ export function usePhotoAlbumsPage(
     nextPage,
     zoom,
     adjustZoom,
-    isAdmin,
-    showCreateModal,
-    setShowCreateModal,
-    createForm,
-    setCreateForm,
-    createWithAi,
-    adminTitle,
-    setAdminTitle,
-    adminSummary,
-    setAdminSummary,
+    showAlbumViewer,
+    showAdminModal,
+    adminDraft,
+    openAlbum,
+    closeAlbumViewer,
+    closeAdminModal,
     saveAdminEdits,
     deleteSelectedAlbum,
+    updateAdminDraft,
   };
 }

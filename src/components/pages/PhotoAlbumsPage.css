@@ -5,75 +5,71 @@
   --catn8-albums-wood: #8f6848;
 }
 
-.catn8-photo-albums-hero {
-  padding: 1.5rem;
+.catn8-photo-albums-list-shell {
+  padding: 1.25rem;
   background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.7), transparent 40%),
-    linear-gradient(130deg, #eed5b8, #d3b38e);
+    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.65), transparent 36%),
+    linear-gradient(140deg, #f3dcc3, #d9b899);
 }
 
-.catn8-photo-albums-layout {
+.catn8-photo-albums-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.catn8-photo-albums-card-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
 }
 
-.catn8-photo-albums-layout.is-fullscreen {
-  grid-template-columns: 1fr;
+.catn8-photo-album-card {
+  text-align: left;
+  width: 100%;
+  border: 1px solid rgba(49, 34, 20, 0.22);
+  border-radius: 14px;
+  background: #fff9ef;
+  overflow: hidden;
+  box-shadow: 0 14px 24px rgba(49, 34, 20, 0.14);
+  transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
-.catn8-photo-albums-sidebar,
+.catn8-photo-album-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 30px rgba(49, 34, 20, 0.18);
+}
+
+.catn8-photo-album-card-image {
+  height: 170px;
+  background-size: cover;
+  background-position: center;
+  background-color: #d9b799;
+}
+
+.catn8-photo-album-card-body {
+  padding: 0.9rem;
+}
+
+.catn8-photo-album-card-body h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.catn8-photo-album-card-body p {
+  margin: 0;
+  color: rgba(45, 36, 25, 0.78);
+  font-size: 0.9rem;
+}
+
 .catn8-photo-albums-main {
   padding: 1rem;
 }
 
 .catn8-photo-albums-main.is-fullscreen {
   padding: 0;
-}
-
-.catn8-album-shelf-list {
-  display: grid;
-  gap: 0.7rem;
-  max-height: 70vh;
-  overflow: auto;
-  padding-right: 0.25rem;
-}
-
-.catn8-album-shelf-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  text-align: left;
-  padding: 0.55rem;
-  border: 1px solid rgba(31, 29, 53, 0.15);
-  border-radius: 12px;
-  background: var(--catn8-albums-paper);
-}
-
-.catn8-album-shelf-item.is-active {
-  border-color: #7b5234;
-  box-shadow: 0 8px 24px rgba(52, 47, 99, 0.15);
-}
-
-.catn8-album-shelf-thumb {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  background: linear-gradient(160deg, #d4a97f, #b88458);
-  background-size: cover;
-  background-position: center;
-  flex-shrink: 0;
-}
-
-.catn8-album-shelf-meta {
-  display: flex;
-  flex-direction: column;
-}
-
-.catn8-album-shelf-meta span {
-  font-size: 0.85rem;
-  color: rgba(47, 41, 69, 0.72);
 }
 
 .catn8-album-toolbar {
@@ -108,78 +104,79 @@
   margin-top: 1rem;
 }
 
-.catn8-scrapbook-stage.is-fullscreen {
-  margin-top: 0;
-  min-height: calc(100vh - 80px);
-  background:
-    radial-gradient(circle at 20% 10%, rgba(255, 247, 229, 0.4), transparent 38%),
-    linear-gradient(140deg, #4a2f1f, #27170c);
-  padding: 1rem;
+.catn8-scrapbook-stage-user {
+  min-height: calc(100vh - 210px);
 }
 
-.catn8-scrapbook-viewer {
-  display: grid;
-  grid-template-columns: 0.95fr 1.05fr;
-  gap: 1rem;
+.catn8-scrapbook-scatter {
+  position: relative;
   padding: 1rem;
+  min-height: 72vh;
   background:
     linear-gradient(115deg, rgba(255, 250, 237, 0.97), rgba(247, 232, 206, 0.96)),
     repeating-linear-gradient(0deg, rgba(108, 75, 46, 0.08), rgba(108, 75, 46, 0.08) 1px, transparent 1px, transparent 22px);
   transform-origin: top center;
   border: 6px solid var(--catn8-albums-wood);
   box-shadow: 0 18px 40px var(--catn8-albums-shadow);
+  overflow: hidden;
 }
 
-.catn8-scrapbook-page-left,
-.catn8-scrapbook-page-right {
+.catn8-scrapbook-stage-header {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.9rem;
+  border: 2px dashed rgba(60, 42, 24, 0.5);
   border-radius: 12px;
-  border: 1px solid rgba(74, 48, 28, 0.18);
-  padding: 1rem;
-  background: var(--catn8-albums-paper);
+  background: rgba(255, 250, 237, 0.84);
 }
 
 .catn8-scrapbook-page-tag {
   display: inline-block;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 0.28rem 0.58rem;
+  padding: 0.22rem 0.5rem;
   border-radius: 999px;
-  margin-bottom: 0.8rem;
   background: #e3ccb0;
   color: #51331d;
 }
 
-.catn8-memory-text {
-  white-space: pre-wrap;
-  line-height: 1.55;
+.catn8-scrapbook-stage-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
 }
 
-.catn8-scrapbook-chip-row {
+.catn8-scatter-emoji-row {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.9rem;
+  z-index: 2;
   display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
-.catn8-scrapbook-chip {
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  background: #efddc6;
-  color: #5b3f2a;
+.catn8-scatter-emoji {
+  font-size: 1.25rem;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.18));
 }
 
-.catn8-polaroid-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.85rem;
+.catn8-scatter-canvas {
+  position: relative;
+  min-height: 64vh;
 }
 
-.catn8-polaroid {
+.catn8-scatter-card {
+  position: absolute;
+}
+
+.catn8-scatter-media {
   margin: 0;
   background: #fff;
-  border: 1px solid rgba(56, 42, 27, 0.2);
-  border-radius: 8px;
-  padding: 0.4rem;
+  border: 3px solid rgba(56, 42, 27, 0.2);
+  border-radius: 10px;
+  padding: 0.45rem;
   box-shadow: 0 10px 24px rgba(31, 29, 53, 0.12);
 }
 
@@ -207,49 +204,128 @@
   line-height: 1.45;
 }
 
-.catn8-live-toggle {
-  margin-top: 0.5rem;
-  border: 1px solid rgba(74, 48, 28, 0.3);
-  background: #f7ead8;
-  color: #4b2f1e;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  padding: 0.2rem 0.55rem;
+.catn8-scatter-note {
+  width: 230px;
 }
 
-.catn8-scrapbook-notes {
+.catn8-scatter-note-inner {
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 0.45rem 0.6rem;
+  box-shadow: 0 8px 18px rgba(49, 34, 20, 0.12);
+}
+
+.catn8-scatter-note-emoji {
+  display: inline-block;
+  margin-right: 0.3rem;
+}
+
+.catn8-scatter-note p {
+  margin: 0;
+  color: #2f2535;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.catn8-theme-support {
+  background:
+    radial-gradient(circle at 15% 8%, rgba(218, 235, 255, 0.52), transparent 33%),
+    radial-gradient(circle at 88% 92%, rgba(214, 231, 255, 0.4), transparent 30%),
+    linear-gradient(115deg, rgba(245, 251, 255, 0.98), rgba(228, 240, 255, 0.95));
+}
+
+.catn8-theme-celebration {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 232, 183, 0.52), transparent 35%),
+    radial-gradient(circle at 87% 86%, rgba(255, 206, 192, 0.42), transparent 30%),
+    linear-gradient(115deg, rgba(255, 245, 219, 0.98), rgba(255, 231, 194, 0.95));
+}
+
+.catn8-theme-calm {
+  background:
+    radial-gradient(circle at 15% 8%, rgba(222, 244, 228, 0.52), transparent 35%),
+    radial-gradient(circle at 88% 92%, rgba(220, 238, 230, 0.42), transparent 30%),
+    linear-gradient(115deg, rgba(245, 255, 247, 0.98), rgba(226, 242, 231, 0.95));
+}
+
+.catn8-admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--catn8-z-modal, 5100);
+  background: rgba(34, 21, 14, 0.62);
+  backdrop-filter: blur(2px);
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.8rem;
+  align-items: center;
+  justify-content: center;
 }
 
-.catn8-scrapbook-note {
-  background: #f4e7a8;
-  color: #3f2a14;
-  border: 1px solid rgba(84, 58, 23, 0.24);
-  border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  max-width: 260px;
-  transform: rotate(-1deg);
+.catn8-admin-modal-shell {
+  width: 95vw;
+  height: 95vh;
+  background: #f8efe5;
+  border: 1px solid rgba(45, 32, 18, 0.4);
+  border-radius: 14px;
+  box-shadow: 0 26px 48px rgba(0, 0, 0, 0.36);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.catn8-scrapbook-note:nth-child(2n) {
-  transform: rotate(1.25deg);
+.catn8-admin-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(41, 29, 16, 0.24);
+  background: linear-gradient(140deg, #ecd0ae, #dcb691);
 }
 
-.catn8-album-admin {
-  padding: 1rem;
+.catn8-admin-modal-body {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  overflow: hidden;
+  height: 100%;
 }
 
-@media (max-width: 1199px) {
-  .catn8-photo-albums-layout {
+.catn8-admin-editor-panel {
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.catn8-admin-image-editor {
+  border: 1px dashed rgba(56, 42, 27, 0.32);
+  border-radius: 10px;
+  padding: 0.6rem;
+  margin-bottom: 0.55rem;
+  background: #fffaf3;
+}
+
+.catn8-admin-preview-panel {
+  overflow: auto;
+}
+
+@media (max-width: 991px) {
+  .catn8-photo-albums-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catn8-admin-modal-body {
     grid-template-columns: 1fr;
   }
 
-  .catn8-scrapbook-viewer {
-    grid-template-columns: 1fr;
+  .catn8-scrapbook-scatter {
+    min-height: 92vh;
+  }
+
+  .catn8-scatter-media,
+  .catn8-scatter-note {
+    position: static;
+    width: auto;
+    transform: none !important;
+    margin-bottom: 0.7rem;
   }
 }

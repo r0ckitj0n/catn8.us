@@ -8,6 +8,7 @@ export interface ViewerTarget {
 
 export interface PreparedMediaItem {
   key: string;
+  sourceIndex: number;
   src: string;
   mediaType?: 'image' | 'video';
   caption: string;

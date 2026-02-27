@@ -30,7 +30,6 @@ type NoteItem = {
   y?: number;
   w?: number;
   rotation?: number;
-  side?: 'left' | 'right';
 };
 
 type DecorItem = {
@@ -84,18 +83,38 @@ function formatNoteText(note: NoteItem): string {
   return `${note.speaker}${timePart}: ${note.text}`;
 }
 
-function positionByChronology(index: number, total: number, seed: string, side: 'left' | 'right' | 'full'): { x: number; y: number; rotate: number } {
+function positionByFlow(index: number, total: number, seed: string): { x: number; y: number; rotate: number } {
   const hash = hashValue(`${seed}-${index}`);
-  const progress = total <= 1 ? 0.5 : index / (total - 1);
-  const y = clamp(6 + progress * 80 + ((hash % 5) - 2), 4, 90);
-  const rotate = ((Math.floor(hash / 10) % 12) - 6);
-  if (side === 'left') {
-    return { x: clamp(8 + (Math.floor(hash / 100) % 28), 4, 38), y, rotate };
-  }
-  if (side === 'right') {
-    return { x: clamp(58 + (Math.floor(hash / 100) % 30), 56, 90), y, rotate };
-  }
-  return { x: clamp(10 + (Math.floor(hash / 100) % 76), 4, 90), y, rotate };
+  const cols = total >= 12 ? 4 : total >= 6 ? 3 : 2;
+  const rows = Math.max(1, Math.ceil(Math.max(1, total) / cols));
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  const rowProgress = rows <= 1 ? 0.5 : row / (rows - 1);
+  const colWidth = 82 / cols;
+  const jitterX = ((hash % 100) / 100 - 0.5) * Math.min(6, colWidth * 0.25);
+  const jitterY = (((Math.floor(hash / 100) % 100) / 100) - 0.5) * 4;
+  const x = clamp(7 + (col * colWidth) + (colWidth * 0.1) + jitterX, 3, 90);
+  const y = clamp(7 + (rowProgress * 78) + jitterY, 4, 90);
+  const rotate = ((Math.floor(hash / 19) % 9) - 4);
+  return { x, y, rotate };
+}
+
+function positionByDecorScatter(index: number, total: number, seed: string): { x: number; y: number; rotate: number } {
+  const hash = hashValue(`${seed}-${index}`);
+  const anchors = [
+    { x: 10, y: 10 }, { x: 50, y: 10 }, { x: 88, y: 12 },
+    { x: 12, y: 32 }, { x: 88, y: 34 }, { x: 10, y: 56 },
+    { x: 50, y: 50 }, { x: 90, y: 56 }, { x: 12, y: 82 },
+    { x: 48, y: 84 }, { x: 88, y: 82 }, { x: 28, y: 68 },
+  ];
+  const anchor = anchors[index % Math.max(total, anchors.length)];
+  const jitterX = ((hash % 100) / 100 - 0.5) * 8;
+  const jitterY = (((Math.floor(hash / 100) % 100) / 100) - 0.5) * 8;
+  return {
+    x: clamp(anchor.x + jitterX, 3, 94),
+    y: clamp(anchor.y + jitterY, 4, 92),
+    rotate: ((Math.floor(hash / 31) % 12) - 6),
+  };
 }
 
 function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMediaItem[] {
@@ -111,6 +130,7 @@ function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMedi
     const capturedAtMs = Date.parse(String(image.captured_at || ''));
     list.push({
       key: `${album.id}-${targetSpreadIndex}-${index}-${src}`,
+      sourceIndex: index,
       src,
       mediaType: image.media_type,
       caption,
@@ -147,7 +167,6 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           y: item.y,
           w: item.w,
           rotation: item.rotation,
-          side: item.side,
         } as NoteItem;
       })
       .filter((item) => item.text);
@@ -198,7 +217,7 @@ function spreadDecor(album: PhotoAlbum, targetSpreadIndex: number, emojiPool: st
     }));
   }
   return emojiPool.slice(0, 6).map((emoji, index) => {
-    const pos = positionByChronology(index, 6, `${album.id}-${targetSpreadIndex}-decor`, 'full');
+    const pos = positionByDecorScatter(index, 6, `${album.id}-${targetSpreadIndex}-decor`);
     return {
       id: `${album.id}-${targetSpreadIndex}-decor-auto-${index}`,
       emoji,
@@ -241,6 +260,82 @@ function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction:
   return null;
 }
 
+type LayoutItem = {
+  id: string;
+  type: 'media' | 'note' | 'decor';
+  index: number;
+  sourceIndex?: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  size?: number;
+};
+
+const CANVAS_MIN_X = 2;
+const CANVAS_MAX_X = 98;
+const CANVAS_MIN_Y = 4;
+const CANVAS_MAX_Y = 94;
+const MAX_COVERAGE = 0.1;
+
+function overlapArea(a: LayoutItem, b: LayoutItem): number {
+  const left = Math.max(a.x, b.x);
+  const right = Math.min(a.x + a.w, b.x + b.w);
+  const top = Math.max(a.y, b.y);
+  const bottom = Math.min(a.y + a.h, b.y + b.h);
+  if (right <= left || bottom <= top) {
+    return 0;
+  }
+  return (right - left) * (bottom - top);
+}
+
+function constrainLayout(item: LayoutItem): LayoutItem {
+  const maxX = Math.max(CANVAS_MIN_X, CANVAS_MAX_X - item.w);
+  const maxY = Math.max(CANVAS_MIN_Y, CANVAS_MAX_Y - item.h);
+  return {
+    ...item,
+    x: clamp(item.x, CANVAS_MIN_X, maxX),
+    y: clamp(item.y, CANVAS_MIN_Y, maxY),
+  };
+}
+
+function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
+  const resolved = items.map((item) => constrainLayout({ ...item }));
+  for (let pass = 0; pass < 36; pass += 1) {
+    let changed = false;
+    for (let i = 0; i < resolved.length; i += 1) {
+      const current = resolved[i];
+      for (let j = 0; j < i; j += 1) {
+        const placed = resolved[j];
+        const overlap = overlapArea(current, placed);
+        if (!overlap) {
+          continue;
+        }
+        const currentCoverage = overlap / Math.max(1, current.w * current.h);
+        const placedCoverage = overlap / Math.max(1, placed.w * placed.h);
+        if (currentCoverage <= MAX_COVERAGE && placedCoverage <= MAX_COVERAGE) {
+          continue;
+        }
+        const hash = hashValue(`${seed}-${current.id}-${placed.id}-${pass}-${j}`);
+        const driftX = ((hash % 2 === 0) ? 1 : -1) * (2 + (hash % 4));
+        const driftY = 2 + (Math.floor(hash / 7) % 4);
+        current.x += driftX;
+        current.y += driftY;
+        const bounded = constrainLayout(current);
+        current.x = bounded.x;
+        current.y = bounded.y;
+        changed = true;
+      }
+      resolved[i] = constrainLayout(current);
+    }
+    if (!changed) {
+      break;
+    }
+  }
+  return resolved;
+}
+
 export function PhotoAlbumStage({
   album,
   spreadIndex,
@@ -265,16 +360,77 @@ export function PhotoAlbumStage({
   const mediaWidthPct = notes.length + mediaItems.length >= 16 ? 14 : notes.length + mediaItems.length >= 10 ? 18 : 22;
   const noteWidthPct = notes.length >= 12 ? 16 : notes.length >= 8 ? 18 : 22;
 
-  const firstSpeaker = notes.find((note) => note.speaker !== 'Unknown')?.speaker || 'Jon';
-  const leftSpeaker: 'Jon' | 'Trinity' = firstSpeaker === 'Trinity' ? 'Trinity' : 'Jon';
-
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
-  const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number }>(null);
+  const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number; sourceIndex?: number }>(null);
 
   React.useEffect(() => {
     setViewerTarget(null);
     setDragging(null);
   }, [album.id, spreadIndex]);
+
+  const layoutByType = React.useMemo(() => {
+    const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
+      const source = spread?.images?.[item.sourceIndex];
+      const fallback = positionByFlow(index, Math.max(1, mediaItems.length), `${album.id}-${spreadIndex}-media`);
+      const w = clamp(Number(source?.w ?? mediaWidthPct), 12, 26);
+      return {
+        id: `media-${item.sourceIndex}`,
+        type: 'media',
+        index,
+        sourceIndex: item.sourceIndex,
+        x: Number(source?.x ?? fallback.x),
+        y: Number(source?.y ?? fallback.y),
+        w,
+        h: clamp((w * 0.84) + 3.5, 14, 30),
+        rotation: clamp(Number(source?.rotation ?? fallback.rotate), -8, 8),
+      };
+    });
+    const noteLayout: LayoutItem[] = notes.map((note, index) => {
+      const fallback = positionByFlow(index, Math.max(1, notes.length), `${album.id}-${spreadIndex}-note`);
+      const w = clamp(Number(note.w ?? noteWidthPct), 14, 28);
+      return {
+        id: `note-${index}`,
+        type: 'note',
+        index,
+        x: Number(note.x ?? fallback.x),
+        y: Number(note.y ?? fallback.y),
+        w,
+        h: clamp((w * 0.62) + 2, 10, 26),
+        rotation: clamp(Number(note.rotation ?? fallback.rotate), -7, 7),
+      };
+    });
+    const decorLayout: LayoutItem[] = decorItems.map((item, index) => {
+      const fallback = positionByDecorScatter(index, Math.max(1, decorItems.length), `${album.id}-${spreadIndex}-decor`);
+      const size = clamp(Number(item.size ?? 1), 0.75, 1.4);
+      const footprint = 4.6 * size;
+      return {
+        id: `decor-${index}`,
+        type: 'decor',
+        index,
+        x: Number(item.x ?? fallback.x),
+        y: Number(item.y ?? fallback.y),
+        w: footprint,
+        h: footprint,
+        size,
+        rotation: clamp(Number(item.rotation ?? fallback.rotate), -9, 9),
+      };
+    });
+
+    const resolved = resolveLayout([...mediaLayout, ...noteLayout, ...decorLayout], `${album.id}-${spreadIndex}`);
+    const mediaByIndex = new Map<number, LayoutItem>();
+    const noteByIndex = new Map<number, LayoutItem>();
+    const decorByIndex = new Map<number, LayoutItem>();
+    resolved.forEach((item) => {
+      if (item.type === 'media') {
+        mediaByIndex.set(item.index, item);
+      } else if (item.type === 'note') {
+        noteByIndex.set(item.index, item);
+      } else {
+        decorByIndex.set(item.index, item);
+      }
+    });
+    return { mediaByIndex, noteByIndex, decorByIndex };
+  }, [album.id, spread, spreadIndex, mediaItems, notes, decorItems, mediaWidthPct, noteWidthPct]);
 
   const activeMedia = React.useMemo(() => {
     if (!viewerTarget || viewerTarget.type !== 'media') {
@@ -301,10 +457,17 @@ export function PhotoAlbumStage({
       return;
     }
     const canvas = event.currentTarget.getBoundingClientRect();
-    const x = clamp(((event.clientX - canvas.left) / canvas.width) * 100, 2, 92);
-    const y = clamp(((event.clientY - canvas.top) / canvas.height) * 100, 3, 92);
+    const currentLayout = dragging.type === 'media'
+      ? layoutByType.mediaByIndex.get(dragging.index)
+      : dragging.type === 'note'
+        ? layoutByType.noteByIndex.get(dragging.index)
+        : layoutByType.decorByIndex.get(dragging.index);
+    const widthPct = currentLayout?.w ?? 8;
+    const heightPct = currentLayout?.h ?? 8;
+    const x = clamp(((event.clientX - canvas.left) / canvas.width) * 100, CANVAS_MIN_X, CANVAS_MAX_X - widthPct);
+    const y = clamp(((event.clientY - canvas.top) / canvas.height) * 100, CANVAS_MIN_Y, CANVAS_MAX_Y - heightPct);
     if (dragging.type === 'media' && onMoveMedia) {
-      onMoveMedia(dragging.index, { x, y });
+      onMoveMedia(dragging.sourceIndex ?? dragging.index, { x, y });
     }
     if (dragging.type === 'note' && onMoveNote) {
       onMoveNote(dragging.index, { x, y });
@@ -312,53 +475,36 @@ export function PhotoAlbumStage({
     if (dragging.type === 'decor' && onMoveDecor) {
       onMoveDecor(dragging.index, { x, y });
     }
-  }, [editable, dragging, onMoveDecor, onMoveMedia, onMoveNote]);
+  }, [editable, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote]);
 
   const renderMediaStyle = (index: number): React.CSSProperties => {
-    const source = spread?.images?.[index];
-    const seed = `${album.id}-${spreadIndex}-media-${index}`;
-    const fallback = positionByChronology(index, Math.max(1, mediaItems.length), seed, 'full');
-    const x = clamp(Number(source?.x ?? fallback.x), 2, 92 - mediaWidthPct);
-    const y = clamp(Number(source?.y ?? fallback.y), 4, 90);
-    const rotation = Number(source?.rotation ?? fallback.rotate);
-    const w = clamp(Number(source?.w ?? mediaWidthPct), 12, 26);
+    const placement = layoutByType.mediaByIndex.get(index);
     return {
-      left: `${x}%`,
-      top: `${y}%`,
-      width: `${w}%`,
-      transform: `rotate(${rotation}deg) scale(var(--catn8-card-scale, 1))`,
+      left: `${placement?.x ?? CANVAS_MIN_X}%`,
+      top: `${placement?.y ?? CANVAS_MIN_Y}%`,
+      width: `${placement?.w ?? mediaWidthPct}%`,
+      transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 8 + (index % 4),
     };
   };
 
-  const renderNoteStyle = (note: NoteItem, index: number): React.CSSProperties => {
-    const side: 'left' | 'right' = note.side || (note.speaker === leftSpeaker ? 'left' : 'right');
-    const seed = `${album.id}-${spreadIndex}-note-${index}`;
-    const fallback = positionByChronology(index, Math.max(1, notes.length), seed, side);
-    const x = clamp(Number(note.x ?? fallback.x), side === 'left' ? 2 : 52, side === 'left' ? 42 : 92 - noteWidthPct);
-    const y = clamp(Number(note.y ?? fallback.y), 4, 90);
-    const rotation = Number(note.rotation ?? fallback.rotate);
-    const w = clamp(Number(note.w ?? noteWidthPct), 14, 28);
+  const renderNoteStyle = (_note: NoteItem, index: number): React.CSSProperties => {
+    const placement = layoutByType.noteByIndex.get(index);
     return {
-      left: `${x}%`,
-      top: `${y}%`,
-      width: `${w}%`,
-      transform: `rotate(${rotation}deg) scale(var(--catn8-card-scale, 1))`,
+      left: `${placement?.x ?? CANVAS_MIN_X}%`,
+      top: `${placement?.y ?? CANVAS_MIN_Y}%`,
+      width: `${placement?.w ?? noteWidthPct}%`,
+      transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 20 + (index % 4),
     };
   };
 
-  const renderDecorStyle = (item: DecorItem, index: number): React.CSSProperties => {
-    const seed = `${album.id}-${spreadIndex}-decor-${index}`;
-    const fallback = positionByChronology(index, Math.max(1, decorItems.length), seed, 'full');
-    const x = clamp(Number(item.x ?? fallback.x), 2, 94);
-    const y = clamp(Number(item.y ?? fallback.y), 3, 92);
-    const rotation = Number(item.rotation ?? fallback.rotate);
-    const size = clamp(Number(item.size ?? 1), 0.75, 1.4);
+  const renderDecorStyle = (_item: DecorItem, index: number): React.CSSProperties => {
+    const placement = layoutByType.decorByIndex.get(index);
     return {
-      left: `${x}%`,
-      top: `${y}%`,
-      transform: `rotate(${rotation}deg) scale(${size})`,
+      left: `${placement?.x ?? CANVAS_MIN_X}%`,
+      top: `${placement?.y ?? CANVAS_MIN_Y}%`,
+      transform: `rotate(${placement?.rotation ?? 0}deg) scale(${placement?.size ?? 1})`,
       zIndex: 2,
       pointerEvents: editable ? 'auto' : 'none',
     };
@@ -367,6 +513,11 @@ export function PhotoAlbumStage({
   return (
     <div className="catn8-scrapbook-stage catn8-scrapbook-stage-user">
       <div className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={{ transform: `scale(${zoom})` }}>
+        <div className="catn8-scrapbook-corner catn8-scrapbook-corner-tl" aria-hidden="true" />
+        <div className="catn8-scrapbook-corner catn8-scrapbook-corner-br" aria-hidden="true" />
+        <div className="catn8-scrapbook-tape catn8-scrapbook-tape-top" aria-hidden="true" />
+        <div className="catn8-scrapbook-tape catn8-scrapbook-tape-right" aria-hidden="true" />
+
         <button
           type="button"
           className="catn8-stage-nav catn8-stage-nav-prev"
@@ -412,8 +563,22 @@ export function PhotoAlbumStage({
               key={item.id}
               className="catn8-scatter-emoji"
               style={renderDecorStyle(item, index)}
-              onMouseDown={editable ? () => setDragging({ type: 'decor', index }) : undefined}
             >
+              {editable ? (
+                <button
+                  type="button"
+                  className="catn8-drag-handle catn8-drag-handle-emoji"
+                  aria-label="Drag decor item"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setDragging({ type: 'decor', index });
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  ⠿
+                </button>
+              ) : null}
               {item.emoji}
             </span>
           ))}
@@ -427,8 +592,22 @@ export function PhotoAlbumStage({
                 key={item.key}
                 style={renderMediaStyle(index)}
                 onClick={() => setViewerTarget({ type: 'media', spreadIndex, itemIndex: index })}
-                onMouseDown={editable ? () => setDragging({ type: 'media', index }) : undefined}
               >
+                {editable ? (
+                  <button
+                    type="button"
+                    className="catn8-drag-handle"
+                    aria-label="Drag media item"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    ⠿
+                  </button>
+                ) : null}
                 {isVideoMedia(imageSrc, item.mediaType) ? (
                   <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
                 ) : (
@@ -453,8 +632,22 @@ export function PhotoAlbumStage({
                     onEditNoteText(index, next.trim());
                   }
                 } : undefined}
-                onMouseDown={editable ? () => setDragging({ type: 'note', index }) : undefined}
               >
+                {editable ? (
+                  <button
+                    type="button"
+                    className="catn8-drag-handle"
+                    aria-label="Drag note item"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDragging({ type: 'note', index });
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    ⠿
+                  </button>
+                ) : null}
                 <div className="catn8-scatter-note-inner" style={{ borderColor: theme.borderColor, backgroundColor: theme.accentColor }}>
                   <span className="catn8-scatter-note-emoji">{theme.emojis[index % theme.emojis.length]}</span>
                   <p>{display}</p>

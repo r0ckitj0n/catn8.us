@@ -37,6 +37,9 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     .map((line) => line.trim())
     .filter((line) => Boolean(line) && !line.startsWith('Attachment') && line.length > 2)
     .slice(0, 8);
+  const notesMidpoint = Math.ceil(spreadNotes.length / 2);
+  const leftNotes = spreadNotes.slice(0, notesMidpoint);
+  const rightNotes = spreadNotes.slice(notesMidpoint);
 
   const viewerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
@@ -178,14 +181,14 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                             ))}
                           </div>
                           <div className="catn8-scrapbook-notes">
-                            {spreadNotes.map((note, idx) => (
+                            {leftNotes.map((note, idx) => (
                               <div className="catn8-scrapbook-note" key={`note-${idx}`}>{note}</div>
                             ))}
                           </div>
                         </div>
                         <div className="catn8-scrapbook-page-right">
                           <div className="catn8-polaroid-grid">
-                            {(rightImages.length > 0 ? rightImages : []).map((image, idx) => (
+                            {(rightImages.length > 0 ? rightImages : leftImages.slice(0, 1)).map((image, idx) => (
                               <figure className="catn8-polaroid" key={`${selectedAlbum.id}-${state.pageIndex}-right-${idx}`}>
                                 {(() => {
                                   const mediaKey = `${selectedAlbum.id}-${state.pageIndex}-right-${idx}`;
@@ -221,6 +224,11 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                                 })()}
                                 <figcaption className="catn8-polaroid-caption">{image.caption || image.memory_text || selectedSpread?.caption || `Memory #${idx + 1}`}</figcaption>
                               </figure>
+                            ))}
+                          </div>
+                          <div className="catn8-scrapbook-notes">
+                            {(rightNotes.length > 0 ? rightNotes : leftNotes.slice(0, 2)).map((note, idx) => (
+                              <div className="catn8-scrapbook-note" key={`r-note-${idx}`}>{note}</div>
                             ))}
                           </div>
                         </div>

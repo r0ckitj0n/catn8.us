@@ -132,36 +132,25 @@ def apple_ts_to_datetime(value: int) -> Optional[dt.datetime]:
         return None
 
 
+def sanitize_message_text(value: str) -> str:
+    v = (value or "").replace("\r", " ").replace("\n", " ").replace("\x00", " ").strip()
+    if not v:
+        return ""
+    # Remove frequent attributed-string serialization garbage.
+    v = re.sub(r"\b(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData)\b", " ", v)
+    v = re.sub(r"\bkIM[A-Za-z0-9_]+\b", " ", v)
+    v = re.sub(r"\biI\b", " ", v)
+    v = re.sub(r"\s+", " ", v).strip()
+    # Drop lines that are mostly token junk.
+    token_hits = len(re.findall(r"\b(NS|NSMutable|NSDictionary|kIM|streamtyped)\w*\b", v))
+    if token_hits >= 3:
+        return ""
+    return v
+
+
 def extract_text_from_attributed_body(blob: bytes) -> str:
     if not blob:
         return ""
-
-    noise_tokens = {
-        "streamtyped", "NSMutableAttributedString", "NSAttributedString", "NSObject", "NSMutableString",
-        "NSString", "NSDictionary", "NSNumber", "NSValue", "NSMutableData", "NSData",
-    }
-
-    def clean_text(value: str) -> str:
-        v = (value or "").replace("\r", " ").replace("\n", " ").replace("\x00", " ").strip()
-        if not v:
-            return ""
-        words = [w for w in re.split(r"\s+", v) if w]
-        kept = []
-        for w in words:
-            if w in noise_tokens:
-                continue
-            if w.startswith("kIM"):
-                continue
-            if w in {"iI"}:
-                continue
-            kept.append(w)
-        out = " ".join(kept)
-        out = re.sub(r"\s+", " ", out).strip()
-        if len(out) < 2:
-            return ""
-        if not re.search(r"[A-Za-z]", out):
-            return ""
-        return out
 
     # First try plist decoding for newer iMessage attributed payloads.
     try:
@@ -186,7 +175,7 @@ def extract_text_from_attributed_body(blob: bytes) -> str:
                 seen: Set[str] = set()
                 uniq: List[str] = []
                 for s in strings:
-                    c = clean_text(s)
+                    c = sanitize_message_text(s)
                     if not c or c in seen:
                         continue
                     seen.add(c)
@@ -203,7 +192,7 @@ def extract_text_from_attributed_body(blob: bytes) -> str:
     segments = re.findall(r"NSString\s+(.+?)(?:\s+iI\s+NSDictionary|\s+NSDictionary|$)", decoded)
     cleaned = []
     for seg in segments:
-        c = clean_text(seg)
+        c = sanitize_message_text(seg)
         if c:
             cleaned.append(c)
     if not cleaned:
@@ -306,13 +295,13 @@ def load_messages(messages_db: Path, handles: Sequence[str], start: dt.date, end
         if t.date() < start or t.date() > end:
             continue
         mid = int(r["message_id"])
-        text_value = str(r["text"] or "").strip()
+        text_value = sanitize_message_text(str(r["text"] or ""))
         if not text_value and r["attributed_body"] is not None:
             attr = r["attributed_body"]
             if isinstance(attr, memoryview):
                 attr = bytes(attr)
             if isinstance(attr, (bytes, bytearray)):
-                text_value = extract_text_from_attributed_body(bytes(attr))
+                text_value = sanitize_message_text(extract_text_from_attributed_body(bytes(attr)))
 
         if mid not in grouped:
             grouped[mid] = MessageRow(

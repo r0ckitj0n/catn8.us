@@ -18,6 +18,14 @@ interface PhotoAlbumStageProps {
   onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
   onMoveDecor?: (index: number, patch: { x: number; y: number }) => void;
   onEditNoteText?: (index: number, nextText: string) => void;
+  onEditMediaCaption?: (index: number, nextCaption: string) => void;
+  onEditDecor?: (index: number, patch: { emoji?: string; size?: number }) => void;
+  onDuplicateMedia?: (index: number) => void;
+  onDuplicateNote?: (index: number) => void;
+  onDuplicateDecor?: (index: number) => void;
+  onDeleteMedia?: (index: number) => void;
+  onDeleteNote?: (index: number) => void;
+  onDeleteDecor?: (index: number) => void;
   onBackToAlbums?: () => void;
 }
 
@@ -83,17 +91,41 @@ function formatNoteText(note: NoteItem): string {
   return `${note.speaker}${timePart}: ${note.text}`;
 }
 
+function parseClockToMinutes(value?: string): number | null {
+  if (!value) {
+    return null;
+  }
+  const match = String(value).trim().match(/^([0-9]{1,2}):([0-9]{2})\s*([AP]M)$/i);
+  if (!match) {
+    return null;
+  }
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = match[3].toUpperCase();
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute < 0 || minute > 59 || hour < 1 || hour > 12) {
+    return null;
+  }
+  if (period === 'AM') {
+    if (hour === 12) {
+      hour = 0;
+    }
+  } else if (hour !== 12) {
+    hour += 12;
+  }
+  return (hour * 60) + minute;
+}
+
 function positionByFlow(index: number, total: number, seed: string): { x: number; y: number; rotate: number } {
   const hash = hashValue(`${seed}-${index}`);
-  const spreadStep = 75 / Math.max(2, total + 1);
-  const laneCount = total >= 14 ? 5 : total >= 8 ? 4 : 3;
-  const lane = Math.floor(hash / 19) % laneCount;
-  const laneWidth = 80 / laneCount;
-  const baseY = 6 + (index * spreadStep);
-  const jitterY = (((Math.floor(hash / 101) % 100) / 100) - 0.5) * 7;
-  const driftX = (((Math.floor(hash / 37) % 100) / 100) - 0.5) * 18;
-  const x = clamp(7 + (lane * laneWidth) + (laneWidth * 0.5) + driftX, 3, 90);
-  const y = clamp(baseY + jitterY, 4, 90);
+  const progress = total <= 1 ? 0.5 : index / (total - 1);
+  const baseX = 5 + (progress * 84);
+  const baseY = 5 + (progress * 84);
+  const jitterX = (((Math.floor(hash / 37) % 100) / 100) - 0.5) * 20;
+  const jitterY = (((Math.floor(hash / 101) % 100) / 100) - 0.5) * 12;
+  const minDiagX = 4 + (progress * 46);
+  const minDiagY = 4 + (progress * 52);
+  const x = clamp(Math.max(baseX + jitterX, minDiagX), 3, 90);
+  const y = clamp(Math.max(baseY + jitterY, minDiagY), 4, 90);
   const rotate = ((Math.floor(hash / 19) % 13) - 6);
   return { x, y, rotate };
 }
@@ -272,6 +304,12 @@ type LayoutItem = {
   size?: number;
 };
 
+type SelectedItem = {
+  type: 'media' | 'note' | 'decor';
+  index: number;
+  sourceIndex?: number;
+};
+
 const CANVAS_MIN_X = 2;
 const CANVAS_MAX_X = 98;
 const CANVAS_MIN_Y = 4;
@@ -335,6 +373,53 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
   return resolved;
 }
 
+function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], spreadTitle: string): {
+  mediaOrder: Map<number, number>;
+  noteOrder: Map<number, number>;
+  total: number;
+} {
+  const mediaOrder = new Map<number, number>();
+  const noteOrder = new Map<number, number>();
+  const timeline: Array<{ type: 'media' | 'note'; index: number; orderKey: number }> = [];
+  const spreadDateMs = Date.parse(String(spreadTitle || '').trim());
+
+  mediaItems.forEach((item, index) => {
+    const fallback = 10_000_000_000 + index;
+    timeline.push({
+      type: 'media',
+      index,
+      orderKey: typeof item.capturedAtMs === 'number' ? item.capturedAtMs : fallback,
+    });
+  });
+
+  notes.forEach((note, index) => {
+    const minuteOffset = parseClockToMinutes(note.time);
+    const fallback = 20_000_000_000 + index;
+    const orderKey = Number.isFinite(spreadDateMs) && minuteOffset !== null
+      ? (spreadDateMs + (minuteOffset * 60 * 1000))
+      : fallback;
+    timeline.push({ type: 'note', index, orderKey });
+  });
+
+  timeline.sort((a, b) => {
+    if (a.orderKey !== b.orderKey) {
+      return a.orderKey - b.orderKey;
+    }
+    return a.index - b.index;
+  });
+
+  timeline.forEach((entry, flowIndex) => {
+    if (entry.type === 'media') {
+      mediaOrder.set(entry.index, flowIndex);
+    } else {
+      noteOrder.set(entry.index, flowIndex);
+    }
+  });
+
+  const total = Math.max(1, timeline.length);
+  return { mediaOrder, noteOrder, total };
+}
+
 export function PhotoAlbumStage({
   album,
   spreadIndex,
@@ -348,6 +433,14 @@ export function PhotoAlbumStage({
   onMoveNote,
   onMoveDecor,
   onEditNoteText,
+  onEditMediaCaption,
+  onEditDecor,
+  onDuplicateMedia,
+  onDuplicateNote,
+  onDuplicateDecor,
+  onDeleteMedia,
+  onDeleteNote,
+  onDeleteDecor,
   onBackToAlbums,
 }: PhotoAlbumStageProps) {
   const spread = album.spec.spreads[spreadIndex] || null;
@@ -361,16 +454,24 @@ export function PhotoAlbumStage({
 
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
   const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number; sourceIndex?: number }>(null);
+  const [selectedItem, setSelectedItem] = React.useState<SelectedItem | null>(null);
+  const dragStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const dragMovedRef = React.useRef(false);
+  const suppressClickRef = React.useRef(false);
+  const canvasRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     setViewerTarget(null);
     setDragging(null);
+    setSelectedItem(null);
   }, [album.id, spreadIndex]);
 
   const layoutByType = React.useMemo(() => {
+    const flow = createFlowOrders(mediaItems, notes, spread?.title || '');
     const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
       const source = spread?.images?.[item.sourceIndex];
-      const fallback = positionByFlow(index, Math.max(1, mediaItems.length), `${album.id}-${spreadIndex}-media`);
+      const flowIndex = flow.mediaOrder.get(index) ?? index;
+      const fallback = positionByFlow(flowIndex, flow.total, `${album.id}-${spreadIndex}-flow`);
       const w = clamp(Number(source?.w ?? mediaWidthPct), 12, 26);
       return {
         id: `media-${item.sourceIndex}`,
@@ -385,7 +486,8 @@ export function PhotoAlbumStage({
       };
     });
     const noteLayout: LayoutItem[] = notes.map((note, index) => {
-      const fallback = positionByFlow(index, Math.max(1, notes.length), `${album.id}-${spreadIndex}-note`);
+      const flowIndex = flow.noteOrder.get(index) ?? (mediaItems.length + index);
+      const fallback = positionByFlow(flowIndex, flow.total, `${album.id}-${spreadIndex}-flow`);
       const w = clamp(Number(note.w ?? noteWidthPct), 14, 28);
       return {
         id: `note-${index}`,
@@ -451,11 +553,22 @@ export function PhotoAlbumStage({
   const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1) : null;
   const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1) : null;
 
-  const onMouseMove = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const applyDragPosition = React.useCallback((clientX: number, clientY: number) => {
     if (!editable || !dragging) {
       return;
     }
-    const canvas = event.currentTarget.getBoundingClientRect();
+    if (dragStartRef.current) {
+      const dx = clientX - dragStartRef.current.x;
+      const dy = clientY - dragStartRef.current.y;
+      if ((dx * dx) + (dy * dy) > 16) {
+        dragMovedRef.current = true;
+      }
+    }
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) {
+      return;
+    }
+    const canvas = canvasEl.getBoundingClientRect();
     const currentLayout = dragging.type === 'media'
       ? layoutByType.mediaByIndex.get(dragging.index)
       : dragging.type === 'note'
@@ -463,8 +576,8 @@ export function PhotoAlbumStage({
         : layoutByType.decorByIndex.get(dragging.index);
     const widthPct = currentLayout?.w ?? 8;
     const heightPct = currentLayout?.h ?? 8;
-    const x = clamp(((event.clientX - canvas.left) / canvas.width) * 100, CANVAS_MIN_X, CANVAS_MAX_X - widthPct);
-    const y = clamp(((event.clientY - canvas.top) / canvas.height) * 100, CANVAS_MIN_Y, CANVAS_MAX_Y - heightPct);
+    const x = clamp(((clientX - canvas.left) / canvas.width) * 100, CANVAS_MIN_X, CANVAS_MAX_X - widthPct);
+    const y = clamp(((clientY - canvas.top) / canvas.height) * 100, CANVAS_MIN_Y, CANVAS_MAX_Y - heightPct);
     if (dragging.type === 'media' && onMoveMedia) {
       onMoveMedia(dragging.sourceIndex ?? dragging.index, { x, y });
     }
@@ -475,6 +588,135 @@ export function PhotoAlbumStage({
       onMoveDecor(dragging.index, { x, y });
     }
   }, [editable, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote]);
+
+  const endDragging = React.useCallback(() => {
+    if (dragMovedRef.current) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 180);
+    }
+    dragMovedRef.current = false;
+    dragStartRef.current = null;
+    setDragging(null);
+  }, []);
+
+  React.useEffect(() => {
+    if (!editable || !dragging) {
+      return undefined;
+    }
+    const onWindowMove = (event: MouseEvent) => {
+      applyDragPosition(event.clientX, event.clientY);
+    };
+    const onWindowUp = () => {
+      endDragging();
+    };
+    window.addEventListener('mousemove', onWindowMove);
+    window.addEventListener('mouseup', onWindowUp);
+    return () => {
+      window.removeEventListener('mousemove', onWindowMove);
+      window.removeEventListener('mouseup', onWindowUp);
+    };
+  }, [applyDragPosition, dragging, editable, endDragging]);
+
+  const onItemClick = React.useCallback((item: SelectedItem, viewerType: ViewerType | null) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (editable) {
+      setSelectedItem(item);
+      return;
+    }
+    if (viewerType) {
+      setViewerTarget({ type: viewerType, spreadIndex, itemIndex: item.index });
+    }
+  }, [editable, spreadIndex]);
+
+  const selectedNoteText = React.useMemo(() => {
+    if (!selectedItem || selectedItem.type !== 'note') {
+      return '';
+    }
+    return notes[selectedItem.index] ? formatNoteText(notes[selectedItem.index]) : '';
+  }, [selectedItem, notes]);
+
+  const onViewSelected = React.useCallback(() => {
+    if (!selectedItem || selectedItem.type === 'decor') {
+      return;
+    }
+    setViewerTarget({ type: selectedItem.type, spreadIndex, itemIndex: selectedItem.index });
+  }, [selectedItem, spreadIndex]);
+
+  const onEditSelected = React.useCallback(() => {
+    if (!selectedItem) {
+      return;
+    }
+    if (selectedItem.type === 'media') {
+      const media = mediaItems[selectedItem.index];
+      if (!media || !onEditMediaCaption) {
+        return;
+      }
+      const next = window.prompt('Edit media caption', media.caption || '');
+      if (typeof next === 'string') {
+        onEditMediaCaption(selectedItem.sourceIndex ?? selectedItem.index, next.trim());
+      }
+      return;
+    }
+    if (selectedItem.type === 'note') {
+      if (!onEditNoteText) {
+        return;
+      }
+      const next = window.prompt('Edit text', selectedNoteText);
+      if (typeof next === 'string' && next.trim()) {
+        onEditNoteText(selectedItem.index, next.trim());
+      }
+      return;
+    }
+    if (selectedItem.type === 'decor' && onEditDecor) {
+      const current = decorItems[selectedItem.index];
+      const nextEmoji = window.prompt('Edit emoji', current?.emoji || '✨');
+      if (typeof nextEmoji === 'string' && nextEmoji.trim()) {
+        onEditDecor(selectedItem.index, { emoji: nextEmoji.trim() });
+      }
+    }
+  }, [selectedItem, mediaItems, onEditMediaCaption, onEditNoteText, selectedNoteText, onEditDecor, decorItems]);
+
+  const onDuplicateSelected = React.useCallback(() => {
+    if (!selectedItem) {
+      return;
+    }
+    if (selectedItem.type === 'media' && onDuplicateMedia) {
+      onDuplicateMedia(selectedItem.sourceIndex ?? selectedItem.index);
+      return;
+    }
+    if (selectedItem.type === 'note' && onDuplicateNote) {
+      onDuplicateNote(selectedItem.index);
+      return;
+    }
+    if (selectedItem.type === 'decor' && onDuplicateDecor) {
+      onDuplicateDecor(selectedItem.index);
+    }
+  }, [selectedItem, onDuplicateMedia, onDuplicateNote, onDuplicateDecor]);
+
+  const onDeleteSelected = React.useCallback(() => {
+    if (!selectedItem) {
+      return;
+    }
+    if (selectedItem.type === 'media' && onDeleteMedia) {
+      onDeleteMedia(selectedItem.sourceIndex ?? selectedItem.index);
+      setSelectedItem(null);
+      return;
+    }
+    if (selectedItem.type === 'note' && onDeleteNote) {
+      onDeleteNote(selectedItem.index);
+      setSelectedItem(null);
+      return;
+    }
+    if (selectedItem.type === 'decor' && onDeleteDecor) {
+      onDeleteDecor(selectedItem.index);
+      setSelectedItem(null);
+    }
+  }, [selectedItem, onDeleteMedia, onDeleteNote, onDeleteDecor]);
 
   const renderMediaStyle = (index: number): React.CSSProperties => {
     const placement = layoutByType.mediaByIndex.get(index);
@@ -552,16 +794,17 @@ export function PhotoAlbumStage({
         </div>
 
         <div
+          ref={canvasRef}
           className="catn8-scatter-canvas"
-          onMouseMove={onMouseMove}
-          onMouseUp={() => setDragging(null)}
-          onMouseLeave={() => setDragging(null)}
+          onMouseUp={endDragging}
+          onMouseLeave={endDragging}
         >
           {decorItems.map((item, index) => (
             <span
               key={item.id}
               className="catn8-scatter-emoji"
               style={renderDecorStyle(item, index)}
+              onClick={() => onItemClick({ type: 'decor', index }, null)}
             >
               {editable ? (
                 <button
@@ -571,6 +814,8 @@ export function PhotoAlbumStage({
                   onMouseDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    dragStartRef.current = { x: event.clientX, y: event.clientY };
+                    dragMovedRef.current = false;
                     setDragging({ type: 'decor', index });
                   }}
                   onClick={(event) => event.stopPropagation()}
@@ -590,7 +835,7 @@ export function PhotoAlbumStage({
                 className="catn8-scatter-card catn8-scatter-media"
                 key={item.key}
                 style={renderMediaStyle(index)}
-                onClick={() => setViewerTarget({ type: 'media', spreadIndex, itemIndex: index })}
+                onClick={() => onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media')}
               >
                 {editable ? (
                   <button
@@ -600,6 +845,8 @@ export function PhotoAlbumStage({
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      dragStartRef.current = { x: event.clientX, y: event.clientY };
+                      dragMovedRef.current = false;
                       setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
                     }}
                     onClick={(event) => event.stopPropagation()}
@@ -624,7 +871,7 @@ export function PhotoAlbumStage({
                 className="catn8-scatter-card catn8-scatter-note"
                 key={note.id}
                 style={renderNoteStyle(note, index)}
-                onClick={() => setViewerTarget({ type: 'note', spreadIndex, itemIndex: index })}
+                onClick={() => onItemClick({ type: 'note', index }, 'note')}
                 onDoubleClick={editable && onEditNoteText ? () => {
                   const next = window.prompt('Edit text', display);
                   if (typeof next === 'string' && next.trim()) {
@@ -640,6 +887,8 @@ export function PhotoAlbumStage({
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      dragStartRef.current = { x: event.clientX, y: event.clientY };
+                      dragMovedRef.current = false;
                       setDragging({ type: 'note', index });
                     }}
                     onClick={(event) => event.stopPropagation()}
@@ -654,6 +903,21 @@ export function PhotoAlbumStage({
               </div>
             );
           })}
+
+          {editable && selectedItem ? (
+            <div className="catn8-item-actions" onClick={(event) => event.stopPropagation()}>
+              <span className="catn8-item-actions-label">
+                {selectedItem.type === 'media' ? 'Media' : selectedItem.type === 'note' ? 'Text' : 'Decor'}
+              </span>
+              {selectedItem.type !== 'decor' ? (
+                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onViewSelected}>View</button>
+              ) : null}
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onEditSelected}>Edit</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDuplicateSelected}>Duplicate</button>
+              <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDeleteSelected}>Delete</button>
+              <button type="button" className="btn btn-sm btn-dark" onClick={() => setSelectedItem(null)}>Close</button>
+            </div>
+          ) : null}
 
         </div>
       </div>

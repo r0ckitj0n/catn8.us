@@ -419,6 +419,28 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   font-size: 0.82rem;
 }
 
+.catn8-item-actions {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(60, 42, 24, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 248, 234, 0.95);
+  box-shadow: 0 6px 16px rgba(50, 33, 18, 0.2);
+}
+
+.catn8-item-actions-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #52341f;
+  margin-right: 0.15rem;
+}
+
 .catn8-element-viewer-overlay {
   position: fixed;
   inset: 0;

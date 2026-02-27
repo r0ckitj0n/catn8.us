@@ -2,7 +2,7 @@ import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
 import { auditPhotoAlbum } from '../../utils/photoAlbumAudit';
-import { sanitizeAlbumMessageText } from '../../utils/photoAlbumText';
+import { sanitizeAlbumMessageText, splitAlbumMessages } from '../../utils/photoAlbumText';
 import { PhotoAlbumStage } from './PhotoAlbumStage';
 
 interface PhotoAlbumAdminModalProps {
@@ -93,6 +93,17 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
       return next;
     });
   }, [album, onAlbumChange, pageIndex]);
+
+  const hydrateTextItems = React.useCallback((targetSpread: NonNullable<PhotoAlbum['spec']['spreads'][number]>) => {
+    if (Array.isArray(targetSpread.text_items) && targetSpread.text_items.length > 0) {
+      return;
+    }
+    const lines = splitAlbumMessages(targetSpread.caption || '').map((line) => line.trim()).filter(Boolean);
+    targetSpread.text_items = lines.map((line, index) => ({
+      id: `note-${Date.now()}-${index}`,
+      text: line.replace(/^Contact\s*:/i, 'Trinity:'),
+    }));
+  }, []);
 
   if (!open || !album) {
     return null;
@@ -568,11 +579,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 if (!targetSpread) {
                   return prev;
                 }
+                hydrateTextItems(targetSpread);
                 if (!Array.isArray(targetSpread.text_items)) {
-                  targetSpread.text_items = [];
+                  return next;
                 }
                 if (!targetSpread.text_items[index]) {
-                  targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: '' };
+                  targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: 'Jon: New note' };
                 }
                 targetSpread.text_items[index].x = patch.x;
                 targetSpread.text_items[index].y = patch.y;
@@ -593,14 +605,115 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 if (!targetSpread) {
                   return prev;
                 }
+                hydrateTextItems(targetSpread);
                 if (!Array.isArray(targetSpread.text_items)) {
-                  targetSpread.text_items = [];
+                  return next;
                 }
                 if (!targetSpread.text_items[index]) {
                   targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: nextText };
                 } else {
                   targetSpread.text_items[index].text = nextText;
                 }
+                return next;
+              })}
+              onEditMediaCaption={(index, nextCaption) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const target = next.spec.spreads[pageIndex]?.images?.[index];
+                if (target) {
+                  target.caption = nextCaption;
+                }
+                return next;
+              })}
+              onEditDecor={(index, patch) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
+                if (target) {
+                  if (typeof patch.emoji === 'string') {
+                    target.emoji = patch.emoji;
+                  }
+                  if (typeof patch.size === 'number') {
+                    target.size = patch.size;
+                  }
+                }
+                return next;
+              })}
+              onDuplicateMedia={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread || !Array.isArray(targetSpread.images) || !targetSpread.images[index]) {
+                  return prev;
+                }
+                const source = targetSpread.images[index];
+                targetSpread.images.splice(index + 1, 0, {
+                  ...source,
+                  x: Math.min(92, Number(source.x ?? 10) + 4),
+                  y: Math.min(90, Number(source.y ?? 10) + 4),
+                });
+                return next;
+              })}
+              onDuplicateNote={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread) {
+                  return prev;
+                }
+                hydrateTextItems(targetSpread);
+                if (!Array.isArray(targetSpread.text_items) || !targetSpread.text_items[index]) {
+                  return prev;
+                }
+                const source = targetSpread.text_items[index];
+                targetSpread.text_items.splice(index + 1, 0, {
+                  ...source,
+                  id: `${source.id || 'note'}-copy-${Date.now()}`,
+                  x: Math.min(92, Number(source.x ?? 10) + 3),
+                  y: Math.min(90, Number(source.y ?? 10) + 3),
+                });
+                return next;
+              })}
+              onDuplicateDecor={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread || !Array.isArray(targetSpread.decor_items) || !targetSpread.decor_items[index]) {
+                  return prev;
+                }
+                const source = targetSpread.decor_items[index];
+                targetSpread.decor_items.splice(index + 1, 0, {
+                  ...source,
+                  id: `${source.id || 'decor'}-copy-${Date.now()}`,
+                  x: Math.min(94, Number(source.x ?? 20) + 4),
+                  y: Math.min(92, Number(source.y ?? 20) + 4),
+                });
+                return next;
+              })}
+              onDeleteMedia={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread || !Array.isArray(targetSpread.images)) {
+                  return prev;
+                }
+                targetSpread.images.splice(index, 1);
+                return next;
+              })}
+              onDeleteNote={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread) {
+                  return prev;
+                }
+                hydrateTextItems(targetSpread);
+                if (!Array.isArray(targetSpread.text_items)) {
+                  return prev;
+                }
+                targetSpread.text_items.splice(index, 1);
+                return next;
+              })}
+              onDeleteDecor={(index) => onAlbumChange((prev) => {
+                const next = structuredClone(prev);
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread || !Array.isArray(targetSpread.decor_items)) {
+                  return prev;
+                }
+                targetSpread.decor_items.splice(index, 1);
                 return next;
               })}
             />

@@ -603,7 +603,7 @@ def convert_to_png(src: Path, dst: Path) -> bool:
             return True
 
     # Last-resort fallback: use Quick Look thumbnail generation on macOS.
-    thumb_dir = dst.parent / ".ql_tmp"
+    thumb_dir = Path(".local/state/photos_ql_tmp").resolve()
     thumb_dir.mkdir(parents=True, exist_ok=True)
     p_ql = subprocess.run(["qlmanage", "-t", "-s", "2048", "-o", str(thumb_dir), str(src)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if p_ql.returncode == 0:

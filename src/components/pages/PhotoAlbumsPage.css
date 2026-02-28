@@ -391,10 +391,10 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-polaroid-caption {
-  font-size: 0.82rem;
+  font-size: var(--catn8-caption-font-size, 0.82rem);
   margin-top: 0.45rem;
   color: rgba(47, 41, 69, 0.88);
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-line;
 }
 
@@ -418,8 +418,8 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-scatter-note p {
   margin: 0;
   color: #2f2535;
-  font-size: 0.84rem;
-  line-height: 1.4;
+  font-size: var(--catn8-note-font-size, 0.84rem);
+  line-height: 1.5;
   white-space: pre-line;
 }
 
@@ -620,6 +620,11 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-admin-preview-panel .catn8-scatter-canvas {
   min-height: 0;
   height: 100%;
+}
+
+.catn8-admin-preview-panel .catn8-scatter-card:hover,
+.catn8-admin-preview-panel .catn8-scatter-card:focus-within {
+  --catn8-card-scale: 1;
 }
 
 @media (max-width: 991px) {

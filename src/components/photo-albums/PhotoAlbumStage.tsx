@@ -109,6 +109,9 @@ function shouldHideNoteText(value: string): boolean {
   if (!normalized) {
     return true;
   }
+  if (/\bno\s+message\s+text\b/.test(normalized)) {
+    return true;
+  }
   return normalized.includes('attachment media currently unavailable');
 }
 
@@ -369,7 +372,7 @@ const CANVAS_MIN_X = 2;
 const CANVAS_MAX_X = 98;
 const CANVAS_MIN_Y = 4;
 const CANVAS_MAX_Y = 94;
-const MAX_COVERAGE = 0.015;
+const MAX_COVERAGE = 0.01;
 const MAX_CORE_OVERLAP = 0;
 const OVERLAP_EPSILON = 0.001;
 const RESERVED_PADDING_PCT = 1.4;
@@ -394,9 +397,9 @@ function estimateNoteHeightPct(note: NoteItem, widthPct: number): number {
   const text = formatNoteText(note);
   const charsPerLine = Math.max(12, Math.floor(widthPct * 2.4));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  const base = 6.2;
-  const lineHeight = 2.9;
-  return clamp(base + (lines * lineHeight), 10, 40);
+  const base = 7.8;
+  const lineHeight = 3.5;
+  return clamp(base + (lines * lineHeight), 12, 54);
 }
 
 function estimateMediaHeightPct(caption: string, widthPct: number): number {
@@ -405,9 +408,9 @@ function estimateMediaHeightPct(caption: string, widthPct: number): number {
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
   // Image footprint (4:3) + frame/padding + caption text block.
   const imageHeight = widthPct * 0.76;
-  const frameBase = 3.2;
-  const captionLineHeight = 2.3;
-  return clamp(imageHeight + frameBase + (lines * captionLineHeight), 13, 58);
+  const frameBase = 4.2;
+  const captionLineHeight = 2.8;
+  return clamp(imageHeight + frameBase + (lines * captionLineHeight), 15, 66);
 }
 
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
@@ -815,9 +818,9 @@ export function PhotoAlbumStage({
     const estimatedNoteArea = notes.reduce((sum, item) => sum + (noteWidthPct * estimateNoteHeightPct(item, noteWidthPct)), 0);
     const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
     const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
-    const targetCoverage = densityCount <= 5 ? 0.82 : densityCount <= 10 ? 0.86 : densityCount <= 16 ? 0.9 : 0.94;
-    const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.82, 2.1);
-    const decorScale = clamp(0.9 + ((sizeScale - 1) * 0.5), 0.75, 1.55);
+    const targetCoverage = densityCount <= 5 ? 0.9 : densityCount <= 10 ? 0.94 : densityCount <= 16 ? 0.98 : 1.02;
+    const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.92, 2.8);
+    const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
 
     const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
       const source = spread?.images?.[item.sourceIndex];
@@ -827,7 +830,7 @@ export function PhotoAlbumStage({
       const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
       const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
       const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
-      const w = clamp(sourceBaseWidth * sizeScale, 10, 36);
+      const w = clamp(sourceBaseWidth * sizeScale, 12, 48);
       return {
         id: `media-${item.sourceIndex}`,
         type: 'media',
@@ -848,7 +851,7 @@ export function PhotoAlbumStage({
       const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
       const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
       const noteBaseWidth = Number(note.w ?? noteWidthPct);
-      const w = clamp(noteBaseWidth * sizeScale, 11, 38);
+      const w = clamp(noteBaseWidth * sizeScale, 13, 52);
       return {
         id: `note-${index}`,
         type: 'note',
@@ -865,7 +868,7 @@ export function PhotoAlbumStage({
       const fallback = positionByDecorScatter(index, Math.max(1, decorItems.length), `${album.id}-${spreadIndex}-decor`);
       const hasPinnedPosition = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
       const savedSize = Number(item.size ?? 1);
-      const size = clamp(savedSize * decorScale, 0.75, 1.8);
+      const size = clamp(savedSize * decorScale, 0.85, 2.2);
       const footprint = 4.6 * size;
       return {
         id: `decor-${index}`,
@@ -1095,10 +1098,13 @@ export function PhotoAlbumStage({
 
   const renderMediaStyle = (index: number): React.CSSProperties => {
     const placement = layoutByType.mediaByIndex.get(index);
+    const widthPct = placement?.w ?? mediaWidthPct;
+    const captionFontRem = clamp(0.92 + ((widthPct - 14) * 0.018), 0.92, 1.32);
     return {
       left: `${placement?.x ?? CANVAS_MIN_X}%`,
       top: `${placement?.y ?? CANVAS_MIN_Y}%`,
-      width: `${placement?.w ?? mediaWidthPct}%`,
+      width: `${widthPct}%`,
+      ['--catn8-caption-font-size' as string]: `${captionFontRem.toFixed(2)}rem`,
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 8 + (index % 4),
     };
@@ -1106,10 +1112,13 @@ export function PhotoAlbumStage({
 
   const renderNoteStyle = (_note: NoteItem, index: number): React.CSSProperties => {
     const placement = layoutByType.noteByIndex.get(index);
+    const widthPct = placement?.w ?? noteWidthPct;
+    const noteFontRem = clamp(0.95 + ((widthPct - 14) * 0.02), 0.95, 1.42);
     return {
       left: `${placement?.x ?? CANVAS_MIN_X}%`,
       top: `${placement?.y ?? CANVAS_MIN_Y}%`,
-      width: `${placement?.w ?? noteWidthPct}%`,
+      width: `${widthPct}%`,
+      ['--catn8-note-font-size' as string]: `${noteFontRem.toFixed(2)}rem`,
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 20 + (index % 4),
     };

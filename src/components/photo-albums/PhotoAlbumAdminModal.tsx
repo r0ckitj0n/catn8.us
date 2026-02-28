@@ -58,7 +58,9 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     return auditPhotoAlbum(album);
   }, [album]);
   const textItems = Array.isArray(spread?.text_items) ? spread.text_items : [];
-  const decorItems = Array.isArray(spread?.decor_items) ? spread.decor_items : [];
+  const decorItems = (Array.isArray(spread?.decor_items) ? spread.decor_items : [])
+    .map((item, index) => ({ item, index }))
+    .filter((entry) => Boolean(entry.item && typeof entry.item === 'object'));
 
   React.useEffect(() => {
     if (!open) {
@@ -522,8 +524,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 </div>
               ))}
 
-              {decorItems.map((item, index) => (
-                <div className="catn8-admin-image-editor" key={item.id || `decor-${index}`}>
+              {decorItems.map(({ item, index: sourceIndex }, index) => (
+                <div className="catn8-admin-image-editor" key={item.id || `decor-${sourceIndex}`}>
                   <label className="form-label">Clipart Emoji</label>
                   <input
                     className="form-control"
@@ -531,7 +533,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                     disabled={busy}
                     onChange={(event) => onAlbumChange((prev) => {
                       const next = structuredClone(prev);
-                      const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
+                      const target = next.spec.spreads[pageIndex]?.decor_items?.[sourceIndex];
                       if (target) {
                         target.emoji = event.target.value || '✨';
                       }
@@ -547,7 +549,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                         const next = structuredClone(prev);
                         const target = next.spec.spreads[pageIndex];
                         if (target?.decor_items) {
-                          target.decor_items.splice(index, 1);
+                          target.decor_items.splice(sourceIndex, 1);
                         }
                         return next;
                       })}

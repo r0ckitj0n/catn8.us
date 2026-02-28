@@ -301,16 +301,17 @@ function spreadDecor(album: PhotoAlbum, targetSpreadIndex: number, emojiPool: st
   const spread = album.spec?.spreads?.[targetSpreadIndex];
   const existing = Array.isArray(spread?.decor_items) ? spread.decor_items : [];
   if (existing.length > 0) {
-    return existing
-      .filter((item): item is NonNullable<typeof item> => Boolean(item && typeof item === 'object'))
-      .map((item, idx) => ({
-        id: item.id || `${album.id}-${targetSpreadIndex}-decor-${idx}`,
-        emoji: item.emoji || emojiPool[idx % emojiPool.length] || '✨',
-        x: item.x,
-        y: item.y,
-        size: item.size,
-        rotation: item.rotation,
-      }));
+    return existing.map((item, idx) => {
+      const safe = (item && typeof item === 'object') ? item : {};
+      return {
+        id: (safe as any).id || `${album.id}-${targetSpreadIndex}-decor-${idx}`,
+        emoji: (safe as any).emoji || emojiPool[idx % emojiPool.length] || '✨',
+        x: (safe as any).x,
+        y: (safe as any).y,
+        size: (safe as any).size,
+        rotation: (safe as any).rotation,
+      };
+    });
   }
   return emojiPool.slice(0, 6).map((emoji, index) => {
     const pos = positionByDecorScatter(index, 6, `${album.id}-${targetSpreadIndex}-decor`);
@@ -1323,7 +1324,7 @@ export function PhotoAlbumStage({
                   </button>
                 ) : null}
                 <div className="catn8-scatter-note-inner" style={{ borderColor: theme.borderColor, backgroundColor: theme.accentColor }}>
-                  <span className="catn8-scatter-note-emoji">{theme.emojis[index % theme.emojis.length]}</span>
+                  <span className="catn8-scatter-note-emoji">{theme.emojis[index % Math.max(1, theme.emojis.length)] || '✨'}</span>
                   <p>{display}</p>
                 </div>
               </div>

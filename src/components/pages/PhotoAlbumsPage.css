@@ -90,29 +90,36 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-photo-albums-main.is-fullscreen {
   padding: 0;
   height: 100dvh;
+  width: 100dvw;
+  overflow: hidden;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-stage {
   margin-top: 0;
   height: 100%;
+  width: 100%;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-stage-user {
   margin-top: 0;
   min-height: 0;
   height: 100%;
+  width: 100%;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-scatter {
   min-height: 0;
   height: 100%;
+  width: 100%;
   border-width: 0;
   box-shadow: none;
+  transform: none !important;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scatter-canvas {
   min-height: 0;
   height: 100%;
+  width: 100%;
 }
 
 .catn8-album-toolbar {

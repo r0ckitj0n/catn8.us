@@ -175,6 +175,9 @@ function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMedi
   const images = Array.isArray(spread?.images) ? spread.images : [];
   const list: PreparedMediaItem[] = [];
   images.forEach((image, index) => {
+    if (!image || typeof image !== 'object') {
+      return;
+    }
     const src = String(image.display_src || image.src || '').trim();
     if (!src) {
       return;
@@ -244,6 +247,9 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
   if (spreadTextItems.length > 0) {
     const notes = spreadTextItems
       .map((item, index) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
         const parsed = parseSpeakerLine(item.text || '');
         const fullText = `${(item.speaker as string) || parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`;
         if (shouldHideNoteText(fullText)) {
@@ -295,14 +301,16 @@ function spreadDecor(album: PhotoAlbum, targetSpreadIndex: number, emojiPool: st
   const spread = album.spec?.spreads?.[targetSpreadIndex];
   const existing = Array.isArray(spread?.decor_items) ? spread.decor_items : [];
   if (existing.length > 0) {
-    return existing.map((item, idx) => ({
-      id: item.id || `${album.id}-${targetSpreadIndex}-decor-${idx}`,
-      emoji: item.emoji || emojiPool[idx % emojiPool.length] || '✨',
-      x: item.x,
-      y: item.y,
-      size: item.size,
-      rotation: item.rotation,
-    }));
+    return existing
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && typeof item === 'object'))
+      .map((item, idx) => ({
+        id: item.id || `${album.id}-${targetSpreadIndex}-decor-${idx}`,
+        emoji: item.emoji || emojiPool[idx % emojiPool.length] || '✨',
+        x: item.x,
+        y: item.y,
+        size: item.size,
+        rotation: item.rotation,
+      }));
   }
   return emojiPool.slice(0, 6).map((emoji, index) => {
     const pos = positionByDecorScatter(index, 6, `${album.id}-${targetSpreadIndex}-decor`);
@@ -741,7 +749,7 @@ export function PhotoAlbumStage({
   onDeleteDecor,
   onBackToAlbums,
 }: PhotoAlbumStageProps) {
-  const spread = album.spec.spreads[spreadIndex] || null;
+  const spread = album.spec?.spreads?.[spreadIndex] || null;
   const mediaItems = React.useMemo(() => spreadMedia(album, spreadIndex), [album, spreadIndex]);
   const notes = React.useMemo(() => spreadNotes(album, spreadIndex, mediaItems), [album, spreadIndex, mediaItems]);
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...notes.map((n) => n.text)].join(' '));

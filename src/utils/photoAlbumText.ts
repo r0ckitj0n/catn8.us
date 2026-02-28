@@ -71,7 +71,20 @@ export function splitAlbumMessages(value: unknown): string[] {
 }
 
 export function formatAlbumCaption(value: unknown, maxLines = 4): string {
-  const lines = splitAlbumMessages(value);
+  const rawLines = splitAlbumMessages(value);
+  const lines: string[] = [];
+  for (let i = 0; i < rawLines.length; i += 1) {
+    const current = sanitizeAlbumMessageText(rawLines[i]);
+    const next = sanitizeAlbumMessageText(rawLines[i + 1] || '');
+    const senderMatch = current.match(/^(Jon|Trinity|Unknown)$/i);
+    const sentMatch = next.match(/^Sent\s+(.+)$/i);
+    if (senderMatch && sentMatch) {
+      lines.push(`${senderMatch[1]} ${sentMatch[1]}`.trim());
+      i += 1;
+      continue;
+    }
+    lines.push(current);
+  }
   if (lines.length === 0) {
     return sanitizeAlbumMessageText(value);
   }

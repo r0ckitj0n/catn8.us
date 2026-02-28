@@ -1090,7 +1090,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 page_images: List[Dict[str, str]] = []
                 message_speaker = "Jon" if msg.is_from_me else resolve_incoming_speaker(msg.handle_id, handle_label_map, child.contacts[0])
                 sent_stamp = msg.sent_at.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ")
-                media_stamp_caption = f"{message_speaker} | Sent {sent_stamp}"
+                media_stamp_caption = f"{message_speaker} {sent_stamp}"
 
                 for attachment_filename, attachment_mime in msg.attachments:
                     raw_name = Path(attachment_filename).name if attachment_filename else ""

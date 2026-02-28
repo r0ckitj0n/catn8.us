@@ -563,6 +563,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               canNext={canNext}
               onPrev={onPrevPage}
               onNext={onNextPage}
+              onBackToAlbums={onClose}
               editable
               onMoveMedia={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);

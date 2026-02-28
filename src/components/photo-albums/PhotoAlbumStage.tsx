@@ -91,6 +91,19 @@ function formatNoteText(note: NoteItem): string {
   return `${note.speaker}${timePart}: ${note.text}`;
 }
 
+function isMessageLikeLine(line: string): boolean {
+  return /^(Jon|Trinity|Contact|Unknown)\s*(?:\([0-9]{1,2}:[0-9]{2}\s*[AP]M\)|\[[0-9]{1,2}:[0-9]{2}\s*[AP]M\])?\s*:/i.test(sanitizeAlbumMessageText(line));
+}
+
+function isTranscriptCaption(text: string): boolean {
+  const lines = splitAlbumMessages(text).filter(Boolean);
+  if (!lines.length) {
+    return false;
+  }
+  const messageLikeCount = lines.filter((line) => isMessageLikeLine(line)).length;
+  return messageLikeCount >= 1 && (messageLikeCount / lines.length) >= 0.6;
+}
+
 function shouldHideNoteText(value: string): boolean {
   const normalized = sanitizeAlbumMessageText(value).toLowerCase();
   if (!normalized) {
@@ -190,9 +203,43 @@ function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMedi
 
 function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: PreparedMediaItem[]): NoteItem[] {
   const spread = album.spec?.spreads?.[targetSpreadIndex];
+  const dedup = new Set<string>();
+  const addUniqueNote = (note: NoteItem, out: NoteItem[]) => {
+    const canonical = `${note.speaker}:${note.time || ''}:${note.text}`.toLowerCase();
+    if (!canonical.trim() || dedup.has(canonical)) {
+      return;
+    }
+    dedup.add(canonical);
+    out.push(note);
+  };
+
+  const mediaNotes = media.flatMap((mediaItem, mediaIndex) => (
+    splitAlbumMessages(mediaItem.caption)
+      .map((line, lineIndex) => {
+        if (!isMessageLikeLine(line)) {
+          return null;
+        }
+        const parsed = parseSpeakerLine(line);
+        if (!parsed.body) {
+          return null;
+        }
+        const fullText = `${parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`;
+        if (shouldHideNoteText(fullText)) {
+          return null;
+        }
+        return {
+          id: `${album.id}-${targetSpreadIndex}-media-note-${mediaIndex}-${lineIndex}`,
+          text: parsed.body,
+          speaker: parsed.speaker,
+          time: parsed.time,
+        } as NoteItem;
+      })
+      .filter((item): item is NoteItem => Boolean(item))
+  ));
+
   const spreadTextItems = Array.isArray(spread?.text_items) ? spread.text_items : [];
   if (spreadTextItems.length > 0) {
-    return spreadTextItems
+    const notes = spreadTextItems
       .map((item, index) => {
         const parsed = parseSpeakerLine(item.text || '');
         const fullText = `${(item.speaker as string) || parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`;
@@ -211,38 +258,32 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
         } as NoteItem;
       })
       .filter((item): item is NoteItem => Boolean(item && item.text));
-  }
-
-  const imageTextSet = new Set<string>();
-  for (const mediaItem of media) {
-    splitAlbumMessages(mediaItem.caption).forEach((line) => imageTextSet.add(line.toLowerCase()));
+    const combined: NoteItem[] = [];
+    notes.forEach((note) => addUniqueNote(note, combined));
+    mediaNotes.forEach((note) => addUniqueNote(note, combined));
+    return combined;
   }
 
   const rawLines = splitAlbumMessages(spread?.caption || '');
-  const dedup = new Set<string>();
   const notes: NoteItem[] = [];
+  mediaNotes.forEach((note) => addUniqueNote(note, notes));
   rawLines.forEach((line, index) => {
     const parsed = parseSpeakerLine(line);
     if (!parsed.body) {
       return;
     }
+    if (!isMessageLikeLine(line)) {
+      return;
+    }
     if (shouldHideNoteText(`${parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`)) {
       return;
     }
-    const canonical = `${parsed.speaker}:${parsed.time || ''}:${parsed.body}`.toLowerCase();
-    if (dedup.has(canonical)) {
-      return;
-    }
-    if (imageTextSet.has(line.toLowerCase()) || imageTextSet.has(parsed.body.toLowerCase())) {
-      return;
-    }
-    dedup.add(canonical);
-    notes.push({
+    addUniqueNote({
       id: `${album.id}-${targetSpreadIndex}-note-${index}`,
       text: parsed.body,
       speaker: parsed.speaker,
       time: parsed.time,
-    });
+    }, notes);
   });
   return notes;
 }
@@ -1020,6 +1061,7 @@ export function PhotoAlbumStage({
           {mediaItems.map((item, index) => {
             const imageSrc = item.src;
             const caption = item.caption;
+            const showCaption = Boolean(caption && !isTranscriptCaption(caption));
             return (
               <figure
                 className="catn8-scatter-card catn8-scatter-media"
@@ -1049,7 +1091,7 @@ export function PhotoAlbumStage({
                 ) : (
                   <img className="catn8-polaroid-photo" src={imageSrc} alt={caption || `Memory ${index + 1}`} loading="lazy" />
                 )}
-                <figcaption className="catn8-polaroid-caption">{caption || 'Memory'}</figcaption>
+                {showCaption ? <figcaption className="catn8-polaroid-caption">{caption}</figcaption> : null}
               </figure>
             );
           })}

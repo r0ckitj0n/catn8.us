@@ -104,6 +104,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `file_exists` (TINYINT(1))
 - `has_violet_face` (TINYINT(1))
 - `has_eleanor_face` (TINYINT(1))
+- `has_lyra_face` (TINYINT(1))
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 

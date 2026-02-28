@@ -50,7 +50,7 @@ class MessageRow:
 class AlbumPage:
     sent_at: dt.datetime
     caption: str
-    media_items: List[Tuple[str, str]]
+    media_items: List[Tuple[str, str, str]]
 
 
 @dataclass
@@ -74,6 +74,7 @@ class CatalogMedia:
     captured_at: dt.datetime
     has_violet_face: int
     has_eleanor_face: int
+    has_lyra_face: int
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,6 +86,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--messages-db", default="~/Library/Messages/chat.db")
     p.add_argument("--violet-face-id", type=int, default=None)
     p.add_argument("--eleanor-face-id", type=int, default=None)
+    p.add_argument("--lyra-face-id", type=int, default=None)
     p.add_argument("--violet-birth-date", default="2021-11-29")
     p.add_argument("--eleanor-birth-date", default="2025-12-31")
     p.add_argument("--start-date", default="")
@@ -96,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--target-pages", type=int, default=25)
     p.add_argument("--max-export-items", type=int, default=40)
     p.add_argument("--import-source", default="")
-    p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor"], default="auto")
+    p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor", "lyra"], default="auto")
     p.add_argument("--match-window-hours", type=int, default=72)
     p.add_argument("--max-matched-media-per-message", type=int, default=8)
     p.add_argument("--rebuild-catalog", action="store_true")
@@ -285,6 +287,21 @@ def prompt_face_ids(named_faces: Sequence[FacePerson]) -> Tuple[int, int]:
         print(f"Face ID: {f.person_id:>6} | Name: {f.name} | Tagged Faces: {f.face_count}")
     print("=" * 56)
     return int(input("Enter Face ID for Violet: ").strip()), int(input("Enter Face ID for Eleanor: ").strip())
+
+
+def find_face_id_by_name(named_faces: Sequence[FacePerson], aliases: Sequence[str]) -> Optional[int]:
+    alias_tokens = [str(a).strip().lower() for a in aliases if str(a).strip()]
+    best_id: Optional[int] = None
+    best_count = -1
+    for face in named_faces:
+        name = str(face.name or "").strip().lower()
+        if not name:
+            continue
+        if any(token in name for token in alias_tokens):
+            if int(face.face_count) > best_count:
+                best_count = int(face.face_count)
+                best_id = int(face.person_id)
+    return best_id
 
 
 def load_face_assets(photos_conn: sqlite3.Connection, person_ids: Sequence[int]) -> List[PhotoAsset]:
@@ -531,12 +548,12 @@ def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: 
         c = sanitize_message_text(page.caption)
         if c and c not in bucket["captions"]:
             bucket["captions"].append(c)
-        for rel_path, source_name in page.media_items:
-            key = (rel_path, source_name)
+        for rel_path, source_name, media_kind in page.media_items:
+            key = (rel_path, source_name, media_kind)
             if key in bucket["media_keys"]:
                 continue
             bucket["media_keys"].add(key)
-            bucket["media_items"].append((rel_path, source_name))
+            bucket["media_items"].append((rel_path, source_name, media_kind))
 
     out: List[AlbumPage] = []
     seen_lines: set[str] = set()
@@ -618,15 +635,42 @@ def media_kind_from_attachment(path: Optional[Path], mime: str) -> str:
     return "other"
 
 
+def album_media_kind_from_paths(rel_path: str, source_name: str) -> str:
+    token = f"{rel_path} {source_name}".lower()
+    if re.search(r"\.(mov|mp4|m4v|3gp|avi|mkv|webm)(\s|$)", token):
+        return "video"
+    return "image"
+
+
+def copy_media_to_staging(source_path: Path, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists():
+        return
+    shutil.copy2(source_path, out_path)
+
+
+def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
+    focus = (focus_person or "").strip().lower()
+    if focus == "violet":
+        return int(media.has_violet_face or 0) == 1
+    if focus == "eleanor":
+        return int(media.has_eleanor_face or 0) == 1
+    if focus == "lyra":
+        return int(media.has_lyra_face or 0) == 1
+    return False
+
+
 def resolve_focus_person(focus_person: str, album_title_prefix: str) -> str:
     focus = (focus_person or "auto").strip().lower()
-    if focus in {"violet", "eleanor", "any"}:
+    if focus in {"violet", "eleanor", "lyra", "any"}:
         return focus
     title = (album_title_prefix or "").strip().lower()
     if "violet" in title:
         return "violet"
     if "eleanor" in title:
         return "eleanor"
+    if "lyra" in title or "lyrielle" in title:
+        return "lyra"
     return "any"
 
 
@@ -635,6 +679,17 @@ def build_import_source_key(args: argparse.Namespace, focus: str) -> str:
         return str(args.import_source).strip()[:180]
     contact = re.sub(r"[^a-z0-9]+", "-", str(args.contact or "contact").strip().lower()).strip("-") or "contact"
     return f"imessage-{contact}-{focus}"[:180]
+
+
+def filter_assets_for_focus(assets: Sequence[PhotoAsset], focus_person: str, violet_id: int, eleanor_id: int, lyra_id: int) -> List[PhotoAsset]:
+    focus = (focus_person or "").strip().lower()
+    if focus == "violet":
+        return [asset for asset in assets if int(violet_id) in asset.person_ids]
+    if focus == "eleanor":
+        return [asset for asset in assets if int(eleanor_id) in asset.person_ids]
+    if focus == "lyra" and int(lyra_id) > 0:
+        return [asset for asset in assets if int(lyra_id) in asset.person_ids]
+    return list(assets)
 
 
 def ensure_album_import_tables(cur) -> None:
@@ -683,12 +738,15 @@ def ensure_album_import_tables(cur) -> None:
       file_exists TINYINT(1) NOT NULL DEFAULT 0,
       has_violet_face TINYINT(1) NOT NULL DEFAULT 0,
       has_eleanor_face TINYINT(1) NOT NULL DEFAULT 0,
+      has_lyra_face TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY uniq_source_media_attachment (source_key, message_row_id, attachment_index),
       KEY idx_media_source_time (source_key, captured_at),
       KEY idx_media_source_kind (source_key, media_kind, file_exists),
-      KEY idx_media_source_violet (source_key, has_violet_face, captured_at)
+      KEY idx_media_source_violet (source_key, has_violet_face, captured_at),
+      KEY idx_media_source_eleanor (source_key, has_eleanor_face, captured_at),
+      KEY idx_media_source_lyra (source_key, has_lyra_face, captured_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
     cur.execute("""
@@ -734,9 +792,10 @@ def checkpoint_upsert(cur, source_key: str, last_message_id: int, last_matched_m
     )
 
 
-def build_face_filename_sets(assets: Sequence[PhotoAsset], violet_id: int, eleanor_id: int) -> Tuple[set[str], set[str]]:
+def build_face_filename_sets(assets: Sequence[PhotoAsset], violet_id: int, eleanor_id: int, lyra_id: int) -> Tuple[set[str], set[str], set[str]]:
     violet_names: set[str] = set()
     eleanor_names: set[str] = set()
+    lyra_names: set[str] = set()
     for asset in assets:
         names = [str(asset.filename or "").strip(), str(asset.original_filename or "").strip()]
         keys: List[str] = []
@@ -749,7 +808,9 @@ def build_face_filename_sets(assets: Sequence[PhotoAsset], violet_id: int, elean
             violet_names.update(x for x in keys if x)
         if eleanor_id in asset.person_ids:
             eleanor_names.update(x for x in keys if x)
-    return violet_names, eleanor_names
+        if lyra_id > 0 and lyra_id in asset.person_ids:
+            lyra_names.update(x for x in keys if x)
+    return violet_names, eleanor_names, lyra_names
 
 
 def ingest_messages_into_catalog(
@@ -758,6 +819,7 @@ def ingest_messages_into_catalog(
     messages: Sequence[MessageRow],
     violet_face_names: set[str],
     eleanor_face_names: set[str],
+    lyra_face_names: set[str],
     rebuild_catalog: bool,
 ) -> Tuple[int, int]:
     if rebuild_catalog:
@@ -840,11 +902,12 @@ def ingest_messages_into_catalog(
             stem_l = Path(name).stem.lower().strip() if name_l else ""
             has_violet = 1 if (name_l in violet_face_names or stem_l in violet_face_names) else 0
             has_eleanor = 1 if (name_l in eleanor_face_names or stem_l in eleanor_face_names) else 0
+            has_lyra = 1 if (name_l in lyra_face_names or stem_l in lyra_face_names) else 0
             cur.execute(
                 """
                 INSERT INTO photo_album_media_catalog
-                  (source_key, message_row_id, attachment_index, attachment_name, attachment_path, mime_type, media_kind, captured_at, file_exists, has_violet_face, has_eleanor_face)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                  (source_key, message_row_id, attachment_index, attachment_name, attachment_path, mime_type, media_kind, captured_at, file_exists, has_violet_face, has_eleanor_face, has_lyra_face)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     source_key,
@@ -858,6 +921,7 @@ def ingest_messages_into_catalog(
                     1 if (ap is not None and ap.exists()) else 0,
                     has_violet,
                     has_eleanor,
+                    has_lyra,
                 ),
             )
         ingested_messages += 1
@@ -900,7 +964,7 @@ def load_catalog_media(cur, source_key: str, only_existing: bool) -> List[Catalo
     extra = " AND file_exists=1" if only_existing else ""
     cur.execute(
         f"""
-        SELECT id, message_row_id, attachment_name, attachment_path, media_kind, captured_at, has_violet_face, has_eleanor_face
+        SELECT id, message_row_id, attachment_name, attachment_path, media_kind, captured_at, has_violet_face, has_eleanor_face, has_lyra_face
         FROM photo_album_media_catalog
         WHERE source_key=%s
           AND media_kind IN ('image','video')
@@ -921,6 +985,7 @@ def load_catalog_media(cur, source_key: str, only_existing: bool) -> List[Catalo
                 captured_at=row["captured_at"],
                 has_violet_face=int(row["has_violet_face"] or 0),
                 has_eleanor_face=int(row["has_eleanor_face"] or 0),
+                has_lyra_face=int(row["has_lyra_face"] or 0),
             )
         )
     return out
@@ -938,12 +1003,9 @@ def run_catalog_matching(
     if not messages:
         return 0
 
-    all_media = load_catalog_media(cur, source_key, only_existing=False)
-    media_candidates = [m for m in all_media if m.media_kind == "image" and Path(m.attachment_path).exists()]
-    if focus_person == "violet":
-        media_candidates = [m for m in media_candidates if int(m.has_violet_face or 0) == 1]
-    elif focus_person == "eleanor":
-        media_candidates = [m for m in media_candidates if int(m.has_eleanor_face or 0) == 1]
+    all_media = [m for m in load_catalog_media(cur, source_key, only_existing=False) if Path(m.attachment_path).exists()]
+    image_media = [m for m in all_media if m.media_kind == "image"]
+    media_by_id: Dict[int, CatalogMedia] = {int(m.media_id): m for m in all_media}
 
     media_by_message: Dict[int, List[CatalogMedia]] = {}
     for media in all_media:
@@ -966,14 +1028,43 @@ def run_catalog_matching(
     matched_count = 0
     window_seconds = max(1, int(match_window_hours)) * 3600
     for message in messages:
+        direct_media_all = sorted(
+            [m for m in media_by_message.get(message.message_row_id, []) if m.media_kind in {"image", "video"}],
+            key=lambda m: (0 if m.media_kind == "image" else 1, m.media_id),
+        )
+        direct_media_images_all = [m for m in direct_media_all if m.media_kind == "image"]
+        direct_media_videos = [m for m in direct_media_all if m.media_kind == "video"]
+        direct_media_images = list(direct_media_images_all)
+        if focus_person in {"violet", "eleanor", "lyra"}:
+            direct_media_images = [m for m in direct_media_images if media_has_focus_face(m, focus_person)]
+        if not direct_media_images:
+            # Face tags are incomplete in many libraries; keep same-message images as likely attachments.
+            direct_media_images = list(direct_media_images_all)
+
+        direct_media: List[CatalogMedia] = list(direct_media_images)
+        if not direct_media:
+            # Allow videos to carry a message when images are missing.
+            direct_media = list(direct_media_videos)
+
         referenced_names = {
             str(media.attachment_name or "").strip().lower()
             for media in media_by_message.get(message.message_row_id, [])
             if str(media.attachment_name or "").strip()
         }
         expected = max(1, min(int(message.attachment_count or 1), int(max_matched_media_per_message or 8)))
+        ranked_media_ids: List[int] = []
+        for media in direct_media:
+            if media.media_id in ranked_media_ids:
+                continue
+            ranked_media_ids.append(int(media.media_id))
+            if len(ranked_media_ids) >= expected:
+                break
+
+        remaining_slots = expected - len(ranked_media_ids)
         scored: List[Tuple[float, float, CatalogMedia]] = []
-        for media in media_candidates:
+        for media in image_media:
+            if int(media.media_id) in ranked_media_ids:
+                continue
             delta_seconds = abs((media.captured_at - message.sent_at).total_seconds())
             if delta_seconds > window_seconds:
                 continue
@@ -984,10 +1075,10 @@ def run_catalog_matching(
             media_name_l = str(media.attachment_name or "").strip().lower()
             if media_name_l and media_name_l in referenced_names:
                 score += 120.0
-            if focus_person == "violet" and int(media.has_violet_face or 0) == 1:
+            if focus_person in {"violet", "eleanor", "lyra"} and media_has_focus_face(media, focus_person):
                 score += 35.0
-            if focus_person == "eleanor" and int(media.has_eleanor_face or 0) == 1:
-                score += 35.0
+            elif focus_person in {"violet", "eleanor", "lyra"}:
+                score -= 8.0
             if media.media_id in used_media_ids:
                 score -= 18.0
             if score <= 0:
@@ -995,15 +1086,48 @@ def run_catalog_matching(
             scored.append((score, delta_seconds, media))
 
         scored.sort(key=lambda item: (-item[0], item[1], item[2].media_id))
-        picks = scored[:expected]
-        if not picks:
+        picks = scored[:max(0, remaining_slots)]
+        for _score, _delta, media in picks:
+            ranked_media_ids.append(int(media.media_id))
+
+        ranked_media: List[CatalogMedia] = [media_by_id[mid] for mid in ranked_media_ids if mid in media_by_id]
+        if len(ranked_media) < expected:
+            # Backfill with closest videos in time when still short.
+            video_candidates = [m for m in all_media if m.media_kind == "video" and int(m.media_id) not in ranked_media_ids]
+            video_candidates.sort(key=lambda m: abs((m.captured_at - message.sent_at).total_seconds()))
+            for video in video_candidates:
+                delta_seconds = abs((video.captured_at - message.sent_at).total_seconds())
+                if delta_seconds > window_seconds:
+                    continue
+                ranked_media_ids.append(int(video.media_id))
+                ranked_media.append(video)
+                if len(ranked_media) >= expected:
+                    break
+
+        if len(ranked_media) > expected:
+            ranked_media = ranked_media[:expected]
+            ranked_media_ids = [int(m.media_id) for m in ranked_media]
+
+        if ranked_media:
+            # Preserve direct-media priority before time-window inference.
+            ordered_direct_ids = [int(m.media_id) for m in direct_media if int(m.media_id) in ranked_media_ids]
+            ordered_other = [m for m in ranked_media if int(m.media_id) not in ordered_direct_ids]
+            ranked_media = [media_by_id[mid] for mid in ordered_direct_ids if mid in media_by_id] + ordered_other
+
+        if not ranked_media:
             cur.execute(
                 "UPDATE photo_album_message_catalog SET is_matched=1, matched_at=NOW() WHERE source_key=%s AND message_row_id=%s",
                 (source_key, int(message.message_row_id)),
             )
             continue
 
-        for rank, (score, _delta, media) in enumerate(picks, start=1):
+        for rank, media in enumerate(ranked_media, start=1):
+            delta_seconds = abs((media.captured_at - message.sent_at).total_seconds())
+            score = max(0.0, 96.0 - (delta_seconds / 3600.0))
+            if media.message_row_id == message.message_row_id:
+                score += 140.0
+            if media.media_kind == "video":
+                score += 10.0
             cur.execute(
                 """
                 INSERT INTO photo_album_message_media_matches (source_key, message_row_id, media_id, rank_order, score)
@@ -1047,14 +1171,15 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
           m.video_attachment_count,
           c.id AS media_id,
           c.attachment_name,
-          c.attachment_path
+          c.attachment_path,
+          c.media_kind
         FROM photo_album_message_catalog m
         INNER JOIN photo_album_message_media_matches mm
           ON mm.source_key=m.source_key AND mm.message_row_id=m.message_row_id
         INNER JOIN photo_album_media_catalog c
           ON c.id=mm.media_id AND c.source_key=mm.source_key
         WHERE m.source_key=%s
-          AND c.media_kind='image'
+          AND c.media_kind IN ('image','video')
           AND c.file_exists=1
         ORDER BY m.sent_at ASC, m.message_row_id ASC, mm.rank_order ASC
         """,
@@ -1079,10 +1204,17 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         source_path = Path(str(row["attachment_path"] or ""))
         if not source_path.exists():
             continue
-        out_name = f"catalog_{int(row['media_id']):08d}.png"
-        out_path = staging_dir / out_name
-        convert_to_png(source_path, out_path)
-        bucket["media_items"].append((f"/photo_albums/{out_name}", str(row["attachment_name"] or out_name)))
+        media_kind = str(row["media_kind"] or "image").strip().lower()
+        if media_kind == "video":
+            suffix = source_path.suffix.lower() or ".mov"
+            out_name = f"catalog_{int(row['media_id']):08d}{suffix}"
+            out_path = staging_dir / out_name
+            copy_media_to_staging(source_path, out_path)
+        else:
+            out_name = f"catalog_{int(row['media_id']):08d}.png"
+            out_path = staging_dir / out_name
+            convert_to_png(source_path, out_path)
+        bucket["media_items"].append((f"/photo_albums/{out_name}", str(row["attachment_name"] or out_name), media_kind))
 
     pages: List[AlbumPage] = []
     for msg_id in sorted(grouped.keys()):
@@ -1290,9 +1422,11 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
         spreads = []
         for i, page in enumerate(pages, start=1):
             images = []
-            for rel_path, source_name in page.media_items[:24]:
+            for rel_path, source_name, media_kind in page.media_items[:24]:
+                media_type = media_kind if media_kind in {"image", "video"} else album_media_kind_from_paths(rel_path, source_name)
                 images.append({
                     "src": rel_path,
+                    "media_type": media_type,
                     "captured_at": page.sent_at.isoformat(),
                     "source_filename": source_name,
                     "caption": page.caption,
@@ -1441,7 +1575,7 @@ def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Pat
         out_name = f"page_{len(pages)+1:04d}.png"
         out_path = staging_dir / out_name
         convert_to_png(msg.attachment_path, out_path)
-        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name)]))
+        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name, "image")]))
     return aggregate_album_pages_by_day(pages)
 
 
@@ -1503,7 +1637,7 @@ def pages_from_photos_timeline(
         out_name = f"page_{len(pages)+1:04d}.png"
         out_path = staging_dir / out_name
         convert_to_png(source, out_path)
-        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name)]))
+        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, "image")]))
         if len(pages) % 5 == 0:
             print(f"photos_timeline progress: exported {len(pages)} page(s)...")
 
@@ -1545,7 +1679,11 @@ def main() -> None:
             print(f"Using Face IDs: Violet={violet_id}, Eleanor={eleanor_id}")
         else:
             violet_id, eleanor_id = prompt_face_ids(faces)
-        assets = load_face_assets(photos_conn, [violet_id, eleanor_id])
+        lyra_id = int(args.lyra_face_id) if args.lyra_face_id is not None else int(find_face_id_by_name(faces, ["lyra", "lyrielle"]) or 0)
+        if lyra_id > 0:
+            print(f"Using Face ID: Lyra={lyra_id}")
+        person_ids = [pid for pid in [violet_id, eleanor_id, lyra_id] if int(pid) > 0]
+        assets = load_face_assets(photos_conn, person_ids)
         print(f"Loaded {len(assets)} face-tagged assets from Photos DB.")
     finally:
         photos_conn.close()
@@ -1559,7 +1697,7 @@ def main() -> None:
     messages: List[MessageRow] = []
     pages: List[AlbumPage] = []
     if args.mode == "catalog_match":
-        violet_face_names, eleanor_face_names = build_face_filename_sets(assets, violet_id, eleanor_id)
+        violet_face_names, eleanor_face_names, lyra_face_names = build_face_filename_sets(assets, violet_id, eleanor_id, lyra_id)
         conn = build_mysql_connection_from_env()
         try:
             with conn.cursor() as cur:
@@ -1583,6 +1721,7 @@ def main() -> None:
                     messages,
                     violet_face_names,
                     eleanor_face_names,
+                    lyra_face_names,
                     rebuild_catalog=bool(args.rebuild_catalog),
                 )
                 print(f"Ingested {ingested_messages} message records into MySQL catalog.")
@@ -1613,9 +1752,11 @@ def main() -> None:
     elif args.mode == "photos_timeline":
         messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
         print(f"Loaded {len(messages)} messages in window.")
+        timeline_assets = filter_assets_for_focus(assets, focus_person, violet_id, eleanor_id, lyra_id)
+        print(f"Photos timeline assets after focus filter: {len(timeline_assets)}")
         pages = pages_from_photos_timeline(
             photos_db,
-            assets,
+            timeline_assets,
             messages,
             start_date,
             end_date,

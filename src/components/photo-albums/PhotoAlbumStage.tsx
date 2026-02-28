@@ -16,7 +16,7 @@ interface PhotoAlbumStageProps {
   editable?: boolean;
   onMoveMedia?: (index: number, patch: { x: number; y: number }) => void;
   onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
-  onMoveDecor?: (index: number, patch: { x: number; y: number }) => void;
+  onMoveDecor?: (index: number, patch: { x: number; y: number; emoji?: string; size?: number; rotation?: number }) => void;
   onEditNoteText?: (index: number, nextText: string) => void;
   onEditMediaCaption?: (index: number, nextCaption: string) => void;
   onEditDecor?: (index: number, patch: { emoji?: string; size?: number }) => void;
@@ -963,9 +963,16 @@ export function PhotoAlbumStage({
       onMoveNote(dragging.index, { x: constrained.x, y: constrained.y });
     }
     if (dragging.type === 'decor' && onMoveDecor) {
-      onMoveDecor(dragging.index, { x: constrained.x, y: constrained.y });
+      const currentDecor = decorItems[dragging.index];
+      onMoveDecor(dragging.index, {
+        x: constrained.x,
+        y: constrained.y,
+        emoji: currentDecor?.emoji,
+        size: currentDecor?.size,
+        rotation: currentDecor?.rotation,
+      });
     }
-  }, [editable, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints]);
+  }, [editable, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
 
   const endDragging = React.useCallback(() => {
     if (dragMovedRef.current) {

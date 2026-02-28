@@ -71,7 +71,7 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
 
     setBusy(true);
     try {
-      await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=update', {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=update', {
         id: adminDraft.id,
         title: adminDraft.title,
         summary: adminDraft.summary,
@@ -80,16 +80,17 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
         is_active: adminDraft.is_active,
         spec: adminDraft.spec,
       });
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
       toast('success', 'Photo album updated');
       await loadAlbums();
-      setShowAdminModal(false);
-      setAdminDraft(null);
     } catch (error: any) {
       toast('error', error?.message || 'Failed to update album');
     } finally {
       setBusy(false);
     }
-  }, [adminDraft, isAdmin, loadAlbums, setAdminDraft, setBusy, setShowAdminModal, toast]);
+  }, [adminDraft, isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
 
   const deleteSelectedAlbum = React.useCallback(async () => {
     const album = adminDraft || selectedAlbum;

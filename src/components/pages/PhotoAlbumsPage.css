@@ -5,6 +5,10 @@
   --catn8-albums-wood: #8f6848;
 }
 
+body.catn8-admin-modal-open {
+  overflow: hidden;
+}
+
 body.catn8-photo-albums-fullscreen .navbar.sticky-top {
   display: none !important;
 }
@@ -545,11 +549,13 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   position: fixed;
   inset: 0;
   z-index: var(--catn8-z-modal, 5100);
-  background: rgba(34, 21, 14, 0.62);
-  backdrop-filter: blur(2px);
+  background: rgba(28, 17, 12, 0.76);
+  backdrop-filter: blur(3px) saturate(0.9);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .catn8-admin-modal-shell {
@@ -562,6 +568,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  overscroll-behavior: contain;
 }
 
 .catn8-admin-modal-header {
@@ -581,11 +588,13 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   padding: 0.75rem;
   overflow: hidden;
   height: 100%;
+  overscroll-behavior: contain;
 }
 
 .catn8-admin-editor-panel {
   overflow-y: auto;
   padding-right: 0.25rem;
+  overscroll-behavior: contain;
 }
 
 .catn8-admin-image-editor {
@@ -597,8 +606,9 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-admin-preview-panel {
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .catn8-admin-preview-panel .catn8-scrapbook-stage {

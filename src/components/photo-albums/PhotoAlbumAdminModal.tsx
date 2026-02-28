@@ -8,6 +8,7 @@ import { PhotoAlbumStage } from './PhotoAlbumStage';
 interface PhotoAlbumAdminModalProps {
   open: boolean;
   busy: boolean;
+  hasUnsavedChanges: boolean;
   album: PhotoAlbum | null;
   pageIndex: number;
   zoom: number;
@@ -26,6 +27,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
   const {
     open,
     busy,
+    hasUnsavedChanges,
     album,
     pageIndex,
     zoom,
@@ -62,10 +64,15 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     if (!open) {
       return undefined;
     }
-    const prev = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.classList.add('catn8-admin-modal-open');
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.classList.remove('catn8-admin-modal-open');
     };
   }, [open]);
 
@@ -116,6 +123,10 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
           <h2 className="h4 m-0">Edit Photo Album</h2>
           <div className="d-flex gap-2">
             <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
+            {hasUnsavedChanges ? (
+              <button type="button" className="btn btn-sm btn-primary" onClick={onSave} disabled={busy}>Save Album</button>
+            ) : null}
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDelete} disabled={busy}>Delete Album</button>
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
           </div>
         </div>
@@ -548,10 +559,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               ))}
             </div>
 
-            <div className="d-flex gap-2 pb-4">
-              <button type="button" className="btn btn-primary" onClick={onSave} disabled={busy}>Save Album</button>
-              <button type="button" className="btn btn-outline-danger" onClick={onDelete} disabled={busy}>Delete Album</button>
-            </div>
           </div>
 
           <div className="catn8-admin-preview-panel">
@@ -593,10 +600,35 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               })}
               onMoveDecor={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
-                const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
-                if (target) {
-                  target.x = patch.x;
-                  target.y = patch.y;
+                const targetSpread = next.spec.spreads[pageIndex];
+                if (!targetSpread) {
+                  return prev;
+                }
+                if (!Array.isArray(targetSpread.decor_items)) {
+                  targetSpread.decor_items = [];
+                }
+                if (!targetSpread.decor_items[index]) {
+                  targetSpread.decor_items[index] = {
+                    id: `decor-${Date.now()}-${index}`,
+                    emoji: patch.emoji || '✨',
+                    size: typeof patch.size === 'number' ? patch.size : 1,
+                    rotation: typeof patch.rotation === 'number' ? patch.rotation : 0,
+                    x: patch.x,
+                    y: patch.y,
+                  };
+                  return next;
+                }
+                const target = targetSpread.decor_items[index];
+                target.x = patch.x;
+                target.y = patch.y;
+                if (typeof patch.emoji === 'string' && patch.emoji.trim()) {
+                  target.emoji = patch.emoji;
+                }
+                if (typeof patch.size === 'number') {
+                  target.size = patch.size;
+                }
+                if (typeof patch.rotation === 'number') {
+                  target.rotation = patch.rotation;
                 }
                 return next;
               })}

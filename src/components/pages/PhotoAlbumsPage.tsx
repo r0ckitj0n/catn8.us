@@ -171,6 +171,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
       <PhotoAlbumAdminModal
         open={state.showAdminModal}
         busy={state.busy}
+        hasUnsavedChanges={state.hasUnsavedAdminChanges}
         album={state.adminDraft}
         pageIndex={state.pageIndex}
         zoom={state.zoom}

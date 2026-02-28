@@ -223,6 +223,7 @@ export function usePhotoAlbumsPage(
     adjustZoom,
     showAlbumViewer,
     showAdminModal,
+    hasUnsavedAdminChanges,
     adminDraft,
     openAlbum,
     openSelectedInViewer,

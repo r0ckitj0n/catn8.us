@@ -28,6 +28,14 @@ function cloneAlbum(album: PhotoAlbum): PhotoAlbum {
   return JSON.parse(JSON.stringify(album)) as PhotoAlbum;
 }
 
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
 export function usePhotoAlbumsPage(
   viewer: any,
   onToast?: (toast: IToast) => void,
@@ -87,6 +95,12 @@ export function usePhotoAlbumsPage(
   }, [loadAlbums]);
 
   const selectedAlbum = React.useMemo(() => albums.find((album) => album.id === selectedId) || null, [albums, selectedId]);
+  const hasUnsavedAdminChanges = React.useMemo(() => {
+    if (!showAdminModal || !adminDraft || !selectedAlbum || adminDraft.id !== selectedAlbum.id) {
+      return false;
+    }
+    return stableStringify(adminDraft) !== stableStringify(selectedAlbum);
+  }, [adminDraft, selectedAlbum, showAdminModal]);
   const workingAlbum = showAdminModal ? adminDraft : selectedAlbum;
   const spreads = workingAlbum?.spec?.spreads || [];
   const selectedSpread = spreads[pageIndex] || null;
@@ -136,17 +150,29 @@ export function usePhotoAlbumsPage(
   }, []);
 
   const closeAdminModal = React.useCallback(() => {
+    if (hasUnsavedAdminChanges) {
+      const discard = window.confirm('You have unsaved album changes. Discard them?');
+      if (!discard) {
+        return;
+      }
+    }
     setShowAdminModal(false);
     setAdminDraft(null);
-  }, []);
+  }, [hasUnsavedAdminChanges]);
 
   const openSelectedInViewer = React.useCallback(() => {
     if (!selectedAlbum && !adminDraft) {
       return;
     }
+    if (hasUnsavedAdminChanges) {
+      const discard = window.confirm('You have unsaved album changes. Save Album first to keep them. Continue and discard changes?');
+      if (!discard) {
+        return;
+      }
+    }
     setShowAdminModal(false);
     setShowAlbumViewer(true);
-  }, [adminDraft, selectedAlbum]);
+  }, [adminDraft, selectedAlbum, hasUnsavedAdminChanges]);
 
   const { createWithAi, saveAdminEdits, deleteSelectedAlbum } = usePhotoAlbumsMutations({
     isAdmin,

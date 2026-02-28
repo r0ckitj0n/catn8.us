@@ -271,6 +271,9 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-scrapbook-page-tag-button {
   border: 0;
+  appearance: none;
+  font: inherit;
+  line-height: inherit;
   cursor: pointer;
 }
 

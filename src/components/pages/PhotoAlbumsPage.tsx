@@ -132,9 +132,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
                     <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
-                    <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => void closeViewer()}>
-                      Back to Albums
-                    </button>
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-primary"

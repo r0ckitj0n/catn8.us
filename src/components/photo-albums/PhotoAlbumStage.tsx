@@ -328,14 +328,27 @@ const CANVAS_MAX_X = 98;
 const CANVAS_MIN_Y = 4;
 const CANVAS_MAX_Y = 94;
 const MAX_COVERAGE = 0.06;
+const MAX_CORE_OVERLAP = 0;
+const OVERLAP_EPSILON = 0.001;
 
 function estimateNoteHeightPct(note: NoteItem, widthPct: number): number {
   const text = formatNoteText(note);
   const charsPerLine = Math.max(12, Math.floor(widthPct * 2.4));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  const base = 4.8;
-  const lineHeight = 2.25;
-  return clamp(base + (lines * lineHeight), 9, 34);
+  const base = 6.2;
+  const lineHeight = 2.9;
+  return clamp(base + (lines * lineHeight), 10, 40);
+}
+
+function estimateMediaHeightPct(caption: string, widthPct: number): number {
+  const text = sanitizeAlbumMessageText(caption || '');
+  const charsPerLine = Math.max(14, Math.floor(widthPct * 2.6));
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  // Image footprint (4:3) + frame/padding + caption text block.
+  const imageHeight = widthPct * 0.76;
+  const frameBase = 3.2;
+  const captionLineHeight = 2.3;
+  return clamp(imageHeight + frameBase + (lines * captionLineHeight), 13, 58);
 }
 
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
@@ -359,6 +372,10 @@ function constrainLayout(item: LayoutItem): LayoutItem {
   };
 }
 
+function isCoreItem(item: LayoutItem): boolean {
+  return item.type === 'media' || item.type === 'note';
+}
+
 function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
   const resolved = items.map((item) => constrainLayout({ ...item }));
   for (let pass = 0; pass < 72; pass += 1) {
@@ -376,9 +393,11 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
         if (!overlap) {
           continue;
         }
+        const strictNoOverlap = isCoreItem(current) && isCoreItem(placed);
         const currentCoverage = overlap / Math.max(1, current.w * current.h);
         const placedCoverage = overlap / Math.max(1, placed.w * placed.h);
-        if (currentCoverage <= MAX_COVERAGE && placedCoverage <= MAX_COVERAGE) {
+        const maxAllowed = strictNoOverlap ? MAX_CORE_OVERLAP : MAX_COVERAGE;
+        if (currentCoverage <= maxAllowed && placedCoverage <= maxAllowed) {
           continue;
         }
         const hash = hashValue(`${seed}-${current.id}-${placed.id}-${pass}-${j}`);
@@ -393,8 +412,8 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
           dy = (Math.floor(hash / 11) % 2 === 0) ? 1 : -1;
         }
         const len = Math.max(0.001, Math.hypot(dx, dy));
-        const severity = Math.max(currentCoverage, placedCoverage) - MAX_COVERAGE;
-        const push = 0.8 + (severity * 14);
+        const severity = Math.max(currentCoverage, placedCoverage) - maxAllowed;
+        const push = strictNoOverlap ? (1.5 + (severity * 22)) : (0.8 + (severity * 14));
         pushX += (dx / len) * push;
         pushY += (dy / len) * push;
       }
@@ -414,7 +433,7 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
     if (pass % 12 === 11) {
       for (let i = 0; i < resolved.length; i += 1) {
         const current = resolved[i];
-        if (current.type === 'decor') {
+        if (!isCoreItem(current)) {
           continue;
         }
         let violation = 0;
@@ -426,14 +445,17 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
           if (!overlap) {
             continue;
           }
+          if (!isCoreItem(resolved[j])) {
+            continue;
+          }
           const coverage = overlap / Math.max(1, current.w * current.h);
-          if (coverage > MAX_COVERAGE) {
-            violation += (coverage - MAX_COVERAGE);
+          if (coverage > MAX_CORE_OVERLAP) {
+            violation += (coverage - MAX_CORE_OVERLAP);
           }
         }
-        if (violation > 0.02) {
-          current.w = Math.max(current.type === 'media' ? 9.5 : 10, current.w * 0.96);
-          current.h = Math.max(current.type === 'media' ? 10 : 8, current.h * 0.96);
+        if (violation > OVERLAP_EPSILON) {
+          current.w = Math.max(current.type === 'media' ? 8.5 : 9, current.w * 0.95);
+          current.h = Math.max(current.type === 'media' ? 9 : 8, current.h * 0.95);
           resolved[i] = constrainLayout(current);
           changed = true;
         }
@@ -443,6 +465,42 @@ function resolveLayout(items: LayoutItem[], seed: string): LayoutItem[] {
       break;
     }
   }
+
+  for (let i = 0; i < resolved.length; i += 1) {
+    const current = resolved[i];
+    if (!isCoreItem(current)) {
+      continue;
+    }
+    for (let guard = 0; guard < 80; guard += 1) {
+      let hasCollision = false;
+      for (let j = 0; j < resolved.length; j += 1) {
+        if (i === j || !isCoreItem(resolved[j])) {
+          continue;
+        }
+        if (overlapArea(current, resolved[j]) > OVERLAP_EPSILON) {
+          hasCollision = true;
+          break;
+        }
+      }
+      if (!hasCollision) {
+        break;
+      }
+      const hash = hashValue(`${seed}-final-${current.id}-${guard}`);
+      const stepX = ((hash % 2 === 0) ? 1 : -1) * (2 + (hash % 3));
+      const stepY = 2 + (Math.floor(hash / 7) % 4);
+      current.x += stepX;
+      current.y += stepY;
+      const bounded = constrainLayout(current);
+      current.x = bounded.x;
+      current.y = bounded.y;
+      if (guard % 10 === 9) {
+        current.w = Math.max(current.type === 'media' ? 8 : 8.5, current.w * 0.97);
+        current.h = Math.max(current.type === 'media' ? 8.5 : 7.5, current.h * 0.97);
+      }
+    }
+    resolved[i] = constrainLayout(current);
+  }
+
   return resolved;
 }
 
@@ -611,7 +669,7 @@ export function PhotoAlbumStage({
         x: Number(source?.x ?? fallback.x),
         y: Number(source?.y ?? fallback.y),
         w,
-        h: clamp((w * 0.84) + 3.5, 14, 30),
+        h: estimateMediaHeightPct(item.caption, w),
         rotation: clamp(Number(source?.rotation ?? fallback.rotate), -8, 8),
       };
     });

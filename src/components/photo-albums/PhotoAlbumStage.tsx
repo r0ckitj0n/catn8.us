@@ -750,10 +750,28 @@ export function PhotoAlbumStage({
   onBackToAlbums,
 }: PhotoAlbumStageProps) {
   const spread = album.spec?.spreads?.[spreadIndex] || null;
-  const mediaItems = React.useMemo(() => spreadMedia(album, spreadIndex), [album, spreadIndex]);
-  const notes = React.useMemo(() => spreadNotes(album, spreadIndex, mediaItems), [album, spreadIndex, mediaItems]);
+  const mediaItems = React.useMemo(() => {
+    try {
+      return spreadMedia(album, spreadIndex);
+    } catch {
+      return [] as PreparedMediaItem[];
+    }
+  }, [album, spreadIndex]);
+  const notes = React.useMemo(() => {
+    try {
+      return spreadNotes(album, spreadIndex, mediaItems);
+    } catch {
+      return [] as NoteItem[];
+    }
+  }, [album, spreadIndex, mediaItems]);
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...notes.map((n) => n.text)].join(' '));
-  const decorItems = React.useMemo(() => spreadDecor(album, spreadIndex, theme.emojis), [album, spreadIndex, theme.emojis]);
+  const decorItems = React.useMemo(() => {
+    try {
+      return spreadDecor(album, spreadIndex, theme.emojis);
+    } catch {
+      return [] as DecorItem[];
+    }
+  }, [album, spreadIndex, theme.emojis]);
 
   const densityCount = notes.length + mediaItems.length;
   const mediaWidthPct = densityCount >= 16 ? 11 : densityCount >= 10 ? 13 : 16;
@@ -821,91 +839,99 @@ export function PhotoAlbumStage({
   }), [reservedHeaderRect]);
 
   const layoutByType = React.useMemo(() => {
-    const flow = createFlowOrders(mediaItems, notes, spread?.title || '');
-    const estimatedMediaArea = mediaItems.reduce((sum, item) => sum + (mediaWidthPct * estimateMediaHeightPct(item.caption, mediaWidthPct)), 0);
-    const estimatedNoteArea = notes.reduce((sum, item) => sum + (noteWidthPct * estimateNoteHeightPct(item, noteWidthPct)), 0);
-    const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
-    const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
-    const targetCoverage = densityCount <= 5 ? 0.9 : densityCount <= 10 ? 0.94 : densityCount <= 16 ? 0.98 : 1.02;
-    const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.92, 2.8);
-    const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
+    try {
+      const flow = createFlowOrders(mediaItems, notes, spread?.title || '');
+      const estimatedMediaArea = mediaItems.reduce((sum, item) => sum + (mediaWidthPct * estimateMediaHeightPct(item.caption, mediaWidthPct)), 0);
+      const estimatedNoteArea = notes.reduce((sum, item) => sum + (noteWidthPct * estimateNoteHeightPct(item, noteWidthPct)), 0);
+      const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
+      const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
+      const targetCoverage = densityCount <= 5 ? 0.9 : densityCount <= 10 ? 0.94 : densityCount <= 16 ? 0.98 : 1.02;
+      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.92, 2.8);
+      const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
 
-    const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
-      const source = spread?.images?.[item.sourceIndex];
-      const flowIndex = flow.mediaOrder.get(index) ?? index;
-      const groupIndex = flow.mediaGroup.get(index) ?? 0;
-      const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
-      const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
-      const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
-      const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
-      const w = clamp(sourceBaseWidth * sizeScale, 12, 48);
-      return {
-        id: `media-${item.sourceIndex}`,
-        type: 'media',
-        index,
-        sourceIndex: item.sourceIndex,
-        pinned: hasPinnedPosition,
-        x: Number(source?.x ?? fallback.x),
-        y: Number(source?.y ?? fallback.y),
-        w,
-        h: estimateMediaHeightPct(item.caption, w),
-        rotation: clamp(Number(source?.rotation ?? fallback.rotate), -8, 8),
-      };
-    });
-    const noteLayout: LayoutItem[] = notes.map((note, index) => {
-      const flowIndex = flow.noteOrder.get(index) ?? (mediaItems.length + index);
-      const groupIndex = flow.noteGroup.get(index) ?? 0;
-      const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
-      const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
-      const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
-      const noteBaseWidth = Number(note.w ?? noteWidthPct);
-      const w = clamp(noteBaseWidth * sizeScale, 13, 52);
-      return {
-        id: `note-${index}`,
-        type: 'note',
-        index,
-        pinned: hasPinnedPosition,
-        x: Number(note.x ?? fallback.x),
-        y: Number(note.y ?? fallback.y),
-        w,
-        h: estimateNoteHeightPct(note, w),
-        rotation: clamp(Number(note.rotation ?? fallback.rotate), -7, 7),
-      };
-    });
-    const decorLayout: LayoutItem[] = decorItems.map((item, index) => {
-      const fallback = positionByDecorScatter(index, Math.max(1, decorItems.length), `${album.id}-${spreadIndex}-decor`);
-      const hasPinnedPosition = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
-      const savedSize = Number(item.size ?? 1);
-      const size = clamp(savedSize * decorScale, 0.85, 2.2);
-      const footprint = 4.6 * size;
-      return {
-        id: `decor-${index}`,
-        type: 'decor',
-        index,
-        pinned: hasPinnedPosition,
-        x: Number(item.x ?? fallback.x),
-        y: Number(item.y ?? fallback.y),
-        w: footprint,
-        h: footprint,
-        size,
-        rotation: clamp(Number(item.rotation ?? fallback.rotate), -9, 9),
-      };
-    });
+      const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
+        const source = spread?.images?.[item.sourceIndex];
+        const flowIndex = flow.mediaOrder.get(index) ?? index;
+        const groupIndex = flow.mediaGroup.get(index) ?? 0;
+        const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
+        const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
+        const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
+        const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
+        const w = clamp(sourceBaseWidth * sizeScale, 12, 48);
+        return {
+          id: `media-${item.sourceIndex}`,
+          type: 'media',
+          index,
+          sourceIndex: item.sourceIndex,
+          pinned: hasPinnedPosition,
+          x: Number(source?.x ?? fallback.x),
+          y: Number(source?.y ?? fallback.y),
+          w,
+          h: estimateMediaHeightPct(item.caption, w),
+          rotation: clamp(Number(source?.rotation ?? fallback.rotate), -8, 8),
+        };
+      });
+      const noteLayout: LayoutItem[] = notes.map((note, index) => {
+        const flowIndex = flow.noteOrder.get(index) ?? (mediaItems.length + index);
+        const groupIndex = flow.noteGroup.get(index) ?? 0;
+        const groupCenterX = flow.groupCenterXByIndex.get(groupIndex) ?? 50;
+        const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
+        const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
+        const noteBaseWidth = Number(note.w ?? noteWidthPct);
+        const w = clamp(noteBaseWidth * sizeScale, 13, 52);
+        return {
+          id: `note-${index}`,
+          type: 'note',
+          index,
+          pinned: hasPinnedPosition,
+          x: Number(note.x ?? fallback.x),
+          y: Number(note.y ?? fallback.y),
+          w,
+          h: estimateNoteHeightPct(note, w),
+          rotation: clamp(Number(note.rotation ?? fallback.rotate), -7, 7),
+        };
+      });
+      const decorLayout: LayoutItem[] = decorItems.map((item, index) => {
+        const fallback = positionByDecorScatter(index, Math.max(1, decorItems.length), `${album.id}-${spreadIndex}-decor`);
+        const hasPinnedPosition = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
+        const savedSize = Number(item.size ?? 1);
+        const size = clamp(savedSize * decorScale, 0.85, 2.2);
+        const footprint = 4.6 * size;
+        return {
+          id: `decor-${index}`,
+          type: 'decor',
+          index,
+          pinned: hasPinnedPosition,
+          x: Number(item.x ?? fallback.x),
+          y: Number(item.y ?? fallback.y),
+          w: footprint,
+          h: footprint,
+          size,
+          rotation: clamp(Number(item.rotation ?? fallback.rotate), -9, 9),
+        };
+      });
 
-    const resolved = resolveLayout([...mediaLayout, ...noteLayout, ...decorLayout], `${album.id}-${spreadIndex}`, layoutConstraints);
-    const mediaByIndex = new Map<number, LayoutItem>();
-    const noteByIndex = new Map<number, LayoutItem>();
-    const decorByIndex = new Map<number, LayoutItem>();
-    resolved.forEach((item) => {
-      if (item.type === 'media') {
-        mediaByIndex.set(item.index, item);
-      } else if (item.type === 'note') {
-        noteByIndex.set(item.index, item);
-      } else {
-        decorByIndex.set(item.index, item);
-      }
-    });
-    return { mediaByIndex, noteByIndex, decorByIndex };
+      const resolved = resolveLayout([...mediaLayout, ...noteLayout, ...decorLayout], `${album.id}-${spreadIndex}`, layoutConstraints);
+      const mediaByIndex = new Map<number, LayoutItem>();
+      const noteByIndex = new Map<number, LayoutItem>();
+      const decorByIndex = new Map<number, LayoutItem>();
+      resolved.forEach((item) => {
+        if (item.type === 'media') {
+          mediaByIndex.set(item.index, item);
+        } else if (item.type === 'note') {
+          noteByIndex.set(item.index, item);
+        } else {
+          decorByIndex.set(item.index, item);
+        }
+      });
+      return { mediaByIndex, noteByIndex, decorByIndex };
+    } catch {
+      return {
+        mediaByIndex: new Map<number, LayoutItem>(),
+        noteByIndex: new Map<number, LayoutItem>(),
+        decorByIndex: new Map<number, LayoutItem>(),
+      };
+    }
   }, [album.id, spread, spreadIndex, mediaItems, notes, decorItems, mediaWidthPct, noteWidthPct, densityCount, layoutConstraints]);
 
   const activeMedia = React.useMemo(() => {

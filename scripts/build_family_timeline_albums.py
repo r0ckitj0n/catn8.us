@@ -33,6 +33,7 @@ class ChildConfig:
 @dataclass
 class MessageRow:
     message_id: int
+    handle_id: str
     sent_at: dt.datetime
     is_from_me: bool
     text: str
@@ -285,6 +286,7 @@ def load_messages(messages_db: Path, handles: Sequence[str], start: dt.date, end
         sql = f"""
         SELECT m.ROWID message_id, m.date msg_date, COALESCE(m.text,'') text,
                COALESCE(m.is_from_me,0) is_from_me,
+               COALESCE(h.id,'') handle_id,
                m.attributedBody attributed_body,
                COALESCE(a.filename,'') attachment_filename, COALESCE(a.mime_type,'') attachment_mime
         FROM message m
@@ -325,6 +327,7 @@ def load_messages(messages_db: Path, handles: Sequence[str], start: dt.date, end
         if mid not in grouped:
             grouped[mid] = MessageRow(
                 message_id=mid,
+                handle_id=str(r["handle_id"] or "").strip().lower(),
                 sent_at=t,
                 is_from_me=bool(int(r["is_from_me"] or 0)),
                 text=text_value,
@@ -333,6 +336,8 @@ def load_messages(messages_db: Path, handles: Sequence[str], start: dt.date, end
         else:
             if text_value and not grouped[mid].text:
                 grouped[mid].text = text_value
+            if not grouped[mid].handle_id:
+                grouped[mid].handle_id = str(r["handle_id"] or "").strip().lower()
 
         af = str(r["attachment_filename"] or "").strip()
         am = str(r["attachment_mime"] or "").strip().lower()
@@ -647,9 +652,32 @@ def copy_media(src: Path, dst: Path) -> bool:
         return False
 
 
-def make_caption(messages: Sequence[MessageRow], idx: int, attach_notes: Sequence[str]) -> str:
+def resolve_incoming_speaker(handle_id: str, handle_label_map: Dict[str, str], fallback: str) -> str:
+    key = str(handle_id or "").strip().lower()
+    if not key:
+        return fallback
+    if key in handle_label_map:
+        return handle_label_map[key]
+    for v in normalize_contact_variants(key):
+        if v in handle_label_map:
+            return handle_label_map[v]
+    digits = re.sub(r"\D+", "", key)
+    if digits:
+        for cand in (digits, digits[-10:] if len(digits) > 10 else digits):
+            if cand and cand in handle_label_map:
+                return handle_label_map[cand]
+    return fallback
+
+
+def make_caption(
+    messages: Sequence[MessageRow],
+    idx: int,
+    attach_notes: Sequence[str],
+    handle_label_map: Dict[str, str],
+    fallback_incoming_name: str,
+) -> str:
     focal = messages[idx]
-    speaker = "Jon" if focal.is_from_me else "Trinity"
+    speaker = "Jon" if focal.is_from_me else resolve_incoming_speaker(focal.handle_id, handle_label_map, fallback_incoming_name)
 
     lines: List[str] = []
     focal_text = (focal.text or "").strip()
@@ -705,6 +733,7 @@ def aggregate_pages_by_day(
                 str(image.get("display_src", "")).strip(),
                 str(image.get("original_src", "")).strip(),
                 str(image.get("live_video_src", "")).strip(),
+                str(image.get("caption", "")).strip(),
             )
             if key in bucket["image_keys"]:
                 continue
@@ -970,8 +999,8 @@ def main() -> None:
     stage_dir.mkdir(parents=True, exist_ok=True)
 
     children = [
-        ChildConfig(name="Violet", birth_date=parse_date("2021-11-29"), contacts=["Trinity"]),
-        ChildConfig(name="Eleanor", birth_date=parse_date("2025-12-31"), contacts=["Trinity"]),
+        ChildConfig(name="Violet", birth_date=parse_date("2021-11-29"), contacts=["Trinity", "Ian Pilsbury", "Ian"]),
+        ChildConfig(name="Eleanor", birth_date=parse_date("2025-12-31"), contacts=["Trinity", "Ian Pilsbury", "Ian"]),
         ChildConfig(name="Lyrielle", birth_date=parse_date("2025-02-21"), contacts=["Elijah", "Marisa", "Lyrielle", "Lyra"]),
     ]
 
@@ -1013,10 +1042,17 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
         print(f"{child.name}: {len(windows)} windows planned")
 
         handles: Set[str] = set()
+        handle_label_map: Dict[str, str] = {}
         for contact in child.contacts:
             if contact not in contact_handles_cache:
                 contact_handles_cache[contact] = discover_contact_handles(contact)
-            handles.update(contact_handles_cache[contact])
+            normalized_contact = contact.strip()
+            contact_label = normalized_contact.split()[0] if normalized_contact.lower().startswith("ian ") else normalized_contact
+            for h in contact_handles_cache[contact]:
+                handles.add(h)
+                for key in normalize_contact_variants(h):
+                    handle_label_map[key] = contact_label
+                handle_label_map[h.strip().lower()] = contact_label
         child_handles = sorted(handles)
         print(f"{child.name}: {len(child_handles)} handle(s)")
 
@@ -1052,6 +1088,9 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             for i, msg in enumerate(messages):
                 attach_notes: List[str] = []
                 page_images: List[Dict[str, str]] = []
+                message_speaker = "Jon" if msg.is_from_me else resolve_incoming_speaker(msg.handle_id, handle_label_map, child.contacts[0])
+                sent_stamp = msg.sent_at.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ")
+                media_stamp_caption = f"{message_speaker} | Sent {sent_stamp}"
 
                 for attachment_filename, attachment_mime in msg.attachments:
                     raw_name = Path(attachment_filename).name if attachment_filename else ""
@@ -1118,6 +1157,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                                 "live_video_src": "",
                                 "live_photo_available": "false",
                                 "source_filename": raw_name,
+                                "caption": media_stamp_caption,
                             })
                             linked_videos += 1
                         else:
@@ -1168,9 +1208,10 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                             "live_video_src": live_video_rel,
                             "live_photo_available": "true" if live_video_rel else "false",
                             "source_filename": raw_name,
+                            "caption": media_stamp_caption,
                         })
 
-                caption = make_caption(messages, i, attach_notes)
+                caption = make_caption(messages, i, attach_notes, handle_label_map, child.contacts[0])
                 pages.append((msg.sent_at, caption, page_images, msg.text))
                 if (i + 1) == 1 or (i + 1) % 25 == 0 or (i + 1) == len(messages):
                     print(
@@ -1208,6 +1249,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
             for sidx, (sent_at, caption, page_images, raw_text) in enumerate(pages, start=1):
                 images = []
                 for img in page_images[:8]:
+                    media_caption = sanitize_message_text(str(img.get("caption", "")).strip()) or caption
                     images.append(
                         {
                             "src": img.get("src", ""),
@@ -1218,8 +1260,8 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                             "live_photo_available": img.get("live_photo_available", "false") == "true",
                             "captured_at": sent_at.isoformat(),
                             "source_filename": img.get("source_filename", ""),
-                            "caption": caption,
-                            "memory_text": caption,
+                            "caption": media_caption,
+                            "memory_text": media_caption,
                         }
                     )
                 spreads.append(

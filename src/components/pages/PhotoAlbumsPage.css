@@ -85,21 +85,30 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-photo-albums-main.is-fullscreen {
   padding: 0;
+  height: 100dvh;
+}
+
+.catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-stage {
+  margin-top: 0;
+  height: 100%;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-stage-user {
   margin-top: 0;
-  min-height: 100dvh;
+  min-height: 0;
+  height: 100%;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scrapbook-scatter {
-  min-height: 100dvh;
+  min-height: 0;
+  height: 100%;
   border-width: 0;
   box-shadow: none;
 }
 
 .catn8-photo-albums-main.is-fullscreen .catn8-scatter-canvas {
-  min-height: calc(100dvh - 5.5rem);
+  min-height: 0;
+  height: 100%;
 }
 
 .catn8-album-toolbar {
@@ -248,8 +257,10 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-scrapbook-stage-header {
-  position: relative;
-  z-index: 3;
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 13;
   display: inline-flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -332,7 +343,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-scatter-canvas {
   position: relative;
   min-height: 64vh;
-  margin-top: 0.4rem;
+  margin-top: 0;
   border: 2px solid rgba(87, 61, 33, 0.24);
   border-radius: 12px;
   background: linear-gradient(120deg, rgba(255, 247, 230, 0.8), rgba(253, 239, 211, 0.74));
@@ -586,7 +597,29 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-admin-preview-panel {
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.catn8-admin-preview-panel .catn8-scrapbook-stage {
+  margin-top: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.catn8-admin-preview-panel .catn8-scrapbook-stage-user {
+  min-height: 0;
+  height: 100%;
+}
+
+.catn8-admin-preview-panel .catn8-scrapbook-scatter {
+  min-height: 0;
+  height: 100%;
+}
+
+.catn8-admin-preview-panel .catn8-scatter-canvas {
+  min-height: 0;
+  height: 100%;
 }
 
 @media (max-width: 991px) {

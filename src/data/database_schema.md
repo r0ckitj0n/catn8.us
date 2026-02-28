@@ -67,6 +67,55 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### photo_album_import_checkpoints
+- `source_key` (VARCHAR(191), PRIMARY KEY)
+- `last_message_id` (BIGINT)
+- `last_matched_message_id` (BIGINT)
+- `last_run_at` (DATETIME, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### photo_album_message_catalog
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `source_key` (VARCHAR(191))
+- `message_row_id` (BIGINT)
+- `handle_id` (VARCHAR(191))
+- `is_from_me` (TINYINT(1))
+- `sent_at` (DATETIME)
+- `message_text` (TEXT)
+- `attachment_count` (INT)
+- `image_attachment_count` (INT)
+- `video_attachment_count` (INT)
+- `is_matched` (TINYINT(1))
+- `matched_at` (DATETIME, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### photo_album_media_catalog
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `source_key` (VARCHAR(191))
+- `message_row_id` (BIGINT)
+- `attachment_index` (INT)
+- `attachment_name` (VARCHAR(255))
+- `attachment_path` (TEXT)
+- `mime_type` (VARCHAR(191))
+- `media_kind` (VARCHAR(16), e.g. `image`/`video`/`other`)
+- `captured_at` (DATETIME)
+- `file_exists` (TINYINT(1))
+- `has_violet_face` (TINYINT(1))
+- `has_eleanor_face` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### photo_album_message_media_matches
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `source_key` (VARCHAR(191))
+- `message_row_id` (BIGINT)
+- `media_id` (BIGINT)
+- `rank_order` (INT)
+- `score` (DECIMAL(9,3))
+- `created_at` (TIMESTAMP)
+
 ## Build Wizard Tables
 
 ### build_wizard_projects

@@ -53,9 +53,32 @@ class AlbumPage:
     media_items: List[Tuple[str, str]]
 
 
+@dataclass
+class CatalogMessage:
+    message_row_id: int
+    sent_at: dt.datetime
+    is_from_me: int
+    message_text: str
+    attachment_count: int
+    image_attachment_count: int
+    video_attachment_count: int
+
+
+@dataclass
+class CatalogMedia:
+    media_id: int
+    message_row_id: int
+    attachment_name: str
+    attachment_path: str
+    media_kind: str
+    captured_at: dt.datetime
+    has_violet_face: int
+    has_eleanor_face: int
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Import iMessage/Photos memories into CATN8 photo_albums")
-    p.add_argument("--mode", choices=["attachment_match", "photos_timeline"], default="attachment_match")
+    p.add_argument("--mode", choices=["catalog_match", "attachment_match", "photos_timeline"], default="catalog_match")
     p.add_argument("--contact", default="Trinity")
     p.add_argument("--years", type=int, default=4)
     p.add_argument("--photos-db", default="~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite")
@@ -72,6 +95,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-pages", type=int, default=50)
     p.add_argument("--target-pages", type=int, default=25)
     p.add_argument("--max-export-items", type=int, default=40)
+    p.add_argument("--import-source", default="")
+    p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor"], default="auto")
+    p.add_argument("--match-window-hours", type=int, default=72)
+    p.add_argument("--max-matched-media-per-message", type=int, default=8)
+    p.add_argument("--rebuild-catalog", action="store_true")
+    p.add_argument("--rematch-all", action="store_true")
     p.add_argument("--disable-ai", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     return p.parse_args()
@@ -369,13 +398,26 @@ def discover_contact_handles(contact: str) -> List[str]:
     return sorted(handles)
 
 
-def load_messages(messages_db: Path, contact: str, years: int, contact_handles: Sequence[str], start_date: Optional[dt.date], end_date: Optional[dt.date]) -> List[MessageRow]:
+def load_messages(
+    messages_db: Path,
+    contact: str,
+    years: int,
+    contact_handles: Sequence[str],
+    start_date: Optional[dt.date],
+    end_date: Optional[dt.date],
+    min_message_id: int = 0,
+) -> List[MessageRow]:
     cutoff = start_date or (dt.datetime.now().astimezone().date() - dt.timedelta(days=years * 365))
     conn = sqlite_connect_readonly(messages_db)
     try:
         handles = [h.lower().strip() for h in contact_handles if h and h.strip()]
         if handles:
             ph = ",".join(["?"] * len(handles))
+            params: List[Any] = list(handles + handles)
+            message_id_filter = ""
+            if min_message_id > 0:
+                message_id_filter = " AND m.ROWID > ?"
+                params.append(int(min_message_id))
             sql = f"""
             SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                    m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
@@ -392,12 +434,18 @@ def load_messages(messages_db: Path, contact: str, years: int, contact_handles: 
                    INNER JOIN handle hh ON hh.ROWID = chj.handle_id
                    WHERE cmj.message_id = m.ROWID AND LOWER(COALESCE(hh.id,'')) IN ({ph})
                )
+              {message_id_filter}
             ORDER BY m.date ASC, m.ROWID ASC
             """
-            rows = conn.execute(sql, tuple(handles + handles)).fetchall()
+            rows = conn.execute(sql, tuple(params)).fetchall()
         else:
+            params2: List[Any] = [f"%{contact.lower()}%"]
+            message_id_filter = ""
+            if min_message_id > 0:
+                message_id_filter = " AND m.ROWID > ?"
+                params2.append(int(min_message_id))
             rows = conn.execute(
-                """
+                f"""
                 SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                        m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
                        m.attributedBody AS attributed_body,
@@ -407,9 +455,10 @@ def load_messages(messages_db: Path, contact: str, years: int, contact_handles: 
                 LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
                 LEFT JOIN attachment a ON a.ROWID = maj.attachment_id
                 WHERE LOWER(COALESCE(h.id,'')) LIKE ?
+                  {message_id_filter}
                 ORDER BY m.date ASC, m.ROWID ASC
                 """,
-                (f"%{contact.lower()}%",),
+                tuple(params2),
             ).fetchall()
     finally:
         conn.close()
@@ -548,12 +597,508 @@ def photos_export_by_filename(filename: str, out_dir: Path) -> Optional[Path]:
 
 def convert_to_png(source_path: Path, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists():
+        return
     if source_path.suffix.lower() == ".png":
-        shutil.copy2(source_path, out_path)
+        if not out_path.exists():
+            shutil.copy2(source_path, out_path)
         return
     proc = subprocess.run(["sips", "-s", "format", "png", str(source_path), "--out", str(out_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"sips conversion failed: {source_path} :: {proc.stderr.strip()}")
+
+
+def media_kind_from_attachment(path: Optional[Path], mime: str) -> str:
+    suffix = path.suffix.lower() if path is not None else ""
+    mime_l = (mime or "").strip().lower()
+    if mime_l.startswith("image/") or suffix in {".heic", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff"}:
+        return "image"
+    if mime_l.startswith("video/") or suffix in {".mov", ".mp4", ".m4v", ".3gp", ".avi", ".mkv", ".webm"}:
+        return "video"
+    return "other"
+
+
+def resolve_focus_person(focus_person: str, album_title_prefix: str) -> str:
+    focus = (focus_person or "auto").strip().lower()
+    if focus in {"violet", "eleanor", "any"}:
+        return focus
+    title = (album_title_prefix or "").strip().lower()
+    if "violet" in title:
+        return "violet"
+    if "eleanor" in title:
+        return "eleanor"
+    return "any"
+
+
+def build_import_source_key(args: argparse.Namespace, focus: str) -> str:
+    if str(args.import_source or "").strip():
+        return str(args.import_source).strip()[:180]
+    contact = re.sub(r"[^a-z0-9]+", "-", str(args.contact or "contact").strip().lower()).strip("-") or "contact"
+    return f"imessage-{contact}-{focus}"[:180]
+
+
+def ensure_album_import_tables(cur) -> None:
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS photo_album_import_checkpoints (
+      source_key VARCHAR(191) PRIMARY KEY,
+      last_message_id BIGINT NOT NULL DEFAULT 0,
+      last_matched_message_id BIGINT NOT NULL DEFAULT 0,
+      last_run_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS photo_album_message_catalog (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      source_key VARCHAR(191) NOT NULL,
+      message_row_id BIGINT NOT NULL,
+      handle_id VARCHAR(191) NOT NULL DEFAULT '',
+      is_from_me TINYINT(1) NOT NULL DEFAULT 0,
+      sent_at DATETIME NOT NULL,
+      message_text TEXT NOT NULL,
+      attachment_count INT NOT NULL DEFAULT 0,
+      image_attachment_count INT NOT NULL DEFAULT 0,
+      video_attachment_count INT NOT NULL DEFAULT 0,
+      is_matched TINYINT(1) NOT NULL DEFAULT 0,
+      matched_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_source_message (source_key, message_row_id),
+      KEY idx_message_source_sent (source_key, sent_at),
+      KEY idx_message_source_match (source_key, is_matched, message_row_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS photo_album_media_catalog (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      source_key VARCHAR(191) NOT NULL,
+      message_row_id BIGINT NOT NULL,
+      attachment_index INT NOT NULL,
+      attachment_name VARCHAR(255) NOT NULL DEFAULT '',
+      attachment_path TEXT NOT NULL,
+      mime_type VARCHAR(191) NOT NULL DEFAULT '',
+      media_kind VARCHAR(16) NOT NULL DEFAULT 'other',
+      captured_at DATETIME NOT NULL,
+      file_exists TINYINT(1) NOT NULL DEFAULT 0,
+      has_violet_face TINYINT(1) NOT NULL DEFAULT 0,
+      has_eleanor_face TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_source_media_attachment (source_key, message_row_id, attachment_index),
+      KEY idx_media_source_time (source_key, captured_at),
+      KEY idx_media_source_kind (source_key, media_kind, file_exists),
+      KEY idx_media_source_violet (source_key, has_violet_face, captured_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS photo_album_message_media_matches (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      source_key VARCHAR(191) NOT NULL,
+      message_row_id BIGINT NOT NULL,
+      media_id BIGINT NOT NULL,
+      rank_order INT NOT NULL,
+      score DECIMAL(9,3) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_source_msg_media (source_key, message_row_id, media_id),
+      UNIQUE KEY uniq_source_msg_rank (source_key, message_row_id, rank_order),
+      KEY idx_match_source_msg (source_key, message_row_id),
+      KEY idx_match_source_media (source_key, media_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+
+def checkpoint_get(cur, source_key: str) -> Dict[str, int]:
+    cur.execute(
+        "SELECT last_message_id, last_matched_message_id FROM photo_album_import_checkpoints WHERE source_key=%s LIMIT 1",
+        (source_key,),
+    )
+    row = cur.fetchone() or {}
+    return {
+        "last_message_id": int(row.get("last_message_id") or 0),
+        "last_matched_message_id": int(row.get("last_matched_message_id") or 0),
+    }
+
+
+def checkpoint_upsert(cur, source_key: str, last_message_id: int, last_matched_message_id: int) -> None:
+    cur.execute(
+        """
+        INSERT INTO photo_album_import_checkpoints (source_key, last_message_id, last_matched_message_id, last_run_at)
+        VALUES (%s,%s,%s,NOW())
+        ON DUPLICATE KEY UPDATE
+          last_message_id = GREATEST(last_message_id, VALUES(last_message_id)),
+          last_matched_message_id = GREATEST(last_matched_message_id, VALUES(last_matched_message_id)),
+          last_run_at = NOW()
+        """,
+        (source_key, int(last_message_id), int(last_matched_message_id)),
+    )
+
+
+def build_face_filename_sets(assets: Sequence[PhotoAsset], violet_id: int, eleanor_id: int) -> Tuple[set[str], set[str]]:
+    violet_names: set[str] = set()
+    eleanor_names: set[str] = set()
+    for asset in assets:
+        names = [str(asset.filename or "").strip(), str(asset.original_filename or "").strip()]
+        keys: List[str] = []
+        for name in names:
+            if not name:
+                continue
+            keys.append(name.lower())
+            keys.append(Path(name).stem.lower())
+        if violet_id in asset.person_ids:
+            violet_names.update(x for x in keys if x)
+        if eleanor_id in asset.person_ids:
+            eleanor_names.update(x for x in keys if x)
+    return violet_names, eleanor_names
+
+
+def ingest_messages_into_catalog(
+    cur,
+    source_key: str,
+    messages: Sequence[MessageRow],
+    violet_face_names: set[str],
+    eleanor_face_names: set[str],
+    rebuild_catalog: bool,
+) -> Tuple[int, int]:
+    if rebuild_catalog:
+        cur.execute("DELETE FROM photo_album_message_media_matches WHERE source_key=%s", (source_key,))
+        cur.execute("DELETE FROM photo_album_media_catalog WHERE source_key=%s", (source_key,))
+        cur.execute("DELETE FROM photo_album_message_catalog WHERE source_key=%s", (source_key,))
+        cur.execute("UPDATE photo_album_import_checkpoints SET last_message_id=0, last_matched_message_id=0 WHERE source_key=%s", (source_key,))
+
+    grouped: Dict[int, List[MessageRow]] = {}
+    for row in messages:
+        grouped.setdefault(int(row.message_id), []).append(row)
+
+    highest_message_id = 0
+    ingested_messages = 0
+    for message_id in sorted(grouped.keys()):
+        rows = grouped[message_id]
+        highest_message_id = max(highest_message_id, int(message_id))
+        first = rows[0]
+        sent_at = first.sent_at.strftime("%Y-%m-%d %H:%M:%S")
+        text_value = ""
+        for row in rows:
+            if str(row.text or "").strip():
+                text_value = str(row.text or "").strip()
+                break
+        attachments: List[Tuple[Optional[Path], str]] = []
+        seen_attach: set[Tuple[str, str]] = set()
+        for row in rows:
+            ap = row.attachment_path
+            mime = str(row.attachment_mime or "").strip().lower()
+            key = (str(ap or ""), mime)
+            if not str(key[0]).strip():
+                continue
+            if key in seen_attach:
+                continue
+            seen_attach.add(key)
+            attachments.append((ap, mime))
+
+        image_count = 0
+        video_count = 0
+        for ap, mime in attachments:
+            kind = media_kind_from_attachment(ap, mime)
+            if kind == "image":
+                image_count += 1
+            elif kind == "video":
+                video_count += 1
+
+        cur.execute(
+            """
+            INSERT INTO photo_album_message_catalog
+              (source_key, message_row_id, handle_id, is_from_me, sent_at, message_text, attachment_count, image_attachment_count, video_attachment_count, is_matched, matched_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,NULL)
+            ON DUPLICATE KEY UPDATE
+              handle_id=VALUES(handle_id),
+              is_from_me=VALUES(is_from_me),
+              sent_at=VALUES(sent_at),
+              message_text=VALUES(message_text),
+              attachment_count=VALUES(attachment_count),
+              image_attachment_count=VALUES(image_attachment_count),
+              video_attachment_count=VALUES(video_attachment_count),
+              is_matched=0,
+              matched_at=NULL
+            """,
+            (
+                source_key,
+                int(message_id),
+                str(first.handle_id or "").strip().lower(),
+                int(first.is_from_me or 0),
+                sent_at,
+                text_value,
+                len(attachments),
+                image_count,
+                video_count,
+            ),
+        )
+        cur.execute("DELETE FROM photo_album_media_catalog WHERE source_key=%s AND message_row_id=%s", (source_key, int(message_id)))
+        for idx, (ap, mime) in enumerate(attachments, start=1):
+            kind = media_kind_from_attachment(ap, mime)
+            name = ap.name if ap is not None else ""
+            name_l = name.lower().strip()
+            stem_l = Path(name).stem.lower().strip() if name_l else ""
+            has_violet = 1 if (name_l in violet_face_names or stem_l in violet_face_names) else 0
+            has_eleanor = 1 if (name_l in eleanor_face_names or stem_l in eleanor_face_names) else 0
+            cur.execute(
+                """
+                INSERT INTO photo_album_media_catalog
+                  (source_key, message_row_id, attachment_index, attachment_name, attachment_path, mime_type, media_kind, captured_at, file_exists, has_violet_face, has_eleanor_face)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    source_key,
+                    int(message_id),
+                    int(idx),
+                    name[:255],
+                    str(ap or ""),
+                    mime[:191],
+                    kind,
+                    sent_at,
+                    1 if (ap is not None and ap.exists()) else 0,
+                    has_violet,
+                    has_eleanor,
+                ),
+            )
+        ingested_messages += 1
+
+    return ingested_messages, highest_message_id
+
+
+def load_catalog_messages(cur, source_key: str, min_message_row_id: int = 0) -> List[CatalogMessage]:
+    params: List[Any] = [source_key]
+    clause = ""
+    if min_message_row_id > 0:
+        clause = " AND message_row_id > %s"
+        params.append(int(min_message_row_id))
+    cur.execute(
+        f"""
+        SELECT message_row_id, sent_at, is_from_me, message_text, attachment_count, image_attachment_count, video_attachment_count
+        FROM photo_album_message_catalog
+        WHERE source_key=%s {clause}
+        ORDER BY sent_at ASC, message_row_id ASC
+        """,
+        tuple(params),
+    )
+    out: List[CatalogMessage] = []
+    for row in cur.fetchall():
+        out.append(
+            CatalogMessage(
+                message_row_id=int(row["message_row_id"]),
+                sent_at=row["sent_at"],
+                is_from_me=int(row["is_from_me"] or 0),
+                message_text=str(row["message_text"] or ""),
+                attachment_count=int(row["attachment_count"] or 0),
+                image_attachment_count=int(row["image_attachment_count"] or 0),
+                video_attachment_count=int(row["video_attachment_count"] or 0),
+            )
+        )
+    return out
+
+
+def load_catalog_media(cur, source_key: str, only_existing: bool) -> List[CatalogMedia]:
+    extra = " AND file_exists=1" if only_existing else ""
+    cur.execute(
+        f"""
+        SELECT id, message_row_id, attachment_name, attachment_path, media_kind, captured_at, has_violet_face, has_eleanor_face
+        FROM photo_album_media_catalog
+        WHERE source_key=%s
+          AND media_kind IN ('image','video')
+          {extra}
+        ORDER BY captured_at ASC, id ASC
+        """,
+        (source_key,),
+    )
+    out: List[CatalogMedia] = []
+    for row in cur.fetchall():
+        out.append(
+            CatalogMedia(
+                media_id=int(row["id"]),
+                message_row_id=int(row["message_row_id"]),
+                attachment_name=str(row["attachment_name"] or ""),
+                attachment_path=str(row["attachment_path"] or ""),
+                media_kind=str(row["media_kind"] or "other"),
+                captured_at=row["captured_at"],
+                has_violet_face=int(row["has_violet_face"] or 0),
+                has_eleanor_face=int(row["has_eleanor_face"] or 0),
+            )
+        )
+    return out
+
+
+def run_catalog_matching(
+    cur,
+    source_key: str,
+    focus_person: str,
+    match_window_hours: int,
+    max_matched_media_per_message: int,
+    min_message_row_id: int,
+) -> int:
+    messages = [m for m in load_catalog_messages(cur, source_key, min_message_row_id=min_message_row_id) if int(m.attachment_count or 0) > 0]
+    if not messages:
+        return 0
+
+    all_media = load_catalog_media(cur, source_key, only_existing=False)
+    media_candidates = [m for m in all_media if m.media_kind == "image" and Path(m.attachment_path).exists()]
+    if focus_person == "violet":
+        media_candidates = [m for m in media_candidates if int(m.has_violet_face or 0) == 1]
+    elif focus_person == "eleanor":
+        media_candidates = [m for m in media_candidates if int(m.has_eleanor_face or 0) == 1]
+
+    media_by_message: Dict[int, List[CatalogMedia]] = {}
+    for media in all_media:
+        media_by_message.setdefault(int(media.message_row_id), []).append(media)
+
+    cur.execute(
+        "SELECT MAX(message_row_id) AS max_row FROM photo_album_message_catalog WHERE source_key=%s",
+        (source_key,),
+    )
+    max_row = int((cur.fetchone() or {}).get("max_row") or 0)
+    if min_message_row_id > 0:
+        cur.execute(
+            "DELETE FROM photo_album_message_media_matches WHERE source_key=%s AND message_row_id > %s",
+            (source_key, int(min_message_row_id)),
+        )
+    else:
+        cur.execute("DELETE FROM photo_album_message_media_matches WHERE source_key=%s", (source_key,))
+
+    used_media_ids: set[int] = set()
+    matched_count = 0
+    window_seconds = max(1, int(match_window_hours)) * 3600
+    for message in messages:
+        referenced_names = {
+            str(media.attachment_name or "").strip().lower()
+            for media in media_by_message.get(message.message_row_id, [])
+            if str(media.attachment_name or "").strip()
+        }
+        expected = max(1, min(int(message.attachment_count or 1), int(max_matched_media_per_message or 8)))
+        scored: List[Tuple[float, float, CatalogMedia]] = []
+        for media in media_candidates:
+            delta_seconds = abs((media.captured_at - message.sent_at).total_seconds())
+            if delta_seconds > window_seconds:
+                continue
+            hours = delta_seconds / 3600.0
+            score = max(0.0, 96.0 - hours)
+            if media.message_row_id == message.message_row_id:
+                score += 140.0
+            media_name_l = str(media.attachment_name or "").strip().lower()
+            if media_name_l and media_name_l in referenced_names:
+                score += 120.0
+            if focus_person == "violet" and int(media.has_violet_face or 0) == 1:
+                score += 35.0
+            if focus_person == "eleanor" and int(media.has_eleanor_face or 0) == 1:
+                score += 35.0
+            if media.media_id in used_media_ids:
+                score -= 18.0
+            if score <= 0:
+                continue
+            scored.append((score, delta_seconds, media))
+
+        scored.sort(key=lambda item: (-item[0], item[1], item[2].media_id))
+        picks = scored[:expected]
+        if not picks:
+            cur.execute(
+                "UPDATE photo_album_message_catalog SET is_matched=1, matched_at=NOW() WHERE source_key=%s AND message_row_id=%s",
+                (source_key, int(message.message_row_id)),
+            )
+            continue
+
+        for rank, (score, _delta, media) in enumerate(picks, start=1):
+            cur.execute(
+                """
+                INSERT INTO photo_album_message_media_matches (source_key, message_row_id, media_id, rank_order, score)
+                VALUES (%s,%s,%s,%s,%s)
+                """,
+                (source_key, int(message.message_row_id), int(media.media_id), int(rank), float(score)),
+            )
+            used_media_ids.add(int(media.media_id))
+            matched_count += 1
+
+        cur.execute(
+            "UPDATE photo_album_message_catalog SET is_matched=1, matched_at=NOW() WHERE source_key=%s AND message_row_id=%s",
+            (source_key, int(message.message_row_id)),
+        )
+
+    checkpoint_upsert(cur, source_key, max_row, max_row)
+    return matched_count
+
+
+def caption_from_catalog_message(msg: CatalogMessage) -> str:
+    text = str(msg.message_text or "").strip() or "(no caption)"
+    speaker = "Jon" if int(msg.is_from_me or 0) else "Trinity"
+    stamp = msg.sent_at.strftime("%I:%M %p").lstrip("0")
+    attach_line = (
+        f"Attachments referenced: {msg.attachment_count} total "
+        f"({msg.image_attachment_count} images, {msg.video_attachment_count} videos)."
+    )
+    return f"{speaker} ({stamp}): {text}\\n{attach_line}"
+
+
+def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[AlbumPage]:
+    cur.execute(
+        """
+        SELECT
+          m.message_row_id,
+          m.sent_at,
+          m.is_from_me,
+          m.message_text,
+          m.attachment_count,
+          m.image_attachment_count,
+          m.video_attachment_count,
+          c.id AS media_id,
+          c.attachment_name,
+          c.attachment_path
+        FROM photo_album_message_catalog m
+        INNER JOIN photo_album_message_media_matches mm
+          ON mm.source_key=m.source_key AND mm.message_row_id=m.message_row_id
+        INNER JOIN photo_album_media_catalog c
+          ON c.id=mm.media_id AND c.source_key=mm.source_key
+        WHERE m.source_key=%s
+          AND c.media_kind='image'
+          AND c.file_exists=1
+        ORDER BY m.sent_at ASC, m.message_row_id ASC, mm.rank_order ASC
+        """,
+        (source_key,),
+    )
+    grouped: Dict[int, Dict[str, Any]] = {}
+    for row in cur.fetchall():
+        msg_id = int(row["message_row_id"])
+        bucket = grouped.get(msg_id)
+        if bucket is None:
+            message = CatalogMessage(
+                message_row_id=msg_id,
+                sent_at=row["sent_at"],
+                is_from_me=int(row["is_from_me"] or 0),
+                message_text=str(row["message_text"] or ""),
+                attachment_count=int(row["attachment_count"] or 0),
+                image_attachment_count=int(row["image_attachment_count"] or 0),
+                video_attachment_count=int(row["video_attachment_count"] or 0),
+            )
+            bucket = {"message": message, "media_items": []}
+            grouped[msg_id] = bucket
+        source_path = Path(str(row["attachment_path"] or ""))
+        if not source_path.exists():
+            continue
+        out_name = f"catalog_{int(row['media_id']):08d}.png"
+        out_path = staging_dir / out_name
+        convert_to_png(source_path, out_path)
+        bucket["media_items"].append((f"/photo_albums/{out_name}", str(row["attachment_name"] or out_name)))
+
+    pages: List[AlbumPage] = []
+    for msg_id in sorted(grouped.keys()):
+        bucket = grouped[msg_id]
+        media_items = list(bucket["media_items"])
+        if not media_items:
+            continue
+        message = bucket["message"]
+        pages.append(
+            AlbumPage(
+                sent_at=message.sent_at,
+                caption=caption_from_catalog_message(message),
+                media_items=media_items[:24],
+            )
+        )
+    return pages
 
 
 def chunk_sizes(total: int, min_pages: int, max_pages: int, target_pages: int) -> List[int]:
@@ -1005,11 +1550,69 @@ def main() -> None:
     finally:
         photos_conn.close()
 
-    contact_handles = discover_contact_handles(args.contact)
-    messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
-    print(f"Loaded {len(messages)} messages in window.")
+    focus_person = resolve_focus_person(args.focus_person, args.album_title_prefix)
+    source_key = build_import_source_key(args, focus_person)
+    print(f"Focus person: {focus_person}")
+    print(f"Catalog source key: {source_key}")
 
-    if args.mode == "photos_timeline":
+    contact_handles = discover_contact_handles(args.contact)
+    messages: List[MessageRow] = []
+    pages: List[AlbumPage] = []
+    if args.mode == "catalog_match":
+        violet_face_names, eleanor_face_names = build_face_filename_sets(assets, violet_id, eleanor_id)
+        conn = build_mysql_connection_from_env()
+        try:
+            with conn.cursor() as cur:
+                ensure_album_permissions_table(cur)
+                ensure_album_import_tables(cur)
+                checkpoint = checkpoint_get(cur, source_key)
+                min_message_id = 0 if args.rebuild_catalog else int(checkpoint["last_message_id"])
+                messages = load_messages(
+                    messages_db,
+                    args.contact,
+                    args.years,
+                    contact_handles,
+                    start_date,
+                    end_date,
+                    min_message_id=min_message_id,
+                )
+                print(f"Loaded {len(messages)} new/updated message rows from iMessage DB (min_message_id={min_message_id}).")
+                ingested_messages, highest_message_id = ingest_messages_into_catalog(
+                    cur,
+                    source_key,
+                    messages,
+                    violet_face_names,
+                    eleanor_face_names,
+                    rebuild_catalog=bool(args.rebuild_catalog),
+                )
+                print(f"Ingested {ingested_messages} message records into MySQL catalog.")
+                checkpoint_upsert(
+                    cur,
+                    source_key,
+                    max(int(checkpoint["last_message_id"]), int(highest_message_id)),
+                    int(checkpoint["last_matched_message_id"]),
+                )
+
+                min_match_message_id = 0 if args.rematch_all else int(checkpoint["last_matched_message_id"])
+                matched_count = run_catalog_matching(
+                    cur,
+                    source_key,
+                    focus_person,
+                    match_window_hours=max(1, int(args.match_window_hours)),
+                    max_matched_media_per_message=max(1, int(args.max_matched_media_per_message)),
+                    min_message_row_id=min_match_message_id,
+                )
+                print(f"Catalog matching linked {matched_count} media items to messages.")
+                pages = build_pages_from_catalog(cur, source_key, staging_dir)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    elif args.mode == "photos_timeline":
+        messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
+        print(f"Loaded {len(messages)} messages in window.")
         pages = pages_from_photos_timeline(
             photos_db,
             assets,
@@ -1020,10 +1623,12 @@ def main() -> None:
             max_export_items=max(1, min(args.max_export_items, args.max_pages)),
         )
     else:
+        messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
+        print(f"Loaded {len(messages)} messages in window.")
         pages = pages_from_attachment_match(messages, staging_dir)
 
     if not pages:
-        raise RuntimeError("No pages produced. For photos_timeline, ensure Photos can export originals for this date window.")
+        raise RuntimeError("No pages produced. For catalog_match, check catalog table content and face filtering. For photos_timeline, ensure Photos can export originals for this date window.")
 
     sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
     batches: List[List[AlbumPage]] = []

@@ -32,7 +32,7 @@ interface PhotoAlbumStageProps {
 type NoteItem = {
   id: string;
   text: string;
-  speaker: 'Jon' | 'Trinity' | 'Unknown';
+  speaker: string;
   time?: string;
   x?: number;
   y?: number;
@@ -69,18 +69,18 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function parseSpeakerLine(line: string): { speaker: 'Jon' | 'Trinity' | 'Unknown'; time?: string; body: string } {
+function parseSpeakerLine(line: string): { speaker: string; time?: string; body: string } {
   const cleaned = sanitizeAlbumMessageText(line);
   const withAlias = cleaned.replace(/^Contact\s*:/i, 'Trinity:');
-  const rich = withAlias.match(/^(Jon|Trinity)\s*(?:\(([0-9]{1,2}:[0-9]{2}\s*[AP]M)\)|\[([0-9]{1,2}:[0-9]{2}\s*[AP]M)\])?\s*:\s*(.+)$/i);
+  const rich = withAlias.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*(?:\(([0-9]{1,2}:[0-9]{2}\s*[AP]M)\)|\[([0-9]{1,2}:[0-9]{2}\s*[AP]M)\])?\s*:\s*(.+)$/i);
   if (rich) {
-    const speaker = rich[1].toLowerCase() === 'jon' ? 'Jon' : 'Trinity';
+    const speaker = sanitizeAlbumMessageText(rich[1] || '') || 'Unknown';
     const time = (rich[2] || rich[3] || '').trim() || undefined;
     return { speaker, time, body: sanitizeAlbumMessageText(rich[4] || '') };
   }
-  const basic = withAlias.match(/^(Jon|Trinity)\s*:\s*(.+)$/i);
+  const basic = withAlias.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*:\s*(.+)$/i);
   if (basic) {
-    const speaker = basic[1].toLowerCase() === 'jon' ? 'Jon' : 'Trinity';
+    const speaker = sanitizeAlbumMessageText(basic[1] || '') || 'Unknown';
     return { speaker, body: sanitizeAlbumMessageText(basic[2] || '') };
   }
   return { speaker: 'Unknown', body: withAlias };
@@ -92,7 +92,7 @@ function formatNoteText(note: NoteItem): string {
 }
 
 function isMessageLikeLine(line: string): boolean {
-  return /^(Jon|Trinity|Contact|Unknown)\s*(?:\([0-9]{1,2}:[0-9]{2}\s*[AP]M\)|\[[0-9]{1,2}:[0-9]{2}\s*[AP]M\])?\s*:/i.test(sanitizeAlbumMessageText(line));
+  return /^([A-Za-z][A-Za-z' -]{0,30}|Contact|Unknown)\s*(?:\([0-9]{1,2}:[0-9]{2}\s*[AP]M\)|\[[0-9]{1,2}:[0-9]{2}\s*[AP]M\])?\s*:/i.test(sanitizeAlbumMessageText(line));
 }
 
 function isTranscriptCaption(text: string): boolean {
@@ -258,7 +258,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
         return {
           id: item.id || `${album.id}-${targetSpreadIndex}-text-${index}`,
           text: parsed.body,
-          speaker: (item.speaker as 'Jon' | 'Trinity' | undefined) || parsed.speaker,
+          speaker: String((item as { speaker?: string }).speaker || '').trim() || parsed.speaker,
           time: item.time || parsed.time,
           x: item.x,
           y: item.y,

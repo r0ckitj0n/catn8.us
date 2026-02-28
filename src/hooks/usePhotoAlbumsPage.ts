@@ -36,6 +36,23 @@ function stableStringify(value: unknown): string {
   }
 }
 
+function sortAlbumsOldestToNewest(albums: PhotoAlbum[]): PhotoAlbum[] {
+  return [...albums].sort((a, b) => {
+    const aTime = Date.parse(a?.created_at || '');
+    const bTime = Date.parse(b?.created_at || '');
+
+    const aValid = Number.isFinite(aTime);
+    const bValid = Number.isFinite(bTime);
+    if (aValid && bValid && aTime !== bTime) {
+      return aTime - bTime;
+    }
+    if (aValid !== bValid) {
+      return aValid ? -1 : 1;
+    }
+    return Number(a?.id || 0) - Number(b?.id || 0);
+  });
+}
+
 export function usePhotoAlbumsPage(
   viewer: any,
   onToast?: (toast: IToast) => void,
@@ -67,7 +84,7 @@ export function usePhotoAlbumsPage(
     setLoading(true);
     try {
       const res = await ApiClient.get<PhotoAlbumListResponse>('/api/photo_albums.php?action=list');
-      const nextAlbums = Array.isArray(res?.albums) ? res.albums : [];
+      const nextAlbums = sortAlbumsOldestToNewest(Array.isArray(res?.albums) ? res.albums : []);
       setAlbums(nextAlbums);
 
       if (nextAlbums.length === 0) {

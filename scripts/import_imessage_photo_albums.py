@@ -1915,19 +1915,35 @@ def upload_sql_via_maintenance_api(sql_text: str) -> None:
 
 def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, created_by_user_id: int, disable_ai: bool) -> None:
     rows = build_album_rows(album_batches, title_prefix, disable_ai)
+    upload_album_rows(rows, created_by_user_id)
+
+
+def upload_album_rows(rows: Sequence[Dict[str, Any]], created_by_user_id: int) -> None:
+    if not rows:
+        return
     conn = build_mysql_connection_from_env()
     try:
         with conn.cursor() as cur:
             ensure_album_permissions_table(cur)
             photo_group_id, admin_group_id = fetch_required_group_ids(cur)
-            for row in rows:
-                slug = unique_slug(cur, slugify(str(row["slug"])))
+        conn.commit()
+        for row in rows:
+            with conn.cursor() as cur:
+                slug = unique_slug(cur, slugify(str(row.get("slug") or "album")))
                 cur.execute(
                     """
                     INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
                     VALUES (%s,%s,%s,%s,%s,%s,1,%s)
                     """,
-                    (row["title"], slug, row["summary"], row["cover_image_url"], row["cover_prompt"], row["spec_json"], created_by_user_id),
+                    (
+                        row.get("title") or "Photo Album",
+                        slug,
+                        row.get("summary") or "",
+                        row.get("cover_image_url") or "",
+                        row.get("cover_prompt") or "",
+                        row.get("spec_json") or "{}",
+                        created_by_user_id,
+                    ),
                 )
                 album_id = int(cur.lastrowid)
                 cur.execute(
@@ -1938,7 +1954,7 @@ def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, creat
                     """,
                     (album_id, photo_group_id, album_id, admin_group_id),
                 )
-        conn.commit()
+            conn.commit()
     except Exception:
         conn.rollback()
         raise
@@ -2359,15 +2375,16 @@ def main() -> None:
             continue
 
         created_by_user_id = int(os.environ.get("CATN8_ALBUM_CREATED_BY_USER_ID", "1"))
-        try:
-            upload_albums(batches, album_title_prefix, created_by_user_id, args.disable_ai)
-            print("Upload complete via direct MySQL connection.")
-        except Exception as mysql_error:
-            print(f"Direct MySQL failed ({mysql_error}); trying maintenance API fallback...")
-            rows = build_album_rows(batches, album_title_prefix, args.disable_ai)
-            sql_text = build_sql_for_album_rows(rows, created_by_user_id)
-            upload_sql_via_maintenance_api(sql_text)
-            print("Upload complete via maintenance API SQL restore.")
+        rows = build_album_rows(batches, album_title_prefix, args.disable_ai)
+        for album_idx, row in enumerate(rows, start=1):
+            try:
+                upload_album_rows([row], created_by_user_id)
+                print(f"Upload complete for album {album_idx}/{len(rows)} via direct MySQL connection.")
+            except Exception as mysql_error:
+                print(f"Direct MySQL failed for album {album_idx}/{len(rows)} ({mysql_error}); trying maintenance API fallback...")
+                sql_text = build_sql_for_album_rows([row], created_by_user_id)
+                upload_sql_via_maintenance_api(sql_text)
+                print(f"Upload complete for album {album_idx}/{len(rows)} via maintenance API SQL restore.")
 
     if total_pages <= 0:
         print("No new pages were produced in this run. Existing checkpoints/state are up to date.")

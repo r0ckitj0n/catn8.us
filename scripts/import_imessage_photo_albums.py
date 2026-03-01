@@ -1634,10 +1634,19 @@ def pages_from_photos_timeline(
                 nearest_idx = i
         caption = build_rich_caption(messages, nearest_idx) if messages else "(no caption)"
 
-        out_name = f"page_{len(pages)+1:04d}.png"
-        out_path = staging_dir / out_name
-        convert_to_png(source, out_path)
-        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, "image")]))
+        source_kind = media_kind_from_attachment(source, "")
+        if source_kind == "video":
+            suffix = source.suffix.lower() or ".mov"
+            out_name = f"page_{len(pages)+1:04d}{suffix}"
+            out_path = staging_dir / out_name
+            copy_media_to_staging(source, out_path)
+            media_kind = "video"
+        else:
+            out_name = f"page_{len(pages)+1:04d}.png"
+            out_path = staging_dir / out_name
+            convert_to_png(source, out_path)
+            media_kind = "image"
+        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, media_kind)]))
         if len(pages) % 5 == 0:
             print(f"photos_timeline progress: exported {len(pages)} page(s)...")
 

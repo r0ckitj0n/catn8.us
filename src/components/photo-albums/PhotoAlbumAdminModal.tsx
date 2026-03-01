@@ -97,7 +97,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
         .filter(Boolean);
       target.text_items = lines.map((line, index) => ({
         id: `note-${Date.now()}-${index}`,
-        text: line.replace(/^Contact\s*:/i, 'Trinity:'),
+        text: line,
       }));
       return next;
     });
@@ -110,7 +110,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     const lines = splitAlbumMessages(targetSpread.caption || '').map((line) => line.trim()).filter(Boolean);
     targetSpread.text_items = lines.map((line, index) => ({
       id: `note-${Date.now()}-${index}`,
-      text: line.replace(/^Contact\s*:/i, 'Trinity:'),
+      text: line,
     }));
   }, []);
 
@@ -568,6 +568,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               album={album}
               spreadIndex={pageIndex}
               zoom={zoom}
+              contactDisplayName={album.created_by_username || ''}
               canPrev={canPrev}
               canNext={canNext}
               onPrev={onPrevPage}

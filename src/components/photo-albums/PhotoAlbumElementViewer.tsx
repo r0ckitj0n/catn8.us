@@ -6,6 +6,7 @@ interface PhotoAlbumElementViewerProps {
   target: ViewerTarget;
   activeMedia: PreparedMediaItem | null;
   activeNote: string;
+  dateLabel?: string;
   prevTarget: ViewerTarget | null;
   nextTarget: ViewerTarget | null;
   onClose: () => void;
@@ -20,16 +21,17 @@ function isVideoMedia(src: string, mediaType?: string): boolean {
 }
 
 export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
-  const { target, activeMedia, activeNote, prevTarget, nextTarget, onClose, onNavigate } = props;
+  const { target, activeMedia, activeNote, dateLabel, prevTarget, nextTarget, onClose, onNavigate } = props;
 
   return (
     <div className="catn8-element-viewer-overlay" role="dialog" aria-modal="true">
       <div className="catn8-element-viewer-shell">
         <div className="catn8-element-viewer-header">
-          <strong>
-            {target.type === 'media' ? 'Media' : 'Text'} · Spread {target.spreadIndex + 1}
-          </strong>
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+          <strong>{target.type === 'media' ? 'Media' : 'Text'}</strong>
+          <div className="catn8-element-viewer-header-right">
+            {dateLabel ? <span className="catn8-element-viewer-date">{dateLabel}</span> : null}
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+          </div>
         </div>
         <div className="catn8-element-viewer-body">
           {target.type === 'media' && activeMedia ? (

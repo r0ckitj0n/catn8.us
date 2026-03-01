@@ -36,6 +36,7 @@ export interface PhotoAlbumSpec {
     spread_number: number;
     title: string;
     caption: string;
+    default_contact_label?: string;
     photo_slots: number;
     embellishments: string[];
     background_prompt: string;
@@ -71,6 +72,8 @@ export interface PhotoAlbumSpec {
       source_filename?: string;
       caption?: string;
       memory_text?: string;
+      speaker_label?: string;
+      speaker_handle_id?: string;
       x?: number;
       y?: number;
       w?: number;
@@ -89,6 +92,7 @@ export interface PhotoAlbum {
   cover_prompt: string;
   is_active: number;
   created_by_user_id: number;
+  created_by_username?: string;
   created_at: string;
   updated_at: string;
   spec: PhotoAlbumSpec;

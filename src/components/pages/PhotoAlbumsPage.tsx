@@ -148,6 +148,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 album={selectedAlbum}
                 spreadIndex={state.pageIndex}
                 zoom={state.zoom}
+                contactDisplayName={selectedAlbum.created_by_username || ''}
                 canPrev={state.canPrev}
                 canNext={state.canNext}
                 onPrev={state.prevPage}

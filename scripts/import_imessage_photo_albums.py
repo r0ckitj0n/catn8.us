@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import calendar
 import datetime as dt
 import glob
 import hashlib
@@ -56,6 +57,8 @@ class AlbumPage:
     sent_at: dt.datetime
     caption: str
     media_items: List[Tuple[str, str, str]]
+    speaker_label: str = ""
+    speaker_handle_id: str = ""
 
 
 @dataclass
@@ -72,6 +75,7 @@ class CatalogMessage:
     message_row_id: int
     sent_at: dt.datetime
     is_from_me: int
+    handle_id: str
     message_text: str
     attachment_count: int
     image_attachment_count: int
@@ -107,6 +111,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lyra-face-id", type=int, default=None)
     p.add_argument("--violet-birth-date", default="2021-11-29")
     p.add_argument("--eleanor-birth-date", default="2025-12-31")
+    p.add_argument("--lyra-birth-date", default="2025-02-21")
     p.add_argument("--start-date", default="")
     p.add_argument("--end-date", default="")
     p.add_argument("--extra-window", action="append", default=[], help="Additional date window in YYYY-MM-DD:YYYY-MM-DD format (repeatable)")
@@ -208,6 +213,19 @@ def speaker_name_from_row(row: MessageRow, handle_name_map: Dict[str, str]) -> s
     return "Contact"
 
 
+def speaker_name_from_catalog_message(msg: CatalogMessage, handle_name_map: Dict[str, str]) -> str:
+    if int(msg.is_from_me or 0) == 1:
+        return "Papa"
+    handle_key = normalize_handle_for_lookup(msg.handle_id)
+    if handle_key and handle_key in handle_name_map:
+        return handle_name_map[handle_key]
+    handle_raw = str(msg.handle_id or "").lower()
+    for token, label in (("ian", "Ian"), ("elijah", "Elijah"), ("marisa", "Marisa"), ("trinity", "Trinity")):
+        if token in handle_raw:
+            return label
+    return "Contact"
+
+
 def load_env_files() -> None:
     for env_file in (".env", ".env.local", ".env.live"):
         path = Path(env_file)
@@ -225,6 +243,54 @@ def load_env_files() -> None:
 
 def parse_date(value: str) -> dt.date:
     return dt.datetime.strptime(value.strip(), "%Y-%m-%d").date()
+
+
+def add_months(base: dt.date, months: int) -> dt.date:
+    year = base.year + ((base.month - 1 + months) // 12)
+    month = ((base.month - 1 + months) % 12) + 1
+    day = min(base.day, calendar.monthrange(year, month)[1])
+    return dt.date(year, month, day)
+
+
+def month_window_index_for_date(target: dt.date, birth_date: dt.date, prebirth_days: int = 7) -> Optional[int]:
+    first_start = birth_date - dt.timedelta(days=max(0, int(prebirth_days)))
+    if target < first_start:
+        return None
+    months = ((target.year - birth_date.year) * 12) + (target.month - birth_date.month)
+    anchor = add_months(birth_date, months)
+    if target < anchor:
+        months -= 1
+    if months <= 0:
+        return 0
+    return months
+
+
+def build_birthday_month_batches(
+    pages: Sequence[AlbumPage],
+    birth_date: dt.date,
+    min_pages: int,
+    max_pages: int,
+    target_pages: int,
+    prebirth_days: int = 7,
+) -> List[List[AlbumPage]]:
+    per_month: Dict[int, List[AlbumPage]] = {}
+    for page in sorted(pages, key=lambda p: p.sent_at):
+        idx = month_window_index_for_date(page.sent_at.date(), birth_date, prebirth_days=prebirth_days)
+        if idx is None:
+            continue
+        per_month.setdefault(idx, []).append(page)
+
+    batches: List[List[AlbumPage]] = []
+    for month_idx in sorted(per_month.keys()):
+        month_pages = per_month[month_idx]
+        if not month_pages:
+            continue
+        sizes = chunk_sizes(len(month_pages), min_pages, max_pages, target_pages)
+        offset = 0
+        for size in sizes:
+            batches.append(month_pages[offset: offset + size])
+            offset += size
+    return batches
 
 
 def sqlite_connect_readonly(db_path: Path) -> sqlite3.Connection:
@@ -1722,7 +1788,7 @@ def load_catalog_messages(cur, source_key: str, min_message_row_id: int = 0) -> 
         params.append(int(min_message_row_id))
     cur.execute(
         f"""
-        SELECT message_row_id, sent_at, is_from_me, message_text, attachment_count, image_attachment_count, video_attachment_count
+        SELECT message_row_id, sent_at, is_from_me, handle_id, message_text, attachment_count, image_attachment_count, video_attachment_count
         FROM photo_album_message_catalog
         WHERE source_key=%s {clause}
         ORDER BY sent_at ASC, message_row_id ASC
@@ -1736,6 +1802,7 @@ def load_catalog_messages(cur, source_key: str, min_message_row_id: int = 0) -> 
                 message_row_id=int(row["message_row_id"]),
                 sent_at=row["sent_at"],
                 is_from_me=int(row["is_from_me"] or 0),
+                handle_id=str(row["handle_id"] or ""),
                 message_text=str(row["message_text"] or ""),
                 attachment_count=int(row["attachment_count"] or 0),
                 image_attachment_count=int(row["image_attachment_count"] or 0),
@@ -1932,20 +1999,21 @@ def run_catalog_matching(
     return matched_count
 
 
-def caption_from_catalog_message(msg: CatalogMessage) -> str:
+def caption_from_catalog_message(msg: CatalogMessage, handle_name_map: Dict[str, str]) -> str:
     text = str(msg.message_text or "").strip() or "(no caption)"
-    speaker = "Papa" if int(msg.is_from_me or 0) else "Contact"
+    speaker = speaker_name_from_catalog_message(msg, handle_name_map)
     stamp = msg.sent_at.strftime("%I:%M %p").lstrip("0")
     return f"{speaker} ({stamp}): {text}"
 
 
-def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[AlbumPage]:
+def build_pages_from_catalog(cur, source_key: str, staging_dir: Path, handle_name_map: Dict[str, str]) -> List[AlbumPage]:
     cur.execute(
         """
         SELECT
           m.message_row_id,
           m.sent_at,
           m.is_from_me,
+          m.handle_id,
           m.message_text,
           m.attachment_count,
           m.image_attachment_count,
@@ -1978,6 +2046,7 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
                 message_row_id=msg_id,
                 sent_at=row["sent_at"],
                 is_from_me=int(row["is_from_me"] or 0),
+                handle_id=str(row["handle_id"] or ""),
                 message_text=str(row["message_text"] or ""),
                 attachment_count=int(row["attachment_count"] or 0),
                 image_attachment_count=int(row["image_attachment_count"] or 0),
@@ -2018,8 +2087,10 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         pages.append(
             AlbumPage(
                 sent_at=message.sent_at,
-                caption=caption_from_catalog_message(message),
+                caption=caption_from_catalog_message(message, handle_name_map),
                 media_items=media_items[:24],
+                speaker_label=speaker_name_from_catalog_message(message, handle_name_map),
+                speaker_handle_id=str(message.handle_id or ""),
             )
         )
     return pages
@@ -2277,12 +2348,15 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
                     "source_filename": source_name,
                     "caption": page.caption,
                     "memory_text": page.caption,
+                    "speaker_label": page.speaker_label,
+                    "speaker_handle_id": page.speaker_handle_id,
                 })
             spreads.append(
                 {
                     "spread_number": i,
                     "title": "Opening Notes" if i == 1 else f"Memory Spread {i}",
                     "caption": page.caption,
+                    "default_contact_label": page.speaker_label if page.speaker_label != "Papa" else "",
                     "photo_slots": max(1, len(images)),
                     "embellishments": [motifs[(i - 1) % len(motifs)], materials[(i - 1) % len(materials)]],
                     "background_prompt": " | ".join([
@@ -2513,13 +2587,29 @@ def pages_from_attachment_match(
     staging_dir: Path,
     photos_db: Path,
     handle_name_map: Dict[str, str],
+    focus_person: str = "any",
+    eleanor_birth: Optional[dt.date] = None,
+    face_name_filter: Optional[set[str]] = None,
 ) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
     staged_by_source_hash: Dict[str, str] = {}
+    normalized_face_names = {str(x).strip().lower() for x in list(face_name_filter or set()) if str(x).strip()}
     for i, msg in enumerate(messages):
         source = resolve_message_media_source(msg, photos_db)
         if source is None:
             continue
+        if normalized_face_names and eleanor_birth and msg.sent_at.date() >= eleanor_birth and focus_person in {"violet", "eleanor", "lyra"}:
+            candidate_names = {
+                str(source.name or "").strip().lower(),
+                str(source.stem or "").strip().lower(),
+                str(msg.attachment_transfer_name or "").strip().lower(),
+                str(msg.attachment_guid or "").strip().lower(),
+            }
+            if msg.attachment_path is not None:
+                candidate_names.add(str(msg.attachment_path.name or "").strip().lower())
+                candidate_names.add(str(msg.attachment_path.stem or "").strip().lower())
+            if not any(name in normalized_face_names for name in candidate_names if name):
+                continue
         caption = build_rich_caption(messages, i, handle_name_map)
         if caption == "(no caption)":
             caption = build_contextual_caption(messages, i, handle_name_map)
@@ -2772,7 +2862,9 @@ def main() -> None:
 
     violet_birth = parse_date(args.violet_birth_date)
     eleanor_birth = parse_date(args.eleanor_birth_date)
-    start_date = parse_date(args.start_date) if args.start_date.strip() else min(violet_birth, eleanor_birth)
+    lyra_birth = parse_date(args.lyra_birth_date)
+    default_start = min(violet_birth, eleanor_birth, lyra_birth) - dt.timedelta(days=7)
+    start_date = parse_date(args.start_date) if args.start_date.strip() else default_start
     end_date = parse_date(args.end_date) if args.end_date.strip() else None
     extra_windows: List[Tuple[dt.date, dt.date]] = [parse_date_window(v) for v in list(args.extra_window or [])]
     message_windows: List[Tuple[Optional[dt.date], Optional[dt.date]]] = [(start_date, end_date)]
@@ -2797,7 +2889,7 @@ def main() -> None:
     if extra_windows:
         print(f"Extra windows: {', '.join([f'{s.isoformat()}..{e.isoformat()}' for (s, e) in extra_windows])}")
 
-    needs_face_assets = args.mode in {"catalog_match", "photos_timeline"}
+    needs_face_assets = args.mode in {"catalog_match", "photos_timeline", "attachment_match"}
     violet_id = 0
     eleanor_id = 0
     lyra_id = 0
@@ -2806,7 +2898,14 @@ def main() -> None:
         photos_conn = sqlite_connect_readonly(photos_db)
         try:
             faces = load_named_faces(photos_conn)
-            if args.violet_face_id is not None and args.eleanor_face_id is not None:
+            if args.mode == "attachment_match":
+                violet_id = int(args.violet_face_id) if args.violet_face_id is not None else int(find_face_id_by_name(faces, ["violet"]) or 0)
+                eleanor_id = int(args.eleanor_face_id) if args.eleanor_face_id is not None else int(find_face_id_by_name(faces, ["eleanor"]) or 0)
+                if violet_id > 0 or eleanor_id > 0:
+                    print(f"Auto-selected Face IDs: Violet={violet_id}, Eleanor={eleanor_id}")
+                else:
+                    print("Could not auto-select Violet/Eleanor face IDs; post-Eleanor face filtering will be skipped.")
+            elif args.violet_face_id is not None and args.eleanor_face_id is not None:
                 violet_id = int(args.violet_face_id)
                 eleanor_id = int(args.eleanor_face_id)
                 print(f"Using Face IDs: Violet={violet_id}, Eleanor={eleanor_id}")
@@ -2836,6 +2935,12 @@ def main() -> None:
     contact_handle_cache: Dict[str, List[str]] = {}
 
     total_pages = 0
+    violet_face_names: set[str] = set()
+    eleanor_face_names: set[str] = set()
+    lyra_face_names: set[str] = set()
+    if assets and (violet_id > 0 or eleanor_id > 0 or lyra_id > 0):
+        violet_face_names, eleanor_face_names, lyra_face_names = build_face_filename_sets(assets, violet_id, eleanor_id, lyra_id)
+
     for active_focus in focus_sequence:
         focus_contacts = contacts_for_focus(args, active_focus)
         focus_handles: List[str] = []
@@ -2909,7 +3014,7 @@ def main() -> None:
                         min_message_row_id=min_match_message_id,
                     )
                     print(f"Catalog matching linked {matched_count} media items to messages.")
-                    pages = build_pages_from_catalog(cur, source_key, staging_dir)
+                    pages = build_pages_from_catalog(cur, source_key, staging_dir, handle_name_map)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -2958,18 +3063,47 @@ def main() -> None:
         else:
             messages = load_messages_for_windows(messages_db, args.contact, args.years, focus_handles, message_windows)
             print(f"Loaded {len(messages)} messages in window.")
-            pages = pages_from_attachment_match(messages, staging_dir, photos_db, handle_name_map)
+            focus_face_names = set()
+            if active_focus == "violet":
+                focus_face_names = set(violet_face_names)
+            elif active_focus == "eleanor":
+                focus_face_names = set(eleanor_face_names)
+            elif active_focus == "lyra":
+                focus_face_names = set(lyra_face_names)
+            pages = pages_from_attachment_match(
+                messages,
+                staging_dir,
+                photos_db,
+                handle_name_map,
+                focus_person=active_focus,
+                eleanor_birth=eleanor_birth,
+                face_name_filter=focus_face_names,
+            )
 
         if not pages:
             print(f"No new pages produced for focus '{active_focus}'.")
             continue
 
-        sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
-        batches: List[List[AlbumPage]] = []
-        offset = 0
-        for size in sizes:
-            batches.append(pages[offset: offset + size])
-            offset += size
+        if active_focus == "violet":
+            batches = build_birthday_month_batches(pages, violet_birth, args.min_pages, args.max_pages, args.target_pages, prebirth_days=7)
+        elif active_focus == "eleanor":
+            batches = build_birthday_month_batches(pages, eleanor_birth, args.min_pages, args.max_pages, args.target_pages, prebirth_days=7)
+        elif active_focus == "lyra":
+            batches = build_birthday_month_batches(pages, lyra_birth, args.min_pages, args.max_pages, args.target_pages, prebirth_days=7)
+        else:
+            sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
+            batches = []
+            offset = 0
+            for size in sizes:
+                batches.append(pages[offset: offset + size])
+                offset += size
+        if not batches:
+            sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
+            batches = []
+            offset = 0
+            for size in sizes:
+                batches.append(pages[offset: offset + size])
+                offset += size
         print(f"Generated {len(batches)} album(s): {[len(b) for b in batches]} pages each")
         total_pages += len(pages)
 

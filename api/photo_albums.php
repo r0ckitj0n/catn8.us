@@ -116,6 +116,7 @@ function catn8_photo_albums_row_to_payload(array $row): array
         'spec' => catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? '')),
         'is_active' => (int)($row['is_active'] ?? 0),
         'created_by_user_id' => (int)($row['created_by_user_id'] ?? 0),
+        'created_by_username' => (string)($row['created_by_username'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
         'updated_at' => (string)($row['updated_at'] ?? ''),
     ];
@@ -415,7 +416,7 @@ $viewerPayload = catn8_photo_albums_get_viewer($viewerId);
 if ($method === 'GET') {
     if ($action === 'list') {
         $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
-        $sql = 'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, created_at, updated_at
+        $sql = 'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
                 FROM photo_albums';
         if (!$isAdminViewer) {
             $sql .= ' WHERE is_active = 1';
@@ -434,7 +435,7 @@ if ($method === 'GET') {
         }
 
         $row = Database::queryOne(
-            'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, created_at, updated_at
+            'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
              FROM photo_albums
              WHERE id = ?
              LIMIT 1',
@@ -507,7 +508,7 @@ if ($action === 'create') {
 
     $newId = (int)Database::lastInsertId();
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',
@@ -552,7 +553,7 @@ if ($action === 'update') {
     );
 
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',
@@ -662,7 +663,7 @@ if ($action === 'create_with_ai') {
 
     $newId = (int)Database::lastInsertId();
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',

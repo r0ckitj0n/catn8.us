@@ -9,6 +9,7 @@ interface PhotoAlbumStageProps {
   album: PhotoAlbum;
   spreadIndex: number;
   zoom: number;
+  contactDisplayName?: string;
   canPrev?: boolean;
   canNext?: boolean;
   onPrev?: () => void;
@@ -69,21 +70,38 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function parseSpeakerLine(line: string): { speaker: string; time?: string; body: string } {
+function resolveContactSpeaker(rawSpeaker: string, contactDisplayName?: string, perMessageContactLabel?: string): string {
+  if (/^contact$/i.test(rawSpeaker.trim())) {
+    const perMessage = sanitizeAlbumMessageText(perMessageContactLabel || '').trim();
+    if (perMessage) {
+      return perMessage;
+    }
+    const display = sanitizeAlbumMessageText(contactDisplayName || '').trim();
+    return display || 'Contact';
+  }
+  return rawSpeaker.trim();
+}
+
+function parseSpeakerLine(
+  line: string,
+  contactDisplayName?: string,
+  perMessageContactLabel?: string,
+): { speaker: string; time?: string; body: string } {
   const cleaned = sanitizeAlbumMessageText(line);
-  const withAlias = cleaned.replace(/^Contact\s*:/i, 'Trinity:');
-  const rich = withAlias.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*(?:\(([0-9]{1,2}:[0-9]{2}\s*[AP]M)\)|\[([0-9]{1,2}:[0-9]{2}\s*[AP]M)\])?\s*:\s*(.+)$/i);
+  const rich = cleaned.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*(?:\(([0-9]{1,2}:[0-9]{2}\s*[AP]M)\)|\[([0-9]{1,2}:[0-9]{2}\s*[AP]M)\])?\s*:\s*(.+)$/i);
   if (rich) {
-    const speaker = sanitizeAlbumMessageText(rich[1] || '') || 'Unknown';
+    const speakerToken = sanitizeAlbumMessageText(rich[1] || '') || 'Unknown';
+    const speaker = resolveContactSpeaker(speakerToken, contactDisplayName, perMessageContactLabel);
     const time = (rich[2] || rich[3] || '').trim() || undefined;
     return { speaker, time, body: sanitizeAlbumMessageText(rich[4] || '') };
   }
-  const basic = withAlias.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*:\s*(.+)$/i);
+  const basic = cleaned.match(/^([A-Za-z][A-Za-z' -]{0,30})\s*:\s*(.+)$/i);
   if (basic) {
-    const speaker = sanitizeAlbumMessageText(basic[1] || '') || 'Unknown';
+    const speakerToken = sanitizeAlbumMessageText(basic[1] || '') || 'Unknown';
+    const speaker = resolveContactSpeaker(speakerToken, contactDisplayName, perMessageContactLabel);
     return { speaker, body: sanitizeAlbumMessageText(basic[2] || '') };
   }
-  return { speaker: 'Unknown', body: withAlias };
+  return { speaker: 'Unknown', body: cleaned };
 }
 
 function formatNoteText(note: NoteItem): string {
@@ -207,7 +225,7 @@ function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMedi
   });
 }
 
-function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: PreparedMediaItem[]): NoteItem[] {
+function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: PreparedMediaItem[], contactDisplayName?: string): NoteItem[] {
   const spread = album.spec?.spreads?.[targetSpreadIndex];
   const dedup = new Set<string>();
   const addUniqueNote = (note: NoteItem, out: NoteItem[]) => {
@@ -225,7 +243,9 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
         if (!isMessageLikeLine(line)) {
           return null;
         }
-        const parsed = parseSpeakerLine(line);
+        const sourceImage = spread?.images?.[mediaItem.sourceIndex];
+        const mediaContactLabel = String(sourceImage?.speaker_label || spread?.default_contact_label || '').trim();
+        const parsed = parseSpeakerLine(line, contactDisplayName, mediaContactLabel);
         if (!parsed.body) {
           return null;
         }
@@ -250,7 +270,8 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
         if (!item || typeof item !== 'object') {
           return null;
         }
-        const parsed = parseSpeakerLine(item.text || '');
+        const textItemContactLabel = String((item as { speaker?: string }).speaker || spread?.default_contact_label || '').trim();
+        const parsed = parseSpeakerLine(item.text || '', contactDisplayName, textItemContactLabel);
         const fullText = `${(item.speaker as string) || parsed.speaker}${parsed.time ? ` (${parsed.time})` : ''}: ${parsed.body}`;
         if (shouldHideNoteText(fullText)) {
           return null;
@@ -258,7 +279,11 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
         return {
           id: item.id || `${album.id}-${targetSpreadIndex}-text-${index}`,
           text: parsed.body,
-          speaker: String((item as { speaker?: string }).speaker || '').trim() || parsed.speaker,
+          speaker: resolveContactSpeaker(
+            String((item as { speaker?: string }).speaker || '').trim() || parsed.speaker,
+            contactDisplayName,
+            spread?.default_contact_label,
+          ),
           time: item.time || parsed.time,
           x: item.x,
           y: item.y,
@@ -277,7 +302,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
   const notes: NoteItem[] = [];
   mediaNotes.forEach((note) => addUniqueNote(note, notes));
   rawLines.forEach((line, index) => {
-    const parsed = parseSpeakerLine(line);
+    const parsed = parseSpeakerLine(line, contactDisplayName, spread?.default_contact_label);
     if (!parsed.body) {
       return;
     }
@@ -326,11 +351,11 @@ function spreadDecor(album: PhotoAlbum, targetSpreadIndex: number, emojiPool: st
   });
 }
 
-function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1): ViewerTarget | null {
+function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1, contactDisplayName?: string): ViewerTarget | null {
   const spreads = Array.isArray(album.spec?.spreads) ? album.spec.spreads : [];
   const itemListAt = (type: ViewerType, sidx: number): number => {
     const media = spreadMedia(album, sidx);
-    const notes = spreadNotes(album, sidx, media);
+    const notes = spreadNotes(album, sidx, media, contactDisplayName);
     return type === 'media' ? media.length : notes.length;
   };
 
@@ -422,6 +447,12 @@ function estimateMediaHeightPct(caption: string, widthPct: number): number {
   return clamp(imageHeight + frameBase + (lines * captionLineHeight), 15, 66);
 }
 
+function sizeVariation(seed: string, min: number, max: number): number {
+  const hash = hashValue(seed) % 10_000;
+  const factor = hash / 10_000;
+  return min + ((max - min) * factor);
+}
+
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
   const left = Math.max(a.x, b.x);
   const right = Math.min(a.x + a.w, b.x + b.w);
@@ -497,13 +528,89 @@ function isCoreItem(item: LayoutItem): boolean {
   return item.type === 'media' || item.type === 'note';
 }
 
+function minimumWidthFor(item: LayoutItem): number {
+  if (item.type === 'media') {
+    return 9.5;
+  }
+  if (item.type === 'note') {
+    return 10.5;
+  }
+  return 3.2;
+}
+
+function minimumHeightFor(item: LayoutItem): number {
+  if (item.type === 'media') {
+    return 9.5;
+  }
+  if (item.type === 'note') {
+    return 8.2;
+  }
+  return 3.2;
+}
+
+function forceSeparate(items: LayoutItem[], seed: string, constraints: LayoutConstraints): LayoutItem[] {
+  const resolved = items.map((item) => constrainLayout({ ...item }, constraints));
+  for (let pass = 0; pass < 120; pass += 1) {
+    let changed = false;
+    for (let i = 0; i < resolved.length; i += 1) {
+      for (let j = i + 1; j < resolved.length; j += 1) {
+        const a = resolved[i];
+        const b = resolved[j];
+        const overlap = overlapArea(a, b);
+        if (overlap <= OVERLAP_EPSILON) {
+          continue;
+        }
+        const hash = hashValue(`${seed}-separate-${pass}-${a.id}-${b.id}`);
+        const acx = a.x + (a.w / 2);
+        const acy = a.y + (a.h / 2);
+        const bcx = b.x + (b.w / 2);
+        const bcy = b.y + (b.h / 2);
+        let dx = acx - bcx;
+        let dy = acy - bcy;
+        if (Math.abs(dx) < 0.02 && Math.abs(dy) < 0.02) {
+          dx = hash % 2 === 0 ? 1 : -1;
+          dy = Math.floor(hash / 13) % 2 === 0 ? 1 : -1;
+        }
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        const push = 0.52 + Math.min(4.6, overlap / 16);
+        const aWeight = a.pinned && !b.pinned ? 0.15 : !a.pinned && b.pinned ? 0.85 : 0.5;
+        const bWeight = 1 - aWeight;
+
+        a.x += (dx / len) * push * aWeight;
+        a.y += (dy / len) * push * aWeight;
+        b.x -= (dx / len) * push * bWeight;
+        b.y -= (dy / len) * push * bWeight;
+
+        resolved[i] = constrainLayout(a, constraints);
+        resolved[j] = constrainLayout(b, constraints);
+        changed = true;
+      }
+    }
+    if (!changed && pass > 5) {
+      break;
+    }
+    if (pass % 20 === 19) {
+      resolved.forEach((item, idx) => {
+        const hasCollision = resolved.some((other, j) => j !== idx && overlapArea(item, other) > OVERLAP_EPSILON);
+        if (!hasCollision) {
+          return;
+        }
+        item.w = Math.max(minimumWidthFor(item), item.w * 0.975);
+        item.h = Math.max(minimumHeightFor(item), item.h * 0.975);
+        resolved[idx] = constrainLayout(item, constraints);
+      });
+    }
+  }
+  return resolved;
+}
+
 function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutConstraints): LayoutItem[] {
   const resolved = items.map((item) => constrainLayout({ ...item }, constraints));
   for (let pass = 0; pass < 72; pass += 1) {
     let changed = false;
     for (let i = 0; i < resolved.length; i += 1) {
       const current = resolved[i];
-      const currentPushFactor = current.pinned ? 0.18 : 1;
+      const currentPushFactor = current.pinned ? 0.55 : 1;
       let pushX = 0;
       let pushY = 0;
       for (let j = 0; j < resolved.length; j += 1) {
@@ -623,7 +730,7 @@ function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutCon
     resolved[i] = constrainLayout(current, constraints);
   }
 
-  return resolved;
+  return forceSeparate(resolved, `${seed}-finalize`, constraints);
 }
 
 function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], spreadTitle: string): {
@@ -731,6 +838,7 @@ export function PhotoAlbumStage({
   album,
   spreadIndex,
   zoom,
+  contactDisplayName,
   canPrev = false,
   canNext = false,
   onPrev,
@@ -760,11 +868,11 @@ export function PhotoAlbumStage({
   }, [album, spreadIndex]);
   const notes = React.useMemo(() => {
     try {
-      return spreadNotes(album, spreadIndex, mediaItems);
+      return spreadNotes(album, spreadIndex, mediaItems, contactDisplayName);
     } catch {
       return [] as NoteItem[];
     }
-  }, [album, spreadIndex, mediaItems]);
+  }, [album, spreadIndex, mediaItems, contactDisplayName]);
   const theme = inferAlbumTheme([spread?.title || '', spread?.caption || '', ...notes.map((n) => n.text)].join(' '));
   const decorItems = React.useMemo(() => {
     try {
@@ -856,8 +964,8 @@ export function PhotoAlbumStage({
       const estimatedNoteArea = notes.reduce((sum, item) => sum + (noteWidthPct * estimateNoteHeightPct(item, noteWidthPct)), 0);
       const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
       const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
-      const targetCoverage = densityCount <= 5 ? 0.9 : densityCount <= 10 ? 0.94 : densityCount <= 16 ? 0.98 : 1.02;
-      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.92, 2.8);
+      const targetCoverage = densityCount <= 5 ? 0.76 : densityCount <= 10 ? 0.81 : densityCount <= 16 ? 0.86 : 0.9;
+      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.8, 1.55);
       const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
 
       const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
@@ -868,7 +976,8 @@ export function PhotoAlbumStage({
         const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
         const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
         const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
-        const w = clamp(sourceBaseWidth * sizeScale, 12, 48);
+        const variation = sizeVariation(`${album.id}-${spreadIndex}-media-${item.key}`, 0.78, 1.28);
+        const w = clamp(sourceBaseWidth * sizeScale * variation, 10.5, 46);
         return {
           id: `media-${item.sourceIndex}`,
           type: 'media',
@@ -889,7 +998,8 @@ export function PhotoAlbumStage({
         const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
         const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
         const noteBaseWidth = Number(note.w ?? noteWidthPct);
-        const w = clamp(noteBaseWidth * sizeScale, 13, 52);
+        const variation = sizeVariation(`${album.id}-${spreadIndex}-note-${note.id}`, 0.74, 1.32);
+        const w = clamp(noteBaseWidth * sizeScale * variation, 11, 48);
         return {
           id: `note-${index}`,
           type: 'note',
@@ -906,7 +1016,8 @@ export function PhotoAlbumStage({
         const fallback = positionByDecorScatter(index, Math.max(1, decorItems.length), `${album.id}-${spreadIndex}-decor`);
         const hasPinnedPosition = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
         const savedSize = Number(item.size ?? 1);
-        const size = clamp(savedSize * decorScale, 0.85, 2.2);
+        const variation = sizeVariation(`${album.id}-${spreadIndex}-decor-${item.id}`, 0.72, 1.45);
+        const size = clamp(savedSize * decorScale * variation, 0.65, 2.3);
         const footprint = 4.6 * size;
         return {
           id: `decor-${index}`,
@@ -957,13 +1068,29 @@ export function PhotoAlbumStage({
     if (!viewerTarget || viewerTarget.type !== 'note') {
       return null;
     }
-    const list = spreadNotes(album, viewerTarget.spreadIndex, spreadMedia(album, viewerTarget.spreadIndex));
+    const list = spreadNotes(album, viewerTarget.spreadIndex, spreadMedia(album, viewerTarget.spreadIndex), contactDisplayName);
     const note = list[viewerTarget.itemIndex];
     return note ? formatNoteText(note) : '';
-  }, [album, viewerTarget]);
+  }, [album, viewerTarget, contactDisplayName]);
 
-  const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1) : null;
-  const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1) : null;
+  const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1, contactDisplayName) : null;
+  const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1, contactDisplayName) : null;
+  const viewerDateLabel = React.useMemo(() => {
+    if (!viewerTarget) {
+      return '';
+    }
+    if (viewerTarget.type === 'media' && activeMedia?.capturedAtMs) {
+      return new Date(activeMedia.capturedAtMs).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    const spreadForTarget = album.spec?.spreads?.[viewerTarget.spreadIndex];
+    const spreadCaptured = spreadMedia(album, viewerTarget.spreadIndex)
+      .map((item) => item.capturedAtMs)
+      .filter((value): value is number => Number.isFinite(value));
+    if (spreadCaptured.length > 0) {
+      return new Date(Math.min(...spreadCaptured)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return sanitizeAlbumMessageText(spreadForTarget?.title || '');
+  }, [activeMedia?.capturedAtMs, album, viewerTarget]);
 
   const applyDragPosition = React.useCallback((clientX: number, clientY: number) => {
     if (!editable || !dragging) {
@@ -1364,6 +1491,7 @@ export function PhotoAlbumStage({
           target={viewerTarget}
           activeMedia={activeMedia}
           activeNote={activeNote}
+          dateLabel={viewerDateLabel}
           prevTarget={prevTarget}
           nextTarget={nextTarget}
           onClose={() => setViewerTarget(null)}

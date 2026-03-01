@@ -369,7 +369,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-scatter-card:hover,
 .catn8-scatter-card:focus-within {
-  --catn8-card-scale: 1.25;
+  --catn8-card-scale: 1.08;
   z-index: 30 !important;
 }
 
@@ -496,6 +496,19 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   padding: 0.7rem 0.9rem;
   background: #f0dbc0;
   border-bottom: 1px solid rgba(50, 33, 18, 0.2);
+}
+
+.catn8-element-viewer-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.catn8-element-viewer-date {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: rgba(54, 35, 21, 0.9);
+  letter-spacing: 0.01em;
 }
 
 .catn8-element-viewer-footer {

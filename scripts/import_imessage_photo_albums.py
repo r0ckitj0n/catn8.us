@@ -48,6 +48,7 @@ class MessageRow:
     attachment_mime: str
     attachment_guid: str
     attachment_transfer_name: str
+    attachment_total_bytes: int
 
 
 @dataclass
@@ -94,6 +95,10 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Import iMessage/Photos memories into CATN8 photo_albums")
     p.add_argument("--mode", choices=["catalog_match", "attachment_match", "photos_timeline"], default="catalog_match")
     p.add_argument("--contact", default="Trinity")
+    p.add_argument("--contacts-violet", default="Trinity,Ian")
+    p.add_argument("--contacts-eleanor", default="Trinity,Ian")
+    p.add_argument("--contacts-lyra", default="Elijah,Marisa")
+    p.add_argument("--contacts-any", default="Trinity,Ian")
     p.add_argument("--years", type=int, default=4)
     p.add_argument("--photos-db", default="~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite")
     p.add_argument("--messages-db", default="~/Library/Messages/chat.db")
@@ -104,6 +109,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eleanor-birth-date", default="2025-12-31")
     p.add_argument("--start-date", default="")
     p.add_argument("--end-date", default="")
+    p.add_argument("--extra-window", action="append", default=[], help="Additional date window in YYYY-MM-DD:YYYY-MM-DD format (repeatable)")
     p.add_argument("--staging-dir", default="./photo_albums")
     p.add_argument("--album-title-prefix", default="Trinity Memories")
     p.add_argument("--min-pages", type=int, default=10)
@@ -120,7 +126,86 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--rematch-all", action="store_true")
     p.add_argument("--disable-ai", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--replace-existing-titles", action="store_true")
+    p.add_argument("--lock-title", action="append", default=[], help="Album title to lock from importer overwrites (repeatable)")
+    p.add_argument("--unlock-title", action="append", default=[], help="Album title to unlock for importer overwrites (repeatable)")
     return p.parse_args()
+
+
+def parse_date_window(value: str) -> Tuple[dt.date, dt.date]:
+    token = str(value or "").strip()
+    if ":" not in token:
+        raise ValueError(f"Invalid --extra-window '{token}'. Expected YYYY-MM-DD:YYYY-MM-DD")
+    left, right = token.split(":", 1)
+    start = parse_date(left)
+    end = parse_date(right)
+    if end < start:
+        raise ValueError(f"Invalid --extra-window '{token}'. End date is before start date.")
+    return start, end
+
+
+def parse_contact_csv(value: str) -> List[str]:
+    out: List[str] = []
+    for part in str(value or "").split(","):
+        token = part.strip()
+        if token:
+            out.append(token)
+    return out
+
+
+def normalize_handle_for_lookup(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    digits = re.sub(r"\D+", "", raw)
+    if digits:
+        if len(digits) == 11 and digits.startswith("1"):
+            digits = digits[1:]
+        return digits
+    return raw
+
+
+def contacts_for_focus(args: argparse.Namespace, focus: str) -> List[str]:
+    key = (focus or "any").strip().lower()
+    if key == "violet":
+        contacts = parse_contact_csv(args.contacts_violet)
+    elif key == "eleanor":
+        contacts = parse_contact_csv(args.contacts_eleanor)
+    elif key == "lyra":
+        contacts = parse_contact_csv(args.contacts_lyra)
+    else:
+        contacts = parse_contact_csv(args.contacts_any)
+    if contacts:
+        return contacts
+    # Last-resort fallback for legacy behavior.
+    return [str(args.contact or "").strip() or "Trinity"]
+
+
+def is_noise_message_text(text: str) -> bool:
+    t = str(text or "").strip()
+    if not t:
+        return True
+    low = t.lower()
+    if any(tok in low for tok in ("ns.rangeval", "$class", "streamtyped", "attachments referenced:")):
+        return True
+    if re.search(r"\breacted\b.+\bto\b", low):
+        return True
+    if re.match(r"^(liked|loved|laughed at|emphasized|questioned|disliked)\b", low):
+        return True
+    return False
+
+
+def speaker_name_from_row(row: MessageRow, handle_name_map: Dict[str, str]) -> str:
+    if int(row.is_from_me or 0) == 1:
+        return "Papa"
+    handle_key = normalize_handle_for_lookup(row.handle_id)
+    if handle_key and handle_key in handle_name_map:
+        return handle_name_map[handle_key]
+    handle_raw = str(row.handle_id or "").lower()
+    for token, label in (("ian", "Ian"), ("elijah", "Elijah"), ("marisa", "Marisa"), ("trinity", "Trinity")):
+        if token in handle_raw:
+            return label
+    return "Contact"
 
 
 def load_env_files() -> None:
@@ -455,7 +540,8 @@ def load_messages(
                    m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
                    m.attributedBody AS attributed_body,
                    COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime,
-                   COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name
+                   COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name,
+                   COALESCE(a.total_bytes,0) AS attachment_total_bytes
             FROM message m
             LEFT JOIN handle h ON h.ROWID = m.handle_id
             LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
@@ -483,7 +569,8 @@ def load_messages(
                        m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
                        m.attributedBody AS attributed_body,
                        COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime,
-                       COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name
+                       COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name,
+                       COALESCE(a.total_bytes,0) AS attachment_total_bytes
                 FROM message m
                 LEFT JOIN handle h ON h.ROWID = m.handle_id
                 LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
@@ -531,9 +618,47 @@ def load_messages(
                 attachment_mime=str(r["attachment_mime"] or "").strip(),
                 attachment_guid=str(r["attachment_guid"] or "").strip(),
                 attachment_transfer_name=str(r["attachment_transfer_name"] or "").strip(),
+                attachment_total_bytes=int(r["attachment_total_bytes"] or 0),
             )
         )
     return out
+
+
+def load_messages_for_windows(
+    messages_db: Path,
+    contact: str,
+    years: int,
+    contact_handles: Sequence[str],
+    windows: Sequence[Tuple[Optional[dt.date], Optional[dt.date]]],
+    min_message_id: int = 0,
+) -> List[MessageRow]:
+    all_rows: List[MessageRow] = []
+    seen: set[Tuple[int, str, str, str]] = set()
+    for idx, (start_date, end_date) in enumerate(windows):
+        # For multi-window runs, message_id checkpointing can hide older windows.
+        window_min_message_id = int(min_message_id) if (idx == 0 and len(windows) == 1) else 0
+        rows = load_messages(
+            messages_db,
+            contact,
+            years,
+            contact_handles,
+            start_date,
+            end_date,
+            min_message_id=window_min_message_id,
+        )
+        for row in rows:
+            key = (
+                int(row.message_id),
+                str(row.attachment_guid or ""),
+                str(row.attachment_transfer_name or ""),
+                str(row.attachment_path or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            all_rows.append(row)
+    all_rows.sort(key=lambda r: (r.sent_at, int(r.message_id), str(r.attachment_guid or ""), str(r.attachment_transfer_name or ""), str(r.attachment_path or "")))
+    return all_rows
 
 
 def is_image_path(path: Optional[Path], mime: str) -> bool:
@@ -567,14 +692,50 @@ def is_image_binary(path: Path) -> bool:
     return False
 
 
-def build_rich_caption(messages: Sequence[MessageRow], index: int) -> str:
+def build_rich_caption(messages: Sequence[MessageRow], index: int, handle_name_map: Dict[str, str]) -> str:
     focal = messages[index]
-    text = (focal.text or "").strip()
-    if not text:
+    text = sanitize_message_text(str(focal.text or "").strip())
+    if is_noise_message_text(text):
         return "(no caption)"
-    speaker = "Jon" if int(focal.is_from_me or 0) else "Trinity"
+    speaker = speaker_name_from_row(focal, handle_name_map)
     stamp = focal.sent_at.strftime("%I:%M %p").lstrip("0")
     return f"{speaker} ({stamp}): {text}"
+
+
+def build_contextual_caption(
+    messages: Sequence[MessageRow],
+    index: int,
+    handle_name_map: Dict[str, str],
+    max_lines: int = 4,
+    max_hours: int = 36,
+) -> str:
+    focal = messages[index]
+    center = focal.sent_at
+    lines: List[str] = []
+    seen: set[str] = set()
+
+    # Gather nearest meaningful lines around the attachment when the focal row has no text.
+    radius = min(len(messages), 60)
+    for step in range(1, radius + 1):
+        for j in (index - step, index + step):
+            if j < 0 or j >= len(messages):
+                continue
+            row = messages[j]
+            if abs((row.sent_at - center).total_seconds()) > max_hours * 3600:
+                continue
+            text = sanitize_message_text(str(row.text or "").strip())
+            if is_noise_message_text(text):
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            speaker = speaker_name_from_row(row, handle_name_map)
+            stamp = row.sent_at.strftime("%I:%M %p").lstrip("0")
+            lines.append(f"{speaker} ({stamp}): {text}")
+            if len(lines) >= max_lines:
+                return "\n".join(lines)
+    return "(no caption)"
 
 
 def group_messages_by_id(messages: Sequence[MessageRow]) -> List[GroupedMessage]:
@@ -604,7 +765,7 @@ def group_messages_by_id(messages: Sequence[MessageRow]) -> List[GroupedMessage]
 
 
 def build_grouped_message_caption(msg: GroupedMessage) -> str:
-    speaker = "Jon" if int(msg.is_from_me or 0) else "Trinity"
+    speaker = "Papa" if int(msg.is_from_me or 0) else "Contact"
     stamp = msg.sent_at.strftime("%I:%M %p").lstrip("0")
     text = str(msg.text or "").strip() or "(no caption)"
     image_count = 0
@@ -615,8 +776,7 @@ def build_grouped_message_caption(msg: GroupedMessage) -> str:
             image_count += 1
         elif kind == "video":
             video_count += 1
-    attach_line = f"Attachments referenced: {len(msg.attachments)} total ({image_count} images, {video_count} videos)."
-    return f"{speaker} ({stamp}): {text}\\n{attach_line}"
+    return f"{speaker} ({stamp}): {text}"
 
 
 def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 24) -> List[AlbumPage]:
@@ -629,9 +789,15 @@ def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: 
             buckets[day] = bucket
         if page.sent_at < bucket["sent_at"]:
             bucket["sent_at"] = page.sent_at
-        c = sanitize_message_text(page.caption)
-        if c and c not in bucket["captions"]:
-            bucket["captions"].append(c)
+        raw_lines = str(page.caption or "").splitlines()
+        if not raw_lines:
+            raw_lines = [str(page.caption or "")]
+        for raw_line in raw_lines:
+            c = sanitize_message_text(raw_line)
+            if not c or is_noise_message_text(c):
+                continue
+            if c not in bucket["captions"]:
+                bucket["captions"].append(c)
         for rel_path, source_name, media_kind in page.media_items:
             key = (rel_path, source_name, media_kind)
             if key in bucket["media_keys"]:
@@ -652,7 +818,7 @@ def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: 
             unique_captions.append(line)
             if len(unique_captions) >= 12:
                 break
-        caption = "\\n".join(unique_captions).strip() or "(no caption)"
+        caption = "\n".join(unique_captions).strip() or "(no caption)"
         media_items = list(bucket["media_items"])[:max_media_per_day]
         if not media_items and caption == "(no caption)":
             continue
@@ -906,7 +1072,7 @@ _CAPTURE_TS_CACHE: Dict[str, dt.datetime] = {}
 _FILE_HASH_CACHE: Dict[str, Tuple[int, int, str]] = {}
 _PHOTOS_UUID_PATH_CACHE: Dict[str, Optional[Path]] = {}
 _MESSAGE_ATTACHMENT_DIR_CACHE: Dict[str, Optional[Path]] = {}
-_PHOTOS_FILENAME_CANDIDATE_CACHE: Dict[str, List[Tuple[str, Optional[dt.datetime]]]] = {}
+_PHOTOS_FILENAME_CANDIDATE_CACHE: Dict[str, List[Tuple[str, Optional[dt.datetime], int]]] = {}
 
 
 def parse_exif_datetime(raw: str) -> Optional[dt.datetime]:
@@ -960,7 +1126,7 @@ def find_message_attachment_file_from_guid(attachment_guid: str, transfer_name: 
     return None
 
 
-def photos_candidates_for_transfer_name(photos_db: Path, transfer_name: str) -> List[Tuple[str, Optional[dt.datetime]]]:
+def photos_candidates_for_transfer_name(photos_db: Path, transfer_name: str) -> List[Tuple[str, Optional[dt.datetime], int]]:
     name = Path(str(transfer_name or "").strip()).name.strip().lower()
     if not name:
         return []
@@ -972,7 +1138,8 @@ def photos_candidates_for_transfer_name(photos_db: Path, transfer_name: str) -> 
         rows = conn.execute(
             """
             SELECT COALESCE(a.ZUUID,'') AS asset_uuid,
-                   a.ZDATECREATED AS date_created
+                   a.ZDATECREATED AS date_created,
+                   COALESCE(aa.ZORIGINALFILESIZE,0) AS original_file_size
             FROM ZASSET a
             LEFT JOIN ZADDITIONALASSETATTRIBUTES aa ON aa.ZASSET = a.Z_PK
             WHERE LOWER(COALESCE(aa.ZORIGINALFILENAME,'')) = ?
@@ -986,28 +1153,45 @@ def photos_candidates_for_transfer_name(photos_db: Path, transfer_name: str) -> 
     finally:
         conn.close()
 
-    out: List[Tuple[str, Optional[dt.datetime]]] = []
+    out: List[Tuple[str, Optional[dt.datetime], int]] = []
     for r in rows:
         uuid = str(r["asset_uuid"] or "").strip()
         if not uuid:
             continue
-        out.append((uuid, apple_ts_to_datetime(r["date_created"])))
+        out.append((uuid, apple_ts_to_datetime(r["date_created"]), int(r["original_file_size"] or 0)))
     _PHOTOS_FILENAME_CANDIDATE_CACHE[name] = out
     return out
 
 
-def photos_find_by_transfer_name_nearest_date(photos_db: Path, transfer_name: str, sent_at: dt.datetime) -> Optional[Path]:
+def photos_find_by_transfer_name_nearest_date(
+    photos_db: Path,
+    transfer_name: str,
+    sent_at: dt.datetime,
+    attachment_total_bytes: int = 0,
+    max_date_drift_days: float = 7.0,
+) -> Optional[Path]:
     candidates = photos_candidates_for_transfer_name(photos_db, transfer_name)
     if not candidates:
         return None
 
-    def sort_key(item: Tuple[str, Optional[dt.datetime]]) -> float:
-        _uuid, created_at = item
-        if created_at is None:
-            return 1e18
-        return abs((created_at - sent_at).total_seconds())
+    total_bytes = max(0, int(attachment_total_bytes or 0))
 
-    for asset_uuid, _created_at in sorted(candidates, key=sort_key):
+    def sort_key(item: Tuple[str, Optional[dt.datetime], int]) -> Tuple[int, int, float]:
+        _uuid, created_at, original_file_size = item
+        size_match_rank = 1
+        size_delta = 10**12
+        if total_bytes > 0 and int(original_file_size or 0) > 0:
+            size_delta = abs(int(original_file_size) - total_bytes)
+            size_match_rank = 0 if size_delta == 0 else 1
+        if created_at is None:
+            return (size_match_rank, size_delta, 1e18)
+        return (size_match_rank, size_delta, abs((created_at - sent_at).total_seconds()))
+
+    for asset_uuid, created_at, _original_file_size in sorted(candidates, key=sort_key):
+        if created_at is not None and max_date_drift_days > 0:
+            drift_days = abs((created_at - sent_at).total_seconds()) / 86400.0
+            if drift_days > float(max_date_drift_days):
+                continue
         located = photos_find_derivative_by_asset_uuid(photos_db, asset_uuid)
         if located and located.exists():
             return located
@@ -1035,7 +1219,13 @@ def resolve_message_media_source(msg: MessageRow, photos_db: Path) -> Optional[P
                 return located
 
     if msg.attachment_transfer_name:
-        located = photos_find_by_transfer_name_nearest_date(photos_db, msg.attachment_transfer_name, msg.sent_at)
+        located = photos_find_by_transfer_name_nearest_date(
+            photos_db,
+            msg.attachment_transfer_name,
+            msg.sent_at,
+            attachment_total_bytes=msg.attachment_total_bytes,
+            max_date_drift_days=7.0,
+        )
         if located and located.exists():
             return located
     return None
@@ -1744,13 +1934,9 @@ def run_catalog_matching(
 
 def caption_from_catalog_message(msg: CatalogMessage) -> str:
     text = str(msg.message_text or "").strip() or "(no caption)"
-    speaker = "Jon" if int(msg.is_from_me or 0) else "Trinity"
+    speaker = "Papa" if int(msg.is_from_me or 0) else "Contact"
     stamp = msg.sent_at.strftime("%I:%M %p").lstrip("0")
-    attach_line = (
-        f"Attachments referenced: {msg.attachment_count} total "
-        f"({msg.image_attachment_count} images, {msg.video_attachment_count} videos)."
-    )
-    return f"{speaker} ({stamp}): {text}\\n{attach_line}"
+    return f"{speaker} ({stamp}): {text}"
 
 
 def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[AlbumPage]:
@@ -1972,6 +2158,59 @@ def ensure_album_permissions_table(cur) -> None:
     """)
 
 
+def ensure_album_import_locks_table(cur) -> None:
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS photo_album_import_locks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      album_id INT NOT NULL,
+      is_locked TINYINT(1) NOT NULL DEFAULT 1,
+      note VARCHAR(255) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_album_lock (album_id),
+      KEY idx_pail_album (album_id),
+      CONSTRAINT fk_pail_album FOREIGN KEY (album_id) REFERENCES photo_albums(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+
+def set_import_lock_by_title(cur, title: str, locked: bool, note: str = "") -> int:
+    t = str(title or "").strip()
+    if not t:
+        return 0
+    state = 1 if bool(locked) else 0
+    cur.execute(
+        """
+        INSERT INTO photo_album_import_locks (album_id, is_locked, note)
+        SELECT pa.id, %s, %s
+        FROM photo_albums pa
+        WHERE pa.title = %s
+        ON DUPLICATE KEY UPDATE
+          is_locked = VALUES(is_locked),
+          note = VALUES(note)
+        """,
+        (state, note[:255], t),
+    )
+    return int(cur.rowcount or 0)
+
+
+def fetch_locked_titles(cur, titles: Sequence[str]) -> set[str]:
+    cleaned = sorted({str(t).strip() for t in titles if str(t).strip()})
+    if not cleaned:
+        return set()
+    placeholders = ",".join(["%s"] * len(cleaned))
+    cur.execute(
+        f"""
+        SELECT DISTINCT pa.title AS title
+        FROM photo_albums pa
+        INNER JOIN photo_album_import_locks l ON l.album_id = pa.id AND l.is_locked = 1
+        WHERE pa.title IN ({placeholders})
+        """,
+        tuple(cleaned),
+    )
+    return {str(r["title"] or "").strip() for r in cur.fetchall() if str(r.get("title") or "").strip()}
+
+
 def fetch_required_group_ids(cur) -> Tuple[int, int]:
     cur.execute("""
     SELECT id, slug, title FROM catn8_groups
@@ -2012,10 +2251,11 @@ def sql_quote(value: str) -> str:
 def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, disable_ai: bool) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     stamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+    single_album = len(album_batches) == 1
     for idx, pages in enumerate(album_batches, start=1):
         first_dt = pages[0].sent_at.strftime("%Y-%m-%d")
         last_dt = pages[-1].sent_at.strftime("%Y-%m-%d")
-        title = f"{title_prefix} {idx}"
+        title = title_prefix if single_album else f"{title_prefix} {idx}"
         summary = f"Imported memories ({first_dt} to {last_dt}). {len(pages)} pages."
         slug = f"{slugify(f'{title_prefix}-{idx}-{first_dt}')[:100]}-{stamp}-{idx}"[:120]
 
@@ -2081,7 +2321,13 @@ def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, di
     return rows
 
 
-def build_sql_for_album_rows(rows: List[Dict[str, Any]], created_by_user_id: int) -> str:
+def build_sql_for_album_rows(
+    rows: List[Dict[str, Any]],
+    created_by_user_id: int,
+    replace_titles: Optional[Sequence[str]] = None,
+    lock_titles: Optional[Sequence[str]] = None,
+    unlock_titles: Optional[Sequence[str]] = None,
+) -> str:
     parts = ["""
 CREATE TABLE IF NOT EXISTS photo_album_permissions (
  id INT AUTO_INCREMENT PRIMARY KEY,
@@ -2096,12 +2342,63 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
  CONSTRAINT fk_pap_group FOREIGN KEY (group_id) REFERENCES catn8_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """.strip()]
+    parts.append("""
+CREATE TABLE IF NOT EXISTS photo_album_import_locks (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ album_id INT NOT NULL,
+ is_locked TINYINT(1) NOT NULL DEFAULT 1,
+ note VARCHAR(255) NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY uniq_album_lock (album_id),
+ KEY idx_pail_album (album_id),
+ CONSTRAINT fk_pail_album FOREIGN KEY (album_id) REFERENCES photo_albums(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+""".strip())
+    if lock_titles:
+        for title in sorted({str(t).strip() for t in lock_titles if str(t).strip()}):
+            parts.append(f"""
+INSERT INTO photo_album_import_locks (album_id, is_locked, note)
+SELECT pa.id, 1, 'Locked via importer'
+FROM photo_albums pa
+WHERE pa.title={sql_quote(title)}
+ON DUPLICATE KEY UPDATE is_locked=VALUES(is_locked), note=VALUES(note);
+""".strip())
+    if unlock_titles:
+        for title in sorted({str(t).strip() for t in unlock_titles if str(t).strip()}):
+            parts.append(f"""
+INSERT INTO photo_album_import_locks (album_id, is_locked, note)
+SELECT pa.id, 0, 'Unlocked via importer'
+FROM photo_albums pa
+WHERE pa.title={sql_quote(title)}
+ON DUPLICATE KEY UPDATE is_locked=VALUES(is_locked), note=VALUES(note);
+""".strip())
+    if replace_titles:
+        for title in sorted({str(t).strip() for t in replace_titles if str(t).strip()}):
+            parts.append(f"""
+SET @lock_count := (
+  SELECT COUNT(*)
+  FROM photo_albums pa
+  INNER JOIN photo_album_import_locks l ON l.album_id = pa.id AND l.is_locked = 1
+  WHERE pa.title={sql_quote(title)}
+);
+DELETE pa FROM photo_albums pa
+LEFT JOIN photo_album_import_locks l ON l.album_id = pa.id AND l.is_locked = 1
+WHERE pa.title={sql_quote(title)} AND l.album_id IS NULL;
+""".strip())
     for r in rows:
+        title_q = sql_quote(r["title"])
         parts.append(f"""
+SET @skip_insert := (
+  SELECT COUNT(*)
+  FROM photo_albums pa
+  INNER JOIN photo_album_import_locks l ON l.album_id = pa.id AND l.is_locked = 1
+  WHERE pa.title={title_q}
+);
 INSERT INTO photo_albums
 (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
-VALUES (
-{sql_quote(r['title'])},
+SELECT
+{title_q},
 {sql_quote(r['slug'])},
 {sql_quote(r['summary'])},
 {sql_quote(r['cover_image_url'])},
@@ -2109,11 +2406,12 @@ VALUES (
 {sql_quote(r['spec_json'])},
 1,
 {int(created_by_user_id)}
-);
+WHERE @skip_insert = 0;
 SET @album_id := LAST_INSERT_ID();
 INSERT INTO photo_album_permissions (album_id, group_id, can_view)
 SELECT @album_id, g.id, 1 FROM catn8_groups g
 WHERE g.slug IN ('photo-albums-users', 'administrators')
+  AND @album_id > 0
 ON DUPLICATE KEY UPDATE can_view = VALUES(can_view);
         """.strip())
     return "\n\n".join(parts) + "\n"
@@ -2142,16 +2440,40 @@ def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, creat
     upload_album_rows(rows, created_by_user_id)
 
 
-def upload_album_rows(rows: Sequence[Dict[str, Any]], created_by_user_id: int) -> None:
+def upload_album_rows(
+    rows: Sequence[Dict[str, Any]],
+    created_by_user_id: int,
+    replace_titles: Optional[Sequence[str]] = None,
+    lock_titles: Optional[Sequence[str]] = None,
+    unlock_titles: Optional[Sequence[str]] = None,
+) -> None:
     if not rows:
         return
     conn = build_mysql_connection_from_env()
     try:
         with conn.cursor() as cur:
             ensure_album_permissions_table(cur)
+            ensure_album_import_locks_table(cur)
             photo_group_id, admin_group_id = fetch_required_group_ids(cur)
+            for title in sorted({str(t).strip() for t in (lock_titles or []) if str(t).strip()}):
+                set_import_lock_by_title(cur, title, True, note="Locked via importer")
+            for title in sorted({str(t).strip() for t in (unlock_titles or []) if str(t).strip()}):
+                set_import_lock_by_title(cur, title, False, note="Unlocked via importer")
+            if replace_titles:
+                locked_titles = fetch_locked_titles(cur, replace_titles)
+                for title in sorted({str(t).strip() for t in replace_titles if str(t).strip()}):
+                    if title in locked_titles:
+                        print(f"Skipping replace for locked title: {title}")
+                        continue
+                    cur.execute("DELETE FROM photo_albums WHERE title=%s", (title,))
         conn.commit()
         for row in rows:
+            row_title = str(row.get("title") or "").strip()
+            with conn.cursor() as cur:
+                locked_for_row = fetch_locked_titles(cur, [row_title]) if row_title else set()
+            if row_title and row_title in locked_for_row:
+                print(f"Skipping upload for locked title: {row_title}")
+                continue
             with conn.cursor() as cur:
                 slug = unique_slug(cur, slugify(str(row.get("slug") or "album")))
                 cur.execute(
@@ -2186,14 +2508,21 @@ def upload_album_rows(rows: Sequence[Dict[str, Any]], created_by_user_id: int) -
         conn.close()
 
 
-def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path, photos_db: Path) -> List[AlbumPage]:
+def pages_from_attachment_match(
+    messages: Sequence[MessageRow],
+    staging_dir: Path,
+    photos_db: Path,
+    handle_name_map: Dict[str, str],
+) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
     staged_by_source_hash: Dict[str, str] = {}
     for i, msg in enumerate(messages):
         source = resolve_message_media_source(msg, photos_db)
         if source is None:
             continue
-        caption = build_rich_caption(messages, i)
+        caption = build_rich_caption(messages, i, handle_name_map)
+        if caption == "(no caption)":
+            caption = build_contextual_caption(messages, i, handle_name_map)
         source_hash = file_sha256(source)
         out_name = str(staged_by_source_hash.get(source_hash) or "").strip()
         if out_name and not (staging_dir / out_name).exists():
@@ -2445,6 +2774,9 @@ def main() -> None:
     eleanor_birth = parse_date(args.eleanor_birth_date)
     start_date = parse_date(args.start_date) if args.start_date.strip() else min(violet_birth, eleanor_birth)
     end_date = parse_date(args.end_date) if args.end_date.strip() else None
+    extra_windows: List[Tuple[dt.date, dt.date]] = [parse_date_window(v) for v in list(args.extra_window or [])]
+    message_windows: List[Tuple[Optional[dt.date], Optional[dt.date]]] = [(start_date, end_date)]
+    message_windows.extend(extra_windows)
 
     photos_db = resolve_photos_db_path(args.photos_db)
     messages_db = Path(os.path.expanduser(args.messages_db)).resolve()
@@ -2462,6 +2794,8 @@ def main() -> None:
     print(f"Start date: {start_date.isoformat()}")
     if end_date:
         print(f"End date: {end_date.isoformat()}")
+    if extra_windows:
+        print(f"Extra windows: {', '.join([f'{s.isoformat()}..{e.isoformat()}' for (s, e) in extra_windows])}")
 
     needs_face_assets = args.mode in {"catalog_match", "photos_timeline"}
     violet_id = 0
@@ -2495,14 +2829,28 @@ def main() -> None:
         focus_sequence = ["violet", "eleanor", "lyra"]
     else:
         focus_sequence = [focus_person]
-    if int(lyra_id) <= 0:
+    if needs_face_assets and int(lyra_id) <= 0:
         focus_sequence = [f for f in focus_sequence if f != "lyra"]
 
-    contact_handles = discover_contact_handles(args.contact)
     print(f"Focus run order: {', '.join(focus_sequence)}")
+    contact_handle_cache: Dict[str, List[str]] = {}
 
     total_pages = 0
     for active_focus in focus_sequence:
+        focus_contacts = contacts_for_focus(args, active_focus)
+        focus_handles: List[str] = []
+        handle_name_map: Dict[str, str] = {}
+        for focus_contact in focus_contacts:
+            key = focus_contact.strip().lower()
+            if key not in contact_handle_cache:
+                contact_handle_cache[key] = discover_contact_handles(focus_contact)
+            discovered = list(contact_handle_cache[key])
+            focus_handles.extend(discovered)
+            for h in discovered:
+                norm = normalize_handle_for_lookup(h)
+                if norm and norm not in handle_name_map:
+                    handle_name_map[norm] = focus_contact.strip()
+        focus_handles = sorted({h for h in focus_handles if h})
         source_key = source_key_for_focus(args, active_focus)
         album_title_prefix = args.album_title_prefix
         if len(focus_sequence) > 1 and active_focus not in album_title_prefix.lower():
@@ -2511,6 +2859,7 @@ def main() -> None:
         print("")
         print(f"=== Running focus: {active_focus} ===")
         print(f"Run source key: {source_key}")
+        print(f"Contacts: {', '.join(focus_contacts)}")
 
         messages: List[MessageRow] = []
         pages: List[AlbumPage] = []
@@ -2524,13 +2873,12 @@ def main() -> None:
                     ensure_album_import_tables(cur)
                     checkpoint = checkpoint_get(cur, source_key)
                     min_message_id = 0 if args.rebuild_catalog else int(checkpoint["last_message_id"])
-                    messages = load_messages(
+                    messages = load_messages_for_windows(
                         messages_db,
                         args.contact,
                         args.years,
-                        contact_handles,
-                        start_date,
-                        end_date,
+                        focus_handles,
+                        message_windows,
                         min_message_id=min_message_id,
                     )
                     print(f"Loaded {len(messages)} new/updated message rows from iMessage DB (min_message_id={min_message_id}).")
@@ -2580,13 +2928,12 @@ def main() -> None:
                 reset=bool(args.rematch_all),
             )
             min_message_id = 0 if args.rematch_all else int(timeline_state.get("last_processed_message_id") or 0)
-            messages = load_messages(
+            messages = load_messages_for_windows(
                 messages_db,
                 args.contact,
                 args.years,
-                contact_handles,
-                start_date,
-                end_date,
+                focus_handles,
+                message_windows,
                 min_message_id=min_message_id,
             )
             print(f"Loaded {len(messages)} messages in window (min_message_id={min_message_id}).")
@@ -2609,9 +2956,9 @@ def main() -> None:
             )
             print(f"Updated timeline checkpoint to message_id={last_processed_message_id} for focus '{active_focus}'.")
         else:
-            messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
+            messages = load_messages_for_windows(messages_db, args.contact, args.years, focus_handles, message_windows)
             print(f"Loaded {len(messages)} messages in window.")
-            pages = pages_from_attachment_match(messages, staging_dir, photos_db)
+            pages = pages_from_attachment_match(messages, staging_dir, photos_db, handle_name_map)
 
         if not pages:
             print(f"No new pages produced for focus '{active_focus}'.")
@@ -2634,11 +2981,25 @@ def main() -> None:
         rows = build_album_rows(batches, album_title_prefix, args.disable_ai)
         for album_idx, row in enumerate(rows, start=1):
             try:
-                upload_album_rows([row], created_by_user_id)
+                replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None
+                upload_album_rows(
+                    [row],
+                    created_by_user_id,
+                    replace_titles=replace_titles,
+                    lock_titles=list(args.lock_title or []),
+                    unlock_titles=list(args.unlock_title or []),
+                )
                 print(f"Upload complete for album {album_idx}/{len(rows)} via direct MySQL connection.")
             except Exception as mysql_error:
                 print(f"Direct MySQL failed for album {album_idx}/{len(rows)} ({mysql_error}); trying maintenance API fallback...")
-                sql_text = build_sql_for_album_rows([row], created_by_user_id)
+                replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None
+                sql_text = build_sql_for_album_rows(
+                    [row],
+                    created_by_user_id,
+                    replace_titles=replace_titles,
+                    lock_titles=list(args.lock_title or []),
+                    unlock_titles=list(args.unlock_title or []),
+                )
                 upload_sql_via_maintenance_api(sql_text)
                 print(f"Upload complete for album {album_idx}/{len(rows)} via maintenance API SQL restore.")
 

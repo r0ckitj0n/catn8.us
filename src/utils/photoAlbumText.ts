@@ -2,8 +2,8 @@ const JUNK_TOKENS = /(streamtyped|NSMutableAttributedString|NSAttributedString|N
 const JUNK_IM_TOKENS = /\bkIM[A-Za-z0-9_]+\b/g;
 const JUNK_LABELS = /\b(iI|typedstream)\b/gi;
 const SPEAKER_ALIAS = /\bContact\s*:/gi;
-const SPEAKER_BOUNDARY = /\s+(Jon|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Contact)\s*:\s*/gi;
-const KNOWN_SPEAKER_ONLY = /^(Jon|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Unknown)$/i;
+const SPEAKER_BOUNDARY = /\s+(Papa|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Contact)\s*:\s*/gi;
+const KNOWN_SPEAKER_ONLY = /^(Papa|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Unknown)$/i;
 
 function cleanWhitespace(value: string): string {
   return value
@@ -84,7 +84,7 @@ export function formatAlbumCaption(value: unknown, maxLines = 4): string {
       i += 1;
       continue;
     }
-    const inlineSentMatch = current.match(/^(Jon|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Unknown)\s*\|\s*Sent\s+(.+)$/i);
+    const inlineSentMatch = current.match(/^(Papa|Trinity|Ian|Elijah|Marisa|Lyrielle|Lyra|Unknown)\s*\|\s*Sent\s+(.+)$/i);
     if (inlineSentMatch) {
       lines.push(`${inlineSentMatch[1]} ${inlineSentMatch[2]}`.trim());
       continue;

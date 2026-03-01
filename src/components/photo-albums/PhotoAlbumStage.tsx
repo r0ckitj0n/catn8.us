@@ -773,6 +773,16 @@ export function PhotoAlbumStage({
       return [] as DecorItem[];
     }
   }, [album, spreadIndex, theme.emojis]);
+  const spreadHeaderLabel = React.useMemo(() => {
+    const captured = mediaItems
+      .map((item) => item.capturedAtMs)
+      .filter((value): value is number => Number.isFinite(value));
+    if (captured.length > 0) {
+      const date = new Date(Math.min(...captured));
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return sanitizeAlbumMessageText(spread?.title || 'Untitled Spread');
+  }, [mediaItems, spread?.title]);
 
   const densityCount = notes.length + mediaItems.length;
   const mediaWidthPct = densityCount >= 16 ? 11 : densityCount >= 10 ? 13 : 16;
@@ -1216,7 +1226,7 @@ export function PhotoAlbumStage({
           ) : (
             <span className="catn8-scrapbook-page-tag">Spread {spreadIndex + 1}</span>
           )}
-          <h3>{sanitizeAlbumMessageText(spread?.title || 'Untitled Spread')}</h3>
+          <h3>{spreadHeaderLabel}</h3>
         </div>
 
         <div

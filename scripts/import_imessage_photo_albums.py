@@ -5,6 +5,7 @@ import argparse
 import bisect
 import datetime as dt
 import glob
+import hashlib
 import json
 import os
 import plistlib
@@ -841,6 +842,7 @@ def build_timestamped_output_name(
 
 
 _CAPTURE_TS_CACHE: Dict[str, dt.datetime] = {}
+_FILE_HASH_CACHE: Dict[str, Tuple[int, int, str]] = {}
 
 
 def parse_exif_datetime(raw: str) -> Optional[dt.datetime]:
@@ -903,6 +905,37 @@ def media_capture_datetime(source_path: Path, fallback: dt.datetime) -> dt.datet
 
     _CAPTURE_TS_CACHE[cache_key] = fallback
     return fallback
+
+
+def file_sha256(path: Path) -> str:
+    resolved = path.resolve()
+    st = resolved.stat()
+    cache_key = str(resolved)
+    cached = _FILE_HASH_CACHE.get(cache_key)
+    if cached and cached[0] == int(st.st_size) and cached[1] == int(st.st_mtime_ns):
+        return cached[2]
+    h = hashlib.sha256()
+    with resolved.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            if not chunk:
+                break
+            h.update(chunk)
+    digest = h.hexdigest()
+    _FILE_HASH_CACHE[cache_key] = (int(st.st_size), int(st.st_mtime_ns), digest)
+    return digest
+
+
+def build_staging_hash_index(staging_dir: Path) -> Dict[str, str]:
+    index: Dict[str, str] = {}
+    if not staging_dir.exists():
+        return index
+    for path in sorted((p for p in staging_dir.iterdir() if p.is_file()), key=lambda p: p.name):
+        try:
+            digest = file_sha256(path)
+        except Exception:
+            continue
+        index.setdefault(digest, path.name)
+    return index
 
 
 def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
@@ -1566,6 +1599,7 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
     )
     grouped: Dict[int, Dict[str, Any]] = {}
     used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
+    staged_hash_to_name: Dict[str, str] = build_staging_hash_index(staging_dir)
     for row in cur.fetchall():
         msg_id = int(row["message_row_id"])
         bucket = grouped.get(msg_id)
@@ -1587,15 +1621,21 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         media_kind = str(row["media_kind"] or "image").strip().lower()
         media_captured_at = row["media_captured_at"] if row.get("media_captured_at") else row["sent_at"]
         media_captured_at = media_capture_datetime(source_path, media_captured_at)
-        if media_kind == "video":
+        source_hash = file_sha256(source_path)
+        existing_name = str(staged_hash_to_name.get(source_hash) or "").strip()
+        if existing_name and (staging_dir / existing_name).exists():
+            out_name = existing_name
+        elif media_kind == "video":
             suffix = source_path.suffix.lower() or ".mov"
             out_name = build_timestamped_output_name(media_captured_at, str(row["attachment_name"] or source_path.name), suffix, used_names, "video")
             out_path = staging_dir / out_name
             copy_media_to_staging(source_path, out_path)
+            staged_hash_to_name[source_hash] = out_name
         else:
             out_name = build_timestamped_output_name(media_captured_at, str(row["attachment_name"] or source_path.name), ".png", used_names, "image")
             out_path = staging_dir / out_name
             convert_to_png(source_path, out_path)
+            staged_hash_to_name[source_hash] = out_name
         bucket["media_items"].append((f"/photo_albums/{out_name}", str(row["attachment_name"] or out_name), media_kind))
 
     pages: List[AlbumPage] = []
@@ -2029,6 +2069,7 @@ def pages_from_photos_timeline(
     processed_messages = 0
     processed_messages_with_attachments = 0
     used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
+    staged_hash_to_name: Dict[str, str] = build_staging_hash_index(staging_dir)
     window_secs = max(1, int(match_window_hours)) * 3600
 
     def emit_progress(status: str, force: bool = False) -> None:
@@ -2083,11 +2124,17 @@ def pages_from_photos_timeline(
                 if existing_name and (staging_dir / existing_name).exists():
                     out_name = existing_name
                 else:
-                    capture_ts = media_capture_datetime(source, msg.sent_at)
-                    source_kind = media_kind_from_attachment(source, mime)
-                    ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
-                    out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
-                    copy_media_to_staging(source, staging_dir / out_name)
+                    source_hash = file_sha256(source)
+                    hashed_name = str(staged_hash_to_name.get(source_hash) or "").strip()
+                    if hashed_name and (staging_dir / hashed_name).exists():
+                        out_name = hashed_name
+                    else:
+                        capture_ts = media_capture_datetime(source, msg.sent_at)
+                        source_kind = media_kind_from_attachment(source, mime)
+                        ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
+                        out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
+                        copy_media_to_staging(source, staging_dir / out_name)
+                        staged_hash_to_name[source_hash] = out_name
                     staged_by_attachment_path[src_key] = out_name
                 media_kind = media_kind_from_attachment(source, mime)
                 page_media.append((f"/photo_albums/{out_name}", source.name, media_kind))
@@ -2145,9 +2192,15 @@ def pages_from_photos_timeline(
 
                     capture_ts = media_capture_datetime(source, asset.date_created or msg.sent_at)
                     source_kind = media_kind_from_attachment(source, "")
-                    ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
-                    out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
-                    copy_media_to_staging(source, staging_dir / out_name)
+                    source_hash = file_sha256(source)
+                    hashed_name = str(staged_hash_to_name.get(source_hash) or "").strip()
+                    if hashed_name and (staging_dir / hashed_name).exists():
+                        out_name = hashed_name
+                    else:
+                        ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
+                        out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
+                        copy_media_to_staging(source, staging_dir / out_name)
+                        staged_hash_to_name[source_hash] = out_name
                     media_kind = "video" if source_kind == "video" else "image"
                     page_media.append((f"/photo_albums/{out_name}", source.name, media_kind))
                     used_asset_ids.add(int(asset.asset_id))

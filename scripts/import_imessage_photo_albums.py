@@ -678,6 +678,71 @@ def build_timestamped_output_name(
     return candidate
 
 
+_CAPTURE_TS_CACHE: Dict[str, dt.datetime] = {}
+
+
+def parse_exif_datetime(raw: str) -> Optional[dt.datetime]:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return dt.datetime.strptime(value[:19], fmt)
+        except Exception:
+            continue
+    return None
+
+
+def media_capture_datetime(source_path: Path, fallback: dt.datetime) -> dt.datetime:
+    try:
+        st = source_path.stat()
+        cache_key = f"{source_path.resolve()}::{int(st.st_size)}::{int(st.st_mtime)}"
+    except Exception:
+        cache_key = str(source_path)
+    if cache_key in _CAPTURE_TS_CACHE:
+        return _CAPTURE_TS_CACHE[cache_key]
+
+    tags = ["DateTimeOriginal", "CreateDate", "MediaCreateDate", "TrackCreateDate", "QuickTime:CreateDate"]
+    for tag in tags:
+        try:
+            proc = subprocess.run(
+                ["exiftool", "-s", "-s", "-s", f"-{tag}", str(source_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            proc = None
+        if proc and proc.returncode == 0:
+            parsed = parse_exif_datetime(proc.stdout)
+            if parsed:
+                _CAPTURE_TS_CACHE[cache_key] = parsed
+                return parsed
+
+    # mdls fallback for files that lack Exif/QuickTime date tags
+    try:
+        proc2 = subprocess.run(
+            ["mdls", "-raw", "-name", "kMDItemContentCreationDate", str(source_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+        if proc2.returncode == 0:
+            raw = str(proc2.stdout or "").strip()
+            if raw and raw not in {"(null)", "null"}:
+                parsed = parse_exif_datetime(raw.replace(" +0000", ""))
+                if parsed:
+                    _CAPTURE_TS_CACHE[cache_key] = parsed
+                    return parsed
+    except Exception:
+        pass
+
+    _CAPTURE_TS_CACHE[cache_key] = fallback
+    return fallback
+
+
 def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
     focus = (focus_person or "").strip().lower()
     if focus == "violet":
@@ -1216,7 +1281,7 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         (source_key,),
     )
     grouped: Dict[int, Dict[str, Any]] = {}
-    used_names: set[str] = set()
+    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
     for row in cur.fetchall():
         msg_id = int(row["message_row_id"])
         bucket = grouped.get(msg_id)
@@ -1237,6 +1302,7 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
             continue
         media_kind = str(row["media_kind"] or "image").strip().lower()
         media_captured_at = row["media_captured_at"] if row.get("media_captured_at") else row["sent_at"]
+        media_captured_at = media_capture_datetime(source_path, media_captured_at)
         if media_kind == "video":
             suffix = source_path.suffix.lower() or ".mov"
             out_name = build_timestamped_output_name(media_captured_at, str(row["attachment_name"] or source_path.name), suffix, used_names, "video")
@@ -1598,14 +1664,15 @@ def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, creat
 
 def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
-    used_names: set[str] = set()
+    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
     for i, msg in enumerate(messages):
         if not is_image_path(msg.attachment_path, msg.attachment_mime):
             continue
         if msg.attachment_path is None or not msg.attachment_path.exists():
             continue
         caption = build_rich_caption(messages, i)
-        out_name = build_timestamped_output_name(msg.sent_at, msg.attachment_path.name, ".png", used_names, "image")
+        captured_at = media_capture_datetime(msg.attachment_path, msg.sent_at)
+        out_name = build_timestamped_output_name(captured_at, msg.attachment_path.name, ".png", used_names, "image")
         out_path = staging_dir / out_name
         convert_to_png(msg.attachment_path, out_path)
         pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name, "image")]))
@@ -1627,7 +1694,7 @@ def pages_from_photos_timeline(
     candidates = [a for a in assets if a.date_created and a.date_created.date() >= start_date and (end_date is None or a.date_created.date() <= end_date)]
     candidates.sort(key=lambda a: a.date_created or dt.datetime.min.astimezone())
     pages: List[AlbumPage] = []
-    used_names: set[str] = set()
+    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
     attempts = 0
     max_attempts = max_export_items * 2
     uuid_like = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.[A-Za-z0-9]+$")
@@ -1668,19 +1735,20 @@ def pages_from_photos_timeline(
                 nearest_idx = i
         caption = build_rich_caption(messages, nearest_idx) if messages else "(no caption)"
 
+        capture_ts = media_capture_datetime(source, anchor)
         source_kind = media_kind_from_attachment(source, "")
         if source_kind == "video":
             suffix = source.suffix.lower() or ".mov"
-            out_name = build_timestamped_output_name(anchor, source.name, suffix, used_names, "video")
+            out_name = build_timestamped_output_name(capture_ts, source.name, suffix, used_names, "video")
             out_path = staging_dir / out_name
             copy_media_to_staging(source, out_path)
             media_kind = "video"
         else:
-            out_name = build_timestamped_output_name(anchor, source.name, ".png", used_names, "image")
+            out_name = build_timestamped_output_name(capture_ts, source.name, ".png", used_names, "image")
             out_path = staging_dir / out_name
             convert_to_png(source, out_path)
             media_kind = "image"
-        pages.append(AlbumPage(sent_at=anchor, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, media_kind)]))
+        pages.append(AlbumPage(sent_at=capture_ts, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, media_kind)]))
         if len(pages) % 5 == 0:
             print(f"photos_timeline progress: exported {len(pages)} page(s)...")
 

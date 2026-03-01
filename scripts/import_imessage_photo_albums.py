@@ -46,6 +46,8 @@ class MessageRow:
     is_from_me: int
     attachment_path: Optional[Path]
     attachment_mime: str
+    attachment_guid: str
+    attachment_transfer_name: str
 
 
 @dataclass
@@ -452,7 +454,8 @@ def load_messages(
             SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                    m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
                    m.attributedBody AS attributed_body,
-                   COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime
+                   COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime,
+                   COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name
             FROM message m
             LEFT JOIN handle h ON h.ROWID = m.handle_id
             LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
@@ -479,7 +482,8 @@ def load_messages(
                 SELECT m.ROWID AS message_id, COALESCE(h.id,'') AS handle_id, COALESCE(m.text,'') AS text,
                        m.date AS msg_date, COALESCE(m.is_from_me,0) AS is_from_me,
                        m.attributedBody AS attributed_body,
-                       COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime
+                       COALESCE(a.filename,'') AS attachment_filename, COALESCE(a.mime_type,'') AS attachment_mime,
+                       COALESCE(a.guid,'') AS attachment_guid, COALESCE(a.transfer_name,'') AS attachment_transfer_name
                 FROM message m
                 LEFT JOIN handle h ON h.ROWID = m.handle_id
                 LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
@@ -525,6 +529,8 @@ def load_messages(
                 is_from_me=int(r["is_from_me"] or 0),
                 attachment_path=ap,
                 attachment_mime=str(r["attachment_mime"] or "").strip(),
+                attachment_guid=str(r["attachment_guid"] or "").strip(),
+                attachment_transfer_name=str(r["attachment_transfer_name"] or "").strip(),
             )
         )
     return out
@@ -536,6 +542,29 @@ def is_image_path(path: Optional[Path], mime: str) -> bool:
     if path.suffix.lower() in {".heic", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff"}:
         return True
     return mime.lower().startswith("image/")
+
+
+def is_image_binary(path: Path) -> bool:
+    try:
+        with path.open("rb") as f:
+            header = f.read(64)
+    except Exception:
+        return False
+    if len(header) < 12:
+        return False
+    if header.startswith(b"\xFF\xD8\xFF"):  # JPEG
+        return True
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG
+        return True
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if header[:4] in {b"II*\x00", b"MM\x00*"}:  # TIFF
+        return True
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return True
+    if header[4:8] == b"ftyp" and header[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"avif"}:
+        return True
+    return False
 
 
 def build_rich_caption(messages: Sequence[MessageRow], index: int) -> str:
@@ -775,6 +804,38 @@ def photos_export_by_asset_id(asset_uuid: str, out_dir: Path) -> Optional[Path]:
     return None
 
 
+def photos_library_root_from_db(photos_db: Path) -> Path:
+    resolved = photos_db.resolve()
+    if resolved.name.lower() == "photos.sqlite" and resolved.parent.name.lower() == "database":
+        return resolved.parent.parent
+    return resolved.parent
+
+
+def photos_find_derivative_by_asset_uuid(photos_db: Path, asset_uuid: str) -> Optional[Path]:
+    uuid = str(asset_uuid or "").strip().upper()
+    if not uuid:
+        return None
+    cache_key = f"{photos_db.resolve()}::{uuid}"
+    if cache_key in _PHOTOS_UUID_PATH_CACHE:
+        return _PHOTOS_UUID_PATH_CACHE[cache_key]
+
+    root = photos_library_root_from_db(photos_db)
+    candidate_bases = [
+        root / "scopes" / "syndication" / "resources" / "derivatives" / "masters",
+        root / "resources" / "derivatives" / "masters",
+    ]
+    for base in candidate_bases:
+        if not base.exists():
+            continue
+        for path in sorted(base.glob(f"*/{uuid}_*")):
+            if path.is_file():
+                _PHOTOS_UUID_PATH_CACHE[cache_key] = path
+                return path
+
+    _PHOTOS_UUID_PATH_CACHE[cache_key] = None
+    return None
+
+
 def convert_to_png(source_path: Path, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if out_path.exists():
@@ -843,6 +904,9 @@ def build_timestamped_output_name(
 
 _CAPTURE_TS_CACHE: Dict[str, dt.datetime] = {}
 _FILE_HASH_CACHE: Dict[str, Tuple[int, int, str]] = {}
+_PHOTOS_UUID_PATH_CACHE: Dict[str, Optional[Path]] = {}
+_MESSAGE_ATTACHMENT_DIR_CACHE: Dict[str, Optional[Path]] = {}
+_PHOTOS_FILENAME_CANDIDATE_CACHE: Dict[str, List[Tuple[str, Optional[dt.datetime]]]] = {}
 
 
 def parse_exif_datetime(raw: str) -> Optional[dt.datetime]:
@@ -854,6 +918,126 @@ def parse_exif_datetime(raw: str) -> Optional[dt.datetime]:
             return dt.datetime.strptime(value[:19], fmt)
         except Exception:
             continue
+    return None
+
+
+def extract_uuid_candidates(value: str) -> List[str]:
+    matches = re.findall(r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b", str(value or ""))
+    seen: set[str] = set()
+    out: List[str] = []
+    for m in matches:
+        token = m.upper()
+        if token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def find_message_attachment_file_from_guid(attachment_guid: str, transfer_name: str) -> Optional[Path]:
+    guid_token = str(attachment_guid or "").strip().split("/")[-1]
+    if not guid_token:
+        return None
+    if guid_token in _MESSAGE_ATTACHMENT_DIR_CACHE:
+        base_dir = _MESSAGE_ATTACHMENT_DIR_CACHE[guid_token]
+    else:
+        root = Path("~/Library/Messages/Attachments").expanduser()
+        matches = list(root.glob(f"*/*/{guid_token}"))
+        base_dir = matches[0].resolve() if matches else None
+        _MESSAGE_ATTACHMENT_DIR_CACHE[guid_token] = base_dir
+    if base_dir is None or not base_dir.exists() or not base_dir.is_dir():
+        return None
+
+    transfer = str(transfer_name or "").strip()
+    if transfer:
+        candidate = base_dir / transfer
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+
+    for path in sorted(base_dir.iterdir()):
+        if path.is_file() and (is_image_path(path, "") or is_image_binary(path)):
+            return path.resolve()
+    return None
+
+
+def photos_candidates_for_transfer_name(photos_db: Path, transfer_name: str) -> List[Tuple[str, Optional[dt.datetime]]]:
+    name = Path(str(transfer_name or "").strip()).name.strip().lower()
+    if not name:
+        return []
+    if name in _PHOTOS_FILENAME_CANDIDATE_CACHE:
+        return _PHOTOS_FILENAME_CANDIDATE_CACHE[name]
+
+    conn = sqlite_connect_readonly(photos_db)
+    try:
+        rows = conn.execute(
+            """
+            SELECT COALESCE(a.ZUUID,'') AS asset_uuid,
+                   a.ZDATECREATED AS date_created
+            FROM ZASSET a
+            LEFT JOIN ZADDITIONALASSETATTRIBUTES aa ON aa.ZASSET = a.Z_PK
+            WHERE LOWER(COALESCE(aa.ZORIGINALFILENAME,'')) = ?
+               OR LOWER(COALESCE(a.ZFILENAME,'')) = ?
+            ORDER BY a.ZDATECREATED ASC
+            """,
+            (name, name),
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+
+    out: List[Tuple[str, Optional[dt.datetime]]] = []
+    for r in rows:
+        uuid = str(r["asset_uuid"] or "").strip()
+        if not uuid:
+            continue
+        out.append((uuid, apple_ts_to_datetime(r["date_created"])))
+    _PHOTOS_FILENAME_CANDIDATE_CACHE[name] = out
+    return out
+
+
+def photos_find_by_transfer_name_nearest_date(photos_db: Path, transfer_name: str, sent_at: dt.datetime) -> Optional[Path]:
+    candidates = photos_candidates_for_transfer_name(photos_db, transfer_name)
+    if not candidates:
+        return None
+
+    def sort_key(item: Tuple[str, Optional[dt.datetime]]) -> float:
+        _uuid, created_at = item
+        if created_at is None:
+            return 1e18
+        return abs((created_at - sent_at).total_seconds())
+
+    for asset_uuid, _created_at in sorted(candidates, key=sort_key):
+        located = photos_find_derivative_by_asset_uuid(photos_db, asset_uuid)
+        if located and located.exists():
+            return located
+    return None
+
+
+def resolve_message_media_source(msg: MessageRow, photos_db: Path) -> Optional[Path]:
+    ap = msg.attachment_path
+    if ap is not None and ap.exists() and (is_image_path(ap, msg.attachment_mime) or is_image_binary(ap)):
+        return ap
+
+    recovered = find_message_attachment_file_from_guid(msg.attachment_guid, msg.attachment_transfer_name)
+    if recovered is not None and recovered.exists():
+        return recovered
+
+    uuid_candidates: List[str] = []
+    if ap is not None:
+        uuid_candidates.extend(extract_uuid_candidates(str(ap)))
+        uuid_candidates.extend(extract_uuid_candidates(ap.name))
+    uuid_candidates.extend(extract_uuid_candidates(msg.text or ""))
+    if uuid_candidates:
+        for asset_uuid in uuid_candidates:
+            located = photos_find_derivative_by_asset_uuid(photos_db, asset_uuid)
+            if located and located.exists():
+                return located
+
+    if msg.attachment_transfer_name:
+        located = photos_find_by_transfer_name_nearest_date(photos_db, msg.attachment_transfer_name, msg.sent_at)
+        if located and located.exists():
+            return located
     return None
 
 
@@ -2002,16 +2186,15 @@ def upload_album_rows(rows: Sequence[Dict[str, Any]], created_by_user_id: int) -
         conn.close()
 
 
-def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path) -> List[AlbumPage]:
+def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path, photos_db: Path) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
     staged_by_source_hash: Dict[str, str] = {}
     for i, msg in enumerate(messages):
-        if not is_image_path(msg.attachment_path, msg.attachment_mime):
-            continue
-        if msg.attachment_path is None or not msg.attachment_path.exists():
+        source = resolve_message_media_source(msg, photos_db)
+        if source is None:
             continue
         caption = build_rich_caption(messages, i)
-        source_hash = file_sha256(msg.attachment_path)
+        source_hash = file_sha256(source)
         out_name = str(staged_by_source_hash.get(source_hash) or "").strip()
         if out_name and not (staging_dir / out_name).exists():
             out_name = ""
@@ -2019,8 +2202,8 @@ def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Pat
             out_name = f"imsg_{source_hash[:20]}.png"
             staged_by_source_hash[source_hash] = out_name
         out_path = staging_dir / out_name
-        convert_to_png(msg.attachment_path, out_path)
-        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name, "image")]))
+        convert_to_png(source, out_path)
+        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, "image")]))
     return aggregate_album_pages_by_day(pages)
 
 
@@ -2186,7 +2369,14 @@ def pages_from_photos_timeline(
                     if export_key in export_cache and export_cache[export_key].exists():
                         source = export_cache[export_key]
                     else:
-                        exported = photos_export_by_filename_nearest_date(asset.original_filename or asset.filename, target_dt, export_dir)
+                        exported = None
+                        asset_uuid = str(asset.uuid or "").strip()
+                        if asset_uuid:
+                            exported = photos_find_derivative_by_asset_uuid(photos_db, asset_uuid)
+                        if not exported and asset_uuid:
+                            exported = photos_export_by_asset_id(asset_uuid, export_dir)
+                        if not exported:
+                            exported = photos_export_by_filename_nearest_date(asset.original_filename or asset.filename, target_dt, export_dir)
                         if exported and exported.exists():
                             source = exported
                             export_cache[export_key] = exported
@@ -2421,7 +2611,7 @@ def main() -> None:
         else:
             messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
             print(f"Loaded {len(messages)} messages in window.")
-            pages = pages_from_attachment_match(messages, staging_dir)
+            pages = pages_from_attachment_match(messages, staging_dir, photos_db)
 
         if not pages:
             print(f"No new pages produced for focus '{active_focus}'.")

@@ -2004,15 +2004,20 @@ def upload_album_rows(rows: Sequence[Dict[str, Any]], created_by_user_id: int) -
 
 def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
-    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
+    staged_by_source_hash: Dict[str, str] = {}
     for i, msg in enumerate(messages):
         if not is_image_path(msg.attachment_path, msg.attachment_mime):
             continue
         if msg.attachment_path is None or not msg.attachment_path.exists():
             continue
         caption = build_rich_caption(messages, i)
-        captured_at = media_capture_datetime(msg.attachment_path, msg.sent_at)
-        out_name = build_timestamped_output_name(captured_at, msg.attachment_path.name, ".png", used_names, "image")
+        source_hash = file_sha256(msg.attachment_path)
+        out_name = str(staged_by_source_hash.get(source_hash) or "").strip()
+        if out_name and not (staging_dir / out_name).exists():
+            out_name = ""
+        if not out_name:
+            out_name = f"imsg_{source_hash[:20]}.png"
+            staged_by_source_hash[source_hash] = out_name
         out_path = staging_dir / out_name
         convert_to_png(msg.attachment_path, out_path)
         pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name, "image")]))
@@ -2268,23 +2273,31 @@ def main() -> None:
     if end_date:
         print(f"End date: {end_date.isoformat()}")
 
-    photos_conn = sqlite_connect_readonly(photos_db)
-    try:
-        faces = load_named_faces(photos_conn)
-        if args.violet_face_id is not None and args.eleanor_face_id is not None:
-            violet_id = int(args.violet_face_id)
-            eleanor_id = int(args.eleanor_face_id)
-            print(f"Using Face IDs: Violet={violet_id}, Eleanor={eleanor_id}")
-        else:
-            violet_id, eleanor_id = prompt_face_ids(faces)
-        lyra_id = int(args.lyra_face_id) if args.lyra_face_id is not None else int(find_face_id_by_name(faces, ["lyra", "lyrielle"]) or 0)
-        if lyra_id > 0:
-            print(f"Using Face ID: Lyra={lyra_id}")
-        person_ids = [pid for pid in [violet_id, eleanor_id, lyra_id] if int(pid) > 0]
-        assets = load_face_assets(photos_conn, person_ids)
-        print(f"Loaded {len(assets)} face-tagged assets from Photos DB.")
-    finally:
-        photos_conn.close()
+    needs_face_assets = args.mode in {"catalog_match", "photos_timeline"}
+    violet_id = 0
+    eleanor_id = 0
+    lyra_id = 0
+    assets: List[PhotoAsset] = []
+    if needs_face_assets:
+        photos_conn = sqlite_connect_readonly(photos_db)
+        try:
+            faces = load_named_faces(photos_conn)
+            if args.violet_face_id is not None and args.eleanor_face_id is not None:
+                violet_id = int(args.violet_face_id)
+                eleanor_id = int(args.eleanor_face_id)
+                print(f"Using Face IDs: Violet={violet_id}, Eleanor={eleanor_id}")
+            else:
+                violet_id, eleanor_id = prompt_face_ids(faces)
+            lyra_id = int(args.lyra_face_id) if args.lyra_face_id is not None else int(find_face_id_by_name(faces, ["lyra", "lyrielle"]) or 0)
+            if lyra_id > 0:
+                print(f"Using Face ID: Lyra={lyra_id}")
+            person_ids = [pid for pid in [violet_id, eleanor_id, lyra_id] if int(pid) > 0]
+            assets = load_face_assets(photos_conn, person_ids)
+            print(f"Loaded {len(assets)} face-tagged assets from Photos DB.")
+        finally:
+            photos_conn.close()
+    else:
+        print("Skipping face asset scan for attachment_match mode.")
 
     focus_person = resolve_focus_person(args.focus_person, args.album_title_prefix)
     focus_sequence: List[str]
@@ -2307,7 +2320,7 @@ def main() -> None:
 
         print("")
         print(f"=== Running focus: {active_focus} ===")
-        print(f"Catalog source key: {source_key}")
+        print(f"Run source key: {source_key}")
 
         messages: List[MessageRow] = []
         pages: List[AlbumPage] = []

@@ -649,6 +649,35 @@ def copy_media_to_staging(source_path: Path, out_path: Path) -> None:
     shutil.copy2(source_path, out_path)
 
 
+def sanitize_filename_token(value: str, fallback: str = "media", max_len: int = 40) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return fallback
+    token = re.sub(r"[^a-z0-9]+", "-", raw).strip("-")
+    if not token:
+        token = fallback
+    return token[:max_len]
+
+
+def build_timestamped_output_name(
+    sent_at: dt.datetime,
+    source_name: str,
+    extension: str,
+    used_names: set[str],
+    kind_hint: str = "",
+) -> str:
+    stamp = sent_at.strftime("%Y%m%d_%H%M%S")
+    core = stamp
+    ext = extension if extension.startswith(".") else f".{extension}"
+    candidate = f"{core}{ext}"
+    n = 2
+    while candidate in used_names:
+        candidate = f"{core}_{n:02d}{ext}"
+        n += 1
+    used_names.add(candidate)
+    return candidate
+
+
 def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
     focus = (focus_person or "").strip().lower()
     if focus == "violet":
@@ -1172,7 +1201,8 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
           c.id AS media_id,
           c.attachment_name,
           c.attachment_path,
-          c.media_kind
+          c.media_kind,
+          c.captured_at AS media_captured_at
         FROM photo_album_message_catalog m
         INNER JOIN photo_album_message_media_matches mm
           ON mm.source_key=m.source_key AND mm.message_row_id=m.message_row_id
@@ -1186,6 +1216,7 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         (source_key,),
     )
     grouped: Dict[int, Dict[str, Any]] = {}
+    used_names: set[str] = set()
     for row in cur.fetchall():
         msg_id = int(row["message_row_id"])
         bucket = grouped.get(msg_id)
@@ -1205,13 +1236,14 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path) -> List[Al
         if not source_path.exists():
             continue
         media_kind = str(row["media_kind"] or "image").strip().lower()
+        media_captured_at = row["media_captured_at"] if row.get("media_captured_at") else row["sent_at"]
         if media_kind == "video":
             suffix = source_path.suffix.lower() or ".mov"
-            out_name = f"catalog_{int(row['media_id']):08d}{suffix}"
+            out_name = build_timestamped_output_name(media_captured_at, str(row["attachment_name"] or source_path.name), suffix, used_names, "video")
             out_path = staging_dir / out_name
             copy_media_to_staging(source_path, out_path)
         else:
-            out_name = f"catalog_{int(row['media_id']):08d}.png"
+            out_name = build_timestamped_output_name(media_captured_at, str(row["attachment_name"] or source_path.name), ".png", used_names, "image")
             out_path = staging_dir / out_name
             convert_to_png(source_path, out_path)
         bucket["media_items"].append((f"/photo_albums/{out_name}", str(row["attachment_name"] or out_name), media_kind))
@@ -1566,13 +1598,14 @@ def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, creat
 
 def pages_from_attachment_match(messages: Sequence[MessageRow], staging_dir: Path) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
+    used_names: set[str] = set()
     for i, msg in enumerate(messages):
         if not is_image_path(msg.attachment_path, msg.attachment_mime):
             continue
         if msg.attachment_path is None or not msg.attachment_path.exists():
             continue
         caption = build_rich_caption(messages, i)
-        out_name = f"page_{len(pages)+1:04d}.png"
+        out_name = build_timestamped_output_name(msg.sent_at, msg.attachment_path.name, ".png", used_names, "image")
         out_path = staging_dir / out_name
         convert_to_png(msg.attachment_path, out_path)
         pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", msg.attachment_path.name, "image")]))
@@ -1594,6 +1627,7 @@ def pages_from_photos_timeline(
     candidates = [a for a in assets if a.date_created and a.date_created.date() >= start_date and (end_date is None or a.date_created.date() <= end_date)]
     candidates.sort(key=lambda a: a.date_created or dt.datetime.min.astimezone())
     pages: List[AlbumPage] = []
+    used_names: set[str] = set()
     attempts = 0
     max_attempts = max_export_items * 2
     uuid_like = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.[A-Za-z0-9]+$")
@@ -1637,12 +1671,12 @@ def pages_from_photos_timeline(
         source_kind = media_kind_from_attachment(source, "")
         if source_kind == "video":
             suffix = source.suffix.lower() or ".mov"
-            out_name = f"page_{len(pages)+1:04d}{suffix}"
+            out_name = build_timestamped_output_name(anchor, source.name, suffix, used_names, "video")
             out_path = staging_dir / out_name
             copy_media_to_staging(source, out_path)
             media_kind = "video"
         else:
-            out_name = f"page_{len(pages)+1:04d}.png"
+            out_name = build_timestamped_output_name(anchor, source.name, ".png", used_names, "image")
             out_path = staging_dir / out_name
             convert_to_png(source, out_path)
             media_kind = "image"

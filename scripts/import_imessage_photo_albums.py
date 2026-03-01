@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import datetime as dt
 import glob
 import json
@@ -54,6 +55,15 @@ class AlbumPage:
 
 
 @dataclass
+class GroupedMessage:
+    message_id: int
+    sent_at: dt.datetime
+    is_from_me: int
+    text: str
+    attachments: List[Tuple[Optional[Path], str]]
+
+
+@dataclass
 class CatalogMessage:
     message_row_id: int
     sent_at: dt.datetime
@@ -98,8 +108,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--target-pages", type=int, default=25)
     p.add_argument("--max-export-items", type=int, default=40)
     p.add_argument("--import-source", default="")
-    p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor", "lyra"], default="auto")
+    p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor", "lyra", "all"], default="auto")
+    p.add_argument("--run-all-children", action="store_true")
     p.add_argument("--match-window-hours", type=int, default=72)
+    p.add_argument("--progress-every-messages", type=int, default=0)
     p.add_argument("--max-matched-media-per-message", type=int, default=8)
     p.add_argument("--rebuild-catalog", action="store_true")
     p.add_argument("--rematch-all", action="store_true")
@@ -535,6 +547,48 @@ def build_rich_caption(messages: Sequence[MessageRow], index: int) -> str:
     return f"{speaker} ({stamp}): {text}"
 
 
+def group_messages_by_id(messages: Sequence[MessageRow]) -> List[GroupedMessage]:
+    grouped: Dict[int, GroupedMessage] = {}
+    for row in messages:
+        mid = int(row.message_id)
+        gm = grouped.get(mid)
+        if gm is None:
+            gm = GroupedMessage(
+                message_id=mid,
+                sent_at=row.sent_at,
+                is_from_me=int(row.is_from_me or 0),
+                text=str(row.text or "").strip(),
+                attachments=[],
+            )
+            grouped[mid] = gm
+        if row.sent_at < gm.sent_at:
+            gm.sent_at = row.sent_at
+        if not gm.text and str(row.text or "").strip():
+            gm.text = str(row.text or "").strip()
+        ap = row.attachment_path
+        mime = str(row.attachment_mime or "").strip().lower()
+        key = (str(ap or ""), mime)
+        if str(key[0]).strip() and key not in {(str(x[0] or ""), x[1]) for x in gm.attachments}:
+            gm.attachments.append((ap, mime))
+    return sorted(grouped.values(), key=lambda m: (m.sent_at, m.message_id))
+
+
+def build_grouped_message_caption(msg: GroupedMessage) -> str:
+    speaker = "Jon" if int(msg.is_from_me or 0) else "Trinity"
+    stamp = msg.sent_at.strftime("%I:%M %p").lstrip("0")
+    text = str(msg.text or "").strip() or "(no caption)"
+    image_count = 0
+    video_count = 0
+    for ap, mime in msg.attachments:
+        kind = media_kind_from_attachment(ap, mime)
+        if kind == "image":
+            image_count += 1
+        elif kind == "video":
+            video_count += 1
+    attach_line = f"Attachments referenced: {len(msg.attachments)} total ({image_count} images, {video_count} videos)."
+    return f"{speaker} ({stamp}): {text}\\n{attach_line}"
+
+
 def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 24) -> List[AlbumPage]:
     buckets: Dict[dt.date, Dict[str, Any]] = {}
     for page in pages:
@@ -610,6 +664,114 @@ def photos_export_by_filename(filename: str, out_dir: Path) -> Optional[Path]:
     low = filename.lower()
     fallback = sorted([p for p in out_dir.iterdir() if p.is_file() and p.name.lower() == low], key=lambda p: p.stat().st_mtime, reverse=True)
     return fallback[0] if fallback else None
+
+
+def photos_export_by_filename_nearest_date(filename: str, target_dt: dt.datetime, out_dir: Path) -> Optional[Path]:
+    if not filename:
+        return None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = filename.replace('"', '')
+    out_dir_escaped = str(out_dir).replace('"', '\\"')
+    target_ts = int(target_dt.timestamp())
+    generic_names = {"fullsizerender.heic", "image.heic", "image.jpg", "image.jpeg", "image.png", "video.mov", "video.mp4"}
+    is_generic = target.strip().lower() in generic_names
+    window_seconds = 3 * 24 * 3600
+    script = f'''
+    set outFolder to POSIX file "{out_dir_escaped}"
+    set epochDate to date "January 1, 1970 00:00:00"
+    set targetDate to epochDate + {target_ts}
+    set lowerBound to targetDate - {window_seconds}
+    set upperBound to targetDate + {window_seconds}
+    tell application "Photos"
+      if {"true" if is_generic else "false"} then
+        set matches to every media item whose date ≥ lowerBound and date ≤ upperBound
+      else
+        set matches to every media item whose filename is "{target}" and date ≥ lowerBound and date ≤ upperBound
+        if (count of matches) is 0 then
+          set matches to every media item whose filename is "{target}"
+        end if
+      end if
+      if (count of matches) is 0 then
+        return ""
+      end if
+      set bestItem to item 1 of matches
+      set bestDelta to 999999999
+      repeat with m in matches
+        try
+          set d to date of m
+          set delta to d - targetDate
+          if delta < 0 then
+            set delta to delta * -1
+          end if
+          if delta < bestDelta then
+            set bestDelta to delta
+            set bestItem to m
+          end if
+        end try
+      end repeat
+      export {{bestItem}} to outFolder with using originals
+    end tell
+    '''
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if proc.returncode != 0:
+        return None
+    low = filename.lower()
+    candidates = sorted(
+        [p for p in out_dir.iterdir() if p.is_file() and (p.name.lower() == low or p.name.lower().startswith(Path(filename).stem.lower()))],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def photos_export_by_asset_id(asset_uuid: str, out_dir: Path) -> Optional[Path]:
+    asset_uuid = str(asset_uuid or "").strip()
+    if not asset_uuid:
+        return None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir_escaped = str(out_dir).replace('"', '\\"')
+    # Photos media-item ids are typically "<UUID>/L0/001".
+    item_id = f"{asset_uuid}/L0/001"
+    script = f'''
+    set outFolder to POSIX file "{out_dir_escaped}"
+    tell application "Photos"
+      set matches to every media item whose id is "{item_id}"
+      if (count of matches) is 0 then
+        return ""
+      end if
+      export {{item 1 of matches}} to outFolder with using originals
+    end tell
+    '''
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if proc.returncode != 0:
+        return None
+    # Most reliable post-export lookup: prefix on UUID.
+    candidates = sorted(
+        [p for p in out_dir.iterdir() if p.is_file() and p.name.upper().startswith(asset_uuid.upper())],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if candidates:
+        return candidates[0]
+    return None
 
 
 def convert_to_png(source_path: Path, out_path: Path) -> None:
@@ -756,7 +918,7 @@ def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
 
 def resolve_focus_person(focus_person: str, album_title_prefix: str) -> str:
     focus = (focus_person or "auto").strip().lower()
-    if focus in {"violet", "eleanor", "lyra", "any"}:
+    if focus in {"violet", "eleanor", "lyra", "any", "all"}:
         return focus
     title = (album_title_prefix or "").strip().lower()
     if "violet" in title:
@@ -775,13 +937,135 @@ def build_import_source_key(args: argparse.Namespace, focus: str) -> str:
     return f"imessage-{contact}-{focus}"[:180]
 
 
+def source_key_for_focus(args: argparse.Namespace, focus: str) -> str:
+    base = build_import_source_key(args, focus)
+    if str(args.import_source or "").strip() and focus != resolve_focus_person(args.focus_person, args.album_title_prefix):
+        return f"{base}-{focus}"[:180]
+    return base
+
+
+def state_file_token(source_key: str) -> str:
+    return re.sub(r"[^a-z0-9._-]+", "-", str(source_key or "import").strip().lower())[:180] or "import"
+
+
+def timeline_state_path(source_key: str) -> Path:
+    state_dir = Path(".local/state")
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / f"photos_timeline_state_{state_file_token(source_key)}.json"
+
+
+def timeline_progress_snapshot_path(source_key: str) -> Path:
+    state_dir = Path(".local/state")
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / f"photos_timeline_progress_{state_file_token(source_key)}.json"
+
+
+def timeline_progress_history_path(source_key: str) -> Path:
+    state_dir = Path(".local/state")
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / f"photos_timeline_progress_{state_file_token(source_key)}.ndjson"
+
+
+def write_timeline_progress(
+    source_key: str,
+    payload: Dict[str, Any],
+    append_history: bool = True,
+) -> None:
+    snapshot_path = timeline_progress_snapshot_path(source_key)
+    history_path = timeline_progress_history_path(source_key)
+    body = dict(payload)
+    body["updated_at"] = dt.datetime.now().isoformat()
+    tmp_path = snapshot_path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(body, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
+    tmp_path.replace(snapshot_path)
+    if append_history:
+        with history_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(body, ensure_ascii=True, sort_keys=True))
+            fh.write("\n")
+
+
+def load_timeline_state(state_path: Path) -> Dict[str, Any]:
+    if not state_path.exists():
+        return {}
+    try:
+        raw = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return raw
+
+
+def save_timeline_state(state_path: Path, state: Dict[str, Any]) -> None:
+    state["updated_at"] = dt.datetime.now().isoformat()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def normalize_timeline_state(
+    state: Dict[str, Any],
+    source_key: str,
+    focus_person: str,
+    start_date: dt.date,
+    end_date: Optional[dt.date],
+    staging_dir: Path,
+    reset: bool,
+) -> Dict[str, Any]:
+    expected = {
+        "state_version": 1,
+        "source_key": source_key,
+        "focus_person": focus_person,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat() if end_date else "",
+    }
+    if reset or not state:
+        state = {}
+    elif (
+        state.get("state_version") != expected["state_version"]
+        or str(state.get("source_key") or "") != expected["source_key"]
+        or str(state.get("focus_person") or "") != expected["focus_person"]
+        or str(state.get("start_date") or "") != expected["start_date"]
+        or str(state.get("end_date") or "") != expected["end_date"]
+    ):
+        state = {}
+
+    merged: Dict[str, Any] = dict(expected)
+    merged["created_at"] = str(state.get("created_at") or dt.datetime.now().isoformat())
+    merged["last_processed_message_id"] = int(state.get("last_processed_message_id") or 0)
+    merged["used_asset_ids"] = [int(x) for x in state.get("used_asset_ids", []) if str(x).strip().isdigit()]
+    merged["failed_asset_ids"] = [int(x) for x in state.get("failed_asset_ids", []) if str(x).strip().isdigit()]
+    merged["failed_export_keys"] = [str(x) for x in state.get("failed_export_keys", []) if str(x).strip()]
+
+    staged_by_asset_id: Dict[str, str] = {}
+    for k, v in dict(state.get("staged_media_by_asset_id", {})).items():
+        name = str(v or "").strip()
+        if not name:
+            continue
+        if (staging_dir / name).exists():
+            staged_by_asset_id[str(int(k)) if str(k).isdigit() else str(k)] = name
+    merged["staged_media_by_asset_id"] = staged_by_asset_id
+
+    staged_by_attachment_path: Dict[str, str] = {}
+    for k, v in dict(state.get("staged_media_by_attachment_path", {})).items():
+        src = str(k or "").strip()
+        name = str(v or "").strip()
+        if not src or not name:
+            continue
+        if (staging_dir / name).exists():
+            staged_by_attachment_path[src] = name
+    merged["staged_media_by_attachment_path"] = staged_by_attachment_path
+    return merged
+
+
 def filter_assets_for_focus(assets: Sequence[PhotoAsset], focus_person: str, violet_id: int, eleanor_id: int, lyra_id: int) -> List[PhotoAsset]:
     focus = (focus_person or "").strip().lower()
     if focus == "violet":
         return [asset for asset in assets if int(violet_id) in asset.person_ids]
     if focus == "eleanor":
         return [asset for asset in assets if int(eleanor_id) in asset.person_ids]
-    if focus == "lyra" and int(lyra_id) > 0:
+    if focus == "lyra":
+        if int(lyra_id) <= 0:
+            return []
         return [asset for asset in assets if int(lyra_id) in asset.person_ids]
     return list(assets)
 
@@ -1687,72 +1971,206 @@ def pages_from_photos_timeline(
     end_date: Optional[dt.date],
     staging_dir: Path,
     max_export_items: int,
-) -> List[AlbumPage]:
+    match_window_hours: int,
+    timeline_state: Dict[str, Any],
+    state_path: Path,
+    source_key: str,
+    focus_person: str,
+    progress_every_messages: int,
+) -> Tuple[List[AlbumPage], int]:
     export_dir = Path(".local/state/photos_timeline_exports")
     export_dir.mkdir(parents=True, exist_ok=True)
 
     candidates = [a for a in assets if a.date_created and a.date_created.date() >= start_date and (end_date is None or a.date_created.date() <= end_date)]
-    candidates.sort(key=lambda a: a.date_created or dt.datetime.min.astimezone())
-    pages: List[AlbumPage] = []
-    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
-    attempts = 0
-    max_attempts = max_export_items * 2
-    uuid_like = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.[A-Za-z0-9]+$")
+    candidates.sort(key=lambda a: a.date_created or dt.datetime.min)
+    grouped_messages = group_messages_by_id(messages)
+    if not grouped_messages:
+        return [], int(timeline_state.get("last_processed_message_id") or 0)
 
+    candidate_times: List[float] = []
     for asset in candidates:
-        if len(pages) >= max_export_items:
-            break
-        if attempts >= max_attempts:
-            break
-        source: Optional[Path] = None
-        preferred_names: List[str] = []
-        for name in [asset.original_filename, asset.filename]:
-            if not name:
-                continue
-            if uuid_like.match(name):
-                continue
-            preferred_names.append(name)
-        if not preferred_names:
-            continue
-        for name in preferred_names:
-            attempts += 1
-            if attempts % 10 == 0:
-                print(f"photos_timeline progress: attempted {attempts} exports, built {len(pages)} page(s)...")
-            exported = photos_export_by_filename(name, export_dir)
-            if exported and exported.exists():
-                source = exported
-                break
-        if source is None:
-            continue
+        dtv = asset.date_created or dt.datetime.now()
+        candidate_times.append(float(dtv.timestamp()))
 
-        anchor = asset.date_created or dt.datetime.now().astimezone()
-        nearest_idx = 0
-        nearest_delta = None
-        for i, msg in enumerate(messages):
-            d = abs((msg.sent_at - anchor).total_seconds())
-            if nearest_delta is None or d < nearest_delta:
-                nearest_delta = d
-                nearest_idx = i
-        caption = build_rich_caption(messages, nearest_idx) if messages else "(no caption)"
+    used_asset_ids: set[int] = {int(x) for x in timeline_state.get("used_asset_ids", []) if str(x).strip().isdigit()}
+    failed_asset_ids: set[int] = {int(x) for x in timeline_state.get("failed_asset_ids", []) if str(x).strip().isdigit()}
+    failed_export_keys: set[str] = {str(x) for x in timeline_state.get("failed_export_keys", []) if str(x).strip()}
+    staged_by_asset_id: Dict[str, str] = dict(timeline_state.get("staged_media_by_asset_id", {}))
+    staged_by_attachment_path: Dict[str, str] = dict(timeline_state.get("staged_media_by_attachment_path", {}))
+    last_processed_message_id = int(timeline_state.get("last_processed_message_id") or 0)
+    export_cache: Dict[str, Path] = {}
+    remaining_messages = [m for m in grouped_messages if int(m.message_id) > int(last_processed_message_id)]
+    total_messages = len(remaining_messages)
+    total_messages_with_attachments = sum(1 for m in remaining_messages if len(m.attachments) > 0)
+    auto_progress_every = max(50, min(500, max(1, total_messages // 200))) if total_messages > 0 else 50
+    progress_interval = int(progress_every_messages) if int(progress_every_messages or 0) > 0 else int(auto_progress_every)
+    progress_interval = max(10, progress_interval)
+    print(f"Progress file: {timeline_progress_snapshot_path(source_key)}")
+    print(f"Progress interval: every {progress_interval} messages")
 
-        capture_ts = media_capture_datetime(source, anchor)
-        source_kind = media_kind_from_attachment(source, "")
-        if source_kind == "video":
-            suffix = source.suffix.lower() or ".mov"
-            out_name = build_timestamped_output_name(capture_ts, source.name, suffix, used_names, "video")
-            out_path = staging_dir / out_name
-            copy_media_to_staging(source, out_path)
-            media_kind = "video"
+    pages: List[AlbumPage] = []
+    attempts = 0
+    processed_messages = 0
+    processed_messages_with_attachments = 0
+    used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
+    window_secs = max(1, int(match_window_hours)) * 3600
+
+    def emit_progress(status: str, force: bool = False) -> None:
+        if total_messages <= 0:
+            pct = 100.0
         else:
-            out_name = build_timestamped_output_name(capture_ts, source.name, ".png", used_names, "image")
-            out_path = staging_dir / out_name
-            convert_to_png(source, out_path)
-            media_kind = "image"
-        pages.append(AlbumPage(sent_at=capture_ts, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, media_kind)]))
-        if len(pages) % 5 == 0:
-            print(f"photos_timeline progress: exported {len(pages)} page(s)...")
+            pct = (float(processed_messages) / float(total_messages)) * 100.0
+        payload = {
+            "status": status,
+            "source_key": source_key,
+            "focus_person": focus_person,
+            "progress_interval_messages": int(progress_interval),
+            "total_messages": int(total_messages),
+            "total_messages_with_attachments": int(total_messages_with_attachments),
+            "processed_messages": int(processed_messages),
+            "processed_messages_with_attachments": int(processed_messages_with_attachments),
+            "percent_complete": round(pct, 3),
+            "pages_built": int(len(pages)),
+            "exports_attempted": int(attempts),
+            "last_processed_message_id": int(last_processed_message_id),
+        }
+        write_timeline_progress(source_key, payload, append_history=bool(force or (processed_messages % progress_interval == 0)))
 
-    return aggregate_album_pages_by_day(pages)
+    emit_progress("running", force=True)
+    try:
+        for msg in remaining_messages:
+            if len(pages) >= max_export_items:
+                break
+            if not msg.attachments:
+                last_processed_message_id = max(last_processed_message_id, int(msg.message_id))
+                processed_messages += 1
+                timeline_state["last_processed_message_id"] = int(last_processed_message_id)
+                if processed_messages % 200 == 0:
+                    save_timeline_state(state_path, timeline_state)
+                if processed_messages % progress_interval == 0:
+                    emit_progress("running")
+                continue
+            processed_messages_with_attachments += 1
+            attachment_refs = [(ap, mime) for ap, mime in msg.attachments if media_kind_from_attachment(ap, mime) in {"image", "video"}]
+            expected = max(1, min(len(attachment_refs) if attachment_refs else len(msg.attachments) or 1, 12))
+            ts = float(msg.sent_at.timestamp())
+
+            page_media: List[Tuple[str, str, str]] = []
+
+            # Fast path: direct iMessage attachments are highest confidence and avoid Photos export latency.
+            for ap, mime in attachment_refs:
+                if ap is None or not ap.exists():
+                    continue
+                source = ap
+                src_key = str(source.resolve())
+                existing_name = str(staged_by_attachment_path.get(src_key) or "").strip()
+                if existing_name and (staging_dir / existing_name).exists():
+                    out_name = existing_name
+                else:
+                    capture_ts = media_capture_datetime(source, msg.sent_at)
+                    source_kind = media_kind_from_attachment(source, mime)
+                    ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
+                    out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
+                    copy_media_to_staging(source, staging_dir / out_name)
+                    staged_by_attachment_path[src_key] = out_name
+                media_kind = media_kind_from_attachment(source, mime)
+                page_media.append((f"/photo_albums/{out_name}", source.name, media_kind))
+                if len(page_media) >= expected:
+                    break
+
+            remaining = max(0, expected - len(page_media))
+            if remaining > 0:
+                lo = bisect.bisect_left(candidate_times, ts - window_secs)
+                hi = bisect.bisect_right(candidate_times, ts + window_secs)
+                nearby: List[PhotoAsset] = []
+                for idx in range(lo, hi):
+                    asset = candidates[idx]
+                    aid = int(asset.asset_id)
+                    if aid in used_asset_ids:
+                        continue
+                    if aid in failed_asset_ids:
+                        continue
+                    nearby.append(asset)
+                nearby.sort(key=lambda a: abs(float((a.date_created or msg.sent_at).timestamp()) - ts))
+
+                for asset in nearby:
+                    if remaining <= 0:
+                        break
+                    source: Optional[Path] = None
+                    attempts += 1
+                    if attempts % 10 == 0:
+                        print(f"photos_timeline progress: attempted {attempts} exports, built {len(pages)} page(s)...")
+
+                    aid_str = str(int(asset.asset_id))
+                    existing_name = str(staged_by_asset_id.get(aid_str) or "").strip()
+                    if existing_name and (staging_dir / existing_name).exists():
+                        out_name = existing_name
+                        media_kind = media_kind_from_attachment(staging_dir / out_name, "")
+                        page_media.append((f"/photo_albums/{out_name}", asset.original_filename or asset.filename or out_name, media_kind))
+                        used_asset_ids.add(int(asset.asset_id))
+                        remaining -= 1
+                        continue
+
+                    target_dt = asset.date_created or msg.sent_at
+                    export_key = f"{(asset.original_filename or asset.filename).lower()}|{target_dt.strftime('%Y%m%d%H%M')}"
+                    if export_key in failed_export_keys:
+                        continue
+                    if export_key in export_cache and export_cache[export_key].exists():
+                        source = export_cache[export_key]
+                    else:
+                        exported = photos_export_by_filename_nearest_date(asset.original_filename or asset.filename, target_dt, export_dir)
+                        if exported and exported.exists():
+                            source = exported
+                            export_cache[export_key] = exported
+                    if source is None:
+                        failed_asset_ids.add(int(asset.asset_id))
+                        failed_export_keys.add(export_key)
+                        continue
+
+                    capture_ts = media_capture_datetime(source, asset.date_created or msg.sent_at)
+                    source_kind = media_kind_from_attachment(source, "")
+                    ext = source.suffix.lower() or (".mov" if source_kind == "video" else ".heic")
+                    out_name = build_timestamped_output_name(capture_ts, source.name, ext, used_names, source_kind)
+                    copy_media_to_staging(source, staging_dir / out_name)
+                    media_kind = "video" if source_kind == "video" else "image"
+                    page_media.append((f"/photo_albums/{out_name}", source.name, media_kind))
+                    used_asset_ids.add(int(asset.asset_id))
+                    staged_by_asset_id[aid_str] = out_name
+                    remaining -= 1
+
+            last_processed_message_id = max(last_processed_message_id, int(msg.message_id))
+            processed_messages += 1
+            timeline_state["last_processed_message_id"] = int(last_processed_message_id)
+            timeline_state["used_asset_ids"] = sorted(int(x) for x in used_asset_ids)
+            timeline_state["failed_asset_ids"] = sorted(int(x) for x in failed_asset_ids)
+            timeline_state["failed_export_keys"] = sorted(failed_export_keys)
+            timeline_state["staged_media_by_asset_id"] = staged_by_asset_id
+            timeline_state["staged_media_by_attachment_path"] = staged_by_attachment_path
+            if processed_messages % 20 == 0:
+                save_timeline_state(state_path, timeline_state)
+            if processed_messages % progress_interval == 0:
+                emit_progress("running")
+
+            if not page_media:
+                continue
+            caption = build_grouped_message_caption(msg)
+            pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=page_media))
+            if len(pages) % 5 == 0:
+                print(f"photos_timeline progress: exported {len(pages)} page(s)...")
+                emit_progress("running")
+    except Exception:
+        emit_progress("failed", force=True)
+        raise
+
+    timeline_state["last_processed_message_id"] = int(last_processed_message_id)
+    timeline_state["used_asset_ids"] = sorted(int(x) for x in used_asset_ids)
+    timeline_state["failed_asset_ids"] = sorted(int(x) for x in failed_asset_ids)
+    timeline_state["failed_export_keys"] = sorted(failed_export_keys)
+    timeline_state["staged_media_by_asset_id"] = staged_by_asset_id
+    timeline_state["staged_media_by_attachment_path"] = staged_by_attachment_path
+    save_timeline_state(state_path, timeline_state)
+    emit_progress("completed", force=True)
+    return pages, int(last_processed_message_id)
 
 
 def main() -> None:
@@ -1800,110 +2218,160 @@ def main() -> None:
         photos_conn.close()
 
     focus_person = resolve_focus_person(args.focus_person, args.album_title_prefix)
-    source_key = build_import_source_key(args, focus_person)
-    print(f"Focus person: {focus_person}")
-    print(f"Catalog source key: {source_key}")
+    focus_sequence: List[str]
+    if args.run_all_children or focus_person == "all":
+        focus_sequence = ["violet", "eleanor", "lyra"]
+    else:
+        focus_sequence = [focus_person]
+    if int(lyra_id) <= 0:
+        focus_sequence = [f for f in focus_sequence if f != "lyra"]
 
     contact_handles = discover_contact_handles(args.contact)
-    messages: List[MessageRow] = []
-    pages: List[AlbumPage] = []
-    if args.mode == "catalog_match":
-        violet_face_names, eleanor_face_names, lyra_face_names = build_face_filename_sets(assets, violet_id, eleanor_id, lyra_id)
-        conn = build_mysql_connection_from_env()
+    print(f"Focus run order: {', '.join(focus_sequence)}")
+
+    total_pages = 0
+    for active_focus in focus_sequence:
+        source_key = source_key_for_focus(args, active_focus)
+        album_title_prefix = args.album_title_prefix
+        if len(focus_sequence) > 1 and active_focus not in album_title_prefix.lower():
+            album_title_prefix = f"{args.album_title_prefix} {active_focus.capitalize()}".strip()
+
+        print("")
+        print(f"=== Running focus: {active_focus} ===")
+        print(f"Catalog source key: {source_key}")
+
+        messages: List[MessageRow] = []
+        pages: List[AlbumPage] = []
+
+        if args.mode == "catalog_match":
+            violet_face_names, eleanor_face_names, lyra_face_names = build_face_filename_sets(assets, violet_id, eleanor_id, lyra_id)
+            conn = build_mysql_connection_from_env()
+            try:
+                with conn.cursor() as cur:
+                    ensure_album_permissions_table(cur)
+                    ensure_album_import_tables(cur)
+                    checkpoint = checkpoint_get(cur, source_key)
+                    min_message_id = 0 if args.rebuild_catalog else int(checkpoint["last_message_id"])
+                    messages = load_messages(
+                        messages_db,
+                        args.contact,
+                        args.years,
+                        contact_handles,
+                        start_date,
+                        end_date,
+                        min_message_id=min_message_id,
+                    )
+                    print(f"Loaded {len(messages)} new/updated message rows from iMessage DB (min_message_id={min_message_id}).")
+                    ingested_messages, highest_message_id = ingest_messages_into_catalog(
+                        cur,
+                        source_key,
+                        messages,
+                        violet_face_names,
+                        eleanor_face_names,
+                        lyra_face_names,
+                        rebuild_catalog=bool(args.rebuild_catalog),
+                    )
+                    print(f"Ingested {ingested_messages} message records into MySQL catalog.")
+                    checkpoint_upsert(
+                        cur,
+                        source_key,
+                        max(int(checkpoint["last_message_id"]), int(highest_message_id)),
+                        int(checkpoint["last_matched_message_id"]),
+                    )
+
+                    min_match_message_id = 0 if args.rematch_all else int(checkpoint["last_matched_message_id"])
+                    matched_count = run_catalog_matching(
+                        cur,
+                        source_key,
+                        active_focus,
+                        match_window_hours=max(1, int(args.match_window_hours)),
+                        max_matched_media_per_message=max(1, int(args.max_matched_media_per_message)),
+                        min_message_row_id=min_match_message_id,
+                    )
+                    print(f"Catalog matching linked {matched_count} media items to messages.")
+                    pages = build_pages_from_catalog(cur, source_key, staging_dir)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+        elif args.mode == "photos_timeline":
+            state_path = timeline_state_path(source_key)
+            timeline_state = normalize_timeline_state(
+                load_timeline_state(state_path),
+                source_key=source_key,
+                focus_person=active_focus,
+                start_date=start_date,
+                end_date=end_date,
+                staging_dir=staging_dir,
+                reset=bool(args.rematch_all),
+            )
+            min_message_id = 0 if args.rematch_all else int(timeline_state.get("last_processed_message_id") or 0)
+            messages = load_messages(
+                messages_db,
+                args.contact,
+                args.years,
+                contact_handles,
+                start_date,
+                end_date,
+                min_message_id=min_message_id,
+            )
+            print(f"Loaded {len(messages)} messages in window (min_message_id={min_message_id}).")
+            timeline_assets = filter_assets_for_focus(assets, active_focus, violet_id, eleanor_id, lyra_id)
+            print(f"Photos timeline assets after focus filter: {len(timeline_assets)}")
+            pages, last_processed_message_id = pages_from_photos_timeline(
+                photos_db,
+                timeline_assets,
+                messages,
+                start_date,
+                end_date,
+                staging_dir,
+                max_export_items=max(1, min(args.max_export_items, args.max_pages)),
+                match_window_hours=max(1, int(args.match_window_hours)),
+                timeline_state=timeline_state,
+                state_path=state_path,
+                source_key=source_key,
+                focus_person=active_focus,
+                progress_every_messages=max(0, int(args.progress_every_messages)),
+            )
+            print(f"Updated timeline checkpoint to message_id={last_processed_message_id} for focus '{active_focus}'.")
+        else:
+            messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
+            print(f"Loaded {len(messages)} messages in window.")
+            pages = pages_from_attachment_match(messages, staging_dir)
+
+        if not pages:
+            print(f"No new pages produced for focus '{active_focus}'.")
+            continue
+
+        sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
+        batches: List[List[AlbumPage]] = []
+        offset = 0
+        for size in sizes:
+            batches.append(pages[offset: offset + size])
+            offset += size
+        print(f"Generated {len(batches)} album(s): {[len(b) for b in batches]} pages each")
+        total_pages += len(pages)
+
+        if args.dry_run:
+            print("Dry run enabled: skipping upload")
+            continue
+
+        created_by_user_id = int(os.environ.get("CATN8_ALBUM_CREATED_BY_USER_ID", "1"))
         try:
-            with conn.cursor() as cur:
-                ensure_album_permissions_table(cur)
-                ensure_album_import_tables(cur)
-                checkpoint = checkpoint_get(cur, source_key)
-                min_message_id = 0 if args.rebuild_catalog else int(checkpoint["last_message_id"])
-                messages = load_messages(
-                    messages_db,
-                    args.contact,
-                    args.years,
-                    contact_handles,
-                    start_date,
-                    end_date,
-                    min_message_id=min_message_id,
-                )
-                print(f"Loaded {len(messages)} new/updated message rows from iMessage DB (min_message_id={min_message_id}).")
-                ingested_messages, highest_message_id = ingest_messages_into_catalog(
-                    cur,
-                    source_key,
-                    messages,
-                    violet_face_names,
-                    eleanor_face_names,
-                    lyra_face_names,
-                    rebuild_catalog=bool(args.rebuild_catalog),
-                )
-                print(f"Ingested {ingested_messages} message records into MySQL catalog.")
-                checkpoint_upsert(
-                    cur,
-                    source_key,
-                    max(int(checkpoint["last_message_id"]), int(highest_message_id)),
-                    int(checkpoint["last_matched_message_id"]),
-                )
+            upload_albums(batches, album_title_prefix, created_by_user_id, args.disable_ai)
+            print("Upload complete via direct MySQL connection.")
+        except Exception as mysql_error:
+            print(f"Direct MySQL failed ({mysql_error}); trying maintenance API fallback...")
+            rows = build_album_rows(batches, album_title_prefix, args.disable_ai)
+            sql_text = build_sql_for_album_rows(rows, created_by_user_id)
+            upload_sql_via_maintenance_api(sql_text)
+            print("Upload complete via maintenance API SQL restore.")
 
-                min_match_message_id = 0 if args.rematch_all else int(checkpoint["last_matched_message_id"])
-                matched_count = run_catalog_matching(
-                    cur,
-                    source_key,
-                    focus_person,
-                    match_window_hours=max(1, int(args.match_window_hours)),
-                    max_matched_media_per_message=max(1, int(args.max_matched_media_per_message)),
-                    min_message_row_id=min_match_message_id,
-                )
-                print(f"Catalog matching linked {matched_count} media items to messages.")
-                pages = build_pages_from_catalog(cur, source_key, staging_dir)
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-    elif args.mode == "photos_timeline":
-        messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
-        print(f"Loaded {len(messages)} messages in window.")
-        timeline_assets = filter_assets_for_focus(assets, focus_person, violet_id, eleanor_id, lyra_id)
-        print(f"Photos timeline assets after focus filter: {len(timeline_assets)}")
-        pages = pages_from_photos_timeline(
-            photos_db,
-            timeline_assets,
-            messages,
-            start_date,
-            end_date,
-            staging_dir,
-            max_export_items=max(1, min(args.max_export_items, args.max_pages)),
-        )
-    else:
-        messages = load_messages(messages_db, args.contact, args.years, contact_handles, start_date, end_date)
-        print(f"Loaded {len(messages)} messages in window.")
-        pages = pages_from_attachment_match(messages, staging_dir)
-
-    if not pages:
-        raise RuntimeError("No pages produced. For catalog_match, check catalog table content and face filtering. For photos_timeline, ensure Photos can export originals for this date window.")
-
-    sizes = chunk_sizes(len(pages), args.min_pages, args.max_pages, args.target_pages)
-    batches: List[List[AlbumPage]] = []
-    offset = 0
-    for size in sizes:
-        batches.append(pages[offset: offset + size])
-        offset += size
-    print(f"Generated {len(batches)} album(s): {[len(b) for b in batches]} pages each")
-
-    if args.dry_run:
-        print("Dry run enabled: skipping upload")
+    if total_pages <= 0:
+        print("No new pages were produced in this run. Existing checkpoints/state are up to date.")
         return
-
-    created_by_user_id = int(os.environ.get("CATN8_ALBUM_CREATED_BY_USER_ID", "1"))
-    try:
-        upload_albums(batches, args.album_title_prefix, created_by_user_id, args.disable_ai)
-        print("Upload complete via direct MySQL connection.")
-    except Exception as mysql_error:
-        print(f"Direct MySQL failed ({mysql_error}); trying maintenance API fallback...")
-        rows = build_album_rows(batches, args.album_title_prefix, args.disable_ai)
-        sql_text = build_sql_for_album_rows(rows, created_by_user_id)
-        upload_sql_via_maintenance_api(sql_text)
-        print("Upload complete via maintenance API SQL restore.")
 
 
 if __name__ == "__main__":

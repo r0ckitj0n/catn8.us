@@ -87,6 +87,13 @@ SKIP_TYPECHECK="${CATN8_SKIP_TYPECHECK:-0}"
 PURGE="${CATN8_PURGE_REMOTE:-0}"
 STRICT_VERIFY="${CATN8_STRICT_VERIFY:-0}"
 UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
+# Comma-separated image glob paths under images/ to exclude from uploads in preserve mode.
+# Defaults target directories commonly populated by live AI/user tooling.
+IMAGE_SYNC_EXCLUDE_GLOBS="${CATN8_IMAGE_SYNC_EXCLUDE_GLOBS:-images/mystery/**,images/build-wizard/**,images/wordsearch/**,images/backgrounds/**}"
+# Pull missing files from LIVE after deploy so local has a backup of live-only assets.
+PULL_MISSING_FROM_LIVE="${CATN8_PULL_MISSING_FROM_LIVE:-1}"
+# Comma-separated remote roots to pull missing files for (safe default: images only).
+PULL_MISSING_PATHS="${CATN8_PULL_MISSING_PATHS:-images}"
 # Default safety: never delete anything under images/** on the remote.
 PRESERVE_IMAGES=1
 PURGE_IMAGES=0
@@ -568,6 +575,16 @@ EOL
   # In preserve-images mode, publish new/updated images without deleting remote files.
   if [ "$MODE" != "dist-only" ] && [ "$PRESERVE_IMAGES" = "1" ]; then
     echo -e "${GREEN}🖼️  Syncing images (upload/update only, no deletes)...${NC}"
+    IMAGE_EXCLUDE_ARGS=""
+    if [ -n "${IMAGE_SYNC_EXCLUDE_GLOBS}" ]; then
+      IFS=',' read -r -a IMAGE_EXCLUDES_ARR <<< "${IMAGE_SYNC_EXCLUDE_GLOBS}"
+      for ex in "${IMAGE_EXCLUDES_ARR[@]}"; do
+        ex_trimmed="$(echo "$ex" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        if [ -n "$ex_trimmed" ]; then
+          IMAGE_EXCLUDE_ARGS="${IMAGE_EXCLUDE_ARGS}\n  --exclude-glob \"${ex_trimmed}\" \\"
+        fi
+      done
+    fi
     cat > deploy_images.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
@@ -575,6 +592,7 @@ set cmd:fail-exit yes
 ${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --reverse --verbose --only-newer --ignore-time --no-perms \
+$(printf "%b" "${IMAGE_EXCLUDE_ARGS}")
   images images
 bye
 EOL
@@ -768,6 +786,38 @@ else
   echo -e "${YELLOW}⚠️  Logo image returned HTTP code: $HTTP_CODE${NC}"
 fi
 
+# Optional: pull files that exist on LIVE but are missing locally (never overwrite local files).
+if [ "${PULL_MISSING_FROM_LIVE}" = "1" ] && [ "$MODE" != "env-only" ]; then
+  echo -e "${GREEN}⬇️  Pulling live-only files to local backup (missing files only)...${NC}"
+  PULL_LIST="${PULL_MISSING_PATHS}"
+  IFS=',' read -r -a PULL_PATHS_ARR <<< "${PULL_LIST}"
+  for pull_path in "${PULL_PATHS_ARR[@]}"; do
+    pull_trimmed="$(echo "$pull_path" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    if [ -z "$pull_trimmed" ]; then
+      continue
+    fi
+    echo -e "${GREEN}   • Pull missing from /${pull_trimmed}${NC}"
+    cat > pull_missing_live.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
+open sftp://$USER:$PASS@$HOST
+mirror --verbose --only-missing --no-perms \
+  ${pull_trimmed} ${pull_trimmed}
+bye
+EOL
+    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+      echo -e "${YELLOW}DRY-RUN: Skipping pull-missing for ${pull_trimmed}${NC}"
+    elif lftp -f pull_missing_live.txt; then
+      echo -e "${GREEN}✅ Pulled missing files for ${pull_trimmed}${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Pull-missing failed for ${pull_trimmed}; continuing${NC}"
+    fi
+    rm -f pull_missing_live.txt
+  done
+fi
+
 # Final summary
 echo -e "\n${GREEN}📊 Fast Deployment Summary:${NC}"
 echo -e "  • Files: ✅ Deployed to server"
@@ -779,6 +829,11 @@ else
 fi
 [ "$PURGE" = "1" ] && echo -e "  • Remote Purge: 🔥 Performed (managed directories)"
 echo -e "  • Verification: ✅ Completed"
+if [ "${PULL_MISSING_FROM_LIVE}" = "1" ] && [ "$MODE" != "env-only" ]; then
+  echo -e "  • Local Backup Pull: ✅ Missing files pulled from LIVE (${PULL_MISSING_PATHS})"
+else
+  echo -e "  • Local Backup Pull: ⏭️  Skipped"
+fi
 
 echo -e "\n${GREEN}🎉 Fast deployment completed!${NC}"
 echo -e "${YELLOW}💡 Use ./deploy_full.sh when you need to update the database${NC}"

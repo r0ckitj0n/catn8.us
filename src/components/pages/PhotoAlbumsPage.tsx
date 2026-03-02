@@ -16,6 +16,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const selectedAlbumSummary = toPhotoAlbumDisplaySummary(selectedAlbum?.summary || '');
   const selectedAlbumId = Number(selectedAlbum?.id || 0);
   const selectedPageFavorite = selectedAlbumId > 0 ? state.isPageFavorite(selectedAlbumId, state.pageIndex) : false;
+  const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(selectedAlbum);
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
@@ -73,8 +74,8 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
 
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
-      <section className="section catn8-photo-albums-page">
-        <div className="container">
+      <section className={isAlbumViewerOpen ? 'section catn8-photo-albums-page catn8-photo-albums-page--viewer' : 'section catn8-photo-albums-page'}>
+        <div className={isAlbumViewerOpen ? 'container catn8-photo-albums-container--viewer' : 'container'}>
           {state.loading ? <div className="catn8-card p-4 mt-3">Loading albums...</div> : null}
 
           {!state.loading && !state.showAlbumViewer ? (
@@ -145,7 +146,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           ) : null}
 
           {!state.loading && state.showAlbumViewer && selectedAlbum ? (
-            <div className={isFullscreen ? 'catn8-photo-albums-main is-fullscreen' : 'catn8-photo-albums-main'}>
+            <div className={isFullscreen ? 'catn8-photo-albums-main catn8-photo-albums-main--viewer is-fullscreen' : 'catn8-photo-albums-main catn8-photo-albums-main--viewer'}>
               {!isFullscreen ? (
                 <div className="catn8-album-toolbar catn8-card">
                   <div className="catn8-album-toolbar-title-row">

@@ -72,7 +72,7 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
           </div>
         </div>
-        <div className="catn8-element-viewer-body">
+        <div className={target.type === 'media' ? 'catn8-element-viewer-body catn8-element-viewer-body-media' : 'catn8-element-viewer-body'}>
           {target.type === 'media' && activeMedia ? (
             isVideoMedia(activeMedia.src, activeMedia.mediaType) ? (
               <video className="catn8-element-viewer-media" src={activeMedia.src} controls autoPlay preload="metadata" />

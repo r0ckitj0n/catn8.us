@@ -816,8 +816,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-element-viewer-body-media {
-  padding: 0.35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
   overflow: hidden;
+  align-items: stretch;
+  justify-content: center;
 }
 
 .catn8-element-viewer-media-wrap {

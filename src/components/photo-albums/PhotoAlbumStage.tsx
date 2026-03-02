@@ -588,10 +588,16 @@ function constrainLayout(item: LayoutItem, constraints: LayoutConstraints): Layo
   const itemMaxX = Number.isFinite(item.maxX) ? Number(item.maxX) : constraints.maxX;
   const itemMinY = Number.isFinite(item.minY) ? Number(item.minY) : constraints.minY;
   const itemMaxY = Number.isFinite(item.maxY) ? Number(item.maxY) : constraints.maxY;
-  const maxX = Math.max(itemMinX, itemMaxX - item.w);
-  const maxY = Math.max(itemMinY, itemMaxY - item.h);
+  const laneWidth = Math.max(1, itemMaxX - itemMinX);
+  const laneHeight = Math.max(1, itemMaxY - itemMinY);
+  const fittedW = Math.min(item.w, laneWidth);
+  const fittedH = Math.min(item.h, laneHeight);
+  const maxX = Math.max(itemMinX, itemMaxX - fittedW);
+  const maxY = Math.max(itemMinY, itemMaxY - fittedH);
   const bounded = {
     ...item,
+    w: fittedW,
+    h: fittedH,
     x: clamp(item.x, itemMinX, maxX),
     y: clamp(item.y, itemMinY, maxY),
   };

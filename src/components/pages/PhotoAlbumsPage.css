@@ -857,8 +857,8 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   align-items: center;
   justify-content: center;
   z-index: 3;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   transition: opacity 140ms ease, background-color 140ms ease;
 }
 
@@ -868,13 +868,6 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-element-viewer-nav-next {
   right: max(0.5rem, env(safe-area-inset-right));
-}
-
-.catn8-element-viewer-body-media:hover ~ .catn8-element-viewer-nav,
-.catn8-element-viewer-body-media:focus-within ~ .catn8-element-viewer-nav,
-.catn8-element-viewer-nav:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .catn8-element-viewer-nav:hover {
@@ -895,13 +888,6 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   color: #2f2535;
   line-height: 1.5;
   font-size: 1.05rem;
-}
-
-@media (hover: none) {
-  .catn8-element-viewer-nav {
-    opacity: 1;
-    pointer-events: auto;
-  }
 }
 
 .catn8-theme-support {

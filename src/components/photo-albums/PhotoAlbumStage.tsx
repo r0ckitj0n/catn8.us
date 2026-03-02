@@ -429,6 +429,10 @@ type LayoutItem = {
   index: number;
   sourceIndex?: number;
   pinned?: boolean;
+  minX?: number;
+  maxX?: number;
+  minY?: number;
+  maxY?: number;
   x: number;
   y: number;
   w: number;
@@ -580,12 +584,16 @@ function itemWithoutReservedCollision(item: LayoutItem, constraints: LayoutConst
 }
 
 function constrainLayout(item: LayoutItem, constraints: LayoutConstraints): LayoutItem {
-  const maxX = Math.max(constraints.minX, constraints.maxX - item.w);
-  const maxY = Math.max(constraints.minY, constraints.maxY - item.h);
+  const itemMinX = Number.isFinite(item.minX) ? Number(item.minX) : constraints.minX;
+  const itemMaxX = Number.isFinite(item.maxX) ? Number(item.maxX) : constraints.maxX;
+  const itemMinY = Number.isFinite(item.minY) ? Number(item.minY) : constraints.minY;
+  const itemMaxY = Number.isFinite(item.maxY) ? Number(item.maxY) : constraints.maxY;
+  const maxX = Math.max(itemMinX, itemMaxX - item.w);
+  const maxY = Math.max(itemMinY, itemMaxY - item.h);
   const bounded = {
     ...item,
-    x: clamp(item.x, constraints.minX, maxX),
-    y: clamp(item.y, constraints.minY, maxY),
+    x: clamp(item.x, itemMinX, maxX),
+    y: clamp(item.y, itemMinY, maxY),
   };
   return itemWithoutReservedCollision(bounded, constraints);
 }
@@ -1207,6 +1215,8 @@ export function PhotoAlbumStage({
           index,
           sourceIndex: item.sourceIndex,
           pinned: hasPinnedPosition,
+          minY: 38,
+          maxY: CANVAS_MAX_Y,
           x: hasPinnedPosition ? Number(source?.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(source?.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,
@@ -1231,6 +1241,8 @@ export function PhotoAlbumStage({
           type: 'note',
           index,
           pinned: hasPinnedPosition,
+          minY: CANVAS_MIN_Y,
+          maxY: 34,
           x: hasPinnedPosition ? Number(note.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(note.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,

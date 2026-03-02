@@ -97,7 +97,7 @@ export interface PhotoAlbum {
   updated_at: string;
   spec: PhotoAlbumSpec;
   is_virtual?: boolean;
-  virtual_kind?: 'favorite_media' | 'favorite_pages';
+  virtual_kind?: 'favorite_media' | 'favorite_pages' | 'favorite_text';
 }
 
 export interface PhotoAlbumViewerInfo {
@@ -160,9 +160,16 @@ export interface PhotoAlbumFavoriteMedia {
   media_source_index: number;
 }
 
+export interface PhotoAlbumFavoriteText {
+  album_id: number;
+  spread_index: number;
+  text_item_id: string;
+}
+
 export interface PhotoAlbumFavoritesPayload {
   pages: PhotoAlbumFavoritePage[];
   media: PhotoAlbumFavoriteMedia[];
+  text: PhotoAlbumFavoriteText[];
 }
 
 export interface PhotoAlbumFavoriteMutationResponse {

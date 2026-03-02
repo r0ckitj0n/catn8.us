@@ -118,6 +118,7 @@ export function usePhotoAlbumsPage(
   const [adminDraft, setAdminDraft] = React.useState<PhotoAlbum | null>(null);
   const [favoritePageKeys, setFavoritePageKeys] = React.useState<Set<string>>(new Set());
   const [favoriteMediaKeys, setFavoriteMediaKeys] = React.useState<Set<string>>(new Set());
+  const [favoriteTextKeys, setFavoriteTextKeys] = React.useState<Set<string>>(new Set());
 
   const isAdmin = React.useMemo(
     () => Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1,
@@ -151,11 +152,17 @@ export function usePhotoAlbumsPage(
           (Array.isArray(nextFavorites.media) ? nextFavorites.media : [])
             .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${Number(item.media_source_index)}`),
         );
+        const textKeys = new Set<string>(
+          (Array.isArray(nextFavorites.text) ? nextFavorites.text : [])
+            .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${String(item.text_item_id || '')}`),
+        );
         setFavoritePageKeys(pageKeys);
         setFavoriteMediaKeys(mediaKeys);
+        setFavoriteTextKeys(textKeys);
       } else {
         setFavoritePageKeys(new Set());
         setFavoriteMediaKeys(new Set());
+        setFavoriteTextKeys(new Set());
       }
 
       if (nextAlbums.length === 0) {
@@ -207,8 +214,13 @@ export function usePhotoAlbumsPage(
       (Array.isArray(favorites.media) ? favorites.media : [])
         .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${Number(item.media_source_index)}`),
     );
+    const textKeys = new Set<string>(
+      (Array.isArray(favorites.text) ? favorites.text : [])
+        .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${String(item.text_item_id || '')}`),
+    );
     setFavoritePageKeys(pageKeys);
     setFavoriteMediaKeys(mediaKeys);
+    setFavoriteTextKeys(textKeys);
   }, []);
 
   React.useEffect(() => {
@@ -352,6 +364,10 @@ export function usePhotoAlbumsPage(
     favoriteMediaKeys.has(`${albumId}:${spreadIdx}:${mediaSourceIdx}`)
   ), [favoriteMediaKeys]);
 
+  const isTextFavorite = React.useCallback((albumId: number, spreadIdx: number, textItemId: string) => (
+    favoriteTextKeys.has(`${albumId}:${spreadIdx}:${textItemId}`)
+  ), [favoriteTextKeys]);
+
   const togglePageFavorite = React.useCallback(async (albumId: number, spreadIdx: number) => {
     if (albumId <= 0 || spreadIdx < 0) {
       return;
@@ -391,6 +407,27 @@ export function usePhotoAlbumsPage(
     }
   }, [applyFavorites, isMediaFavorite, toast]);
 
+  const toggleTextFavorite = React.useCallback(async (albumId: number, spreadIdx: number, textItemId: string) => {
+    const trimmedId = String(textItemId || '').trim();
+    if (albumId <= 0 || spreadIdx < 0 || trimmedId === '') {
+      return;
+    }
+    try {
+      const currentlyFavorite = isTextFavorite(albumId, spreadIdx, trimmedId);
+      const res = await ApiClient.post<PhotoAlbumFavoriteMutationResponse>('/api/photo_albums.php?action=toggle_text_favorite', {
+        album_id: albumId,
+        spread_index: spreadIdx,
+        text_item_id: trimmedId,
+        is_favorite: currentlyFavorite ? 0 : 1,
+      });
+      if (res?.favorites) {
+        applyFavorites(res.favorites);
+      }
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update text favorite');
+    }
+  }, [applyFavorites, isTextFavorite, toast]);
+
   return {
     loading,
     busy,
@@ -427,7 +464,9 @@ export function usePhotoAlbumsPage(
     updateAdminDraft,
     isPageFavorite,
     isMediaFavorite,
+    isTextFavorite,
     togglePageFavorite,
     toggleMediaFavorite,
+    toggleTextFavorite,
   };
 }

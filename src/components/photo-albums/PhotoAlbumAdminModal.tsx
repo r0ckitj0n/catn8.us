@@ -16,10 +16,12 @@ interface PhotoAlbumAdminModalProps {
   canNext: boolean;
   pageFavorite?: boolean;
   isMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => boolean;
+  isTextFavorite?: (spreadIndex: number, textItemId: string) => boolean;
   onPrevPage: () => void;
   onNextPage: () => void;
   onTogglePageFavorite?: (spreadIndex: number) => void;
   onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
+  onToggleTextFavorite?: (spreadIndex: number, textItemId: string) => void;
   onFullscreenPreview: () => void;
   onClose: () => void;
   onSave: () => void;
@@ -39,10 +41,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     canNext,
     pageFavorite = false,
     isMediaFavorite,
+    isTextFavorite,
     onPrevPage,
     onNextPage,
     onTogglePageFavorite,
     onToggleMediaFavorite,
+    onToggleTextFavorite,
     onFullscreenPreview,
     onClose,
     onSave,
@@ -581,10 +585,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               canNext={canNext}
               pageFavorite={pageFavorite}
               isMediaFavorite={isMediaFavorite}
+              isTextFavorite={isTextFavorite}
               onPrev={onPrevPage}
               onNext={onNextPage}
               onTogglePageFavorite={onTogglePageFavorite}
               onToggleMediaFavorite={onToggleMediaFavorite}
+              onToggleTextFavorite={onToggleTextFavorite}
               onBackToAlbums={onClose}
               editable
               onMoveMedia={(index, patch) => onAlbumChange((prev) => {

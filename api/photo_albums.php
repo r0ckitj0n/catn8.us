@@ -54,6 +54,21 @@ function catn8_photo_album_media_favorites_table_ensure(): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
+function catn8_photo_album_text_favorites_table_ensure(): void
+{
+    Database::execute("CREATE TABLE IF NOT EXISTS photo_album_text_favorites (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        album_id INT NOT NULL,
+        spread_index INT NOT NULL,
+        text_item_id VARCHAR(191) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_album_spread_text (user_id, album_id, spread_index, text_item_id),
+        KEY idx_photo_album_text_favorites_user_created (user_id, created_at),
+        KEY idx_photo_album_text_favorites_album (album_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
 function catn8_photo_albums_slug(string $value): string
 {
     $value = strtolower(trim($value));
@@ -158,6 +173,79 @@ function catn8_photo_albums_as_list(array $value): array
     return array_values(array_filter(array_map(static fn ($item) => trim((string)$item), $value), static fn ($item) => $item !== ''));
 }
 
+function catn8_photo_albums_split_lines(string $text): array
+{
+    $normalized = preg_replace('/\r\n?/', "\n", (string)$text);
+    if (!is_string($normalized)) {
+        return [];
+    }
+    $rawLines = explode("\n", $normalized);
+    $lines = [];
+    foreach ($rawLines as $line) {
+        $clean = trim((string)$line);
+        if ($clean !== '') {
+            $lines[] = $clean;
+        }
+    }
+    return $lines;
+}
+
+function catn8_photo_albums_is_message_like_line(string $line): bool
+{
+    return preg_match('/^([A-Za-z][A-Za-z\' -]{0,30}|Contact|Unknown)\s*(?:\([0-9]{1,2}:[0-9]{2}\s*[AP]M\)|\[[0-9]{1,2}:[0-9]{2}\s*[AP]M\])?\s*:/i', trim($line)) === 1;
+}
+
+function catn8_photo_albums_note_ids_for_spread(array $spread): array
+{
+    $ids = [];
+    $seen = [];
+
+    $addId = static function (string $id) use (&$ids, &$seen): void {
+        $safe = trim($id);
+        if ($safe === '' || isset($seen[$safe])) {
+            return;
+        }
+        $seen[$safe] = true;
+        $ids[] = $safe;
+    };
+
+    $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+    foreach ($images as $mediaIndex => $image) {
+        if (!is_array($image)) {
+            continue;
+        }
+        $captionLines = catn8_photo_albums_split_lines((string)($image['caption'] ?? ''));
+        foreach ($captionLines as $lineIndex => $line) {
+            if (!catn8_photo_albums_is_message_like_line($line)) {
+                continue;
+            }
+            $addId('media-note-' . ((int)$mediaIndex) . '-' . ((int)$lineIndex));
+        }
+    }
+
+    $textItems = is_array($spread['text_items'] ?? null) ? $spread['text_items'] : [];
+    foreach ($textItems as $textIndex => $textItem) {
+        if (!is_array($textItem)) {
+            continue;
+        }
+        $candidateId = trim((string)($textItem['id'] ?? ''));
+        if ($candidateId === '') {
+            $candidateId = 'text-' . ((int)$textIndex);
+        }
+        $addId($candidateId);
+    }
+
+    $spreadLines = catn8_photo_albums_split_lines((string)($spread['caption'] ?? ''));
+    foreach ($spreadLines as $lineIndex => $line) {
+        if (!catn8_photo_albums_is_message_like_line($line)) {
+            continue;
+        }
+        $addId('spread-note-' . ((int)$lineIndex));
+    }
+
+    return $ids;
+}
+
 function catn8_photo_albums_favorites_payload(int $viewerId): array
 {
     $pageRows = Database::queryAll(
@@ -174,6 +262,13 @@ function catn8_photo_albums_favorites_payload(int $viewerId): array
           ORDER BY created_at ASC, id ASC',
         [$viewerId]
     );
+    $textRows = Database::queryAll(
+        'SELECT album_id, spread_index, text_item_id
+           FROM photo_album_text_favorites
+          WHERE user_id = ?
+          ORDER BY created_at ASC, id ASC',
+        [$viewerId]
+    );
 
     $pages = array_map(static fn ($row) => [
         'album_id' => (int)($row['album_id'] ?? 0),
@@ -184,10 +279,16 @@ function catn8_photo_albums_favorites_payload(int $viewerId): array
         'spread_index' => (int)($row['spread_index'] ?? 0),
         'media_source_index' => (int)($row['media_source_index'] ?? 0),
     ], $mediaRows);
+    $text = array_map(static fn ($row) => [
+        'album_id' => (int)($row['album_id'] ?? 0),
+        'spread_index' => (int)($row['spread_index'] ?? 0),
+        'text_item_id' => trim((string)($row['text_item_id'] ?? '')),
+    ], $textRows);
 
     return [
         'pages' => $pages,
         'media' => $media,
+        'text' => $text,
     ];
 }
 
@@ -674,6 +775,124 @@ function catn8_photo_albums_build_virtual_favorites(array $albums, array $favori
         ];
     }
 
+    $textItems = [];
+    foreach (($favorites['text'] ?? []) as $fav) {
+        $albumId = (int)($fav['album_id'] ?? 0);
+        $spreadIndex = (int)($fav['spread_index'] ?? -1);
+        $textItemId = trim((string)($fav['text_item_id'] ?? ''));
+        if ($albumId <= 0 || $spreadIndex < 0 || $textItemId === '' || !isset($byId[$albumId])) {
+            continue;
+        }
+        $album = $byId[$albumId];
+        $spreads = is_array($album['spec']['spreads'] ?? null) ? $album['spec']['spreads'] : [];
+        $spread = $spreads[$spreadIndex] ?? null;
+        if (!is_array($spread)) {
+            continue;
+        }
+        $availableNoteIds = catn8_photo_albums_note_ids_for_spread($spread);
+        if (!in_array($textItemId, $availableNoteIds, true)) {
+            continue;
+        }
+
+        $resolvedText = '';
+        $textItemsInSpread = is_array($spread['text_items'] ?? null) ? $spread['text_items'] : [];
+        foreach ($textItemsInSpread as $textIndex => $textItem) {
+            if (!is_array($textItem)) {
+                continue;
+            }
+            $candidateId = trim((string)($textItem['id'] ?? ''));
+            if ($candidateId === '') {
+                $candidateId = 'text-' . ((int)$textIndex);
+            }
+            if ($candidateId === $textItemId) {
+                $resolvedText = trim((string)($textItem['text'] ?? ''));
+                break;
+            }
+        }
+
+        if ($resolvedText === '' && preg_match('/^spread-note-([0-9]+)$/', $textItemId, $match) === 1) {
+            $lineIndex = (int)($match[1] ?? 0);
+            $spreadLines = catn8_photo_albums_split_lines((string)($spread['caption'] ?? ''));
+            $resolvedText = trim((string)($spreadLines[$lineIndex] ?? ''));
+        }
+
+        if ($resolvedText === '' && preg_match('/^media-note-([0-9]+)-([0-9]+)$/', $textItemId, $match) === 1) {
+            $mediaIndex = (int)($match[1] ?? 0);
+            $lineIndex = (int)($match[2] ?? 0);
+            $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+            $image = is_array($images[$mediaIndex] ?? null) ? $images[$mediaIndex] : [];
+            $mediaLines = catn8_photo_albums_split_lines((string)($image['caption'] ?? ''));
+            $resolvedText = trim((string)($mediaLines[$lineIndex] ?? ''));
+        }
+
+        if ($resolvedText === '') {
+            continue;
+        }
+
+        $capturedMs = false;
+        $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+        foreach ($images as $image) {
+            if (!is_array($image)) {
+                continue;
+            }
+            $capturedRaw = trim((string)($image['captured_at'] ?? ''));
+            if ($capturedRaw === '') {
+                continue;
+            }
+            $next = strtotime($capturedRaw);
+            if ($next === false) {
+                continue;
+            }
+            if ($capturedMs === false || $next < $capturedMs) {
+                $capturedMs = $next;
+            }
+        }
+
+        $textItems[] = [
+            'order_ms' => $capturedMs !== false ? (int)$capturedMs : PHP_INT_MAX,
+            'album_title' => (string)($album['title'] ?? ''),
+            'spread_index' => $spreadIndex,
+            'text' => $resolvedText,
+            'id' => $textItemId,
+        ];
+    }
+    usort($textItems, static function (array $a, array $b): int {
+        if ((int)$a['order_ms'] === (int)$b['order_ms']) {
+            return strcmp((string)$a['album_title'], (string)$b['album_title']);
+        }
+        return ((int)$a['order_ms'] < (int)$b['order_ms']) ? -1 : 1;
+    });
+
+    $textSpreads = [];
+    foreach ($textItems as $index => $item) {
+        $dateLabel = ((int)$item['order_ms'] < PHP_INT_MAX) ? gmdate('Y-m-d', (int)$item['order_ms']) : 'Undated';
+        $textSpreads[] = [
+            'spread_number' => $index + 1,
+            'title' => $dateLabel,
+            'caption' => trim((string)$item['album_title']) . ' (Spread ' . ((int)$item['spread_index'] + 1) . ')',
+            'photo_slots' => 0,
+            'embellishments' => ['favorites', 'notes'],
+            'background_prompt' => '[CATN8_SCRAPBOOK_SPREAD_BG_V1] Favorites text',
+            'images' => [],
+            'text_items' => [[
+                'id' => (string)$item['id'],
+                'text' => (string)$item['text'],
+            ]],
+        ];
+    }
+    if (!$textSpreads) {
+        $textSpreads[] = [
+            'spread_number' => 1,
+            'title' => 'No Favorite Text Yet',
+            'caption' => 'Tap the heart on any text note to add it here.',
+            'photo_slots' => 0,
+            'embellishments' => ['favorites'],
+            'background_prompt' => '[CATN8_SCRAPBOOK_SPREAD_BG_V1] Favorites text empty',
+            'images' => [],
+            'text_items' => [],
+        ];
+    }
+
     $firstMediaImage = is_array($mediaSpreads[0]['images'] ?? null) ? ($mediaSpreads[0]['images'][0] ?? null) : null;
     $mediaCover = is_array($firstMediaImage) ? trim((string)($firstMediaImage['display_src'] ?? $firstMediaImage['src'] ?? '')) : '';
 
@@ -698,6 +917,14 @@ function catn8_photo_albums_build_virtual_favorites(array $albums, array $favori
             $pageSpreads,
             'favorite_pages'
         ),
+        catn8_photo_albums_virtual_payload(
+            -1003,
+            'Favorite Text',
+            count($textItems) . ' messages favorited.',
+            '',
+            $textSpreads,
+            'favorite_text'
+        ),
     ];
 }
 
@@ -705,6 +932,7 @@ catn8_groups_seed_core();
 catn8_photo_albums_table_ensure();
 catn8_photo_album_page_favorites_table_ensure();
 catn8_photo_album_media_favorites_table_ensure();
+catn8_photo_album_text_favorites_table_ensure();
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $action = strtolower(trim((string)($_GET['action'] ?? 'list')));
@@ -846,6 +1074,56 @@ if ($action === 'toggle_media_favorite') {
             'DELETE FROM photo_album_media_favorites
               WHERE user_id = ? AND album_id = ? AND spread_index = ? AND media_source_index = ?',
             [$viewerId, $albumId, $spreadIndex, $mediaSourceIndex]
+        );
+    }
+
+    catn8_json_response(['success' => true, 'favorites' => catn8_photo_albums_favorites_payload($viewerId)]);
+}
+
+if ($action === 'toggle_text_favorite') {
+    $albumId = (int)($body['album_id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $textItemId = trim((string)($body['text_item_id'] ?? ''));
+    $isFavorite = (int)($body['is_favorite'] ?? 0) === 1;
+
+    if ($albumId <= 0 || $spreadIndex < 0 || $textItemId === '') {
+        catn8_json_response(['success' => false, 'error' => 'Invalid favorite text payload'], 400);
+    }
+    if (strlen($textItemId) > 191) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid text_item_id'], 400);
+    }
+
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    if (!$albumRow) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
+    if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+
+    $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    if (!is_array($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    $availableNoteIds = catn8_photo_albums_note_ids_for_spread($spread);
+    if (!in_array($textItemId, $availableNoteIds, true)) {
+        catn8_json_response(['success' => false, 'error' => 'Text item not found'], 404);
+    }
+
+    if ($isFavorite) {
+        Database::execute(
+            'INSERT INTO photo_album_text_favorites (user_id, album_id, spread_index, text_item_id) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE created_at = created_at',
+            [$viewerId, $albumId, $spreadIndex, $textItemId]
+        );
+    } else {
+        Database::execute(
+            'DELETE FROM photo_album_text_favorites
+              WHERE user_id = ? AND album_id = ? AND spread_index = ? AND text_item_id = ?',
+            [$viewerId, $albumId, $spreadIndex, $textItemId]
         );
     }
 

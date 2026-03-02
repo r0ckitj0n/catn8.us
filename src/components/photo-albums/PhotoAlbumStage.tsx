@@ -12,12 +12,14 @@ interface PhotoAlbumStageProps {
   contactDisplayName?: string;
   pageFavorite?: boolean;
   isMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => boolean;
+  isTextFavorite?: (spreadIndex: number, textItemId: string) => boolean;
   canPrev?: boolean;
   canNext?: boolean;
   onPrev?: () => void;
   onNext?: () => void;
   onTogglePageFavorite?: (spreadIndex: number) => void;
   onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
+  onToggleTextFavorite?: (spreadIndex: number, textItemId: string) => void;
   editable?: boolean;
   onMoveMedia?: (index: number, patch: { x: number; y: number }) => void;
   onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
@@ -53,6 +55,19 @@ type DecorItem = {
   size?: number;
   rotation?: number;
 };
+
+function DragHandleIcon() {
+  return (
+    <svg className="catn8-drag-handle-icon" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+      <circle cx="2" cy="2" r="1" />
+      <circle cx="2" cy="5" r="1" />
+      <circle cx="2" cy="8" r="1" />
+      <circle cx="8" cy="2" r="1" />
+      <circle cx="8" cy="5" r="1" />
+      <circle cx="8" cy="8" r="1" />
+    </svg>
+  );
+}
 
 function isVideoMedia(src: string, mediaType?: string): boolean {
   if (mediaType === 'video') {
@@ -242,7 +257,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
     out.push(note);
   };
 
-  const mediaNotes = media.flatMap((mediaItem, mediaIndex) => (
+  const mediaNotes = media.flatMap((mediaItem) => (
     splitAlbumMessages(mediaItem.caption)
       .map((line, lineIndex) => {
         if (!isMessageLikeLine(line)) {
@@ -259,7 +274,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           return null;
         }
         return {
-          id: `${album.id}-${targetSpreadIndex}-media-note-${mediaIndex}-${lineIndex}`,
+          id: `media-note-${mediaItem.sourceIndex}-${lineIndex}`,
           text: parsed.body,
           speaker: parsed.speaker,
           time: parsed.time,
@@ -282,7 +297,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           return null;
         }
         return {
-          id: item.id || `${album.id}-${targetSpreadIndex}-text-${index}`,
+          id: item.id || `text-${index}`,
           text: parsed.body,
           speaker: resolveContactSpeaker(
             String((item as { speaker?: string }).speaker || '').trim() || parsed.speaker,
@@ -318,7 +333,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
       return;
     }
     addUniqueNote({
-      id: `${album.id}-${targetSpreadIndex}-note-${index}`,
+      id: `spread-note-${index}`,
       text: parsed.body,
       speaker: parsed.speaker,
       time: parsed.time,
@@ -356,7 +371,7 @@ function spreadDecor(album: PhotoAlbum, targetSpreadIndex: number, emojiPool: st
   });
 }
 
-function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1, contactDisplayName?: string): ViewerTarget | null {
+function findAdjacentItemTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1, contactDisplayName?: string): ViewerTarget | null {
   const spreads = Array.isArray(album.spec?.spreads) ? album.spec.spreads : [];
   const itemListAt = (type: ViewerType, sidx: number): number => {
     const media = spreadMedia(album, sidx);
@@ -384,6 +399,26 @@ function findAdjacentTarget(album: PhotoAlbum, current: ViewerTarget, direction:
     }
   }
 
+  return null;
+}
+
+function findAdjacentSpreadTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1, contactDisplayName?: string): ViewerTarget | null {
+  const spreads = Array.isArray(album.spec?.spreads) ? album.spec.spreads : [];
+  const itemListAt = (type: ViewerType, sidx: number): number => {
+    const media = spreadMedia(album, sidx);
+    const notes = spreadNotes(album, sidx, media, contactDisplayName);
+    return type === 'media' ? media.length : notes.length;
+  };
+  for (let sidx = current.spreadIndex + direction; sidx >= 0 && sidx < spreads.length; sidx += direction) {
+    const count = itemListAt(current.type, sidx);
+    if (count > 0) {
+      return {
+        type: current.type,
+        spreadIndex: sidx,
+        itemIndex: clamp(current.itemIndex, 0, Math.max(0, count - 1)),
+      };
+    }
+  }
   return null;
 }
 
@@ -902,12 +937,14 @@ export function PhotoAlbumStage({
   contactDisplayName,
   pageFavorite = false,
   isMediaFavorite,
+  isTextFavorite,
   canPrev = false,
   canNext = false,
   onPrev,
   onNext,
   onTogglePageFavorite,
   onToggleMediaFavorite,
+  onToggleTextFavorite,
   editable = false,
   onMoveMedia,
   onMoveNote,
@@ -1175,12 +1212,31 @@ export function PhotoAlbumStage({
     return note ? formatNoteText(note) : '';
   }, [album, viewerTarget, contactDisplayName]);
 
-  const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1, contactDisplayName) : null;
-  const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1, contactDisplayName) : null;
+  const prevTarget = viewerTarget
+    ? (viewerTarget.type === 'media'
+      ? findAdjacentSpreadTarget(album, viewerTarget, -1, contactDisplayName)
+      : findAdjacentItemTarget(album, viewerTarget, -1, contactDisplayName))
+    : null;
+  const nextTarget = viewerTarget
+    ? (viewerTarget.type === 'media'
+      ? findAdjacentSpreadTarget(album, viewerTarget, 1, contactDisplayName)
+      : findAdjacentItemTarget(album, viewerTarget, 1, contactDisplayName))
+    : null;
   const canFavoriteCurrentPage = album.id > 0 && !album.is_virtual && typeof onTogglePageFavorite === 'function';
   const canFavoriteCurrentMedia = album.id > 0 && !album.is_virtual && typeof onToggleMediaFavorite === 'function' && viewerTarget?.type === 'media' && Boolean(activeMedia);
+  const canFavoriteCurrentText = album.id > 0 && !album.is_virtual && typeof onToggleTextFavorite === 'function' && viewerTarget?.type === 'note';
   const activeMediaFavorited = (canFavoriteCurrentMedia && activeMedia && typeof isMediaFavorite === 'function')
-    ? isMediaFavorite(spreadIndex, activeMedia.sourceIndex)
+    ? isMediaFavorite(viewerTarget?.spreadIndex ?? spreadIndex, activeMedia.sourceIndex)
+    : false;
+  const activeViewerNote = React.useMemo(() => {
+    if (!viewerTarget || viewerTarget.type !== 'note') {
+      return null;
+    }
+    const list = spreadNotes(album, viewerTarget.spreadIndex, spreadMedia(album, viewerTarget.spreadIndex), contactDisplayName);
+    return list[viewerTarget.itemIndex] || null;
+  }, [album, viewerTarget, contactDisplayName]);
+  const activeNoteFavorited = (canFavoriteCurrentText && activeViewerNote && typeof isTextFavorite === 'function' && viewerTarget)
+    ? isTextFavorite(viewerTarget.spreadIndex, activeViewerNote.id)
     : false;
   const viewerDateLabel = React.useMemo(() => {
     if (!viewerTarget) {
@@ -1502,7 +1558,7 @@ export function PhotoAlbumStage({
                   }}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  ⠿
+                  <DragHandleIcon />
                 </button>
               ) : null}
               {item.emoji}
@@ -1513,12 +1569,14 @@ export function PhotoAlbumStage({
             const imageSrc = item.src;
             const caption = item.caption;
             const showCaption = Boolean(caption && !isTranscriptCaption(caption));
+            const mediaFavorited = typeof isMediaFavorite === 'function'
+              ? isMediaFavorite(spreadIndex, item.sourceIndex)
+              : false;
             return (
               <figure
                 className="catn8-scatter-card catn8-scatter-media"
                 key={item.key}
                 style={renderMediaStyle(index)}
-                onClick={() => onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media')}
               >
                 {editable ? (
                   <button
@@ -1534,13 +1592,46 @@ export function PhotoAlbumStage({
                     }}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    ⠿
+                    <DragHandleIcon />
+                  </button>
+                ) : null}
+                {typeof onToggleMediaFavorite === 'function' && album.id > 0 && !album.is_virtual ? (
+                  <button
+                    type="button"
+                    className={mediaFavorited ? 'catn8-preview-favorite-toggle is-active' : 'catn8-preview-favorite-toggle'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleMediaFavorite(spreadIndex, item.sourceIndex);
+                    }}
+                    aria-label={mediaFavorited ? 'Remove media from favorites' : 'Add media to favorites'}
+                    aria-pressed={mediaFavorited}
+                    title={mediaFavorited ? 'Favorited media' : 'Favorite this media'}
+                  >
+                    ♥
                   </button>
                 ) : null}
                 {isVideoMedia(imageSrc, item.mediaType) ? (
-                  <video className="catn8-polaroid-photo catn8-polaroid-video" src={imageSrc} controls preload="metadata" />
+                  <video
+                    className="catn8-polaroid-photo catn8-polaroid-video"
+                    src={imageSrc}
+                    controls
+                    preload="metadata"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media');
+                    }}
+                  />
                 ) : (
-                  <img className="catn8-polaroid-photo" src={imageSrc} alt={caption || `Memory ${index + 1}`} loading="lazy" />
+                  <img
+                    className="catn8-polaroid-photo"
+                    src={imageSrc}
+                    alt={caption || `Memory ${index + 1}`}
+                    loading="lazy"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media');
+                    }}
+                  />
                 )}
                 {showCaption ? <figcaption className="catn8-polaroid-caption">{caption}</figcaption> : null}
               </figure>
@@ -1549,6 +1640,9 @@ export function PhotoAlbumStage({
 
           {notes.map((note, index) => {
             const display = formatNoteText(note);
+            const noteFavorited = typeof isTextFavorite === 'function'
+              ? isTextFavorite(spreadIndex, note.id)
+              : false;
             return (
               <div
                 className="catn8-scatter-card catn8-scatter-note"
@@ -1576,7 +1670,22 @@ export function PhotoAlbumStage({
                     }}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    ⠿
+                    <DragHandleIcon />
+                  </button>
+                ) : null}
+                {typeof onToggleTextFavorite === 'function' && album.id > 0 && !album.is_virtual ? (
+                  <button
+                    type="button"
+                    className={noteFavorited ? 'catn8-preview-favorite-toggle catn8-preview-favorite-toggle-note is-active' : 'catn8-preview-favorite-toggle catn8-preview-favorite-toggle-note'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleTextFavorite(spreadIndex, note.id);
+                    }}
+                    aria-label={noteFavorited ? 'Remove text from favorites' : 'Add text to favorites'}
+                    aria-pressed={noteFavorited}
+                    title={noteFavorited ? 'Favorited text' : 'Favorite this text'}
+                  >
+                    ♥
                   </button>
                 ) : null}
                 <div className="catn8-scatter-note-inner" style={{ borderColor: theme.borderColor, backgroundColor: theme.accentColor }}>
@@ -1612,10 +1721,14 @@ export function PhotoAlbumStage({
           activeNote={activeNote}
           dateLabel={viewerDateLabel}
           activeMediaFavorite={activeMediaFavorited}
+          activeNoteFavorite={activeNoteFavorited}
           prevTarget={prevTarget}
           nextTarget={nextTarget}
           onToggleActiveMediaFavorite={canFavoriteCurrentMedia && activeMedia ? () => {
-            onToggleMediaFavorite?.(spreadIndex, activeMedia.sourceIndex);
+            onToggleMediaFavorite?.(viewerTarget.spreadIndex, activeMedia.sourceIndex);
+          } : undefined}
+          onToggleActiveNoteFavorite={canFavoriteCurrentText && activeViewerNote && viewerTarget ? () => {
+            onToggleTextFavorite?.(viewerTarget.spreadIndex, activeViewerNote.id);
           } : undefined}
           onClose={() => setViewerTarget(null)}
           onNavigate={setViewerTarget}

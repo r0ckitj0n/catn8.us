@@ -456,6 +456,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   z-index: 35;
 }
 
+.catn8-drag-handle-icon {
+  width: 0.82rem;
+  height: 0.82rem;
+  fill: currentColor;
+}
+
 .catn8-drag-handle:active {
   cursor: grabbing;
 }
@@ -498,6 +504,50 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   padding: 0.45rem;
   box-shadow: 0 10px 24px rgba(31, 29, 53, 0.12);
   overflow: hidden;
+}
+
+.catn8-preview-favorite-toggle {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid rgba(127, 90, 56, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.95);
+  color: #7f5a38;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 36;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease;
+}
+
+.catn8-preview-favorite-toggle-note {
+  top: 0.34rem;
+  right: 0.34rem;
+}
+
+.catn8-scatter-card:hover .catn8-preview-favorite-toggle,
+.catn8-scatter-card:focus-within .catn8-preview-favorite-toggle,
+.catn8-preview-favorite-toggle.is-active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.catn8-preview-favorite-toggle:hover {
+  background: #fff;
+}
+
+.catn8-preview-favorite-toggle.is-active {
+  color: #c1355a;
+  border-color: rgba(193, 53, 90, 0.45);
 }
 
 .catn8-polaroid-photo {
@@ -595,11 +645,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-element-viewer-shell {
-  width: min(1000px, 94vw);
-  max-height: 92vh;
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
   background: #fff7eb;
-  border: 1px solid rgba(50, 33, 18, 0.4);
-  border-radius: 14px;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -636,7 +687,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-element-viewer-body {
   padding: 0.9rem;
   overflow: auto;
-  max-height: calc(92vh - 104px);
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -644,7 +695,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-element-viewer-media {
   max-width: 100%;
-  max-height: 72vh;
+  max-height: 100%;
   object-fit: contain;
   border-radius: 10px;
   background: #000;

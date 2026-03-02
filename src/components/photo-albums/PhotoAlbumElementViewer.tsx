@@ -8,9 +8,11 @@ interface PhotoAlbumElementViewerProps {
   activeNote: string;
   dateLabel?: string;
   activeMediaFavorite?: boolean;
+  activeNoteFavorite?: boolean;
   prevTarget: ViewerTarget | null;
   nextTarget: ViewerTarget | null;
   onToggleActiveMediaFavorite?: () => void;
+  onToggleActiveNoteFavorite?: () => void;
   onClose: () => void;
   onNavigate: (target: ViewerTarget | null) => void;
 }
@@ -23,7 +25,20 @@ function isVideoMedia(src: string, mediaType?: string): boolean {
 }
 
 export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
-  const { target, activeMedia, activeNote, dateLabel, activeMediaFavorite = false, prevTarget, nextTarget, onToggleActiveMediaFavorite, onClose, onNavigate } = props;
+  const {
+    target,
+    activeMedia,
+    activeNote,
+    dateLabel,
+    activeMediaFavorite = false,
+    activeNoteFavorite = false,
+    prevTarget,
+    nextTarget,
+    onToggleActiveMediaFavorite,
+    onToggleActiveNoteFavorite,
+    onClose,
+    onNavigate,
+  } = props;
 
   return (
     <div className="catn8-element-viewer-overlay" role="dialog" aria-modal="true">
@@ -40,7 +55,18 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
                 aria-label={activeMediaFavorite ? 'Remove media from favorites' : 'Add media to favorites'}
                 title={activeMediaFavorite ? 'Favorited media' : 'Favorite this media'}
               >
-                ♡
+                ♥
+              </button>
+            ) : null}
+            {target.type === 'note' && typeof onToggleActiveNoteFavorite === 'function' ? (
+              <button
+                type="button"
+                className={activeNoteFavorite ? 'catn8-viewer-favorite-toggle is-active' : 'catn8-viewer-favorite-toggle'}
+                onClick={onToggleActiveNoteFavorite}
+                aria-label={activeNoteFavorite ? 'Remove text from favorites' : 'Add text to favorites'}
+                title={activeNoteFavorite ? 'Favorited text' : 'Favorite this text'}
+              >
+                ♥
               </button>
             ) : null}
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
@@ -59,7 +85,7 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
           ) : null}
         </div>
         <div className="catn8-element-viewer-footer">
-          <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!prevTarget} onClick={() => onNavigate(prevTarget)}>← Back</button>
+          <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!prevTarget} onClick={() => onNavigate(prevTarget)}>← Previous</button>
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!nextTarget} onClick={() => onNavigate(nextTarget)}>Next →</button>
         </div>
       </div>

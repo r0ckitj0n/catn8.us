@@ -24,6 +24,10 @@ export function PageLayout({ page, title, children, viewer, isAdmin = false, onL
     || p.startsWith('/mystery/')
     || p === '/sheriff_station.php'
     || p === '/sheriff_station'
+    || p === '/photo-albums.php'
+    || p.startsWith('/photo-albums.php/')
+    || p === '/photo-albums'
+    || p.startsWith('/photo-albums/')
   );
 
   return (

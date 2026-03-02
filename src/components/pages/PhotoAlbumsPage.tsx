@@ -156,6 +156,9 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void openAdminFullscreenPreview(); }}>
                       Full Screen
                     </button>
+                    <a className="btn btn-sm btn-outline-secondary" href="https://catn8.us">
+                      Home
+                    </a>
                   </div>
                 </div>
               ) : null}
@@ -171,8 +174,10 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 onNext={state.nextPage}
                 pageFavorite={selectedPageFavorite}
                 isMediaFavorite={(spreadIndex, mediaSourceIndex) => state.isMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex)}
+                isTextFavorite={(spreadIndex, textItemId) => state.isTextFavorite(selectedAlbum.id, spreadIndex, textItemId)}
                 onTogglePageFavorite={(spreadIndex) => { void state.togglePageFavorite(selectedAlbum.id, spreadIndex); }}
                 onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex); }}
+                onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(selectedAlbum.id, spreadIndex, textItemId); }}
                 onBackToAlbums={() => { void closeViewer(); }}
               />
             </div>
@@ -200,6 +205,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         canNext={state.canNext}
         pageFavorite={selectedPageFavorite}
         isMediaFavorite={(spreadIndex, mediaSourceIndex) => selectedAlbumId > 0 && state.isMediaFavorite(selectedAlbumId, spreadIndex, mediaSourceIndex)}
+        isTextFavorite={(spreadIndex, textItemId) => selectedAlbumId > 0 && state.isTextFavorite(selectedAlbumId, spreadIndex, textItemId)}
         onPrevPage={state.prevPage}
         onNextPage={state.nextPage}
         onTogglePageFavorite={(spreadIndex) => {
@@ -210,6 +216,11 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => {
           if (selectedAlbumId > 0) {
             void state.toggleMediaFavorite(selectedAlbumId, spreadIndex, mediaSourceIndex);
+          }
+        }}
+        onToggleTextFavorite={(spreadIndex, textItemId) => {
+          if (selectedAlbumId > 0) {
+            void state.toggleTextFavorite(selectedAlbumId, spreadIndex, textItemId);
           }
         }}
         onFullscreenPreview={() => { void openAdminFullscreenPreview(); }}

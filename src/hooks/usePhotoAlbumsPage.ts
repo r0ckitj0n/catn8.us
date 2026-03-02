@@ -330,12 +330,23 @@ export function usePhotoAlbumsPage(
     setShowAlbumViewer(true);
   }, [adminDraft, selectedAlbum, hasUnsavedAdminChanges]);
 
-  const { createWithAi, saveAdminEdits, deleteSelectedAlbum, deleteAlbumById } = usePhotoAlbumsMutations({
+  const {
+    createWithAi,
+    saveAdminEdits,
+    autoLayoutAlbum,
+    autoLayoutCurrentSpread,
+    autoLayoutAllUnlocked,
+    toggleAlbumLock,
+    toggleSpreadLock,
+    deleteSelectedAlbum,
+    deleteAlbumById,
+  } = usePhotoAlbumsMutations({
     isAdmin,
     createForm,
     defaultCreateForm: DEFAULT_CREATE_FORM,
     adminDraft,
     selectedAlbum,
+    pageIndex,
     setBusy,
     setShowCreateModal,
     setCreateForm,
@@ -346,7 +357,6 @@ export function usePhotoAlbumsPage(
     loadAlbums,
     toast,
   });
-
   const updateAdminDraft = React.useCallback((updater: (prev: PhotoAlbum) => PhotoAlbum) => {
     setAdminDraft((prev) => {
       if (!prev) {
@@ -459,6 +469,11 @@ export function usePhotoAlbumsPage(
     closeAlbumViewer,
     closeAdminModal,
     saveAdminEdits,
+    autoLayoutAlbum,
+    autoLayoutCurrentSpread,
+    autoLayoutAllUnlocked,
+    toggleAlbumLock,
+    toggleSpreadLock,
     deleteSelectedAlbum,
     deleteAlbumById,
     updateAdminDraft,

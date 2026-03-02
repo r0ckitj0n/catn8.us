@@ -25,6 +25,11 @@ interface PhotoAlbumAdminModalProps {
   onFullscreenPreview: () => void;
   onClose: () => void;
   onSave: () => void;
+  onAutoLayout: () => void;
+  onAutoLayoutSpread: () => void;
+  onAutoLayoutAllUnlocked: () => void;
+  onToggleAlbumLock: (isLocked: boolean) => void;
+  onToggleSpreadLock: (isLocked: boolean) => void;
   onDelete: () => void;
   onAlbumChange: (updater: (prev: PhotoAlbum) => PhotoAlbum) => void;
 }
@@ -50,6 +55,11 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onFullscreenPreview,
     onClose,
     onSave,
+    onAutoLayout,
+    onAutoLayoutSpread,
+    onAutoLayoutAllUnlocked,
+    onToggleAlbumLock,
+    onToggleSpreadLock,
     onDelete,
     onAlbumChange,
   } = props;
@@ -70,6 +80,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     return auditPhotoAlbum(album);
   }, [album]);
   const textItems = Array.isArray(spread?.text_items) ? spread.text_items : [];
+  const albumLocked = Number(album?.is_locked || 0) === 1;
+  const spreadLocked = Number(spread?.is_locked || 0) === 1;
   const decorItems = (Array.isArray(spread?.decor_items) ? spread.decor_items : [])
     .map((item, index) => ({ item, index }))
     .filter((entry) => Boolean(entry.item && typeof entry.item === 'object'));
@@ -137,10 +149,15 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
           <h2 className="h4 m-0">Edit Photo Album</h2>
           <div className="d-flex gap-2">
             <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onToggleAlbumLock(!albumLocked)} disabled={busy}>{albumLocked ? 'Unlock Album' : 'Lock Album'}</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onToggleSpreadLock(!spreadLocked)} disabled={busy || albumLocked}>{spreadLocked ? 'Unlock Page' : 'Lock Page'}</button>
             {hasUnsavedChanges ? (
-              <button type="button" className="btn btn-sm btn-primary" onClick={onSave} disabled={busy}>Save Album</button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={onSave} disabled={busy || albumLocked}>Save Album</button>
             ) : null}
-            <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDelete} disabled={busy}>Delete Album</button>
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDelete} disabled={busy || albumLocked}>Delete Album</button>
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
           </div>
         </div>
@@ -592,8 +609,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               onTogglePageFavorite={onTogglePageFavorite}
               onToggleMediaFavorite={onToggleMediaFavorite}
               onToggleTextFavorite={onToggleTextFavorite}
+              pageLocked={spreadLocked}
+              albumLocked={albumLocked}
+              onTogglePageLock={() => onToggleSpreadLock(!spreadLocked)}
+              onToggleAlbumLock={() => onToggleAlbumLock(!albumLocked)}
               onBackToAlbums={onClose}
-              editable
+              editable={!albumLocked && !spreadLocked}
               onMoveMedia={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const target = next.spec.spreads[pageIndex]?.images?.[index];

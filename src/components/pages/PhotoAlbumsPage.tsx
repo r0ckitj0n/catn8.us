@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { ApiClient } from '../../core/ApiClient';
 import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { toAlbumDisplayName, toPhotoAlbumDisplaySummary, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
@@ -17,10 +16,11 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const selectedAlbumSummary = toPhotoAlbumDisplaySummary(selectedAlbum?.summary || '');
   const selectedAlbumId = Number(selectedAlbum?.id || 0);
   const selectedPageFavorite = selectedAlbumId > 0 ? state.isPageFavorite(selectedAlbumId, state.pageIndex) : false;
+  const selectedAlbumLocked = Number(selectedAlbum?.is_locked || 0) === 1;
+  const selectedPageLocked = Number(selectedAlbum?.spec?.spreads?.[state.pageIndex]?.is_locked || 0) === 1;
   const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(selectedAlbum);
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
-  const persistedLayoutKeysRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     const handleFs = () => {
@@ -74,90 +74,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     }
   }, [state]);
 
-  const persistResolvedLayout = React.useCallback(async (
-    spreadIdx: number,
-    snapshot: {
-      media: Array<{ sourceIndex: number; x: number; y: number; w: number; rotation: number }>;
-      notes: Array<{ id: string; x: number; y: number; w: number; rotation: number }>;
-      decor: Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
-    },
-  ) => {
-    const album = selectedAlbum;
-    if (!state.isAdmin || !album || album.id <= 0 || album.is_virtual) {
-      return;
-    }
-    const spread = album.spec?.spreads?.[spreadIdx];
-    if (!spread) {
-      return;
-    }
-
-    const payloadKey = `${album.id}:${spreadIdx}:${JSON.stringify(snapshot)}`;
-    if (persistedLayoutKeysRef.current.has(payloadKey)) {
-      return;
-    }
-    persistedLayoutKeysRef.current.add(payloadKey);
-
-    try {
-      const nextSpec = structuredClone(album.spec);
-      const targetSpread = nextSpec?.spreads?.[spreadIdx];
-      if (!targetSpread) {
-        return;
-      }
-      const images = Array.isArray(targetSpread.images) ? targetSpread.images : [];
-      snapshot.media.forEach((entry) => {
-        const target = images[entry.sourceIndex];
-        if (!target) {
-          return;
-        }
-        target.x = entry.x;
-        target.y = entry.y;
-        target.w = entry.w;
-        target.rotation = entry.rotation;
-      });
-      const nextNoteLayout: Record<string, { x?: number; y?: number; w?: number; rotation?: number }> = {
-        ...(targetSpread.note_layout || {}),
-      };
-      snapshot.notes.forEach((entry) => {
-        const id = String(entry.id || '').trim();
-        if (!id) {
-          return;
-        }
-        nextNoteLayout[id] = {
-          x: entry.x,
-          y: entry.y,
-          w: entry.w,
-          rotation: entry.rotation,
-        };
-      });
-      targetSpread.note_layout = nextNoteLayout;
-      const decor = Array.isArray(targetSpread.decor_items) ? targetSpread.decor_items : [];
-      snapshot.decor.forEach((entry) => {
-        const target = decor[entry.index];
-        if (!target) {
-          return;
-        }
-        target.x = entry.x;
-        target.y = entry.y;
-        target.rotation = entry.rotation;
-        if (typeof entry.size === 'number') {
-          target.size = entry.size;
-        }
-      });
-
-      await ApiClient.post('/api/photo_albums.php?action=update', {
-        id: album.id,
-        title: album.title,
-        summary: album.summary,
-        cover_image_url: album.cover_image_url,
-        cover_prompt: album.cover_prompt,
-        is_active: album.is_active,
-        spec: nextSpec,
-      });
-    } catch {
-      persistedLayoutKeysRef.current.delete(payloadKey);
-    }
-  }, [selectedAlbum, state.isAdmin]);
-
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className={isAlbumViewerOpen ? 'section catn8-photo-albums-page catn8-photo-albums-page--viewer' : 'section catn8-photo-albums-page'}>
@@ -172,9 +88,14 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                   <p className="mb-0">Choose an album to open it.</p>
                 </div>
                 {state.isAdmin ? (
-                  <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
-                    Create Photo Album
-                  </button>
+                  <div className="d-flex gap-2 flex-wrap">
+                    <button type="button" className="btn btn-outline-primary" onClick={() => { void state.autoLayoutAllUnlocked(); }}>
+                      Auto Layout All Unlocked
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
+                      Create Photo Album
+                    </button>
+                  </div>
                 ) : null}
               </div>
 
@@ -213,6 +134,19 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           title="Edit album"
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="catn8-photo-album-card-delete"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void state.toggleAlbumLock(album.id, Number(album.is_locked || 0) !== 1);
+                          }}
+                          aria-label={Number(album.is_locked || 0) === 1 ? `Unlock album ${displayTitle}` : `Lock album ${displayTitle}`}
+                          title={Number(album.is_locked || 0) === 1 ? 'Unlock album' : 'Lock album'}
+                        >
+                          {Number(album.is_locked || 0) === 1 ? '🔒' : '🔓'}
                         </button>
                         <button
                           type="button"
@@ -268,6 +202,19 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         Edit Album
                       </button>
                     ) : null}
+                    {state.isAdmin ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                          if (selectedAlbum?.id) {
+                            void state.toggleAlbumLock(selectedAlbum.id, !selectedAlbumLocked);
+                          }
+                        }}
+                      >
+                        {selectedAlbumLocked ? 'Unlock Album' : 'Lock Album'}
+                      </button>
+                    ) : null}
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void openAdminFullscreenPreview(); }}>
                       Full Screen
                     </button>
@@ -294,10 +241,11 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 onTogglePageFavorite={(spreadIndex) => { void state.togglePageFavorite(selectedAlbum.id, spreadIndex); }}
                 onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex); }}
                 onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(selectedAlbum.id, spreadIndex, textItemId); }}
+                pageLocked={selectedPageLocked}
+                albumLocked={selectedAlbumLocked}
+                onTogglePageLock={state.isAdmin ? (spreadIndex) => { void state.toggleSpreadLock(selectedAlbum.id, spreadIndex, !selectedPageLocked); } : undefined}
+                onToggleAlbumLock={state.isAdmin ? () => { void state.toggleAlbumLock(selectedAlbum.id, !selectedAlbumLocked); } : undefined}
                 onBackToAlbums={() => { void closeViewer(); }}
-                onResolvedPlacementSnapshot={(spreadIndex, snapshot) => {
-                  void persistResolvedLayout(spreadIndex, snapshot);
-                }}
               />
             </div>
           ) : null}
@@ -345,6 +293,19 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         onFullscreenPreview={() => { void openAdminFullscreenPreview(); }}
         onClose={state.closeAdminModal}
         onSave={state.saveAdminEdits}
+        onAutoLayout={state.autoLayoutAlbum}
+        onAutoLayoutSpread={state.autoLayoutCurrentSpread}
+        onAutoLayoutAllUnlocked={state.autoLayoutAllUnlocked}
+        onToggleAlbumLock={(isLocked) => {
+          if (selectedAlbumId > 0) {
+            void state.toggleAlbumLock(selectedAlbumId, isLocked);
+          }
+        }}
+        onToggleSpreadLock={(isLocked) => {
+          if (selectedAlbumId > 0) {
+            void state.toggleSpreadLock(selectedAlbumId, state.pageIndex, isLocked);
+          }
+        }}
         onDelete={state.deleteSelectedAlbum}
         onAlbumChange={state.updateAdminDraft}
       />

@@ -63,6 +63,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `cover_prompt` (TEXT)
 - `spec_json` (LONGTEXT/JSON)
 - `is_active` (TINYINT(1), DEFAULT 1)
+- `is_locked` (TINYINT(1), DEFAULT 0)
 - `created_by_user_id` (INT)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)

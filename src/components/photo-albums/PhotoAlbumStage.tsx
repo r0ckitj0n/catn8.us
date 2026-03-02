@@ -21,6 +21,10 @@ interface PhotoAlbumStageProps {
   onTogglePageFavorite?: (spreadIndex: number) => void;
   onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
   onToggleTextFavorite?: (spreadIndex: number, textItemId: string) => void;
+  pageLocked?: boolean;
+  albumLocked?: boolean;
+  onTogglePageLock?: (spreadIndex: number) => void;
+  onToggleAlbumLock?: () => void;
   editable?: boolean;
   onMoveMedia?: (index: number, patch: { x: number; y: number }) => void;
   onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
@@ -35,14 +39,6 @@ interface PhotoAlbumStageProps {
   onDeleteNote?: (index: number) => void;
   onDeleteDecor?: (index: number) => void;
   onBackToAlbums?: () => void;
-  onResolvedPlacementSnapshot?: (
-    spreadIndex: number,
-    snapshot: {
-      media: Array<{ sourceIndex: number; x: number; y: number; w: number; rotation: number }>;
-      notes: Array<{ id: string; x: number; y: number; w: number; rotation: number }>;
-      decor: Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
-    },
-  ) => void;
 }
 
 type NoteItem = {
@@ -53,6 +49,7 @@ type NoteItem = {
   x?: number;
   y?: number;
   w?: number;
+  h?: number;
   rotation?: number;
 };
 
@@ -293,6 +290,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           x: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.x),
           y: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.y),
           w: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.w),
+          h: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.h),
           rotation: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.rotation),
         } as NoteItem;
       })
@@ -324,6 +322,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           x: Number(item.x ?? (noteLayout as any)?.[item.id || `text-${index}`]?.x),
           y: Number(item.y ?? (noteLayout as any)?.[item.id || `text-${index}`]?.y),
           w: Number(item.w ?? (noteLayout as any)?.[item.id || `text-${index}`]?.w),
+          h: Number((item as any).h ?? (noteLayout as any)?.[item.id || `text-${index}`]?.h),
           rotation: Number(item.rotation ?? (noteLayout as any)?.[item.id || `text-${index}`]?.rotation),
         } as NoteItem;
       })
@@ -356,6 +355,7 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
       x: Number((noteLayout as any)?.[`spread-note-${index}`]?.x),
       y: Number((noteLayout as any)?.[`spread-note-${index}`]?.y),
       w: Number((noteLayout as any)?.[`spread-note-${index}`]?.w),
+      h: Number((noteLayout as any)?.[`spread-note-${index}`]?.h),
       rotation: Number((noteLayout as any)?.[`spread-note-${index}`]?.rotation),
     }, notes);
   });
@@ -1086,6 +1086,10 @@ export function PhotoAlbumStage({
   onTogglePageFavorite,
   onToggleMediaFavorite,
   onToggleTextFavorite,
+  pageLocked = false,
+  albumLocked = false,
+  onTogglePageLock,
+  onToggleAlbumLock,
   editable = false,
   onMoveMedia,
   onMoveNote,
@@ -1100,8 +1104,8 @@ export function PhotoAlbumStage({
   onDeleteNote,
   onDeleteDecor,
   onBackToAlbums,
-  onResolvedPlacementSnapshot,
 }: PhotoAlbumStageProps) {
+  const isLayoutLocked = albumLocked || pageLocked;
   const spread = album.spec?.spreads?.[spreadIndex] || null;
   const mediaItems = React.useMemo(() => {
     try {
@@ -1266,7 +1270,9 @@ export function PhotoAlbumStage({
           x: hasPinnedPosition ? Number(source?.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(source?.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,
-          h: estimateMediaHeightPct(item.caption, w),
+          h: (hasPinnedPosition && Number.isFinite(Number((source as any)?.h)))
+            ? Number((source as any).h)
+            : estimateMediaHeightPct(item.caption, w),
           rotation: clamp(Number(source?.rotation ?? (singleMediaSingleNote ? (fallback.rotate - 2) : fallback.rotate)), -8, 8),
         };
       });
@@ -1291,7 +1297,9 @@ export function PhotoAlbumStage({
           x: hasPinnedPosition ? Number(note.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(note.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,
-          h: estimateNoteHeightPct(note, w),
+          h: (hasPinnedPosition && Number.isFinite(Number(note.h)))
+            ? Number(note.h)
+            : estimateNoteHeightPct(note, w),
           rotation: clamp(Number(note.rotation ?? (singleMediaSingleNote ? (fallback.rotate + 2) : fallback.rotate)), -7, 7),
         };
       });
@@ -1400,53 +1408,6 @@ export function PhotoAlbumStage({
   }, [activeMedia?.capturedAtMs, album, viewerTarget]);
 
   React.useEffect(() => {
-    if (typeof onResolvedPlacementSnapshot !== 'function') {
-      return;
-    }
-    const media = mediaItems.map((item, index) => {
-      const placement = layoutByType.mediaByIndex.get(index);
-      if (!placement) {
-        return null;
-      }
-      return {
-        sourceIndex: item.sourceIndex,
-        x: placement.x,
-        y: placement.y,
-        w: placement.w,
-        rotation: placement.rotation,
-      };
-    }).filter((item): item is { sourceIndex: number; x: number; y: number; w: number; rotation: number } => Boolean(item));
-    const noteEntries = notes.map((note, index) => {
-      const placement = layoutByType.noteByIndex.get(index);
-      if (!placement) {
-        return null;
-      }
-      return {
-        id: note.id,
-        x: placement.x,
-        y: placement.y,
-        w: placement.w,
-        rotation: placement.rotation,
-      };
-    }).filter((item): item is { id: string; x: number; y: number; w: number; rotation: number } => Boolean(item));
-    const decor = decorItems.map((_, index) => {
-      const placement = layoutByType.decorByIndex.get(index);
-      if (!placement) {
-        return null;
-      }
-      return {
-        index,
-        x: placement.x,
-        y: placement.y,
-        size: placement.size,
-        rotation: placement.rotation,
-      };
-    }).filter((item) => Boolean(item)) as Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
-
-    onResolvedPlacementSnapshot(spreadIndex, { media, notes: noteEntries, decor });
-  }, [decorItems, layoutByType.decorByIndex, layoutByType.mediaByIndex, layoutByType.noteByIndex, mediaItems, notes, onResolvedPlacementSnapshot, spreadIndex]);
-
-  React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
         return;
@@ -1503,7 +1464,7 @@ export function PhotoAlbumStage({
   }, [canNext, canPrev, nextTarget, onNext, onPrev, prevTarget, viewerTarget]);
 
   const applyDragPosition = React.useCallback((clientX: number, clientY: number) => {
-    if (!editable || !dragging) {
+    if (!editable || isLayoutLocked || !dragging) {
       return;
     }
     if (dragStartRef.current) {
@@ -1554,7 +1515,7 @@ export function PhotoAlbumStage({
         rotation: currentDecor?.rotation,
       });
     }
-  }, [editable, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
+  }, [editable, isLayoutLocked, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
 
   const endDragging = React.useCallback(() => {
     if (dragMovedRef.current) {
@@ -1569,7 +1530,7 @@ export function PhotoAlbumStage({
   }, []);
 
   React.useEffect(() => {
-    if (!editable || !dragging) {
+    if (!editable || isLayoutLocked || !dragging) {
       return undefined;
     }
     const onWindowMove = (event: MouseEvent) => {
@@ -1584,21 +1545,21 @@ export function PhotoAlbumStage({
       window.removeEventListener('mousemove', onWindowMove);
       window.removeEventListener('mouseup', onWindowUp);
     };
-  }, [applyDragPosition, dragging, editable, endDragging]);
+  }, [applyDragPosition, dragging, editable, endDragging, isLayoutLocked]);
 
   const onItemClick = React.useCallback((item: SelectedItem, viewerType: ViewerType | null) => {
     if (suppressClickRef.current) {
       suppressClickRef.current = false;
       return;
     }
-    if (editable) {
+    if (editable && !isLayoutLocked) {
       setSelectedItem(item);
       return;
     }
     if (viewerType) {
       setViewerTarget({ type: viewerType, spreadIndex, itemIndex: item.index });
     }
-  }, [editable, spreadIndex]);
+  }, [editable, isLayoutLocked, spreadIndex]);
 
   const selectedNoteText = React.useMemo(() => {
     if (!selectedItem || selectedItem.type !== 'note') {
@@ -1762,6 +1723,28 @@ export function PhotoAlbumStage({
             ♡
           </button>
         ) : null}
+        {typeof onTogglePageLock === 'function' ? (
+          <button
+            type="button"
+            className={pageLocked ? 'catn8-stage-favorite-toggle is-active catn8-stage-lock-toggle' : 'catn8-stage-favorite-toggle catn8-stage-lock-toggle'}
+            onClick={() => onTogglePageLock(spreadIndex)}
+            aria-label={pageLocked ? 'Unlock this page' : 'Lock this page'}
+            title={pageLocked ? 'Page locked' : 'Lock this page'}
+          >
+            {pageLocked ? '🔒' : '🔓'}
+          </button>
+        ) : null}
+        {typeof onToggleAlbumLock === 'function' ? (
+          <button
+            type="button"
+            className={albumLocked ? 'catn8-stage-favorite-toggle is-active catn8-stage-lock-toggle catn8-stage-album-lock-toggle' : 'catn8-stage-favorite-toggle catn8-stage-lock-toggle catn8-stage-album-lock-toggle'}
+            onClick={() => onToggleAlbumLock()}
+            aria-label={albumLocked ? 'Unlock this album' : 'Lock this album'}
+            title={albumLocked ? 'Album locked' : 'Lock this album'}
+          >
+            {albumLocked ? '🔒' : '🔓'}
+          </button>
+        ) : null}
 
         <div ref={headerRef} className="catn8-scrapbook-stage-header">
           {typeof onBackToAlbums === 'function' ? (
@@ -1824,8 +1807,18 @@ export function PhotoAlbumStage({
                 className="catn8-scatter-card catn8-scatter-media"
                 key={item.key}
                 style={renderMediaStyle(index)}
+              onMouseDown={editable && !isLayoutLocked ? (event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest('button') || target.closest('video')) {
+                    return;
+                  }
+                  event.preventDefault();
+                  dragStartRef.current = { x: event.clientX, y: event.clientY };
+                  dragMovedRef.current = false;
+                  setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
+                } : undefined}
               >
-                {editable ? (
+                {editable && !isLayoutLocked ? (
                   <button
                     type="button"
                     className="catn8-drag-handle"
@@ -1896,14 +1889,24 @@ export function PhotoAlbumStage({
                 key={note.id}
                 style={renderNoteStyle(note, index)}
                 onClick={() => onItemClick({ type: 'note', index }, 'note')}
-                onDoubleClick={editable && onEditNoteText ? () => {
+                onMouseDown={editable && !isLayoutLocked ? (event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest('button')) {
+                    return;
+                  }
+                  event.preventDefault();
+                  dragStartRef.current = { x: event.clientX, y: event.clientY };
+                  dragMovedRef.current = false;
+                  setDragging({ type: 'note', index });
+                } : undefined}
+                onDoubleClick={editable && !isLayoutLocked && onEditNoteText ? () => {
                   const next = window.prompt('Edit text', display);
                   if (typeof next === 'string' && next.trim()) {
                     onEditNoteText(index, next.trim());
                   }
                 } : undefined}
               >
-                {editable ? (
+                {editable && !isLayoutLocked ? (
                   <button
                     type="button"
                     className="catn8-drag-handle"

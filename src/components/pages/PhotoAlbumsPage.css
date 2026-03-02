@@ -469,6 +469,14 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   box-shadow: 0 6px 16px rgba(34, 21, 8, 0.18);
 }
 
+.catn8-stage-lock-toggle {
+  right: 58px;
+}
+
+.catn8-stage-album-lock-toggle {
+  right: 104px;
+}
+
 .catn8-stage-favorite-toggle.is-active {
   color: #c1355a;
 }

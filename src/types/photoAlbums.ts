@@ -36,6 +36,7 @@ export interface PhotoAlbumSpec {
     spread_number: number;
     title: string;
     caption: string;
+    is_locked?: boolean;
     default_contact_label?: string;
     photo_slots: number;
     embellishments: string[];
@@ -48,6 +49,7 @@ export interface PhotoAlbumSpec {
       x?: number;
       y?: number;
       w?: number;
+      h?: number;
       rotation?: number;
       border_color?: string;
       bg_color?: string;
@@ -57,6 +59,7 @@ export interface PhotoAlbumSpec {
       x?: number;
       y?: number;
       w?: number;
+      h?: number;
       rotation?: number;
     }>;
     decor_items?: Array<{
@@ -83,6 +86,7 @@ export interface PhotoAlbumSpec {
       x?: number;
       y?: number;
       w?: number;
+      h?: number;
       rotation?: number;
       border_color?: string;
     }>;
@@ -101,6 +105,7 @@ export interface PhotoAlbum {
   created_by_username?: string;
   created_at: string;
   updated_at: string;
+  is_locked?: number;
   spec: PhotoAlbumSpec;
   is_virtual?: boolean;
   virtual_kind?: 'favorite_media' | 'favorite_pages' | 'favorite_text';

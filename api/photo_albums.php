@@ -17,12 +17,28 @@ function catn8_photo_albums_table_ensure(): void
         cover_prompt TEXT NOT NULL,
         spec_json LONGTEXT NOT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
+        is_locked TINYINT(1) NOT NULL DEFAULT 0,
         created_by_user_id INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_photo_albums_active (is_active, updated_at),
-        KEY idx_photo_albums_slug (slug)
+        KEY idx_photo_albums_slug (slug),
+        KEY idx_photo_albums_locked (is_locked, updated_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $cols = Database::queryAll('SHOW COLUMNS FROM photo_albums');
+    $hasLocked = false;
+    foreach ($cols as $col) {
+        $name = strtolower(trim((string)($col['Field'] ?? '')));
+        if ($name === 'is_locked') {
+            $hasLocked = true;
+            break;
+        }
+    }
+    if (!$hasLocked) {
+        Database::execute('ALTER TABLE photo_albums ADD COLUMN is_locked TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active');
+        Database::execute('ALTER TABLE photo_albums ADD INDEX idx_photo_albums_locked (is_locked, updated_at)');
+    }
 }
 
 function catn8_photo_album_page_favorites_table_ensure(): void
@@ -159,6 +175,7 @@ function catn8_photo_albums_row_to_payload(array $row): array
         'cover_prompt' => (string)($row['cover_prompt'] ?? ''),
         'spec' => catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? '')),
         'is_active' => (int)($row['is_active'] ?? 0),
+        'is_locked' => (int)($row['is_locked'] ?? 0),
         'created_by_user_id' => (int)($row['created_by_user_id'] ?? 0),
         'created_by_username' => (string)($row['created_by_username'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
@@ -622,6 +639,29 @@ function catn8_photo_albums_get_viewer(int $viewerId): array
     ];
 }
 
+function catn8_photo_albums_spread_is_locked(array $spread): bool
+{
+    return (int)($spread['is_locked'] ?? 0) === 1;
+}
+
+function catn8_photo_albums_merge_locked_spreads(array $existingSpec, array $incomingSpec): array
+{
+    $existingSpreads = is_array($existingSpec['spreads'] ?? null) ? $existingSpec['spreads'] : [];
+    $incomingSpreads = is_array($incomingSpec['spreads'] ?? null) ? $incomingSpec['spreads'] : [];
+    foreach ($existingSpreads as $idx => $existingSpread) {
+        if (!is_array($existingSpread) || !catn8_photo_albums_spread_is_locked($existingSpread)) {
+            continue;
+        }
+        if (!isset($incomingSpreads[$idx]) || !is_array($incomingSpreads[$idx])) {
+            $incomingSpreads[$idx] = $existingSpread;
+            continue;
+        }
+        $incomingSpreads[$idx] = $existingSpread;
+    }
+    $incomingSpec['spreads'] = array_values($incomingSpreads);
+    return $incomingSpec;
+}
+
 function catn8_photo_albums_build_virtual_favorites(array $albums, array $favorites): array
 {
     $byId = [];
@@ -928,6 +968,375 @@ function catn8_photo_albums_build_virtual_favorites(array $albums, array $favori
     ];
 }
 
+function catn8_photo_albums_layout_hash_fraction(string $seed): float
+{
+    $hash = crc32($seed);
+    if (!is_int($hash)) {
+        $hash = 0;
+    }
+    $unsigned = (float)sprintf('%u', $hash);
+    return fmod($unsigned, 1000000.0) / 1000000.0;
+}
+
+function catn8_photo_albums_layout_clamp(float $value, float $min, float $max): float
+{
+    if ($value < $min) {
+        return $min;
+    }
+    if ($value > $max) {
+        return $max;
+    }
+    return $value;
+}
+
+function catn8_photo_albums_layout_parse_clock_to_minutes(string $value): ?int
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return null;
+    }
+    if (!preg_match('/^([0-9]{1,2}):([0-9]{2})\s*([AP]M)$/i', $trimmed, $m)) {
+        return null;
+    }
+    $hour = (int)$m[1];
+    $minute = (int)$m[2];
+    $period = strtoupper((string)$m[3]);
+    if ($hour < 1 || $hour > 12 || $minute < 0 || $minute > 59) {
+        return null;
+    }
+    if ($period === 'AM') {
+        if ($hour === 12) {
+            $hour = 0;
+        }
+    } elseif ($hour !== 12) {
+        $hour += 12;
+    }
+    return ($hour * 60) + $minute;
+}
+
+function catn8_photo_albums_layout_estimate_lines(string $text, float $widthPct, float $charScale, int $minCharsPerLine): int
+{
+    $chars = max(0, strlen(trim($text)));
+    $charsPerLine = max($minCharsPerLine, (int)floor($widthPct * $charScale));
+    if ($charsPerLine <= 0) {
+        $charsPerLine = $minCharsPerLine;
+    }
+    return max(1, (int)ceil($chars / $charsPerLine));
+}
+
+function catn8_photo_albums_layout_estimate_note_height(string $text, float $widthPct): float
+{
+    $lines = catn8_photo_albums_layout_estimate_lines($text, $widthPct, 1.5, 10);
+    return catn8_photo_albums_layout_clamp(9.2 + ($lines * 4.2), 12.0, 62.0);
+}
+
+function catn8_photo_albums_layout_estimate_media_height(string $caption, float $widthPct): float
+{
+    $lines = catn8_photo_albums_layout_estimate_lines($caption, $widthPct, 1.65, 12);
+    $imageHeight = $widthPct * 0.76;
+    return catn8_photo_albums_layout_clamp($imageHeight + 5.8 + ($lines * 3.4), 14.0, 70.0);
+}
+
+function catn8_photo_albums_layout_overlap(array $a, array $b): bool
+{
+    $gap = 1.35;
+    $aX1 = ((float)$a['x']) - $gap;
+    $aY1 = ((float)$a['y']) - $gap;
+    $aX2 = ((float)$a['x']) + ((float)$a['w']) + $gap;
+    $aY2 = ((float)$a['y']) + ((float)$a['h']) + $gap;
+    $bX1 = ((float)$b['x']) - $gap;
+    $bY1 = ((float)$b['y']) - $gap;
+    $bX2 = ((float)$b['x']) + ((float)$b['w']) + $gap;
+    $bY2 = ((float)$b['y']) + ((float)$b['h']) + $gap;
+    return !($aX2 <= $bX1 || $bX2 <= $aX1 || $aY2 <= $bY1 || $bY2 <= $aY1);
+}
+
+function catn8_photo_albums_layout_place_item(array $item, array $placed, string $seed, array $reservedRects = []): array
+{
+    $minX = 2.0;
+    $maxX = 98.0;
+    $minY = 4.0;
+    $maxY = 94.0;
+
+    $baseX = catn8_photo_albums_layout_clamp((float)$item['preferred_x'], $minX, $maxX - (float)$item['w']);
+    $baseY = catn8_photo_albums_layout_clamp((float)$item['preferred_y'], $minY, $maxY - (float)$item['h']);
+
+    $candidate = $item;
+    $candidate['x'] = $baseX;
+    $candidate['y'] = $baseY;
+
+    $fits = static function (array $next) use ($placed, $reservedRects): bool {
+        foreach ($reservedRects as $reserved) {
+            if (!is_array($reserved)) {
+                continue;
+            }
+            if (catn8_photo_albums_layout_overlap($next, [
+                'x' => (float)($reserved['x'] ?? 0.0),
+                'y' => (float)($reserved['y'] ?? 0.0),
+                'w' => (float)($reserved['w'] ?? 0.0),
+                'h' => (float)($reserved['h'] ?? 0.0),
+            ])) {
+                return false;
+            }
+        }
+        foreach ($placed as $other) {
+            if (catn8_photo_albums_layout_overlap($next, $other)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if ($fits($candidate)) {
+        return $candidate;
+    }
+
+    $w = (float)$candidate['w'];
+    $h = (float)$candidate['h'];
+    for ($shrinkPass = 0; $shrinkPass < 24; $shrinkPass++) {
+        $ringStep = 1.05 + ($shrinkPass * 0.1);
+        for ($attempt = 0; $attempt < 320; $attempt++) {
+            $ring = (int)floor($attempt / 16);
+            $angle = (catn8_photo_albums_layout_hash_fraction($seed . '-a-' . $shrinkPass . '-' . $attempt) * 2.0 * M_PI);
+            $dx = cos($angle) * $ring * $ringStep;
+            $dy = sin($angle) * $ring * $ringStep;
+            $test = $candidate;
+            $test['w'] = $w;
+            $test['h'] = $h;
+            $test['x'] = catn8_photo_albums_layout_clamp($baseX + $dx, $minX, $maxX - $w);
+            $test['y'] = catn8_photo_albums_layout_clamp($baseY + $dy, $minY, $maxY - $h);
+            if ($fits($test)) {
+                return $test;
+            }
+        }
+        $minW = $item['kind'] === 'media' ? 9.5 : 10.5;
+        $minH = $item['kind'] === 'media' ? 9.5 : 8.2;
+        $w = max($minW, $w * 0.97);
+        $h = max($minH, $h * 0.97);
+        $candidate['w'] = $w;
+        $candidate['h'] = $h;
+        $candidate['x'] = catn8_photo_albums_layout_clamp($baseX, $minX, $maxX - $w);
+        $candidate['y'] = catn8_photo_albums_layout_clamp($baseY, $minY, $maxY - $h);
+        if ($fits($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $candidate;
+}
+
+function catn8_photo_albums_auto_layout_spread(array $spread, int $albumId, int $spreadIndex): array
+{
+    $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+    $textItems = is_array($spread['text_items'] ?? null) ? $spread['text_items'] : [];
+    $noteLayout = is_array($spread['note_layout'] ?? null) ? $spread['note_layout'] : [];
+    $items = [];
+    $fallbackOrder = 0;
+
+    foreach ($images as $mediaIndex => $image) {
+        if (!is_array($image)) {
+            continue;
+        }
+        $src = trim((string)($image['display_src'] ?? $image['src'] ?? ''));
+        if ($src === '') {
+            continue;
+        }
+        $caption = trim((string)($image['caption'] ?? $image['memory_text'] ?? ''));
+        $capturedRaw = trim((string)($image['captured_at'] ?? ''));
+        $capturedTs = $capturedRaw !== '' ? strtotime($capturedRaw) : false;
+        $orderKey = ($capturedTs !== false) ? ((int)$capturedTs * 1000) : (900000000000 + $fallbackOrder);
+        $fallbackOrder += 1;
+        $items[] = [
+            'kind' => 'media',
+            'media_index' => (int)$mediaIndex,
+            'note_id' => '',
+            'text' => $caption,
+            'order_key' => $orderKey,
+        ];
+
+        $captionLines = catn8_photo_albums_split_lines($caption);
+        foreach ($captionLines as $lineIndex => $line) {
+            if (!catn8_photo_albums_is_message_like_line($line)) {
+                continue;
+            }
+            $noteOrder = $orderKey + (($lineIndex + 1) * 60);
+            $items[] = [
+                'kind' => 'note',
+                'media_index' => -1,
+                'note_id' => 'media-note-' . ((int)$mediaIndex) . '-' . ((int)$lineIndex),
+                'text' => $line,
+                'order_key' => $noteOrder,
+            ];
+        }
+    }
+
+    foreach ($textItems as $textIndex => $textItem) {
+        if (!is_array($textItem)) {
+            continue;
+        }
+        $noteId = trim((string)($textItem['id'] ?? ''));
+        if ($noteId === '') {
+            $noteId = 'text-' . ((int)$textIndex);
+        }
+        $text = trim((string)($textItem['text'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        $timeMinutes = catn8_photo_albums_layout_parse_clock_to_minutes((string)($textItem['time'] ?? ''));
+        $orderKey = $timeMinutes !== null ? (500000000000 + ($timeMinutes * 60) + $textIndex) : (910000000000 + $fallbackOrder);
+        $fallbackOrder += 1;
+        $items[] = [
+            'kind' => 'note',
+            'media_index' => -1,
+            'note_id' => $noteId,
+            'text' => $text,
+            'order_key' => $orderKey,
+        ];
+    }
+
+    $spreadCaptionLines = catn8_photo_albums_split_lines((string)($spread['caption'] ?? ''));
+    foreach ($spreadCaptionLines as $lineIndex => $line) {
+        if (!catn8_photo_albums_is_message_like_line($line)) {
+            continue;
+        }
+        $items[] = [
+            'kind' => 'note',
+            'media_index' => -1,
+            'note_id' => 'spread-note-' . ((int)$lineIndex),
+            'text' => $line,
+            'order_key' => 920000000000 + $fallbackOrder + $lineIndex,
+        ];
+    }
+
+    usort($items, static function (array $a, array $b): int {
+        $ak = (int)($a['order_key'] ?? 0);
+        $bk = (int)($b['order_key'] ?? 0);
+        if ($ak !== $bk) {
+            return $ak < $bk ? -1 : 1;
+        }
+        return strcmp((string)($a['kind'] ?? ''), (string)($b['kind'] ?? ''));
+    });
+
+    $count = max(1, count($items));
+    $density = $count;
+    $baseMediaW = $density <= 2 ? 42.0 : ($density <= 4 ? 30.0 : ($density <= 8 ? 21.0 : ($density >= 14 ? 12.0 : 15.0)));
+    $baseNoteW = $density <= 2 ? 38.0 : ($density <= 4 ? 27.0 : ($density <= 8 ? 19.0 : ($density >= 14 ? 11.0 : 14.0)));
+
+    $minimumItems = [];
+    $totalMinArea = 0.0;
+    foreach ($items as $idx => $item) {
+        $seed = $albumId . '-' . $spreadIndex . '-' . $idx . '-' . (string)($item['kind'] ?? 'item');
+        $variation = 0.84 + (catn8_photo_albums_layout_hash_fraction($seed) * 0.34);
+        if ($item['kind'] === 'media') {
+            $w = catn8_photo_albums_layout_clamp($baseMediaW * $variation, 9.5, 40.0);
+            $h = catn8_photo_albums_layout_estimate_media_height((string)($item['text'] ?? ''), $w);
+        } else {
+            $w = catn8_photo_albums_layout_clamp($baseNoteW * $variation, 10.5, 44.0);
+            $h = catn8_photo_albums_layout_estimate_note_height((string)($item['text'] ?? ''), $w);
+        }
+        $entry = $item;
+        $entry['w'] = $w;
+        $entry['h'] = $h;
+        $minimumItems[] = $entry;
+        $totalMinArea += ($w * $h);
+    }
+
+    $reservedRects = [
+        ['x' => 2.0, 'y' => 4.0, 'w' => 23.0, 'h' => 16.0],   // page tag + date card area
+        ['x' => 92.0, 'y' => 4.0, 'w' => 6.0, 'h' => 9.0],    // favorite button area
+    ];
+    $canvasArea = (98.0 - 2.0) * (94.0 - 4.0);
+    $reservedArea = 0.0;
+    foreach ($reservedRects as $reserved) {
+        $reservedArea += max(0.0, ((float)$reserved['w']) * ((float)$reserved['h']));
+    }
+    $usableArea = max(1.0, $canvasArea - $reservedArea);
+    $targetCoverage = 0.78;
+    $targetArea = $usableArea * $targetCoverage;
+    $scale = $totalMinArea > 0 ? sqrt($targetArea / $totalMinArea) : 1.0;
+    $scale = catn8_photo_albums_layout_clamp($scale, 0.92, 2.2);
+
+    $placed = [];
+    $placedItems = [];
+    foreach ($minimumItems as $index => $item) {
+        $w = catn8_photo_albums_layout_clamp(((float)$item['w']) * $scale, $item['kind'] === 'media' ? 9.5 : 10.5, 52.0);
+        $hBase = $item['kind'] === 'media'
+            ? catn8_photo_albums_layout_estimate_media_height((string)($item['text'] ?? ''), $w)
+            : catn8_photo_albums_layout_estimate_note_height((string)($item['text'] ?? ''), $w);
+        $h = catn8_photo_albums_layout_clamp($hBase, $item['kind'] === 'media' ? 10.0 : 8.2, 72.0);
+        $progress = ($count <= 1) ? 0.5 : ($index / ($count - 1));
+        $preferredY = 6.0 + ($progress * 82.0) + ((catn8_photo_albums_layout_hash_fraction('y-' . $albumId . '-' . $spreadIndex . '-' . $index) - 0.5) * 4.0);
+        $preferredX = 6.0 + (catn8_photo_albums_layout_hash_fraction('x-' . $albumId . '-' . $spreadIndex . '-' . $index) * 86.0);
+        $rotation = (((catn8_photo_albums_layout_hash_fraction('r-' . $albumId . '-' . $spreadIndex . '-' . $index) * 13.0) - 6.0));
+
+        $placeRequest = [
+            'kind' => (string)$item['kind'],
+            'w' => $w,
+            'h' => $h,
+            'preferred_x' => $preferredX,
+            'preferred_y' => $preferredY,
+            'rotation' => $rotation,
+        ];
+        $placedItem = catn8_photo_albums_layout_place_item($placeRequest, $placed, (string)($albumId . '-' . $spreadIndex . '-' . $index), $reservedRects);
+        $placed[] = $placedItem;
+        $item['x'] = $placedItem['x'];
+        $item['y'] = $placedItem['y'];
+        $item['w'] = $placedItem['w'];
+        $item['h'] = $placedItem['h'];
+        $item['rotation'] = $rotation;
+        $placedItems[] = $item;
+    }
+
+    foreach ($placedItems as $item) {
+        if (($item['kind'] ?? '') === 'media') {
+            $mediaIndex = (int)($item['media_index'] ?? -1);
+            if ($mediaIndex >= 0 && isset($images[$mediaIndex]) && is_array($images[$mediaIndex])) {
+                $images[$mediaIndex]['x'] = (float)$item['x'];
+                $images[$mediaIndex]['y'] = (float)$item['y'];
+                $images[$mediaIndex]['w'] = (float)$item['w'];
+                $images[$mediaIndex]['h'] = (float)$item['h'];
+                $images[$mediaIndex]['rotation'] = (float)$item['rotation'];
+            }
+            continue;
+        }
+        $noteId = trim((string)($item['note_id'] ?? ''));
+        if ($noteId === '') {
+            continue;
+        }
+        $noteLayout[$noteId] = [
+            'x' => (float)$item['x'],
+            'y' => (float)$item['y'],
+            'w' => (float)$item['w'],
+            'h' => (float)$item['h'],
+            'rotation' => (float)$item['rotation'],
+        ];
+    }
+
+    foreach ($textItems as $textIndex => $textItem) {
+        if (!is_array($textItem)) {
+            continue;
+        }
+        $noteId = trim((string)($textItem['id'] ?? ''));
+        if ($noteId === '') {
+            $noteId = 'text-' . ((int)$textIndex);
+        }
+        $layout = is_array($noteLayout[$noteId] ?? null) ? $noteLayout[$noteId] : null;
+        if ($layout === null) {
+            continue;
+        }
+        $textItems[$textIndex]['x'] = (float)($layout['x'] ?? 0.0);
+        $textItems[$textIndex]['y'] = (float)($layout['y'] ?? 0.0);
+        $textItems[$textIndex]['w'] = (float)($layout['w'] ?? 0.0);
+        $textItems[$textIndex]['h'] = (float)($layout['h'] ?? 0.0);
+        $textItems[$textIndex]['rotation'] = (float)($layout['rotation'] ?? 0.0);
+    }
+
+    $spread['images'] = $images;
+    $spread['text_items'] = $textItems;
+    $spread['note_layout'] = $noteLayout;
+    return $spread;
+}
+
 catn8_groups_seed_core();
 catn8_photo_albums_table_ensure();
 catn8_photo_album_page_favorites_table_ensure();
@@ -943,7 +1352,7 @@ $viewerPayload = catn8_photo_albums_get_viewer($viewerId);
 if ($method === 'GET') {
     if ($action === 'list') {
         $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
-        $sql = 'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+        $sql = 'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
                 FROM photo_albums';
         if (!$isAdminViewer) {
             $sql .= ' WHERE is_active = 1';
@@ -964,7 +1373,7 @@ if ($method === 'GET') {
         }
 
         $row = Database::queryOne(
-            'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+            'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
              FROM photo_albums
              WHERE id = ?
              LIMIT 1',
@@ -1005,13 +1414,16 @@ if ($action === 'toggle_page_favorite') {
         catn8_json_response(['success' => false, 'error' => 'Invalid album_id or spread_index'], 400);
     }
 
-    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active, is_locked FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
     if (!$albumRow) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
     }
     $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
     if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($albumRow['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
     }
 
     $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
@@ -1046,13 +1458,16 @@ if ($action === 'toggle_media_favorite') {
         catn8_json_response(['success' => false, 'error' => 'Invalid favorite media payload'], 400);
     }
 
-    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active, is_locked FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
     if (!$albumRow) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
     }
     $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
     if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($albumRow['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
     }
 
     $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
@@ -1093,13 +1508,16 @@ if ($action === 'toggle_text_favorite') {
         catn8_json_response(['success' => false, 'error' => 'Invalid text_item_id'], 400);
     }
 
-    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active, is_locked FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
     if (!$albumRow) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
     }
     $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
     if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($albumRow['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
     }
 
     $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
@@ -1165,14 +1583,14 @@ if ($action === 'create') {
     }
 
     Database::execute(
-        'INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)',
         [$title, $slug, $summary, $coverImageUrl, $coverPrompt, $specJson, $isActive, $viewerId]
     );
 
     $newId = (int)Database::lastInsertId();
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',
@@ -1188,9 +1606,12 @@ if ($action === 'update') {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
 
-    $existing = Database::queryOne('SELECT id FROM photo_albums WHERE id = ? LIMIT 1', [$id]);
+    $existing = Database::queryOne('SELECT id, title, spec_json, is_locked FROM photo_albums WHERE id = ? LIMIT 1', [$id]);
     if (!$existing) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($existing['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
     }
 
     $title = catn8_photo_albums_clean_text((string)($body['title'] ?? ''), 191);
@@ -1202,6 +1623,8 @@ if ($action === 'update') {
     if ($title === '' || !is_array($spec)) {
         catn8_json_response(['success' => false, 'error' => 'Title and spec are required'], 400);
     }
+    $existingSpec = catn8_photo_albums_parse_spec((string)($existing['spec_json'] ?? '{}'), (string)($existing['title'] ?? ''));
+    $spec = catn8_photo_albums_merge_locked_spreads($existingSpec, $spec);
 
     $isActive = (int)($body['is_active'] ?? 1) === 1 ? 1 : 0;
     $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
@@ -1217,7 +1640,7 @@ if ($action === 'update') {
     );
 
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',
@@ -1227,15 +1650,220 @@ if ($action === 'update') {
     catn8_json_response(['success' => true, 'album' => catn8_photo_albums_row_to_payload($row ?: [])]);
 }
 
+if ($action === 'auto_layout') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    $row = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
+    }
+
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    foreach ($spreads as $spreadIndex => $spread) {
+        if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
+            continue;
+        }
+        $spreads[$spreadIndex] = catn8_photo_albums_auto_layout_spread($spread, $id, (int)$spreadIndex);
+    }
+    $spec['spreads'] = array_values($spreads);
+    $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+    if (!is_string($specJson) || $specJson === '') {
+        catn8_json_response(['success' => false, 'error' => 'Failed to encode album spec'], 500);
+    }
+
+    Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $id]);
+
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    catn8_json_response(['success' => true, 'album' => catn8_photo_albums_row_to_payload($updated ?: [])]);
+}
+
+if ($action === 'auto_layout_spread') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+
+    $row = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
+    }
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    if (!is_array($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    if (catn8_photo_albums_spread_is_locked($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread is locked'], 423);
+    }
+    $spreads[$spreadIndex] = catn8_photo_albums_auto_layout_spread($spread, $id, $spreadIndex);
+    $spec['spreads'] = array_values($spreads);
+    $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+    if (!is_string($specJson) || $specJson === '') {
+        catn8_json_response(['success' => false, 'error' => 'Failed to encode album spec'], 500);
+    }
+    Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $id]);
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    catn8_json_response(['success' => true, 'album' => catn8_photo_albums_row_to_payload($updated ?: [])]);
+}
+
+if ($action === 'auto_layout_all') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    $rows = Database::queryAll(
+        'SELECT id, title, spec_json
+           FROM photo_albums
+          WHERE is_locked = 0
+          ORDER BY id ASC'
+    );
+    $updatedCount = 0;
+    foreach ($rows as $row) {
+        $albumId = (int)($row['id'] ?? 0);
+        if ($albumId <= 0) {
+            continue;
+        }
+        $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+        $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+        foreach ($spreads as $spreadIndex => $spread) {
+            if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
+                continue;
+            }
+            $spreads[$spreadIndex] = catn8_photo_albums_auto_layout_spread($spread, $albumId, (int)$spreadIndex);
+        }
+        $spec['spreads'] = array_values($spreads);
+        $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+        if (!is_string($specJson) || $specJson === '') {
+            continue;
+        }
+        Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $albumId]);
+        $updatedCount += 1;
+    }
+    catn8_json_response(['success' => true, 'updated_albums' => $updatedCount]);
+}
+
+if ($action === 'toggle_album_lock') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    $id = (int)($body['id'] ?? 0);
+    $isLocked = (int)($body['is_locked'] ?? 0) === 1 ? 1 : 0;
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $existing = Database::queryOne('SELECT id FROM photo_albums WHERE id = ? LIMIT 1', [$id]);
+    if (!$existing) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    Database::execute('UPDATE photo_albums SET is_locked = ? WHERE id = ?', [$isLocked, $id]);
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    catn8_json_response(['success' => true, 'album' => catn8_photo_albums_row_to_payload($updated ?: [])]);
+}
+
+if ($action === 'toggle_spread_lock') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $isLocked = (int)($body['is_locked'] ?? 0) === 1;
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+    $row = Database::queryOne(
+        'SELECT id, title, spec_json, is_locked
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
+    }
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    if (!isset($spreads[$spreadIndex]) || !is_array($spreads[$spreadIndex])) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    $spreads[$spreadIndex]['is_locked'] = $isLocked ? 1 : 0;
+    $spec['spreads'] = array_values($spreads);
+    $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+    if (!is_string($specJson) || $specJson === '') {
+        catn8_json_response(['success' => false, 'error' => 'Failed to encode album spec'], 500);
+    }
+    Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $id]);
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    catn8_json_response(['success' => true, 'album' => catn8_photo_albums_row_to_payload($updated ?: [])]);
+}
+
 if ($action === 'delete') {
     $id = (int)($body['id'] ?? 0);
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
 
-    $row = Database::queryOne('SELECT id FROM photo_albums WHERE id = ? LIMIT 1', [$id]);
+    $row = Database::queryOne('SELECT id, is_locked FROM photo_albums WHERE id = ? LIMIT 1', [$id]);
     if (!$row) {
         catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
     }
 
     Database::execute('DELETE FROM photo_albums WHERE id = ?', [$id]);
@@ -1320,14 +1948,14 @@ if ($action === 'create_with_ai') {
     }
 
     Database::execute(
-        'INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
+        'INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?)',
         [$title, $slug, $summary, $coverImageUrl, $coverPrompt, $specJson, $viewerId]
     );
 
     $newId = (int)Database::lastInsertId();
     $row = Database::queryOne(
-        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
          FROM photo_albums
          WHERE id = ?
          LIMIT 1',

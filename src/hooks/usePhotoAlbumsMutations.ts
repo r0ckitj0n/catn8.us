@@ -10,6 +10,7 @@ interface PhotoAlbumsMutationsArgs {
   defaultCreateForm: PhotoAlbumAiCreateRequest;
   adminDraft: PhotoAlbum | null;
   selectedAlbum: PhotoAlbum | null;
+  pageIndex: number;
   setBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setShowCreateModal: React.Dispatch<React.SetStateAction<boolean>>;
   setCreateForm: React.Dispatch<React.SetStateAction<PhotoAlbumAiCreateRequest>>;
@@ -33,6 +34,7 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     defaultCreateForm,
     adminDraft,
     selectedAlbum,
+    pageIndex,
     setBusy,
     setShowCreateModal,
     setCreateForm,
@@ -131,9 +133,136 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     await deleteAlbumById({ id: album.id, title: album.title });
   }, [adminDraft, deleteAlbumById, selectedAlbum]);
 
+  const autoLayoutAlbum = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=auto_layout', {
+        id: album.id,
+      });
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Auto layout applied and saved');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to auto layout album');
+    } finally {
+      setBusy(false);
+    }
+  }, [adminDraft, selectedAlbum, isAdmin, setBusy, setAdminDraft, toast, loadAlbums]);
+
+  const autoLayoutCurrentSpread = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=auto_layout_spread', {
+        id: album.id,
+        spread_index: pageIndex,
+      });
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', `Auto layout applied to spread ${pageIndex + 1}`);
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to auto layout spread');
+    } finally {
+      setBusy(false);
+    }
+  }, [adminDraft, isAdmin, loadAlbums, pageIndex, selectedAlbum, setAdminDraft, setBusy, toast]);
+
+  const autoLayoutAllUnlocked = React.useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    const proceed = window.confirm('Auto layout all unlocked albums?');
+    if (!proceed) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; updated_albums?: number }>('/api/photo_albums.php?action=auto_layout_all', {});
+      const updated = Number(res?.updated_albums || 0);
+      toast('success', `Auto layout complete for ${updated} album${updated === 1 ? '' : 's'}`);
+      await loadAlbums();
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to auto layout all albums');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setBusy, toast]);
+
+  const toggleAlbumLock = React.useCallback(async (id: number, isLocked: boolean) => {
+    if (!isAdmin || id <= 0) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=toggle_album_lock', {
+        id,
+        is_locked: isLocked ? 1 : 0,
+      });
+      if (res?.album) {
+        setAdminDraft((prev) => {
+          if (!prev || prev.id !== id) {
+            return prev;
+          }
+          return res.album;
+        });
+      }
+      toast('success', isLocked ? 'Album locked' : 'Album unlocked');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update album lock');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const toggleSpreadLock = React.useCallback(async (id: number, spreadIndex: number, isLocked: boolean) => {
+    if (!isAdmin || id <= 0 || spreadIndex < 0) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=toggle_spread_lock', {
+        id,
+        spread_index: spreadIndex,
+        is_locked: isLocked ? 1 : 0,
+      });
+      if (res?.album) {
+        setAdminDraft((prev) => {
+          if (!prev || prev.id !== id) {
+            return prev;
+          }
+          return res.album;
+        });
+      }
+      toast('success', isLocked ? 'Page locked' : 'Page unlocked');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update page lock');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
   return {
     createWithAi,
     saveAdminEdits,
+    autoLayoutAlbum,
+    autoLayoutCurrentSpread,
+    autoLayoutAllUnlocked,
+    toggleAlbumLock,
+    toggleSpreadLock,
     deleteSelectedAlbum,
     deleteAlbumById,
   };

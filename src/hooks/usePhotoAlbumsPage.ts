@@ -150,6 +150,7 @@ export function usePhotoAlbumsPage(
   }, [loadAlbums]);
 
   const selectedAlbum = React.useMemo(() => albums.find((album) => album.id === selectedId) || null, [albums, selectedId]);
+  const selectedAlbumIndex = React.useMemo(() => albums.findIndex((album) => album.id === selectedId), [albums, selectedId]);
   const hasUnsavedAdminChanges = React.useMemo(() => {
     if (!showAdminModal || !adminDraft || !selectedAlbum || adminDraft.id !== selectedAlbum.id) {
       return false;
@@ -159,24 +160,62 @@ export function usePhotoAlbumsPage(
   const workingAlbum = showAdminModal ? adminDraft : selectedAlbum;
   const spreads = workingAlbum?.spec?.spreads || [];
   const selectedSpread = spreads[pageIndex] || null;
+  const pendingPageIndexRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     const initialZoom = Number(selectedAlbum?.spec?.controls?.zoom?.initial || 1);
     setZoom(Number.isFinite(initialZoom) ? initialZoom : 1);
+    const spreadCount = Array.isArray(selectedAlbum?.spec?.spreads) ? selectedAlbum.spec.spreads.length : 0;
+    const pendingPageIndex = pendingPageIndexRef.current;
+    if (pendingPageIndex !== null) {
+      const clamped = spreadCount > 0 ? Math.max(0, Math.min(spreadCount - 1, pendingPageIndex)) : 0;
+      setPageIndex(clamped);
+      pendingPageIndexRef.current = null;
+      return;
+    }
     setPageIndex(0);
   }, [selectedAlbum?.id]);
 
   const totalSpreads = spreads.length;
-  const canPrev = pageIndex > 0;
-  const canNext = pageIndex < Math.max(0, totalSpreads - 1);
+  const canPrevSpread = pageIndex > 0;
+  const canNextSpread = pageIndex < Math.max(0, totalSpreads - 1);
+  const canPrevAlbum = showAlbumViewer && !showAdminModal && !canPrevSpread && selectedAlbumIndex > 0;
+  const canNextAlbum = showAlbumViewer && !showAdminModal && !canNextSpread && selectedAlbumIndex >= 0 && selectedAlbumIndex < (albums.length - 1);
+  const canPrev = canPrevSpread || canPrevAlbum;
+  const canNext = canNextSpread || canNextAlbum;
 
   const prevPage = React.useCallback(() => {
-    setPageIndex((prev) => Math.max(0, prev - 1));
-  }, []);
+    if (pageIndex > 0) {
+      setPageIndex((prev) => Math.max(0, prev - 1));
+      return;
+    }
+    if (!showAlbumViewer || showAdminModal || selectedAlbumIndex <= 0) {
+      return;
+    }
+    const prevAlbum = albums[selectedAlbumIndex - 1];
+    if (!prevAlbum) {
+      return;
+    }
+    const prevSpreadCount = Array.isArray(prevAlbum?.spec?.spreads) ? prevAlbum.spec.spreads.length : 0;
+    pendingPageIndexRef.current = Math.max(0, prevSpreadCount - 1);
+    setSelectedId(prevAlbum.id);
+  }, [albums, pageIndex, selectedAlbumIndex, showAdminModal, showAlbumViewer]);
 
   const nextPage = React.useCallback(() => {
-    setPageIndex((prev) => Math.min(Math.max(0, totalSpreads - 1), prev + 1));
-  }, [totalSpreads]);
+    if (pageIndex < Math.max(0, totalSpreads - 1)) {
+      setPageIndex((prev) => Math.min(Math.max(0, totalSpreads - 1), prev + 1));
+      return;
+    }
+    if (!showAlbumViewer || showAdminModal || selectedAlbumIndex < 0 || selectedAlbumIndex >= (albums.length - 1)) {
+      return;
+    }
+    const nextAlbum = albums[selectedAlbumIndex + 1];
+    if (!nextAlbum) {
+      return;
+    }
+    pendingPageIndexRef.current = 0;
+    setSelectedId(nextAlbum.id);
+  }, [albums, pageIndex, selectedAlbumIndex, showAdminModal, showAlbumViewer, totalSpreads]);
 
   const adjustZoom = React.useCallback((delta: number) => {
     const minZoom = Number(workingAlbum?.spec?.controls?.zoom?.min || 0.75);
@@ -187,6 +226,7 @@ export function usePhotoAlbumsPage(
   }, [workingAlbum, zoom]);
 
   const openAlbum = React.useCallback((albumId: number, mode: 'view' | 'edit' = 'view') => {
+    pendingPageIndexRef.current = null;
     setSelectedId(albumId);
     setPageIndex(0);
     if (isAdmin && mode === 'edit') {

@@ -84,11 +84,12 @@ export function toPhotoAlbumDisplayTitle(value: unknown): string {
 }
 
 export function toPhotoAlbumDisplaySummary(value: unknown): string {
-  const cleaned = sanitizeAlbumMessageText(value).trim();
-  if (!cleaned) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
     return '';
   }
-  return cleaned.replace(/^Imported memories\s*/i, '').trim();
+  const withoutPrefix = raw.replace(/^Imported memories\s*/i, '').trim();
+  return withoutPrefix.replace(/\s{2,}/g, ' ');
 }
 
 function cleanWhitespace(value: string): string {

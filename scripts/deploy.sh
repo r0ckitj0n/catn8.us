@@ -47,6 +47,12 @@ Common options:
   --full           Full-replace mode
   --dist-only      Deploy dist assets only
   --env-only       Deploy .env.live only
+  --pull-missing-from-live
+                   Pull missing files from LIVE to local after deploy (explicit opt-in)
+  --pull-missing-paths <paths>
+                   Comma-separated remote roots for pull-missing (default: images)
+  --no-pull-missing-from-live
+                   Explicitly disable pull-missing behavior
   --backup-live    Trigger live website backup API before deploy
   --no-backup-live Skip live website backup API before deploy
   --purge          Purge managed remote directories before deploy
@@ -91,10 +97,12 @@ UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
 # Defaults target directories commonly populated by live AI/user tooling.
 IMAGE_SYNC_EXCLUDE_GLOBS="${CATN8_IMAGE_SYNC_EXCLUDE_GLOBS:-images/mystery/**,images/build-wizard/**,images/wordsearch/**,images/backgrounds/**}"
 # Pull missing files from LIVE after deploy so local has a backup of live-only assets.
-# Default is OFF to avoid accidental large downloads into the local repo.
-PULL_MISSING_FROM_LIVE="${CATN8_PULL_MISSING_FROM_LIVE:-0}"
+# Always OFF by default; must be explicitly enabled by CLI flag.
+PULL_MISSING_FROM_LIVE="0"
+PULL_MISSING_EXPLICIT="0"
+PULL_MISSING_ENV_REQUESTED="${CATN8_PULL_MISSING_FROM_LIVE:-0}"
 # Comma-separated remote roots to pull missing files for (safe default: images only).
-PULL_MISSING_PATHS="${CATN8_PULL_MISSING_PATHS:-images}"
+PULL_MISSING_PATHS="images"
 # Default safety: never delete anything under images/** on the remote.
 PRESERVE_IMAGES=1
 PURGE_IMAGES=0
@@ -156,11 +164,33 @@ while [[ $# -gt 0 ]]; do
       SKIP_TYPECHECK=1
       shift
       ;;
+    --pull-missing-from-live)
+      PULL_MISSING_FROM_LIVE=1
+      PULL_MISSING_EXPLICIT=1
+      shift
+      ;;
+    --no-pull-missing-from-live)
+      PULL_MISSING_FROM_LIVE=0
+      PULL_MISSING_EXPLICIT=1
+      shift
+      ;;
+    --pull-missing-paths)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --pull-missing-paths requires a comma-separated path list." >&2
+        exit 2
+      fi
+      PULL_MISSING_PATHS="$2"
+      shift 2
+      ;;
     *)
       shift
       ;;
   esac
 done
+
+if [[ "${PULL_MISSING_ENV_REQUESTED}" == "1" && "${PULL_MISSING_EXPLICIT}" != "1" ]]; then
+  echo "Info: Ignoring CATN8_PULL_MISSING_FROM_LIVE=1 (requires explicit --pull-missing-from-live flag)."
+fi
 
 require_var CATN8_DEPLOY_HOST
 require_var CATN8_DEPLOY_USER

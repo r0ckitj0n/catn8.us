@@ -35,6 +35,14 @@ interface PhotoAlbumStageProps {
   onDeleteNote?: (index: number) => void;
   onDeleteDecor?: (index: number) => void;
   onBackToAlbums?: () => void;
+  onResolvedPlacementSnapshot?: (
+    spreadIndex: number,
+    snapshot: {
+      media: Array<{ sourceIndex: number; x: number; y: number; w: number; rotation: number }>;
+      notes: Array<{ id: string; x: number; y: number; w: number; rotation: number }>;
+      decor: Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
+    },
+  ) => void;
 }
 
 type NoteItem = {
@@ -248,6 +256,9 @@ function spreadMedia(album: PhotoAlbum, targetSpreadIndex: number): PreparedMedi
 
 function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: PreparedMediaItem[], contactDisplayName?: string): NoteItem[] {
   const spread = album.spec?.spreads?.[targetSpreadIndex];
+  const noteLayout = (spread && typeof spread.note_layout === 'object' && spread.note_layout)
+    ? spread.note_layout
+    : {};
   const dedup = new Set<string>();
   const addUniqueNote = (note: NoteItem, out: NoteItem[]) => {
     const canonical = `${note.speaker}:${note.time || ''}:${note.text}`.toLowerCase();
@@ -279,6 +290,10 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
           text: parsed.body,
           speaker: parsed.speaker,
           time: parsed.time,
+          x: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.x),
+          y: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.y),
+          w: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.w),
+          rotation: Number((noteLayout as any)?.[`media-note-${mediaItem.sourceIndex}-${lineIndex}`]?.rotation),
         } as NoteItem;
       })
       .filter((item): item is NoteItem => Boolean(item))
@@ -306,10 +321,10 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
             spread?.default_contact_label,
           ),
           time: item.time || parsed.time,
-          x: item.x,
-          y: item.y,
-          w: item.w,
-          rotation: item.rotation,
+          x: Number(item.x ?? (noteLayout as any)?.[item.id || `text-${index}`]?.x),
+          y: Number(item.y ?? (noteLayout as any)?.[item.id || `text-${index}`]?.y),
+          w: Number(item.w ?? (noteLayout as any)?.[item.id || `text-${index}`]?.w),
+          rotation: Number(item.rotation ?? (noteLayout as any)?.[item.id || `text-${index}`]?.rotation),
         } as NoteItem;
       })
       .filter((item): item is NoteItem => Boolean(item && item.text));
@@ -338,6 +353,10 @@ function spreadNotes(album: PhotoAlbum, targetSpreadIndex: number, media: Prepar
       text: parsed.body,
       speaker: parsed.speaker,
       time: parsed.time,
+      x: Number((noteLayout as any)?.[`spread-note-${index}`]?.x),
+      y: Number((noteLayout as any)?.[`spread-note-${index}`]?.y),
+      w: Number((noteLayout as any)?.[`spread-note-${index}`]?.w),
+      rotation: Number((noteLayout as any)?.[`spread-note-${index}`]?.rotation),
     }, notes);
   });
   return notes;
@@ -429,6 +448,7 @@ type LayoutItem = {
   index: number;
   sourceIndex?: number;
   pinned?: boolean;
+  timelineOrder?: number;
   minX?: number;
   maxX?: number;
   minY?: number;
@@ -458,6 +478,8 @@ const RESERVED_PADDING_PCT = 1.4;
 const LAYOUT_NUDGE_PCT = 0.8;
 const MIN_CORE_GAP_PCT = 2.6;
 const MIN_ITEM_GAP_PCT = 0.9;
+const TIMELINE_TOP_PCT = 6;
+const TIMELINE_BOTTOM_PCT = 90;
 
 type LayoutRect = {
   x: number;
@@ -740,56 +762,73 @@ function forceSeparate(items: LayoutItem[], seed: string, constraints: LayoutCon
   return resolved;
 }
 
-function enforceNoTouch(items: LayoutItem[], constraints: LayoutConstraints): LayoutItem[] {
-  const step = 0.8;
-  const sorted = [...items].sort((a, b) => {
-    if (isCoreItem(a) !== isCoreItem(b)) {
-      return isCoreItem(a) ? -1 : 1;
-    }
-    const areaDiff = (b.w * b.h) - (a.w * a.h);
-    if (Math.abs(areaDiff) > 0.01) {
-      return areaDiff;
-    }
-    return a.id.localeCompare(b.id);
-  });
-  const placed: LayoutItem[] = [];
+function enforceNoTouch(items: LayoutItem[], seed: string, constraints: LayoutConstraints): LayoutItem[] {
+  const cores = items
+    .filter((item) => isCoreItem(item))
+    .sort((a, b) => {
+      const ao = Number.isFinite(a.timelineOrder) ? Number(a.timelineOrder) : Number.POSITIVE_INFINITY;
+      const bo = Number.isFinite(b.timelineOrder) ? Number(b.timelineOrder) : Number.POSITIVE_INFINITY;
+      if (ao !== bo) {
+        return ao - bo;
+      }
+      return a.id.localeCompare(b.id);
+    });
+  const decors = items
+    .filter((item) => !isCoreItem(item))
+    .sort((a, b) => a.id.localeCompare(b.id));
 
+  const placed: LayoutItem[] = [];
   const fits = (candidate: LayoutItem): boolean => (
     !placed.some((other) => overlapArea(candidate, other) > OVERLAP_EPSILON)
   );
+  const maxOrder = cores.reduce((max, item) => {
+    const order = Number.isFinite(item.timelineOrder) ? Number(item.timelineOrder) : 0;
+    return Math.max(max, order);
+  }, 0);
 
-  sorted.forEach((item) => {
-    let candidate = constrainLayout({ ...item }, constraints);
-    let found = false;
+  const placeItem = (item: LayoutItem, preferredX: number, preferredY: number): LayoutItem => {
+    let candidate = constrainLayout({ ...item, x: preferredX, y: preferredY }, constraints);
+    let found = fits(candidate);
     let w = candidate.w;
     let h = candidate.h;
 
     for (let shrinkPass = 0; shrinkPass < 20 && !found; shrinkPass += 1) {
-      const maxX = Math.max(constraints.minX, constraints.maxX - w);
-      const maxY = Math.max(constraints.minY, constraints.maxY - h);
-      for (let y = constraints.minY; y <= maxY && !found; y += step) {
-        for (let x = constraints.minX; x <= maxX; x += step) {
-          const test = constrainLayout({ ...candidate, x, y, w, h }, constraints);
-          if (fits(test)) {
-            candidate = test;
-            found = true;
-            break;
-          }
+      const ringStep = 1.1 + (shrinkPass * 0.12);
+      for (let attempt = 0; attempt < 280 && !found; attempt += 1) {
+        const hash = hashValue(`${seed}-${item.id}-${shrinkPass}-${attempt}`);
+        const ring = Math.floor(attempt / 14);
+        const angle = ((hash % 360) * Math.PI) / 180;
+        const radiusX = ring * ringStep;
+        const radiusY = ring * ringStep * 0.95;
+        const dx = Math.cos(angle) * radiusX;
+        const dy = Math.sin(angle) * radiusY;
+        const test = constrainLayout({ ...candidate, x: preferredX + dx, y: preferredY + dy, w, h }, constraints);
+        if (fits(test)) {
+          candidate = test;
+          found = true;
         }
       }
       if (!found) {
-        const minW = minimumWidthFor(item);
-        const minH = minimumHeightFor(item);
-        w = Math.max(minW, w * 0.965);
-        h = Math.max(minH, h * 0.965);
+        w = Math.max(minimumWidthFor(item), w * 0.97);
+        h = Math.max(minimumHeightFor(item), h * 0.97);
+        candidate = constrainLayout({ ...candidate, w, h, x: preferredX, y: preferredY }, constraints);
+        found = fits(candidate);
       }
     }
+    return candidate;
+  };
 
-    if (!found) {
-      candidate = constrainLayout({ ...candidate, w, h }, constraints);
-    }
+  cores.forEach((item) => {
+    const order = Number.isFinite(item.timelineOrder) ? Number(item.timelineOrder) : 0;
+    const progress = maxOrder <= 0 ? 0.5 : clamp(order / maxOrder, 0, 1);
+    const ySpan = Math.max(2, TIMELINE_BOTTOM_PCT - TIMELINE_TOP_PCT);
+    const preferredY = TIMELINE_TOP_PCT + (progress * ySpan);
+    const placedItem = placeItem(item, item.x, preferredY);
+    placed.push(placedItem);
+  });
 
-    placed.push(candidate);
+  decors.forEach((item) => {
+    placed.push(placeItem(item, item.x, item.y));
   });
 
   const byId = new Map<string, LayoutItem>();
@@ -925,6 +964,7 @@ function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutCon
 
   return enforceNoTouch(
     maximizeCoreItems(forceSeparate(resolved, `${seed}-finalize`, constraints), constraints),
+    seed,
     constraints,
   );
 }
@@ -1060,6 +1100,7 @@ export function PhotoAlbumStage({
   onDeleteNote,
   onDeleteDecor,
   onBackToAlbums,
+  onResolvedPlacementSnapshot,
 }: PhotoAlbumStageProps) {
   const spread = album.spec?.spreads?.[spreadIndex] || null;
   const mediaItems = React.useMemo(() => {
@@ -1221,8 +1262,7 @@ export function PhotoAlbumStage({
           index,
           sourceIndex: item.sourceIndex,
           pinned: hasPinnedPosition,
-          minY: 38,
-          maxY: CANVAS_MAX_Y,
+          timelineOrder: flowIndex,
           x: hasPinnedPosition ? Number(source?.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(source?.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,
@@ -1247,8 +1287,7 @@ export function PhotoAlbumStage({
           type: 'note',
           index,
           pinned: hasPinnedPosition,
-          minY: CANVAS_MIN_Y,
-          maxY: 34,
+          timelineOrder: flowIndex,
           x: hasPinnedPosition ? Number(note.x) : Number(singleMediaSingleNote ? singleX : fallback.x),
           y: hasPinnedPosition ? Number(note.y) : Number(singleMediaSingleNote ? singleY : fallback.y),
           w,
@@ -1359,6 +1398,53 @@ export function PhotoAlbumStage({
     }
     return sanitizeAlbumMessageText(spreadForTarget?.title || '');
   }, [activeMedia?.capturedAtMs, album, viewerTarget]);
+
+  React.useEffect(() => {
+    if (typeof onResolvedPlacementSnapshot !== 'function') {
+      return;
+    }
+    const media = mediaItems.map((item, index) => {
+      const placement = layoutByType.mediaByIndex.get(index);
+      if (!placement) {
+        return null;
+      }
+      return {
+        sourceIndex: item.sourceIndex,
+        x: placement.x,
+        y: placement.y,
+        w: placement.w,
+        rotation: placement.rotation,
+      };
+    }).filter((item): item is { sourceIndex: number; x: number; y: number; w: number; rotation: number } => Boolean(item));
+    const noteEntries = notes.map((note, index) => {
+      const placement = layoutByType.noteByIndex.get(index);
+      if (!placement) {
+        return null;
+      }
+      return {
+        id: note.id,
+        x: placement.x,
+        y: placement.y,
+        w: placement.w,
+        rotation: placement.rotation,
+      };
+    }).filter((item): item is { id: string; x: number; y: number; w: number; rotation: number } => Boolean(item));
+    const decor = decorItems.map((_, index) => {
+      const placement = layoutByType.decorByIndex.get(index);
+      if (!placement) {
+        return null;
+      }
+      return {
+        index,
+        x: placement.x,
+        y: placement.y,
+        size: placement.size,
+        rotation: placement.rotation,
+      };
+    }).filter((item) => Boolean(item)) as Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
+
+    onResolvedPlacementSnapshot(spreadIndex, { media, notes: noteEntries, decor });
+  }, [decorItems, layoutByType.decorByIndex, layoutByType.mediaByIndex, layoutByType.noteByIndex, mediaItems, notes, onResolvedPlacementSnapshot, spreadIndex]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -53,6 +53,12 @@ export interface PhotoAlbumSpec {
       bg_color?: string;
       side?: 'left' | 'right';
     }>;
+    note_layout?: Record<string, {
+      x?: number;
+      y?: number;
+      w?: number;
+      rotation?: number;
+    }>;
     decor_items?: Array<{
       id: string;
       emoji: string;

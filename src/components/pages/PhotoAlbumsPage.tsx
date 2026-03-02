@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { ApiClient } from '../../core/ApiClient';
 import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { toAlbumDisplayName, toPhotoAlbumDisplaySummary, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
@@ -19,6 +20,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(selectedAlbum);
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const persistedLayoutKeysRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     const handleFs = () => {
@@ -71,6 +73,90 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
       // fullscreen can be blocked by browser context
     }
   }, [state]);
+
+  const persistResolvedLayout = React.useCallback(async (
+    spreadIdx: number,
+    snapshot: {
+      media: Array<{ sourceIndex: number; x: number; y: number; w: number; rotation: number }>;
+      notes: Array<{ id: string; x: number; y: number; w: number; rotation: number }>;
+      decor: Array<{ index: number; x: number; y: number; size?: number; rotation: number }>;
+    },
+  ) => {
+    const album = selectedAlbum;
+    if (!state.isAdmin || !album || album.id <= 0 || album.is_virtual) {
+      return;
+    }
+    const spread = album.spec?.spreads?.[spreadIdx];
+    if (!spread) {
+      return;
+    }
+
+    const payloadKey = `${album.id}:${spreadIdx}:${JSON.stringify(snapshot)}`;
+    if (persistedLayoutKeysRef.current.has(payloadKey)) {
+      return;
+    }
+    persistedLayoutKeysRef.current.add(payloadKey);
+
+    try {
+      const nextSpec = structuredClone(album.spec);
+      const targetSpread = nextSpec?.spreads?.[spreadIdx];
+      if (!targetSpread) {
+        return;
+      }
+      const images = Array.isArray(targetSpread.images) ? targetSpread.images : [];
+      snapshot.media.forEach((entry) => {
+        const target = images[entry.sourceIndex];
+        if (!target) {
+          return;
+        }
+        target.x = entry.x;
+        target.y = entry.y;
+        target.w = entry.w;
+        target.rotation = entry.rotation;
+      });
+      const nextNoteLayout: Record<string, { x?: number; y?: number; w?: number; rotation?: number }> = {
+        ...(targetSpread.note_layout || {}),
+      };
+      snapshot.notes.forEach((entry) => {
+        const id = String(entry.id || '').trim();
+        if (!id) {
+          return;
+        }
+        nextNoteLayout[id] = {
+          x: entry.x,
+          y: entry.y,
+          w: entry.w,
+          rotation: entry.rotation,
+        };
+      });
+      targetSpread.note_layout = nextNoteLayout;
+      const decor = Array.isArray(targetSpread.decor_items) ? targetSpread.decor_items : [];
+      snapshot.decor.forEach((entry) => {
+        const target = decor[entry.index];
+        if (!target) {
+          return;
+        }
+        target.x = entry.x;
+        target.y = entry.y;
+        target.rotation = entry.rotation;
+        if (typeof entry.size === 'number') {
+          target.size = entry.size;
+        }
+      });
+
+      await ApiClient.post('/api/photo_albums.php?action=update', {
+        id: album.id,
+        title: album.title,
+        summary: album.summary,
+        cover_image_url: album.cover_image_url,
+        cover_prompt: album.cover_prompt,
+        is_active: album.is_active,
+        spec: nextSpec,
+      });
+    } catch {
+      persistedLayoutKeysRef.current.delete(payloadKey);
+    }
+  }, [selectedAlbum, state.isAdmin]);
 
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -197,6 +283,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 spreadIndex={state.pageIndex}
                 zoom={state.zoom}
                 contactDisplayName={toAlbumDisplayName(selectedAlbum.created_by_username || '')}
+                respectSavedPositions
                 canPrev={state.canPrev}
                 canNext={state.canNext}
                 onPrev={state.prevPage}
@@ -208,6 +295,9 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex); }}
                 onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(selectedAlbum.id, spreadIndex, textItemId); }}
                 onBackToAlbums={() => { void closeViewer(); }}
+                onResolvedPlacementSnapshot={(spreadIndex, snapshot) => {
+                  void persistResolvedLayout(spreadIndex, snapshot);
+                }}
               />
             </div>
           ) : null}

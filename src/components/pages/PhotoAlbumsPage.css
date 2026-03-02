@@ -150,6 +150,38 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   transition: opacity 150ms ease, transform 150ms ease, background-color 150ms ease;
 }
 
+.catn8-photo-album-card-lock {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.45rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(125, 135, 147, 0.45);
+  border-radius: 999px;
+  background: rgba(246, 248, 251, 0.96);
+  color: #a4acb7;
+  font-size: 0.9rem;
+  line-height: 1;
+  z-index: 2;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.catn8-photo-album-card-lock.is-active {
+  color: #7f5a38;
+  border-color: rgba(127, 90, 56, 0.45);
+  background: rgba(255, 248, 236, 0.95);
+}
+
+.catn8-photo-album-card-lock:hover {
+  background: #fff;
+}
+
 .catn8-photo-album-card-admin-actions {
   position: absolute;
   right: 0.5rem;
@@ -172,7 +204,8 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   background: rgba(255, 255, 255, 0.94);
 }
 
-.catn8-photo-album-card-admin-actions .catn8-photo-album-card-delete {
+.catn8-photo-album-card-admin-actions .catn8-photo-album-card-delete,
+.catn8-photo-album-card-admin-actions .catn8-photo-album-card-lock {
   position: static;
   right: auto;
   bottom: auto;
@@ -336,6 +369,22 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   flex-wrap: wrap;
 }
 
+.catn8-lock-text-toggle {
+  border: 1px solid rgba(125, 135, 147, 0.45);
+  background: rgba(246, 248, 251, 0.96);
+  color: #aeb5bf;
+}
+
+.catn8-lock-text-toggle:hover:not(:disabled) {
+  background: #fff;
+}
+
+.catn8-lock-text-toggle.is-active {
+  color: #7f5a38;
+  border-color: rgba(127, 90, 56, 0.45);
+  background: rgba(255, 248, 236, 0.95);
+}
+
 .catn8-album-toolbar.is-fullscreen {
   border-radius: 0;
   margin: 0;
@@ -494,7 +543,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-stage-lock-toggle {
   right: 58px;
-  color: #9aa1ab;
+}
+
+.catn8-stage-lock-toggle:not(.is-active) {
+  color: #aeb5bf;
+  background: rgba(246, 248, 251, 0.96);
+  box-shadow: 0 6px 16px rgba(80, 93, 109, 0.18);
 }
 
 .catn8-stage-album-lock-toggle {
@@ -507,6 +561,8 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-stage-lock-toggle.is-active {
   color: #7f5a38;
+  background: rgba(255, 248, 236, 0.95);
+  box-shadow: 0 6px 16px rgba(34, 21, 8, 0.18);
 }
 
 .catn8-stage-favorite-toggle:hover {
@@ -1064,6 +1120,23 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   background: linear-gradient(140deg, #ecd0ae, #dcb691);
 }
 
+.catn8-admin-modal-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.catn8-admin-modal-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .catn8-admin-modal-body {
   display: grid;
   grid-template-columns: 380px 1fr;
@@ -1091,10 +1164,10 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-admin-inline-lock {
   width: 2rem;
   height: 2rem;
-  border: 1px solid rgba(112, 84, 58, 0.35);
+  border: 1px solid rgba(125, 135, 147, 0.45);
   border-radius: 999px;
-  background: rgba(255, 248, 236, 0.95);
-  color: #9aa1ab;
+  background: rgba(246, 248, 251, 0.96);
+  color: #aeb5bf;
   font-size: 1rem;
   line-height: 1;
   display: inline-flex;
@@ -1105,6 +1178,8 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-admin-inline-lock.is-active {
   color: #7f5a38;
+  border-color: rgba(127, 90, 56, 0.35);
+  background: rgba(255, 248, 236, 0.95);
 }
 
 .catn8-admin-inline-lock:hover:not(:disabled) {
@@ -1164,6 +1239,23 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
   .catn8-admin-modal-body {
     grid-template-columns: 1fr;
+  }
+
+  .catn8-admin-modal-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .catn8-admin-modal-header-actions {
+    width: 100%;
+    margin-left: 0;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .catn8-admin-modal-header-tools {
+    justify-content: flex-start;
   }
 
   .catn8-scrapbook-scatter {

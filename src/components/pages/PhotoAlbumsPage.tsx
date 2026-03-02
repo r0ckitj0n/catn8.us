@@ -39,8 +39,8 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     };
   }, [isFullscreen, state.showAlbumViewer]);
 
-  const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view') => {
-    state.openAlbum(albumId, mode);
+  const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
+    state.openAlbum(albumId, mode, initialPageIndex);
     if (state.isAdmin || mode === 'edit') {
       return;
     }
@@ -143,7 +143,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         </button>
                         <button
                           type="button"
-                          className="catn8-photo-album-card-delete"
+                          className={Number(album.is_locked || 0) === 1 ? 'catn8-photo-album-card-lock is-active' : 'catn8-photo-album-card-lock'}
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
@@ -201,7 +201,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
                           if (selectedAlbum?.id) {
-                            void openAlbum(selectedAlbum.id, 'edit');
+                            void openAlbum(selectedAlbum.id, 'edit', state.pageIndex);
                           }
                         }}
                       >
@@ -211,7 +211,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     {state.isAdmin ? (
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-secondary"
+                        className={selectedAlbumLocked ? 'btn btn-sm catn8-lock-text-toggle is-active' : 'btn btn-sm catn8-lock-text-toggle'}
                         onClick={() => {
                           if (selectedAlbum?.id) {
                             void state.toggleAlbumLock(selectedAlbum.id, !selectedAlbumLocked);
@@ -250,7 +250,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 pageLocked={selectedPageLocked}
                 albumLocked={selectedAlbumLocked}
                 onTogglePageLock={state.isAdmin ? (spreadIndex) => { void state.toggleSpreadLock(selectedAlbum.id, spreadIndex, !selectedPageLocked); } : undefined}
-                onToggleAlbumLock={state.isAdmin ? () => { void state.toggleAlbumLock(selectedAlbum.id, !selectedAlbumLocked); } : undefined}
                 onBackToAlbums={() => { void closeViewer(); }}
               />
             </div>

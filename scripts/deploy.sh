@@ -398,7 +398,8 @@ DOC_HTACCESS_INCLUDE=""
 if [ -f documentation/.htaccess ]; then
   DOC_HTACCESS_INCLUDE=' --include-glob documentation/.htaccess'
 fi
-cat > deploy_commands.txt << EOL
+DEPLOY_COMMANDS_FILE="$(mktemp /tmp/catn8_deploy_commands.XXXXXX)"
+cat > "${DEPLOY_COMMANDS_FILE}" << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
@@ -409,10 +410,12 @@ open sftp://$USER:$PASS@$HOST
 # Note: SFTP lacks checksums. In full-replace mode we use --overwrite to force upload.
 # In fast mode, we use size-only + only-newer to avoid re-uploading identical files.
 mirror $MIRROR_FLAGS \
+  --exclude-glob ".git/**" \
   --exclude-glob .git/ \
   --exclude-glob .git \
   --exclude-glob node_modules/ \
   --exclude-glob vendor/** \
+  --exclude-glob ".local/**" \
   --exclude-glob .local/ \
   --exclude-glob .cache/ \
   --exclude-glob .agent/ \
@@ -469,7 +472,7 @@ if [ "$MODE" != "env-only" ] && [ "$MODE" != "dist-only" ]; then
   else
     # Create logs directory if it doesn't exist
     mkdir -p logs
-    if lftp -f deploy_commands.txt; then
+    if lftp -f "${DEPLOY_COMMANDS_FILE}"; then
       DRY_DEPLOY_SUCCESS=1
     else
       DRY_DEPLOY_SUCCESS=0
@@ -582,61 +585,77 @@ EOL
   # Rationale: primary mirror excludes dist/**, so this pass is required in all modes,
   # including --full (CATN8_FULL_REPLACE=1), to publish the latest frontend bundles.
   echo -e "${GREEN}📦 Ensuring dist assets & manifest are updated...${NC}"
-  cat > deploy_dist.txt << EOL
+  DEPLOY_DIST_FILE="$(mktemp /tmp/catn8_deploy_dist.XXXXXX)"
+  cat > "${DEPLOY_DIST_FILE}" << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
 ${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --reverse --delete --verbose --overwrite --no-perms \
+  --exclude-glob ".DS_Store" \
+  --exclude-glob "**/.DS_Store" \
+  --exclude-glob "* [0-9]*" \
   dist dist
 bye
 EOL
   if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
     echo -e "${YELLOW}DRY-RUN: Skipping dist sync${NC}"
-  elif lftp -f deploy_dist.txt; then
+  elif lftp -f "${DEPLOY_DIST_FILE}"; then
     echo -e "${GREEN}✅ Dist assets & manifest synced${NC}"
   else
     echo -e "${RED}❌ Dist sync failed.${NC}"
-    rm -f deploy_dist.txt
+    rm -f "${DEPLOY_DIST_FILE}"
     exit 1
   fi
-  rm -f deploy_dist.txt
+  rm -f "${DEPLOY_DIST_FILE}"
 
   # In preserve-images mode, publish new/updated images without deleting remote files.
   if [ "$MODE" != "dist-only" ] && [ "$PRESERVE_IMAGES" = "1" ]; then
     echo -e "${GREEN}🖼️  Syncing images (upload/update only, no deletes)...${NC}"
-    IMAGE_EXCLUDE_ARGS=""
+    DEPLOY_IMAGES_FILE="$(mktemp /tmp/catn8_deploy_images.XXXXXX)"
+    {
+      printf '%s\n' "set sftp:auto-confirm yes"
+      printf '%s\n' "set ssl:verify-certificate no"
+      printf '%s\n' "set cmd:fail-exit yes"
+      printf '%s\n' "${LFTP_NET_SETTINGS}"
+      printf '%s\n' "open sftp://$USER:$PASS@$HOST"
+      printf '%s\n' "mirror --reverse --verbose --only-newer --ignore-time --no-perms \\"
+    } > "${DEPLOY_IMAGES_FILE}"
     if [ -n "${IMAGE_SYNC_EXCLUDE_GLOBS}" ]; then
+      declare -a IMAGE_EXCLUDES_ARR=()
       IFS=',' read -r -a IMAGE_EXCLUDES_ARR <<< "${IMAGE_SYNC_EXCLUDE_GLOBS}"
       for ex in "${IMAGE_EXCLUDES_ARR[@]}"; do
         ex_trimmed="$(echo "$ex" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         if [ -n "$ex_trimmed" ]; then
-          IMAGE_EXCLUDE_ARGS="${IMAGE_EXCLUDE_ARGS}\n  --exclude-glob \"${ex_trimmed}\" \\"
+          printf '  --exclude-glob "%s" \\\n' "${ex_trimmed}" >> "${DEPLOY_IMAGES_FILE}"
         fi
       done
     fi
-    cat > deploy_images.txt << EOL
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-${LFTP_NET_SETTINGS}
-open sftp://$USER:$PASS@$HOST
-mirror --reverse --verbose --only-newer --ignore-time --no-perms \
-$(printf "%b" "${IMAGE_EXCLUDE_ARGS}")
+    cat >> "${DEPLOY_IMAGES_FILE}" << 'EOL'
+  --exclude-glob ".git/**" \
+  --exclude-glob ".git" \
+  --exclude-glob ".local/**" \
+  --exclude-glob ".local/" \
+  --exclude-glob "backups/**" \
+  --exclude-glob "logs/**" \
+  --exclude-glob ".DS_Store" \
+  --exclude-glob "**/.DS_Store" \
+  --exclude-glob "* [0-9]*" \
+  --exclude-glob "deploy_images.txt" \
   images images
 bye
 EOL
     if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
       echo -e "${YELLOW}DRY-RUN: Skipping images sync${NC}"
-    elif lftp -f deploy_images.txt; then
+    elif lftp -f "${DEPLOY_IMAGES_FILE}"; then
       echo -e "${GREEN}✅ Images synced (upload/update only)${NC}"
     else
       echo -e "${RED}❌ Images sync failed.${NC}"
-      rm -f deploy_images.txt
+      rm -f "${DEPLOY_IMAGES_FILE}"
       exit 1
     fi
-    rm -f deploy_images.txt
+    rm -f "${DEPLOY_IMAGES_FILE}"
   fi
 
   # Secondary passes are unnecessary in full-replace mode
@@ -669,12 +688,12 @@ EOL
   fi
 else
   echo -e "${RED}❌ File deployment failed${NC}"
-  rm deploy_commands.txt
+  rm -f "${DEPLOY_COMMANDS_FILE}"
   exit 1
 fi
 
 # Clean up lftp commands file
-rm deploy_commands.txt
+rm -f "${DEPLOY_COMMANDS_FILE}"
 
 # Ensure no Vite hot file exists on the live server (prevents accidental dev mode)
 if [ "$MODE" != "env-only" ]; then

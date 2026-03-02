@@ -286,10 +286,11 @@ export function usePhotoAlbumsPage(
     setZoom(Math.max(minZoom, Math.min(maxZoom, Number(next.toFixed(2)))));
   }, [workingAlbum, zoom]);
 
-  const openAlbum = React.useCallback((albumId: number, mode: 'view' | 'edit' = 'view') => {
+  const openAlbum = React.useCallback((albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
     pendingPageIndexRef.current = null;
     setSelectedId(albumId);
-    setPageIndex(0);
+    const requestedPage = Number(initialPageIndex);
+    setPageIndex(Number.isFinite(requestedPage) && requestedPage >= 0 ? requestedPage : 0);
     if (isAdmin && mode === 'edit') {
       const album = albums.find((candidate) => candidate.id === albumId);
       setAdminDraft(album ? cloneAlbum(album) : null);

@@ -67,6 +67,23 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### photo_album_page_favorites
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `album_id` (INT)
+- `spread_index` (INT)
+- `created_at` (TIMESTAMP)
+- Unique key: (`user_id`, `album_id`, `spread_index`)
+
+### photo_album_media_favorites
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `album_id` (INT)
+- `spread_index` (INT)
+- `media_source_index` (INT)
+- `created_at` (TIMESTAMP)
+- Unique key: (`user_id`, `album_id`, `spread_index`, `media_source_index`)
+
 ### photo_album_import_checkpoints
 - `source_key` (VARCHAR(191), PRIMARY KEY)
 - `last_message_id` (BIGINT)

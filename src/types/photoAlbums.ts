@@ -96,6 +96,8 @@ export interface PhotoAlbum {
   created_at: string;
   updated_at: string;
   spec: PhotoAlbumSpec;
+  is_virtual?: boolean;
+  virtual_kind?: 'favorite_media' | 'favorite_pages';
 }
 
 export interface PhotoAlbumViewerInfo {
@@ -108,6 +110,7 @@ export interface PhotoAlbumListResponse {
   success: boolean;
   viewer: PhotoAlbumViewerInfo;
   albums: PhotoAlbum[];
+  favorites?: PhotoAlbumFavoritesPayload;
 }
 
 export interface PhotoAlbumGetResponse {
@@ -144,4 +147,25 @@ export interface PhotoAlbumAiCreateRequest {
 export interface PhotoAlbumMutationResponse {
   success: boolean;
   album: PhotoAlbum;
+}
+
+export interface PhotoAlbumFavoritePage {
+  album_id: number;
+  spread_index: number;
+}
+
+export interface PhotoAlbumFavoriteMedia {
+  album_id: number;
+  spread_index: number;
+  media_source_index: number;
+}
+
+export interface PhotoAlbumFavoritesPayload {
+  pages: PhotoAlbumFavoritePage[];
+  media: PhotoAlbumFavoriteMedia[];
+}
+
+export interface PhotoAlbumFavoriteMutationResponse {
+  success: boolean;
+  favorites: PhotoAlbumFavoritesPayload;
 }

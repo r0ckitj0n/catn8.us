@@ -94,6 +94,17 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   font-size: 0.9rem;
 }
 
+.catn8-photo-album-template-badge {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5a3a22;
+  background: rgba(227, 204, 176, 0.92);
+}
+
 .catn8-photo-album-card-delete {
   position: absolute;
   right: 0.5rem;
@@ -321,6 +332,56 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-stage-nav-next {
   right: 10px;
+}
+
+.catn8-stage-favorite-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 248, 236, 0.95);
+  color: #7f5a38;
+  font-size: 1.15rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 14;
+  box-shadow: 0 6px 16px rgba(34, 21, 8, 0.18);
+}
+
+.catn8-stage-favorite-toggle.is-active {
+  color: #c1355a;
+}
+
+.catn8-stage-favorite-toggle:hover {
+  background: #fff;
+}
+
+.catn8-viewer-favorite-toggle {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(127, 90, 56, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.92);
+  color: #7f5a38;
+  font-size: 1.05rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.catn8-viewer-favorite-toggle.is-active {
+  color: #c1355a;
+  border-color: rgba(193, 53, 90, 0.45);
+}
+
+.catn8-viewer-favorite-toggle:hover {
+  background: #fff;
 }
 
 .catn8-scrapbook-stage-header {

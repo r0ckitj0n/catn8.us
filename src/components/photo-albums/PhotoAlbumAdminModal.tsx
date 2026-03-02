@@ -14,8 +14,12 @@ interface PhotoAlbumAdminModalProps {
   zoom: number;
   canPrev: boolean;
   canNext: boolean;
+  pageFavorite?: boolean;
+  isMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => boolean;
   onPrevPage: () => void;
   onNextPage: () => void;
+  onTogglePageFavorite?: (spreadIndex: number) => void;
+  onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
   onFullscreenPreview: () => void;
   onClose: () => void;
   onSave: () => void;
@@ -33,8 +37,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     zoom,
     canPrev,
     canNext,
+    pageFavorite = false,
+    isMediaFavorite,
     onPrevPage,
     onNextPage,
+    onTogglePageFavorite,
+    onToggleMediaFavorite,
     onFullscreenPreview,
     onClose,
     onSave,
@@ -571,8 +579,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
               canPrev={canPrev}
               canNext={canNext}
+              pageFavorite={pageFavorite}
+              isMediaFavorite={isMediaFavorite}
               onPrev={onPrevPage}
               onNext={onNextPage}
+              onTogglePageFavorite={onTogglePageFavorite}
+              onToggleMediaFavorite={onToggleMediaFavorite}
               onBackToAlbums={onClose}
               editable
               onMoveMedia={(index, patch) => onAlbumChange((prev) => {

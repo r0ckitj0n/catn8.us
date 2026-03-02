@@ -7,8 +7,10 @@ interface PhotoAlbumElementViewerProps {
   activeMedia: PreparedMediaItem | null;
   activeNote: string;
   dateLabel?: string;
+  activeMediaFavorite?: boolean;
   prevTarget: ViewerTarget | null;
   nextTarget: ViewerTarget | null;
+  onToggleActiveMediaFavorite?: () => void;
   onClose: () => void;
   onNavigate: (target: ViewerTarget | null) => void;
 }
@@ -21,7 +23,7 @@ function isVideoMedia(src: string, mediaType?: string): boolean {
 }
 
 export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
-  const { target, activeMedia, activeNote, dateLabel, prevTarget, nextTarget, onClose, onNavigate } = props;
+  const { target, activeMedia, activeNote, dateLabel, activeMediaFavorite = false, prevTarget, nextTarget, onToggleActiveMediaFavorite, onClose, onNavigate } = props;
 
   return (
     <div className="catn8-element-viewer-overlay" role="dialog" aria-modal="true">
@@ -30,6 +32,17 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
           <strong>{target.type === 'media' ? 'Media' : 'Text'}</strong>
           <div className="catn8-element-viewer-header-right">
             {dateLabel ? <span className="catn8-element-viewer-date">{dateLabel}</span> : null}
+            {target.type === 'media' && typeof onToggleActiveMediaFavorite === 'function' ? (
+              <button
+                type="button"
+                className={activeMediaFavorite ? 'catn8-viewer-favorite-toggle is-active' : 'catn8-viewer-favorite-toggle'}
+                onClick={onToggleActiveMediaFavorite}
+                aria-label={activeMediaFavorite ? 'Remove media from favorites' : 'Add media to favorites'}
+                title={activeMediaFavorite ? 'Favorited media' : 'Favorite this media'}
+              >
+                ♡
+              </button>
+            ) : null}
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
           </div>
         </div>

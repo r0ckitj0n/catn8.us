@@ -10,10 +10,14 @@ interface PhotoAlbumStageProps {
   spreadIndex: number;
   zoom: number;
   contactDisplayName?: string;
+  pageFavorite?: boolean;
+  isMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => boolean;
   canPrev?: boolean;
   canNext?: boolean;
   onPrev?: () => void;
   onNext?: () => void;
+  onTogglePageFavorite?: (spreadIndex: number) => void;
+  onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
   editable?: boolean;
   onMoveMedia?: (index: number, patch: { x: number; y: number }) => void;
   onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
@@ -840,10 +844,14 @@ export function PhotoAlbumStage({
   spreadIndex,
   zoom,
   contactDisplayName,
+  pageFavorite = false,
+  isMediaFavorite,
   canPrev = false,
   canNext = false,
   onPrev,
   onNext,
+  onTogglePageFavorite,
+  onToggleMediaFavorite,
   editable = false,
   onMoveMedia,
   onMoveNote,
@@ -1076,6 +1084,11 @@ export function PhotoAlbumStage({
 
   const prevTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, -1, contactDisplayName) : null;
   const nextTarget = viewerTarget ? findAdjacentTarget(album, viewerTarget, 1, contactDisplayName) : null;
+  const canFavoriteCurrentPage = album.id > 0 && !album.is_virtual && typeof onTogglePageFavorite === 'function';
+  const canFavoriteCurrentMedia = album.id > 0 && !album.is_virtual && typeof onToggleMediaFavorite === 'function' && viewerTarget?.type === 'media' && Boolean(activeMedia);
+  const activeMediaFavorited = (canFavoriteCurrentMedia && activeMedia && typeof isMediaFavorite === 'function')
+    ? isMediaFavorite(spreadIndex, activeMedia.sourceIndex)
+    : false;
   const viewerDateLabel = React.useMemo(() => {
     if (!viewerTarget) {
       return '';
@@ -1342,6 +1355,18 @@ export function PhotoAlbumStage({
           ›
         </button>
 
+        {canFavoriteCurrentPage ? (
+          <button
+            type="button"
+            className={pageFavorite ? 'catn8-stage-favorite-toggle is-active' : 'catn8-stage-favorite-toggle'}
+            onClick={() => onTogglePageFavorite?.(spreadIndex)}
+            aria-label={pageFavorite ? 'Remove page from favorites' : 'Add page to favorites'}
+            title={pageFavorite ? 'Favorited page' : 'Favorite this page'}
+          >
+            ♡
+          </button>
+        ) : null}
+
         <div ref={headerRef} className="catn8-scrapbook-stage-header">
           {typeof onBackToAlbums === 'function' ? (
             <button
@@ -1493,8 +1518,12 @@ export function PhotoAlbumStage({
           activeMedia={activeMedia}
           activeNote={activeNote}
           dateLabel={viewerDateLabel}
+          activeMediaFavorite={activeMediaFavorited}
           prevTarget={prevTarget}
           nextTarget={nextTarget}
+          onToggleActiveMediaFavorite={canFavoriteCurrentMedia && activeMedia ? () => {
+            onToggleMediaFavorite?.(spreadIndex, activeMedia.sourceIndex);
+          } : undefined}
           onClose={() => setViewerTarget(null)}
           onNavigate={setViewerTarget}
         />

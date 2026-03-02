@@ -25,6 +25,35 @@ function catn8_photo_albums_table_ensure(): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
+function catn8_photo_album_page_favorites_table_ensure(): void
+{
+    Database::execute("CREATE TABLE IF NOT EXISTS photo_album_page_favorites (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        album_id INT NOT NULL,
+        spread_index INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_album_spread (user_id, album_id, spread_index),
+        KEY idx_photo_album_page_favorites_user_created (user_id, created_at),
+        KEY idx_photo_album_page_favorites_album (album_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function catn8_photo_album_media_favorites_table_ensure(): void
+{
+    Database::execute("CREATE TABLE IF NOT EXISTS photo_album_media_favorites (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        album_id INT NOT NULL,
+        spread_index INT NOT NULL,
+        media_source_index INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_album_spread_media (user_id, album_id, spread_index, media_source_index),
+        KEY idx_photo_album_media_favorites_user_created (user_id, created_at),
+        KEY idx_photo_album_media_favorites_album (album_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
 function catn8_photo_albums_slug(string $value): string
 {
     $value = strtolower(trim($value));
@@ -119,6 +148,94 @@ function catn8_photo_albums_row_to_payload(array $row): array
         'created_by_username' => (string)($row['created_by_username'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
         'updated_at' => (string)($row['updated_at'] ?? ''),
+        'is_virtual' => (int)($row['is_virtual'] ?? 0) === 1,
+        'virtual_kind' => (string)($row['virtual_kind'] ?? ''),
+    ];
+}
+
+function catn8_photo_albums_as_list(array $value): array
+{
+    return array_values(array_filter(array_map(static fn ($item) => trim((string)$item), $value), static fn ($item) => $item !== ''));
+}
+
+function catn8_photo_albums_favorites_payload(int $viewerId): array
+{
+    $pageRows = Database::queryAll(
+        'SELECT album_id, spread_index
+           FROM photo_album_page_favorites
+          WHERE user_id = ?
+          ORDER BY created_at ASC, id ASC',
+        [$viewerId]
+    );
+    $mediaRows = Database::queryAll(
+        'SELECT album_id, spread_index, media_source_index
+           FROM photo_album_media_favorites
+          WHERE user_id = ?
+          ORDER BY created_at ASC, id ASC',
+        [$viewerId]
+    );
+
+    $pages = array_map(static fn ($row) => [
+        'album_id' => (int)($row['album_id'] ?? 0),
+        'spread_index' => (int)($row['spread_index'] ?? 0),
+    ], $pageRows);
+    $media = array_map(static fn ($row) => [
+        'album_id' => (int)($row['album_id'] ?? 0),
+        'spread_index' => (int)($row['spread_index'] ?? 0),
+        'media_source_index' => (int)($row['media_source_index'] ?? 0),
+    ], $mediaRows);
+
+    return [
+        'pages' => $pages,
+        'media' => $media,
+    ];
+}
+
+function catn8_photo_albums_virtual_payload(int $id, string $title, string $summary, string $coverImageUrl, array $spreads, string $kind): array
+{
+    return [
+        'id' => $id,
+        'title' => $title,
+        'slug' => $kind,
+        'summary' => $summary,
+        'cover_image_url' => $coverImageUrl,
+        'cover_prompt' => '',
+        'is_active' => 1,
+        'created_by_user_id' => 0,
+        'created_by_username' => '',
+        'created_at' => gmdate('Y-m-d H:i:s'),
+        'updated_at' => gmdate('Y-m-d H:i:s'),
+        'spec' => [
+            'schema_version' => 'catn8_scrapbook_spec_v1',
+            'dimensions' => [
+                'width_px' => 1400,
+                'height_px' => 1050,
+                'aspect_ratio' => '4:3',
+                'safe_margin_px' => 56,
+                'bleed_px' => 24,
+            ],
+            'controls' => [
+                'page_turn_style' => 'ribbon-tabs',
+                'zoom' => ['min' => 0.75, 'max' => 2.5, 'step' => 0.25, 'initial' => 1],
+                'downloads' => [
+                    'allow_cover_download' => false,
+                    'allow_page_download' => false,
+                    'formats' => ['png'],
+                    'default_format' => 'png',
+                ],
+            ],
+            'style_guide' => [
+                'memory_era' => 'favorites',
+                'mood' => 'warm and nostalgic',
+                'palette' => ['gold', 'cream', 'sage'],
+                'materials' => ['paper tape', 'linen', 'postcards'],
+                'motifs' => ['stars', 'hearts', 'bookmarks'],
+                'scrapbook_feel' => 'A curated set of favorite memories.',
+            ],
+            'spreads' => $spreads,
+        ],
+        'is_virtual' => true,
+        'virtual_kind' => $kind,
     ];
 }
 
@@ -404,8 +521,190 @@ function catn8_photo_albums_get_viewer(int $viewerId): array
     ];
 }
 
+function catn8_photo_albums_build_virtual_favorites(array $albums, array $favorites): array
+{
+    $byId = [];
+    foreach ($albums as $album) {
+        $aid = (int)($album['id'] ?? 0);
+        if ($aid > 0) {
+            $byId[$aid] = $album;
+        }
+    }
+
+    $mediaItems = [];
+    foreach (($favorites['media'] ?? []) as $fav) {
+        $albumId = (int)($fav['album_id'] ?? 0);
+        $spreadIndex = (int)($fav['spread_index'] ?? -1);
+        $mediaSourceIndex = (int)($fav['media_source_index'] ?? -1);
+        if ($albumId <= 0 || $spreadIndex < 0 || $mediaSourceIndex < 0 || !isset($byId[$albumId])) {
+            continue;
+        }
+        $album = $byId[$albumId];
+        $spreads = is_array($album['spec']['spreads'] ?? null) ? $album['spec']['spreads'] : [];
+        $spread = $spreads[$spreadIndex] ?? null;
+        if (!is_array($spread)) {
+            continue;
+        }
+        $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+        $image = $images[$mediaSourceIndex] ?? null;
+        if (!is_array($image)) {
+            continue;
+        }
+        $src = trim((string)($image['display_src'] ?? $image['src'] ?? ''));
+        if ($src === '') {
+            continue;
+        }
+        $capturedRaw = trim((string)($image['captured_at'] ?? ''));
+        $capturedMs = $capturedRaw !== '' ? strtotime($capturedRaw) : false;
+        $capturedAt = $capturedMs !== false ? gmdate('c', (int)$capturedMs) : '';
+        $mediaItems[] = [
+            'order_ms' => $capturedMs !== false ? (int)$capturedMs : PHP_INT_MAX,
+            'album_title' => (string)($album['title'] ?? ''),
+            'spread_index' => $spreadIndex,
+            'caption' => trim((string)($image['caption'] ?? $spread['caption'] ?? '')),
+            'image' => [
+                'src' => $src,
+                'media_type' => (string)($image['media_type'] ?? 'image'),
+                'display_src' => (string)($image['display_src'] ?? ''),
+                'original_src' => (string)($image['original_src'] ?? ''),
+                'live_video_src' => (string)($image['live_video_src'] ?? ''),
+                'live_photo_available' => (int)($image['live_photo_available'] ?? 0) === 1,
+                'captured_at' => $capturedAt !== '' ? $capturedAt : ($capturedRaw !== '' ? $capturedRaw : null),
+                'source_filename' => (string)($image['source_filename'] ?? ''),
+                'caption' => (string)($image['caption'] ?? ''),
+                'memory_text' => (string)($image['memory_text'] ?? ''),
+                'speaker_label' => (string)($image['speaker_label'] ?? ''),
+                'speaker_handle_id' => (string)($image['speaker_handle_id'] ?? ''),
+            ],
+        ];
+    }
+    usort($mediaItems, static function (array $a, array $b): int {
+        if ((int)$a['order_ms'] === (int)$b['order_ms']) {
+            return strcmp((string)$a['album_title'], (string)$b['album_title']);
+        }
+        return ((int)$a['order_ms'] < (int)$b['order_ms']) ? -1 : 1;
+    });
+
+    $mediaSpreads = [];
+    foreach ($mediaItems as $index => $item) {
+        $dateLabel = ((int)$item['order_ms'] < PHP_INT_MAX) ? gmdate('Y-m-d', (int)$item['order_ms']) : 'Undated';
+        $mediaSpreads[] = [
+            'spread_number' => $index + 1,
+            'title' => $dateLabel,
+            'caption' => trim((string)$item['album_title']) . ' (Spread ' . ((int)$item['spread_index'] + 1) . ')',
+            'photo_slots' => 1,
+            'embellishments' => ['favorites', 'bookmarks'],
+            'background_prompt' => '[CATN8_SCRAPBOOK_SPREAD_BG_V1] Favorites media',
+            'images' => [$item['image']],
+        ];
+    }
+    if (!$mediaSpreads) {
+        $mediaSpreads[] = [
+            'spread_number' => 1,
+            'title' => 'No Favorite Media Yet',
+            'caption' => 'Tap the star on any image or video to add it here.',
+            'photo_slots' => 0,
+            'embellishments' => ['favorites'],
+            'background_prompt' => '[CATN8_SCRAPBOOK_SPREAD_BG_V1] Favorites media empty',
+            'images' => [],
+        ];
+    }
+
+    $pageItems = [];
+    foreach (($favorites['pages'] ?? []) as $fav) {
+        $albumId = (int)($fav['album_id'] ?? 0);
+        $spreadIndex = (int)($fav['spread_index'] ?? -1);
+        if ($albumId <= 0 || $spreadIndex < 0 || !isset($byId[$albumId])) {
+            continue;
+        }
+        $album = $byId[$albumId];
+        $spreads = is_array($album['spec']['spreads'] ?? null) ? $album['spec']['spreads'] : [];
+        $spread = $spreads[$spreadIndex] ?? null;
+        if (!is_array($spread)) {
+            continue;
+        }
+        $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+        $capturedMs = false;
+        foreach ($images as $image) {
+            if (!is_array($image)) {
+                continue;
+            }
+            $capturedRaw = trim((string)($image['captured_at'] ?? ''));
+            if ($capturedRaw === '') {
+                continue;
+            }
+            $next = strtotime($capturedRaw);
+            if ($next === false) {
+                continue;
+            }
+            if ($capturedMs === false || $next < $capturedMs) {
+                $capturedMs = $next;
+            }
+        }
+        $pageItems[] = [
+            'order_ms' => $capturedMs !== false ? (int)$capturedMs : PHP_INT_MAX,
+            'album_title' => (string)($album['title'] ?? ''),
+            'spread_index' => $spreadIndex,
+            'spread' => $spread,
+        ];
+    }
+    usort($pageItems, static function (array $a, array $b): int {
+        if ((int)$a['order_ms'] === (int)$b['order_ms']) {
+            return strcmp((string)$a['album_title'], (string)$b['album_title']);
+        }
+        return ((int)$a['order_ms'] < (int)$b['order_ms']) ? -1 : 1;
+    });
+
+    $pageSpreads = [];
+    foreach ($pageItems as $index => $item) {
+        $spread = is_array($item['spread']) ? $item['spread'] : [];
+        $spread['spread_number'] = $index + 1;
+        $spread['caption'] = trim((string)($item['album_title'] ?? '')) . ': ' . trim((string)($spread['caption'] ?? ''));
+        $pageSpreads[] = $spread;
+    }
+    if (!$pageSpreads) {
+        $pageSpreads[] = [
+            'spread_number' => 1,
+            'title' => 'No Favorite Pages Yet',
+            'caption' => 'Tap the star on any page to add it here.',
+            'photo_slots' => 0,
+            'embellishments' => ['favorites'],
+            'background_prompt' => '[CATN8_SCRAPBOOK_SPREAD_BG_V1] Favorites pages empty',
+            'images' => [],
+        ];
+    }
+
+    $firstMediaImage = is_array($mediaSpreads[0]['images'] ?? null) ? ($mediaSpreads[0]['images'][0] ?? null) : null;
+    $mediaCover = is_array($firstMediaImage) ? trim((string)($firstMediaImage['display_src'] ?? $firstMediaImage['src'] ?? '')) : '';
+
+    $firstPageSpreadImages = is_array($pageSpreads[0]['images'] ?? null) ? $pageSpreads[0]['images'] : [];
+    $firstPageImage = is_array($firstPageSpreadImages[0] ?? null) ? $firstPageSpreadImages[0] : null;
+    $pageCover = is_array($firstPageImage) ? trim((string)($firstPageImage['display_src'] ?? $firstPageImage['src'] ?? '')) : '';
+
+    return [
+        catn8_photo_albums_virtual_payload(
+            -1001,
+            'Favorite Media',
+            count($mediaItems) . ' items favorited.',
+            $mediaCover,
+            $mediaSpreads,
+            'favorite_media'
+        ),
+        catn8_photo_albums_virtual_payload(
+            -1002,
+            'Favorite Pages',
+            count($pageItems) . ' pages favorited.',
+            $pageCover,
+            $pageSpreads,
+            'favorite_pages'
+        ),
+    ];
+}
+
 catn8_groups_seed_core();
 catn8_photo_albums_table_ensure();
+catn8_photo_album_page_favorites_table_ensure();
+catn8_photo_album_media_favorites_table_ensure();
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $action = strtolower(trim((string)($_GET['action'] ?? 'list')));
@@ -425,7 +724,9 @@ if ($method === 'GET') {
         $rows = Database::queryAll($sql);
 
         $albums = array_map('catn8_photo_albums_row_to_payload', $rows);
-        catn8_json_response(['success' => true, 'viewer' => $viewerPayload, 'albums' => $albums]);
+        $favorites = catn8_photo_albums_favorites_payload($viewerId);
+        $virtualAlbums = catn8_photo_albums_build_virtual_favorites($albums, $favorites);
+        catn8_json_response(['success' => true, 'viewer' => $viewerPayload, 'albums' => array_merge($virtualAlbums, $albums), 'favorites' => $favorites]);
     }
 
     if ($action === 'get') {
@@ -464,9 +765,94 @@ if ($method !== 'POST') {
     catn8_json_response(['success' => false, 'error' => 'Method not allowed'], 405);
 }
 
-catn8_require_admin();
 catn8_photo_albums_require_json_request();
 $body = catn8_read_json_body();
+
+if ($action === 'toggle_page_favorite') {
+    $albumId = (int)($body['album_id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $isFavorite = (int)($body['is_favorite'] ?? 0) === 1;
+
+    if ($albumId <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid album_id or spread_index'], 400);
+    }
+
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    if (!$albumRow) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
+    if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+
+    $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    if (!isset($spreads[$spreadIndex])) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+
+    if ($isFavorite) {
+        Database::execute(
+            'INSERT INTO photo_album_page_favorites (user_id, album_id, spread_index) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE created_at = created_at',
+            [$viewerId, $albumId, $spreadIndex]
+        );
+    } else {
+        Database::execute(
+            'DELETE FROM photo_album_page_favorites WHERE user_id = ? AND album_id = ? AND spread_index = ?',
+            [$viewerId, $albumId, $spreadIndex]
+        );
+    }
+
+    catn8_json_response(['success' => true, 'favorites' => catn8_photo_albums_favorites_payload($viewerId)]);
+}
+
+if ($action === 'toggle_media_favorite') {
+    $albumId = (int)($body['album_id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $mediaSourceIndex = (int)($body['media_source_index'] ?? -1);
+    $isFavorite = (int)($body['is_favorite'] ?? 0) === 1;
+
+    if ($albumId <= 0 || $spreadIndex < 0 || $mediaSourceIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid favorite media payload'], 400);
+    }
+
+    $albumRow = Database::queryOne('SELECT id, spec_json, is_active FROM photo_albums WHERE id = ? LIMIT 1', [$albumId]);
+    if (!$albumRow) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    $isAdminViewer = (int)($viewerPayload['is_admin'] ?? 0) === 1;
+    if (!$isAdminViewer && (int)($albumRow['is_active'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+
+    $spec = catn8_photo_albums_parse_spec((string)($albumRow['spec_json'] ?? '{}'), '');
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+    if (!isset($images[$mediaSourceIndex])) {
+        catn8_json_response(['success' => false, 'error' => 'Media not found'], 404);
+    }
+
+    if ($isFavorite) {
+        Database::execute(
+            'INSERT INTO photo_album_media_favorites (user_id, album_id, spread_index, media_source_index) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE created_at = created_at',
+            [$viewerId, $albumId, $spreadIndex, $mediaSourceIndex]
+        );
+    } else {
+        Database::execute(
+            'DELETE FROM photo_album_media_favorites
+              WHERE user_id = ? AND album_id = ? AND spread_index = ? AND media_source_index = ?',
+            [$viewerId, $albumId, $spreadIndex, $mediaSourceIndex]
+        );
+    }
+
+    catn8_json_response(['success' => true, 'favorites' => catn8_photo_albums_favorites_payload($viewerId)]);
+}
+
+catn8_require_admin();
 
 if ($action === 'create') {
     $title = catn8_photo_albums_clean_text((string)($body['title'] ?? ''), 191);

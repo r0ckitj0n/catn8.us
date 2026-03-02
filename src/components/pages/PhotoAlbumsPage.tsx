@@ -14,6 +14,8 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
   const selectedAlbumSummary = toPhotoAlbumDisplaySummary(selectedAlbum?.summary || '');
+  const selectedAlbumId = Number(selectedAlbum?.id || 0);
+  const selectedPageFavorite = selectedAlbumId > 0 ? state.isPageFavorite(selectedAlbumId, state.pageIndex) : false;
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
@@ -93,6 +95,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 {state.albums.map((album) => {
                   const displayTitle = toPhotoAlbumDisplayTitle(album.title);
                   const displaySummary = toPhotoAlbumDisplaySummary(album.summary);
+                  const isVirtual = Boolean(album.is_virtual);
                   return (
                   <article key={album.id} className="catn8-photo-album-card">
                     <button
@@ -106,9 +109,10 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <div className="catn8-photo-album-card-image" style={{ backgroundImage: album.cover_image_url ? `url(${album.cover_image_url})` : undefined }} />
                     <div className="catn8-photo-album-card-body">
                       <h2>{displayTitle}</h2>
+                      {isVirtual ? <div className="catn8-photo-album-template-badge">Template</div> : null}
                       <p>{displaySummary || 'No summary yet.'}</p>
                     </div>
-                    {state.isAdmin ? (
+                    {state.isAdmin && !isVirtual ? (
                       <button
                         type="button"
                         className="catn8-photo-album-card-delete"
@@ -165,6 +169,10 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 canNext={state.canNext}
                 onPrev={state.prevPage}
                 onNext={state.nextPage}
+                pageFavorite={selectedPageFavorite}
+                isMediaFavorite={(spreadIndex, mediaSourceIndex) => state.isMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex)}
+                onTogglePageFavorite={(spreadIndex) => { void state.togglePageFavorite(selectedAlbum.id, spreadIndex); }}
+                onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(selectedAlbum.id, spreadIndex, mediaSourceIndex); }}
                 onBackToAlbums={() => { void closeViewer(); }}
               />
             </div>
@@ -190,8 +198,20 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         zoom={state.zoom}
         canPrev={state.canPrev}
         canNext={state.canNext}
+        pageFavorite={selectedPageFavorite}
+        isMediaFavorite={(spreadIndex, mediaSourceIndex) => selectedAlbumId > 0 && state.isMediaFavorite(selectedAlbumId, spreadIndex, mediaSourceIndex)}
         onPrevPage={state.prevPage}
         onNextPage={state.nextPage}
+        onTogglePageFavorite={(spreadIndex) => {
+          if (selectedAlbumId > 0) {
+            void state.togglePageFavorite(selectedAlbumId, spreadIndex);
+          }
+        }}
+        onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => {
+          if (selectedAlbumId > 0) {
+            void state.toggleMediaFavorite(selectedAlbumId, spreadIndex, mediaSourceIndex);
+          }
+        }}
         onFullscreenPreview={() => { void openAdminFullscreenPreview(); }}
         onClose={state.closeAdminModal}
         onSave={state.saveAdminEdits}

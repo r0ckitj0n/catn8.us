@@ -3,6 +3,8 @@ import React from 'react';
 import {
   PhotoAlbum,
   PhotoAlbumAiCreateRequest,
+  PhotoAlbumFavoriteMutationResponse,
+  PhotoAlbumFavoritesPayload,
   PhotoAlbumListResponse,
 } from '../types/photoAlbums';
 import { IToast } from '../types/common';
@@ -65,6 +67,16 @@ function earliestCapturedAtMs(album: PhotoAlbum): number | null {
 
 function sortAlbumsOldestToNewest(albums: PhotoAlbum[]): PhotoAlbum[] {
   return [...albums].sort((a, b) => {
+    const aVirtual = Boolean(a?.is_virtual);
+    const bVirtual = Boolean(b?.is_virtual);
+    if (aVirtual !== bVirtual) {
+      return aVirtual ? -1 : 1;
+    }
+    if (aVirtual && bVirtual) {
+      const aKind = String(a?.virtual_kind || '');
+      const bKind = String(b?.virtual_kind || '');
+      return aKind.localeCompare(bKind);
+    }
     const aCapture = earliestCapturedAtMs(a);
     const bCapture = earliestCapturedAtMs(b);
     if (aCapture !== null && bCapture !== null && aCapture !== bCapture) {
@@ -104,6 +116,8 @@ export function usePhotoAlbumsPage(
   const [showAlbumViewer, setShowAlbumViewer] = React.useState(false);
   const [createForm, setCreateForm] = React.useState<PhotoAlbumAiCreateRequest>(DEFAULT_CREATE_FORM);
   const [adminDraft, setAdminDraft] = React.useState<PhotoAlbum | null>(null);
+  const [favoritePageKeys, setFavoritePageKeys] = React.useState<Set<string>>(new Set());
+  const [favoriteMediaKeys, setFavoriteMediaKeys] = React.useState<Set<string>>(new Set());
 
   const isAdmin = React.useMemo(
     () => Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1,
@@ -116,14 +130,33 @@ export function usePhotoAlbumsPage(
     }
   }, [onToast]);
 
-  const loadAlbums = React.useCallback(async () => {
-    setLoading(true);
+  const loadAlbums = React.useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const res = await ApiClient.get<PhotoAlbumListResponse>('/api/photo_albums.php?action=list');
       const rawAlbums = Array.isArray(res?.albums) ? res.albums : [];
       const normalizedAlbums = rawAlbums.map(normalizeAlbumSummary);
       const nextAlbums = sortAlbumsOldestToNewest(normalizedAlbums);
       setAlbums(nextAlbums);
+      const nextFavorites = res?.favorites;
+      if (nextFavorites) {
+        const pageKeys = new Set<string>(
+          (Array.isArray(nextFavorites.pages) ? nextFavorites.pages : [])
+            .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}`),
+        );
+        const mediaKeys = new Set<string>(
+          (Array.isArray(nextFavorites.media) ? nextFavorites.media : [])
+            .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${Number(item.media_source_index)}`),
+        );
+        setFavoritePageKeys(pageKeys);
+        setFavoriteMediaKeys(mediaKeys);
+      } else {
+        setFavoritePageKeys(new Set());
+        setFavoriteMediaKeys(new Set());
+      }
 
       if (nextAlbums.length === 0) {
         setSelectedId(0);
@@ -141,7 +174,9 @@ export function usePhotoAlbumsPage(
       setAlbums([]);
       setSelectedId(0);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [toast]);
 
@@ -161,6 +196,20 @@ export function usePhotoAlbumsPage(
   const spreads = workingAlbum?.spec?.spreads || [];
   const selectedSpread = spreads[pageIndex] || null;
   const pendingPageIndexRef = React.useRef<number | null>(null);
+  const selectedAlbumIsVirtual = Boolean(selectedAlbum?.is_virtual);
+
+  const applyFavorites = React.useCallback((favorites: PhotoAlbumFavoritesPayload) => {
+    const pageKeys = new Set<string>(
+      (Array.isArray(favorites.pages) ? favorites.pages : [])
+        .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}`),
+    );
+    const mediaKeys = new Set<string>(
+      (Array.isArray(favorites.media) ? favorites.media : [])
+        .map((item) => `${Number(item.album_id)}:${Number(item.spread_index)}:${Number(item.media_source_index)}`),
+    );
+    setFavoritePageKeys(pageKeys);
+    setFavoriteMediaKeys(mediaKeys);
+  }, []);
 
   React.useEffect(() => {
     const initialZoom = Number(selectedAlbum?.spec?.controls?.zoom?.initial || 1);
@@ -295,12 +344,60 @@ export function usePhotoAlbumsPage(
     });
   }, []);
 
+  const isPageFavorite = React.useCallback((albumId: number, spreadIdx: number) => (
+    favoritePageKeys.has(`${albumId}:${spreadIdx}`)
+  ), [favoritePageKeys]);
+
+  const isMediaFavorite = React.useCallback((albumId: number, spreadIdx: number, mediaSourceIdx: number) => (
+    favoriteMediaKeys.has(`${albumId}:${spreadIdx}:${mediaSourceIdx}`)
+  ), [favoriteMediaKeys]);
+
+  const togglePageFavorite = React.useCallback(async (albumId: number, spreadIdx: number) => {
+    if (albumId <= 0 || spreadIdx < 0) {
+      return;
+    }
+    try {
+      const currentlyFavorite = isPageFavorite(albumId, spreadIdx);
+      const res = await ApiClient.post<PhotoAlbumFavoriteMutationResponse>('/api/photo_albums.php?action=toggle_page_favorite', {
+        album_id: albumId,
+        spread_index: spreadIdx,
+        is_favorite: currentlyFavorite ? 0 : 1,
+      });
+      if (res?.favorites) {
+        applyFavorites(res.favorites);
+      }
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update page favorite');
+    }
+  }, [applyFavorites, isPageFavorite, toast]);
+
+  const toggleMediaFavorite = React.useCallback(async (albumId: number, spreadIdx: number, mediaSourceIdx: number) => {
+    if (albumId <= 0 || spreadIdx < 0 || mediaSourceIdx < 0) {
+      return;
+    }
+    try {
+      const currentlyFavorite = isMediaFavorite(albumId, spreadIdx, mediaSourceIdx);
+      const res = await ApiClient.post<PhotoAlbumFavoriteMutationResponse>('/api/photo_albums.php?action=toggle_media_favorite', {
+        album_id: albumId,
+        spread_index: spreadIdx,
+        media_source_index: mediaSourceIdx,
+        is_favorite: currentlyFavorite ? 0 : 1,
+      });
+      if (res?.favorites) {
+        applyFavorites(res.favorites);
+      }
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update media favorite');
+    }
+  }, [applyFavorites, isMediaFavorite, toast]);
+
   return {
     loading,
     busy,
     albums,
     selectedId,
     selectedAlbum,
+    selectedAlbumIsVirtual,
     selectedSpread,
     showCreateModal,
     setShowCreateModal,
@@ -328,5 +425,9 @@ export function usePhotoAlbumsPage(
     deleteSelectedAlbum,
     deleteAlbumById,
     updateAdminDraft,
+    isPageFavorite,
+    isMediaFavorite,
+    togglePageFavorite,
+    toggleMediaFavorite,
   };
 }

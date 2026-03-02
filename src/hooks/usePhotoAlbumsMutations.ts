@@ -17,7 +17,7 @@ interface PhotoAlbumsMutationsArgs {
   setShowAdminModal: React.Dispatch<React.SetStateAction<boolean>>;
   setAdminDraft: React.Dispatch<React.SetStateAction<PhotoAlbum | null>>;
   setShowAlbumViewer: React.Dispatch<React.SetStateAction<boolean>>;
-  loadAlbums: () => Promise<void>;
+  loadAlbums: (options?: { silent?: boolean }) => Promise<void>;
   toast: (tone: IToast['tone'], message: string) => void;
 }
 

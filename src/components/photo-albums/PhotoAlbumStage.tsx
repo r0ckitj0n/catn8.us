@@ -553,6 +553,62 @@ function minimumHeightFor(item: LayoutItem): number {
   return 3.2;
 }
 
+function collidesWithReserved(item: LayoutItem, constraints: LayoutConstraints): boolean {
+  if (constraints.reserved.length === 0) {
+    return false;
+  }
+  const rect: LayoutRect = { x: item.x, y: item.y, w: item.w, h: item.h };
+  return constraints.reserved.some((reserved) => rectsOverlap(rect, reserved));
+}
+
+function maximizeCoreItems(items: LayoutItem[], constraints: LayoutConstraints): LayoutItem[] {
+  const resolved = items.map((item) => constrainLayout({ ...item }, constraints));
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (let i = 0; i < resolved.length; i += 1) {
+      const current = resolved[i];
+      if (!isCoreItem(current)) {
+        continue;
+      }
+      const maxWidth = current.type === 'media' ? 62 : 58;
+      const maxHeight = current.type === 'media' ? 74 : 72;
+      const step = current.type === 'media' ? 1.038 : 1.032;
+      let candidate = { ...current };
+      for (let grow = 0; grow < 40; grow += 1) {
+        if (candidate.w >= maxWidth || candidate.h >= maxHeight) {
+          break;
+        }
+        const nextW = Math.min(maxWidth, candidate.w * step);
+        const nextH = Math.min(maxHeight, candidate.h * step);
+        let next: LayoutItem = {
+          ...candidate,
+          w: nextW,
+          h: nextH,
+          x: candidate.x - ((nextW - candidate.w) / 2),
+          y: candidate.y - ((nextH - candidate.h) / 2),
+        };
+        next = constrainLayout(next, constraints);
+        if (collidesWithReserved(next, constraints)) {
+          break;
+        }
+        const hasCoreCollision = resolved.some((other, j) => (
+          j !== i
+          && isCoreItem(other)
+          && overlapArea(next, other) > OVERLAP_EPSILON
+        ));
+        if (hasCoreCollision) {
+          break;
+        }
+        if ((next.w * next.h) <= (candidate.w * candidate.h)) {
+          break;
+        }
+        candidate = next;
+      }
+      resolved[i] = candidate;
+    }
+  }
+  return resolved;
+}
+
 function forceSeparate(items: LayoutItem[], seed: string, constraints: LayoutConstraints): LayoutItem[] {
   const resolved = items.map((item) => constrainLayout({ ...item }, constraints));
   for (let pass = 0; pass < 120; pass += 1) {
@@ -735,7 +791,7 @@ function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutCon
     resolved[i] = constrainLayout(current, constraints);
   }
 
-  return forceSeparate(resolved, `${seed}-finalize`, constraints);
+  return maximizeCoreItems(forceSeparate(resolved, `${seed}-finalize`, constraints), constraints);
 }
 
 function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], spreadTitle: string): {
@@ -902,8 +958,28 @@ export function PhotoAlbumStage({
   }, [mediaItems, spread?.title]);
 
   const densityCount = notes.length + mediaItems.length;
-  const mediaWidthPct = densityCount >= 16 ? 11 : densityCount >= 10 ? 13 : 16;
-  const noteWidthPct = densityCount >= 16 ? 12 : densityCount >= 10 ? 14 : 17;
+  const mediaWidthPct = densityCount <= 2
+    ? 44
+    : densityCount <= 4
+      ? 30
+      : densityCount <= 8
+        ? 22
+        : densityCount >= 16
+          ? 11
+          : densityCount >= 10
+            ? 13
+            : 16;
+  const noteWidthPct = densityCount <= 2
+    ? 40
+    : densityCount <= 4
+      ? 28
+      : densityCount <= 8
+        ? 20
+        : densityCount >= 16
+          ? 12
+          : densityCount >= 10
+            ? 14
+            : 17;
 
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
   const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number; sourceIndex?: number }>(null);
@@ -973,9 +1049,20 @@ export function PhotoAlbumStage({
       const estimatedNoteArea = notes.reduce((sum, item) => sum + (noteWidthPct * estimateNoteHeightPct(item, noteWidthPct)), 0);
       const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
       const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
-      const targetCoverage = densityCount <= 5 ? 0.76 : densityCount <= 10 ? 0.81 : densityCount <= 16 ? 0.86 : 0.9;
-      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.8, 1.55);
+      const targetCoverage = densityCount <= 2
+        ? 0.9
+        : densityCount <= 4
+          ? 0.88
+          : densityCount <= 8
+            ? 0.84
+            : densityCount <= 12
+              ? 0.82
+              : densityCount <= 16
+                ? 0.86
+                : 0.9;
+      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.78, 1.75);
       const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
+      const singleMediaSingleNote = mediaItems.length === 1 && notes.length === 1;
 
       const mediaLayout: LayoutItem[] = mediaItems.map((item, index) => {
         const source = spread?.images?.[item.sourceIndex];
@@ -985,19 +1072,22 @@ export function PhotoAlbumStage({
         const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
         const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
         const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
-        const variation = sizeVariation(`${album.id}-${spreadIndex}-media-${item.key}`, 0.78, 1.28);
+        const variation = sizeVariation(`${album.id}-${spreadIndex}-media-${item.key}`, densityCount <= 2 ? 0.92 : 0.78, densityCount <= 2 ? 1.18 : 1.28);
         const w = clamp(sourceBaseWidth * sizeScale * variation, 10.5, 46);
+        const singleHash = hashValue(`${album.id}-${spreadIndex}-single-media-${item.key}`);
+        const singleX = 5 + ((singleHash % 8) * 0.65);
+        const singleY = 14 + ((Math.floor(singleHash / 17) % 12) * 0.7);
         return {
           id: `media-${item.sourceIndex}`,
           type: 'media',
           index,
           sourceIndex: item.sourceIndex,
           pinned: hasPinnedPosition,
-          x: Number(source?.x ?? fallback.x),
-          y: Number(source?.y ?? fallback.y),
+          x: Number(source?.x ?? (singleMediaSingleNote ? singleX : fallback.x)),
+          y: Number(source?.y ?? (singleMediaSingleNote ? singleY : fallback.y)),
           w,
           h: estimateMediaHeightPct(item.caption, w),
-          rotation: clamp(Number(source?.rotation ?? fallback.rotate), -8, 8),
+          rotation: clamp(Number(source?.rotation ?? (singleMediaSingleNote ? (fallback.rotate - 2) : fallback.rotate)), -8, 8),
         };
       });
       const noteLayout: LayoutItem[] = notes.map((note, index) => {
@@ -1007,18 +1097,21 @@ export function PhotoAlbumStage({
         const fallback = positionByFlow(flowIndex, flow.total, groupCenterX, `${album.id}-${spreadIndex}-flow`);
         const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
         const noteBaseWidth = Number(note.w ?? noteWidthPct);
-        const variation = sizeVariation(`${album.id}-${spreadIndex}-note-${note.id}`, 0.74, 1.32);
+        const variation = sizeVariation(`${album.id}-${spreadIndex}-note-${note.id}`, densityCount <= 2 ? 0.9 : 0.74, densityCount <= 2 ? 1.2 : 1.32);
         const w = clamp(noteBaseWidth * sizeScale * variation, 11, 48);
+        const singleHash = hashValue(`${album.id}-${spreadIndex}-single-note-${note.id}`);
+        const singleX = 48 + ((singleHash % 10) * 0.75);
+        const singleY = 28 + ((Math.floor(singleHash / 13) % 14) * 0.75);
         return {
           id: `note-${index}`,
           type: 'note',
           index,
           pinned: hasPinnedPosition,
-          x: Number(note.x ?? fallback.x),
-          y: Number(note.y ?? fallback.y),
+          x: Number(note.x ?? (singleMediaSingleNote ? singleX : fallback.x)),
+          y: Number(note.y ?? (singleMediaSingleNote ? singleY : fallback.y)),
           w,
           h: estimateNoteHeightPct(note, w),
-          rotation: clamp(Number(note.rotation ?? fallback.rotate), -7, 7),
+          rotation: clamp(Number(note.rotation ?? (singleMediaSingleNote ? (fallback.rotate + 2) : fallback.rotate)), -7, 7),
         };
       });
       const decorLayout: LayoutItem[] = decorItems.map((item, index) => {

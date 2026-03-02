@@ -89,6 +89,32 @@ def ordinal(n: int) -> str:
     return f"{n}{suf}"
 
 
+def season_for_date(value: dt.date) -> Tuple[str, int]:
+    month = value.month
+    year = value.year
+    if 3 <= month <= 5:
+        return ("Spring", year)
+    if 6 <= month <= 8:
+        return ("Summer", year)
+    if 9 <= month <= 11:
+        return ("Fall", year)
+    if month == 12:
+        return ("Winter", year + 1)
+    return ("Winter", year)
+
+
+def season_bounds(season: str, season_year: int) -> Tuple[dt.date, dt.date]:
+    if season == "Spring":
+        return (dt.date(season_year, 3, 1), dt.date(season_year, 5, 31))
+    if season == "Summer":
+        return (dt.date(season_year, 6, 1), dt.date(season_year, 8, 31))
+    if season == "Fall":
+        return (dt.date(season_year, 9, 1), dt.date(season_year, 11, 30))
+    winter_start = dt.date(season_year - 1, 12, 1)
+    winter_end = dt.date(season_year, 2, 29 if (season_year % 4 == 0 and (season_year % 100 != 0 or season_year % 400 == 0)) else 28)
+    return (winter_start, winter_end)
+
+
 def sanitize_slug(title: str) -> str:
     out = []
     prev_dash = False
@@ -859,10 +885,18 @@ def build_album_windows(child: ChildConfig, now: dt.date) -> List[Tuple[str, dt.
         prev_end = end
 
     year_no = 3
-    year_start = child.birth_date + dt.timedelta(days=365 * 2)
+    year_start = add_months(child.birth_date, 24)
     while year_start <= now:
-        year_end = min(year_start + dt.timedelta(days=365) - dt.timedelta(days=1), now)
-        windows.append((f"{child.name}'s {ordinal(year_no)} Year", year_start, year_end))
+        year_end = min(add_months(year_start, 12) - dt.timedelta(days=1), now)
+        cursor = year_start
+        while cursor <= year_end:
+            season_name, season_year = season_for_date(cursor)
+            season_start, season_end = season_bounds(season_name, season_year)
+            start = max(year_start, season_start)
+            end = min(year_end, season_end, now)
+            if start <= end:
+                windows.append((f"{child.name}'s {ordinal(year_no)} Year - {season_name} {season_year}", start, end))
+            cursor = end + dt.timedelta(days=1)
         year_no += 1
         year_start = year_end + dt.timedelta(days=1)
 
@@ -1306,7 +1340,7 @@ CREATE TABLE IF NOT EXISTS photo_album_permissions (
                 "spreads": spreads,
             }
 
-            summary = f"Auto timeline import for {child.name} ({start.isoformat()} to {end.isoformat()}). {len(pages)} days."
+            summary = f"{start.isoformat()} to {end.isoformat()} ({len(pages)} pages)"
             cover_src = ""
             for _, _, imgs, _ in pages:
                 if imgs:

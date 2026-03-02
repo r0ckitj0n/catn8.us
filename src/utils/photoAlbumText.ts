@@ -63,6 +63,21 @@ export function toPhotoAlbumDisplayTitle(value: unknown): string {
     return '';
   }
 
+  const violetThirdYearSeasonal = cleaned.match(/^Violet's\s+3rd\s+Year\s+Part\s+([0-9]{1,2})$/i);
+  if (violetThirdYearSeasonal) {
+    const part = Number(violetThirdYearSeasonal[1] || 0);
+    const seasonByPart: Record<number, string> = {
+      1: 'Winter',
+      2: 'Spring',
+      3: 'Summer',
+      4: 'Fall',
+    };
+    const season = seasonByPart[part];
+    if (season) {
+      return `Violet's 3rd Year - ${season}`;
+    }
+  }
+
   const alreadyNewStyle = cleaned.match(/^([A-Za-z]+)'s\s+([0-9]{1,3})(st|nd|rd|th)\s+(Month|Year)(?:\s+Part\s+[0-9]+)?$/i);
   if (alreadyNewStyle) {
     return cleaned;

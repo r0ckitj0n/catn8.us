@@ -182,6 +182,13 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   background: #fff;
 }
 
+.catn8-lock-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  display: block;
+  fill: currentColor;
+}
+
 .catn8-photo-album-card-admin-actions {
   position: absolute;
   right: 0.5rem;

@@ -2,6 +2,7 @@ import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
 import { formatAlbumCaption, inferAlbumTheme, sanitizeAlbumMessageText, splitAlbumMessages, toAlbumDisplayName } from '../../utils/photoAlbumText';
+import { LockIcon } from './LockIcon';
 import { PhotoAlbumElementViewer } from './PhotoAlbumElementViewer';
 import { PreparedMediaItem, ViewerTarget, ViewerType } from './types';
 
@@ -1875,7 +1876,7 @@ export function PhotoAlbumStage({
             aria-label={pageLocked ? 'Unlock this page' : 'Lock this page'}
             title={pageLocked ? 'Page locked' : 'Lock this page'}
           >
-            {pageLocked ? '🔒' : '🔓'}
+            <LockIcon locked={pageLocked} />
           </button>
         ) : null}
         {typeof onToggleAlbumLock === 'function' ? (
@@ -1886,7 +1887,7 @@ export function PhotoAlbumStage({
             aria-label={albumLocked ? 'Unlock this album' : 'Lock this album'}
             title={albumLocked ? 'Album locked' : 'Lock this album'}
           >
-            {albumLocked ? '🔒' : '🔓'}
+            <LockIcon locked={albumLocked} />
           </button>
         ) : null}
 

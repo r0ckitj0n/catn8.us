@@ -3,6 +3,7 @@ import React from 'react';
 import { PhotoAlbum } from '../../types/photoAlbums';
 import { auditPhotoAlbum } from '../../utils/photoAlbumAudit';
 import { sanitizeAlbumMessageText, splitAlbumMessages, toAlbumDisplayName } from '../../utils/photoAlbumText';
+import { LockIcon } from './LockIcon';
 import { PhotoAlbumStage } from './PhotoAlbumStage';
 
 interface PhotoAlbumAdminModalProps {
@@ -233,7 +234,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   aria-label={albumLocked ? 'Unlock album' : 'Lock album'}
                   title={albumLocked ? 'Album locked' : 'Lock album'}
                 >
-                  {albumLocked ? '🔒' : '🔓'}
+                  <LockIcon locked={albumLocked} />
                 </button>
               </div>
               <input

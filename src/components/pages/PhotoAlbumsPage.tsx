@@ -7,6 +7,7 @@ import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
 import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
+import { LockIcon } from '../photo-albums/LockIcon';
 import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
@@ -152,7 +153,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           aria-label={Number(album.is_locked || 0) === 1 ? `Unlock album ${displayTitle}` : `Lock album ${displayTitle}`}
                           title={Number(album.is_locked || 0) === 1 ? 'Unlock album' : 'Lock album'}
                         >
-                          {Number(album.is_locked || 0) === 1 ? '🔒' : '🔓'}
+                          <LockIcon locked={Number(album.is_locked || 0) === 1} />
                         </button>
                         <button
                           type="button"

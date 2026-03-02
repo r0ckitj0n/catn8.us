@@ -1284,6 +1284,15 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
     margin-bottom: 0.7rem;
   }
 
+  .catn8-admin-preview-panel .catn8-scatter-media,
+  .catn8-admin-preview-panel .catn8-scatter-note,
+  .catn8-admin-preview-panel .catn8-scatter-empty {
+    position: absolute;
+    width: auto;
+    margin-bottom: 0;
+    transform: inherit !important;
+  }
+
   .catn8-scatter-card:hover,
   .catn8-scatter-card:focus-within {
     --catn8-card-scale: 1;

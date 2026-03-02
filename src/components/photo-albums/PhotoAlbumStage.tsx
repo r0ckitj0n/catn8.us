@@ -1341,7 +1341,10 @@ export function PhotoAlbumStage({
         };
       });
 
-      const resolved = resolveLayout([...mediaLayout, ...noteLayout, ...decorLayout], `${album.id}-${spreadIndex}`, layoutConstraints);
+      const baseLayout = [...mediaLayout, ...noteLayout, ...decorLayout];
+      const resolved = (editable && !isLayoutLocked)
+        ? baseLayout.map((item) => constrainLayout({ ...item }, layoutConstraints))
+        : resolveLayout(baseLayout, `${album.id}-${spreadIndex}`, layoutConstraints);
       const mediaByIndex = new Map<number, LayoutItem>();
       const noteByIndex = new Map<number, LayoutItem>();
       const decorByIndex = new Map<number, LayoutItem>();
@@ -1362,7 +1365,21 @@ export function PhotoAlbumStage({
         decorByIndex: new Map<number, LayoutItem>(),
       };
     }
-  }, [album.id, spread, spreadIndex, mediaItems, notes, decorItems, mediaWidthPct, noteWidthPct, densityCount, layoutConstraints, respectSavedPositions]);
+  }, [
+    album.id,
+    spread,
+    spreadIndex,
+    mediaItems,
+    notes,
+    decorItems,
+    mediaWidthPct,
+    noteWidthPct,
+    densityCount,
+    layoutConstraints,
+    respectSavedPositions,
+    editable,
+    isLayoutLocked,
+  ]);
 
   const activeMedia = React.useMemo(() => {
     if (!viewerTarget || viewerTarget.type !== 'media') {
@@ -1645,7 +1662,7 @@ export function PhotoAlbumStage({
     if (!editable || isLayoutLocked || (!dragging && !resizing)) {
       return undefined;
     }
-    const onWindowMove = (event: MouseEvent) => {
+    const onWindowMove = (event: PointerEvent) => {
       if (resizing) {
         applyResizePosition(event.clientX, event.clientY);
       } else {
@@ -1655,11 +1672,13 @@ export function PhotoAlbumStage({
     const onWindowUp = () => {
       endDragging();
     };
-    window.addEventListener('mousemove', onWindowMove);
-    window.addEventListener('mouseup', onWindowUp);
+    window.addEventListener('pointermove', onWindowMove);
+    window.addEventListener('pointerup', onWindowUp);
+    window.addEventListener('pointercancel', onWindowUp);
     return () => {
-      window.removeEventListener('mousemove', onWindowMove);
-      window.removeEventListener('mouseup', onWindowUp);
+      window.removeEventListener('pointermove', onWindowMove);
+      window.removeEventListener('pointerup', onWindowUp);
+      window.removeEventListener('pointercancel', onWindowUp);
     };
   }, [applyDragPosition, applyResizePosition, dragging, resizing, editable, endDragging, isLayoutLocked]);
 
@@ -1774,6 +1793,7 @@ export function PhotoAlbumStage({
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 8 + (index % 4),
       cursor: editable && !isLayoutLocked ? 'grab' : 'pointer',
+      touchAction: editable && !isLayoutLocked ? 'none' : 'auto',
     };
   };
 
@@ -1789,6 +1809,7 @@ export function PhotoAlbumStage({
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 20 + (index % 4),
       cursor: editable && !isLayoutLocked ? 'grab' : 'pointer',
+      touchAction: editable && !isLayoutLocked ? 'none' : 'auto',
     };
   };
 
@@ -1800,18 +1821,19 @@ export function PhotoAlbumStage({
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(${placement?.size ?? 1})`,
       zIndex: 2,
       pointerEvents: editable ? 'auto' : 'none',
+      touchAction: editable ? 'none' : 'auto',
     };
   };
   const renderResizeHandle = React.useCallback((
     direction: ResizeState['direction'],
-    onStart: (event: React.MouseEvent<HTMLElement>) => void,
+    onStart: (event: React.PointerEvent<HTMLElement>) => void,
   ) => (
     <button
       key={direction}
       type="button"
       className={`catn8-resize-handle catn8-resize-handle-${direction}`}
       aria-label={`Resize item from ${direction}`}
-      onMouseDown={onStart}
+      onPointerDown={onStart}
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1909,15 +1931,19 @@ export function PhotoAlbumStage({
         <div
           ref={canvasRef}
           className="catn8-scatter-canvas"
-          onMouseUp={endDragging}
-          onMouseLeave={endDragging}
+          onPointerUp={endDragging}
+          onMouseLeave={() => {
+            if (!dragging && !resizing) {
+              endDragging();
+            }
+          }}
         >
           {decorItems.map((item, index) => (
             <span
               key={item.id}
               className="catn8-scatter-emoji"
               style={renderDecorStyle(item, index)}
-              onMouseDown={editable && !isLayoutLocked ? (event) => {
+              onPointerDown={editable && !isLayoutLocked ? (event) => {
                 const target = event.target as HTMLElement;
                 if (target.closest('button')) {
                   return;
@@ -1937,7 +1963,7 @@ export function PhotoAlbumStage({
                     type="button"
                     className="catn8-drag-handle catn8-drag-handle-emoji"
                     aria-label="Drag decor item"
-                    onMouseDown={(event) => {
+                    onPointerDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       setSelectedItem({ type: 'decor', index });
@@ -1989,7 +2015,7 @@ export function PhotoAlbumStage({
                 className={selectedItem?.type === 'media' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-media is-selected' : 'catn8-scatter-card catn8-scatter-media'}
                 key={item.key}
                 style={renderMediaStyle(index)}
-                onMouseDown={editable && !isLayoutLocked ? (event) => {
+                onPointerDown={editable && !isLayoutLocked ? (event) => {
                   const target = event.target as HTMLElement;
                   if (target.closest('button') || target.closest('video')) {
                     return;
@@ -2079,7 +2105,7 @@ export function PhotoAlbumStage({
                 key={note.id}
                 style={renderNoteStyle(note, index)}
                 onClick={() => onItemClick({ type: 'note', index }, 'note')}
-                onMouseDown={editable && !isLayoutLocked ? (event) => {
+                onPointerDown={editable && !isLayoutLocked ? (event) => {
                   const target = event.target as HTMLElement;
                   if (target.closest('button')) {
                     return;

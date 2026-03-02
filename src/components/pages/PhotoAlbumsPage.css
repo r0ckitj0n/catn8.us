@@ -179,6 +179,13 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   padding: 1rem;
 }
 
+.catn8-album-toolbar-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .catn8-album-toolbar.is-fullscreen {
   border-radius: 0;
   margin: 0;

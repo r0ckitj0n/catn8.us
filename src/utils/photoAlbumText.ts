@@ -83,6 +83,14 @@ export function toPhotoAlbumDisplayTitle(value: unknown): string {
   return titleFromLegacyIndex(childName, index);
 }
 
+export function toPhotoAlbumDisplaySummary(value: unknown): string {
+  const cleaned = sanitizeAlbumMessageText(value).trim();
+  if (!cleaned) {
+    return '';
+  }
+  return cleaned.replace(/^Imported memories\s*/i, '').trim();
+}
+
 function cleanWhitespace(value: string): string {
   return value
     .replace(/\u0000/g, ' ')

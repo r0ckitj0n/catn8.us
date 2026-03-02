@@ -2387,7 +2387,7 @@ def build_album_rows(
             title = base_title if part_no == 1 else f"{base_title} Part {part_no}"
         else:
             title = title_prefix if single_album else f"{title_prefix} {idx}"
-        summary = f"Imported memories ({first_dt} to {last_dt}). {len(pages)} pages."
+        summary = f"({first_dt} to {last_dt}). {len(pages)} pages."
         slug = f"{slugify(f'{title_prefix}-{idx}-{first_dt}')[:100]}-{stamp}-{idx}"[:120]
 
         captions = [p.caption for p in pages]

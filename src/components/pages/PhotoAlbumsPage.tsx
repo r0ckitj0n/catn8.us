@@ -2,7 +2,7 @@ import React from 'react';
 
 import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
-import { toAlbumDisplayName, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
+import { toAlbumDisplayName, toPhotoAlbumDisplaySummary, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
 import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
@@ -10,18 +10,10 @@ import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
 
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
+  const selectedAlbumSummary = toPhotoAlbumDisplaySummary(selectedAlbum?.summary || '');
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
@@ -100,6 +92,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
               <div className="catn8-photo-albums-card-grid">
                 {state.albums.map((album) => {
                   const displayTitle = toPhotoAlbumDisplayTitle(album.title);
+                  const displaySummary = toPhotoAlbumDisplaySummary(album.summary);
                   return (
                   <article key={album.id} className="catn8-photo-album-card">
                     <button
@@ -113,7 +106,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <div className="catn8-photo-album-card-image" style={{ backgroundImage: album.cover_image_url ? `url(${album.cover_image_url})` : undefined }} />
                     <div className="catn8-photo-album-card-body">
                       <h2>{displayTitle}</h2>
-                      <p>{album.summary || 'No summary yet.'}</p>
+                      <p>{displaySummary || 'No summary yet.'}</p>
                     </div>
                     {state.isAdmin ? (
                       <button
@@ -151,23 +144,13 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
             <div className={isFullscreen ? 'catn8-photo-albums-main is-fullscreen' : 'catn8-photo-albums-main'}>
               {!isFullscreen ? (
                 <div className="catn8-album-toolbar catn8-card">
-                  <div>
-                    <h2 className="h4 mb-1">{toPhotoAlbumDisplayTitle(selectedAlbum.title)}</h2>
-                    <div className="small text-muted">{selectedAlbum.summary}</div>
+                  <div className="catn8-album-toolbar-title-row">
+                    <h2 className="h4 mb-0">{toPhotoAlbumDisplayTitle(selectedAlbum.title)}</h2>
+                    {selectedAlbumSummary ? <div className="small text-muted">{selectedAlbumSummary}</div> : null}
                   </div>
                   <div className="catn8-album-controls">
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.prevPage} disabled={!state.canPrev}>Prev Page</button>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={state.nextPage} disabled={!state.canNext}>Next Page</button>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(-1)}>-</button>
-                    <span className="catn8-zoom-label">{Math.round(state.zoom * 100)}%</span>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => state.adjustZoom(1)}>+</button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => downloadDataUrl(selectedAlbum.cover_image_url, `${selectedAlbum.slug}-cover.png`)}
-                      disabled={!selectedAlbum.cover_image_url}
-                    >
-                      Download Cover
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void openAdminFullscreenPreview(); }}>
+                      Full Screen
                     </button>
                   </div>
                 </div>

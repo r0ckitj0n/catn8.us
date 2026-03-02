@@ -7,6 +7,7 @@ import {
 } from '../types/photoAlbums';
 import { IToast } from '../types/common';
 import { ApiClient } from '../core/ApiClient';
+import { toPhotoAlbumDisplaySummary } from '../utils/photoAlbumText';
 import { usePhotoAlbumsMutations } from './usePhotoAlbumsMutations';
 
 const DEFAULT_CREATE_FORM: PhotoAlbumAiCreateRequest = {
@@ -26,6 +27,10 @@ const DEFAULT_CREATE_FORM: PhotoAlbumAiCreateRequest = {
 
 function cloneAlbum(album: PhotoAlbum): PhotoAlbum {
   return JSON.parse(JSON.stringify(album)) as PhotoAlbum;
+}
+
+function normalizeAlbumSummary(album: PhotoAlbum): PhotoAlbum {
+  return { ...album, summary: toPhotoAlbumDisplaySummary(album.summary) };
 }
 
 function stableStringify(value: unknown): string {
@@ -115,7 +120,9 @@ export function usePhotoAlbumsPage(
     setLoading(true);
     try {
       const res = await ApiClient.get<PhotoAlbumListResponse>('/api/photo_albums.php?action=list');
-      const nextAlbums = sortAlbumsOldestToNewest(Array.isArray(res?.albums) ? res.albums : []);
+      const rawAlbums = Array.isArray(res?.albums) ? res.albums : [];
+      const normalizedAlbums = rawAlbums.map(normalizeAlbumSummary);
+      const nextAlbums = sortAlbumsOldestToNewest(normalizedAlbums);
       setAlbums(nextAlbums);
 
       if (nextAlbums.length === 0) {

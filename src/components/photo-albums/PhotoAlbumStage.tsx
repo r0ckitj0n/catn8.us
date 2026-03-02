@@ -468,16 +468,16 @@ type SelectedItem = {
 };
 
 type ResizeState = {
-  type: 'media' | 'note';
+  type: 'media' | 'note' | 'decor';
   index: number;
   sourceIndex?: number;
+  direction: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   startClientX: number;
   startClientY: number;
   startX: number;
   startY: number;
   startW: number;
   startH: number;
-  aspect: number;
 };
 
 const CANVAS_MIN_X = 2;
@@ -1187,6 +1187,7 @@ export function PhotoAlbumStage({
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const headerRef = React.useRef<HTMLDivElement | null>(null);
   const [reservedHeaderRect, setReservedHeaderRect] = React.useState<LayoutRect | null>(null);
+  const resizeDirections: Array<ResizeState['direction']> = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
   React.useEffect(() => {
     setViewerTarget(null);
@@ -1550,20 +1551,47 @@ export function PhotoAlbumStage({
     const canvas = canvasEl.getBoundingClientRect();
     const deltaX = ((clientX - resizing.startClientX) / Math.max(1, canvas.width)) * 100;
     const deltaY = ((clientY - resizing.startClientY) / Math.max(1, canvas.height)) * 100;
-    const widthFromX = resizing.startW + deltaX;
-    const widthFromY = resizing.startW + (deltaY * resizing.aspect);
-    const minimumW = resizing.type === 'media' ? 9.5 : 10.5;
-    const maximumW = resizing.type === 'media' ? 62 : 58;
-    const nextW = clamp(Math.max(widthFromX, widthFromY), minimumW, maximumW);
-    const nextH = Math.max(nextW / Math.max(0.2, resizing.aspect), resizing.type === 'media' ? 9.5 : 8.2);
+    const affectsEast = resizing.direction.includes('e');
+    const affectsWest = resizing.direction.includes('w');
+    const affectsNorth = resizing.direction.includes('n');
+    const affectsSouth = resizing.direction.includes('s');
+
+    let nextX = resizing.startX;
+    let nextY = resizing.startY;
+    let nextW = resizing.startW;
+    let nextH = resizing.startH;
+
+    if (affectsEast) {
+      nextW = resizing.startW + deltaX;
+    }
+    if (affectsWest) {
+      nextW = resizing.startW - deltaX;
+      nextX = resizing.startX + deltaX;
+    }
+    if (affectsSouth) {
+      nextH = resizing.startH + deltaY;
+    }
+    if (affectsNorth) {
+      nextH = resizing.startH - deltaY;
+      nextY = resizing.startY + deltaY;
+    }
+
+    const limits = resizing.type === 'media'
+      ? { minW: 9.5, maxW: 62, minH: 9.5, maxH: 74 }
+      : resizing.type === 'note'
+        ? { minW: 10.5, maxW: 58, minH: 8.2, maxH: 72 }
+        : { minW: 3.2, maxW: 10.6, minH: 3.2, maxH: 10.6 };
+
+    nextW = clamp(nextW, limits.minW, limits.maxW);
+    nextH = clamp(nextH, limits.minH, limits.maxH);
 
     const constrained = constrainLayout({
       id: `${resizing.type}-${resizing.index}`,
       type: resizing.type,
       index: resizing.index,
       sourceIndex: resizing.sourceIndex,
-      x: resizing.startX,
-      y: resizing.startY,
+      x: nextX,
+      y: nextY,
       w: nextW,
       h: nextH,
       rotation: 0,
@@ -1585,8 +1613,19 @@ export function PhotoAlbumStage({
         w: constrained.w,
         h: constrained.h,
       });
+      return;
     }
-  }, [editable, isLayoutLocked, layoutConstraints, onMoveMedia, onMoveNote, resizing]);
+    if (resizing.type === 'decor' && onMoveDecor) {
+      const currentDecor = decorItems[resizing.index];
+      onMoveDecor(resizing.index, {
+        x: constrained.x,
+        y: constrained.y,
+        size: clamp(constrained.w / 4.6, 0.65, 2.3),
+        emoji: currentDecor?.emoji,
+        rotation: currentDecor?.rotation,
+      });
+    }
+  }, [editable, isLayoutLocked, layoutConstraints, onMoveDecor, onMoveMedia, onMoveNote, resizing, decorItems]);
 
   const endDragging = React.useCallback(() => {
     if (dragMovedRef.current) {
@@ -1762,6 +1801,22 @@ export function PhotoAlbumStage({
       pointerEvents: editable ? 'auto' : 'none',
     };
   };
+  const renderResizeHandle = React.useCallback((
+    direction: ResizeState['direction'],
+    onStart: (event: React.MouseEvent<HTMLElement>) => void,
+  ) => (
+    <button
+      key={direction}
+      type="button"
+      className={`catn8-resize-handle catn8-resize-handle-${direction}`}
+      aria-label={`Resize item from ${direction}`}
+      onMouseDown={onStart}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    />
+  ), []);
   const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
   const scatterStyle: React.CSSProperties = {
     transform: `scale(${zoom})`,
@@ -1861,24 +1916,61 @@ export function PhotoAlbumStage({
               key={item.id}
               className="catn8-scatter-emoji"
               style={renderDecorStyle(item, index)}
+              onMouseDown={editable && !isLayoutLocked ? (event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest('button')) {
+                  return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                setSelectedItem({ type: 'decor', index });
+                dragStartRef.current = { x: event.clientX, y: event.clientY };
+                dragMovedRef.current = false;
+                setDragging({ type: 'decor', index });
+              } : undefined}
               onClick={() => onItemClick({ type: 'decor', index }, null)}
             >
               {editable ? (
-                <button
-                  type="button"
-                  className="catn8-drag-handle catn8-drag-handle-emoji"
-                  aria-label="Drag decor item"
-                  onMouseDown={(event) => {
+                <>
+                  <button
+                    type="button"
+                    className="catn8-drag-handle catn8-drag-handle-emoji"
+                    aria-label="Drag decor item"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedItem({ type: 'decor', index });
+                      dragStartRef.current = { x: event.clientX, y: event.clientY };
+                      dragMovedRef.current = false;
+                      setDragging({ type: 'decor', index });
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <DragHandleIcon />
+                  </button>
+                  {resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    const placement = layoutByType.decorByIndex.get(index);
+                    if (!placement) {
+                      return;
+                    }
+                    setSelectedItem({ type: 'decor', index });
                     dragStartRef.current = { x: event.clientX, y: event.clientY };
                     dragMovedRef.current = false;
-                    setDragging({ type: 'decor', index });
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <DragHandleIcon />
-                </button>
+                    setResizing({
+                      type: 'decor',
+                      index,
+                      direction,
+                      startClientX: event.clientX,
+                      startClientY: event.clientY,
+                      startX: placement.x,
+                      startY: placement.y,
+                      startW: placement.w,
+                      startH: placement.h,
+                    });
+                  }))}
+                </>
               ) : null}
               {item.emoji}
             </span>
@@ -1896,7 +1988,7 @@ export function PhotoAlbumStage({
                 className={selectedItem?.type === 'media' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-media is-selected' : 'catn8-scatter-card catn8-scatter-media'}
                 key={item.key}
                 style={renderMediaStyle(index)}
-              onMouseDown={editable && !isLayoutLocked ? (event) => {
+                onMouseDown={editable && !isLayoutLocked ? (event) => {
                   const target = event.target as HTMLElement;
                   if (target.closest('button') || target.closest('video')) {
                     return;
@@ -1904,30 +1996,6 @@ export function PhotoAlbumStage({
                   event.preventDefault();
                   event.stopPropagation();
                   setSelectedItem({ type: 'media', index, sourceIndex: item.sourceIndex });
-                  const cardRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-                  const edgeThresholdPx = 14;
-                  const nearRight = (cardRect.right - event.clientX) <= edgeThresholdPx;
-                  const nearBottom = (cardRect.bottom - event.clientY) <= edgeThresholdPx;
-                  if ((nearRight || nearBottom) && selectedItem?.type === 'media' && selectedItem.index === index) {
-                    const placement = layoutByType.mediaByIndex.get(index);
-                    if (placement) {
-                      dragStartRef.current = { x: event.clientX, y: event.clientY };
-                      dragMovedRef.current = false;
-                      setResizing({
-                        type: 'media',
-                        index,
-                        sourceIndex: item.sourceIndex,
-                        startClientX: event.clientX,
-                        startClientY: event.clientY,
-                        startX: placement.x,
-                        startY: placement.y,
-                        startW: placement.w,
-                        startH: placement.h,
-                        aspect: Math.max(0.25, placement.w / Math.max(0.5, placement.h)),
-                      });
-                      return;
-                    }
-                  }
                   dragStartRef.current = { x: event.clientX, y: event.clientY };
                   dragMovedRef.current = false;
                   setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
@@ -1972,6 +2040,29 @@ export function PhotoAlbumStage({
                   />
                 )}
                 {showCaption ? <figcaption className="catn8-polaroid-caption">{caption}</figcaption> : null}
+                {editable && !isLayoutLocked ? resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const placement = layoutByType.mediaByIndex.get(index);
+                  if (!placement) {
+                    return;
+                  }
+                  setSelectedItem({ type: 'media', index, sourceIndex: item.sourceIndex });
+                  dragStartRef.current = { x: event.clientX, y: event.clientY };
+                  dragMovedRef.current = false;
+                  setResizing({
+                    type: 'media',
+                    index,
+                    sourceIndex: item.sourceIndex,
+                    direction,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    startX: placement.x,
+                    startY: placement.y,
+                    startW: placement.w,
+                    startH: placement.h,
+                  });
+                })) : null}
               </figure>
             );
           })}
@@ -1995,29 +2086,6 @@ export function PhotoAlbumStage({
                   event.preventDefault();
                   event.stopPropagation();
                   setSelectedItem({ type: 'note', index });
-                  const cardRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-                  const edgeThresholdPx = 14;
-                  const nearRight = (cardRect.right - event.clientX) <= edgeThresholdPx;
-                  const nearBottom = (cardRect.bottom - event.clientY) <= edgeThresholdPx;
-                  if ((nearRight || nearBottom) && selectedItem?.type === 'note' && selectedItem.index === index) {
-                    const placement = layoutByType.noteByIndex.get(index);
-                    if (placement) {
-                      dragStartRef.current = { x: event.clientX, y: event.clientY };
-                      dragMovedRef.current = false;
-                      setResizing({
-                        type: 'note',
-                        index,
-                        startClientX: event.clientX,
-                        startClientY: event.clientY,
-                        startX: placement.x,
-                        startY: placement.y,
-                        startW: placement.w,
-                        startH: placement.h,
-                        aspect: Math.max(0.25, placement.w / Math.max(0.5, placement.h)),
-                      });
-                      return;
-                    }
-                  }
                   dragStartRef.current = { x: event.clientX, y: event.clientY };
                   dragMovedRef.current = false;
                   setDragging({ type: 'note', index });
@@ -2048,6 +2116,28 @@ export function PhotoAlbumStage({
                   <span className="catn8-scatter-note-emoji">{theme.emojis[index % Math.max(1, theme.emojis.length)] || '✨'}</span>
                   <p>{display}</p>
                 </div>
+                {editable && !isLayoutLocked ? resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const placement = layoutByType.noteByIndex.get(index);
+                  if (!placement) {
+                    return;
+                  }
+                  setSelectedItem({ type: 'note', index });
+                  dragStartRef.current = { x: event.clientX, y: event.clientY };
+                  dragMovedRef.current = false;
+                  setResizing({
+                    type: 'note',
+                    index,
+                    direction,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    startX: placement.x,
+                    startY: placement.y,
+                    startW: placement.w,
+                    startH: placement.h,
+                  });
+                })) : null}
               </div>
             );
           })}

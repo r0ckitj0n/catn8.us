@@ -91,7 +91,8 @@ UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
 # Defaults target directories commonly populated by live AI/user tooling.
 IMAGE_SYNC_EXCLUDE_GLOBS="${CATN8_IMAGE_SYNC_EXCLUDE_GLOBS:-images/mystery/**,images/build-wizard/**,images/wordsearch/**,images/backgrounds/**}"
 # Pull missing files from LIVE after deploy so local has a backup of live-only assets.
-PULL_MISSING_FROM_LIVE="${CATN8_PULL_MISSING_FROM_LIVE:-1}"
+# Default is OFF to avoid accidental large downloads into the local repo.
+PULL_MISSING_FROM_LIVE="${CATN8_PULL_MISSING_FROM_LIVE:-0}"
 # Comma-separated remote roots to pull missing files for (safe default: images only).
 PULL_MISSING_PATHS="${CATN8_PULL_MISSING_PATHS:-images}"
 # Default safety: never delete anything under images/** on the remote.
@@ -804,6 +805,11 @@ set cmd:fail-exit yes
 ${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
 mirror --verbose --only-missing --no-perms \
+  --exclude-glob ".git/**" \
+  --exclude-glob ".git" \
+  --exclude-glob ".gitignore" \
+  --exclude-glob ".gitattributes" \
+  --exclude-glob ".gitmodules" \
   ${pull_trimmed} ${pull_trimmed}
 bye
 EOL

@@ -643,6 +643,78 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
+.catn8-resize-handle {
+  position: absolute;
+  width: 0.82rem;
+  height: 0.82rem;
+  border: 1px solid rgba(74, 51, 30, 0.7);
+  border-radius: 999px;
+  background: rgba(255, 250, 238, 0.98);
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.catn8-scatter-card:hover .catn8-resize-handle,
+.catn8-scatter-card:focus-within .catn8-resize-handle,
+.catn8-scatter-card.is-selected .catn8-resize-handle,
+.catn8-scatter-emoji:hover .catn8-resize-handle,
+.catn8-scatter-emoji:focus-within .catn8-resize-handle {
+  opacity: 1;
+}
+
+.catn8-resize-handle-n {
+  top: -0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.catn8-resize-handle-s {
+  bottom: -0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.catn8-resize-handle-e {
+  right: -0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.catn8-resize-handle-w {
+  left: -0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.catn8-resize-handle-ne {
+  top: -0.45rem;
+  right: -0.45rem;
+  cursor: nesw-resize;
+}
+
+.catn8-resize-handle-nw {
+  top: -0.45rem;
+  left: -0.45rem;
+  cursor: nwse-resize;
+}
+
+.catn8-resize-handle-se {
+  bottom: -0.45rem;
+  right: -0.45rem;
+  cursor: nwse-resize;
+}
+
+.catn8-resize-handle-sw {
+  bottom: -0.45rem;
+  left: -0.45rem;
+  cursor: nesw-resize;
+}
+
 .catn8-scatter-card.is-selected {
   outline: 2px dashed rgba(66, 45, 24, 0.45);
   outline-offset: 2px;

@@ -28,7 +28,6 @@ interface PhotoAlbumAdminModalProps {
   onSave: () => void;
   onAutoLayout: () => void;
   onAutoLayoutSpread: () => void;
-  onAutoLayoutAllUnlocked: () => void;
   onToggleAlbumLock: (isLocked: boolean) => void;
   onToggleSpreadLock: (isLocked: boolean) => void;
   onDelete: () => void;
@@ -72,7 +71,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onSave,
     onAutoLayout,
     onAutoLayoutSpread,
-    onAutoLayoutAllUnlocked,
     onToggleAlbumLock,
     onToggleSpreadLock,
     onDelete,
@@ -174,7 +172,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
               <button
                 type="button"
                 className={spreadLocked ? 'btn btn-sm catn8-lock-text-toggle is-active' : 'btn btn-sm catn8-lock-text-toggle'}
@@ -188,8 +185,10 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
             <div className="d-flex align-items-center gap-2">
               <button
                 type="button"
-                className={'btn btn-sm btn-primary catn8-dirty-save catn8-dirty-save--visible' + (hasUnsavedChanges ? ' catn8-admin-save-is-dirty' : '')}
-                onClick={onSave}
+                className={'btn btn-sm btn-primary catn8-dirty-save' + (hasUnsavedChanges ? ' catn8-dirty-save--visible catn8-admin-save-is-dirty' : '')}
+                onClick={() => {
+                  void onSave();
+                }}
                 disabled={busy || albumLocked || !hasUnsavedChanges}
                 aria-label="Save album"
                 title={hasUnsavedChanges ? 'Save changes' : 'No changes to save'}

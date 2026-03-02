@@ -1105,11 +1105,11 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-admin-modal-shell {
-  width: 95vw;
-  height: 95vh;
+  width: 100vw;
+  height: 100dvh;
   background: #f8efe5;
   border: 1px solid rgba(45, 32, 18, 0.4);
-  border-radius: 14px;
+  border-radius: 0;
   box-shadow: 0 26px 48px rgba(0, 0, 0, 0.36);
   overflow: hidden;
   display: flex;

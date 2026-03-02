@@ -301,7 +301,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         onSave={state.saveAdminEdits}
         onAutoLayout={state.autoLayoutAlbum}
         onAutoLayoutSpread={state.autoLayoutCurrentSpread}
-        onAutoLayoutAllUnlocked={state.autoLayoutAllUnlocked}
         onToggleAlbumLock={(isLocked) => {
           if (selectedAlbumId > 0) {
             void state.toggleAlbumLock(selectedAlbumId, isLocked);

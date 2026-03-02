@@ -125,7 +125,18 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         aria-label={`Delete album ${displayTitle}`}
                         title="Delete album"
                       >
-                        🗑
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          focusable="false"
+                        >
+                          <path
+                            d="M9 3h6l1 2h5v2H3V5h5l1-2Zm-3 6h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"
+                            fill="currentColor"
+                          />
+                        </svg>
                       </button>
                     ) : null}
                   </article>

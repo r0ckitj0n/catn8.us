@@ -110,10 +110,26 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   font-size: 0.9rem;
   line-height: 1;
   z-index: 2;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease, background-color 150ms ease;
+}
+
+.catn8-photo-album-card:hover .catn8-photo-album-card-delete,
+.catn8-photo-album-card:focus-within .catn8-photo-album-card-delete {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .catn8-photo-album-card-delete:hover {
   background: #ffe8e8;
+}
+
+.catn8-photo-album-card-delete:focus-visible {
+  outline: 2px solid #7f1d1d;
+  outline-offset: 2px;
 }
 
 .catn8-photo-albums-main {

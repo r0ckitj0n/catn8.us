@@ -97,7 +97,7 @@ class CatalogMedia:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Import iMessage/Photos memories into CATN8 photo_albums")
-    p.add_argument("--mode", choices=["catalog_match", "attachment_match", "photos_timeline"], default="catalog_match")
+    p.add_argument("--mode", choices=["catalog_match", "attachment_match", "photos_timeline"], default="attachment_match")
     p.add_argument("--contact", default="Trinity")
     p.add_argument("--contacts-violet", default="Trinity,Ian")
     p.add_argument("--contacts-eleanor", default="Trinity,Ian")
@@ -1266,11 +1266,11 @@ def photos_find_by_transfer_name_nearest_date(
 
 def resolve_message_media_source(msg: MessageRow, photos_db: Path) -> Optional[Path]:
     ap = msg.attachment_path
-    if ap is not None and ap.exists() and (is_image_path(ap, msg.attachment_mime) or is_image_binary(ap)):
+    if ap is not None and ap.exists() and media_kind_from_attachment(ap, msg.attachment_mime) in {"image", "video"}:
         return ap
 
     recovered = find_message_attachment_file_from_guid(msg.attachment_guid, msg.attachment_transfer_name)
-    if recovered is not None and recovered.exists():
+    if recovered is not None and recovered.exists() and media_kind_from_attachment(recovered, msg.attachment_mime) in {"image", "video"}:
         return recovered
 
     uuid_candidates: List[str] = []
@@ -1281,7 +1281,7 @@ def resolve_message_media_source(msg: MessageRow, photos_db: Path) -> Optional[P
     if uuid_candidates:
         for asset_uuid in uuid_candidates:
             located = photos_find_derivative_by_asset_uuid(photos_db, asset_uuid)
-            if located and located.exists():
+            if located and located.exists() and media_kind_from_attachment(located, msg.attachment_mime) in {"image", "video"}:
                 return located
 
     if msg.attachment_transfer_name:
@@ -1292,7 +1292,7 @@ def resolve_message_media_source(msg: MessageRow, photos_db: Path) -> Optional[P
             attachment_total_bytes=msg.attachment_total_bytes,
             max_date_drift_days=7.0,
         )
-        if located and located.exists():
+        if located and located.exists() and media_kind_from_attachment(located, msg.attachment_mime) in {"image", "video"}:
             return located
     return None
 
@@ -2590,13 +2590,37 @@ def pages_from_attachment_match(
     focus_person: str = "any",
     eleanor_birth: Optional[dt.date] = None,
     face_name_filter: Optional[set[str]] = None,
+    progress_every_messages: int = 0,
 ) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
     staged_by_source_hash: Dict[str, str] = {}
     normalized_face_names = {str(x).strip().lower() for x in list(face_name_filter or set()) if str(x).strip()}
+    total_messages = len(messages)
+    auto_progress_every = max(50, min(500, max(1, total_messages // 100))) if total_messages > 0 else 50
+    progress_interval = int(progress_every_messages) if int(progress_every_messages or 0) > 0 else int(auto_progress_every)
+    progress_interval = max(10, progress_interval)
+    print(f"Attachment-match progress interval: every {progress_interval} messages")
+
+    processed = 0
+    produced_pages = 0
+    skipped_non_visual = 0
+    skipped_face_filter = 0
+    conversion_failures = 0
+
     for i, msg in enumerate(messages):
+        processed += 1
         source = resolve_message_media_source(msg, photos_db)
         if source is None:
+            if processed % progress_interval == 0:
+                pct = (float(processed) / float(max(1, total_messages))) * 100.0
+                print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
+            continue
+        source_kind = media_kind_from_attachment(source, msg.attachment_mime)
+        if source_kind not in {"image", "video"}:
+            skipped_non_visual += 1
+            if processed % progress_interval == 0:
+                pct = (float(processed) / float(max(1, total_messages))) * 100.0
+                print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
             continue
         if normalized_face_names and eleanor_birth and msg.sent_at.date() >= eleanor_birth and focus_person in {"violet", "eleanor", "lyra"}:
             candidate_names = {
@@ -2609,6 +2633,10 @@ def pages_from_attachment_match(
                 candidate_names.add(str(msg.attachment_path.name or "").strip().lower())
                 candidate_names.add(str(msg.attachment_path.stem or "").strip().lower())
             if not any(name in normalized_face_names for name in candidate_names if name):
+                skipped_face_filter += 1
+                if processed % progress_interval == 0:
+                    pct = (float(processed) / float(max(1, total_messages))) * 100.0
+                    print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
                 continue
         caption = build_rich_caption(messages, i, handle_name_map)
         if caption == "(no caption)":
@@ -2618,11 +2646,28 @@ def pages_from_attachment_match(
         if out_name and not (staging_dir / out_name).exists():
             out_name = ""
         if not out_name:
-            out_name = f"imsg_{source_hash[:20]}.png"
+            extension = source.suffix.lower() if source_kind == "video" and source.suffix else ".png"
+            out_name = f"imsg_{source_hash[:20]}{extension}"
             staged_by_source_hash[source_hash] = out_name
         out_path = staging_dir / out_name
-        convert_to_png(source, out_path)
-        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, "image")]))
+        try:
+            if source_kind == "video":
+                copy_media_to_staging(source, out_path)
+            else:
+                convert_to_png(source, out_path)
+        except Exception as exc:
+            conversion_failures += 1
+            print(f"Skipping unsupported/failed media conversion: {source} ({source_kind}) :: {exc}")
+            if processed % progress_interval == 0:
+                pct = (float(processed) / float(max(1, total_messages))) * 100.0
+                print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
+            continue
+        pages.append(AlbumPage(sent_at=msg.sent_at, caption=caption, media_items=[(f"/photo_albums/{out_name}", source.name, source_kind)]))
+        produced_pages += 1
+        if processed % progress_interval == 0:
+            pct = (float(processed) / float(max(1, total_messages))) * 100.0
+            print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
+    print(f"[attachment_match] complete {processed}/{total_messages} (100.0%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
     return aggregate_album_pages_by_day(pages)
 
 
@@ -2971,7 +3016,13 @@ def main() -> None:
 
         if args.mode == "catalog_match":
             violet_face_names, eleanor_face_names, lyra_face_names = build_face_filename_sets(assets, violet_id, eleanor_id, lyra_id)
-            conn = build_mysql_connection_from_env()
+            try:
+                conn = build_mysql_connection_from_env()
+            except Exception as exc:
+                raise RuntimeError(
+                    "catalog_match requires direct MySQL connectivity. DNS/host resolution failed. "
+                    "Use '--mode attachment_match' (or run via ./scripts/import_photos.sh) when remote DB isn't reachable."
+                ) from exc
             try:
                 with conn.cursor() as cur:
                     ensure_album_permissions_table(cur)
@@ -3078,6 +3129,7 @@ def main() -> None:
                 focus_person=active_focus,
                 eleanor_birth=eleanor_birth,
                 face_name_filter=focus_face_names,
+                progress_every_messages=max(0, int(args.progress_every_messages)),
             )
 
         if not pages:

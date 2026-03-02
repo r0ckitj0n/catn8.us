@@ -496,13 +496,34 @@ function sizeVariation(seed: string, min: number, max: number): number {
   return min + ((max - min) * factor);
 }
 
+function effectiveRect(item: LayoutItem): LayoutRect {
+  const radians = (Math.abs(item.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const rotatedWidth = Math.abs((item.w * cos) + (item.h * sin));
+  const rotatedHeight = Math.abs((item.w * sin) + (item.h * cos));
+  const safetyScale = isCoreItem(item) ? 1.06 : 1;
+  const w = rotatedWidth * safetyScale;
+  const h = rotatedHeight * safetyScale;
+  const centerX = item.x + (item.w / 2);
+  const centerY = item.y + (item.h / 2);
+  return {
+    x: centerX - (w / 2),
+    y: centerY - (h / 2),
+    w,
+    h,
+  };
+}
+
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
   const aPad = (MIN_ITEM_GAP_PCT / 2) + (isCoreItem(a) ? (MIN_CORE_GAP_PCT / 2) : 0);
   const bPad = (MIN_ITEM_GAP_PCT / 2) + (isCoreItem(b) ? (MIN_CORE_GAP_PCT / 2) : 0);
-  const left = Math.max(a.x - aPad, b.x - bPad);
-  const right = Math.min(a.x + a.w + aPad, b.x + b.w + bPad);
-  const top = Math.max(a.y - aPad, b.y - bPad);
-  const bottom = Math.min(a.y + a.h + aPad, b.y + b.h + bPad);
+  const ra = effectiveRect(a);
+  const rb = effectiveRect(b);
+  const left = Math.max(ra.x - aPad, rb.x - bPad);
+  const right = Math.min(ra.x + ra.w + aPad, rb.x + rb.w + bPad);
+  const top = Math.max(ra.y - aPad, rb.y - bPad);
+  const bottom = Math.min(ra.y + ra.h + aPad, rb.y + rb.h + bPad);
   if (right <= left || bottom <= top) {
     return 0;
   }
@@ -1320,6 +1341,62 @@ export function PhotoAlbumStage({
     }
     return sanitizeAlbumMessageText(spreadForTarget?.title || '');
   }, [activeMedia?.capturedAtMs, album, viewerTarget]);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          target.isContentEditable
+          || tag === 'INPUT'
+          || tag === 'TEXTAREA'
+          || tag === 'SELECT'
+          || tag === 'BUTTON'
+          || tag === 'VIDEO'
+        ) {
+          return;
+        }
+      }
+
+      if (event.key === 'ArrowLeft') {
+        if (viewerTarget) {
+          if (prevTarget) {
+            event.preventDefault();
+            setViewerTarget(prevTarget);
+          }
+          return;
+        }
+        if (canPrev && typeof onPrev === 'function') {
+          event.preventDefault();
+          onPrev();
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        if (viewerTarget) {
+          if (nextTarget) {
+            event.preventDefault();
+            setViewerTarget(nextTarget);
+          }
+          return;
+        }
+        if (canNext && typeof onNext === 'function') {
+          event.preventDefault();
+          onNext();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [canNext, canPrev, nextTarget, onNext, onPrev, prevTarget, viewerTarget]);
 
   const applyDragPosition = React.useCallback((clientX: number, clientY: number) => {
     if (!editable || !dragging) {

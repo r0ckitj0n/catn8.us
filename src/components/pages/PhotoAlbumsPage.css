@@ -773,6 +773,11 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   flex-direction: column;
 }
 
+.catn8-element-viewer-shell--media {
+  position: relative;
+  overflow: hidden;
+}
+
 .catn8-element-viewer-header,
 .catn8-element-viewer-footer {
   display: flex;
@@ -811,7 +816,18 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-element-viewer-body-media {
-  padding: 0;
+  padding: 0.35rem;
+  overflow: hidden;
+}
+
+.catn8-element-viewer-media-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
@@ -825,6 +841,51 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   background: #000;
 }
 
+.catn8-element-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3.2rem;
+  height: 3.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(14, 10, 7, 0.62);
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, background-color 140ms ease;
+}
+
+.catn8-element-viewer-nav-prev {
+  left: max(0.5rem, env(safe-area-inset-left));
+}
+
+.catn8-element-viewer-nav-next {
+  right: max(0.5rem, env(safe-area-inset-right));
+}
+
+.catn8-element-viewer-body-media:hover ~ .catn8-element-viewer-nav,
+.catn8-element-viewer-body-media:focus-within ~ .catn8-element-viewer-nav,
+.catn8-element-viewer-nav:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.catn8-element-viewer-nav:hover {
+  background: rgba(14, 10, 7, 0.82);
+}
+
+.catn8-element-viewer-nav:disabled {
+  opacity: 0.24;
+  pointer-events: none;
+}
+
 .catn8-element-viewer-note {
   max-width: 760px;
   padding: 1rem 1.15rem;
@@ -834,6 +895,13 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   color: #2f2535;
   line-height: 1.5;
   font-size: 1.05rem;
+}
+
+@media (hover: none) {
+  .catn8-element-viewer-nav {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .catn8-theme-support {

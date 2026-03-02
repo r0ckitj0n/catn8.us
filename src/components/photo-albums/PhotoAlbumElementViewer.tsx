@@ -39,10 +39,11 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
     onClose,
     onNavigate,
   } = props;
+  const isMediaTarget = target.type === 'media';
 
   return (
     <div className="catn8-element-viewer-overlay" role="dialog" aria-modal="true">
-      <div className="catn8-element-viewer-shell">
+      <div className={isMediaTarget ? 'catn8-element-viewer-shell catn8-element-viewer-shell--media' : 'catn8-element-viewer-shell'}>
         <div className="catn8-element-viewer-header">
           <strong>{target.type === 'media' ? 'Media' : 'Text'}</strong>
           <div className="catn8-element-viewer-header-right">
@@ -72,22 +73,50 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
           </div>
         </div>
-        <div className={target.type === 'media' ? 'catn8-element-viewer-body catn8-element-viewer-body-media' : 'catn8-element-viewer-body'}>
+        <div className={isMediaTarget ? 'catn8-element-viewer-body catn8-element-viewer-body-media' : 'catn8-element-viewer-body'}>
           {target.type === 'media' && activeMedia ? (
-            isVideoMedia(activeMedia.src, activeMedia.mediaType) ? (
-              <video className="catn8-element-viewer-media" src={activeMedia.src} controls autoPlay preload="metadata" />
-            ) : (
-              <img className="catn8-element-viewer-media" src={activeMedia.src} alt={activeMedia.caption || 'Media'} />
-            )
+            <div className="catn8-element-viewer-media-wrap">
+              {isVideoMedia(activeMedia.src, activeMedia.mediaType) ? (
+                <video className="catn8-element-viewer-media" src={activeMedia.src} controls autoPlay preload="metadata" />
+              ) : (
+                <img className="catn8-element-viewer-media" src={activeMedia.src} alt={activeMedia.caption || 'Media'} />
+              )}
+            </div>
           ) : null}
           {target.type === 'note' ? (
             <div className="catn8-element-viewer-note">{activeNote || 'No text available'}</div>
           ) : null}
         </div>
-        <div className="catn8-element-viewer-footer">
-          <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!prevTarget} onClick={() => onNavigate(prevTarget)}>← Previous</button>
-          <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!nextTarget} onClick={() => onNavigate(nextTarget)}>Next →</button>
-        </div>
+        {isMediaTarget ? (
+          <>
+            <button
+              type="button"
+              className="catn8-element-viewer-nav catn8-element-viewer-nav-prev"
+              disabled={!prevTarget}
+              onClick={() => onNavigate(prevTarget)}
+              aria-label="Previous media"
+              title="Previous"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="catn8-element-viewer-nav catn8-element-viewer-nav-next"
+              disabled={!nextTarget}
+              onClick={() => onNavigate(nextTarget)}
+              aria-label="Next media"
+              title="Next"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
+        {!isMediaTarget ? (
+          <div className="catn8-element-viewer-footer">
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!prevTarget} onClick={() => onNavigate(prevTarget)}>← Previous</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!nextTarget} onClick={() => onNavigate(nextTarget)}>Next →</button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

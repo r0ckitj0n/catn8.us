@@ -37,7 +37,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
                       <div>1. to link together; form into a chain</div>
                     </div>
                     <div className="col-md-4 text-center">
-                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.png" alt="catn8.us Logo" />
                     </div>
                   </div>
                 </div>

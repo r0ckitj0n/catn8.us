@@ -755,7 +755,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 return next;
               })}
-              onMoveNote={(index, patch) => onAlbumChange((prev) => {
+              onMoveNote={(noteId, index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread) {
@@ -765,16 +765,18 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 if (!Array.isArray(targetSpread.text_items)) {
                   return next;
                 }
-                if (!targetSpread.text_items[index]) {
-                  targetSpread.text_items[index] = { id: `note-${Date.now()}-${index}`, text: 'Jon: New note' };
+                let targetIndex = targetSpread.text_items.findIndex((item) => String(item?.id || '') === String(noteId || ''));
+                if (targetIndex < 0) {
+                  targetSpread.text_items.push({ id: noteId || `note-${Date.now()}-${index}`, text: 'Jon: New note' });
+                  targetIndex = targetSpread.text_items.length - 1;
                 }
-                targetSpread.text_items[index].x = patch.x;
-                targetSpread.text_items[index].y = patch.y;
+                targetSpread.text_items[targetIndex].x = patch.x;
+                targetSpread.text_items[targetIndex].y = patch.y;
                 if (typeof patch.w === 'number') {
-                  targetSpread.text_items[index].w = patch.w;
+                  targetSpread.text_items[targetIndex].w = patch.w;
                 }
                 if (typeof patch.h === 'number') {
-                  (targetSpread.text_items[index] as any).h = patch.h;
+                  (targetSpread.text_items[targetIndex] as any).h = patch.h;
                 }
                 return next;
               })}

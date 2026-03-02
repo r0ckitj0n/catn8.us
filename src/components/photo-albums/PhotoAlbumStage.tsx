@@ -28,7 +28,7 @@ interface PhotoAlbumStageProps {
   onToggleAlbumLock?: () => void;
   editable?: boolean;
   onMoveMedia?: (index: number, patch: { x: number; y: number; w?: number; h?: number }) => void;
-  onMoveNote?: (index: number, patch: { x: number; y: number; w?: number; h?: number }) => void;
+  onMoveNote?: (noteId: string, index: number, patch: { x: number; y: number; w?: number; h?: number }) => void;
   onMoveDecor?: (index: number, patch: { x: number; y: number; emoji?: string; size?: number; rotation?: number }) => void;
   onEditNoteText?: (index: number, nextText: string) => void;
   onEditMediaCaption?: (index: number, nextCaption: string) => void;
@@ -528,6 +528,10 @@ function estimateMediaHeightPct(caption: string, widthPct: number): number {
   const frameBase = 5.8;
   const captionLineHeight = 3.5;
   return clamp(imageHeight + frameBase + (lines * captionLineHeight), 18, 72);
+}
+
+function visibleMediaCaption(caption: string): string {
+  return isTranscriptCaption(caption) ? '' : caption;
 }
 
 function sizeVariation(seed: string, min: number, max: number): number {
@@ -1277,6 +1281,7 @@ export function PhotoAlbumStage({
         const singleHash = hashValue(`${album.id}-${spreadIndex}-single-media-${item.key}`);
         const singleX = 5 + ((singleHash % 8) * 0.65);
         const singleY = 14 + ((Math.floor(singleHash / 17) % 12) * 0.7);
+        const visibleCaption = visibleMediaCaption(item.caption);
         return {
           id: `media-${item.sourceIndex}`,
           type: 'media',
@@ -1289,7 +1294,7 @@ export function PhotoAlbumStage({
           w,
           h: (hasPinnedPosition && Number.isFinite(Number((source as any)?.h)))
             ? Number((source as any).h)
-            : estimateMediaHeightPct(item.caption, w),
+            : estimateMediaHeightPct(visibleCaption, w),
           rotation: clamp(Number(source?.rotation ?? (singleMediaSingleNote ? (fallback.rotate - 2) : fallback.rotate)), -8, 8),
         };
       });
@@ -1533,11 +1538,15 @@ export function PhotoAlbumStage({
       h: heightPct,
       rotation: 0,
     }, layoutConstraints);
+    if (Math.abs(constrained.x - (currentLayout?.x ?? constrained.x)) < 0.18 && Math.abs(constrained.y - (currentLayout?.y ?? constrained.y)) < 0.18) {
+      return;
+    }
     if (dragging.type === 'media' && onMoveMedia) {
       onMoveMedia(dragging.sourceIndex ?? dragging.index, { x: constrained.x, y: constrained.y });
     }
     if (dragging.type === 'note' && onMoveNote) {
-      onMoveNote(dragging.index, { x: constrained.x, y: constrained.y });
+      const noteId = notes[dragging.index]?.id || `text-${dragging.index}`;
+      onMoveNote(noteId, dragging.index, { x: constrained.x, y: constrained.y });
     }
     if (dragging.type === 'decor' && onMoveDecor) {
       const currentDecor = decorItems[dragging.index];
@@ -1549,7 +1558,7 @@ export function PhotoAlbumStage({
         rotation: currentDecor?.rotation,
       });
     }
-  }, [editable, isLayoutLocked, dragging, resizing, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
+  }, [editable, isLayoutLocked, dragging, resizing, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems, notes]);
 
   const applyResizePosition = React.useCallback((clientX: number, clientY: number) => {
     if (!editable || isLayoutLocked || !resizing) {
@@ -1614,6 +1623,18 @@ export function PhotoAlbumStage({
       h: nextH,
       rotation: 0,
     }, layoutConstraints);
+    const activeLayout = resizing.type === 'media'
+      ? layoutByType.mediaByIndex.get(resizing.index)
+      : resizing.type === 'note'
+        ? layoutByType.noteByIndex.get(resizing.index)
+        : layoutByType.decorByIndex.get(resizing.index);
+    const samePosition = Math.abs(constrained.x - (activeLayout?.x ?? constrained.x)) < 0.18
+      && Math.abs(constrained.y - (activeLayout?.y ?? constrained.y)) < 0.18;
+    const sameSize = Math.abs(constrained.w - (activeLayout?.w ?? constrained.w)) < 0.18
+      && Math.abs(constrained.h - (activeLayout?.h ?? constrained.h)) < 0.18;
+    if (samePosition && sameSize) {
+      return;
+    }
 
     if (resizing.type === 'media' && onMoveMedia) {
       onMoveMedia(resizing.sourceIndex ?? resizing.index, {
@@ -1625,7 +1646,8 @@ export function PhotoAlbumStage({
       return;
     }
     if (resizing.type === 'note' && onMoveNote) {
-      onMoveNote(resizing.index, {
+      const noteId = notes[resizing.index]?.id || `text-${resizing.index}`;
+      onMoveNote(noteId, resizing.index, {
         x: constrained.x,
         y: constrained.y,
         w: constrained.w,
@@ -1643,7 +1665,7 @@ export function PhotoAlbumStage({
         rotation: currentDecor?.rotation,
       });
     }
-  }, [editable, isLayoutLocked, layoutConstraints, onMoveDecor, onMoveMedia, onMoveNote, resizing, decorItems]);
+  }, [editable, isLayoutLocked, layoutConstraints, onMoveDecor, onMoveMedia, onMoveNote, resizing, decorItems, notes, layoutByType]);
 
   const endDragging = React.useCallback(() => {
     if (dragMovedRef.current) {

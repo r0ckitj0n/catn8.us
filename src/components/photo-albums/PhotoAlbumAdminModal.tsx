@@ -2,7 +2,7 @@ import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
 import { auditPhotoAlbum } from '../../utils/photoAlbumAudit';
-import { sanitizeAlbumMessageText, splitAlbumMessages } from '../../utils/photoAlbumText';
+import { sanitizeAlbumMessageText, splitAlbumMessages, toAlbumDisplayName } from '../../utils/photoAlbumText';
 import { PhotoAlbumStage } from './PhotoAlbumStage';
 
 interface PhotoAlbumAdminModalProps {
@@ -568,7 +568,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               album={album}
               spreadIndex={pageIndex}
               zoom={zoom}
-              contactDisplayName={album.created_by_username || ''}
+              contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
               canPrev={canPrev}
               canNext={canNext}
               onPrev={onPrevPage}

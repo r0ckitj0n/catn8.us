@@ -21,6 +21,11 @@ interface PhotoAlbumsMutationsArgs {
   toast: (tone: IToast['tone'], message: string) => void;
 }
 
+interface DeleteAlbumArgs {
+  id: number;
+  title?: string;
+}
+
 export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
   const {
     isAdmin,
@@ -92,20 +97,20 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
   }, [adminDraft, isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
 
-  const deleteSelectedAlbum = React.useCallback(async () => {
-    const album = adminDraft || selectedAlbum;
-    if (!isAdmin || !album) {
+  const deleteAlbumById = React.useCallback(async ({ id, title }: DeleteAlbumArgs) => {
+    if (!isAdmin || !id) {
       return;
     }
 
-    const proceed = window.confirm(`Delete album "${album.title}"?`);
+    const label = (title || 'this album').trim();
+    const proceed = window.confirm(`Delete album "${label}"?`);
     if (!proceed) {
       return;
     }
 
     setBusy(true);
     try {
-      await ApiClient.post('/api/photo_albums.php?action=delete', { id: album.id });
+      await ApiClient.post('/api/photo_albums.php?action=delete', { id });
       toast('success', 'Photo album deleted');
       setShowAdminModal(false);
       setAdminDraft(null);
@@ -116,11 +121,20 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     } finally {
       setBusy(false);
     }
-  }, [adminDraft, isAdmin, loadAlbums, selectedAlbum, setAdminDraft, setBusy, setShowAdminModal, setShowAlbumViewer, toast]);
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, setShowAdminModal, setShowAlbumViewer, toast]);
+
+  const deleteSelectedAlbum = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!album) {
+      return;
+    }
+    await deleteAlbumById({ id: album.id, title: album.title });
+  }, [adminDraft, deleteAlbumById, selectedAlbum]);
 
   return {
     createWithAi,
     saveAdminEdits,
     deleteSelectedAlbum,
+    deleteAlbumById,
   };
 }

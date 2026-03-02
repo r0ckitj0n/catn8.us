@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { PhotoAlbum } from '../../types/photoAlbums';
-import { formatAlbumCaption, inferAlbumTheme, sanitizeAlbumMessageText, splitAlbumMessages } from '../../utils/photoAlbumText';
+import { formatAlbumCaption, inferAlbumTheme, sanitizeAlbumMessageText, splitAlbumMessages, toAlbumDisplayName } from '../../utils/photoAlbumText';
 import { PhotoAlbumElementViewer } from './PhotoAlbumElementViewer';
 import { PreparedMediaItem, ViewerTarget, ViewerType } from './types';
 
@@ -71,15 +71,16 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function resolveContactSpeaker(rawSpeaker: string, contactDisplayName?: string, perMessageContactLabel?: string): string {
+  const normalizedSpeaker = toAlbumDisplayName(rawSpeaker);
   if (/^contact$/i.test(rawSpeaker.trim())) {
-    const perMessage = sanitizeAlbumMessageText(perMessageContactLabel || '').trim();
+    const perMessage = toAlbumDisplayName(perMessageContactLabel);
     if (perMessage) {
       return perMessage;
     }
-    const display = sanitizeAlbumMessageText(contactDisplayName || '').trim();
+    const display = toAlbumDisplayName(contactDisplayName);
     return display || 'Contact';
   }
-  return rawSpeaker.trim();
+  return normalizedSpeaker || 'Unknown';
 }
 
 function parseSpeakerLine(

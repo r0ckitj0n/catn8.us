@@ -2,6 +2,7 @@ import React from 'react';
 
 import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { toAlbumDisplayName, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
 import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
@@ -87,7 +88,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
               <div className="catn8-photo-albums-list-header">
                 <div>
                   <h1 className="section-title mb-1">Photo Albums</h1>
-                  <p className="mb-0">Choose an album to open it. Admins open an editable scrapbook modal; Photo Albums users open fullscreen view.</p>
+                  <p className="mb-0">Choose an album to open it.</p>
                 </div>
                 {state.isAdmin ? (
                   <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
@@ -97,22 +98,39 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
               </div>
 
               <div className="catn8-photo-albums-card-grid">
-                {state.albums.map((album) => (
-                  <button
-                    key={album.id}
-                    type="button"
-                    className="catn8-photo-album-card"
-                    onClick={() => {
-                      void openAlbum(album.id);
-                    }}
-                  >
+                {state.albums.map((album) => {
+                  const displayTitle = toPhotoAlbumDisplayTitle(album.title);
+                  return (
+                  <article key={album.id} className="catn8-photo-album-card">
+                    <button
+                      type="button"
+                      className="catn8-photo-album-card-open"
+                      onClick={() => {
+                        void openAlbum(album.id);
+                      }}
+                      aria-label={`Open album ${displayTitle}`}
+                    />
                     <div className="catn8-photo-album-card-image" style={{ backgroundImage: album.cover_image_url ? `url(${album.cover_image_url})` : undefined }} />
                     <div className="catn8-photo-album-card-body">
-                      <h2>{album.title}</h2>
+                      <h2>{displayTitle}</h2>
                       <p>{album.summary || 'No summary yet.'}</p>
                     </div>
-                  </button>
-                ))}
+                    {state.isAdmin ? (
+                      <button
+                        type="button"
+                        className="catn8-photo-album-card-delete"
+                        onClick={() => {
+                          void state.deleteAlbumById({ id: album.id, title: displayTitle });
+                        }}
+                        aria-label={`Delete album ${displayTitle}`}
+                        title="Delete album"
+                      >
+                        🗑
+                      </button>
+                    ) : null}
+                  </article>
+                  );
+                })}
                 {state.albums.length === 0 ? <div className="catn8-card p-4">No photo albums available yet.</div> : null}
               </div>
             </div>
@@ -123,7 +141,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
               {!isFullscreen ? (
                 <div className="catn8-album-toolbar catn8-card">
                   <div>
-                    <h2 className="h4 mb-1">{selectedAlbum.title}</h2>
+                    <h2 className="h4 mb-1">{toPhotoAlbumDisplayTitle(selectedAlbum.title)}</h2>
                     <div className="small text-muted">{selectedAlbum.summary}</div>
                   </div>
                   <div className="catn8-album-controls">
@@ -148,7 +166,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 album={selectedAlbum}
                 spreadIndex={state.pageIndex}
                 zoom={state.zoom}
-                contactDisplayName={selectedAlbum.created_by_username || ''}
+                contactDisplayName={toAlbumDisplayName(selectedAlbum.created_by_username || '')}
                 canPrev={state.canPrev}
                 canNext={state.canNext}
                 onPrev={state.prevPage}

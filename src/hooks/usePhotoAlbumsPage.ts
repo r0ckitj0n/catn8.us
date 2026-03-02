@@ -36,11 +36,41 @@ function stableStringify(value: unknown): string {
   }
 }
 
+function earliestCapturedAtMs(album: PhotoAlbum): number | null {
+  const spreads = Array.isArray(album?.spec?.spreads) ? album.spec.spreads : [];
+  let earliest: number | null = null;
+  spreads.forEach((spread) => {
+    const images = Array.isArray(spread?.images) ? spread.images : [];
+    images.forEach((image) => {
+      const raw = String(image?.captured_at || '').trim();
+      if (!raw) {
+        return;
+      }
+      const ms = Date.parse(raw);
+      if (!Number.isFinite(ms)) {
+        return;
+      }
+      if (earliest === null || ms < earliest) {
+        earliest = ms;
+      }
+    });
+  });
+  return earliest;
+}
+
 function sortAlbumsOldestToNewest(albums: PhotoAlbum[]): PhotoAlbum[] {
   return [...albums].sort((a, b) => {
+    const aCapture = earliestCapturedAtMs(a);
+    const bCapture = earliestCapturedAtMs(b);
+    if (aCapture !== null && bCapture !== null && aCapture !== bCapture) {
+      return aCapture - bCapture;
+    }
+    if ((aCapture !== null) !== (bCapture !== null)) {
+      return aCapture !== null ? -1 : 1;
+    }
+
     const aTime = Date.parse(a?.created_at || '');
     const bTime = Date.parse(b?.created_at || '');
-
     const aValid = Number.isFinite(aTime);
     const bValid = Number.isFinite(bTime);
     if (aValid && bValid && aTime !== bTime) {
@@ -49,6 +79,7 @@ function sortAlbumsOldestToNewest(albums: PhotoAlbum[]): PhotoAlbum[] {
     if (aValid !== bValid) {
       return aValid ? -1 : 1;
     }
+
     return Number(a?.id || 0) - Number(b?.id || 0);
   });
 }
@@ -148,10 +179,10 @@ export function usePhotoAlbumsPage(
     setZoom(Math.max(minZoom, Math.min(maxZoom, Number(next.toFixed(2)))));
   }, [workingAlbum, zoom]);
 
-  const openAlbum = React.useCallback((albumId: number) => {
+  const openAlbum = React.useCallback((albumId: number, mode: 'view' | 'edit' = 'view') => {
     setSelectedId(albumId);
     setPageIndex(0);
-    if (isAdmin) {
+    if (isAdmin && mode === 'edit') {
       const album = albums.find((candidate) => candidate.id === albumId);
       setAdminDraft(album ? cloneAlbum(album) : null);
       setShowAdminModal(true);
@@ -191,7 +222,7 @@ export function usePhotoAlbumsPage(
     setShowAlbumViewer(true);
   }, [adminDraft, selectedAlbum, hasUnsavedAdminChanges]);
 
-  const { createWithAi, saveAdminEdits, deleteSelectedAlbum } = usePhotoAlbumsMutations({
+  const { createWithAi, saveAdminEdits, deleteSelectedAlbum, deleteAlbumById } = usePhotoAlbumsMutations({
     isAdmin,
     createForm,
     defaultCreateForm: DEFAULT_CREATE_FORM,
@@ -248,6 +279,7 @@ export function usePhotoAlbumsPage(
     closeAdminModal,
     saveAdminEdits,
     deleteSelectedAlbum,
+    deleteAlbumById,
     updateAdminDraft,
   };
 }

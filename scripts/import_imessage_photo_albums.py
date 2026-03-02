@@ -252,6 +252,36 @@ def add_months(base: dt.date, months: int) -> dt.date:
     return dt.date(year, month, day)
 
 
+def ordinal(value: int) -> str:
+    n = int(value)
+    if 10 <= (n % 100) <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def normalize_focus_child_name(focus: str) -> str:
+    token = str(focus or "").strip().lower()
+    if token == "violet":
+        return "Violet"
+    if token == "eleanor":
+        return "Eleanor"
+    if token in {"lyra", "lyrielle"}:
+        return "Lyrielle"
+    return ""
+
+
+def album_title_for_child_window(child_name: str, birth_date: dt.date, page_date: dt.date, prebirth_days: int = 7) -> str:
+    idx = month_window_index_for_date(page_date, birth_date, prebirth_days=prebirth_days)
+    if idx is None:
+        return f"{child_name}'s Memories"
+    if idx < 36:
+        return f"{child_name}'s {ordinal(idx + 1)} Month"
+    year_no = 3 + ((idx - 36) // 12)
+    return f"{child_name}'s {ordinal(year_no)} Year"
+
+
 def month_window_index_for_date(target: dt.date, birth_date: dt.date, prebirth_days: int = 7) -> Optional[int]:
     first_start = birth_date - dt.timedelta(days=max(0, int(prebirth_days)))
     if target < first_start:
@@ -2319,14 +2349,27 @@ def sql_quote(value: str) -> str:
     return "'" + str(value).replace("\\", "\\\\").replace("'", "''") + "'"
 
 
-def build_album_rows(album_batches: List[List[AlbumPage]], title_prefix: str, disable_ai: bool) -> List[Dict[str, Any]]:
+def build_album_rows(
+    album_batches: List[List[AlbumPage]],
+    title_prefix: str,
+    disable_ai: bool,
+    child_name: str = "",
+    child_birth_date: Optional[dt.date] = None,
+) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     stamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
     single_album = len(album_batches) == 1
+    title_counts: Dict[str, int] = {}
     for idx, pages in enumerate(album_batches, start=1):
         first_dt = pages[0].sent_at.strftime("%Y-%m-%d")
         last_dt = pages[-1].sent_at.strftime("%Y-%m-%d")
-        title = title_prefix if single_album else f"{title_prefix} {idx}"
+        if child_name and child_birth_date:
+            base_title = album_title_for_child_window(child_name, child_birth_date, pages[0].sent_at.date(), prebirth_days=7)
+            title_counts[base_title] = title_counts.get(base_title, 0) + 1
+            part_no = title_counts[base_title]
+            title = base_title if part_no == 1 else f"{base_title} Part {part_no}"
+        else:
+            title = title_prefix if single_album else f"{title_prefix} {idx}"
         summary = f"Imported memories ({first_dt} to {last_dt}). {len(pages)} pages."
         slug = f"{slugify(f'{title_prefix}-{idx}-{first_dt}')[:100]}-{stamp}-{idx}"[:120]
 
@@ -2509,8 +2552,21 @@ def upload_sql_via_maintenance_api(sql_text: str) -> None:
         raise RuntimeError(f"Maintenance API restore failed: {payload}")
 
 
-def upload_albums(album_batches: List[List[AlbumPage]], title_prefix: str, created_by_user_id: int, disable_ai: bool) -> None:
-    rows = build_album_rows(album_batches, title_prefix, disable_ai)
+def upload_albums(
+    album_batches: List[List[AlbumPage]],
+    title_prefix: str,
+    created_by_user_id: int,
+    disable_ai: bool,
+    child_name: str = "",
+    child_birth_date: Optional[dt.date] = None,
+) -> None:
+    rows = build_album_rows(
+        album_batches,
+        title_prefix,
+        disable_ai,
+        child_name=child_name,
+        child_birth_date=child_birth_date,
+    )
     upload_album_rows(rows, created_by_user_id)
 
 
@@ -3164,7 +3220,22 @@ def main() -> None:
             continue
 
         created_by_user_id = int(os.environ.get("CATN8_ALBUM_CREATED_BY_USER_ID", "1"))
-        rows = build_album_rows(batches, album_title_prefix, args.disable_ai)
+        child_name = normalize_focus_child_name(active_focus)
+        child_birth_date: Optional[dt.date] = None
+        if child_name == "Violet":
+            child_birth_date = violet_birth
+        elif child_name == "Eleanor":
+            child_birth_date = eleanor_birth
+        elif child_name == "Lyrielle":
+            child_birth_date = lyra_birth
+
+        rows = build_album_rows(
+            batches,
+            album_title_prefix,
+            args.disable_ai,
+            child_name=child_name,
+            child_birth_date=child_birth_date,
+        )
         for album_idx, row in enumerate(rows, start=1):
             try:
                 replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None

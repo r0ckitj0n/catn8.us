@@ -452,6 +452,8 @@ const MAX_CORE_OVERLAP = 0;
 const OVERLAP_EPSILON = 0.001;
 const RESERVED_PADDING_PCT = 1.4;
 const LAYOUT_NUDGE_PCT = 0.8;
+const MIN_CORE_GAP_PCT = 2.6;
+const MIN_ITEM_GAP_PCT = 0.9;
 
 type LayoutRect = {
   x: number;
@@ -470,22 +472,22 @@ type LayoutConstraints = {
 
 function estimateNoteHeightPct(note: NoteItem, widthPct: number): number {
   const text = formatNoteText(note);
-  const charsPerLine = Math.max(12, Math.floor(widthPct * 2.4));
+  const charsPerLine = Math.max(10, Math.floor(widthPct * 1.45));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  const base = 7.8;
-  const lineHeight = 3.5;
-  return clamp(base + (lines * lineHeight), 12, 54);
+  const base = 9.2;
+  const lineHeight = 4.35;
+  return clamp(base + (lines * lineHeight), 14, 68);
 }
 
 function estimateMediaHeightPct(caption: string, widthPct: number): number {
   const text = sanitizeAlbumMessageText(caption || '');
-  const charsPerLine = Math.max(14, Math.floor(widthPct * 2.6));
+  const charsPerLine = Math.max(12, Math.floor(widthPct * 1.6));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
   // Image footprint (4:3) + frame/padding + caption text block.
   const imageHeight = widthPct * 0.76;
-  const frameBase = 4.2;
-  const captionLineHeight = 2.8;
-  return clamp(imageHeight + frameBase + (lines * captionLineHeight), 15, 66);
+  const frameBase = 5.8;
+  const captionLineHeight = 3.5;
+  return clamp(imageHeight + frameBase + (lines * captionLineHeight), 18, 72);
 }
 
 function sizeVariation(seed: string, min: number, max: number): number {
@@ -495,10 +497,12 @@ function sizeVariation(seed: string, min: number, max: number): number {
 }
 
 function overlapArea(a: LayoutItem, b: LayoutItem): number {
-  const left = Math.max(a.x, b.x);
-  const right = Math.min(a.x + a.w, b.x + b.w);
-  const top = Math.max(a.y, b.y);
-  const bottom = Math.min(a.y + a.h, b.y + b.h);
+  const aPad = (MIN_ITEM_GAP_PCT / 2) + (isCoreItem(a) ? (MIN_CORE_GAP_PCT / 2) : 0);
+  const bPad = (MIN_ITEM_GAP_PCT / 2) + (isCoreItem(b) ? (MIN_CORE_GAP_PCT / 2) : 0);
+  const left = Math.max(a.x - aPad, b.x - bPad);
+  const right = Math.min(a.x + a.w + aPad, b.x + b.w + bPad);
+  const top = Math.max(a.y - aPad, b.y - bPad);
+  const bottom = Math.min(a.y + a.h + aPad, b.y + b.h + bPad);
   if (right <= left || bottom <= top) {
     return 0;
   }
@@ -701,6 +705,63 @@ function forceSeparate(items: LayoutItem[], seed: string, constraints: LayoutCon
   return resolved;
 }
 
+function enforceNoTouch(items: LayoutItem[], constraints: LayoutConstraints): LayoutItem[] {
+  const step = 0.8;
+  const sorted = [...items].sort((a, b) => {
+    if (isCoreItem(a) !== isCoreItem(b)) {
+      return isCoreItem(a) ? -1 : 1;
+    }
+    const areaDiff = (b.w * b.h) - (a.w * a.h);
+    if (Math.abs(areaDiff) > 0.01) {
+      return areaDiff;
+    }
+    return a.id.localeCompare(b.id);
+  });
+  const placed: LayoutItem[] = [];
+
+  const fits = (candidate: LayoutItem): boolean => (
+    !placed.some((other) => overlapArea(candidate, other) > OVERLAP_EPSILON)
+  );
+
+  sorted.forEach((item) => {
+    let candidate = constrainLayout({ ...item }, constraints);
+    let found = false;
+    let w = candidate.w;
+    let h = candidate.h;
+
+    for (let shrinkPass = 0; shrinkPass < 20 && !found; shrinkPass += 1) {
+      const maxX = Math.max(constraints.minX, constraints.maxX - w);
+      const maxY = Math.max(constraints.minY, constraints.maxY - h);
+      for (let y = constraints.minY; y <= maxY && !found; y += step) {
+        for (let x = constraints.minX; x <= maxX; x += step) {
+          const test = constrainLayout({ ...candidate, x, y, w, h }, constraints);
+          if (fits(test)) {
+            candidate = test;
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        const minW = minimumWidthFor(item);
+        const minH = minimumHeightFor(item);
+        w = Math.max(minW, w * 0.965);
+        h = Math.max(minH, h * 0.965);
+      }
+    }
+
+    if (!found) {
+      candidate = constrainLayout({ ...candidate, w, h }, constraints);
+    }
+
+    placed.push(candidate);
+  });
+
+  const byId = new Map<string, LayoutItem>();
+  placed.forEach((item) => byId.set(item.id, item));
+  return items.map((item) => byId.get(item.id) || item);
+}
+
 function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutConstraints): LayoutItem[] {
   const resolved = items.map((item) => constrainLayout({ ...item }, constraints));
   for (let pass = 0; pass < 72; pass += 1) {
@@ -827,7 +888,10 @@ function resolveLayout(items: LayoutItem[], seed: string, constraints: LayoutCon
     resolved[i] = constrainLayout(current, constraints);
   }
 
-  return maximizeCoreItems(forceSeparate(resolved, `${seed}-finalize`, constraints), constraints);
+  return enforceNoTouch(
+    maximizeCoreItems(forceSeparate(resolved, `${seed}-finalize`, constraints), constraints),
+    constraints,
+  );
 }
 
 function createFlowOrders(mediaItems: PreparedMediaItem[], notes: NoteItem[], spreadTitle: string): {

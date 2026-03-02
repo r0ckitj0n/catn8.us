@@ -602,6 +602,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-scatter-card {
   position: absolute;
+  box-sizing: border-box;
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }

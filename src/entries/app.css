@@ -208,10 +208,10 @@ body.catn8-noir-mode .modal-backdrop,
 .container-lg,
 .container-xl,
 .container-xxl {
-  max-width: var(--catn8-global-content-max-width) !important;
-  width: min(100%, var(--catn8-global-content-max-width)) !important;
-  padding-left: 24px;
-  padding-right: 24px;
+  max-width: none !important;
+  width: 100% !important;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .admin-console-btn {

@@ -581,6 +581,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               spreadIndex={pageIndex}
               zoom={zoom}
               contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
+              respectSavedPositions
               canPrev={canPrev}
               canNext={canNext}
               pageFavorite={pageFavorite}

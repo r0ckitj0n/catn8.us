@@ -127,8 +127,46 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   transition: opacity 150ms ease, transform 150ms ease, background-color 150ms ease;
 }
 
+.catn8-photo-album-card-admin-actions {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  z-index: 2;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.catn8-photo-album-card-edit {
+  font-size: 0.76rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.catn8-photo-album-card-admin-actions .catn8-photo-album-card-delete {
+  position: static;
+  right: auto;
+  bottom: auto;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
 .catn8-photo-album-card:hover .catn8-photo-album-card-delete,
 .catn8-photo-album-card:focus-within .catn8-photo-album-card-delete {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.catn8-photo-album-card:hover .catn8-photo-album-card-admin-actions,
+.catn8-photo-album-card:focus-within .catn8-photo-album-card-admin-actions {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -158,7 +196,9 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 .catn8-photo-albums-container--viewer {
   width: 100% !important;
   max-width: none !important;
-  margin: 0;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   padding: 0 !important;
   min-height: 100dvh;
 }

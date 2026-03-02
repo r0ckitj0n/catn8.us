@@ -36,9 +36,9 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     };
   }, [isFullscreen, state.showAlbumViewer]);
 
-  const openAlbum = React.useCallback(async (albumId: number) => {
-    state.openAlbum(albumId);
-    if (state.isAdmin) {
+  const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view') => {
+    state.openAlbum(albumId, mode);
+    if (state.isAdmin || mode === 'edit') {
       return;
     }
     try {
@@ -114,28 +114,43 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                       <p>{displaySummary || 'No summary yet.'}</p>
                     </div>
                     {state.isAdmin && !isVirtual ? (
-                      <button
-                        type="button"
-                        className="catn8-photo-album-card-delete"
-                        onClick={() => {
-                          void state.deleteAlbumById({ id: album.id, title: displayTitle });
-                        }}
-                        aria-label={`Delete album ${displayTitle}`}
-                        title="Delete album"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          width="16"
-                          height="16"
-                          focusable="false"
+                      <div className="catn8-photo-album-card-admin-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary catn8-photo-album-card-edit"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void openAlbum(album.id, 'edit');
+                          }}
+                          aria-label={`Edit album ${displayTitle}`}
+                          title="Edit album"
                         >
-                          <path
-                            d="M9 3h6l1 2h5v2H3V5h5l1-2Zm-3 6h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </button>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="catn8-photo-album-card-delete"
+                          onClick={() => {
+                            void state.deleteAlbumById({ id: album.id, title: displayTitle });
+                          }}
+                          aria-label={`Delete album ${displayTitle}`}
+                          title="Delete album"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            focusable="false"
+                          >
+                            <path
+                              d="M9 3h6l1 2h5v2H3V5h5l1-2Zm-3 6h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                     ) : null}
                   </article>
                   );
@@ -154,6 +169,19 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     {selectedAlbumSummary ? <div className="small text-muted">{selectedAlbumSummary}</div> : null}
                   </div>
                   <div className="catn8-album-controls">
+                    {state.isAdmin ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                          if (selectedAlbum?.id) {
+                            void openAlbum(selectedAlbum.id, 'edit');
+                          }
+                        }}
+                      >
+                        Edit Album
+                      </button>
+                    ) : null}
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void openAdminFullscreenPreview(); }}>
                       Full Screen
                     </button>

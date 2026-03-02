@@ -1803,12 +1803,13 @@ export function PhotoAlbumStage({
         {canFavoriteCurrentPage ? (
           <button
             type="button"
-            className={pageFavorite ? 'catn8-stage-favorite-toggle is-active' : 'catn8-stage-favorite-toggle'}
+            className={pageFavorite ? 'catn8-stage-favorite-toggle catn8-stage-page-favorite-toggle is-active' : 'catn8-stage-favorite-toggle catn8-stage-page-favorite-toggle'}
             onClick={() => onTogglePageFavorite?.(spreadIndex)}
             aria-label={pageFavorite ? 'Remove page from favorites' : 'Add page to favorites'}
+            aria-pressed={pageFavorite}
             title={pageFavorite ? 'Favorited page' : 'Favorite this page'}
           >
-            ♡
+            {pageFavorite ? '♥' : '♡'}
           </button>
         ) : null}
         {typeof onTogglePageLock === 'function' ? (

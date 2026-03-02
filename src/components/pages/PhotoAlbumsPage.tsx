@@ -84,14 +84,14 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           {!state.loading && !state.showAlbumViewer ? (
             <div className="catn8-card catn8-photo-albums-list-shell">
               <div className="catn8-photo-albums-list-header">
-                <a className="catn8-photo-albums-logo-link" href="https://catn8.us" aria-label="Go to catn8.us">
-                  <WebpImage className="catn8-photo-albums-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
-                </a>
                 <div className="catn8-photo-albums-list-header-row">
                   <div>
                     <h1 className="section-title mb-1">Photo Albums</h1>
                     <p className="mb-0">Choose an album to open it.</p>
                   </div>
+                  <a className="catn8-photo-albums-logo-link" href="https://catn8.us" aria-label="Go to catn8.us">
+                    <WebpImage className="catn8-photo-albums-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                  </a>
                   {state.isAdmin ? (
                     <div className="d-flex gap-2 flex-wrap">
                       <button type="button" className="btn btn-outline-primary" onClick={() => { void state.autoLayoutAllUnlocked(); }}>

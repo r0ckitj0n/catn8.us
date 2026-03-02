@@ -40,20 +40,25 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 }
 
 .catn8-photo-albums-logo-link {
-  display: inline-flex;
-  align-self: center;
+  display: flex;
+  flex: 0 1 240px;
+  align-items: center;
   justify-content: center;
+  min-width: 0;
 }
 
 .catn8-photo-albums-logo {
-  width: min(240px, 72vw);
-  height: auto;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .catn8-photo-albums-list-header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -477,7 +482,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   border: 0;
   border-radius: 999px;
   background: rgba(255, 248, 236, 0.95);
-  color: #7f5a38;
+  color: #9aa1ab;
   font-size: 1.15rem;
   line-height: 1;
   display: inline-flex;
@@ -489,14 +494,19 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-stage-lock-toggle {
   right: 58px;
+  color: #9aa1ab;
 }
 
 .catn8-stage-album-lock-toggle {
   right: 104px;
 }
 
-.catn8-stage-favorite-toggle.is-active {
+.catn8-stage-page-favorite-toggle.is-active {
   color: #c1355a;
+}
+
+.catn8-stage-lock-toggle.is-active {
+  color: #7f5a38;
 }
 
 .catn8-stage-favorite-toggle:hover {
@@ -998,6 +1008,37 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   overscroll-behavior: contain;
 }
 
+.catn8-admin-label-with-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.catn8-admin-inline-lock {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(112, 84, 58, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 248, 236, 0.95);
+  color: #9aa1ab;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.catn8-admin-inline-lock.is-active {
+  color: #7f5a38;
+}
+
+.catn8-admin-inline-lock:hover:not(:disabled) {
+  background: #fff;
+}
+
 .catn8-admin-image-editor {
   border: 1px dashed rgba(56, 42, 27, 0.32);
   border-radius: 10px;
@@ -1042,6 +1083,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   .catn8-photo-albums-list-header-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .catn8-photo-albums-logo-link {
+    align-self: center;
+    width: min(240px, 72vw);
+    max-width: 100%;
   }
 
   .catn8-admin-modal-body {

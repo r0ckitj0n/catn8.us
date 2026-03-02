@@ -164,7 +164,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
             <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
             <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>
             <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
-            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onToggleAlbumLock(!albumLocked)} disabled={busy}>{albumLocked ? 'Unlock Album' : 'Lock Album'}</button>
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onToggleSpreadLock(!spreadLocked)} disabled={busy || albumLocked}>{spreadLocked ? 'Unlock Page' : 'Lock Page'}</button>
             {hasUnsavedChanges ? (
               <button type="button" className="btn btn-sm btn-primary" onClick={onSave} disabled={busy || albumLocked}>Save Album</button>
@@ -196,7 +195,19 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
             </div>
 
             <div className="catn8-card p-3 mb-3">
-              <label className="form-label">Album Title</label>
+              <div className="catn8-admin-label-with-control">
+                <label className="form-label m-0">Album Title</label>
+                <button
+                  type="button"
+                  className={albumLocked ? 'catn8-admin-inline-lock is-active' : 'catn8-admin-inline-lock'}
+                  onClick={() => onToggleAlbumLock(!albumLocked)}
+                  disabled={busy}
+                  aria-label={albumLocked ? 'Unlock album' : 'Lock album'}
+                  title={albumLocked ? 'Album locked' : 'Lock album'}
+                >
+                  {albumLocked ? '🔒' : '🔓'}
+                </button>
+              </div>
               <input
                 className="form-control"
                 value={album.title}

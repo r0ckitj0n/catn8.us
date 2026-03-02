@@ -345,8 +345,9 @@ fi
 require_dist_artifacts
 
 # Image handling:
-# - Default: deploy images with the normal mirror flow.
-# - Preserve mode: do not upload/delete/touch any images/** paths on the server.
+# - Default: deploy images with the normal mirror flow (including deletes).
+# - Preserve mode: skip images in the primary mirror, then do a dedicated
+#   image upload pass without --delete so new/changed files publish safely.
 if [ "$PRESERVE_IMAGES" = "1" ]; then
   IMAGE_EXCLUDE_LINES=$'  --exclude-glob "images/**" \\'
 else
@@ -564,6 +565,31 @@ EOL
   fi
   rm -f deploy_dist.txt
 
+  # In preserve-images mode, publish new/updated images without deleting remote files.
+  if [ "$MODE" != "dist-only" ] && [ "$PRESERVE_IMAGES" = "1" ]; then
+    echo -e "${GREEN}🖼️  Syncing images (upload/update only, no deletes)...${NC}"
+    cat > deploy_images.txt << EOL
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+${LFTP_NET_SETTINGS}
+open sftp://$USER:$PASS@$HOST
+mirror --reverse --verbose --only-newer --ignore-time --no-perms \
+  images images
+bye
+EOL
+    if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+      echo -e "${YELLOW}DRY-RUN: Skipping images sync${NC}"
+    elif lftp -f deploy_images.txt; then
+      echo -e "${GREEN}✅ Images synced (upload/update only)${NC}"
+    else
+      echo -e "${RED}❌ Images sync failed.${NC}"
+      rm -f deploy_images.txt
+      exit 1
+    fi
+    rm -f deploy_images.txt
+  fi
+
   # Secondary passes are unnecessary in full-replace mode
   if [ "${CATN8_FULL_REPLACE:-0}" != "1" ]; then
     if [ "$MODE" != "dist-only" ]; then
@@ -722,7 +748,7 @@ fi
 
 # Test image accessibility (use a stable asset; path can be overridden)
 echo -e "${GREEN}🌍 Testing image accessibility...${NC}"
-TEST_LOGO_PATH="${BRAND_LOGO_PATH:-/images/logos/logo-catn8.webp}"
+TEST_LOGO_PATH="${BRAND_LOGO_PATH:-/images/catn8_logo.webp}"
 # If TEST_LOGO_PATH is absolute (starts with http), use as-is; otherwise prefix with BASE_URL
 if [[ "$TEST_LOGO_PATH" =~ ^https?:// ]]; then
   TEST_LOGO_URL="$TEST_LOGO_PATH"
@@ -747,9 +773,9 @@ echo -e "\n${GREEN}📊 Fast Deployment Summary:${NC}"
 echo -e "  • Files: ✅ Deployed to server"
 echo -e "  • Database: ⏭️  Skipped (use deploy_full.sh for database updates)"
 if [ "$PRESERVE_IMAGES" = "1" ]; then
-  echo -e "  • Images: ✅ Synced (no deletes under images/**)"
+  echo -e "  • Images: ✅ Synced (upload/update only; no deletes under images/**)"
 else
-  echo -e "  • Images: ✅ Included in deployment"
+  echo -e "  • Images: ✅ Included in deployment (with deletes)"
 fi
 [ "$PURGE" = "1" ] && echo -e "  • Remote Purge: 🔥 Performed (managed directories)"
 echo -e "  • Verification: ✅ Completed"

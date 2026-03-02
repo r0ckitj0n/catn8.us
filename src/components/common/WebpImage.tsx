@@ -2,6 +2,7 @@ import React from 'react';
 
 type WebpImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
   src: string;
+  finalFallbackSrc?: string;
 };
 
 const STATIC_IMAGE_PATH = /^(?:https?:\/\/[^/]+)?\/?images\//i;
@@ -17,9 +18,10 @@ function getWebpPrimary(src: string): string {
   return src.replace(RASTER_IMAGE_EXT, '.webp');
 }
 
-export function WebpImage({ src, onError, ...imgProps }: WebpImageProps) {
+export function WebpImage({ src, finalFallbackSrc, onError, ...imgProps }: WebpImageProps) {
   const fallbackSrc = src;
   const primarySrc = React.useMemo(() => getWebpPrimary(src), [src]);
+  const tertiarySrc = finalFallbackSrc || '';
   const [resolvedSrc, setResolvedSrc] = React.useState(primarySrc);
 
   React.useEffect(() => {
@@ -30,10 +32,12 @@ export function WebpImage({ src, onError, ...imgProps }: WebpImageProps) {
     (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
       if (resolvedSrc !== fallbackSrc) {
         setResolvedSrc(fallbackSrc);
+      } else if (tertiarySrc && resolvedSrc !== tertiarySrc) {
+        setResolvedSrc(tertiarySrc);
       }
       onError?.(event);
     },
-    [fallbackSrc, onError, resolvedSrc]
+    [fallbackSrc, onError, resolvedSrc, tertiarySrc]
   );
 
   return <img {...imgProps} src={resolvedSrc} onError={handleError} />;

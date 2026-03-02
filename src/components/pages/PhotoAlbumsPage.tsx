@@ -90,7 +90,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <p className="mb-0">Choose an album to open it.</p>
                   </div>
                   <a className="catn8-photo-albums-logo-link" href="https://catn8.us" aria-label="Go to catn8.us">
-                    <WebpImage className="catn8-photo-albums-logo" src="/images/catn8_logo.png" alt="catn8.us Logo" />
+                    <WebpImage className="catn8-photo-albums-logo" src="/images/catn8_logo.png" finalFallbackSrc="/images/catn8_logo.svg" alt="catn8.us Logo" />
                   </a>
                   {state.isAdmin ? (
                     <div className="d-flex gap-2 flex-wrap">

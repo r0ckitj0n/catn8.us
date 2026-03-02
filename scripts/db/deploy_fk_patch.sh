@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+on_exit() {
+  local exit_code=$?
+  echo "Run timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z') (exit: ${exit_code})"
+}
+trap on_exit EXIT
+
 # Deploy and apply the FK/collation patch for item_size_assignments.
 # Steps:
 # 1) Generate patch SQL at /tmp/patch_fix_item_fk.sql

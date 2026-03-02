@@ -662,6 +662,95 @@ function catn8_photo_albums_merge_locked_spreads(array $existingSpec, array $inc
     return $incomingSpec;
 }
 
+function catn8_photo_albums_theme_emojis(string $seed): array
+{
+    $base = ['✨', '🌟', '💖', '📌', '🎀', '🧵', '📷', '🌸', '🍃', '🎉', '🕊️', '🫶'];
+    $lower = strtolower($seed);
+    if (strpos($lower, 'beach') !== false || strpos($lower, 'summer') !== false) {
+        return ['☀️', '🌊', '🏖️', '🐚', '✨', '📷'];
+    }
+    if (strpos($lower, 'winter') !== false || strpos($lower, 'christmas') !== false) {
+        return ['❄️', '🎄', '✨', '🧣', '🕯️', '📷'];
+    }
+    if (strpos($lower, 'birthday') !== false || strpos($lower, 'party') !== false) {
+        return ['🎉', '🎈', '✨', '🎂', '📸', '💫'];
+    }
+    if (strpos($lower, 'garden') !== false || strpos($lower, 'spring') !== false) {
+        return ['🌸', '🌼', '🍃', '🦋', '✨', '📷'];
+    }
+    return $base;
+}
+
+function catn8_photo_albums_load_album_row_for_write(int $id): array
+{
+    $row = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Album not found'], 404);
+    }
+    if ((int)($row['is_locked'] ?? 0) === 1) {
+        catn8_json_response(['success' => false, 'error' => 'Album is locked'], 423);
+    }
+    return is_array($row) ? $row : [];
+}
+
+function catn8_photo_albums_save_spec_and_fetch(array $row, array $spec): array
+{
+    $id = (int)($row['id'] ?? 0);
+    $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+    if (!is_string($specJson) || $specJson === '') {
+        catn8_json_response(['success' => false, 'error' => 'Failed to encode album spec'], 500);
+    }
+    Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $id]);
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    return catn8_photo_albums_row_to_payload($updated ?: []);
+}
+
+function catn8_photo_albums_spread_theme_text(array $spread): string
+{
+    $parts = [];
+    $parts[] = catn8_photo_albums_clean_text((string)($spread['title'] ?? ''), 220);
+    $parts[] = catn8_photo_albums_clean_text((string)($spread['caption'] ?? ''), 450);
+    $parts[] = catn8_photo_albums_clean_text((string)($spread['background_prompt'] ?? ''), 450);
+
+    $embellishments = is_array($spread['embellishments'] ?? null) ? $spread['embellishments'] : [];
+    if ($embellishments) {
+        $parts[] = implode(', ', array_slice(catn8_photo_albums_as_list($embellishments), 0, 10));
+    }
+    $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+    foreach (array_slice($images, 0, 8) as $image) {
+        if (!is_array($image)) {
+            continue;
+        }
+        $parts[] = catn8_photo_albums_clean_text((string)($image['caption'] ?? ''), 160);
+        $parts[] = catn8_photo_albums_clean_text((string)($image['memory_text'] ?? ''), 160);
+    }
+
+    $joined = trim(implode(' | ', array_values(array_filter($parts, static fn ($v) => is_string($v) && trim($v) !== ''))));
+    if ($joined === '') {
+        return 'family memories, warm scrapbook aesthetic';
+    }
+    return substr($joined, 0, 1400);
+}
+
+function catn8_photo_albums_position_slot(int $seed, int $maxW): array
+{
+    $x = 4 + (($seed * 13) % max(6, (88 - $maxW)));
+    $y = 8 + (($seed * 17) % 72);
+    return ['x' => (float)$x, 'y' => (float)$y];
+}
+
 function catn8_photo_albums_build_virtual_favorites(array $albums, array $favorites): array
 {
     $byId = [];
@@ -1868,6 +1957,336 @@ if ($action === 'delete') {
 
     Database::execute('DELETE FROM photo_albums WHERE id = ?', [$id]);
     catn8_json_response(['success' => true]);
+}
+
+if ($action === 'ai_generate_background') {
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $scope = strtolower(trim((string)($body['scope'] ?? 'page')));
+    $customPrompt = catn8_photo_albums_clean_text((string)($body['prompt'] ?? ''), 2000);
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+    if ($scope !== 'page' && $scope !== 'album') {
+        catn8_json_response(['success' => false, 'error' => 'Invalid scope'], 400);
+    }
+
+    $row = catn8_photo_albums_load_album_row_for_write($id);
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    if (!isset($spreads[$spreadIndex]) || !is_array($spreads[$spreadIndex])) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+
+    $themeText = catn8_photo_albums_spread_theme_text($spreads[$spreadIndex]);
+    $styleGuide = is_array($spec['style_guide'] ?? null) ? $spec['style_guide'] : [];
+    $palette = implode(', ', catn8_photo_albums_as_list(is_array($styleGuide['palette'] ?? null) ? $styleGuide['palette'] : []));
+    $materials = implode(', ', catn8_photo_albums_as_list(is_array($styleGuide['materials'] ?? null) ? $styleGuide['materials'] : []));
+    $promptBase = implode("\n", [
+        '[CATN8_SCRAPBOOK_BG_PROMPT_V1]',
+        'Create a high-resolution scrapbook paper background image.',
+        'No readable text, no logos, no watermarks, no people faces.',
+        'Layered handmade paper texture with subtle depth and gentle vignette.',
+        'Theme context: ' . $themeText,
+        'Palette: ' . ($palette !== '' ? $palette : 'warm neutrals'),
+        'Materials: ' . ($materials !== '' ? $materials : 'linen, cardstock, tape'),
+        'Keep center area less busy for media and notes.',
+        'Output one background image.',
+    ]);
+    $prompt = $customPrompt !== '' ? ($promptBase . "\nRequested adjustment: " . $customPrompt) : $promptBase;
+
+    $img = catn8_photo_albums_generate_cover_b64($prompt);
+    $bgDataUrl = 'data:image/png;base64,' . $img['b64'];
+
+    if ($scope === 'album') {
+        foreach ($spreads as $idx => $spread) {
+            if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
+                continue;
+            }
+            $spreads[$idx]['background_image_url'] = $bgDataUrl;
+            $spreads[$idx]['background_prompt'] = $prompt;
+        }
+    } else {
+        if (catn8_photo_albums_spread_is_locked($spreads[$spreadIndex])) {
+            catn8_json_response(['success' => false, 'error' => 'Spread is locked'], 423);
+        }
+        $spreads[$spreadIndex]['background_image_url'] = $bgDataUrl;
+        $spreads[$spreadIndex]['background_prompt'] = $prompt;
+    }
+
+    $spec['spreads'] = array_values($spreads);
+    $album = catn8_photo_albums_save_spec_and_fetch($row, $spec);
+    catn8_json_response([
+        'success' => true,
+        'album' => $album,
+        'ai' => ['provider' => (string)($img['provider'] ?? ''), 'model' => (string)($img['model'] ?? ''), 'scope' => $scope],
+    ]);
+}
+
+if ($action === 'ai_generate_clipart') {
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $customPrompt = catn8_photo_albums_clean_text((string)($body['prompt'] ?? ''), 1000);
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+
+    $row = catn8_photo_albums_load_album_row_for_write($id);
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    if (!is_array($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    if (catn8_photo_albums_spread_is_locked($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread is locked'], 423);
+    }
+
+    $themeText = catn8_photo_albums_spread_theme_text($spread);
+    $prompt = implode("\n", [
+        '[CATN8_SCRAPBOOK_CLIPART_PROMPT_V1]',
+        'Create a transparent-background scrapbook clipart sticker.',
+        'Single subject, clean silhouette, playful handcrafted style.',
+        'No text, no watermark.',
+        'Theme context: ' . $themeText,
+        ($customPrompt !== '' ? ('Requested subject: ' . $customPrompt) : 'Subject: memory-themed decorative sticker'),
+        'Output one PNG-style artwork suitable for a small page accent.',
+    ]);
+    $img = catn8_photo_albums_generate_cover_b64($prompt);
+    $src = 'data:image/png;base64,' . $img['b64'];
+
+    if (!is_array($spread['images'] ?? null)) {
+        $spread['images'] = [];
+    }
+    $nextIndex = count($spread['images']);
+    $pos = catn8_photo_albums_position_slot($nextIndex + 3, 18);
+    $spread['images'][] = [
+        'src' => $src,
+        'media_type' => 'image',
+        'caption' => 'AI clipart',
+        'memory_text' => '',
+        'x' => $pos['x'],
+        'y' => $pos['y'],
+        'w' => 16,
+    ];
+    $spreads[$spreadIndex] = $spread;
+    $spec['spreads'] = array_values($spreads);
+    $album = catn8_photo_albums_save_spec_and_fetch($row, $spec);
+    catn8_json_response([
+        'success' => true,
+        'album' => $album,
+        'ai' => ['provider' => (string)($img['provider'] ?? ''), 'model' => (string)($img['model'] ?? '')],
+    ]);
+}
+
+if ($action === 'ai_generate_accent_image') {
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    $customPrompt = catn8_photo_albums_clean_text((string)($body['prompt'] ?? ''), 1000);
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+
+    $row = catn8_photo_albums_load_album_row_for_write($id);
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    if (!is_array($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    if (catn8_photo_albums_spread_is_locked($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread is locked'], 423);
+    }
+
+    $themeText = catn8_photo_albums_spread_theme_text($spread);
+    $prompt = implode("\n", [
+        '[CATN8_SCRAPBOOK_ACCENT_PROMPT_V1]',
+        'Create a subtle scrapbook accent image for background layering.',
+        'No text, no logos, no watermark.',
+        'Soft edges and low visual dominance.',
+        'Theme context: ' . $themeText,
+        ($customPrompt !== '' ? ('Requested accent concept: ' . $customPrompt) : 'Accent concept: tapes, florals, abstract paper marks'),
+        'Output one image suitable as a small accent tile.',
+    ]);
+    $img = catn8_photo_albums_generate_cover_b64($prompt);
+    $src = 'data:image/png;base64,' . $img['b64'];
+
+    if (!is_array($spread['images'] ?? null)) {
+        $spread['images'] = [];
+    }
+    $nextIndex = count($spread['images']);
+    $pos = catn8_photo_albums_position_slot($nextIndex + 9, 28);
+    $spread['images'][] = [
+        'src' => $src,
+        'media_type' => 'image',
+        'caption' => 'AI accent',
+        'memory_text' => '',
+        'x' => $pos['x'],
+        'y' => $pos['y'],
+        'w' => 24,
+    ];
+    $spreads[$spreadIndex] = $spread;
+    $spec['spreads'] = array_values($spreads);
+    $album = catn8_photo_albums_save_spec_and_fetch($row, $spec);
+    catn8_json_response([
+        'success' => true,
+        'album' => $album,
+        'ai' => ['provider' => (string)($img['provider'] ?? ''), 'model' => (string)($img['model'] ?? '')],
+    ]);
+}
+
+if ($action === 'ai_generate_cover_from_favorites') {
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    $row = catn8_photo_albums_load_album_row_for_write($id);
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+
+    $favoriteRows = Database::queryAll(
+        'SELECT spread_index, media_source_index
+           FROM photo_album_media_favorites
+          WHERE album_id = ?
+          ORDER BY created_at DESC
+          LIMIT 24',
+        [$id]
+    );
+
+    $themeLines = [];
+    foreach ($favoriteRows as $fav) {
+        $spreadIndex = (int)($fav['spread_index'] ?? -1);
+        $mediaIndex = (int)($fav['media_source_index'] ?? -1);
+        $spread = $spreads[$spreadIndex] ?? null;
+        if (!is_array($spread)) {
+            continue;
+        }
+        $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+        $image = $images[$mediaIndex] ?? null;
+        if (!is_array($image)) {
+            continue;
+        }
+        $caption = catn8_photo_albums_clean_text((string)($image['caption'] ?? ''), 160);
+        $memory = catn8_photo_albums_clean_text((string)($image['memory_text'] ?? ''), 160);
+        $fileHint = catn8_photo_albums_clean_text((string)($image['source_filename'] ?? ''), 120);
+        $line = trim(implode(' | ', array_values(array_filter([$caption, $memory, $fileHint], static fn ($v) => $v !== ''))));
+        if ($line !== '') {
+            $themeLines[] = $line;
+        }
+    }
+
+    if (count($themeLines) === 0) {
+        foreach (array_slice($spreads, 0, 12) as $spread) {
+            if (!is_array($spread)) {
+                continue;
+            }
+            $themeLines[] = catn8_photo_albums_spread_theme_text($spread);
+        }
+    }
+    $themeLines = array_slice(array_values(array_unique(array_filter($themeLines, static fn ($v) => trim((string)$v) !== ''))), 0, 14);
+
+    $prompt = implode("\n", [
+        '[CATN8_SCRAPBOOK_COVER_FROM_FAVORITES_V1]',
+        'Create a representative scrapbook album cover.',
+        'Use recurring themes inferred from favorited media metadata.',
+        'No text baked into image; leave space for title overlay.',
+        'Album title: ' . catn8_photo_albums_clean_text((string)($row['title'] ?? 'Photo Album'), 191),
+        'Album summary: ' . catn8_photo_albums_clean_text((string)($row['summary'] ?? ''), 800),
+        'Theme evidence:',
+        implode("\n", array_map(static fn ($line) => '- ' . $line, $themeLines)),
+        'Output one hero cover image.',
+    ]);
+    $coverPrompt = substr($prompt, 0, 3500);
+    $img = catn8_photo_albums_generate_cover_b64($coverPrompt);
+    $coverImageUrl = 'data:image/png;base64,' . $img['b64'];
+
+    Database::execute('UPDATE photo_albums SET cover_image_url = ?, cover_prompt = ? WHERE id = ?', [$coverImageUrl, $coverPrompt, $id]);
+    $updated = Database::queryOne(
+        'SELECT id, title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, is_locked, created_by_user_id, (SELECT username FROM users WHERE id = created_by_user_id LIMIT 1) AS created_by_username, created_at, updated_at
+         FROM photo_albums
+         WHERE id = ?
+         LIMIT 1',
+        [$id]
+    );
+    catn8_json_response([
+        'success' => true,
+        'album' => catn8_photo_albums_row_to_payload($updated ?: []),
+        'ai' => ['provider' => (string)($img['provider'] ?? ''), 'model' => (string)($img['model'] ?? '')],
+    ]);
+}
+
+if ($action === 'ai_redesign_spread') {
+    $id = (int)($body['id'] ?? 0);
+    $spreadIndex = (int)($body['spread_index'] ?? -1);
+    if ($id <= 0 || $spreadIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id or spread_index'], 400);
+    }
+
+    $row = catn8_photo_albums_load_album_row_for_write($id);
+    $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+    $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+    $spread = $spreads[$spreadIndex] ?? null;
+    if (!is_array($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread not found'], 404);
+    }
+    if (catn8_photo_albums_spread_is_locked($spread)) {
+        catn8_json_response(['success' => false, 'error' => 'Spread is locked'], 423);
+    }
+
+    $images = is_array($spread['images'] ?? null) ? $spread['images'] : [];
+    $textItems = is_array($spread['text_items'] ?? null) ? $spread['text_items'] : [];
+    $seedText = catn8_photo_albums_spread_theme_text($spread);
+    $emojiPool = catn8_photo_albums_theme_emojis($seedText);
+
+    $maxDecor = 8;
+    $existingDecor = is_array($spread['decor_items'] ?? null) ? $spread['decor_items'] : [];
+    $nextDecor = [];
+    foreach (array_slice($existingDecor, 0, $maxDecor) as $idx => $decor) {
+        if (!is_array($decor)) {
+            continue;
+        }
+        $fallback = catn8_photo_albums_position_slot($idx + 2, 6);
+        $nextDecor[] = [
+            'id' => (string)($decor['id'] ?? ('decor-' . $spreadIndex . '-' . $idx)),
+            'emoji' => catn8_photo_albums_clean_text((string)($decor['emoji'] ?? ($emojiPool[$idx % count($emojiPool)] ?? '✨')), 12),
+            'x' => isset($decor['x']) ? (float)$decor['x'] : (float)$fallback['x'],
+            'y' => isset($decor['y']) ? (float)$decor['y'] : (float)$fallback['y'],
+            'size' => isset($decor['size']) ? (float)$decor['size'] : (1 + (($idx % 3) * 0.1)),
+            'rotation' => isset($decor['rotation']) ? (float)$decor['rotation'] : (($idx % 2 === 0) ? -3 : 3),
+        ];
+    }
+    $targetDecorCount = min($maxDecor, max(4, 2 + (int)ceil(count($images) / 2) + (int)ceil(count($textItems) / 2)));
+    while (count($nextDecor) < $targetDecorCount) {
+        $idx = count($nextDecor);
+        $fallback = catn8_photo_albums_position_slot($idx + 11, 6);
+        $nextDecor[] = [
+            'id' => 'decor-auto-' . $spreadIndex . '-' . $idx . '-' . time(),
+            'emoji' => $emojiPool[$idx % max(1, count($emojiPool))] ?? '✨',
+            'x' => (float)$fallback['x'],
+            'y' => (float)$fallback['y'],
+            'size' => 0.95 + (($idx % 4) * 0.12),
+            'rotation' => ($idx % 2 === 0) ? -4 : 4,
+        ];
+    }
+
+    $spread['decor_items'] = $nextDecor;
+    if (!is_array($spread['embellishments'] ?? null)) {
+        $spread['embellishments'] = [];
+    }
+    $spread['embellishments'] = array_values(array_unique(array_slice(array_merge(
+        catn8_photo_albums_as_list($spread['embellishments']),
+        ['balanced-layout', 'ai-redesign']
+    ), 0, 12)));
+    $spread['background_prompt'] = catn8_photo_albums_clean_text(
+        (string)($spread['background_prompt'] ?? 'Scrapbook background') . ' | AI redesign tuned for balanced composition',
+        3000
+    );
+
+    $spreads[$spreadIndex] = $spread;
+    $spec['spreads'] = array_values($spreads);
+    $album = catn8_photo_albums_save_spec_and_fetch($row, $spec);
+    catn8_json_response(['success' => true, 'album' => $album]);
 }
 
 if ($action === 'create_with_ai') {

@@ -26,8 +26,8 @@ interface PhotoAlbumStageProps {
   onTogglePageLock?: (spreadIndex: number) => void;
   onToggleAlbumLock?: () => void;
   editable?: boolean;
-  onMoveMedia?: (index: number, patch: { x: number; y: number }) => void;
-  onMoveNote?: (index: number, patch: { x: number; y: number }) => void;
+  onMoveMedia?: (index: number, patch: { x: number; y: number; w?: number; h?: number }) => void;
+  onMoveNote?: (index: number, patch: { x: number; y: number; w?: number; h?: number }) => void;
   onMoveDecor?: (index: number, patch: { x: number; y: number; emoji?: string; size?: number; rotation?: number }) => void;
   onEditNoteText?: (index: number, nextText: string) => void;
   onEditMediaCaption?: (index: number, nextCaption: string) => void;
@@ -465,6 +465,19 @@ type SelectedItem = {
   type: 'media' | 'note' | 'decor';
   index: number;
   sourceIndex?: number;
+};
+
+type ResizeState = {
+  type: 'media' | 'note';
+  index: number;
+  sourceIndex?: number;
+  startClientX: number;
+  startClientY: number;
+  startX: number;
+  startY: number;
+  startW: number;
+  startH: number;
+  aspect: number;
 };
 
 const CANVAS_MIN_X = 2;
@@ -1166,6 +1179,7 @@ export function PhotoAlbumStage({
 
   const [viewerTarget, setViewerTarget] = React.useState<ViewerTarget | null>(null);
   const [dragging, setDragging] = React.useState<null | { type: 'media' | 'note' | 'decor'; index: number; sourceIndex?: number }>(null);
+  const [resizing, setResizing] = React.useState<ResizeState | null>(null);
   const [selectedItem, setSelectedItem] = React.useState<SelectedItem | null>(null);
   const dragStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const dragMovedRef = React.useRef(false);
@@ -1177,6 +1191,7 @@ export function PhotoAlbumStage({
   React.useEffect(() => {
     setViewerTarget(null);
     setDragging(null);
+    setResizing(null);
     setSelectedItem(null);
   }, [album.id, spreadIndex]);
 
@@ -1464,7 +1479,7 @@ export function PhotoAlbumStage({
   }, [canNext, canPrev, nextTarget, onNext, onPrev, prevTarget, viewerTarget]);
 
   const applyDragPosition = React.useCallback((clientX: number, clientY: number) => {
-    if (!editable || isLayoutLocked || !dragging) {
+    if (!editable || isLayoutLocked || !dragging || resizing) {
       return;
     }
     if (dragStartRef.current) {
@@ -1515,7 +1530,63 @@ export function PhotoAlbumStage({
         rotation: currentDecor?.rotation,
       });
     }
-  }, [editable, isLayoutLocked, dragging, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
+  }, [editable, isLayoutLocked, dragging, resizing, layoutByType, onMoveDecor, onMoveMedia, onMoveNote, layoutConstraints, decorItems]);
+
+  const applyResizePosition = React.useCallback((clientX: number, clientY: number) => {
+    if (!editable || isLayoutLocked || !resizing) {
+      return;
+    }
+    if (dragStartRef.current) {
+      const dx = clientX - dragStartRef.current.x;
+      const dy = clientY - dragStartRef.current.y;
+      if ((dx * dx) + (dy * dy) > 16) {
+        dragMovedRef.current = true;
+      }
+    }
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) {
+      return;
+    }
+    const canvas = canvasEl.getBoundingClientRect();
+    const deltaX = ((clientX - resizing.startClientX) / Math.max(1, canvas.width)) * 100;
+    const deltaY = ((clientY - resizing.startClientY) / Math.max(1, canvas.height)) * 100;
+    const widthFromX = resizing.startW + deltaX;
+    const widthFromY = resizing.startW + (deltaY * resizing.aspect);
+    const minimumW = resizing.type === 'media' ? 9.5 : 10.5;
+    const maximumW = resizing.type === 'media' ? 62 : 58;
+    const nextW = clamp(Math.max(widthFromX, widthFromY), minimumW, maximumW);
+    const nextH = Math.max(nextW / Math.max(0.2, resizing.aspect), resizing.type === 'media' ? 9.5 : 8.2);
+
+    const constrained = constrainLayout({
+      id: `${resizing.type}-${resizing.index}`,
+      type: resizing.type,
+      index: resizing.index,
+      sourceIndex: resizing.sourceIndex,
+      x: resizing.startX,
+      y: resizing.startY,
+      w: nextW,
+      h: nextH,
+      rotation: 0,
+    }, layoutConstraints);
+
+    if (resizing.type === 'media' && onMoveMedia) {
+      onMoveMedia(resizing.sourceIndex ?? resizing.index, {
+        x: constrained.x,
+        y: constrained.y,
+        w: constrained.w,
+        h: constrained.h,
+      });
+      return;
+    }
+    if (resizing.type === 'note' && onMoveNote) {
+      onMoveNote(resizing.index, {
+        x: constrained.x,
+        y: constrained.y,
+        w: constrained.w,
+        h: constrained.h,
+      });
+    }
+  }, [editable, isLayoutLocked, layoutConstraints, onMoveMedia, onMoveNote, resizing]);
 
   const endDragging = React.useCallback(() => {
     if (dragMovedRef.current) {
@@ -1527,14 +1598,19 @@ export function PhotoAlbumStage({
     dragMovedRef.current = false;
     dragStartRef.current = null;
     setDragging(null);
+    setResizing(null);
   }, []);
 
   React.useEffect(() => {
-    if (!editable || isLayoutLocked || !dragging) {
+    if (!editable || isLayoutLocked || (!dragging && !resizing)) {
       return undefined;
     }
     const onWindowMove = (event: MouseEvent) => {
-      applyDragPosition(event.clientX, event.clientY);
+      if (resizing) {
+        applyResizePosition(event.clientX, event.clientY);
+      } else {
+        applyDragPosition(event.clientX, event.clientY);
+      }
     };
     const onWindowUp = () => {
       endDragging();
@@ -1545,7 +1621,7 @@ export function PhotoAlbumStage({
       window.removeEventListener('mousemove', onWindowMove);
       window.removeEventListener('mouseup', onWindowUp);
     };
-  }, [applyDragPosition, dragging, editable, endDragging, isLayoutLocked]);
+  }, [applyDragPosition, applyResizePosition, dragging, resizing, editable, endDragging, isLayoutLocked]);
 
   const onItemClick = React.useCallback((item: SelectedItem, viewerType: ViewerType | null) => {
     if (suppressClickRef.current) {
@@ -1657,6 +1733,7 @@ export function PhotoAlbumStage({
       ['--catn8-caption-font-size' as string]: `${captionFontRem.toFixed(2)}rem`,
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 8 + (index % 4),
+      cursor: editable && !isLayoutLocked ? 'grab' : 'pointer',
     };
   };
 
@@ -1671,6 +1748,7 @@ export function PhotoAlbumStage({
       ['--catn8-note-font-size' as string]: `${noteFontRem.toFixed(2)}rem`,
       transform: `rotate(${placement?.rotation ?? 0}deg) scale(var(--catn8-card-scale, 1))`,
       zIndex: 20 + (index % 4),
+      cursor: editable && !isLayoutLocked ? 'grab' : 'pointer',
     };
   };
 
@@ -1684,10 +1762,20 @@ export function PhotoAlbumStage({
       pointerEvents: editable ? 'auto' : 'none',
     };
   };
+  const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
+  const scatterStyle: React.CSSProperties = {
+    transform: `scale(${zoom})`,
+    ...(spreadBackgroundImageUrl ? {
+      backgroundImage: `linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0.1)), url(${spreadBackgroundImageUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    } : {}),
+  };
 
   return (
     <div className="catn8-scrapbook-stage catn8-scrapbook-stage-user">
-      <div className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={{ transform: `scale(${zoom})` }}>
+      <div className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={scatterStyle}>
         <div className="catn8-scrapbook-corner catn8-scrapbook-corner-tl" aria-hidden="true" />
         <div className="catn8-scrapbook-corner catn8-scrapbook-corner-br" aria-hidden="true" />
         <div className="catn8-scrapbook-tape catn8-scrapbook-tape-top" aria-hidden="true" />
@@ -1804,7 +1892,7 @@ export function PhotoAlbumStage({
               : false;
             return (
               <figure
-                className="catn8-scatter-card catn8-scatter-media"
+                className={selectedItem?.type === 'media' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-media is-selected' : 'catn8-scatter-card catn8-scatter-media'}
                 key={item.key}
                 style={renderMediaStyle(index)}
               onMouseDown={editable && !isLayoutLocked ? (event) => {
@@ -1813,28 +1901,37 @@ export function PhotoAlbumStage({
                     return;
                   }
                   event.preventDefault();
+                  event.stopPropagation();
+                  setSelectedItem({ type: 'media', index, sourceIndex: item.sourceIndex });
+                  const cardRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                  const edgeThresholdPx = 14;
+                  const nearRight = (cardRect.right - event.clientX) <= edgeThresholdPx;
+                  const nearBottom = (cardRect.bottom - event.clientY) <= edgeThresholdPx;
+                  if ((nearRight || nearBottom) && selectedItem?.type === 'media' && selectedItem.index === index) {
+                    const placement = layoutByType.mediaByIndex.get(index);
+                    if (placement) {
+                      dragStartRef.current = { x: event.clientX, y: event.clientY };
+                      dragMovedRef.current = false;
+                      setResizing({
+                        type: 'media',
+                        index,
+                        sourceIndex: item.sourceIndex,
+                        startClientX: event.clientX,
+                        startClientY: event.clientY,
+                        startX: placement.x,
+                        startY: placement.y,
+                        startW: placement.w,
+                        startH: placement.h,
+                        aspect: Math.max(0.25, placement.w / Math.max(0.5, placement.h)),
+                      });
+                      return;
+                    }
+                  }
                   dragStartRef.current = { x: event.clientX, y: event.clientY };
                   dragMovedRef.current = false;
                   setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
                 } : undefined}
               >
-                {editable && !isLayoutLocked ? (
-                  <button
-                    type="button"
-                    className="catn8-drag-handle"
-                    aria-label="Drag media item"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      dragStartRef.current = { x: event.clientX, y: event.clientY };
-                      dragMovedRef.current = false;
-                      setDragging({ type: 'media', index, sourceIndex: item.sourceIndex });
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DragHandleIcon />
-                  </button>
-                ) : null}
                 {typeof onToggleMediaFavorite === 'function' && album.id > 0 && !album.is_virtual ? (
                   <button
                     type="button"
@@ -1885,7 +1982,7 @@ export function PhotoAlbumStage({
               : false;
             return (
               <div
-                className="catn8-scatter-card catn8-scatter-note"
+                className={selectedItem?.type === 'note' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-note is-selected' : 'catn8-scatter-card catn8-scatter-note'}
                 key={note.id}
                 style={renderNoteStyle(note, index)}
                 onClick={() => onItemClick({ type: 'note', index }, 'note')}
@@ -1895,6 +1992,31 @@ export function PhotoAlbumStage({
                     return;
                   }
                   event.preventDefault();
+                  event.stopPropagation();
+                  setSelectedItem({ type: 'note', index });
+                  const cardRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                  const edgeThresholdPx = 14;
+                  const nearRight = (cardRect.right - event.clientX) <= edgeThresholdPx;
+                  const nearBottom = (cardRect.bottom - event.clientY) <= edgeThresholdPx;
+                  if ((nearRight || nearBottom) && selectedItem?.type === 'note' && selectedItem.index === index) {
+                    const placement = layoutByType.noteByIndex.get(index);
+                    if (placement) {
+                      dragStartRef.current = { x: event.clientX, y: event.clientY };
+                      dragMovedRef.current = false;
+                      setResizing({
+                        type: 'note',
+                        index,
+                        startClientX: event.clientX,
+                        startClientY: event.clientY,
+                        startX: placement.x,
+                        startY: placement.y,
+                        startW: placement.w,
+                        startH: placement.h,
+                        aspect: Math.max(0.25, placement.w / Math.max(0.5, placement.h)),
+                      });
+                      return;
+                    }
+                  }
                   dragStartRef.current = { x: event.clientX, y: event.clientY };
                   dragMovedRef.current = false;
                   setDragging({ type: 'note', index });
@@ -1906,23 +2028,6 @@ export function PhotoAlbumStage({
                   }
                 } : undefined}
               >
-                {editable && !isLayoutLocked ? (
-                  <button
-                    type="button"
-                    className="catn8-drag-handle"
-                    aria-label="Drag note item"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      dragStartRef.current = { x: event.clientX, y: event.clientY };
-                      dragMovedRef.current = false;
-                      setDragging({ type: 'note', index });
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DragHandleIcon />
-                  </button>
-                ) : null}
                 {typeof onToggleTextFavorite === 'function' && album.id > 0 && !album.is_virtual ? (
                   <button
                     type="button"

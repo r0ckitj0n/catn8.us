@@ -37,6 +37,12 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+on_exit() {
+  local exit_code=$?
+  echo "Run timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z') (exit: ${exit_code})"
+}
+trap on_exit EXIT
+
 echo -e "${GREEN}🚀 Starting FULL DEPLOY (DB + Files)${NC}"
 
 # 1) Load .env.local if present, else .env

@@ -3,6 +3,7 @@ import React from 'react';
 import { usePhotoAlbumsPage } from '../../hooks/usePhotoAlbumsPage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { toAlbumDisplayName, toPhotoAlbumDisplaySummary, toPhotoAlbumDisplayTitle } from '../../utils/photoAlbumText';
+import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
 import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
@@ -83,20 +84,25 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           {!state.loading && !state.showAlbumViewer ? (
             <div className="catn8-card catn8-photo-albums-list-shell">
               <div className="catn8-photo-albums-list-header">
-                <div>
-                  <h1 className="section-title mb-1">Photo Albums</h1>
-                  <p className="mb-0">Choose an album to open it.</p>
-                </div>
-                {state.isAdmin ? (
-                  <div className="d-flex gap-2 flex-wrap">
-                    <button type="button" className="btn btn-outline-primary" onClick={() => { void state.autoLayoutAllUnlocked(); }}>
-                      Auto Layout All Unlocked
-                    </button>
-                    <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
-                      Create Photo Album
-                    </button>
+                <a className="catn8-photo-albums-logo-link" href="https://catn8.us" aria-label="Go to catn8.us">
+                  <WebpImage className="catn8-photo-albums-logo" src="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                </a>
+                <div className="catn8-photo-albums-list-header-row">
+                  <div>
+                    <h1 className="section-title mb-1">Photo Albums</h1>
+                    <p className="mb-0">Choose an album to open it.</p>
                   </div>
-                ) : null}
+                  {state.isAdmin ? (
+                    <div className="d-flex gap-2 flex-wrap">
+                      <button type="button" className="btn btn-outline-primary" onClick={() => { void state.autoLayoutAllUnlocked(); }}>
+                        Auto Layout All Unlocked
+                      </button>
+                      <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
+                        Create Photo Album
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div className="catn8-photo-albums-card-grid">
@@ -307,6 +313,21 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           }
         }}
         onDelete={state.deleteSelectedAlbum}
+        onGenerateBackground={(scope, prompt) => {
+          void state.generateAiBackground(scope, prompt);
+        }}
+        onGenerateClipart={(prompt) => {
+          void state.generateAiClipart(prompt);
+        }}
+        onGenerateAccentImage={(prompt) => {
+          void state.generateAiAccentImage(prompt);
+        }}
+        onGenerateCoverFromFavorites={() => {
+          void state.generateAiCoverFromFavorites();
+        }}
+        onRedesignPage={() => {
+          void state.redesignAiSpread();
+        }}
         onAlbumChange={state.updateAdminDraft}
       />
     </PageLayout>

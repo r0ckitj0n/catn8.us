@@ -41,6 +41,7 @@ export interface PhotoAlbumSpec {
     photo_slots: number;
     embellishments: string[];
     background_prompt: string;
+    background_image_url?: string;
     text_items?: Array<{
       id: string;
       text: string;
@@ -158,6 +159,23 @@ export interface PhotoAlbumAiCreateRequest {
 export interface PhotoAlbumMutationResponse {
   success: boolean;
   album: PhotoAlbum;
+}
+
+export interface PhotoAlbumAiBackgroundRequest {
+  id: number;
+  spread_index: number;
+  scope: 'page' | 'album';
+  prompt?: string;
+}
+
+export interface PhotoAlbumAiSpreadRequest {
+  id: number;
+  spread_index: number;
+  prompt?: string;
+}
+
+export interface PhotoAlbumAiCoverFromFavoritesRequest {
+  id: number;
 }
 
 export interface PhotoAlbumFavoritePage {

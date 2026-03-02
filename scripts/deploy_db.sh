@@ -101,7 +101,12 @@ REMOTE_SQL_DIR="${CATN8_REMOTE_SQL_DIR:-backups/sql}"
 RESTORE_BASE="${CATN8_DEPLOY_BASE_URL:-https://catn8.us}"
 
 TMP_LOG="$(mktemp)"
-trap 'rm -f "$TMP_LOG"' EXIT
+on_exit() {
+  local exit_code=$?
+  rm -f "${TMP_LOG:-}"
+  echo "Run timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z') (exit: ${exit_code})"
+}
+trap on_exit EXIT
 
 log 'Creating compressed local database dump (scripts/db/dump_local_db.sh --gzip)...'
 bash scripts/db/dump_local_db.sh --gzip | tee "$TMP_LOG"

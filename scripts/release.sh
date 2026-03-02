@@ -28,6 +28,12 @@ IFS=$'\n\t'
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+on_exit() {
+  local exit_code=$?
+  echo "Run timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z') (exit: ${exit_code})"
+}
+trap on_exit EXIT
+
 # Defaults
 DO_BUILD=true
 DO_PUSH=true

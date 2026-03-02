@@ -23,6 +23,12 @@ fi
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/secrets/env_or_keychain.sh"
 
+on_exit() {
+  local exit_code=$?
+  echo "Run timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z') (exit: ${exit_code})"
+}
+trap on_exit EXIT
+
 usage() {
   cat <<'USAGE'
 Usage: scripts/deploy.sh [--lite|--full|--dist-only|--env-only] [options]

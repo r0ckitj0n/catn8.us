@@ -2,7 +2,14 @@ import React from 'react';
 
 import { ApiClient } from '../core/ApiClient';
 import { IToast } from '../types/common';
-import { PhotoAlbum, PhotoAlbumAiCreateRequest, PhotoAlbumMutationResponse } from '../types/photoAlbums';
+import {
+  PhotoAlbum,
+  PhotoAlbumAiBackgroundRequest,
+  PhotoAlbumAiCoverFromFavoritesRequest,
+  PhotoAlbumAiCreateRequest,
+  PhotoAlbumAiSpreadRequest,
+  PhotoAlbumMutationResponse,
+} from '../types/photoAlbums';
 
 interface PhotoAlbumsMutationsArgs {
   isAdmin: boolean;
@@ -255,6 +262,101 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
   }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
 
+  const generateBackground = React.useCallback(async (payload: PhotoAlbumAiBackgroundRequest) => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=ai_generate_background', payload);
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', payload.scope === 'album' ? 'Generated a new album background' : 'Generated a new page background');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to generate background');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const generateClipart = React.useCallback(async (payload: PhotoAlbumAiSpreadRequest) => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=ai_generate_clipart', payload);
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Generated clipart');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to generate clipart');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const generateAccentImage = React.useCallback(async (payload: PhotoAlbumAiSpreadRequest) => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=ai_generate_accent_image', payload);
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Generated accent image');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to generate accent image');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const generateCoverFromFavorites = React.useCallback(async (payload: PhotoAlbumAiCoverFromFavoritesRequest) => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=ai_generate_cover_from_favorites', payload);
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Generated cover page from favorited media');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to generate cover page');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const redesignSpread = React.useCallback(async (payload: PhotoAlbumAiSpreadRequest) => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=ai_redesign_spread', payload);
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Redesigned page');
+      await loadAlbums({ silent: true });
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to redesign page');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
   return {
     createWithAi,
     saveAdminEdits,
@@ -263,6 +365,11 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     autoLayoutAllUnlocked,
     toggleAlbumLock,
     toggleSpreadLock,
+    generateBackground,
+    generateClipart,
+    generateAccentImage,
+    generateCoverFromFavorites,
+    redesignSpread,
     deleteSelectedAlbum,
     deleteAlbumById,
   };

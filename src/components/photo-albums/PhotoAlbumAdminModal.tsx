@@ -31,6 +31,11 @@ interface PhotoAlbumAdminModalProps {
   onToggleAlbumLock: (isLocked: boolean) => void;
   onToggleSpreadLock: (isLocked: boolean) => void;
   onDelete: () => void;
+  onGenerateBackground: (scope: 'page' | 'album', prompt?: string) => void;
+  onGenerateClipart: (prompt?: string) => void;
+  onGenerateAccentImage: (prompt?: string) => void;
+  onGenerateCoverFromFavorites: () => void;
+  onRedesignPage: () => void;
   onAlbumChange: (updater: (prev: PhotoAlbum) => PhotoAlbum) => void;
 }
 
@@ -61,6 +66,11 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onToggleAlbumLock,
     onToggleSpreadLock,
     onDelete,
+    onGenerateBackground,
+    onGenerateClipart,
+    onGenerateAccentImage,
+    onGenerateCoverFromFavorites,
+    onRedesignPage,
     onAlbumChange,
   } = props;
 
@@ -85,6 +95,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
   const decorItems = (Array.isArray(spread?.decor_items) ? spread.decor_items : [])
     .map((item, index) => ({ item, index }))
     .filter((entry) => Boolean(entry.item && typeof entry.item === 'object'));
+  const [backgroundTarget, setBackgroundTarget] = React.useState<'page' | 'album'>('page');
+  const [aiAssetPrompt, setAiAssetPrompt] = React.useState('');
 
   React.useEffect(() => {
     if (!open) {
@@ -257,10 +269,14 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 })}
               />
 
-              <label className="form-label mt-2">Background Prompt</label>
+            </div>
+
+            <div className="catn8-card p-3 mb-3">
+              <h3 className="h6">AI Tools</h3>
+              <label className="form-label">Background Prompt</label>
               <textarea
                 className="form-control"
-                rows={2}
+                rows={3}
                 value={spread?.background_prompt || ''}
                 disabled={busy}
                 onChange={(event) => onAlbumChange((prev) => {
@@ -271,6 +287,77 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   return next;
                 })}
               />
+              <div className="row g-2 mt-2">
+                <div className="col-md-6">
+                  <label className="form-label">Background Target</label>
+                  <select
+                    className="form-select"
+                    value={backgroundTarget}
+                    disabled={busy}
+                    onChange={(event) => setBackgroundTarget(event.target.value === 'album' ? 'album' : 'page')}
+                  >
+                    <option value="page">This Page</option>
+                    <option value="album">Whole Album</option>
+                  </select>
+                </div>
+                <div className="col-md-6 d-flex align-items-end">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary w-100"
+                    disabled={busy || albumLocked || (backgroundTarget === 'page' && spreadLocked)}
+                    onClick={() => onGenerateBackground(backgroundTarget, spread?.background_prompt || '')}
+                  >
+                    Generate Background
+                  </button>
+                </div>
+              </div>
+
+              <label className="form-label mt-3">AI Asset Prompt (Optional)</label>
+              <input
+                className="form-control"
+                value={aiAssetPrompt}
+                disabled={busy}
+                onChange={(event) => setAiAssetPrompt(event.target.value)}
+                placeholder="Example: pressed flowers and vintage tape accents"
+              />
+
+              <div className="d-flex gap-2 flex-wrap mt-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={busy || albumLocked || spreadLocked}
+                  onClick={() => onGenerateClipart(aiAssetPrompt)}
+                >
+                  Generate Clipart
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={busy || albumLocked || spreadLocked}
+                  onClick={() => onGenerateAccentImage(aiAssetPrompt)}
+                >
+                  Generate Accent Image
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={busy || albumLocked}
+                  onClick={onGenerateCoverFromFavorites}
+                >
+                  Generate Cover Page
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={busy || albumLocked || spreadLocked}
+                  onClick={onRedesignPage}
+                >
+                  Redesign Page
+                </button>
+              </div>
+              <div className="form-text mt-2">
+                Redesign Page adjusts decorative/layout accents only and preserves existing text/media content.
+              </div>
             </div>
 
             <div className="catn8-card p-3 mb-3">
@@ -621,6 +708,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 if (target) {
                   target.x = patch.x;
                   target.y = patch.y;
+                  if (typeof patch.w === 'number') {
+                    target.w = patch.w;
+                  }
+                  if (typeof patch.h === 'number') {
+                    (target as any).h = patch.h;
+                  }
                 }
                 return next;
               })}
@@ -639,6 +732,12 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 targetSpread.text_items[index].x = patch.x;
                 targetSpread.text_items[index].y = patch.y;
+                if (typeof patch.w === 'number') {
+                  targetSpread.text_items[index].w = patch.w;
+                }
+                if (typeof patch.h === 'number') {
+                  (targetSpread.text_items[index] as any).h = patch.h;
+                }
                 return next;
               })}
               onMoveDecor={(index, patch) => onAlbumChange((prev) => {

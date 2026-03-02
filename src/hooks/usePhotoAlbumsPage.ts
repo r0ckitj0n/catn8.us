@@ -326,6 +326,13 @@ export function usePhotoAlbumsPage(
         return;
       }
     }
+    if (adminDraft?.id) {
+      setAlbums((prev) => {
+        const next = prev.map((album) => (album.id === adminDraft.id ? normalizeAlbumSummary(cloneAlbum(adminDraft)) : album));
+        return sortAlbumsOldestToNewest(next);
+      });
+      setSelectedId(adminDraft.id);
+    }
     setShowAdminModal(false);
     setShowAlbumViewer(true);
   }, [adminDraft, selectedAlbum, hasUnsavedAdminChanges]);
@@ -338,6 +345,11 @@ export function usePhotoAlbumsPage(
     autoLayoutAllUnlocked,
     toggleAlbumLock,
     toggleSpreadLock,
+    generateBackground,
+    generateClipart,
+    generateAccentImage,
+    generateCoverFromFavorites,
+    redesignSpread,
     deleteSelectedAlbum,
     deleteAlbumById,
   } = usePhotoAlbumsMutations({
@@ -438,6 +450,62 @@ export function usePhotoAlbumsPage(
     }
   }, [applyFavorites, isTextFavorite, toast]);
 
+  const generateAiBackground = React.useCallback(async (scope: 'page' | 'album', prompt?: string) => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    await generateBackground({
+      id: album.id,
+      spread_index: pageIndex,
+      scope,
+      prompt: String(prompt || '').trim(),
+    });
+  }, [adminDraft, generateBackground, isAdmin, pageIndex, selectedAlbum]);
+
+  const generateAiClipart = React.useCallback(async (prompt?: string) => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    await generateClipart({
+      id: album.id,
+      spread_index: pageIndex,
+      prompt: String(prompt || '').trim(),
+    });
+  }, [adminDraft, generateClipart, isAdmin, pageIndex, selectedAlbum]);
+
+  const generateAiAccentImage = React.useCallback(async (prompt?: string) => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    await generateAccentImage({
+      id: album.id,
+      spread_index: pageIndex,
+      prompt: String(prompt || '').trim(),
+    });
+  }, [adminDraft, generateAccentImage, isAdmin, pageIndex, selectedAlbum]);
+
+  const generateAiCoverFromFavorites = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    await generateCoverFromFavorites({ id: album.id });
+  }, [adminDraft, generateCoverFromFavorites, isAdmin, selectedAlbum]);
+
+  const redesignAiSpread = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!isAdmin || !album || !album.id || album.is_virtual) {
+      return;
+    }
+    await redesignSpread({
+      id: album.id,
+      spread_index: pageIndex,
+    });
+  }, [adminDraft, isAdmin, pageIndex, redesignSpread, selectedAlbum]);
+
   return {
     loading,
     busy,
@@ -483,5 +551,10 @@ export function usePhotoAlbumsPage(
     togglePageFavorite,
     toggleMediaFavorite,
     toggleTextFavorite,
+    generateAiBackground,
+    generateAiClipart,
+    generateAiAccentImage,
+    generateAiCoverFromFavorites,
+    redesignAiSpread,
   };
 }

@@ -158,6 +158,23 @@ def parse_contact_csv(value: str) -> List[str]:
     return out
 
 
+def supplemental_windows_for_focus(focus: str) -> List[Tuple[dt.date, dt.date]]:
+    token = (focus or "").strip().lower()
+    # Keep Violet's pre-birth first-month window in scope for rebuild/import runs.
+    if token == "violet":
+        return [(dt.date(2021, 11, 22), dt.date(2021, 11, 27))]
+    return []
+
+
+def merge_windows(base_windows: Sequence[Tuple[Optional[dt.date], Optional[dt.date]]], extras: Sequence[Tuple[dt.date, dt.date]]) -> List[Tuple[Optional[dt.date], Optional[dt.date]]]:
+    merged: List[Tuple[Optional[dt.date], Optional[dt.date]]] = list(base_windows)
+    for start_date, end_date in extras:
+        pair = (start_date, end_date)
+        if pair not in merged:
+            merged.append(pair)
+    return merged
+
+
 def normalize_handle_for_lookup(value: str) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
@@ -3029,8 +3046,8 @@ def main() -> None:
         focus_sequence = ["violet", "eleanor", "lyra"]
     else:
         focus_sequence = [focus_person]
-    if needs_face_assets and int(lyra_id) <= 0:
-        focus_sequence = [f for f in focus_sequence if f != "lyra"]
+    if needs_face_assets and int(lyra_id) <= 0 and "lyra" in focus_sequence:
+        print("Lyra/Lyrielle Face ID not found; proceeding without strict Lyrielle face filtering.")
 
     print(f"Focus run order: {', '.join(focus_sequence)}")
     contact_handle_cache: Dict[str, List[str]] = {}
@@ -3066,6 +3083,10 @@ def main() -> None:
         print(f"=== Running focus: {active_focus} ===")
         print(f"Run source key: {source_key}")
         print(f"Contacts: {', '.join(focus_contacts)}")
+        active_message_windows = merge_windows(message_windows, supplemental_windows_for_focus(active_focus))
+        added_windows = [(s, e) for (s, e) in active_message_windows if (s, e) not in message_windows and s is not None and e is not None]
+        if added_windows:
+            print(f"Added supplemental windows: {', '.join([f'{s.isoformat()}..{e.isoformat()}' for (s, e) in added_windows])}")
 
         messages: List[MessageRow] = []
         pages: List[AlbumPage] = []
@@ -3090,7 +3111,7 @@ def main() -> None:
                         args.contact,
                         args.years,
                         focus_handles,
-                        message_windows,
+                        active_message_windows,
                         min_message_id=min_message_id,
                     )
                     print(f"Loaded {len(messages)} new/updated message rows from iMessage DB (min_message_id={min_message_id}).")
@@ -3145,7 +3166,7 @@ def main() -> None:
                 args.contact,
                 args.years,
                 focus_handles,
-                message_windows,
+                active_message_windows,
                 min_message_id=min_message_id,
             )
             print(f"Loaded {len(messages)} messages in window (min_message_id={min_message_id}).")
@@ -3168,7 +3189,7 @@ def main() -> None:
             )
             print(f"Updated timeline checkpoint to message_id={last_processed_message_id} for focus '{active_focus}'.")
         else:
-            messages = load_messages_for_windows(messages_db, args.contact, args.years, focus_handles, message_windows)
+            messages = load_messages_for_windows(messages_db, args.contact, args.years, focus_handles, active_message_windows)
             print(f"Loaded {len(messages)} messages in window.")
             focus_face_names = set()
             if active_focus == "violet":

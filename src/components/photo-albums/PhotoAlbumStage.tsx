@@ -442,13 +442,13 @@ type SelectedItem = {
   sourceIndex?: number;
 };
 
-const CANVAS_MIN_X = 2;
-const CANVAS_MAX_X = 98;
-const CANVAS_MIN_Y = 4;
-const CANVAS_MAX_Y = 94;
-const MAX_COVERAGE = 0.01;
+const CANVAS_MIN_X = 4;
+const CANVAS_MAX_X = 96;
+const CANVAS_MIN_Y = 6;
+const CANVAS_MAX_Y = 92;
+const MAX_COVERAGE = 0;
 const MAX_CORE_OVERLAP = 0;
-const OVERLAP_EPSILON = 0.001;
+const OVERLAP_EPSILON = 0.0001;
 const RESERVED_PADDING_PCT = 1.4;
 const LAYOUT_NUDGE_PCT = 0.8;
 
@@ -1087,17 +1087,17 @@ export function PhotoAlbumStage({
       const canvasArea = Math.max(1, (CANVAS_MAX_X - CANVAS_MIN_X) * (CANVAS_MAX_Y - CANVAS_MIN_Y));
       const estimatedCoverage = (estimatedMediaArea + estimatedNoteArea) / canvasArea;
       const targetCoverage = densityCount <= 2
-        ? 0.9
+        ? 0.74
         : densityCount <= 4
-          ? 0.88
+          ? 0.72
           : densityCount <= 8
-            ? 0.84
+            ? 0.68
             : densityCount <= 12
-              ? 0.82
+              ? 0.66
               : densityCount <= 16
-                ? 0.86
-                : 0.9;
-      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.78, 1.75);
+                ? 0.64
+                : 0.62;
+      const sizeScale = clamp(Math.sqrt(targetCoverage / Math.max(0.0001, estimatedCoverage)), 0.62, 1.35);
       const decorScale = clamp(0.95 + ((sizeScale - 1) * 0.56), 0.85, 1.95);
       const singleMediaSingleNote = mediaItems.length === 1 && notes.length === 1;
 
@@ -1110,7 +1110,7 @@ export function PhotoAlbumStage({
         const hasPinnedPosition = Number.isFinite(Number(source?.x)) && Number.isFinite(Number(source?.y));
         const sourceBaseWidth = Number(source?.w ?? mediaWidthPct);
         const variation = sizeVariation(`${album.id}-${spreadIndex}-media-${item.key}`, densityCount <= 2 ? 0.92 : 0.78, densityCount <= 2 ? 1.18 : 1.28);
-        const w = clamp(sourceBaseWidth * sizeScale * variation, 10.5, 46);
+        const w = clamp(sourceBaseWidth * sizeScale * variation, 9.5, 34);
         const singleHash = hashValue(`${album.id}-${spreadIndex}-single-media-${item.key}`);
         const singleX = 5 + ((singleHash % 8) * 0.65);
         const singleY = 14 + ((Math.floor(singleHash / 17) % 12) * 0.7);
@@ -1124,7 +1124,7 @@ export function PhotoAlbumStage({
           y: Number(source?.y ?? (singleMediaSingleNote ? singleY : fallback.y)),
           w,
           h: estimateMediaHeightPct(item.caption, w),
-          rotation: clamp(Number(source?.rotation ?? (singleMediaSingleNote ? (fallback.rotate - 2) : fallback.rotate)), -8, 8),
+          rotation: clamp(Number(source?.rotation ?? (singleMediaSingleNote ? (fallback.rotate - 2) : fallback.rotate)), -3, 3),
         };
       });
       const noteLayout: LayoutItem[] = notes.map((note, index) => {
@@ -1135,7 +1135,7 @@ export function PhotoAlbumStage({
         const hasPinnedPosition = Number.isFinite(Number(note.x)) && Number.isFinite(Number(note.y));
         const noteBaseWidth = Number(note.w ?? noteWidthPct);
         const variation = sizeVariation(`${album.id}-${spreadIndex}-note-${note.id}`, densityCount <= 2 ? 0.9 : 0.74, densityCount <= 2 ? 1.2 : 1.32);
-        const w = clamp(noteBaseWidth * sizeScale * variation, 11, 48);
+        const w = clamp(noteBaseWidth * sizeScale * variation, 10, 30);
         const singleHash = hashValue(`${album.id}-${spreadIndex}-single-note-${note.id}`);
         const singleX = 48 + ((singleHash % 10) * 0.75);
         const singleY = 28 + ((Math.floor(singleHash / 13) % 14) * 0.75);
@@ -1148,7 +1148,7 @@ export function PhotoAlbumStage({
           y: Number(note.y ?? (singleMediaSingleNote ? singleY : fallback.y)),
           w,
           h: estimateNoteHeightPct(note, w),
-          rotation: clamp(Number(note.rotation ?? (singleMediaSingleNote ? (fallback.rotate + 2) : fallback.rotate)), -7, 7),
+          rotation: clamp(Number(note.rotation ?? (singleMediaSingleNote ? (fallback.rotate + 2) : fallback.rotate)), -3, 3),
         };
       });
       const decorLayout: LayoutItem[] = decorItems.map((item, index) => {

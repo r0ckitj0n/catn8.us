@@ -1163,6 +1163,9 @@ export function PhotoAlbumStage({
       return [] as DecorItem[];
     }
   }, [album, spreadIndex, theme.emojis]);
+  const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
+  const canvasWidthPx = Math.max(1, Number(album.spec?.dimensions?.width_px || 1400));
+  const canvasHeightPx = Math.max(1, Number(album.spec?.dimensions?.height_px || 1050));
   const spreadHeaderLabel = React.useMemo(() => {
     const captured = mediaItems
       .map((item) => item.capturedAtMs)
@@ -1206,7 +1209,9 @@ export function PhotoAlbumStage({
   const dragMovedRef = React.useRef(false);
   const suppressClickRef = React.useRef(false);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
+  const scatterRef = React.useRef<HTMLDivElement | null>(null);
   const headerRef = React.useRef<HTMLDivElement | null>(null);
+  const [fittedCanvasSize, setFittedCanvasSize] = React.useState<{ width: number; height: number } | null>(null);
   const [reservedHeaderRect, setReservedHeaderRect] = React.useState<LayoutRect | null>(null);
   const resizeDirections: Array<ResizeState['direction']> = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
@@ -1216,6 +1221,52 @@ export function PhotoAlbumStage({
     setResizing(null);
     setSelectedItem(null);
   }, [album.id, spreadIndex]);
+
+  React.useLayoutEffect(() => {
+    const scatterEl = scatterRef.current;
+    if (!scatterEl || canvasWidthPx <= 0 || canvasHeightPx <= 0) {
+      return undefined;
+    }
+
+    const updateSize = () => {
+      const box = scatterEl.getBoundingClientRect();
+      const style = window.getComputedStyle(scatterEl);
+      const padX = (parseFloat(style.paddingLeft || '0') || 0) + (parseFloat(style.paddingRight || '0') || 0);
+      const padY = (parseFloat(style.paddingTop || '0') || 0) + (parseFloat(style.paddingBottom || '0') || 0);
+      const availableW = Math.max(80, box.width - padX);
+      const availableH = Math.max(80, box.height - padY);
+      let nextWidth = Math.max(80, Math.floor(canvasWidthPx));
+      let nextHeight = Math.max(80, Math.floor(canvasHeightPx));
+
+      if (editable) {
+        const scale = Math.min(availableW / canvasWidthPx, availableH / canvasHeightPx);
+        nextWidth = Math.max(80, Math.floor(canvasWidthPx * scale));
+        nextHeight = Math.max(80, Math.floor(canvasHeightPx * scale));
+      } else {
+        // Viewer mode: fill the available viewport box so preview/fullscreen use full width.
+        // Room-map background and items share this same grid, so positions stay aligned.
+        nextWidth = Math.max(80, Math.floor(availableW));
+        nextHeight = Math.max(80, Math.floor(availableH));
+      }
+      setFittedCanvasSize((prev) => {
+        if (prev && Math.abs(prev.width - nextWidth) < 1 && Math.abs(prev.height - nextHeight) < 1) {
+          return prev;
+        }
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateSize();
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => updateSize())
+      : null;
+    observer?.observe(scatterEl);
+    window.addEventListener('resize', updateSize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [canvasWidthPx, canvasHeightPx, editable, zoom, spreadIndex, album.id]);
 
   React.useEffect(() => {
     const measure = () => {
@@ -1886,9 +1937,6 @@ export function PhotoAlbumStage({
       }}
     />
   ), []);
-  const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
-  const canvasWidthPx = Math.max(1, Number(album.spec?.dimensions?.width_px || 1400));
-  const canvasHeightPx = Math.max(1, Number(album.spec?.dimensions?.height_px || 1050));
   // Saved placement coordinates are authored against the base canvas.
   // Keep baseline scale when honoring saved positions so normal view, edit, and fullscreen match.
   const effectiveZoom = respectSavedPositions ? 1 : (editable ? 1 : zoom);
@@ -1897,6 +1945,10 @@ export function PhotoAlbumStage({
   };
   const canvasStyle: React.CSSProperties = {
     aspectRatio: `${canvasWidthPx} / ${canvasHeightPx}`,
+    ...(fittedCanvasSize ? {
+      width: `${fittedCanvasSize.width}px`,
+      height: `${fittedCanvasSize.height}px`,
+    } : {}),
     ...(spreadBackgroundImageUrl ? {
       backgroundImage: `linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0.1)), url(${spreadBackgroundImageUrl})`,
       // Coordinates are normalized to canvas percentages; stretch map to the same 0-100 grid.
@@ -1908,7 +1960,7 @@ export function PhotoAlbumStage({
 
   return (
     <div className="catn8-scrapbook-stage catn8-scrapbook-stage-user">
-      <div className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={scatterStyle}>
+      <div ref={scatterRef} className={`catn8-scrapbook-scatter catn8-theme-${theme.name}`} style={scatterStyle}>
         <div className="catn8-scrapbook-corner catn8-scrapbook-corner-tl" aria-hidden="true" />
         <div className="catn8-scrapbook-corner catn8-scrapbook-corner-br" aria-hidden="true" />
         <div className="catn8-scrapbook-tape catn8-scrapbook-tape-top" aria-hidden="true" />

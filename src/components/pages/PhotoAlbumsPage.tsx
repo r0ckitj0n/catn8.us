@@ -43,6 +43,25 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     };
   }, [isFullscreen, state.showAlbumViewer]);
 
+  React.useEffect(() => {
+    const shouldFitPreview = state.showAlbumViewer && !isFullscreen;
+    document.body.classList.toggle('catn8-photo-albums-viewer-open', shouldFitPreview);
+    const updateNavbarHeight = () => {
+      const navbar = document.querySelector('.navbar.sticky-top') as HTMLElement | null;
+      const navbarHeight = navbar ? Math.max(0, Math.round(navbar.getBoundingClientRect().height)) : 0;
+      document.body.style.setProperty('--catn8-navbar-height', `${navbarHeight}px`);
+    };
+    if (shouldFitPreview) {
+      updateNavbarHeight();
+      window.addEventListener('resize', updateNavbarHeight);
+    }
+    return () => {
+      document.body.classList.remove('catn8-photo-albums-viewer-open');
+      document.body.style.removeProperty('--catn8-navbar-height');
+      window.removeEventListener('resize', updateNavbarHeight);
+    };
+  }, [state.showAlbumViewer, isFullscreen]);
+
   const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
     state.openAlbum(albumId, mode, initialPageIndex);
     if (state.isAdmin || mode === 'edit') {

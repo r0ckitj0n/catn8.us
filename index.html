@@ -123,6 +123,32 @@
         head.appendChild(script);
       }
 
+      function collectManifestCss(manifest, entry) {
+        var cssFiles = [];
+        var visited = {};
+
+        function visit(node) {
+          if (!node || typeof node !== 'object') return;
+          var key = String(node.file || '');
+          if (key && visited[key]) return;
+          if (key) visited[key] = true;
+
+          var ownCss = Array.isArray(node.css) ? node.css : [];
+          ownCss.forEach(function (file) {
+            if (cssFiles.indexOf(file) === -1) cssFiles.push(file);
+          });
+
+          var imports = Array.isArray(node.imports) ? node.imports : [];
+          imports.forEach(function (importKey) {
+            var child = manifest && manifest[String(importKey)];
+            if (child) visit(child);
+          });
+        }
+
+        visit(entry);
+        return cssFiles;
+      }
+
       function normalizeOrigin(value) {
         var raw = String(value || '').trim().replace(/\/+$/, '');
         if (!raw) return '';
@@ -187,7 +213,7 @@
         if (!entry || !entry.file) {
           throw new Error('manifest entry missing');
         }
-        var css = Array.isArray(entry.css) ? entry.css : [];
+        var css = collectManifestCss(manifest, entry);
         css.forEach(function (file) {
           appendCss('/dist/' + String(file).replace(/^\/+/, ''));
         });

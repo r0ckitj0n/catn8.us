@@ -151,7 +151,20 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
                   onClick={(e) => {
                     if (typeof onLoginClick === 'function') {
                       e.preventDefault();
-                      onLoginClick();
+                      try {
+                        onLoginClick();
+                      } catch (error) {
+                        console.error('[NavBar] login modal open failed', error);
+                      }
+                      window.setTimeout(() => {
+                        const modalOpen = Boolean(
+                          document.querySelector('.catn8-login-panel')
+                          || document.querySelector('[aria-label="Account"]'),
+                        );
+                        if (!modalOpen) {
+                          window.location.assign('/login.php');
+                        }
+                      }, 180);
                     }
                   }}
                 >

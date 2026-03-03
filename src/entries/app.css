@@ -154,6 +154,10 @@ body.catn8-noir-mode .modal-backdrop,
   pointer-events: auto;
 }
 
+.modal-backdrop:not(.show) {
+  pointer-events: none;
+}
+
 .modal-backdrop.show {
   opacity: 1;
 }

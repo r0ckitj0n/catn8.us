@@ -150,13 +150,8 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
                   href="login.php"
                   onClick={(e) => {
                     if (typeof onLoginClick === 'function') {
-                      try {
-                        onLoginClick();
-                        e.preventDefault();
-                      } catch (error) {
-                        // Keep native navigation as a fallback if modal launch fails.
-                        console.error('[NavBar] login modal launch failed, falling back to login.php', error);
-                      }
+                      e.preventDefault();
+                      onLoginClick();
                     }
                   }}
                 >

@@ -117,6 +117,25 @@ function App({ page }: { page: AppPage }) {
   }, [page]);
 
   React.useEffect(() => {
+    const clearOrphanedBackdrops = () => {
+      const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+      if (openModals.length > 0) {
+        return;
+      }
+
+      const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+      if (backdrops.length === 0) {
+        return;
+      }
+
+      backdrops.forEach((el) => el.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    };
+
+    clearOrphanedBackdrops();
+
     const onBackdropClickCapture = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target?.classList) {
@@ -139,6 +158,12 @@ function App({ page }: { page: AppPage }) {
 
       const openModals = Array.from(document.querySelectorAll('.modal.show, .modal.showing')) as HTMLElement[];
       if (!openModals.length) {
+        if (isBackdrop) {
+          target.remove();
+          document.body.classList.remove('modal-open');
+          document.body.style.removeProperty('overflow');
+          document.body.style.removeProperty('padding-right');
+        }
         return;
       }
 
@@ -161,8 +186,13 @@ function App({ page }: { page: AppPage }) {
       topModal.classList.remove('show');
     };
 
+    const observer = new MutationObserver(() => clearOrphanedBackdrops());
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
     document.addEventListener('click', onBackdropClickCapture, true);
-    return () => document.removeEventListener('click', onBackdropClickCapture, true);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('click', onBackdropClickCapture, true);
+    };
   }, []);
 
   const refreshViewer = React.useCallback(async () => {

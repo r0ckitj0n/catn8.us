@@ -132,25 +132,45 @@
         return raw.replace(/\/+$/, '');
       }
 
-      try {
-        var hotResp = await fetch('/hot?ts=' + Date.now(), { cache: 'no-store' });
-        if (hotResp.ok) {
-          var hotOrigin = normalizeOrigin(await hotResp.text());
-          if (hotOrigin) {
-            appendModuleInline(
-              'import RefreshRuntime from "' + hotOrigin + '/@react-refresh";' +
-              'RefreshRuntime.injectIntoGlobalHook(window);' +
-              'window.$RefreshReg$ = () => {};' +
-              'window.$RefreshSig$ = () => (type) => type;' +
-              'window.__vite_plugin_react_preamble_installed__ = true;'
-            );
-            appendModule(hotOrigin + '/@vite/client');
-            appendModule(hotOrigin + '/src/entries/app.tsx');
-            loaded = true;
+      function isLocalDevHost() {
+        var host = String(window.location.hostname || '').toLowerCase();
+        return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      }
+
+      if (isLocalDevHost()) {
+        try {
+          var hotResp = await fetch('/hot?ts=' + Date.now(), { cache: 'no-store' });
+          if (hotResp.ok) {
+            var hotOrigin = normalizeOrigin(await hotResp.text());
+            if (hotOrigin) {
+              var refreshUrl = '';
+              var clientUrl = '';
+              var appUrl = '';
+              try {
+                refreshUrl = new URL('/@react-refresh', hotOrigin).toString();
+                clientUrl = new URL('/@vite/client', hotOrigin).toString();
+                appUrl = new URL('/src/entries/app.tsx', hotOrigin).toString();
+              } catch (_hotUrlErr) {
+                refreshUrl = '';
+              }
+
+              if (refreshUrl && clientUrl && appUrl) {
+                appendModuleInline(
+                  'import RefreshRuntime from ' + JSON.stringify(refreshUrl) + ';' +
+                  'RefreshRuntime.injectIntoGlobalHook(window);' +
+                  'window.$RefreshReg$ = () => {};' +
+                  'window.$RefreshSig$ = () => (type) => type;' +
+                  'window.__vite_plugin_react_preamble_installed__ = true;'
+                );
+                appendModule(clientUrl);
+                appendModule(appUrl);
+                loaded = true;
+              }
+            }
           }
+        } catch (_hotErr) {
+          // no-op: fallback to dist manifest
         }
-      } catch (_hotErr) {
-        // no-op: fallback to dist manifest
       }
 
       if (loaded) {

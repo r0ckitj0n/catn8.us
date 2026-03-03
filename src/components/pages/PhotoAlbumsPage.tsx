@@ -87,6 +87,20 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     }
   }, [state]);
 
+  const closeTopmostLayer = React.useCallback(async () => {
+    if (state.showCreateModal) {
+      state.setShowCreateModal(false);
+      return;
+    }
+    if (state.showAdminModal) {
+      state.closeAdminModal();
+      return;
+    }
+    if (state.showAlbumViewer) {
+      await closeViewer();
+    }
+  }, [closeViewer, state]);
+
   const enterFullscreen = React.useCallback(async () => {
     try {
       if (!document.fullscreenElement) {
@@ -246,14 +260,15 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
                       Full Screen
                     </button>
-                    <a
-                      className="btn btn-sm catn8-close-viewer-btn"
-                      href="https://catn8.us/photo-albums.php"
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"
                       aria-label="Close album viewer"
                       title="Close"
+                      onClick={() => { void closeTopmostLayer(); }}
                     >
                       ×
-                    </a>
+                    </button>
                   </div>
                 </div>
               ) : null}

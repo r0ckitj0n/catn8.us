@@ -2288,7 +2288,15 @@ export function PhotoAlbumStage({
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onEditSelected} disabled={isLayoutLocked}>Edit</button>
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDuplicateSelected} disabled={isLayoutLocked}>Duplicate</button>
               <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDeleteSelected} disabled={isLayoutLocked}>Delete</button>
-              <button type="button" className="btn btn-sm btn-dark" onClick={() => setSelectedItem(null)}>Close</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"
+                onClick={() => setSelectedItem(null)}
+                aria-label="Close item actions"
+                title="Close"
+              >
+                ×
+              </button>
             </div>
           ) : null}
 

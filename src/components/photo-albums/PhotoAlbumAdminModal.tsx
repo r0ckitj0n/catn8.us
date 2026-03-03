@@ -209,7 +209,15 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 {saveSvg}
                 <span className="ms-1">Save</span>
               </button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"
+                onClick={onClose}
+                aria-label="Close edit modal"
+                title="Close"
+              >
+                ×
+              </button>
             </div>
           </div>
         </div>

@@ -70,7 +70,15 @@ export function PhotoAlbumElementViewer(props: PhotoAlbumElementViewerProps) {
                 ♥
               </button>
             ) : null}
-            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"
+              onClick={onClose}
+              aria-label="Close viewer"
+              title="Close"
+            >
+              ×
+            </button>
           </div>
         </div>
         <div className={isMediaTarget ? 'catn8-element-viewer-body catn8-element-viewer-body-media' : 'catn8-element-viewer-body'}>

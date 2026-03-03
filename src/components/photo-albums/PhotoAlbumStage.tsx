@@ -63,19 +63,6 @@ type DecorItem = {
   rotation?: number;
 };
 
-function DragHandleIcon() {
-  return (
-    <svg className="catn8-drag-handle-icon" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-      <circle cx="2" cy="2" r="1" />
-      <circle cx="2" cy="5" r="1" />
-      <circle cx="2" cy="8" r="1" />
-      <circle cx="8" cy="2" r="1" />
-      <circle cx="8" cy="5" r="1" />
-      <circle cx="8" cy="8" r="1" />
-    </svg>
-  );
-}
-
 function isVideoMedia(src: string, mediaType?: string): boolean {
   if (mediaType === 'video') {
     return true;
@@ -1213,7 +1200,6 @@ export function PhotoAlbumStage({
   const headerRef = React.useRef<HTMLDivElement | null>(null);
   const [fittedCanvasSize, setFittedCanvasSize] = React.useState<{ width: number; height: number } | null>(null);
   const [reservedHeaderRect, setReservedHeaderRect] = React.useState<LayoutRect | null>(null);
-  const resizeDirections: Array<ResizeState['direction']> = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
   React.useEffect(() => {
     setViewerTarget(null);
@@ -1921,22 +1907,6 @@ export function PhotoAlbumStage({
       touchAction: editable ? 'none' : 'auto',
     };
   };
-  const renderResizeHandle = React.useCallback((
-    direction: ResizeState['direction'],
-    onStart: (event: React.PointerEvent<HTMLElement>) => void,
-  ) => (
-    <button
-      key={direction}
-      type="button"
-      className={`catn8-resize-handle catn8-resize-handle-${direction}`}
-      aria-label={`Resize item from ${direction}`}
-      onPointerDown={onStart}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-    />
-  ), []);
   // Saved placement coordinates are authored against the base canvas.
   // Keep baseline scale when honoring saved positions so normal view, edit, and fullscreen match.
   const effectiveZoom = respectSavedPositions ? 1 : (editable ? 1 : zoom);
@@ -2065,48 +2035,6 @@ export function PhotoAlbumStage({
               } : undefined}
               onClick={() => onItemClick({ type: 'decor', index }, null)}
             >
-              {editable && !isLayoutLocked ? (
-                <>
-                  <button
-                    type="button"
-                    className="catn8-drag-handle catn8-drag-handle-emoji"
-                    aria-label="Drag decor item"
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setSelectedItem({ type: 'decor', index });
-                      dragStartRef.current = { x: event.clientX, y: event.clientY };
-                      dragMovedRef.current = false;
-                      setDragging({ type: 'decor', index });
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DragHandleIcon />
-                  </button>
-                  {resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const placement = layoutByType.decorByIndex.get(index);
-                    if (!placement) {
-                      return;
-                    }
-                    setSelectedItem({ type: 'decor', index });
-                    dragStartRef.current = { x: event.clientX, y: event.clientY };
-                    dragMovedRef.current = false;
-                    setResizing({
-                      type: 'decor',
-                      index,
-                      direction,
-                      startClientX: event.clientX,
-                      startClientY: event.clientY,
-                      startX: placement.x,
-                      startY: placement.y,
-                      startW: placement.w,
-                      startH: placement.h,
-                    });
-                  }))}
-                </>
-              ) : null}
               {item.emoji}
             </span>
           ))}
@@ -2175,29 +2103,6 @@ export function PhotoAlbumStage({
                   />
                 )}
                 {showCaption ? <figcaption className="catn8-polaroid-caption">{caption}</figcaption> : null}
-                {editable && !isLayoutLocked ? resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const placement = layoutByType.mediaByIndex.get(index);
-                  if (!placement) {
-                    return;
-                  }
-                  setSelectedItem({ type: 'media', index, sourceIndex: item.sourceIndex });
-                  dragStartRef.current = { x: event.clientX, y: event.clientY };
-                  dragMovedRef.current = false;
-                  setResizing({
-                    type: 'media',
-                    index,
-                    sourceIndex: item.sourceIndex,
-                    direction,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    startX: placement.x,
-                    startY: placement.y,
-                    startW: placement.w,
-                    startH: placement.h,
-                  });
-                })) : null}
               </figure>
             );
           })}
@@ -2251,28 +2156,6 @@ export function PhotoAlbumStage({
                   <span className="catn8-scatter-note-emoji">{theme.emojis[index % Math.max(1, theme.emojis.length)] || '✨'}</span>
                   <p>{display}</p>
                 </div>
-                {editable && !isLayoutLocked ? resizeDirections.map((direction) => renderResizeHandle(direction, (event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const placement = layoutByType.noteByIndex.get(index);
-                  if (!placement) {
-                    return;
-                  }
-                  setSelectedItem({ type: 'note', index });
-                  dragStartRef.current = { x: event.clientX, y: event.clientY };
-                  dragMovedRef.current = false;
-                  setResizing({
-                    type: 'note',
-                    index,
-                    direction,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    startX: placement.x,
-                    startY: placement.y,
-                    startW: placement.w,
-                    startH: placement.h,
-                  });
-                })) : null}
               </div>
             );
           })}

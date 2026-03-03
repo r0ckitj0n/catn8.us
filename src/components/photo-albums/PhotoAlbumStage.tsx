@@ -1733,14 +1733,14 @@ export function PhotoAlbumStage({
       suppressClickRef.current = false;
       return;
     }
-    if (editable && !isLayoutLocked) {
+    if (editable) {
       setSelectedItem(item);
       return;
     }
     if (viewerType) {
       setViewerTarget({ type: viewerType, spreadIndex, itemIndex: item.index });
     }
-  }, [editable, isLayoutLocked, spreadIndex]);
+  }, [editable, spreadIndex]);
 
   const selectedNoteText = React.useMemo(() => {
     if (!selectedItem || selectedItem.type !== 'note') {
@@ -1757,7 +1757,7 @@ export function PhotoAlbumStage({
   }, [selectedItem, spreadIndex]);
 
   const onEditSelected = React.useCallback(() => {
-    if (!selectedItem) {
+    if (!selectedItem || isLayoutLocked) {
       return;
     }
     if (selectedItem.type === 'media') {
@@ -1788,10 +1788,10 @@ export function PhotoAlbumStage({
         onEditDecor(selectedItem.index, { emoji: nextEmoji.trim() });
       }
     }
-  }, [selectedItem, mediaItems, onEditMediaCaption, onEditNoteText, selectedNoteText, onEditDecor, decorItems]);
+  }, [selectedItem, isLayoutLocked, mediaItems, onEditMediaCaption, onEditNoteText, selectedNoteText, onEditDecor, decorItems]);
 
   const onDuplicateSelected = React.useCallback(() => {
-    if (!selectedItem) {
+    if (!selectedItem || isLayoutLocked) {
       return;
     }
     if (selectedItem.type === 'media' && onDuplicateMedia) {
@@ -1805,10 +1805,10 @@ export function PhotoAlbumStage({
     if (selectedItem.type === 'decor' && onDuplicateDecor) {
       onDuplicateDecor(selectedItem.index);
     }
-  }, [selectedItem, onDuplicateMedia, onDuplicateNote, onDuplicateDecor]);
+  }, [selectedItem, isLayoutLocked, onDuplicateMedia, onDuplicateNote, onDuplicateDecor]);
 
   const onDeleteSelected = React.useCallback(() => {
-    if (!selectedItem) {
+    if (!selectedItem || isLayoutLocked) {
       return;
     }
     if (selectedItem.type === 'media' && onDeleteMedia) {
@@ -1825,7 +1825,7 @@ export function PhotoAlbumStage({
       onDeleteDecor(selectedItem.index);
       setSelectedItem(null);
     }
-  }, [selectedItem, onDeleteMedia, onDeleteNote, onDeleteDecor]);
+  }, [selectedItem, isLayoutLocked, onDeleteMedia, onDeleteNote, onDeleteDecor]);
 
   const renderMediaStyle = (index: number): React.CSSProperties => {
     const placement = layoutByType.mediaByIndex.get(index);
@@ -2004,7 +2004,7 @@ export function PhotoAlbumStage({
               } : undefined}
               onClick={() => onItemClick({ type: 'decor', index }, null)}
             >
-              {editable ? (
+              {editable && !isLayoutLocked ? (
                 <>
                   <button
                     type="button"
@@ -2224,9 +2224,9 @@ export function PhotoAlbumStage({
               {selectedItem.type !== 'decor' ? (
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onViewSelected}>View</button>
               ) : null}
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onEditSelected}>Edit</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDuplicateSelected}>Duplicate</button>
-              <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDeleteSelected}>Delete</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onEditSelected} disabled={isLayoutLocked}>Edit</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDuplicateSelected} disabled={isLayoutLocked}>Duplicate</button>
+              <button type="button" className="btn btn-sm btn-outline-danger" onClick={onDeleteSelected} disabled={isLayoutLocked}>Delete</button>
               <button type="button" className="btn btn-sm btn-dark" onClick={() => setSelectedItem(null)}>Close</button>
             </div>
           ) : null}

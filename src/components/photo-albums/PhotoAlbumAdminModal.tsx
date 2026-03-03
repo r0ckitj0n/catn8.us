@@ -739,7 +739,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               albumLocked={albumLocked}
               onTogglePageLock={() => onToggleSpreadLock(!spreadLocked)}
               onBackToAlbums={onClose}
-              editable={!albumLocked && !spreadLocked}
+              editable
               onMoveMedia={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const target = next.spec.spreads[pageIndex]?.images?.[index];

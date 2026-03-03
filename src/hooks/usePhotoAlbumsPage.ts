@@ -352,6 +352,7 @@ export function usePhotoAlbumsPage(
     deleteAlbumById,
   } = usePhotoAlbumsMutations({
     isAdmin,
+    albums,
     createForm,
     defaultCreateForm: DEFAULT_CREATE_FORM,
     adminDraft,

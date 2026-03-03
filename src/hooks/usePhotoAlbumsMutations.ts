@@ -8,12 +8,12 @@ import {
   PhotoAlbumAiCoverFromFavoritesRequest,
   PhotoAlbumAiCreateRequest,
   PhotoAlbumAiSpreadRequest,
-  PhotoAlbumBulkAutoLayoutResponse,
   PhotoAlbumMutationResponse,
 } from '../types/photoAlbums';
 
 interface PhotoAlbumsMutationsArgs {
   isAdmin: boolean;
+  albums: PhotoAlbum[];
   createForm: PhotoAlbumAiCreateRequest;
   defaultCreateForm: PhotoAlbumAiCreateRequest;
   adminDraft: PhotoAlbum | null;
@@ -38,6 +38,7 @@ interface DeleteAlbumArgs {
 export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
   const {
     isAdmin,
+    albums,
     createForm,
     defaultCreateForm,
     adminDraft,
@@ -197,24 +198,23 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
     setBusy(true);
     try {
-      let startAfterId = 0;
+      const unlockedAlbums = albums.filter((album) => Number(album?.id || 0) > 0 && Number(album?.is_locked || 0) !== 1 && !album?.is_virtual);
       let updated = 0;
       let failed = 0;
-      const maxRequests = 250;
 
-      for (let i = 0; i < maxRequests; i += 1) {
-        const res = await ApiClient.post<PhotoAlbumBulkAutoLayoutResponse>('/api/photo_albums.php?action=auto_layout_all', {
-          start_after_id: startAfterId,
-          batch_size: 8,
-        });
-        updated += Number(res?.updated_albums || 0);
-        failed += Number(res?.failed_albums || 0);
-        const hasMore = Boolean(res?.has_more);
-        const nextStartAfterId = Number(res?.next_start_after_id || 0);
-        if (!hasMore || nextStartAfterId <= startAfterId) {
-          break;
+      for (const album of unlockedAlbums) {
+        try {
+          const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=auto_layout', {
+            id: Number(album.id),
+          });
+          if (res?.album?.id) {
+            updated += 1;
+          } else {
+            failed += 1;
+          }
+        } catch {
+          failed += 1;
         }
-        startAfterId = nextStartAfterId;
       }
 
       if (failed > 0) {
@@ -228,7 +228,7 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     } finally {
       setBusy(false);
     }
-  }, [isAdmin, loadAlbums, setBusy, toast]);
+  }, [albums, isAdmin, loadAlbums, setBusy, toast]);
 
   const toggleAlbumLock = React.useCallback(async (id: number, isLocked: boolean) => {
     if (!isAdmin || id <= 0) {

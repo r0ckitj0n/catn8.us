@@ -1426,6 +1426,86 @@ function catn8_photo_albums_auto_layout_spread(array $spread, int $albumId, int 
     return $spread;
 }
 
+function catn8_photo_albums_pid_running(int $pid): bool
+{
+    if ($pid <= 0) {
+        return false;
+    }
+    if (function_exists('posix_kill')) {
+        return @posix_kill($pid, 0);
+    }
+    if (!function_exists('shell_exec')) {
+        return false;
+    }
+    $out = shell_exec('ps -p ' . (int)$pid . ' -o pid= 2>/dev/null');
+    return is_string($out) && trim($out) !== '';
+}
+
+function catn8_photo_albums_start_capture_messages_import(): array
+{
+    $repoRoot = dirname(__DIR__);
+    $scriptPath = $repoRoot . '/scripts/import_photos.sh';
+    if (!is_file($scriptPath)) {
+        throw new RuntimeException('Import script not found');
+    }
+    if (!is_executable($scriptPath)) {
+        @chmod($scriptPath, 0755);
+    }
+
+    $stateDir = $repoRoot . '/.local/state';
+    if (!is_dir($stateDir) && !@mkdir($stateDir, 0775, true) && !is_dir($stateDir)) {
+        throw new RuntimeException('Failed to create state directory');
+    }
+    $pidPath = $stateDir . '/import_photos.pid';
+    $logPath = $stateDir . '/import_photos_web.log';
+
+    if (is_file($pidPath)) {
+        $existingRaw = @file_get_contents($pidPath);
+        $existing = json_decode(is_string($existingRaw) ? $existingRaw : '', true);
+        $existingPid = (int)($existing['pid'] ?? 0);
+        if ($existingPid > 0 && catn8_photo_albums_pid_running($existingPid)) {
+            return [
+                'started' => false,
+                'already_running' => true,
+                'pid' => $existingPid,
+                'log_file' => '.local/state/import_photos_web.log',
+            ];
+        }
+        @unlink($pidPath);
+    }
+
+    if (!function_exists('shell_exec')) {
+        throw new RuntimeException('shell_exec is unavailable on this server');
+    }
+
+    $cmd = sprintf(
+        'cd %s && nohup bash %s >> %s 2>&1 & echo $!',
+        escapeshellarg($repoRoot),
+        escapeshellarg($scriptPath),
+        escapeshellarg($logPath)
+    );
+    $pidRaw = shell_exec($cmd);
+    $pid = (int)trim((string)$pidRaw);
+    if ($pid <= 0) {
+        throw new RuntimeException('Failed to start import process');
+    }
+
+    $payload = [
+        'pid' => $pid,
+        'started_at' => gmdate('Y-m-d H:i:s'),
+        'script' => 'scripts/import_photos.sh',
+        'log_file' => '.local/state/import_photos_web.log',
+    ];
+    @file_put_contents($pidPath, json_encode($payload, JSON_UNESCAPED_SLASHES));
+
+    return [
+        'started' => true,
+        'already_running' => false,
+        'pid' => $pid,
+        'log_file' => '.local/state/import_photos_web.log',
+    ];
+}
+
 catn8_groups_seed_core();
 catn8_photo_albums_table_ensure();
 catn8_photo_album_page_favorites_table_ensure();
@@ -1493,6 +1573,32 @@ if ($method !== 'POST') {
 
 catn8_photo_albums_require_json_request();
 $body = catn8_read_json_body();
+
+if ($action === 'capture_new_messages') {
+    if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
+        catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
+    }
+    try {
+        $run = catn8_photo_albums_start_capture_messages_import();
+    } catch (Throwable $e) {
+        error_log('[photo_albums:capture_new_messages] start_error=' . $e->getMessage());
+        catn8_json_response(['success' => false, 'error' => 'Failed to start import process'], 500);
+    }
+    if (!empty($run['already_running'])) {
+        catn8_json_response([
+            'success' => false,
+            'error' => 'Capture process is already running',
+            'pid' => (int)($run['pid'] ?? 0),
+            'log_file' => (string)($run['log_file'] ?? ''),
+        ], 409);
+    }
+    catn8_json_response([
+        'success' => true,
+        'started' => true,
+        'pid' => (int)($run['pid'] ?? 0),
+        'log_file' => (string)($run['log_file'] ?? ''),
+    ]);
+}
 
 if ($action === 'toggle_page_favorite') {
     $albumId = (int)($body['album_id'] ?? 0);

@@ -134,6 +134,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--replace-existing-titles", action="store_true")
     p.add_argument("--lock-title", action="append", default=[], help="Album title to lock from importer overwrites (repeatable)")
     p.add_argument("--unlock-title", action="append", default=[], help="Album title to unlock for importer overwrites (repeatable)")
+    p.add_argument("--no-attachment-checkpoint", action="store_true", help="Disable resume checkpointing for attachment_match mode")
     return p.parse_args()
 
 
@@ -1472,6 +1473,35 @@ def timeline_state_path(source_key: str) -> Path:
     state_dir = Path(".local/state")
     state_dir.mkdir(parents=True, exist_ok=True)
     return state_dir / f"photos_timeline_state_{state_file_token(source_key)}.json"
+
+
+def attachment_checkpoint_path(source_key: str) -> Path:
+    state_dir = Path(".local/state")
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / f"attachment_match_checkpoint_{state_file_token(source_key)}.json"
+
+
+def load_attachment_checkpoint(checkpoint_path: Path) -> Dict[str, Any]:
+    if not checkpoint_path.exists():
+        return {}
+    try:
+        raw = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return raw
+
+
+def save_attachment_checkpoint(checkpoint_path: Path, source_key: str, focus_person: str, last_message_id: int) -> None:
+    payload = {
+        "source_key": str(source_key or ""),
+        "focus_person": str(focus_person or ""),
+        "last_message_id": max(0, int(last_message_id)),
+        "updated_at": dt.datetime.now().isoformat(),
+    }
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def timeline_progress_snapshot_path(source_key: str) -> Path:
@@ -3189,8 +3219,28 @@ def main() -> None:
             )
             print(f"Updated timeline checkpoint to message_id={last_processed_message_id} for focus '{active_focus}'.")
         else:
-            messages = load_messages_for_windows(messages_db, args.contact, args.years, focus_handles, active_message_windows)
-            print(f"Loaded {len(messages)} messages in window.")
+            checkpoint_path = attachment_checkpoint_path(source_key)
+            checkpoint = load_attachment_checkpoint(checkpoint_path)
+            min_message_id = 0
+            if not bool(args.no_attachment_checkpoint) and not bool(args.rematch_all):
+                min_message_id = int(checkpoint.get("last_message_id") or 0)
+
+            messages = load_messages_for_windows(
+                messages_db,
+                args.contact,
+                args.years,
+                focus_handles,
+                active_message_windows,
+                min_message_id=min_message_id,
+            )
+            print(f"Loaded {len(messages)} messages in window (min_message_id={min_message_id}).")
+
+            max_message_id = 0
+            for message_row in messages:
+                try:
+                    max_message_id = max(max_message_id, int(message_row.message_id))
+                except Exception:
+                    continue
             focus_face_names = set()
             if active_focus == "violet":
                 focus_face_names = set(violet_face_names)
@@ -3208,6 +3258,10 @@ def main() -> None:
                 face_name_filter=focus_face_names,
                 progress_every_messages=max(0, int(args.progress_every_messages)),
             )
+            if max_message_id > 0 and not bool(args.no_attachment_checkpoint):
+                next_checkpoint_id = max(min_message_id, max_message_id)
+                save_attachment_checkpoint(checkpoint_path, source_key, active_focus, next_checkpoint_id)
+                print(f"Updated attachment checkpoint to message_id={next_checkpoint_id} for focus '{active_focus}'.")
 
         if not pages:
             print(f"No new pages produced for focus '{active_focus}'.")

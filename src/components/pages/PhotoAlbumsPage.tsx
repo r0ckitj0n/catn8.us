@@ -12,6 +12,8 @@ import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
 
+const SHOW_AUTO_LAYOUT_ALL_BUTTON = false;
+
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
@@ -130,13 +132,23 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                   </a>
                   {state.isAdmin ? (
                     <div className="d-flex gap-2 flex-wrap">
+                      {SHOW_AUTO_LAYOUT_ALL_BUTTON ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          disabled={state.busy}
+                          onClick={() => { void state.autoLayoutAllUnlocked(); }}
+                        >
+                          Auto Layout All Unlocked
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="btn btn-outline-primary"
+                        className="btn btn-outline-secondary"
                         disabled={state.busy}
-                        onClick={() => { void state.autoLayoutAllUnlocked(); }}
+                        onClick={() => { void state.captureNewMessages(); }}
                       >
-                        Auto Layout All Unlocked
+                        Capture New Messages
                       </button>
                       <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
                         Create Photo Album

@@ -8,6 +8,7 @@ import {
   PhotoAlbumAiCoverFromFavoritesRequest,
   PhotoAlbumAiCreateRequest,
   PhotoAlbumAiSpreadRequest,
+  PhotoAlbumCaptureMessagesResponse,
   PhotoAlbumMutationResponse,
 } from '../types/photoAlbums';
 
@@ -230,6 +231,31 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
   }, [albums, isAdmin, loadAlbums, setBusy, toast]);
 
+  const captureNewMessages = React.useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumCaptureMessagesResponse>('/api/photo_albums.php?action=capture_new_messages', {});
+      const pid = Number(res?.pid || 0);
+      if (pid > 0) {
+        toast('success', `Capture started (PID ${pid}).`);
+      } else {
+        toast('success', 'Capture started.');
+      }
+    } catch (error: any) {
+      const status = Number(error?.status || 0);
+      if (status === 409) {
+        toast('info', error?.message || 'Capture process is already running');
+      } else {
+        toast('error', error?.message || 'Failed to start message capture');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, setBusy, toast]);
+
   const toggleAlbumLock = React.useCallback(async (id: number, isLocked: boolean) => {
     if (!isAdmin || id <= 0) {
       return;
@@ -386,6 +412,7 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     autoLayoutAlbum,
     autoLayoutCurrentSpread,
     autoLayoutAllUnlocked,
+    captureNewMessages,
     toggleAlbumLock,
     toggleSpreadLock,
     generateBackground,

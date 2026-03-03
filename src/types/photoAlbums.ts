@@ -170,6 +170,13 @@ export interface PhotoAlbumBulkAutoLayoutResponse {
   next_start_after_id?: number;
 }
 
+export interface PhotoAlbumCaptureMessagesResponse {
+  success: boolean;
+  started?: boolean;
+  pid?: number;
+  log_file?: string;
+}
+
 export interface PhotoAlbumAiBackgroundRequest {
   id: number;
   spread_index: number;

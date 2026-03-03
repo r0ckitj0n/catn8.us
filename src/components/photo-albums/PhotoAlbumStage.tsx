@@ -1866,6 +1866,29 @@ export function PhotoAlbumStage({
     }
   }, [selectedItem, isLayoutLocked, onDeleteMedia, onDeleteNote, onDeleteDecor]);
 
+  const selectedItemActionsStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+    if (!editable || !selectedItem) {
+      return undefined;
+    }
+    const selectedLayout = selectedItem.type === 'media'
+      ? layoutByType.mediaByIndex.get(selectedItem.index)
+      : selectedItem.type === 'note'
+        ? layoutByType.noteByIndex.get(selectedItem.index)
+        : layoutByType.decorByIndex.get(selectedItem.index);
+    if (!selectedLayout) {
+      return undefined;
+    }
+    const anchorLeft = clamp(selectedLayout.x + (selectedLayout.w / 2), CANVAS_MIN_X + 5, CANVAS_MAX_X - 5);
+    const anchorTop = clamp(selectedLayout.y + selectedLayout.h + 1.4, CANVAS_MIN_Y + 1, CANVAS_MAX_Y - 9);
+    return {
+      left: `${anchorLeft}%`,
+      top: `${anchorTop}%`,
+      right: 'auto',
+      bottom: 'auto',
+      transform: 'translateX(-50%)',
+    };
+  }, [editable, selectedItem, layoutByType]);
+
   const renderMediaStyle = (index: number): React.CSSProperties => {
     const placement = layoutByType.mediaByIndex.get(index);
     const widthPct = placement?.w ?? mediaWidthPct;
@@ -2163,7 +2186,7 @@ export function PhotoAlbumStage({
           })}
 
           {editable && selectedItem ? (
-            <div className="catn8-item-actions" onClick={(event) => event.stopPropagation()}>
+            <div className="catn8-item-actions" style={selectedItemActionsStyle} onClick={(event) => event.stopPropagation()}>
               <span className="catn8-item-actions-label">
                 {selectedItem.type === 'media' ? 'Media' : selectedItem.type === 'note' ? 'Text' : 'Decor'}
               </span>

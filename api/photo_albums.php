@@ -1629,6 +1629,12 @@ if ($action === 'capture_new_messages') {
     if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
         catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
     }
+    if (!catn8_is_local_request()) {
+        catn8_json_response([
+            'success' => false,
+            'error' => 'Capture New Messages is local-only. Open Photo Albums on your local site (http://localhost:8888) to run scripts/import_photos.sh on your computer.',
+        ], 400);
+    }
     try {
         $run = catn8_photo_albums_start_capture_messages_import();
     } catch (Throwable $e) {

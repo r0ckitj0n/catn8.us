@@ -128,14 +128,27 @@ $sqlValue = static function (PDO $pdo, $value): string {
 };
 
 $getAllBaseTables = static function (PDO $pdo): array {
-    $rows = $pdo->query('SHOW FULL TABLES')->fetchAll(PDO::FETCH_NUM);
     $out = [];
-    foreach ($rows as $row) {
-        $name = isset($row[0]) ? trim((string)$row[0]) : '';
-        $kind = isset($row[1]) ? strtoupper(trim((string)$row[1])) : 'BASE TABLE';
-        if ($name === '' || $kind !== 'BASE TABLE') continue;
-        $out[] = $name;
+    try {
+        $rows = $pdo->query('SHOW FULL TABLES')->fetchAll(PDO::FETCH_NUM);
+        foreach ($rows as $row) {
+            $name = isset($row[0]) ? trim((string)$row[0]) : '';
+            $kind = isset($row[1]) ? strtoupper(trim((string)$row[1])) : 'BASE TABLE';
+            if ($name === '' || $kind !== 'BASE TABLE') continue;
+            $out[] = $name;
+        }
+    } catch (Throwable $e) {
+        $rows = Database::queryAll(
+            'SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE() AND TABLE_TYPE = "BASE TABLE"'
+        );
+        foreach ($rows as $row) {
+            $name = trim((string)($row['TABLE_NAME'] ?? ''));
+            if ($name !== '') {
+                $out[] = $name;
+            }
+        }
     }
+    $out = array_values(array_unique($out));
     sort($out);
     return $out;
 };
@@ -300,74 +313,79 @@ $dumpTablesToSqlGz = static function (PDO $pdo, array $tables, string $destPath)
 
     $tablesDumped = 0;
     $rowsDumped = 0;
+    $tableErrors = [];
 
     foreach ($tables as $table) {
         $tableSql = $safeTable($table);
+        try {
+            $createRes = $pdo->query('SHOW CREATE TABLE ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
+            if (!$createRes || !isset($createRes['Create Table'])) {
+                continue;
+            }
 
-        $createRes = $pdo->query('SHOW CREATE TABLE ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
-        if (!$createRes || !isset($createRes['Create Table'])) {
-            continue;
-        }
+            $write("--\n-- Table structure for " . $table . "\n--\n\n");
+            $write('DROP TABLE IF EXISTS ' . $tableSql . ";\n");
+            $write((string)$createRes['Create Table'] . ";\n\n");
 
-        $write("--\n-- Table structure for " . $table . "\n--\n\n");
-        $write('DROP TABLE IF EXISTS ' . $tableSql . ";\n");
-        $write((string)$createRes['Create Table'] . ";\n\n");
+            $countRow = $pdo->query('SELECT COUNT(*) AS c FROM ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
+            $rowCount = (int)($countRow['c'] ?? 0);
 
-        $countRow = $pdo->query('SELECT COUNT(*) AS c FROM ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
-        $rowCount = (int)($countRow['c'] ?? 0);
+            $write("--\n-- Data for " . $table . "\n--\n");
+            if ($rowCount <= 0) {
+                $write("\n");
+                $tablesDumped++;
+                continue;
+            }
 
-        $write("--\n-- Data for " . $table . "\n--\n");
-        if ($rowCount <= 0) {
-            $write("\n");
-            $tablesDumped++;
-            continue;
-        }
+            $colRows = $pdo->query('SHOW COLUMNS FROM ' . $tableSql)->fetchAll(PDO::FETCH_ASSOC);
+            $cols = [];
+            foreach ($colRows as $c) {
+                $name = (string)($c['Field'] ?? '');
+                if ($name !== '') $cols[] = $name;
+            }
+            if (empty($cols)) {
+                $tablesDumped++;
+                continue;
+            }
 
-        $colRows = $pdo->query('SHOW COLUMNS FROM ' . $tableSql)->fetchAll(PDO::FETCH_ASSOC);
-        $cols = [];
-        foreach ($colRows as $c) {
-            $name = (string)($c['Field'] ?? '');
-            if ($name !== '') $cols[] = $name;
-        }
-        if (empty($cols)) {
-            $tablesDumped++;
-            continue;
-        }
+            $colList = '(' . implode(', ', array_map($safeTable, $cols)) . ')';
 
-        $colList = '(' . implode(', ', array_map($safeTable, $cols)) . ')';
-
-        $batchSize = 1000;
-        $offset = 0;
-        while ($offset < $rowCount) {
-            $stmt = $pdo->query('SELECT * FROM ' . $tableSql . ' LIMIT ' . (int)$batchSize . ' OFFSET ' . (int)$offset);
-            $valueSets = [];
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $vals = [];
-                foreach ($cols as $col) {
-                    $vals[] = $sqlValue($pdo, $row[$col] ?? null);
+            $batchSize = 1000;
+            $offset = 0;
+            while ($offset < $rowCount) {
+                $stmt = $pdo->query('SELECT * FROM ' . $tableSql . ' LIMIT ' . (int)$batchSize . ' OFFSET ' . (int)$offset);
+                $valueSets = [];
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $vals = [];
+                    foreach ($cols as $col) {
+                        $vals[] = $sqlValue($pdo, $row[$col] ?? null);
+                    }
+                    $valueSets[] = '(' . implode(', ', $vals) . ')';
+                    if (count($valueSets) >= 200) {
+                        $write('INSERT INTO ' . $tableSql . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valueSets) . ";\n");
+                        $rowsDumped += count($valueSets);
+                        $valueSets = [];
+                    }
                 }
-                $valueSets[] = '(' . implode(', ', $vals) . ')';
-                if (count($valueSets) >= 200) {
+                if (!empty($valueSets)) {
                     $write('INSERT INTO ' . $tableSql . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valueSets) . ";\n");
                     $rowsDumped += count($valueSets);
-                    $valueSets = [];
                 }
+                $offset += $batchSize;
             }
-            if (!empty($valueSets)) {
-                $write('INSERT INTO ' . $tableSql . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valueSets) . ";\n");
-                $rowsDumped += count($valueSets);
-            }
-            $offset += $batchSize;
-        }
 
-        $write("\n");
-        $tablesDumped++;
+            $write("\n");
+            $tablesDumped++;
+        } catch (Throwable $e) {
+            $tableErrors[] = ['table' => (string)$table, 'error' => (string)$e->getMessage()];
+            $write("-- Skipped table " . $table . " due to error: " . str_replace(["\n", "\r"], ' ', (string)$e->getMessage()) . "\n\n");
+        }
     }
 
     $write("SET FOREIGN_KEY_CHECKS=1;\n");
     gzclose($h);
 
-    return ['tables' => $tablesDumped, 'rows' => $rowsDumped];
+    return ['tables' => $tablesDumped, 'rows' => $rowsDumped, 'table_errors' => $tableErrors];
 };
 
 $resolveUploadFile = static function (string $fieldName, array $allowedExt) use ($uploadDir, $fail): string {
@@ -733,16 +751,23 @@ $getStatusPayload = static function (PDO $pdo): array {
 
 $getDatabasePayload = static function (PDO $pdo) use ($getExistingTables): array {
     $allTables = $getAllBaseTables($pdo);
+    $tableErrors = [];
 
     $groupsOut = [];
     foreach (CATN8_DB_GROUPS as $id => $def) {
         $existing = $getExistingTables($pdo, (array)($def['tables'] ?? []));
         $rowsOut = [];
         foreach ($existing as $table) {
-            $row = Database::queryOne('SELECT COUNT(*) AS c FROM `' . str_replace('`', '``', $table) . '`');
+            $rowCount = 0;
+            try {
+                $row = Database::queryOne('SELECT COUNT(*) AS c FROM `' . str_replace('`', '``', $table) . '`');
+                $rowCount = (int)($row['c'] ?? 0);
+            } catch (Throwable $e) {
+                $tableErrors[] = ['table' => $table, 'error' => (string)$e->getMessage()];
+            }
             $rowsOut[] = [
                 'table' => $table,
-                'row_count' => (int)($row['c'] ?? 0),
+                'row_count' => $rowCount,
             ];
         }
 
@@ -772,6 +797,7 @@ $getDatabasePayload = static function (PDO $pdo) use ($getExistingTables): array
         'active_tables' => count($allTables),
         'backup_tables' => $backupTableCount,
         'groups' => $groupsOut,
+        'table_errors' => $tableErrors,
         'db_group_options' => array_map(static function (array $g): array {
             return ['id' => (string)$g['id'], 'label' => (string)$g['label']];
         }, $groupsOut),

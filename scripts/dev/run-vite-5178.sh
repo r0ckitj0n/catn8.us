@@ -32,4 +32,4 @@ echo "[run-vite-5178] Running npm run typecheck..."
 npm run typecheck
 
 echo "[run-vite-5178] Starting Vite on ${CATN8_VITE_ORIGIN} (host=${HOST_PART})"
-exec npx vite --host "$HOST_PART" --port 5178 --strictPort --clearScreen false --debug
+exec npx vite --host "$HOST_PART" --port 5178 --strictPort --clearScreen false --debug --force

@@ -97,7 +97,91 @@
       root.dataset.page = window.__CATN8_PAGE__ || 'home';
     })();
   </script>
-  <script type="module" src="/src/entries/app.tsx"></script>
+  <script>
+    (async function loadCatn8AppBundle() {
+      var head = document.head || document.getElementsByTagName('head')[0];
+      var loaded = false;
+
+      function appendCss(href) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        head.appendChild(link);
+      }
+
+      function appendModule(src) {
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.src = src;
+        head.appendChild(script);
+      }
+
+      function appendModuleInline(code) {
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.textContent = code;
+        head.appendChild(script);
+      }
+
+      function normalizeOrigin(value) {
+        var raw = String(value || '').trim().replace(/\/+$/, '');
+        if (!raw) return '';
+        if (!/^https?:\/\//i.test(raw)) {
+          raw = window.location.protocol + '//' + raw;
+        }
+        return raw.replace(/\/+$/, '');
+      }
+
+      try {
+        var hotResp = await fetch('/hot?ts=' + Date.now(), { cache: 'no-store' });
+        if (hotResp.ok) {
+          var hotOrigin = normalizeOrigin(await hotResp.text());
+          if (hotOrigin) {
+            appendModuleInline(
+              'import RefreshRuntime from "' + hotOrigin + '/@react-refresh";' +
+              'RefreshRuntime.injectIntoGlobalHook(window);' +
+              'window.$RefreshReg$ = () => {};' +
+              'window.$RefreshSig$ = () => (type) => type;' +
+              'window.__vite_plugin_react_preamble_installed__ = true;'
+            );
+            appendModule(hotOrigin + '/@vite/client');
+            appendModule(hotOrigin + '/src/entries/app.tsx');
+            loaded = true;
+          }
+        }
+      } catch (_hotErr) {
+        // no-op: fallback to dist manifest
+      }
+
+      if (loaded) {
+        return;
+      }
+
+      try {
+        var manifestResp = await fetch('/dist/.vite/manifest.json?ts=' + Date.now(), { cache: 'no-store' });
+        if (!manifestResp.ok) {
+          throw new Error('manifest not found');
+        }
+        var manifest = await manifestResp.json();
+        var entry = manifest && manifest['index.html'];
+        if (!entry || !entry.file) {
+          throw new Error('manifest entry missing');
+        }
+        var css = Array.isArray(entry.css) ? entry.css : [];
+        css.forEach(function (file) {
+          appendCss('/dist/' + String(file).replace(/^\/+/, ''));
+        });
+        appendModule('/dist/' + String(entry.file).replace(/^\/+/, ''));
+        loaded = true;
+      } catch (_distErr) {
+        // final fallback: direct source path for environments that proxy /src through Vite
+      }
+
+      if (!loaded) {
+        appendModule('/src/entries/app.tsx');
+      }
+    })();
+  </script>
 
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>

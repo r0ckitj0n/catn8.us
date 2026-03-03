@@ -246,8 +246,13 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
                       Full Screen
                     </button>
-                    <a className="btn btn-sm btn-outline-secondary" href="https://catn8.us">
-                      Home
+                    <a
+                      className="btn btn-sm catn8-close-viewer-btn"
+                      href="https://catn8.us/photo-albums.php"
+                      aria-label="Close album viewer"
+                      title="Close"
+                    >
+                      ×
                     </a>
                   </div>
                 </div>

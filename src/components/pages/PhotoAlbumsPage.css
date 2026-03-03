@@ -431,6 +431,36 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   justify-content: flex-end;
 }
 
+.catn8-close-viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(93, 77, 60, 0.45);
+  background: rgba(255, 252, 247, 0.95);
+  color: #3b2a1a;
+  font-size: 1.2rem;
+  line-height: 1;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.catn8-close-viewer-btn:hover,
+.catn8-close-viewer-btn:focus-visible {
+  background: #fff;
+  color: #2a1e14;
+  border-color: rgba(73, 56, 40, 0.6);
+  text-decoration: none;
+}
+
+.catn8-close-viewer-btn:active {
+  background: #f6ece2;
+  color: #2a1e14;
+}
+
 .catn8-zoom-label {
   min-width: 56px;
   text-align: center;

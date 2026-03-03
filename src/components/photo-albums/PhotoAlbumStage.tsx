@@ -1887,14 +1887,20 @@ export function PhotoAlbumStage({
     />
   ), []);
   const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
+  const canvasWidthPx = Math.max(1, Number(album.spec?.dimensions?.width_px || 1400));
+  const canvasHeightPx = Math.max(1, Number(album.spec?.dimensions?.height_px || 1050));
   // Saved placement coordinates are authored against the base canvas.
   // Keep baseline scale when honoring saved positions so normal view, edit, and fullscreen match.
   const effectiveZoom = respectSavedPositions ? 1 : (editable ? 1 : zoom);
   const scatterStyle: React.CSSProperties = {
     transform: `scale(${effectiveZoom})`,
+  };
+  const canvasStyle: React.CSSProperties = {
+    aspectRatio: `${canvasWidthPx} / ${canvasHeightPx}`,
     ...(spreadBackgroundImageUrl ? {
       backgroundImage: `linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0.1)), url(${spreadBackgroundImageUrl})`,
-      backgroundSize: 'cover',
+      // Coordinates are normalized to canvas percentages; stretch map to the same 0-100 grid.
+      backgroundSize: '100% 100%',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     } : {}),
@@ -1980,6 +1986,7 @@ export function PhotoAlbumStage({
         <div
           ref={canvasRef}
           className="catn8-scatter-canvas"
+          style={canvasStyle}
           onPointerUp={endDragging}
           onMouseLeave={() => {
             if (!dragging && !resizing) {

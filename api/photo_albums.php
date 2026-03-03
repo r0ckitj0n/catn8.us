@@ -1842,23 +1842,63 @@ if ($action === 'auto_layout_all') {
         catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
     }
     if (function_exists('set_time_limit')) {
-        @set_time_limit(240);
+        @set_time_limit(120);
     }
-    $rows = Database::queryAll(
-        'SELECT id, title, spec_json
-           FROM photo_albums
-          WHERE is_locked = 0
-          ORDER BY id ASC'
-    );
+    $startAfterId = max(0, (int)($body['start_after_id'] ?? 0));
+    $batchSize = (int)($body['batch_size'] ?? 8);
+    if ($batchSize < 1) {
+        $batchSize = 1;
+    } elseif ($batchSize > 20) {
+        $batchSize = 20;
+    }
+
     $updatedCount = 0;
     $failedCount = 0;
+    $processedCount = 0;
+    $nextStartAfterId = $startAfterId;
+    $maxSpecChars = 1000000;
+
+    try {
+        $rows = Database::queryAll(
+            'SELECT id, title, CHAR_LENGTH(spec_json) AS spec_chars
+               FROM photo_albums
+              WHERE is_locked = 0
+                AND id > ?
+              ORDER BY id ASC
+              LIMIT ' . (int)$batchSize,
+            [$startAfterId]
+        );
+    } catch (Throwable $e) {
+        error_log('[photo_albums:auto_layout_all] fetch_error=' . $e->getMessage());
+        catn8_json_response(['success' => false, 'error' => 'Auto layout failed while fetching albums'], 500);
+    }
+
     foreach ($rows as $row) {
         $albumId = (int)($row['id'] ?? 0);
         if ($albumId <= 0) {
             continue;
         }
+        $processedCount += 1;
+        $nextStartAfterId = max($nextStartAfterId, $albumId);
+
+        $specChars = (int)($row['spec_chars'] ?? 0);
+        if ($specChars > $maxSpecChars) {
+            $failedCount += 1;
+            error_log('[photo_albums:auto_layout_all] album_id=' . $albumId . ' skipped_large_spec_chars=' . $specChars);
+            continue;
+        }
+
         try {
-            $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+            $specRow = Database::queryOne(
+                'SELECT title, spec_json
+                   FROM photo_albums
+                  WHERE id = ?
+                  LIMIT 1',
+                [$albumId]
+            );
+            $title = (string)($specRow['title'] ?? $row['title'] ?? '');
+            $rawSpec = (string)($specRow['spec_json'] ?? '{}');
+            $spec = catn8_photo_albums_parse_spec($rawSpec, $title);
             $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
             foreach ($spreads as $spreadIndex => $spread) {
                 if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
@@ -1879,11 +1919,40 @@ if ($action === 'auto_layout_all') {
             $failedCount += 1;
             error_log('[photo_albums:auto_layout_all] album_id=' . $albumId . ' error=' . $e->getMessage());
         }
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(120);
+        }
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
     }
+
+    $hasMore = false;
+    if ($processedCount > 0) {
+        try {
+            $moreRow = Database::queryOne(
+                'SELECT id
+                   FROM photo_albums
+                  WHERE is_locked = 0
+                    AND id > ?
+                  LIMIT 1',
+                [$nextStartAfterId]
+            );
+            $hasMore = is_array($moreRow) && (int)($moreRow['id'] ?? 0) > 0;
+        } catch (Throwable $e) {
+            error_log('[photo_albums:auto_layout_all] has_more_check_error=' . $e->getMessage());
+            $hasMore = false;
+        }
+    }
+
     catn8_json_response([
         'success' => true,
         'updated_albums' => $updatedCount,
         'failed_albums' => $failedCount,
+        'processed_albums' => $processedCount,
+        'has_more' => $hasMore,
+        'next_start_after_id' => $nextStartAfterId,
     ]);
 }
 

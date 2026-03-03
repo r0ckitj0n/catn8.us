@@ -197,9 +197,26 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
     setBusy(true);
     try {
-      const res = await ApiClient.post<PhotoAlbumBulkAutoLayoutResponse>('/api/photo_albums.php?action=auto_layout_all', {});
-      const updated = Number(res?.updated_albums || 0);
-      const failed = Number(res?.failed_albums || 0);
+      let startAfterId = 0;
+      let updated = 0;
+      let failed = 0;
+      const maxRequests = 250;
+
+      for (let i = 0; i < maxRequests; i += 1) {
+        const res = await ApiClient.post<PhotoAlbumBulkAutoLayoutResponse>('/api/photo_albums.php?action=auto_layout_all', {
+          start_after_id: startAfterId,
+          batch_size: 8,
+        });
+        updated += Number(res?.updated_albums || 0);
+        failed += Number(res?.failed_albums || 0);
+        const hasMore = Boolean(res?.has_more);
+        const nextStartAfterId = Number(res?.next_start_after_id || 0);
+        if (!hasMore || nextStartAfterId <= startAfterId) {
+          break;
+        }
+        startAfterId = nextStartAfterId;
+      }
+
       if (failed > 0) {
         toast('warning', `Auto layout updated ${updated} album${updated === 1 ? '' : 's'}; ${failed} failed. Check server logs for details.`);
       } else {

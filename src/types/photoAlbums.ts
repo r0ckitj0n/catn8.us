@@ -165,6 +165,9 @@ export interface PhotoAlbumBulkAutoLayoutResponse {
   success: boolean;
   updated_albums?: number;
   failed_albums?: number;
+  processed_albums?: number;
+  has_more?: boolean;
+  next_start_after_id?: number;
 }
 
 export interface PhotoAlbumAiBackgroundRequest {

@@ -666,13 +666,15 @@ def load_messages(
             LEFT JOIN handle h ON h.ROWID = m.handle_id
             LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
             LEFT JOIN attachment a ON a.ROWID = maj.attachment_id
-            WHERE LOWER(COALESCE(h.id,'')) IN ({ph})
-               OR EXISTS (
+            WHERE (
+                   LOWER(COALESCE(h.id,'')) IN ({ph})
+               OR  EXISTS (
                    SELECT 1 FROM chat_message_join cmj
                    INNER JOIN chat_handle_join chj ON chj.chat_id = cmj.chat_id
                    INNER JOIN handle hh ON hh.ROWID = chj.handle_id
                    WHERE cmj.message_id = m.ROWID AND LOWER(COALESCE(hh.id,'')) IN ({ph})
                )
+            )
               {message_id_filter}
             ORDER BY m.date ASC, m.ROWID ASC
             """

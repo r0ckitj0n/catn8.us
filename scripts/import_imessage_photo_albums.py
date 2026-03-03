@@ -117,9 +117,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--extra-window", action="append", default=[], help="Additional date window in YYYY-MM-DD:YYYY-MM-DD format (repeatable)")
     p.add_argument("--staging-dir", default="./photo_albums")
     p.add_argument("--album-title-prefix", default="Trinity Memories")
-    p.add_argument("--min-pages", type=int, default=10)
-    p.add_argument("--max-pages", type=int, default=50)
-    p.add_argument("--target-pages", type=int, default=25)
+    p.add_argument("--min-pages", type=int, default=1)
+    p.add_argument("--max-pages", type=int, default=0)
+    p.add_argument("--target-pages", type=int, default=0)
     p.add_argument("--max-export-items", type=int, default=40)
     p.add_argument("--import-source", default="")
     p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor", "lyra", "all"], default="auto")
@@ -303,7 +303,16 @@ def album_title_for_child_window(child_name: str, birth_date: dt.date, page_date
     if idx < 36:
         return f"{child_name}'s {ordinal(idx + 1)} Month"
     year_no = 3 + ((idx - 36) // 12)
-    return f"{child_name}'s {ordinal(year_no)} Year"
+    month = int(page_date.month)
+    if month in (12, 1, 2):
+        season = "Winter"
+    elif month in (3, 4, 5):
+        season = "Spring"
+    elif month in (6, 7, 8):
+        season = "Summer"
+    else:
+        season = "Fall"
+    return f"{child_name}'s {ordinal(year_no)} Year - {season} {int(page_date.year)}"
 
 
 def month_window_index_for_date(target: dt.date, birth_date: dt.date, prebirth_days: int = 7) -> Optional[int]:
@@ -327,22 +336,40 @@ def build_birthday_month_batches(
     target_pages: int,
     prebirth_days: int = 7,
 ) -> List[List[AlbumPage]]:
-    per_month: Dict[int, List[AlbumPage]] = {}
+    per_group: Dict[str, List[AlbumPage]] = {}
     for page in sorted(pages, key=lambda p: p.sent_at):
         idx = month_window_index_for_date(page.sent_at.date(), birth_date, prebirth_days=prebirth_days)
         if idx is None:
             continue
-        per_month.setdefault(idx, []).append(page)
+        if idx < 36:
+            group_key = f"month:{idx:03d}"
+        else:
+            year_no = 3 + ((idx - 36) // 12)
+            month = int(page.sent_at.month)
+            if month in (12, 1, 2):
+                season = "winter"
+                season_order = 0
+            elif month in (3, 4, 5):
+                season = "spring"
+                season_order = 1
+            elif month in (6, 7, 8):
+                season = "summer"
+                season_order = 2
+            else:
+                season = "fall"
+                season_order = 3
+            group_key = f"season:{year_no:03d}:{int(page.sent_at.year):04d}:{season_order:02d}:{season}"
+        per_group.setdefault(group_key, []).append(page)
 
     batches: List[List[AlbumPage]] = []
-    for month_idx in sorted(per_month.keys()):
-        month_pages = per_month[month_idx]
-        if not month_pages:
+    for group_key in sorted(per_group.keys()):
+        grouped_pages = per_group[group_key]
+        if not grouped_pages:
             continue
-        sizes = chunk_sizes(len(month_pages), min_pages, max_pages, target_pages)
+        sizes = chunk_sizes(len(grouped_pages), min_pages, max_pages, target_pages)
         offset = 0
         for size in sizes:
-            batches.append(month_pages[offset: offset + size])
+            batches.append(grouped_pages[offset: offset + size])
             offset += size
     return batches
 
@@ -2185,6 +2212,11 @@ def build_pages_from_catalog(cur, source_key: str, staging_dir: Path, handle_nam
 def chunk_sizes(total: int, min_pages: int, max_pages: int, target_pages: int) -> List[int]:
     if total <= 0:
         return []
+    if max_pages <= 0 or target_pages <= 0:
+        return [total]
+    min_pages = max(1, int(min_pages))
+    max_pages = max(min_pages, int(max_pages))
+    target_pages = max(min_pages, min(int(target_pages), max_pages))
     if total <= max_pages:
         return [total]
     sizes: List[int] = []

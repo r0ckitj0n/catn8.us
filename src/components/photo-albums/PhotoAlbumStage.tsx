@@ -1887,8 +1887,9 @@ export function PhotoAlbumStage({
     />
   ), []);
   const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
+  const effectiveZoom = editable ? 1 : zoom;
   const scatterStyle: React.CSSProperties = {
-    transform: `scale(${zoom})`,
+    transform: `scale(${effectiveZoom})`,
     ...(spreadBackgroundImageUrl ? {
       backgroundImage: `linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0.1)), url(${spreadBackgroundImageUrl})`,
       backgroundSize: 'cover',

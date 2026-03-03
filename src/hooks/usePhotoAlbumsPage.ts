@@ -114,6 +114,7 @@ export function usePhotoAlbumsPage(
   const [showCreateModal, setShowCreateModal] = React.useState(false);
   const [showAdminModal, setShowAdminModal] = React.useState(false);
   const [showAlbumViewer, setShowAlbumViewer] = React.useState(false);
+  const [viewerOverrideAlbum, setViewerOverrideAlbum] = React.useState<PhotoAlbum | null>(null);
   const [createForm, setCreateForm] = React.useState<PhotoAlbumAiCreateRequest>(DEFAULT_CREATE_FORM);
   const [adminDraft, setAdminDraft] = React.useState<PhotoAlbum | null>(null);
   const [favoritePageKeys, setFavoritePageKeys] = React.useState<Set<string>>(new Set());
@@ -288,6 +289,7 @@ export function usePhotoAlbumsPage(
 
   const openAlbum = React.useCallback((albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
     pendingPageIndexRef.current = null;
+    setViewerOverrideAlbum(null);
     setSelectedId(albumId);
     const requestedPage = Number(initialPageIndex);
     setPageIndex(Number.isFinite(requestedPage) && requestedPage >= 0 ? requestedPage : 0);
@@ -304,6 +306,7 @@ export function usePhotoAlbumsPage(
 
   const closeAlbumViewer = React.useCallback(() => {
     setShowAlbumViewer(false);
+    setViewerOverrideAlbum(null);
   }, []);
 
   const closeAdminModal = React.useCallback(() => {
@@ -315,28 +318,22 @@ export function usePhotoAlbumsPage(
     }
     setShowAdminModal(false);
     setAdminDraft(null);
+    setViewerOverrideAlbum(null);
   }, [hasUnsavedAdminChanges]);
 
   const openSelectedInViewer = React.useCallback(() => {
     if (!selectedAlbum && !adminDraft) {
       return;
     }
-    if (hasUnsavedAdminChanges) {
-      const discard = window.confirm('You have unsaved album changes. Save Album first to keep them. Continue and discard changes?');
-      if (!discard) {
-        return;
-      }
-    }
     if (adminDraft?.id) {
-      setAlbums((prev) => {
-        const next = prev.map((album) => (album.id === adminDraft.id ? normalizeAlbumSummary(cloneAlbum(adminDraft)) : album));
-        return sortAlbumsOldestToNewest(next);
-      });
       setSelectedId(adminDraft.id);
+      setViewerOverrideAlbum(normalizeAlbumSummary(cloneAlbum(adminDraft)));
+    } else {
+      setViewerOverrideAlbum(null);
     }
     setShowAdminModal(false);
     setShowAlbumViewer(true);
-  }, [adminDraft, selectedAlbum, hasUnsavedAdminChanges]);
+  }, [adminDraft, selectedAlbum]);
 
   const {
     createWithAi,
@@ -530,6 +527,7 @@ export function usePhotoAlbumsPage(
     zoom,
     adjustZoom,
     showAlbumViewer,
+    viewerAlbum: viewerOverrideAlbum || selectedAlbum,
     showAdminModal,
     hasUnsavedAdminChanges,
     adminDraft,

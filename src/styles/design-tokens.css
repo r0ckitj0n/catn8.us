@@ -61,7 +61,7 @@
   --catn8-z-base: 0;
   --catn8-z-modal-backdrop: 5000;
   --catn8-z-modal: 5100;
-  --catn8-z-toast: 5200;
+  --catn8-z-toast: 6300;
 
   --catn8-global-button-radius: var(--catn8-radius-sm);
   --catn8-global-panel-radius: 16px;

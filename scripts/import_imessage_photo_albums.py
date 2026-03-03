@@ -120,7 +120,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-pages", type=int, default=1)
     p.add_argument("--max-pages", type=int, default=0)
     p.add_argument("--target-pages", type=int, default=0)
-    p.add_argument("--max-export-items", type=int, default=40)
+    p.add_argument("--max-export-items", type=int, default=0, help="Maximum pages to export in photos_timeline mode (0 = unlimited)")
+    p.add_argument("--max-media-per-day", type=int, default=0, help="Maximum media items per day/spread during aggregation (0 = unlimited)")
     p.add_argument("--import-source", default="")
     p.add_argument("--focus-person", choices=["auto", "any", "violet", "eleanor", "lyra", "all"], default="auto")
     p.add_argument("--run-all-children", action="store_true")
@@ -929,7 +930,7 @@ def build_grouped_message_caption(msg: GroupedMessage) -> str:
     return f"{speaker} ({stamp}): {text}"
 
 
-def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 24) -> List[AlbumPage]:
+def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: int = 0) -> List[AlbumPage]:
     buckets: Dict[dt.date, Dict[str, Any]] = {}
     for page in pages:
         day = page.sent_at.date()
@@ -969,7 +970,8 @@ def aggregate_album_pages_by_day(pages: Sequence[AlbumPage], max_media_per_day: 
             if len(unique_captions) >= 12:
                 break
         caption = "\n".join(unique_captions).strip() or "(no caption)"
-        media_items = list(bucket["media_items"])[:max_media_per_day]
+        media_items_all = list(bucket["media_items"])
+        media_items = media_items_all if int(max_media_per_day) <= 0 else media_items_all[:max_media_per_day]
         if not media_items and caption == "(no caption)":
             continue
         out.append(AlbumPage(sent_at=bucket["sent_at"], caption=caption, media_items=media_items))
@@ -2812,7 +2814,7 @@ def pages_from_attachment_match(
             pct = (float(processed) / float(max(1, total_messages))) * 100.0
             print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
     print(f"[attachment_match] complete {processed}/{total_messages} (100.0%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
-    return aggregate_album_pages_by_day(pages)
+    return aggregate_album_pages_by_day(pages, max_media_per_day=max(0, int(args.max_media_per_day)))
 
 
 def pages_from_photos_timeline(
@@ -2892,7 +2894,7 @@ def pages_from_photos_timeline(
     emit_progress("running", force=True)
     try:
         for msg in remaining_messages:
-            if len(pages) >= max_export_items:
+            if int(max_export_items) > 0 and len(pages) >= int(max_export_items):
                 break
             if not msg.attachments:
                 last_processed_message_id = max(last_processed_message_id, int(msg.message_id))
@@ -3250,7 +3252,7 @@ def main() -> None:
                 start_date,
                 end_date,
                 staging_dir,
-                max_export_items=max(1, min(args.max_export_items, args.max_pages)),
+                max_export_items=max(0, int(args.max_export_items)),
                 match_window_hours=max(1, int(args.match_window_hours)),
                 timeline_state=timeline_state,
                 state_path=state_path,

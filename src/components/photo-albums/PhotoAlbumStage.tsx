@@ -644,6 +644,22 @@ function constrainLayout(item: LayoutItem, constraints: LayoutConstraints): Layo
   return itemWithoutReservedCollision(bounded, constraints);
 }
 
+function constrainEditableLayout(item: LayoutItem, constraints: LayoutConstraints): LayoutItem {
+  const itemMinX = Number.isFinite(item.minX) ? Number(item.minX) : constraints.minX;
+  const itemMaxX = Number.isFinite(item.maxX) ? Number(item.maxX) : constraints.maxX;
+  const itemMinY = Number.isFinite(item.minY) ? Number(item.minY) : constraints.minY;
+  const itemMaxY = Number.isFinite(item.maxY) ? Number(item.maxY) : constraints.maxY;
+  const laneWidth = Math.max(1, itemMaxX - itemMinX);
+  const laneHeight = Math.max(1, itemMaxY - itemMinY);
+  return {
+    ...item,
+    w: Math.min(item.w, laneWidth),
+    h: Math.min(item.h, laneHeight),
+    x: clamp(item.x, itemMinX, itemMaxX),
+    y: clamp(item.y, itemMinY, itemMaxY),
+  };
+}
+
 function isCoreItem(item: LayoutItem): boolean {
   return item.type === 'media' || item.type === 'note';
 }
@@ -1347,9 +1363,11 @@ export function PhotoAlbumStage({
       });
 
       const baseLayout = [...mediaLayout, ...noteLayout, ...decorLayout];
-      const resolved = (editable && !isLayoutLocked)
-        ? baseLayout.map((item) => constrainLayout({ ...item }, layoutConstraints))
-        : resolveLayout(baseLayout, `${album.id}-${spreadIndex}`, layoutConstraints);
+      const resolved = respectSavedPositions
+        ? baseLayout.map((item) => constrainEditableLayout({ ...item }, layoutConstraints))
+        : (editable && !isLayoutLocked)
+          ? baseLayout.map((item) => constrainEditableLayout({ ...item }, layoutConstraints))
+          : resolveLayout(baseLayout, `${album.id}-${spreadIndex}`, layoutConstraints);
       const mediaByIndex = new Map<number, LayoutItem>();
       const noteByIndex = new Map<number, LayoutItem>();
       const decorByIndex = new Map<number, LayoutItem>();
@@ -1525,9 +1543,9 @@ export function PhotoAlbumStage({
         : layoutByType.decorByIndex.get(dragging.index);
     const widthPct = currentLayout?.w ?? 8;
     const heightPct = currentLayout?.h ?? 8;
-    const x = clamp(((clientX - canvas.left) / canvas.width) * 100, CANVAS_MIN_X, CANVAS_MAX_X - widthPct);
-    const y = clamp(((clientY - canvas.top) / canvas.height) * 100, CANVAS_MIN_Y, CANVAS_MAX_Y - heightPct);
-    const constrained = constrainLayout({
+    const x = ((clientX - canvas.left) / canvas.width) * 100;
+    const y = ((clientY - canvas.top) / canvas.height) * 100;
+    const baseItem = {
       id: `${dragging.type}-${dragging.index}`,
       type: dragging.type,
       index: dragging.index,
@@ -1537,7 +1555,10 @@ export function PhotoAlbumStage({
       w: widthPct,
       h: heightPct,
       rotation: 0,
-    }, layoutConstraints);
+    } as LayoutItem;
+    const constrained = (editable && !isLayoutLocked)
+      ? constrainEditableLayout(baseItem, layoutConstraints)
+      : constrainLayout(baseItem, layoutConstraints);
     if (Math.abs(constrained.x - (currentLayout?.x ?? constrained.x)) < 0.18 && Math.abs(constrained.y - (currentLayout?.y ?? constrained.y)) < 0.18) {
       return;
     }
@@ -1612,7 +1633,7 @@ export function PhotoAlbumStage({
     nextW = clamp(nextW, limits.minW, limits.maxW);
     nextH = clamp(nextH, limits.minH, limits.maxH);
 
-    const constrained = constrainLayout({
+    const baseItem = {
       id: `${resizing.type}-${resizing.index}`,
       type: resizing.type,
       index: resizing.index,
@@ -1622,7 +1643,10 @@ export function PhotoAlbumStage({
       w: nextW,
       h: nextH,
       rotation: 0,
-    }, layoutConstraints);
+    } as LayoutItem;
+    const constrained = (editable && !isLayoutLocked)
+      ? constrainEditableLayout(baseItem, layoutConstraints)
+      : constrainLayout(baseItem, layoutConstraints);
     const activeLayout = resizing.type === 'media'
       ? layoutByType.mediaByIndex.get(resizing.index)
       : resizing.type === 'note'

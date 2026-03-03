@@ -763,20 +763,44 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 hydrateTextItems(targetSpread);
                 if (!Array.isArray(targetSpread.text_items)) {
-                  return next;
+                  targetSpread.text_items = [];
                 }
                 let targetIndex = targetSpread.text_items.findIndex((item) => String(item?.id || '') === String(noteId || ''));
-                if (targetIndex < 0) {
-                  targetSpread.text_items.push({ id: noteId || `note-${Date.now()}-${index}`, text: 'Jon: New note' });
-                  targetIndex = targetSpread.text_items.length - 1;
+                if (targetIndex >= 0) {
+                  targetSpread.text_items[targetIndex].x = patch.x;
+                  targetSpread.text_items[targetIndex].y = patch.y;
+                  if (typeof patch.w === 'number') {
+                    targetSpread.text_items[targetIndex].w = patch.w;
+                  }
+                  if (typeof patch.h === 'number') {
+                    (targetSpread.text_items[targetIndex] as any).h = patch.h;
+                  }
+                  return next;
                 }
-                targetSpread.text_items[targetIndex].x = patch.x;
-                targetSpread.text_items[targetIndex].y = patch.y;
-                if (typeof patch.w === 'number') {
-                  targetSpread.text_items[targetIndex].w = patch.w;
+
+                const stableNoteId = String(noteId || `spread-note-${index}`).trim();
+                if (!targetSpread.note_layout || typeof targetSpread.note_layout !== 'object') {
+                  targetSpread.note_layout = {};
                 }
-                if (typeof patch.h === 'number') {
-                  (targetSpread.text_items[targetIndex] as any).h = patch.h;
+                const existing = targetSpread.note_layout[stableNoteId] || {};
+                targetSpread.note_layout[stableNoteId] = {
+                  ...existing,
+                  x: patch.x,
+                  y: patch.y,
+                  ...(typeof patch.w === 'number' ? { w: patch.w } : {}),
+                  ...(typeof patch.h === 'number' ? { h: patch.h } : {}),
+                  ...(typeof (existing as any).rotation === 'number' ? { rotation: (existing as any).rotation } : {}),
+                };
+
+                if (stableNoteId.startsWith('text-') || stableNoteId.startsWith('note-')) {
+                  targetSpread.text_items.push({
+                    id: stableNoteId,
+                    text: 'Jon: New note',
+                    x: patch.x,
+                    y: patch.y,
+                    ...(typeof patch.w === 'number' ? { w: patch.w } : {}),
+                    ...(typeof patch.h === 'number' ? { h: patch.h } : {}),
+                  });
                 }
                 return next;
               })}

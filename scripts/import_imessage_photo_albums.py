@@ -110,7 +110,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eleanor-face-id", type=int, default=None)
     p.add_argument("--lyra-face-id", type=int, default=None)
     p.add_argument("--violet-birth-date", default="2021-11-29")
-    p.add_argument("--eleanor-birth-date", default="2025-12-31")
+    p.add_argument("--eleanor-birth-date", default="2024-12-31")
     p.add_argument("--lyra-birth-date", default="2025-02-21")
     p.add_argument("--start-date", default="")
     p.add_argument("--end-date", default="")
@@ -2737,6 +2737,7 @@ def pages_from_attachment_match(
     eleanor_birth: Optional[dt.date] = None,
     face_name_filter: Optional[set[str]] = None,
     progress_every_messages: int = 0,
+    max_media_per_day: int = 0,
 ) -> List[AlbumPage]:
     pages: List[AlbumPage] = []
     staged_by_source_hash: Dict[str, str] = {}
@@ -2814,7 +2815,7 @@ def pages_from_attachment_match(
             pct = (float(processed) / float(max(1, total_messages))) * 100.0
             print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
     print(f"[attachment_match] complete {processed}/{total_messages} (100.0%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
-    return aggregate_album_pages_by_day(pages, max_media_per_day=max(0, int(args.max_media_per_day)))
+    return aggregate_album_pages_by_day(pages, max_media_per_day=max(0, int(max_media_per_day)))
 
 
 def pages_from_photos_timeline(
@@ -3304,6 +3305,7 @@ def main() -> None:
                 eleanor_birth=eleanor_birth,
                 face_name_filter=focus_face_names,
                 progress_every_messages=max(0, int(args.progress_every_messages)),
+                max_media_per_day=max(0, int(args.max_media_per_day)),
             )
             if max_message_id > 0 and not bool(args.no_attachment_checkpoint):
                 next_checkpoint_id = max(min_message_id, max_message_id)

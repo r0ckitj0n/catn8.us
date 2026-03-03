@@ -410,26 +410,6 @@ function findAdjacentItemTarget(album: PhotoAlbum, current: ViewerTarget, direct
   return null;
 }
 
-function findAdjacentSpreadTarget(album: PhotoAlbum, current: ViewerTarget, direction: -1 | 1, contactDisplayName?: string): ViewerTarget | null {
-  const spreads = Array.isArray(album.spec?.spreads) ? album.spec.spreads : [];
-  const itemListAt = (type: ViewerType, sidx: number): number => {
-    const media = spreadMedia(album, sidx);
-    const notes = spreadNotes(album, sidx, media, contactDisplayName);
-    return type === 'media' ? media.length : notes.length;
-  };
-  for (let sidx = current.spreadIndex + direction; sidx >= 0 && sidx < spreads.length; sidx += direction) {
-    const count = itemListAt(current.type, sidx);
-    if (count > 0) {
-      return {
-        type: current.type,
-        spreadIndex: sidx,
-        itemIndex: clamp(current.itemIndex, 0, Math.max(0, count - 1)),
-      };
-    }
-  }
-  return null;
-}
-
 type LayoutItem = {
   id: string;
   type: 'media' | 'note' | 'decor';
@@ -1461,14 +1441,10 @@ export function PhotoAlbumStage({
   }, [album, viewerTarget, contactDisplayName]);
 
   const prevTarget = viewerTarget
-    ? (viewerTarget.type === 'media'
-      ? findAdjacentSpreadTarget(album, viewerTarget, -1, contactDisplayName)
-      : findAdjacentItemTarget(album, viewerTarget, -1, contactDisplayName))
+    ? findAdjacentItemTarget(album, viewerTarget, -1, contactDisplayName)
     : null;
   const nextTarget = viewerTarget
-    ? (viewerTarget.type === 'media'
-      ? findAdjacentSpreadTarget(album, viewerTarget, 1, contactDisplayName)
-      : findAdjacentItemTarget(album, viewerTarget, 1, contactDisplayName))
+    ? findAdjacentItemTarget(album, viewerTarget, 1, contactDisplayName)
     : null;
   const canFavoriteCurrentPage = album.id > 0 && !album.is_virtual && typeof onTogglePageFavorite === 'function';
   const canFavoriteCurrentMedia = album.id > 0 && !album.is_virtual && typeof onToggleMediaFavorite === 'function' && viewerTarget?.type === 'media' && Boolean(activeMedia);

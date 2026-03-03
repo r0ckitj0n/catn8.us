@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 mkdir -p .local/state
 LOG_FILE=".local/state/import_run.log"
 
-DEFAULT_IMPORT_ARGS=(--mode attachment_match --min-pages 1 --max-pages 0 --target-pages 0)
+DEFAULT_IMPORT_ARGS=(--mode attachment_match --min-pages 1 --max-pages 0 --target-pages 0 --eleanor-birth-date 2024-12-31)
 IMPORT_ARGS=()
 FRESH_RUN=0
 HAS_UPLOAD_MODE_FLAG=0

@@ -134,6 +134,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--replace-existing-titles", action="store_true")
     p.add_argument("--lock-title", action="append", default=[], help="Album title to lock from importer overwrites (repeatable)")
     p.add_argument("--unlock-title", action="append", default=[], help="Album title to unlock for importer overwrites (repeatable)")
+    p.add_argument(
+        "--upload-mode",
+        choices=["auto", "mysql", "maintenance_api"],
+        default=os.environ.get("CATN8_IMPORT_UPLOAD_MODE", "auto").strip().lower() or "auto",
+        help="Upload target for live albums: auto (try MySQL then fallback), mysql only, or maintenance_api only",
+    )
     p.add_argument("--no-attachment-checkpoint", action="store_true", help="Disable resume checkpointing for attachment_match mode")
     return p.parse_args()
 
@@ -3312,19 +3318,11 @@ def main() -> None:
             child_birth_date=child_birth_date,
         )
         for album_idx, row in enumerate(rows, start=1):
-            try:
-                replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None
-                upload_album_rows(
-                    [row],
-                    created_by_user_id,
-                    replace_titles=replace_titles,
-                    lock_titles=list(args.lock_title or []),
-                    unlock_titles=list(args.unlock_title or []),
-                )
-                print(f"Upload complete for album {album_idx}/{len(rows)} via direct MySQL connection.")
-            except Exception as mysql_error:
-                print(f"Direct MySQL failed for album {album_idx}/{len(rows)} ({mysql_error}); trying maintenance API fallback...")
-                replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None
+            replace_titles = [str(row.get("title") or "").strip()] if bool(args.replace_existing_titles) else None
+            use_mysql = args.upload_mode in ("auto", "mysql")
+            use_maintenance_api = args.upload_mode in ("auto", "maintenance_api")
+
+            if args.upload_mode == "maintenance_api":
                 sql_text = build_sql_for_album_rows(
                     [row],
                     created_by_user_id,
@@ -3334,6 +3332,33 @@ def main() -> None:
                 )
                 upload_sql_via_maintenance_api(sql_text)
                 print(f"Upload complete for album {album_idx}/{len(rows)} via maintenance API SQL restore.")
+                continue
+
+            if use_mysql:
+                try:
+                    upload_album_rows(
+                        [row],
+                        created_by_user_id,
+                        replace_titles=replace_titles,
+                        lock_titles=list(args.lock_title or []),
+                        unlock_titles=list(args.unlock_title or []),
+                    )
+                    print(f"Upload complete for album {album_idx}/{len(rows)} via direct MySQL connection.")
+                    continue
+                except Exception as mysql_error:
+                    if not use_maintenance_api:
+                        raise
+                    print(f"Direct MySQL failed for album {album_idx}/{len(rows)} ({mysql_error}); trying maintenance API fallback...")
+
+            sql_text = build_sql_for_album_rows(
+                [row],
+                created_by_user_id,
+                replace_titles=replace_titles,
+                lock_titles=list(args.lock_title or []),
+                unlock_titles=list(args.unlock_title or []),
+            )
+            upload_sql_via_maintenance_api(sql_text)
+            print(f"Upload complete for album {album_idx}/{len(rows)} via maintenance API SQL restore.")
 
     if total_pages <= 0:
         print("No new pages were produced in this run. Existing checkpoints/state are up to date.")

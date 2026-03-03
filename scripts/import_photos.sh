@@ -11,10 +11,14 @@ LOG_FILE=".local/state/import_run.log"
 DEFAULT_IMPORT_ARGS=(--mode attachment_match)
 IMPORT_ARGS=()
 FRESH_RUN=0
+HAS_UPLOAD_MODE_FLAG=0
 for arg in "$@"; do
   if [[ "$arg" == "--fresh" ]]; then
     FRESH_RUN=1
     continue
+  fi
+  if [[ "$arg" == "--upload-mode" ]] || [[ "$arg" == --upload-mode=* ]]; then
+    HAS_UPLOAD_MODE_FLAG=1
   fi
   IMPORT_ARGS+=("$arg")
 done
@@ -32,6 +36,10 @@ if [ "${#IMPORT_ARGS[@]}" -eq 0 ]; then
   IMPORT_ARGS=("${DEFAULT_IMPORT_ARGS[@]}")
 elif [ "$HAS_MODE_FLAG" -eq 0 ]; then
   IMPORT_ARGS=("${DEFAULT_IMPORT_ARGS[@]}" "${IMPORT_ARGS[@]}")
+fi
+
+if [ "$HAS_UPLOAD_MODE_FLAG" -eq 0 ]; then
+  IMPORT_ARGS+=(--upload-mode maintenance_api)
 fi
 
 if [ "$FRESH_RUN" -eq 1 ]; then

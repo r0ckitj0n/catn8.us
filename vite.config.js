@@ -23,6 +23,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       input: {
         index: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'src/entries/app.tsx'),
       },
       output: {
         manualChunks(id) {

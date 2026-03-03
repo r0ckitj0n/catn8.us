@@ -235,6 +235,16 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     if (!isAdmin) {
       return;
     }
+    const isLocalHost = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+    );
+    if (!isLocalHost) {
+      const localCommand = 'cd ~/Documents/Websites/catn8.us && bash scripts/import_photos.sh';
+      window.prompt('Run this command on your local machine:', localCommand);
+      toast('info', 'Run the command in your local terminal to capture new messages.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await ApiClient.post<PhotoAlbumCaptureMessagesResponse>('/api/photo_albums.php?action=capture_new_messages', {});

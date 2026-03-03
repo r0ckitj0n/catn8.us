@@ -16,10 +16,6 @@ const SHOW_AUTO_LAYOUT_ALL_BUTTON = false;
 
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
-  const isLocalHost = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  );
   const selectedAlbum = state.selectedAlbum;
   const viewerAlbum = state.viewerAlbum || selectedAlbum;
   const selectedAlbumId = Number(selectedAlbum?.id || 0);
@@ -146,16 +142,14 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           Auto Layout All Unlocked
                         </button>
                       ) : null}
-                      {isLocalHost ? (
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary"
-                          disabled={state.busy}
-                          onClick={() => { void state.captureNewMessages(); }}
-                        >
-                          Capture New Messages
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        disabled={state.busy}
+                        onClick={() => { void state.captureNewMessages(); }}
+                      >
+                        Capture New Messages
+                      </button>
                       <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
                         Create Photo Album
                       </button>

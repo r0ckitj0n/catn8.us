@@ -163,7 +163,7 @@
           throw new Error('manifest not found');
         }
         var manifest = await manifestResp.json();
-        var entry = manifest && manifest['index.html'];
+        var entry = manifest && (manifest['src/entries/app.tsx'] || manifest['index.html']);
         if (!entry || !entry.file) {
           throw new Error('manifest entry missing');
         }

@@ -8,6 +8,7 @@ import {
   PhotoAlbumAiCoverFromFavoritesRequest,
   PhotoAlbumAiCreateRequest,
   PhotoAlbumAiSpreadRequest,
+  PhotoAlbumBulkAutoLayoutResponse,
   PhotoAlbumMutationResponse,
 } from '../types/photoAlbums';
 
@@ -196,9 +197,14 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     }
     setBusy(true);
     try {
-      const res = await ApiClient.post<{ success: boolean; updated_albums?: number }>('/api/photo_albums.php?action=auto_layout_all', {});
+      const res = await ApiClient.post<PhotoAlbumBulkAutoLayoutResponse>('/api/photo_albums.php?action=auto_layout_all', {});
       const updated = Number(res?.updated_albums || 0);
-      toast('success', `Auto layout complete for ${updated} album${updated === 1 ? '' : 's'}`);
+      const failed = Number(res?.failed_albums || 0);
+      if (failed > 0) {
+        toast('warning', `Auto layout updated ${updated} album${updated === 1 ? '' : 's'}; ${failed} failed. Check server logs for details.`);
+      } else {
+        toast('success', `Auto layout complete for ${updated} album${updated === 1 ? '' : 's'}`);
+      }
       await loadAlbums();
     } catch (error: any) {
       toast('error', error?.message || 'Failed to auto layout all albums');

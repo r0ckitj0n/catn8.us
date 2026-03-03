@@ -1841,6 +1841,9 @@ if ($action === 'auto_layout_all') {
     if ((int)($viewerPayload['is_admin'] ?? 0) !== 1) {
         catn8_json_response(['success' => false, 'error' => 'Admin access required'], 403);
     }
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(240);
+    }
     $rows = Database::queryAll(
         'SELECT id, title, spec_json
            FROM photo_albums
@@ -1848,28 +1851,40 @@ if ($action === 'auto_layout_all') {
           ORDER BY id ASC'
     );
     $updatedCount = 0;
+    $failedCount = 0;
     foreach ($rows as $row) {
         $albumId = (int)($row['id'] ?? 0);
         if ($albumId <= 0) {
             continue;
         }
-        $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
-        $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
-        foreach ($spreads as $spreadIndex => $spread) {
-            if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
+        try {
+            $spec = catn8_photo_albums_parse_spec((string)($row['spec_json'] ?? '{}'), (string)($row['title'] ?? ''));
+            $spreads = is_array($spec['spreads'] ?? null) ? $spec['spreads'] : [];
+            foreach ($spreads as $spreadIndex => $spread) {
+                if (!is_array($spread) || catn8_photo_albums_spread_is_locked($spread)) {
+                    continue;
+                }
+                $spreads[$spreadIndex] = catn8_photo_albums_auto_layout_spread($spread, $albumId, (int)$spreadIndex);
+            }
+            $spec['spreads'] = array_values($spreads);
+            $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
+            if (!is_string($specJson) || $specJson === '') {
+                $failedCount += 1;
+                error_log('[photo_albums:auto_layout_all] Failed to encode album spec for album_id=' . $albumId);
                 continue;
             }
-            $spreads[$spreadIndex] = catn8_photo_albums_auto_layout_spread($spread, $albumId, (int)$spreadIndex);
+            Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $albumId]);
+            $updatedCount += 1;
+        } catch (Throwable $e) {
+            $failedCount += 1;
+            error_log('[photo_albums:auto_layout_all] album_id=' . $albumId . ' error=' . $e->getMessage());
         }
-        $spec['spreads'] = array_values($spreads);
-        $specJson = json_encode($spec, JSON_UNESCAPED_SLASHES);
-        if (!is_string($specJson) || $specJson === '') {
-            continue;
-        }
-        Database::execute('UPDATE photo_albums SET spec_json = ? WHERE id = ?', [$specJson, $albumId]);
-        $updatedCount += 1;
     }
-    catn8_json_response(['success' => true, 'updated_albums' => $updatedCount]);
+    catn8_json_response([
+        'success' => true,
+        'updated_albums' => $updatedCount,
+        'failed_albums' => $failedCount,
+    ]);
 }
 
 if ($action === 'toggle_album_lock') {

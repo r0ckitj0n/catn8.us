@@ -161,6 +161,12 @@ export interface PhotoAlbumMutationResponse {
   album: PhotoAlbum;
 }
 
+export interface PhotoAlbumBulkAutoLayoutResponse {
+  success: boolean;
+  updated_albums?: number;
+  failed_albums?: number;
+}
+
 export interface PhotoAlbumAiBackgroundRequest {
   id: number;
   spread_index: number;

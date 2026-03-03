@@ -130,7 +130,12 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                   </a>
                   {state.isAdmin ? (
                     <div className="d-flex gap-2 flex-wrap">
-                      <button type="button" className="btn btn-outline-primary" onClick={() => { void state.autoLayoutAllUnlocked(); }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary"
+                        disabled={state.busy}
+                        onClick={() => { void state.autoLayoutAllUnlocked(); }}
+                      >
                         Auto Layout All Unlocked
                       </button>
                       <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
@@ -298,6 +303,21 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           ) : null}
         </div>
       </section>
+
+      {state.busy ? (
+        <div className="catn8-photo-albums-busy-overlay" role="status" aria-live="polite" aria-label="Photo albums action in progress">
+          <div className="catn8-photo-albums-busy-card">
+            <WebpImage
+              className="catn8-photo-albums-busy-logo"
+              src="/images/catn8_logo.webp"
+              finalFallbackSrc="/images/catn8_logo.svg"
+              alt=""
+              aria-hidden="true"
+            />
+            <div className="catn8-photo-albums-busy-text">Working on your album layout...</div>
+          </div>
+        </div>
+      ) : null}
 
       <PhotoAlbumCreateModal
         open={state.showCreateModal}

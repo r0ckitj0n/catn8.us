@@ -1225,7 +1225,9 @@ export function PhotoAlbumStage({
       let nextHeight = Math.max(80, Math.floor(canvasHeightPx));
 
       if (editable) {
-        const scale = Math.min(availableW / canvasWidthPx, availableH / canvasHeightPx);
+        // In edit mode, prioritize available width so the spread is easier to work on.
+        // Vertical overflow is handled by the preview panel scroll container.
+        const scale = availableW / canvasWidthPx;
         nextWidth = Math.max(80, Math.floor(canvasWidthPx * scale));
         nextHeight = Math.max(80, Math.floor(canvasHeightPx * scale));
       } else {

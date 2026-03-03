@@ -250,7 +250,7 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
 
 .catn8-photo-albums-page--viewer {
   padding: 0 !important;
-  min-height: 100dvh;
+  min-height: 0;
   margin: 0;
   --bs-gutter-x: 0;
   --bs-gutter-y: 0;
@@ -263,12 +263,12 @@ body.catn8-photo-albums-fullscreen .catn8-photo-albums-page .container {
   margin-left: 0 !important;
   margin-right: 0 !important;
   padding: 0 !important;
-  min-height: 100dvh;
+  min-height: 0;
 }
 
 .catn8-photo-albums-main--viewer {
   padding: 0;
-  min-height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;

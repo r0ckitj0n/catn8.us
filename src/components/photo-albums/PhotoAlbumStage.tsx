@@ -1887,7 +1887,9 @@ export function PhotoAlbumStage({
     />
   ), []);
   const spreadBackgroundImageUrl = String((spread as { background_image_url?: string } | null)?.background_image_url || '').trim();
-  const effectiveZoom = editable ? 1 : zoom;
+  // Saved placement coordinates are authored against the base canvas.
+  // Keep baseline scale when honoring saved positions so normal view, edit, and fullscreen match.
+  const effectiveZoom = respectSavedPositions ? 1 : (editable ? 1 : zoom);
   const scatterStyle: React.CSSProperties = {
     transform: `scale(${effectiveZoom})`,
     ...(spreadBackgroundImageUrl ? {

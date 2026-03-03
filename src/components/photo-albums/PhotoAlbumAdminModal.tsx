@@ -149,6 +149,19 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
 
   const hydrateTextItems = React.useCallback((targetSpread: NonNullable<PhotoAlbum['spec']['spreads'][number]>) => {
     if (Array.isArray(targetSpread.text_items) && targetSpread.text_items.length > 0) {
+      targetSpread.text_items = targetSpread.text_items.map((item, index) => {
+        if (!item || typeof item !== 'object') {
+          return {
+            id: `text-${index}`,
+            text: '',
+          };
+        }
+        const stableId = String(item.id || '').trim() || `text-${index}`;
+        return {
+          ...item,
+          id: stableId,
+        };
+      });
       return;
     }
     const lines = splitAlbumMessages(targetSpread.caption || '').map((line) => line.trim()).filter(Boolean);
@@ -765,7 +778,16 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 if (!Array.isArray(targetSpread.text_items)) {
                   targetSpread.text_items = [];
                 }
-                let targetIndex = targetSpread.text_items.findIndex((item) => String(item?.id || '') === String(noteId || ''));
+                const stableNoteId = String(noteId || `spread-note-${index}`).trim();
+                let targetIndex = targetSpread.text_items.findIndex((item) => String(item?.id || '') === stableNoteId);
+                if (targetIndex < 0 && index >= 0 && index < targetSpread.text_items.length) {
+                  // Notes are rendered text_items-first; when legacy items lack ids, recover by index.
+                  const candidate = targetSpread.text_items[index];
+                  if (candidate && typeof candidate === 'object') {
+                    candidate.id = String(candidate.id || '').trim() || stableNoteId;
+                    targetIndex = index;
+                  }
+                }
                 if (targetIndex >= 0) {
                   targetSpread.text_items[targetIndex].x = patch.x;
                   targetSpread.text_items[targetIndex].y = patch.y;
@@ -778,7 +800,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   return next;
                 }
 
-                const stableNoteId = String(noteId || `spread-note-${index}`).trim();
                 if (!targetSpread.note_layout || typeof targetSpread.note_layout !== 'object') {
                   targetSpread.note_layout = {};
                 }
@@ -791,17 +812,6 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   ...(typeof patch.h === 'number' ? { h: patch.h } : {}),
                   ...(typeof (existing as any).rotation === 'number' ? { rotation: (existing as any).rotation } : {}),
                 };
-
-                if (stableNoteId.startsWith('text-') || stableNoteId.startsWith('note-')) {
-                  targetSpread.text_items.push({
-                    id: stableNoteId,
-                    text: 'Jon: New note',
-                    x: patch.x,
-                    y: patch.y,
-                    ...(typeof patch.w === 'number' ? { w: patch.w } : {}),
-                    ...(typeof patch.h === 'number' ? { h: patch.h } : {}),
-                  });
-                }
                 return next;
               })}
               onMoveDecor={(index, patch) => onAlbumChange((prev) => {

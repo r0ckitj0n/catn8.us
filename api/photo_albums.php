@@ -1441,13 +1441,56 @@ function catn8_photo_albums_pid_running(int $pid): bool
     return is_string($out) && trim($out) !== '';
 }
 
+function catn8_photo_albums_tail_file(string $path, int $maxBytes = 3000): string
+{
+    if ($path === '' || !is_file($path)) {
+        return '';
+    }
+    $size = @filesize($path);
+    if (!is_int($size) || $size <= 0) {
+        return '';
+    }
+    $readLen = max(1, min($maxBytes, $size));
+    $fh = @fopen($path, 'rb');
+    if (!is_resource($fh)) {
+        return '';
+    }
+    if ($size > $readLen) {
+        @fseek($fh, -$readLen, SEEK_END);
+    }
+    $data = @fread($fh, $readLen);
+    @fclose($fh);
+    if (!is_string($data)) {
+        return '';
+    }
+    return trim($data);
+}
+
 function catn8_photo_albums_start_capture_messages_import(): array
 {
     $repoRoot = dirname(__DIR__);
-    $scriptPath = $repoRoot . '/scripts/import_photos.sh';
-    if (!is_file($scriptPath)) {
-        throw new RuntimeException('Import script not found');
+    $cwd = (string)(getcwd() ?: '');
+    $scriptCandidates = [
+        $repoRoot . '/scripts/import_photos.sh',
+        __DIR__ . '/../scripts/import_photos.sh',
+        ($cwd !== '' ? $cwd . '/scripts/import_photos.sh' : ''),
+    ];
+    $scriptPath = '';
+    foreach ($scriptCandidates as $candidate) {
+        $safeCandidate = trim((string)$candidate);
+        if ($safeCandidate === '') {
+            continue;
+        }
+        if (is_file($safeCandidate)) {
+            $scriptPath = $safeCandidate;
+            break;
+        }
     }
+    if ($scriptPath === '') {
+        $checked = array_values(array_filter(array_map(static fn ($p) => trim((string)$p), $scriptCandidates), static fn ($p) => $p !== ''));
+        throw new RuntimeException('Import script not found. Checked: ' . implode(', ', $checked));
+    }
+    $repoRoot = dirname($scriptPath, 2);
     if (!is_executable($scriptPath)) {
         @chmod($scriptPath, 0755);
     }
@@ -1497,6 +1540,14 @@ function catn8_photo_albums_start_capture_messages_import(): array
         'log_file' => '.local/state/import_photos_web.log',
     ];
     @file_put_contents($pidPath, json_encode($payload, JSON_UNESCAPED_SLASHES));
+
+    usleep(350000);
+    if (!catn8_photo_albums_pid_running($pid)) {
+        @unlink($pidPath);
+        $tail = catn8_photo_albums_tail_file($logPath);
+        $suffix = $tail !== '' ? (' | log_tail=' . str_replace(["\r", "\n"], ' ', $tail)) : '';
+        throw new RuntimeException('Import process exited immediately' . $suffix);
+    }
 
     return [
         'started' => true,
@@ -1582,7 +1633,7 @@ if ($action === 'capture_new_messages') {
         $run = catn8_photo_albums_start_capture_messages_import();
     } catch (Throwable $e) {
         error_log('[photo_albums:capture_new_messages] start_error=' . $e->getMessage());
-        catn8_json_response(['success' => false, 'error' => 'Failed to start import process'], 500);
+        catn8_json_response(['success' => false, 'error' => 'Failed to start import process: ' . $e->getMessage()], 500);
     }
     if (!empty($run['already_running'])) {
         catn8_json_response([

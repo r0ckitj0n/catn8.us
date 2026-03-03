@@ -19,12 +19,14 @@ for arg in "$@"; do
   IMPORT_ARGS+=("$arg")
 done
 HAS_MODE_FLAG=0
-for arg in "${IMPORT_ARGS[@]}"; do
-  if [[ "$arg" == "--mode" ]] || [[ "$arg" == --mode=* ]]; then
-    HAS_MODE_FLAG=1
-    break
-  fi
-done
+if [ "${#IMPORT_ARGS[@]}" -gt 0 ]; then
+  for arg in "${IMPORT_ARGS[@]}"; do
+    if [[ "$arg" == "--mode" ]] || [[ "$arg" == --mode=* ]]; then
+      HAS_MODE_FLAG=1
+      break
+    fi
+  done
+fi
 
 if [ "${#IMPORT_ARGS[@]}" -eq 0 ]; then
   IMPORT_ARGS=("${DEFAULT_IMPORT_ARGS[@]}")

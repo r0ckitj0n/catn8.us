@@ -68,8 +68,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     }
   }, [state]);
 
-  const openAdminFullscreenPreview = React.useCallback(async () => {
-    state.openSelectedInViewer();
+  const enterFullscreen = React.useCallback(async () => {
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
@@ -77,7 +76,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     } catch {
       // fullscreen can be blocked by browser context
     }
-  }, [state]);
+  }, []);
 
   return (
     <PageLayout page="photo_albums" title="Photo Albums" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -225,7 +224,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         {viewerAlbumLocked ? 'Unlock Album' : 'Lock Album'}
                       </button>
                     ) : null}
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void openAdminFullscreenPreview(); }}>
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
                       Full Screen
                     </button>
                     <a className="btn btn-sm btn-outline-secondary" href="https://catn8.us">
@@ -299,7 +298,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
             void state.toggleTextFavorite(selectedAlbumId, spreadIndex, textItemId);
           }
         }}
-        onFullscreenPreview={() => { void openAdminFullscreenPreview(); }}
+        onFullscreenPreview={() => { void enterFullscreen(); }}
         onClose={state.closeAdminModal}
         onSave={state.saveAdminEdits}
         onAutoLayout={state.autoLayoutAlbum}

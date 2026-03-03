@@ -755,8 +755,9 @@ def load_messages_for_windows(
     all_rows: List[MessageRow] = []
     seen: set[Tuple[int, str, str, str]] = set()
     for idx, (start_date, end_date) in enumerate(windows):
-        # For multi-window runs, message_id checkpointing can hide older windows.
-        window_min_message_id = int(min_message_id) if (idx == 0 and len(windows) == 1) else 0
+        # Resume mode should never fall back to scanning from zero.
+        # Apply checkpoint filter to every window unless caller explicitly passes 0.
+        window_min_message_id = int(min_message_id)
         rows = load_messages(
             messages_db,
             contact,
@@ -3230,6 +3231,10 @@ def main() -> None:
             min_message_id = 0
             if not bool(args.no_attachment_checkpoint) and not bool(args.rematch_all):
                 min_message_id = int(checkpoint.get("last_message_id") or 0)
+            print(
+                "Attachment resume checkpoint: "
+                f"source_key={source_key} last_message_id={min_message_id} windows={len(active_message_windows)}"
+            )
 
             messages = load_messages_for_windows(
                 messages_db,
@@ -3239,7 +3244,7 @@ def main() -> None:
                 active_message_windows,
                 min_message_id=min_message_id,
             )
-            print(f"Loaded {len(messages)} messages in window (min_message_id={min_message_id}).")
+            print(f"Loaded {len(messages)} messages newer than checkpoint (min_message_id={min_message_id}).")
 
             max_message_id = 0
             for message_row in messages:

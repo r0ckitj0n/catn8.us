@@ -53,6 +53,9 @@ echo "Running importer with args: ${IMPORT_ARGS[*]}"
 python3 -u scripts/import_imessage_photo_albums.py "${IMPORT_ARGS[@]}" 2>&1 \
   | tee "$LOG_FILE"
 
-rg -n "Upload complete( for album [0-9]+/[0-9]+)? via (maintenance API SQL restore|direct MySQL connection)" "$LOG_FILE"
+UPLOAD_COUNT="$(rg -c "Upload complete for album [0-9]+/[0-9]+ via (maintenance API SQL restore|direct MySQL connection)\\." "$LOG_FILE" || true)"
+if [[ "${UPLOAD_COUNT:-0}" -gt 0 ]]; then
+  echo "Import upload summary: ${UPLOAD_COUNT} album upload(s) completed."
+fi
 
 bash scripts/deploy.sh --lite

@@ -24,6 +24,7 @@ $isMysteryGameUser = catn8_user_in_group($uid, 'mystery-game-users') ? 1 : 0;
 $isWordsearchUser = catn8_user_in_group($uid, 'wordsearch-users') ? 1 : 0;
 $isBuildWizardUser = catn8_user_in_group($uid, 'build-wizard-users') ? 1 : 0;
 $isPhotoAlbumsUser = catn8_user_in_group($uid, 'photo-albums-users') ? 1 : 0;
+$isPhotoAlbumsAdmin = catn8_user_in_group($uid, 'photo-albums-administrators') ? 1 : 0;
 
 catn8_json_response(['success' => true, 'user' => [
     'id' => (int)$user['id'],
@@ -35,4 +36,5 @@ catn8_json_response(['success' => true, 'user' => [
     'is_wordsearch_user' => $isWordsearchUser,
     'is_build_wizard_user' => $isBuildWizardUser,
     'is_photo_albums_user' => $isPhotoAlbumsUser,
+    'is_photo_albums_admin' => $isPhotoAlbumsAdmin,
 ]]);

@@ -632,10 +632,13 @@ function catn8_photo_albums_build_standard_spec(array $input): array
 
 function catn8_photo_albums_get_viewer(int $viewerId): array
 {
+    $isPhotoAlbumsAdmin = catn8_user_in_group($viewerId, 'photo-albums-administrators');
+    $canManage = catn8_user_is_admin($viewerId) || $isPhotoAlbumsAdmin;
     return [
         'can_view' => true,
-        'is_admin' => catn8_user_is_admin($viewerId) ? 1 : 0,
+        'is_admin' => $canManage ? 1 : 0,
         'is_photo_albums_user' => catn8_user_in_group($viewerId, 'photo-albums-users') ? 1 : 0,
+        'is_photo_albums_admin' => $isPhotoAlbumsAdmin ? 1 : 0,
     ];
 }
 
@@ -1566,7 +1569,15 @@ catn8_photo_album_text_favorites_table_ensure();
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $action = strtolower(trim((string)($_GET['action'] ?? 'list')));
 
-$viewerId = catn8_require_group_or_admin('photo-albums-users');
+$viewerId = catn8_auth_user_id();
+if ($viewerId === null) {
+    catn8_json_response(['success' => false, 'error' => 'Not authenticated'], 401);
+}
+$canManagePhotoAlbums = catn8_user_is_admin($viewerId) || catn8_user_in_group($viewerId, 'photo-albums-administrators');
+$isPhotoAlbumsUser = catn8_user_in_group($viewerId, 'photo-albums-users');
+if (!$canManagePhotoAlbums && !$isPhotoAlbumsUser) {
+    catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
+}
 $viewerPayload = catn8_photo_albums_get_viewer($viewerId);
 
 if ($method === 'GET') {

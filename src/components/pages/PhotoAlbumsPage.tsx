@@ -12,8 +12,6 @@ import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
 
-const SHOW_AUTO_LAYOUT_ALL_BUTTON = true;
-
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
   const selectedAlbum = state.selectedAlbum;
@@ -185,17 +183,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                   </a>
                   {state.isAdmin ? (
                     <div className="d-flex gap-2 flex-wrap">
-                      {SHOW_AUTO_LAYOUT_ALL_BUTTON ? (
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary"
-                          disabled={state.busy}
-                          title="Auto layout all unlocked albums and pages"
-                          onClick={() => { void state.autoLayoutAllUnlocked(); }}
-                        >
-                          Auto Layout All Unlocked
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="btn btn-outline-secondary"
@@ -427,6 +414,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         onClose={state.closeAdminModal}
         onSave={state.saveAdminEdits}
         onAutoLayout={state.autoLayoutAlbum}
+        onAutoLayoutAllUnlocked={state.autoLayoutAllUnlocked}
         onAutoLayoutSpread={state.autoLayoutCurrentSpread}
         onToggleAlbumLock={(isLocked) => {
           if (selectedAlbumId > 0) {

@@ -116,6 +116,7 @@ export interface PhotoAlbumViewerInfo {
   can_view: boolean;
   is_admin: boolean;
   is_photo_albums_user: boolean;
+  is_photo_albums_admin?: boolean;
 }
 
 export interface PhotoAlbumListResponse {

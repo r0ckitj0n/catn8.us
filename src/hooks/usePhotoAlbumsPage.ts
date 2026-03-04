@@ -117,13 +117,19 @@ export function usePhotoAlbumsPage(
   const [viewerOverrideAlbum, setViewerOverrideAlbum] = React.useState<PhotoAlbum | null>(null);
   const [createForm, setCreateForm] = React.useState<PhotoAlbumAiCreateRequest>(DEFAULT_CREATE_FORM);
   const [adminDraft, setAdminDraft] = React.useState<PhotoAlbum | null>(null);
+  const [photoAlbumsIsAdmin, setPhotoAlbumsIsAdmin] = React.useState(false);
   const [favoritePageKeys, setFavoritePageKeys] = React.useState<Set<string>>(new Set());
   const [favoriteMediaKeys, setFavoriteMediaKeys] = React.useState<Set<string>>(new Set());
   const [favoriteTextKeys, setFavoriteTextKeys] = React.useState<Set<string>>(new Set());
 
   const isAdmin = React.useMemo(
-    () => Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1,
-    [viewer],
+    () => (
+      Number(viewer?.is_admin || 0) === 1
+      || Number(viewer?.is_administrator || 0) === 1
+      || Number(viewer?.is_photo_albums_admin || 0) === 1
+      || photoAlbumsIsAdmin
+    ),
+    [photoAlbumsIsAdmin, viewer],
   );
 
   const toast = React.useCallback((tone: IToast['tone'], message: string) => {
@@ -139,6 +145,10 @@ export function usePhotoAlbumsPage(
     }
     try {
       const res = await ApiClient.get<PhotoAlbumListResponse>('/api/photo_albums.php?action=list');
+      setPhotoAlbumsIsAdmin(
+        Number(res?.viewer?.is_admin || 0) === 1
+        || Number(res?.viewer?.is_photo_albums_admin || 0) === 1,
+      );
       const rawAlbums = Array.isArray(res?.albums) ? res.albums : [];
       const normalizedAlbums = rawAlbums.map(normalizeAlbumSummary);
       const nextAlbums = sortAlbumsOldestToNewest(normalizedAlbums);

@@ -27,6 +27,7 @@ interface PhotoAlbumAdminModalProps {
   onClose: () => void;
   onSave: () => void;
   onAutoLayout: () => void;
+  onAutoLayoutAllUnlocked: () => void;
   onAutoLayoutSpread: () => void;
   onToggleAlbumLock: (isLocked: boolean) => void;
   onToggleSpreadLock: (isLocked: boolean) => void;
@@ -70,6 +71,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onClose,
     onSave,
     onAutoLayout,
+    onAutoLayoutAllUnlocked,
     onAutoLayoutSpread,
     onToggleAlbumLock,
     onToggleSpreadLock,
@@ -184,6 +186,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
             <div className="catn8-admin-modal-header-tools">
               <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
+              <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>
               <button
                 type="button"

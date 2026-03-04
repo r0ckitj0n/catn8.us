@@ -2429,6 +2429,26 @@ def fetch_locked_titles(cur, titles: Sequence[str]) -> set[str]:
     return {str(r["title"] or "").strip() for r in cur.fetchall() if str(r.get("title") or "").strip()}
 
 
+def fetch_album_rows_by_title(cur, title: str) -> List[Dict[str, Any]]:
+    t = str(title or "").strip()
+    if not t:
+        return []
+    cur.execute(
+        """
+        SELECT
+          pa.id AS id,
+          pa.title AS title,
+          COALESCE(l.is_locked, 0) AS is_locked
+        FROM photo_albums pa
+        LEFT JOIN photo_album_import_locks l ON l.album_id = pa.id
+        WHERE pa.title = %s
+        ORDER BY pa.id ASC
+        """,
+        (t,),
+    )
+    return [dict(r) for r in cur.fetchall()]
+
+
 def fetch_required_group_ids(cur) -> Tuple[int, int]:
     cur.execute("""
     SELECT id, slug, title FROM catn8_groups
@@ -2624,29 +2644,44 @@ WHERE pa.title={sql_quote(title)} AND l.album_id IS NULL;
     for r in rows:
         title_q = sql_quote(r["title"])
         parts.append(f"""
-SET @skip_insert := (
+SET @has_locked := (
   SELECT COUNT(*)
   FROM photo_albums pa
   INNER JOIN photo_album_import_locks l ON l.album_id = pa.id AND l.is_locked = 1
   WHERE pa.title={title_q}
 );
-INSERT INTO photo_albums
-(title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
-SELECT
-{title_q},
-{sql_quote(r['slug'])},
-{sql_quote(r['summary'])},
-{sql_quote(r['cover_image_url'])},
-{sql_quote(r['cover_prompt'])},
-{sql_quote(r['spec_json'])},
-1,
-{int(created_by_user_id)}
-WHERE @skip_insert = 0;
-SET @album_id := LAST_INSERT_ID();
+SET @album_id := (
+  SELECT pa.id
+  FROM photo_albums pa
+  LEFT JOIN photo_album_import_locks l ON l.album_id = pa.id
+  WHERE pa.title={title_q} AND COALESCE(l.is_locked, 0) = 0
+  ORDER BY pa.id ASC
+  LIMIT 1
+);
+INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
+SELECT {title_q}, {sql_quote(r['slug'])}, {sql_quote(r['summary'])}, {sql_quote(r['cover_image_url'])}, {sql_quote(r['cover_prompt'])}, {sql_quote(r['spec_json'])}, 1, {int(created_by_user_id)}
+WHERE @has_locked = 0 AND @album_id IS NULL;
+SET @album_id := IFNULL(@album_id, LAST_INSERT_ID());
+UPDATE photo_albums
+SET
+  summary = {sql_quote(r['summary'])},
+  cover_image_url = {sql_quote(r['cover_image_url'])},
+  cover_prompt = {sql_quote(r['cover_prompt'])},
+  spec_json = {sql_quote(r['spec_json'])},
+  is_active = 1
+WHERE @has_locked = 0 AND id = @album_id AND @album_id > 0;
+DELETE pa FROM photo_albums pa
+LEFT JOIN photo_album_import_locks l ON l.album_id = pa.id
+WHERE @has_locked = 0
+  AND pa.title = {title_q}
+  AND COALESCE(l.is_locked, 0) = 0
+  AND @album_id > 0
+  AND pa.id <> @album_id;
 INSERT INTO photo_album_permissions (album_id, group_id, can_view)
 SELECT @album_id, g.id, 1 FROM catn8_groups g
 WHERE g.slug IN ('photo-albums-users', 'administrators')
   AND @album_id > 0
+  AND @has_locked = 0
 ON DUPLICATE KEY UPDATE can_view = VALUES(can_view);
         """.strip())
     return "\n\n".join(parts) + "\n"
@@ -2718,28 +2753,54 @@ def upload_album_rows(
         for row in rows:
             row_title = str(row.get("title") or "").strip()
             with conn.cursor() as cur:
-                locked_for_row = fetch_locked_titles(cur, [row_title]) if row_title else set()
-            if row_title and row_title in locked_for_row:
-                print(f"Skipping upload for locked title: {row_title}")
-                continue
-            with conn.cursor() as cur:
-                slug = unique_slug(cur, slugify(str(row.get("slug") or "album")))
-                cur.execute(
-                    """
-                    INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
-                    VALUES (%s,%s,%s,%s,%s,%s,1,%s)
-                    """,
-                    (
-                        row.get("title") or "Photo Album",
-                        slug,
-                        row.get("summary") or "",
-                        row.get("cover_image_url") or "",
-                        row.get("cover_prompt") or "",
-                        row.get("spec_json") or "{}",
-                        created_by_user_id,
-                    ),
-                )
-                album_id = int(cur.lastrowid)
+                album_rows = fetch_album_rows_by_title(cur, row_title) if row_title else []
+                locked_rows = [r for r in album_rows if int(r.get("is_locked") or 0) == 1]
+                unlocked_rows = [r for r in album_rows if int(r.get("is_locked") or 0) != 1]
+
+                if locked_rows:
+                    print(f"Skipping upload for locked title: {row_title}")
+                    continue
+
+                album_id = 0
+                if unlocked_rows:
+                    album_id = int(unlocked_rows[0].get("id") or 0)
+                    cur.execute(
+                        """
+                        UPDATE photo_albums
+                        SET summary=%s, cover_image_url=%s, cover_prompt=%s, spec_json=%s, is_active=1
+                        WHERE id=%s
+                        """,
+                        (
+                            row.get("summary") or "",
+                            row.get("cover_image_url") or "",
+                            row.get("cover_prompt") or "",
+                            row.get("spec_json") or "{}",
+                            album_id,
+                        ),
+                    )
+                    if len(unlocked_rows) > 1:
+                        extras = [int(r.get("id") or 0) for r in unlocked_rows[1:] if int(r.get("id") or 0) > 0]
+                        if extras:
+                            placeholders = ",".join(["%s"] * len(extras))
+                            cur.execute(f"DELETE FROM photo_albums WHERE id IN ({placeholders})", tuple(extras))
+                else:
+                    slug = unique_slug(cur, slugify(str(row.get("slug") or "album")))
+                    cur.execute(
+                        """
+                        INSERT INTO photo_albums (title, slug, summary, cover_image_url, cover_prompt, spec_json, is_active, created_by_user_id)
+                        VALUES (%s,%s,%s,%s,%s,%s,1,%s)
+                        """,
+                        (
+                            row.get("title") or "Photo Album",
+                            slug,
+                            row.get("summary") or "",
+                            row.get("cover_image_url") or "",
+                            row.get("cover_prompt") or "",
+                            row.get("spec_json") or "{}",
+                            created_by_user_id,
+                        ),
+                    )
+                    album_id = int(cur.lastrowid)
                 cur.execute(
                     """
                     INSERT INTO photo_album_permissions (album_id, group_id, can_view)

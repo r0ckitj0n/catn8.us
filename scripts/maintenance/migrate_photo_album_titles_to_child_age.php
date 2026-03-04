@@ -115,6 +115,41 @@ function pa_title_migration_sql_quote(string $value): string
     return "'" . str_replace(["\\", "'"], ["\\\\", "''"], $value) . "'";
 }
 
+function pa_title_migration_strip_title_meta_suffix(string $title): string
+{
+    return trim((string)preg_replace(
+        '/\s+[0-9]{4}-[0-9]{2}-[0-9]{2}\s+to\s+[0-9]{4}-[0-9]{2}-[0-9]{2}\s+\([0-9]{1,4}\s+pages?\)\s*$/i',
+        '',
+        trim($title)
+    ));
+}
+
+function pa_title_migration_parse_range_pages_from_summary(string $summary): ?array
+{
+    $text = trim($summary);
+    if ($text === '') {
+        return null;
+    }
+    if (!preg_match(
+        '/^\(?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s+to\s+([0-9]{4}-[0-9]{2}-[0-9]{2})\s*\)?\.?\s*([0-9]{1,4})\s+pages?\.?\s*$/i',
+        $text,
+        $m
+    )) {
+        return null;
+    }
+
+    return [
+        'start' => (string)$m[1],
+        'end' => (string)$m[2],
+        'pages' => (int)$m[3],
+    ];
+}
+
+function pa_title_migration_format_summary_line(string $startDate, string $endDate, int $pages): string
+{
+    return sprintf('%s to %s (%d pages)', trim($startDate), trim($endDate), max(1, $pages));
+}
+
 function pa_title_migration_write_sql_artifact(string $sql): string
 {
     $stateDir = dirname(__DIR__, 2) . '/.local/state';
@@ -167,7 +202,7 @@ if (!$tableExists) {
 }
 
 $rowsStmt = $pdo->query(
-    'SELECT id, title, created_at
+    'SELECT id, title, summary, created_at
      FROM photo_albums
      ORDER BY created_at ASC, id ASC'
 );
@@ -197,6 +232,7 @@ foreach ($rows as $row) {
     $legacyMatches[] = [
         'id' => $id,
         'title' => $title,
+        'summary' => (string)($row['summary'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
         'base_title' => $baseTitle,
     ];
@@ -247,15 +283,77 @@ foreach ($grouped as $baseTitle => $items) {
             'id' => (int)$item['id'],
             'old_title' => (string)$item['title'],
             'new_title' => $target,
+            'old_summary' => (string)($item['summary'] ?? ''),
+            'new_summary' => (string)($item['summary'] ?? ''),
         ];
     }
 }
 
+$updatesById = [];
+foreach ($updates as $update) {
+    $updatesById[(int)$update['id']] = $update;
+}
+
+foreach ($rows as $row) {
+    $id = (int)($row['id'] ?? 0);
+    if ($id <= 0) {
+        continue;
+    }
+    $existingTitle = trim((string)($row['title'] ?? ''));
+    $existingSummary = trim((string)($row['summary'] ?? ''));
+    $effectiveTitle = (string)($updatesById[$id]['new_title'] ?? $existingTitle);
+    $childName = pa_title_migration_resolve_child_name($effectiveTitle);
+    if (!in_array($childName, ['Eleanor', 'Lyrielle'], true)) {
+        continue;
+    }
+
+    $parsed = pa_title_migration_parse_range_pages_from_summary($existingSummary);
+    if (!$parsed) {
+        continue;
+    }
+
+    $targetTitle = pa_title_migration_strip_title_meta_suffix($effectiveTitle);
+    $targetSummary = pa_title_migration_format_summary_line(
+        (string)$parsed['start'],
+        (string)$parsed['end'],
+        (int)$parsed['pages']
+    );
+
+    $needsTitle = $targetTitle !== '' && strcasecmp($effectiveTitle, $targetTitle) !== 0;
+    $needsSummary = strcmp($existingSummary, $targetSummary) !== 0;
+    if (!$needsTitle && !$needsSummary) {
+        continue;
+    }
+
+    if (isset($updatesById[$id])) {
+        if ($needsTitle) {
+            $updatesById[$id]['new_title'] = $targetTitle;
+        }
+        if ($needsSummary) {
+            $updatesById[$id]['new_summary'] = $targetSummary;
+        }
+    } else {
+        $updatesById[$id] = [
+            'id' => $id,
+            'old_title' => $existingTitle,
+            'new_title' => $needsTitle ? $targetTitle : $existingTitle,
+            'old_summary' => $existingSummary,
+            'new_summary' => $needsSummary ? $targetSummary : $existingSummary,
+        ];
+    }
+}
+
+$updates = array_values($updatesById);
+usort($updates, static function (array $a, array $b): int {
+    return ((int)$a['id']) <=> ((int)$b['id']);
+});
+
 $sqlParts = [];
 foreach ($updates as $update) {
     $sqlParts[] = sprintf(
-        "UPDATE photo_albums SET title = %s, updated_at = NOW() WHERE id = %d;",
+        "UPDATE photo_albums SET title = %s, summary = %s, updated_at = NOW() WHERE id = %d;",
         pa_title_migration_sql_quote($update['new_title']),
+        pa_title_migration_sql_quote((string)($update['new_summary'] ?? '')),
         (int)$update['id']
     );
 }
@@ -285,9 +383,13 @@ if (!$updates) {
 
 try {
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare('UPDATE photo_albums SET title = ?, updated_at = NOW() WHERE id = ?');
+    $stmt = $pdo->prepare('UPDATE photo_albums SET title = ?, summary = ?, updated_at = NOW() WHERE id = ?');
     foreach ($updates as $update) {
-        $stmt->execute([(string)$update['new_title'], (int)$update['id']]);
+        $stmt->execute([
+            (string)$update['new_title'],
+            (string)($update['new_summary'] ?? ''),
+            (int)$update['id'],
+        ]);
     }
     $pdo->commit();
 } catch (Throwable $e) {

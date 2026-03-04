@@ -1475,6 +1475,29 @@ def media_has_focus_face(media: CatalogMedia, focus_person: str) -> bool:
     return False
 
 
+def is_strict_child_face_window(focus_person: str, sent_date: dt.date, eleanor_birth: Optional[dt.date]) -> bool:
+    focus = (focus_person or "").strip().lower()
+    if focus not in {"violet", "eleanor"}:
+        return False
+    if eleanor_birth is None:
+        return False
+    return sent_date >= eleanor_birth
+
+
+def attachment_name_candidates(*values: Any) -> set[str]:
+    out: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip().lower()
+        if not text:
+            continue
+        out.add(text)
+        out.add(Path(text).name.strip().lower())
+        out.add(Path(text).stem.strip().lower())
+    return {x for x in out if x}
+
+
 def resolve_focus_person(focus_person: str, album_title_prefix: str) -> str:
     focus = (focus_person or "auto").strip().lower()
     if focus in {"violet", "eleanor", "lyra", "any", "all"}:
@@ -1962,6 +1985,7 @@ def run_catalog_matching(
     cur,
     source_key: str,
     focus_person: str,
+    eleanor_birth: Optional[dt.date],
     match_window_hours: int,
     max_matched_media_per_message: int,
     min_message_row_id: int,
@@ -1995,6 +2019,7 @@ def run_catalog_matching(
     matched_count = 0
     window_seconds = max(1, int(match_window_hours)) * 3600
     for message in messages:
+        strict_face_window = is_strict_child_face_window(focus_person, message.sent_at.date(), eleanor_birth)
         direct_media_all = sorted(
             [m for m in media_by_message.get(message.message_row_id, []) if m.media_kind in {"image", "video"}],
             key=lambda m: (0 if m.media_kind == "image" else 1, m.media_id),
@@ -2004,12 +2029,12 @@ def run_catalog_matching(
         direct_media_images = list(direct_media_images_all)
         if focus_person in {"violet", "eleanor", "lyra"}:
             direct_media_images = [m for m in direct_media_images if media_has_focus_face(m, focus_person)]
-        if not direct_media_images:
+        if not direct_media_images and not strict_face_window:
             # Face tags are incomplete in many libraries; keep same-message images as likely attachments.
             direct_media_images = list(direct_media_images_all)
 
         direct_media: List[CatalogMedia] = list(direct_media_images)
-        if not direct_media:
+        if not direct_media and not strict_face_window:
             # Allow videos to carry a message when images are missing.
             direct_media = list(direct_media_videos)
 
@@ -2044,6 +2069,8 @@ def run_catalog_matching(
                 score += 120.0
             if focus_person in {"violet", "eleanor", "lyra"} and media_has_focus_face(media, focus_person):
                 score += 35.0
+            elif strict_face_window and focus_person in {"violet", "eleanor"}:
+                continue
             elif focus_person in {"violet", "eleanor", "lyra"}:
                 score -= 8.0
             if media.media_id in used_media_ids:
@@ -2058,7 +2085,7 @@ def run_catalog_matching(
             ranked_media_ids.append(int(media.media_id))
 
         ranked_media: List[CatalogMedia] = [media_by_id[mid] for mid in ranked_media_ids if mid in media_by_id]
-        if len(ranked_media) < expected:
+        if len(ranked_media) < expected and not strict_face_window:
             # Backfill with closest videos in time when still short.
             video_candidates = [m for m in all_media if m.media_kind == "video" and int(m.media_id) not in ranked_media_ids]
             video_candidates.sort(key=lambda m: abs((m.captured_at - message.sent_at).total_seconds()))
@@ -2458,9 +2485,10 @@ def build_album_rows(
             title_counts[base_title] = title_counts.get(base_title, 0) + 1
             part_no = title_counts[base_title]
             title = base_title if part_no == 1 else f"{base_title} Part {part_no}"
+            summary = f"{first_dt} to {last_dt} ({len(pages)} pages)"
         else:
             title = title_prefix if single_album else f"{title_prefix} {idx}"
-        summary = f"({first_dt} to {last_dt}). {len(pages)} pages."
+            summary = f"({first_dt} to {last_dt}). {len(pages)} pages."
         slug = f"{slugify(f'{title_prefix}-{idx}-{first_dt}')[:100]}-{stamp}-{idx}"[:120]
 
         captions = [p.caption for p in pages]
@@ -2769,16 +2797,17 @@ def pages_from_attachment_match(
                 pct = (float(processed) / float(max(1, total_messages))) * 100.0
                 print(f"[attachment_match] {processed}/{total_messages} ({pct:.1f}%) pages={produced_pages} non_visual={skipped_non_visual} face_skips={skipped_face_filter} convert_fail={conversion_failures}")
             continue
-        if normalized_face_names and eleanor_birth and msg.sent_at.date() >= eleanor_birth and focus_person in {"violet", "eleanor", "lyra"}:
-            candidate_names = {
-                str(source.name or "").strip().lower(),
-                str(source.stem or "").strip().lower(),
-                str(msg.attachment_transfer_name or "").strip().lower(),
-                str(msg.attachment_guid or "").strip().lower(),
-            }
-            if msg.attachment_path is not None:
-                candidate_names.add(str(msg.attachment_path.name or "").strip().lower())
-                candidate_names.add(str(msg.attachment_path.stem or "").strip().lower())
+        if normalized_face_names and is_strict_child_face_window(focus_person, msg.sent_at.date(), eleanor_birth):
+            candidate_names = attachment_name_candidates(
+                source,
+                source.name,
+                source.stem,
+                msg.attachment_transfer_name,
+                msg.attachment_guid,
+                msg.attachment_path,
+                msg.attachment_path.name if msg.attachment_path is not None else "",
+                msg.attachment_path.stem if msg.attachment_path is not None else "",
+            )
             if not any(name in normalized_face_names for name in candidate_names if name):
                 skipped_face_filter += 1
                 if processed % progress_interval == 0:
@@ -2832,6 +2861,8 @@ def pages_from_photos_timeline(
     source_key: str,
     focus_person: str,
     progress_every_messages: int,
+    eleanor_birth: Optional[dt.date] = None,
+    face_name_filter: Optional[set[str]] = None,
 ) -> Tuple[List[AlbumPage], int]:
     export_dir = Path(".local/state/photos_timeline_exports")
     export_dir.mkdir(parents=True, exist_ok=True)
@@ -2870,6 +2901,7 @@ def pages_from_photos_timeline(
     used_names: set[str] = {p.name for p in staging_dir.iterdir() if p.is_file()} if staging_dir.exists() else set()
     staged_hash_to_name: Dict[str, str] = build_staging_hash_index(staging_dir)
     window_secs = max(1, int(match_window_hours)) * 3600
+    normalized_face_names = {str(x).strip().lower() for x in list(face_name_filter or set()) if str(x).strip()}
 
     def emit_progress(status: str, force: bool = False) -> None:
         if total_messages <= 0:
@@ -2917,6 +2949,10 @@ def pages_from_photos_timeline(
             for ap, mime in attachment_refs:
                 if ap is None or not ap.exists():
                     continue
+                if normalized_face_names and is_strict_child_face_window(focus_person, msg.sent_at.date(), eleanor_birth):
+                    candidate_names = attachment_name_candidates(ap, ap.name, ap.stem)
+                    if not any(name in normalized_face_names for name in candidate_names if name):
+                        continue
                 source = ap
                 src_key = str(source.resolve())
                 existing_name = str(staged_by_attachment_path.get(src_key) or "").strip()
@@ -3211,6 +3247,7 @@ def main() -> None:
                         cur,
                         source_key,
                         active_focus,
+                        eleanor_birth=eleanor_birth,
                         match_window_hours=max(1, int(args.match_window_hours)),
                         max_matched_media_per_message=max(1, int(args.max_matched_media_per_message)),
                         min_message_row_id=min_match_message_id,
@@ -3260,6 +3297,16 @@ def main() -> None:
                 source_key=source_key,
                 focus_person=active_focus,
                 progress_every_messages=max(0, int(args.progress_every_messages)),
+                eleanor_birth=eleanor_birth,
+                face_name_filter=(
+                    set(violet_face_names)
+                    if active_focus == "violet"
+                    else set(eleanor_face_names)
+                    if active_focus == "eleanor"
+                    else set(lyra_face_names)
+                    if active_focus == "lyra"
+                    else set()
+                ),
             )
             print(f"Updated timeline checkpoint to message_id={last_processed_message_id} for focus '{active_focus}'.")
         else:

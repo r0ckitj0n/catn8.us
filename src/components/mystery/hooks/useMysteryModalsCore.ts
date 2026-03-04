@@ -1,5 +1,6 @@
 import React from 'react';
 import { isBootstrapModalReady, createBootstrapModal, IBootstrapModal } from '../../../core/bootstrapModal';
+import { captureScrollBeforeModalOpen } from '../../../utils/modalUtils';
 
 export function useMysteryModalsCore(
   setError: (err: string) => void,
@@ -26,6 +27,7 @@ export function useMysteryModalsCore(
     }
 
     if (setOpen) setOpen(true);
+    captureScrollBeforeModalOpen();
 
     try {
       modalOpenSeqRef.current += 1;

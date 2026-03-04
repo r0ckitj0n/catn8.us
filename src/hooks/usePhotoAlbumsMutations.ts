@@ -193,7 +193,9 @@ export function usePhotoAlbumsMutations(args: PhotoAlbumsMutationsArgs) {
     if (!isAdmin) {
       return;
     }
-    const proceed = window.confirm('Auto layout all unlocked albums?');
+    const proceed = window.confirm(
+      'Warning: This will reorganize any/all text and media on all pages in every album that is not locked. Continue?',
+    );
     if (!proceed) {
       return;
     }

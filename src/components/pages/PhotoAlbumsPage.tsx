@@ -12,7 +12,7 @@ import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
 import './PhotoAlbumsPage.css';
 
-const SHOW_AUTO_LAYOUT_ALL_BUTTON = false;
+const SHOW_AUTO_LAYOUT_ALL_BUTTON = true;
 
 export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const state = usePhotoAlbumsPage(viewer, onToast);
@@ -28,6 +28,29 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(viewerAlbum);
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const listScrollYRef = React.useRef<number | null>(null);
+  const prevShowCreateModalRef = React.useRef(false);
+  const prevShowAdminModalRef = React.useRef(false);
+
+  const captureListScrollPosition = React.useCallback(() => {
+    listScrollYRef.current = Math.max(
+      0,
+      Number(window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0),
+    );
+  }, []);
+
+  const restoreListScrollPosition = React.useCallback(() => {
+    const targetScrollY = listScrollYRef.current;
+    if (targetScrollY === null) {
+      return;
+    }
+    listScrollYRef.current = null;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: targetScrollY, left: 0, behavior: 'auto' });
+      });
+    });
+  }, []);
 
   React.useEffect(() => {
     const handleFs = () => {
@@ -64,7 +87,29 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     };
   }, [state.showAlbumViewer, isFullscreen]);
 
+  React.useEffect(() => {
+    const wasOpen = prevShowCreateModalRef.current;
+    if (!wasOpen && state.showCreateModal && !state.showAlbumViewer && !state.showAdminModal) {
+      captureListScrollPosition();
+    }
+    if (wasOpen && !state.showCreateModal && !state.showAlbumViewer) {
+      restoreListScrollPosition();
+    }
+    prevShowCreateModalRef.current = state.showCreateModal;
+  }, [captureListScrollPosition, restoreListScrollPosition, state.showAdminModal, state.showAlbumViewer, state.showCreateModal]);
+
+  React.useEffect(() => {
+    const wasOpen = prevShowAdminModalRef.current;
+    if (wasOpen && !state.showAdminModal && !state.showAlbumViewer) {
+      restoreListScrollPosition();
+    }
+    prevShowAdminModalRef.current = state.showAdminModal;
+  }, [restoreListScrollPosition, state.showAdminModal, state.showAlbumViewer]);
+
   const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
+    if (!state.showAlbumViewer && !state.showAdminModal) {
+      captureListScrollPosition();
+    }
     state.openAlbum(albumId, mode, initialPageIndex);
     if (state.isAdmin || mode === 'edit') {
       return;
@@ -76,7 +121,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     } catch {
       // fullscreen can be blocked by browser context
     }
-  }, [state]);
+  }, [captureListScrollPosition, state]);
 
   const closeViewer = React.useCallback(async () => {
     state.closeAlbumViewer();
@@ -87,7 +132,8 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         // no-op
       }
     }
-  }, [state]);
+    restoreListScrollPosition();
+  }, [restoreListScrollPosition, state]);
 
   const closeTopmostLayer = React.useCallback(async () => {
     if (state.showCreateModal) {
@@ -102,6 +148,13 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
       await closeViewer();
     }
   }, [closeViewer, state]);
+
+  const openCreateModal = React.useCallback(() => {
+    if (!state.showAlbumViewer && !state.showAdminModal) {
+      captureListScrollPosition();
+    }
+    state.setShowCreateModal(true);
+  }, [captureListScrollPosition, state]);
 
   const enterFullscreen = React.useCallback(async () => {
     try {
@@ -137,6 +190,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           type="button"
                           className="btn btn-outline-primary"
                           disabled={state.busy}
+                          title="Auto layout all unlocked albums and pages"
                           onClick={() => { void state.autoLayoutAllUnlocked(); }}
                         >
                           Auto Layout All Unlocked
@@ -150,7 +204,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                       >
                         Capture New Messages
                       </button>
-                      <button type="button" className="btn btn-primary" onClick={() => state.setShowCreateModal(true)}>
+                      <button type="button" className="btn btn-primary" onClick={openCreateModal}>
                         Create Photo Album
                       </button>
                     </div>

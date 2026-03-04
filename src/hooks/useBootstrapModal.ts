@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { createBootstrapModal, isBootstrapModalReady, IBootstrapModal } from '../core/bootstrapModal';
+import { captureScrollBeforeModalOpen, restoreScrollAfterModalClose } from '../utils/modalUtils';
 
 export function useBootstrapModal(onClose?: () => void) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -19,10 +20,16 @@ export function useBootstrapModal(onClose?: () => void) {
     modalApiRef.current = modal;
 
     const onHidden = () => {
+      restoreScrollAfterModalClose();
       if (typeof onClose === 'function') onClose();
     };
+    const onShow = () => {
+      captureScrollBeforeModalOpen();
+    };
+    el.addEventListener('show.bs.modal', onShow);
     el.addEventListener('hidden.bs.modal', onHidden);
     return () => {
+      el.removeEventListener('show.bs.modal', onShow);
       el.removeEventListener('hidden.bs.modal', onHidden);
     };
   }, [onClose, bootstrapTick]);

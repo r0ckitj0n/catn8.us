@@ -196,7 +196,7 @@ export function MysteryPage({
                          (caseId ? (scenarioId ? `Briefing for ${mysteryState.selectedCase?.title || 'this case'} is being prepared...` : 'Selecting scenario...') : '');
 
   return (
-    <PageLayout page="mystery" title="Mystery Game" viewer={viewer} isAdmin={isAdmin} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick}>
+    <PageLayout page="mystery" title="INVESTIG8" viewer={viewer} isAdmin={isAdmin} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick}>
       <section className="section">
         <div className="container">
           <MysteryHeader 

@@ -1,0 +1,63 @@
+.accumul8-page {
+  padding-bottom: 2rem;
+}
+
+.accumul8-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.accumul8-summary-card {
+  background: linear-gradient(135deg, rgba(248, 246, 236, 0.9), rgba(226, 233, 241, 0.9));
+  border: 1px solid rgba(35, 45, 66, 0.14);
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.accumul8-summary-card span {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #394868;
+}
+
+.accumul8-summary-card strong {
+  font-size: 1.08rem;
+  color: #18243a;
+}
+
+.accumul8-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.accumul8-panel {
+  margin-top: 1rem;
+  border: 1px solid rgba(33, 41, 56, 0.14);
+  background: rgba(250, 251, 252, 0.92);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.accumul8-ledger-table {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.accumul8-ledger-table tr.is-outflow td {
+  background: rgba(195, 25, 18, 0.08);
+}
+
+.accumul8-ledger-table tr.is-inflow td {
+  background: rgba(14, 135, 50, 0.08);
+}
+
+@media (max-width: 991px) {
+  .accumul8-panel {
+    padding: 0.75rem;
+  }
+}

@@ -115,13 +115,13 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   if (!state.isLoggedIn) {
     return (
-      <PageLayout page="wordsearch" title="Word Search" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="wordsearch" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
-            <h1 className="section-title">Word Search</h1>
+            <h1 className="section-title">LOC8</h1>
             <div className="catn8-card p-2">
               <div className="fw-bold">Login required</div>
-              <div className="mt-1">You must be logged in to access Word Search.</div>
+              <div className="mt-1">You must be logged in to access LOC8.</div>
               <button type="button" className="btn btn-primary mt-3" onClick={onLoginClick}>Log in</button>
             </div>
           </div>
@@ -132,10 +132,10 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   return (
     <>
-      <PageLayout page="wordsearch" title="Word Search" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="wordsearch" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
-            <h1 className="section-title">Word Search</h1>
+            <h1 className="section-title">LOC8</h1>
             <WordsearchToolbar 
               puzzles={state.puzzles} puzzleId={state.puzzleId} setPuzzleId={state.setPuzzleId} busy={state.busy}
               setPuzzlesOpen={setPuzzlesOpen} setManagePuzzlesOpen={setManagePuzzlesOpen} 

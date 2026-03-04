@@ -7,7 +7,7 @@ import { CatalogCard } from '../common/cards/CatalogCard';
 export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const sections = [
     {
-      title: 'Fun Activities for Everyone!',
+      title: 'ACTIV8',
       subtitle: 'Discover exciting activities to do together!',
       items: [
         { title: 'Starfall Reading Fun', description: 'Learn to read with fun interactive stories and activities!', image: '/images/starfall-reading-fun.jpg' },
@@ -36,7 +36,7 @@ export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick,
   ];
 
   return (
-    <PageLayout page="activities" title="Activities" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="activities" title="ACTIV8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       {sections.map((sec) => (
         <section className="section" key={sec.title}>
           <div className="container">

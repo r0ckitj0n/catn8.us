@@ -22,10 +22,10 @@ export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
   }, [q]);
 
   return (
-    <PageLayout page="games" title="Games" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="games" title="STIMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
-          <h1 className="section-title">Fun Games for Everyone!</h1>
+          <h1 className="section-title">STIMUL8</h1>
           <p className="lead text-center mb-4">Play and learn with our collection of exciting games!</p>
           <FilterBar label="Games" query={query} setQuery={setQuery} />
           {sections.map((sec) => (

@@ -70,10 +70,10 @@ export function ColoringPage({ viewer, onLoginClick, onLogout, onAccountClick, m
   const noviceColor = noviceTargetColorId ? paletteMap[noviceTargetColorId] : null;
 
   return (
-    <PageLayout page="coloring" title="Coloring" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="coloring" title="ILLUMIN8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
-          <h1 className="section-title">Coloring Studio</h1>
+          <h1 className="section-title">ILLUMIN8</h1>
           <p className="lead text-center mb-2">{totalPageCount} themed pages with simple to difficult designs.</p>
 
           <div className="catn8-coloring-controls catn8-card p-3 mb-3">

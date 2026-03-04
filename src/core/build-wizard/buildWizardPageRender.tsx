@@ -5726,13 +5726,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           </button>
           <StandardIconButton
             iconKey="close"
-            ariaLabel="Close Build Wizard"
-            title="Close Build Wizard"
+            ariaLabel="Close FABRIC8"
+            title="Close FABRIC8"
             className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
             onClick={onCloseWizard}
           />
         </div>
-        <h1>Build Wizard</h1>
+        <h1>FABRIC8</h1>
         <p>Choose an existing build or start a new build.</p>
         <div className="build-wizard-launcher-grid">
           <div className="build-wizard-launch-card is-new">
@@ -5850,8 +5850,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           </button>
           <StandardIconButton
             iconKey="close"
-            ariaLabel="Close Build Wizard"
-            title="Close Build Wizard"
+            ariaLabel="Close FABRIC8"
+            title="Close FABRIC8"
             className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
             onClick={onCloseWizard}
           />

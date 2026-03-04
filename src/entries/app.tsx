@@ -7,6 +7,7 @@ import { LoginModal } from '../components/modals/LoginModal';
 import { ToastOverlay } from '../components/modals/ToastOverlay';
 import { AboutPage } from '../components/pages/AboutPage';
 import { ActivitiesPage } from '../components/pages/ActivitiesPage';
+import { Accumul8Page } from '../components/pages/Accumul8Page';
 import { ArcadePage } from '../components/pages/ArcadePage';
 import { AsteroidsPage } from '../components/pages/AsteroidsPage';
 import { BuildWizardPage } from '../components/pages/BuildWizardPage';
@@ -36,6 +37,7 @@ type AppPage =
   | 'games'
   | 'arcade'
   | 'activities'
+  | 'accumul8'
   | 'coloring'
   | 'build_wizard'
   | 'login'
@@ -75,6 +77,7 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   games: GamesPage,
   arcade: ArcadePage,
   activities: ActivitiesPage,
+  accumul8: Accumul8Page,
   coloring: ColoringPage,
   wordsearch: WordsearchPage,
   photo_albums: PhotoAlbumsPage,

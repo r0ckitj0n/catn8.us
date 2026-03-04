@@ -30,10 +30,10 @@ export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mys
   }, []);
 
   return (
-    <PageLayout page="arcade" title="Arcade" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="arcade" title="RECRE8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
-          <h1 className="section-title">Arcade</h1>
+          <h1 className="section-title">RECRE8</h1>
           <p className="lead text-center mb-4">Welcome to our arcade! Here you'll find fun and educational games to play.</p>
           <FilterBar label="Arcade Games" query={query} setQuery={setQuery} />
           <div className="row mt-4">

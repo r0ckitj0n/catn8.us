@@ -6,6 +6,7 @@ export interface IViewer {
   is_administrator?: number;
   is_photo_albums_user?: number;
   is_photo_albums_admin?: number;
+  is_accumul8_user?: number;
   [key: string]: any;
 }
 

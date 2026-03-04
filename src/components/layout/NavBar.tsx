@@ -26,17 +26,19 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isWordsearchUser = Number(viewer?.is_wordsearch_user || 0) === 1;
   const isBuildWizardUser = Number(viewer?.is_build_wizard_user || 0) === 1;
   const isPhotoAlbumsUser = Number(viewer?.is_photo_albums_user || 0) === 1;
+  const isAccumul8User = Number(viewer?.is_accumul8_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
   const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
+  const canUseAccumul8 = isAuthed && (isAdministrator || isAccumul8User);
 
   const links = [
-    { key: 'about', href: 'about.php', label: 'About' },
-    { key: 'activities', href: 'activities.php', label: 'Activities' },
-    { key: 'arcade', href: 'arcade.php', label: 'Arcade' },
-    { key: 'coloring', href: 'coloring.php', label: 'Coloring' },
-    { key: 'games', href: 'games.php', label: 'Games' },
-    { key: 'stories', href: 'stories.php', label: 'Stories' },
-    ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'Word Search' }] : []),
+    { key: 'about', href: 'about.php', label: 'ELUCID8' },
+    { key: 'activities', href: 'activities.php', label: 'ACTIV8' },
+    { key: 'arcade', href: 'arcade.php', label: 'RECRE8' },
+    { key: 'coloring', href: 'coloring.php', label: 'ILLUMIN8' },
+    { key: 'games', href: 'games.php', label: 'STIMUL8' },
+    { key: 'stories', href: 'stories.php', label: 'NARR8' },
+    ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'LOC8' }] : []),
   ];
   const shortcutItems: Array<{
     key: string;
@@ -49,13 +51,16 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   }> = [
     ...links.map((l) => ({ key: l.key, label: l.label, href: l.href })),
     ...(isAuthed && isMysteryGameUser
-      ? [{ key: 'mystery', label: 'Mystery Game', href: 'mystery.php' }]
+      ? [{ key: 'mystery', label: 'INVESTIG8', href: 'mystery.php' }]
       : []),
     ...(canUseBuildWizard
-      ? [{ key: 'build_wizard', label: 'Build Wizard', href: 'build-wizard.php' }]
+      ? [{ key: 'build_wizard', label: 'FABRIC8', href: 'build-wizard.php' }]
       : []),
     ...(canUsePhotoAlbums
-      ? [{ key: 'photo_albums', label: 'Photo Albums', href: 'photo-albums.php' }]
+      ? [{ key: 'photo_albums', label: 'Photo M8', href: 'photo-albums.php' }]
+      : []),
+    ...(canUseAccumul8
+      ? [{ key: 'accumul8', label: 'Accumul8', href: 'accumul8.php' }]
       : []),
     ...((active === 'mystery' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [
@@ -93,7 +98,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
         <div className="collapse navbar-collapse" id="navbarNav">
           <ul className="navbar-nav catn8-nav-shortcuts me-auto">
             <li className="nav-item">
-              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">Home</a>
+              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">REGENER8</a>
             </li>
             {shortcutItems.map((item) => (
               <li className="nav-item" key={item.key}>

@@ -7,13 +7,13 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   return (
-    <PageLayout page="about" title="About" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="about" title="ELUCID8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="hero">
         <div className="container hero-content">
           <div className="row justify-content-center">
             <div className="col-lg-9">
               <div className="welcome-message text-center">
-                <h1>Our Philosophy</h1>
+                <h1>ELUCID8</h1>
                 <p className="lead">
                   At catn8.us, our name whispers our deepest aspiration: to catenate, to tenderly link together, not just ideas,
                   but hearts. Founded by Jon and Sarah Graves, our community is built on the foundation of family, love, and

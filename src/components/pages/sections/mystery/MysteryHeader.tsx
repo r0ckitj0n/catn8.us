@@ -42,9 +42,9 @@ export function MysteryHeader({
           title="Change Mystery"
         >
           {selectedMystery ? (
-            `Mystery: ${selectedMystery.title}`
+            `INVESTIG8: ${selectedMystery.title}`
           ) : cachedMysteryTitle ? (
-            `Mystery: ${cachedMysteryTitle}`
+            `INVESTIG8: ${cachedMysteryTitle}`
           ) : 'Choose a Mystery'}
         </span>
         

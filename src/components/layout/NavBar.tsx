@@ -98,7 +98,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
         <div className="collapse navbar-collapse" id="navbarNav">
           <ul className="navbar-nav catn8-nav-shortcuts me-auto">
             <li className="nav-item">
-              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">REGENER8</a>
+              <a className={"nav-link navbar-home-link" + (active === 'home' ? ' active' : '')} href="/">CATN8</a>
             </li>
             {shortcutItems.map((item) => (
               <li className="nav-item" key={item.key}>

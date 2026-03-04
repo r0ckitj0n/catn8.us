@@ -13,13 +13,13 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
   ];
 
   return (
-    <PageLayout page="home" title="REGENER8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="home" title="CATN8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="hero">
         <div className="container hero-content">
           <div className="row align-items-center g-4">
             <div className="col-lg-6">
               <div className="welcome-message catn8-glass-card">
-                <h1>REGENER8</h1>
+                <h1>CATN8</h1>
                 <p className="lead">Where Fun Meets Family!</p>
                 <p>
                   Welcome to our magical corner of the internet! This is a special place where families come together to share

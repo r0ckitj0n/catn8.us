@@ -44,14 +44,12 @@ export function SuspectsModal({
 
               <div className="catn8-mystery-suspects-list">
                 {suspects.map((c, idx) => {
-                  console.log(`[SuspectsModal] Rendering suspect: ${c.name}, agentId: ${c.agentId}, irImageUrl: ${c.irImageUrl}`);
                   return (
                     <div key={`suspect-${c.entityId}-${c.role}-${idx}`} className="catn8-mystery-suspect-card">
                       <button
                         type="button"
                         className="catn8-mystery-suspect-thumb-btn"
                         onClick={() => {
-                          console.log(`[SuspectsModal] Clicked suspect: ${c.name}, agentId: ${c.agentId}`);
                           onInterrogate(c.entityId, c.name, c.agentId);
                         }}
                         disabled={busy}

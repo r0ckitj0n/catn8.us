@@ -8,10 +8,8 @@ export function useInterrogationImages(interrogationAgentId: number) {
 
   React.useEffect(() => {
     const aid = Number(interrogationAgentId || 0);
-    console.log(`[useInterrogationImages] interrogationAgentId changed: ${aid}`);
     // Allow agent IDs up to 100 (Sheriff)
     if (!(aid >= 1 && aid <= 100)) {
-      console.log(`[useInterrogationImages] Invalid agent ID: ${aid}, resetting URLs`);
       setInterrogationIrUrls([]);
       setInterrogationIrIndex(0);
       return;
@@ -19,14 +17,11 @@ export function useInterrogationImages(interrogationAgentId: number) {
     let stopped = false;
     (async () => {
       try {
-        console.log(`[useInterrogationImages] Fetching images for agent ${aid}...`);
         // Use the newly registered list_agent_images action
         const res = await ApiClient.get<IAgentImagesResponse>('/api/mystery/admin.php?action=list_agent_images&agent_id=' + String(aid));
-        console.log(`[useInterrogationImages] API response for agent ${aid}:`, res);
         if (stopped) return;
         if (res && res.success === true) {
           const urls = Array.isArray(res.ir_urls) ? res.ir_urls.map((x) => String(x || '')).filter(Boolean) : [];
-          console.log(`[useInterrogationImages] Found ${urls.length} IR URLs for agent ${aid}:`, urls);
           setInterrogationIrUrls(urls);
           setInterrogationIrIndex(0);
           return;

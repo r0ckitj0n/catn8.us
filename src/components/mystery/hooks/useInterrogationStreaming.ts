@@ -118,7 +118,6 @@ export function useInterrogationStreaming({
   React.useEffect(() => {
     return () => {
       if (interrogationClientRef.current) {
-        console.log("useInterrogationStreaming: Component unmounting, cleaning up client");
         void interrogationClientRef.current.disconnect();
         interrogationClientRef.current = null;
       }

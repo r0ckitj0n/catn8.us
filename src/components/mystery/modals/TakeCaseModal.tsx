@@ -41,7 +41,6 @@ export function TakeCaseModal({ modalRef, cases, busy, onTakeCase }: TakeCaseMod
                           type="button"
                           className="catn8-take-case-tile"
                           onClick={() => {
-                            console.log("TakeCaseModal: Tile clicked for cid =", cid);
                             onTakeCase(cid);
                           }}
                           disabled={busy || !cid}

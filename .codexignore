@@ -22,6 +22,7 @@ current_css_counts.txt
 .env.*
 *.pem
 *.key
+*.key.json
 *.crt
 
 # Local tooling/cache noise

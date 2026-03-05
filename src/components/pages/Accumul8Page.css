@@ -61,3 +61,24 @@
     padding: 0.75rem;
   }
 }
+
+.accumul8-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(17, 22, 32, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.accumul8-help-modal {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid rgba(19, 36, 66, 0.2);
+}

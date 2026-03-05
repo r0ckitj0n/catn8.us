@@ -84,8 +84,6 @@ export function useMysteryState(
       const agentId = Number(se.agent_id || se.data?.agent_id || se.data_json?.agent_id || 0);
       const data = se.data || se.data_json || {};
       const irFallback = agentId >= 1 && agentId <= 100 ? `/images/mystery/agent${agentId}_ir_angry.png` : '/images/mystery/interrogation_room_empty.png';
-      
-      console.log(`[useMysteryState] Entity: ${se.entity_name}, agentId: ${agentId}, irImageUrl: ${irFallback}`);
 
       return {
         entityId: se.entity_id,

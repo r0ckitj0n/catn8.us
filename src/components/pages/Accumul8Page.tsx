@@ -43,7 +43,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [recurringForm, setRecurringForm] = React.useState({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', notes: '' });
   const [ledgerForm, setLedgerForm] = React.useState({ transaction_date: new Date().toISOString().slice(0, 10), due_date: '', entry_type: 'manual', description: '', memo: '', amount: 0, rta_amount: 0, is_paid: 0, is_reconciled: 0, contact_id: '', account_id: '' });
   const [notificationForm, setNotificationForm] = React.useState({ rule_name: '', trigger_type: 'upcoming_due', days_before_due: 3, target_scope: 'group' as 'group' | 'custom', custom_user_ids: '', email_subject_template: '', email_body_template: '' });
-  const [syncNote, setSyncNote] = React.useState('');
+  const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
+  const [syncHelpToken, setSyncHelpToken] = React.useState('');
+  const [syncHelpError, setSyncHelpError] = React.useState('');
+  const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
+    setSyncHelpToken(String(opts?.token || ''));
+    setSyncHelpError(String(opts?.error || ''));
+    setSyncHelpOpen(true);
+  }, []);
   const runPlaidCreateToken = React.useCallback(async () => {
     if (!onToast) return;
     try {
@@ -52,12 +59,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       if (!token) {
         throw new Error('No link token returned');
       }
-      setSyncNote(`Plaid link token generated (${token.slice(0, 24)}...). Add Plaid Link in frontend next.`);
+      openSyncHelp({ token });
       onToast({ tone: 'info', message: 'Plaid link token generated. See Sync panel for next step.' });
     } catch (error: any) {
-      onToast({ tone: 'error', message: String(error?.message || 'Failed to create Plaid link token') });
+      const message = String(error?.message || 'Failed to create Plaid link token');
+      openSyncHelp({ error: message });
+      onToast({ tone: 'error', message });
     }
-  }, [onToast]);
+  }, [onToast, openSyncHelp]);
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -254,9 +263,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
               <div className="d-flex gap-2 flex-wrap mb-3">
                 <button type="button" className="btn btn-outline-primary" onClick={() => void runPlaidCreateToken()} disabled={busy || !syncProvider.configured}>Generate Plaid Link Token</button>
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setSyncNote('To complete linking, integrate Plaid Link JS in this page, capture `public_token`, then call /api/accumul8.php?action=plaid_exchange_public_token.')}>Show Next Step</button>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
-              {syncNote ? <div className="alert alert-info py-2">{syncNote}</div> : null}
               <h4 className="h6">Connected Institutions</h4>
               <div className="table-responsive">
                 <table className="table table-sm">
@@ -274,6 +282,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </table>
               </div>
               <p className="small text-muted mb-0">Target institutions include Capital One, Navy Federal Credit Union, Barclays, Fifth Third, and Truist via the Plaid institution network.</p>
+            </div>
+          )}
+          {syncHelpOpen && (
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Plaid setup guide">
+              <div className="accumul8-help-modal">
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h4 className="h6 mb-0">Plaid Sync Setup Guide</h4>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSyncHelpOpen(false)}>Close</button>
+                </div>
+                {syncHelpError ? <div className="alert alert-warning py-2"><strong>Current error:</strong> {syncHelpError}</div> : null}
+                {syncHelpToken ? <div className="alert alert-success py-2"><strong>Link token generated:</strong> <code>{syncHelpToken.slice(0, 40)}...</code></div> : null}
+                <ol className="mb-2 ps-3">
+                  <li>Create/get your Plaid credentials in <a href="https://dashboard.plaid.com/team/keys" target="_blank" rel="noreferrer">Plaid Dashboard Keys</a>.</li>
+                  <li>Set `accumul8.plaid.client_id`, `accumul8.plaid.secret`, and optional `accumul8.plaid.env` in your server secret store.</li>
+                  <li>Implement Plaid Link in this page using the docs: <a href="https://plaid.com/docs/link/web/" target="_blank" rel="noreferrer">Link for Web</a>.</li>
+                  <li>Pass the generated `link_token` into Plaid Link and capture `public_token` on success.</li>
+                  <li>POST `public_token` to <code>/api/accumul8.php?action=plaid_exchange_public_token</code>.</li>
+                  <li>Then click Sync (or call <code>/api/accumul8.php?action=plaid_sync_transactions</code>) to import transactions.</li>
+                </ol>
+                <div className="small">
+                  Quick references: <a href="https://plaid.com/docs/quickstart/" target="_blank" rel="noreferrer">Plaid Quickstart</a> | <a href="https://plaid.com/docs/api/items/#itempublic_tokenexchange" target="_blank" rel="noreferrer">Public Token Exchange API</a>
+                </div>
+              </div>
             </div>
           )}
           {!loaded && <div className="text-muted mt-2">Loading Accumul8...</div>}

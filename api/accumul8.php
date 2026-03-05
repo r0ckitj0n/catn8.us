@@ -81,17 +81,16 @@ function accumul8_table_has_index(string $tableName, string $indexName): bool
 
 function accumul8_table_has_foreign_key(string $tableName, string $constraintName): bool
 {
-    $row = Database::queryOne(
-        'SELECT 1
-         FROM information_schema.KEY_COLUMN_USAGE
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = ?
-           AND CONSTRAINT_NAME = ?
-           AND REFERENCED_TABLE_NAME IS NOT NULL
-         LIMIT 1',
-        [$tableName, $constraintName]
-    );
-    return (bool)$row;
+    $rows = Database::queryAll('SHOW CREATE TABLE `' . $tableName . '`');
+    if (!$rows) {
+        return false;
+    }
+    $first = (array)$rows[0];
+    $createSql = (string)($first['Create Table'] ?? $first['Create View'] ?? '');
+    if ($createSql === '') {
+        return false;
+    }
+    return stripos($createSql, 'CONSTRAINT `' . $constraintName . '`') !== false;
 }
 
 function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): ?int
@@ -288,14 +287,18 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_bank_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
-        Database::execute('ALTER TABLE accumul8_transactions ADD COLUMN debtor_id INT NULL AFTER contact_id');
-    }
-    if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_debtor')) {
-        Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_debtor (debtor_id)');
-    }
-    if (!accumul8_table_has_foreign_key('accumul8_transactions', 'fk_accumul8_tx_debtor')) {
-        Database::execute('ALTER TABLE accumul8_transactions ADD CONSTRAINT fk_accumul8_tx_debtor FOREIGN KEY (debtor_id) REFERENCES accumul8_debtors(id) ON DELETE SET NULL');
+    try {
+        if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD COLUMN debtor_id INT NULL AFTER contact_id');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_debtor')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_debtor (debtor_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_transactions', 'fk_accumul8_tx_debtor')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD CONSTRAINT fk_accumul8_tx_debtor FOREIGN KEY (debtor_id) REFERENCES accumul8_debtors(id) ON DELETE SET NULL');
+        }
+    } catch (Throwable $e) {
+        error_log('accumul8 schema ensure warning: ' . $e->getMessage());
     }
 }
 

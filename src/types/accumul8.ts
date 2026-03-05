@@ -13,6 +13,14 @@ export interface Accumul8Contact {
   is_active: number;
 }
 
+export interface Accumul8ContactUpsertRequest {
+  contact_name: string;
+  contact_type: Accumul8ContactType;
+  default_amount: number;
+  email: string;
+  notes: string;
+}
+
 export interface Accumul8RecurringPayment {
   id: number;
   contact_id: number | null;
@@ -29,6 +37,18 @@ export interface Accumul8RecurringPayment {
   is_active: number;
   contact_name: string;
   account_name: string;
+}
+
+export interface Accumul8RecurringUpsertRequest {
+  title: string;
+  direction: Accumul8Direction;
+  amount: number;
+  frequency: Accumul8Frequency;
+  interval_count: number;
+  next_due_date: string;
+  contact_id?: number | null;
+  account_id?: number | null;
+  notes?: string;
 }
 
 export interface Accumul8Transaction {
@@ -49,6 +69,20 @@ export interface Accumul8Transaction {
   pending_status: number;
   contact_name: string;
   account_name: string;
+}
+
+export interface Accumul8TransactionUpsertRequest {
+  transaction_date: string;
+  due_date?: string;
+  entry_type: Accumul8EntryType;
+  description: string;
+  memo?: string;
+  amount: number;
+  rta_amount: number;
+  is_paid: number;
+  is_reconciled: number;
+  contact_id?: number | null;
+  account_id?: number | null;
 }
 
 export interface Accumul8Account {
@@ -73,6 +107,16 @@ export interface Accumul8NotificationRule {
   email_body_template: string;
   is_active: number;
   last_triggered_at: string;
+}
+
+export interface Accumul8NotificationRuleUpsertRequest {
+  rule_name: string;
+  trigger_type: string;
+  days_before_due: number;
+  target_scope: 'group' | 'custom';
+  custom_user_ids: number[];
+  email_subject_template: string;
+  email_body_template: string;
 }
 
 export interface Accumul8BillItem {

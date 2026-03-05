@@ -5,9 +5,13 @@ import {
   Accumul8BillItem,
   Accumul8BootstrapResponse,
   Accumul8Contact,
+  Accumul8ContactUpsertRequest,
   Accumul8NotificationRule,
+  Accumul8NotificationRuleUpsertRequest,
   Accumul8RecurringPayment,
+  Accumul8RecurringUpsertRequest,
   Accumul8Transaction,
+  Accumul8TransactionUpsertRequest,
 } from '../types/accumul8';
 export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
   const [busy, setBusy] = React.useState(false);
@@ -61,10 +65,16 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       setBusy(false);
     }
   }, [handleError, load, onToast]);
-  const createContact = React.useCallback(async (form: { contact_name: string; contact_type: string; default_amount: number; email: string; notes: string }) => {
+  const createContact = React.useCallback(async (form: Accumul8ContactUpsertRequest) => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=create_contact', form),
       'Contact saved',
+    );
+  }, [withReload]);
+  const updateContact = React.useCallback(async (id: number, form: Accumul8ContactUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_contact', { id, ...form }),
+      'Contact updated',
     );
   }, [withReload]);
   const deleteContact = React.useCallback(async (id: number) => {
@@ -73,20 +83,16 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       'Contact deleted',
     );
   }, [withReload]);
-  const createRecurring = React.useCallback(async (form: {
-    title: string;
-    direction: string;
-    amount: number;
-    frequency: string;
-    interval_count: number;
-    next_due_date: string;
-    contact_id?: number | null;
-    account_id?: number | null;
-    notes?: string;
-  }) => {
+  const createRecurring = React.useCallback(async (form: Accumul8RecurringUpsertRequest) => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=create_recurring', form),
       'Recurring payment saved',
+    );
+  }, [withReload]);
+  const updateRecurring = React.useCallback(async (id: number, form: Accumul8RecurringUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_recurring', { id, ...form }),
+      'Recurring payment updated',
     );
   }, [withReload]);
   const toggleRecurring = React.useCallback(async (id: number) => {
@@ -95,28 +101,34 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       'Recurring payment updated',
     );
   }, [withReload]);
+  const deleteRecurring = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=delete_recurring', { id }),
+      'Recurring payment deleted',
+    );
+  }, [withReload]);
   const materializeDueRecurring = React.useCallback(async () => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=materialize_due_recurring', {}),
       'Recurring payments posted to ledger',
     );
   }, [withReload]);
-  const createTransaction = React.useCallback(async (form: {
-    transaction_date: string;
-    due_date?: string;
-    entry_type: string;
-    description: string;
-    memo?: string;
-    amount: number;
-    rta_amount: number;
-    is_paid: number;
-    is_reconciled: number;
-    contact_id?: number | null;
-    account_id?: number | null;
-  }) => {
+  const createTransaction = React.useCallback(async (form: Accumul8TransactionUpsertRequest) => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=create_transaction', form),
       'Transaction saved',
+    );
+  }, [withReload]);
+  const updateTransaction = React.useCallback(async (id: number, form: Accumul8TransactionUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_transaction', { id, ...form }),
+      'Transaction updated',
+    );
+  }, [withReload]);
+  const deleteTransaction = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=delete_transaction', { id }),
+      'Transaction deleted',
     );
   }, [withReload]);
   const toggleTransactionPaid = React.useCallback(async (id: number) => {
@@ -129,24 +141,28 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       () => ApiClient.post('/api/accumul8.php?action=toggle_transaction_reconciled', { id }),
     );
   }, [withReload]);
-  const createNotificationRule = React.useCallback(async (form: {
-    rule_name: string;
-    trigger_type: string;
-    days_before_due: number;
-    target_scope: 'group' | 'custom';
-    custom_user_ids: number[];
-    email_subject_template: string;
-    email_body_template: string;
-  }) => {
+  const createNotificationRule = React.useCallback(async (form: Accumul8NotificationRuleUpsertRequest) => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=create_notification_rule', form),
       'Notification rule saved',
+    );
+  }, [withReload]);
+  const updateNotificationRule = React.useCallback(async (id: number, form: Accumul8NotificationRuleUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_notification_rule', { id, ...form }),
+      'Notification rule updated',
     );
   }, [withReload]);
   const toggleNotificationRule = React.useCallback(async (id: number) => {
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=toggle_notification_rule', { id }),
       'Notification rule updated',
+    );
+  }, [withReload]);
+  const deleteNotificationRule = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=delete_notification_rule', { id }),
+      'Notification rule deleted',
     );
   }, [withReload]);
   const sendNotification = React.useCallback(async (payload: { rule_id?: number; subject?: string; body?: string; target_scope?: 'group' | 'custom'; custom_user_ids?: number[] }) => {
@@ -196,15 +212,22 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     syncProvider,
     load,
     createContact,
+    updateContact,
     deleteContact,
     createRecurring,
+    updateRecurring,
     toggleRecurring,
+    deleteRecurring,
     materializeDueRecurring,
     createTransaction,
+    updateTransaction,
+    deleteTransaction,
     toggleTransactionPaid,
     toggleTransactionReconciled,
     createNotificationRule,
+    updateNotificationRule,
     toggleNotificationRule,
+    deleteNotificationRule,
     sendNotification,
     syncBankConnection,
   };

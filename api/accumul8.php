@@ -652,6 +652,34 @@ if ($action === 'create_contact') {
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
 }
 
+if ($action === 'update_contact') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $name = accumul8_normalize_text($body['contact_name'] ?? '', 191);
+    $type = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $amount = accumul8_normalize_amount($body['default_amount'] ?? 0);
+    $email = accumul8_normalize_text($body['email'] ?? '', 191);
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($name === '') {
+        catn8_json_response(['success' => false, 'error' => 'contact_name is required'], 400);
+    }
+
+    Database::execute(
+        'UPDATE accumul8_contacts
+         SET contact_name = ?, contact_type = ?, default_amount = ?, email = ?, notes = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [$name, $type, $amount, ($email === '' ? null : $email), ($notes === '' ? null : $notes), $id, $viewerId]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
 if ($action === 'delete_contact') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -708,6 +736,56 @@ if ($action === 'create_recurring') {
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
 }
 
+if ($action === 'update_recurring') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $title = accumul8_normalize_text($body['title'] ?? '', 191);
+    $direction = accumul8_validate_enum('direction', $body['direction'] ?? 'outflow', ['outflow', 'inflow'], 'outflow');
+    $frequency = accumul8_validate_enum('frequency', $body['frequency'] ?? 'monthly', ['daily', 'weekly', 'biweekly', 'monthly'], 'monthly');
+    $amount = accumul8_normalize_amount($body['amount'] ?? 0);
+    $intervalCount = (int)($body['interval_count'] ?? 1);
+    $intervalCount = max(1, min(365, $intervalCount));
+    $nextDue = accumul8_require_valid_date('next_due_date', $body['next_due_date'] ?? '');
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
+    $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
+    $dayOfMonth = isset($body['day_of_month']) && $body['day_of_month'] !== '' ? (int)$body['day_of_month'] : null;
+    $dayOfWeek = isset($body['day_of_week']) && $body['day_of_week'] !== '' ? (int)$body['day_of_week'] : null;
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($title === '') {
+        catn8_json_response(['success' => false, 'error' => 'title is required'], 400);
+    }
+
+    Database::execute(
+        'UPDATE accumul8_recurring_payments
+         SET contact_id = ?, account_id = ?, title = ?, direction = ?, amount = ?, frequency = ?, interval_count = ?,
+             day_of_month = ?, day_of_week = ?, next_due_date = ?, notes = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $contactId > 0 ? $contactId : null,
+            $accountId > 0 ? $accountId : null,
+            $title,
+            $direction,
+            $amount,
+            $frequency,
+            $intervalCount,
+            $dayOfMonth,
+            $dayOfWeek,
+            $nextDue,
+            $notes === '' ? null : $notes,
+            $id,
+            $viewerId,
+        ]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
 if ($action === 'toggle_recurring') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -723,6 +801,18 @@ if ($action === 'toggle_recurring') {
         [$id, $viewerId]
     );
 
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_recurring') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    Database::execute('DELETE FROM accumul8_recurring_payments WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
     catn8_json_response(['success' => true]);
 }
 
@@ -844,6 +934,57 @@ if ($action === 'create_transaction') {
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
 }
 
+if ($action === 'update_transaction') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $transactionDate = accumul8_require_valid_date('transaction_date', $body['transaction_date'] ?? date('Y-m-d'));
+    $dueDate = accumul8_normalize_date($body['due_date'] ?? null);
+    $entryType = accumul8_validate_enum('entry_type', $body['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
+    $description = accumul8_normalize_text($body['description'] ?? '', 255);
+    $memo = accumul8_normalize_text($body['memo'] ?? '', 5000);
+    $amount = accumul8_normalize_amount($body['amount'] ?? 0);
+    $rtaAmount = accumul8_normalize_amount($body['rta_amount'] ?? 0);
+    $isPaid = accumul8_normalize_bool($body['is_paid'] ?? 0);
+    $isReconciled = accumul8_normalize_bool($body['is_reconciled'] ?? 0);
+    $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($description === '') {
+        catn8_json_response(['success' => false, 'error' => 'description is required'], 400);
+    }
+
+    Database::execute(
+        'UPDATE accumul8_transactions
+         SET account_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+             memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $accountId > 0 ? $accountId : null,
+            $contactId > 0 ? $contactId : null,
+            $transactionDate,
+            $dueDate,
+            $entryType,
+            $description,
+            $memo === '' ? null : $memo,
+            $amount,
+            $rtaAmount,
+            $isPaid,
+            $isReconciled,
+            $id,
+            $viewerId,
+        ]
+    );
+
+    accumul8_recompute_running_balance($viewerId);
+
+    catn8_json_response(['success' => true]);
+}
+
 if ($action === 'toggle_transaction_paid') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -879,6 +1020,19 @@ if ($action === 'toggle_transaction_reconciled') {
         [$id, $viewerId]
     );
 
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_transaction') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    Database::execute('DELETE FROM accumul8_transactions WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
+    accumul8_recompute_running_balance($viewerId);
     catn8_json_response(['success' => true]);
 }
 
@@ -929,6 +1083,58 @@ if ($action === 'create_notification_rule') {
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
 }
 
+if ($action === 'update_notification_rule') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $ruleName = accumul8_normalize_text($body['rule_name'] ?? '', 191);
+    $triggerType = accumul8_validate_enum('trigger_type', $body['trigger_type'] ?? 'upcoming_due', ['upcoming_due', 'overdue', 'manual'], 'upcoming_due');
+    $daysBeforeDue = (int)($body['days_before_due'] ?? 3);
+    $daysBeforeDue = max(0, min(90, $daysBeforeDue));
+    $targetScope = accumul8_validate_enum('target_scope', $body['target_scope'] ?? 'group', ['group', 'custom'], 'group');
+    $subject = accumul8_normalize_text($body['email_subject_template'] ?? '', 255);
+    $message = accumul8_normalize_text($body['email_body_template'] ?? '', 8000);
+    $customIdsRaw = $body['custom_user_ids'] ?? [];
+    $customIds = [];
+    if (is_array($customIdsRaw)) {
+        foreach ($customIdsRaw as $customId) {
+            $n = (int)$customId;
+            if ($n > 0) {
+                $customIds[] = $n;
+            }
+        }
+        $customIds = array_values(array_unique($customIds));
+    }
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($ruleName === '' || $subject === '' || $message === '') {
+        catn8_json_response(['success' => false, 'error' => 'rule_name, email_subject_template, and email_body_template are required'], 400);
+    }
+
+    Database::execute(
+        'UPDATE accumul8_notification_rules
+         SET rule_name = ?, trigger_type = ?, days_before_due = ?, target_scope = ?, custom_user_ids_json = ?,
+             email_subject_template = ?, email_body_template = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $ruleName,
+            $triggerType,
+            $daysBeforeDue,
+            $targetScope,
+            json_encode($customIds),
+            $subject,
+            $message,
+            $id,
+            $viewerId,
+        ]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
 if ($action === 'toggle_notification_rule') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -944,6 +1150,18 @@ if ($action === 'toggle_notification_rule') {
         [$id, $viewerId]
     );
 
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_notification_rule') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    Database::execute('DELETE FROM accumul8_notification_rules WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
     catn8_json_response(['success' => true]);
 }
 

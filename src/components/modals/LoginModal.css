@@ -1,6 +1,6 @@
 .catn8-login-panel {
   position: fixed;
-  z-index: 1090;
+  z-index: calc(var(--catn8-z-toast, 6300) - 1);
   width: min(420px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   overflow: auto;

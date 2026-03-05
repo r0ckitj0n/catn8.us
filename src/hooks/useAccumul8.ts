@@ -2,10 +2,14 @@ import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
   Accumul8Account,
+  Accumul8BudgetRow,
+  Accumul8BudgetRowUpsertRequest,
   Accumul8BillItem,
   Accumul8BootstrapResponse,
   Accumul8Contact,
   Accumul8ContactUpsertRequest,
+  Accumul8Debtor,
+  Accumul8DebtorUpsertRequest,
   Accumul8NotificationRule,
   Accumul8NotificationRuleUpsertRequest,
   Accumul8RecurringPayment,
@@ -23,6 +27,9 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
   const [accounts, setAccounts] = React.useState<Accumul8Account[]>([]);
   const [notificationRules, setNotificationRules] = React.useState<Accumul8NotificationRule[]>([]);
   const [payBills, setPayBills] = React.useState<Accumul8BillItem[]>([]);
+  const [debtors, setDebtors] = React.useState<Accumul8Debtor[]>([]);
+  const [debtorLedger, setDebtorLedger] = React.useState<Accumul8Transaction[]>([]);
+  const [budgetRows, setBudgetRows] = React.useState<Accumul8BudgetRow[]>([]);
   const [bankConnections, setBankConnections] = React.useState<any[]>([]);
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'plaid', env: 'sandbox', configured: 0 });
   const handleError = React.useCallback((error: any, fallback = 'Accumul8 request failed') => {
@@ -41,6 +48,9 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       setAccounts(Array.isArray(res?.accounts) ? res.accounts : []);
       setNotificationRules(Array.isArray(res?.notification_rules) ? res.notification_rules : []);
       setPayBills(Array.isArray(res?.pay_bills) ? res.pay_bills : []);
+      setDebtors(Array.isArray(res?.debtors) ? res.debtors : []);
+      setDebtorLedger(Array.isArray(res?.debtor_ledger) ? res.debtor_ledger : []);
+      setBudgetRows(Array.isArray(res?.budget_rows) ? res.budget_rows : []);
       setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
       setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
@@ -81,6 +91,24 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     await withReload(
       () => ApiClient.post('/api/accumul8.php?action=delete_contact', { id }),
       'Contact deleted',
+    );
+  }, [withReload]);
+  const createDebtor = React.useCallback(async (form: Accumul8DebtorUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=create_debtor', form),
+      'Debtor saved',
+    );
+  }, [withReload]);
+  const updateDebtor = React.useCallback(async (id: number, form: Accumul8DebtorUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_debtor', { id, ...form }),
+      'Debtor updated',
+    );
+  }, [withReload]);
+  const deleteDebtor = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=delete_debtor', { id }),
+      'Debtor deleted',
     );
   }, [withReload]);
   const createRecurring = React.useCallback(async (form: Accumul8RecurringUpsertRequest) => {
@@ -195,6 +223,24 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       setBusy(false);
     }
   }, [handleError, load, onToast]);
+  const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=create_budget_row', form),
+      'Spreadsheet row saved',
+    );
+  }, [withReload]);
+  const updateBudgetRow = React.useCallback(async (id: number, form: Accumul8BudgetRowUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=update_budget_row', { id, ...form }),
+      'Spreadsheet row updated',
+    );
+  }, [withReload]);
+  const deleteBudgetRow = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post('/api/accumul8.php?action=delete_budget_row', { id }),
+      'Spreadsheet row deleted',
+    );
+  }, [withReload]);
   React.useEffect(() => {
     void load();
   }, [load]);
@@ -208,12 +254,18 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     accounts,
     notificationRules,
     payBills,
+    debtors,
+    debtorLedger,
+    budgetRows,
     bankConnections,
     syncProvider,
     load,
     createContact,
     updateContact,
     deleteContact,
+    createDebtor,
+    updateDebtor,
+    deleteDebtor,
     createRecurring,
     updateRecurring,
     toggleRecurring,
@@ -224,6 +276,9 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     deleteTransaction,
     toggleTransactionPaid,
     toggleTransactionReconciled,
+    createBudgetRow,
+    updateBudgetRow,
+    deleteBudgetRow,
     createNotificationRule,
     updateNotificationRule,
     toggleNotificationRule,

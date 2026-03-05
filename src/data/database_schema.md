@@ -79,6 +79,27 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_debtors
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `contact_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_contacts.id)
+- `debtor_name` (VARCHAR(191))
+- `notes` (TEXT, NULLABLE)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### accumul8_budget_rows
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `row_order` (INT)
+- `category_name` (VARCHAR(191))
+- `monthly_budget` (DECIMAL(10,2))
+- `match_pattern` (VARCHAR(191), NULLABLE)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### accumul8_recurring_payments
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)
@@ -102,6 +123,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)
 - `account_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_accounts.id)
 - `contact_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_contacts.id)
+- `debtor_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_debtors.id)
 - `transaction_date` (DATE)
 - `due_date` (DATE, NULLABLE)
 - `entry_type` (VARCHAR(24))

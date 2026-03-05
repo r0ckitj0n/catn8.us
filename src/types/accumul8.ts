@@ -55,6 +55,7 @@ export interface Accumul8Transaction {
   id: number;
   account_id: number | null;
   contact_id: number | null;
+  debtor_id: number | null;
   transaction_date: string;
   due_date: string;
   entry_type: Accumul8EntryType;
@@ -69,6 +70,7 @@ export interface Accumul8Transaction {
   pending_status: number;
   contact_name: string;
   account_name: string;
+  debtor_name: string;
 }
 
 export interface Accumul8TransactionUpsertRequest {
@@ -83,6 +85,7 @@ export interface Accumul8TransactionUpsertRequest {
   is_reconciled: number;
   contact_id?: number | null;
   account_id?: number | null;
+  debtor_id?: number | null;
 }
 
 export interface Accumul8Account {
@@ -147,6 +150,44 @@ export interface Accumul8Summary {
   unpaid_outflow_total: number;
 }
 
+export interface Accumul8Debtor {
+  id: number;
+  contact_id: number | null;
+  debtor_name: string;
+  notes: string;
+  is_active: number;
+  total_loaned: number;
+  total_repaid: number;
+  outstanding_balance: number;
+  transaction_count: number;
+  last_activity_date: string;
+  contact_name: string;
+}
+
+export interface Accumul8DebtorUpsertRequest {
+  debtor_name: string;
+  contact_id?: number | null;
+  notes?: string;
+  is_active?: number;
+}
+
+export interface Accumul8BudgetRow {
+  id: number;
+  row_order: number;
+  category_name: string;
+  monthly_budget: number;
+  match_pattern: string;
+  is_active: number;
+}
+
+export interface Accumul8BudgetRowUpsertRequest {
+  category_name: string;
+  monthly_budget: number;
+  match_pattern?: string;
+  row_order?: number;
+  is_active?: number;
+}
+
 export interface Accumul8BootstrapResponse {
   success: boolean;
   contacts: Accumul8Contact[];
@@ -156,6 +197,9 @@ export interface Accumul8BootstrapResponse {
   notification_rules: Accumul8NotificationRule[];
   pay_bills: Accumul8BillItem[];
   bank_connections: Accumul8BankConnection[];
+  debtors: Accumul8Debtor[];
+  debtor_ledger: Accumul8Transaction[];
+  budget_rows: Accumul8BudgetRow[];
   sync_provider: {
     provider: string;
     env: string;

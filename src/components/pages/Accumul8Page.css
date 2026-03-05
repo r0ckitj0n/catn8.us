@@ -55,6 +55,15 @@
   font-family: 'Courier New', Courier, monospace;
 }
 
+.accumul8-spreadsheet-table td,
+.accumul8-spreadsheet-table th {
+  vertical-align: middle;
+}
+
+.accumul8-spreadsheet-table tfoot td {
+  background: #eef3fb;
+}
+
 .accumul8-ledger-table tr.is-outflow td {
   background: rgba(195, 25, 18, 0.08);
 }

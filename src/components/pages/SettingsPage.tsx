@@ -12,6 +12,7 @@ import { BuildWizardSettingsModal } from '../modals/BuildWizardSettingsModal';
 import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
 import { SiteMaintenanceModal } from '../modals/SiteMaintenanceModal';
 import { ColoringPagesModal } from '../modals/ColoringPagesModal';
+import { PlaidConfigModal } from '../modals/PlaidConfigModal';
 import { IToast } from '../../types/common';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
@@ -47,6 +48,7 @@ export function SettingsPage({
   const [iconsOpen, setIconsOpen] = React.useState(false);
   const [siteMaintenanceOpen, setSiteMaintenanceOpen] = React.useState(false);
   const [coloringPagesOpen, setColoringPagesOpen] = React.useState(false);
+  const [plaidConfigOpen, setPlaidConfigOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
 
   return (
@@ -133,6 +135,11 @@ export function SettingsPage({
                           Build Wizard
                         </button>
                       ) : null}
+                      {isAdmin ? (
+                        <button type="button" className="btn btn-primary" onClick={() => setPlaidConfigOpen(true)}>
+                          Plaid Configuration
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -172,6 +179,7 @@ export function SettingsPage({
       <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
       <SiteMaintenanceModal open={siteMaintenanceOpen} onClose={() => setSiteMaintenanceOpen(false)} onToast={onToast} />
       <ColoringPagesModal open={coloringPagesOpen} onClose={() => setColoringPagesOpen(false)} onToast={onToast} />
+      <PlaidConfigModal open={plaidConfigOpen} onClose={() => setPlaidConfigOpen(false)} onToast={onToast} />
     </>
   );
 }

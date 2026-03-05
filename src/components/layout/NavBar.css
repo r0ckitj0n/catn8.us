@@ -37,8 +37,22 @@
   align-items: center;
 }
 
+.catn8-nav-shortcuts {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.catn8-nav-shortcuts .nav-item {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 .catn8-nav-account {
   margin-left: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 .catn8-nav-logo-link {
@@ -50,16 +64,21 @@
 }
 
 .navbar .nav-link {
-  font-size: 1.4rem;
+  font-size: clamp(0.7rem, 0.82vw, 1.15rem);
   color: var(--catn8-glass-heading) !important;
-  padding: 0.75rem 1.5rem;
-  margin: 0 0.5rem;
+  padding: clamp(0.32rem, 0.5vw, 0.75rem) clamp(0.45rem, 0.9vw, 1.1rem);
+  margin: 0 clamp(0.06rem, 0.3vw, 0.35rem);
   border-radius: 25px;
   transition: all var(--catn8-transition-base) ease;
   background: rgba(255, 255, 255, 0.55);
   pointer-events: auto;
   position: relative;
   z-index: 6201;
+  line-height: 1.15;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .navbar .nav-link:hover {
@@ -74,6 +93,8 @@
 
 .catn8-nav-mystery-title {
   margin-right: 0.5rem;
+  flex: 0 1 16rem;
+  min-width: 0;
 }
 
 @media (min-width: 992px) {
@@ -85,6 +106,10 @@
 
 @media (max-width: 991.98px) {
   .navbar > .container {
+    flex-wrap: wrap;
+  }
+
+  .catn8-nav-shortcuts {
     flex-wrap: wrap;
   }
 

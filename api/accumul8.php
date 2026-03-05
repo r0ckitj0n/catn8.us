@@ -73,6 +73,12 @@ function accumul8_table_has_column(string $tableName, string $columnName): bool
     return !empty($rows);
 }
 
+function accumul8_table_exists(string $tableName): bool
+{
+    $rows = Database::queryAll('SHOW TABLES LIKE ?', [$tableName]);
+    return !empty($rows);
+}
+
 function accumul8_table_has_index(string $tableName, string $indexName): bool
 {
     $rows = Database::queryAll('SHOW INDEX FROM `' . $tableName . '` WHERE Key_name = ?', [$indexName]);
@@ -91,6 +97,13 @@ function accumul8_table_has_foreign_key(string $tableName, string $constraintNam
         return false;
     }
     return stripos($createSql, 'CONSTRAINT `' . $constraintName . '`') !== false;
+}
+
+function accumul8_table_add_column_if_missing(string $tableName, string $columnName, string $columnDefinition): void
+{
+    if (!accumul8_table_has_column($tableName, $columnName)) {
+        Database::execute('ALTER TABLE `' . $tableName . '` ADD COLUMN `' . $columnName . '` ' . $columnDefinition);
+    }
 }
 
 function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): ?int
@@ -112,6 +125,25 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
         [$id, $viewerId]
     );
     return $row ? $id : null;
+}
+
+function accumul8_transactions_has_debtor_column(): bool
+{
+    static $hasColumn = null;
+    if ($hasColumn !== null) {
+        return $hasColumn;
+    }
+    try {
+        $hasColumn = accumul8_table_has_column('accumul8_transactions', 'debtor_id');
+    } catch (Throwable $e) {
+        $hasColumn = false;
+    }
+    return $hasColumn;
+}
+
+function accumul8_has_debtor_support(): bool
+{
+    return accumul8_transactions_has_debtor_column() && accumul8_table_exists('accumul8_debtors');
 }
 
 function accumul8_tables_ensure(): void
@@ -288,6 +320,42 @@ function accumul8_tables_ensure(): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     try {
+        // Legacy schema upgrades for installations that predate newer Accumul8 fields.
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'account_type', "VARCHAR(40) NOT NULL DEFAULT 'checking'");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'institution_name', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'available_balance', "DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'account_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'interval_count', 'INT NOT NULL DEFAULT 1');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'day_of_month', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'day_of_week', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'notes', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'due_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'entry_type', "VARCHAR(24) NOT NULL DEFAULT 'manual'");
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'memo', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'rta_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'is_reconciled', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'is_recurring_instance', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'recurring_payment_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'source_kind', "VARCHAR(24) NOT NULL DEFAULT 'manual'");
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'source_ref', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'external_id', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'pending_status', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'created_by_user_id', 'INT NOT NULL DEFAULT 0');
+
+        accumul8_table_add_column_if_missing('accumul8_notification_rules', 'custom_user_ids_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_notification_rules', 'last_triggered_at', 'DATETIME NULL');
+
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'institution_id', 'VARCHAR(64) NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'institution_name', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'status', "VARCHAR(32) NOT NULL DEFAULT 'setup_pending'");
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_sync_at', 'DATETIME NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_error', 'TEXT NULL');
+
         if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
             Database::execute('ALTER TABLE accumul8_transactions ADD COLUMN debtor_id INT NULL AFTER contact_id');
         }
@@ -403,6 +471,10 @@ function accumul8_list_accounts(int $viewerId): array
 
 function accumul8_list_debtors(int $viewerId): array
 {
+    if (!accumul8_has_debtor_support()) {
+        return [];
+    }
+
     $rows = Database::queryAll(
         'SELECT d.id, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at,
                 c.contact_name,
@@ -443,6 +515,10 @@ function accumul8_list_debtors(int $viewerId): array
 
 function accumul8_list_budget_rows(int $viewerId): array
 {
+    if (!accumul8_table_exists('accumul8_budget_rows')) {
+        return [];
+    }
+
     $rows = Database::queryAll(
         'SELECT id, row_order, category_name, monthly_budget, match_pattern, is_active
          FROM accumul8_budget_rows
@@ -491,14 +567,18 @@ function accumul8_recompute_running_balance(int $viewerId): void
 function accumul8_list_transactions(int $viewerId, int $limit = 400): array
 {
     $limit = max(1, min(1000, $limit));
+    $hasDebtor = accumul8_has_debtor_support();
+    $debtorSelect = $hasDebtor ? 't.debtor_id' : 'NULL AS debtor_id';
+    $debtorNameSelect = $hasDebtor ? ', d.debtor_name' : ", '' AS debtor_name";
+    $debtorJoin = $hasDebtor ? 'LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id' : '';
     $rows = Database::queryAll(
-        'SELECT t.id, t.account_id, t.contact_id, t.debtor_id, t.transaction_date, t.due_date, t.entry_type, t.description, t.memo,
+        'SELECT t.id, t.account_id, t.contact_id, ' . $debtorSelect . ', t.transaction_date, t.due_date, t.entry_type, t.description, t.memo,
                 t.amount, t.rta_amount, t.running_balance, t.is_paid, t.is_reconciled, t.source_kind, t.pending_status,
-                c.contact_name, a.account_name, d.debtor_name
+                c.contact_name, a.account_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
          LEFT JOIN accumul8_contacts c ON c.id = t.contact_id AND c.owner_user_id = t.owner_user_id
          LEFT JOIN accumul8_accounts a ON a.id = t.account_id AND a.owner_user_id = t.owner_user_id
-         LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id
+         ' . $debtorJoin . '
          WHERE t.owner_user_id = ?
          ORDER BY t.transaction_date DESC, t.id DESC
          LIMIT ' . (int)$limit,
@@ -1197,35 +1277,61 @@ if ($action === 'create_transaction') {
     $debtorId = isset($body['debtor_id']) ? (int)$body['debtor_id'] : 0;
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
-    $debtorIdOrNull = accumul8_owned_id_or_null('debtors', $viewerId, $debtorId);
+    $hasDebtor = accumul8_has_debtor_support();
+    $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
 
     if ($description === '') {
         catn8_json_response(['success' => false, 'error' => 'description is required'], 400);
     }
 
-    Database::execute(
-        'INSERT INTO accumul8_transactions
-            (owner_user_id, account_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
-             is_paid, is_reconciled, source_kind, created_by_user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-            $viewerId,
-            $accountIdOrNull,
-            $contactIdOrNull,
-            $debtorIdOrNull,
-            $transactionDate,
-            $dueDate,
-            $entryType,
-            $description,
-            $memo === '' ? null : $memo,
-            $amount,
-            $rtaAmount,
-            $isPaid,
-            $isReconciled,
-            'manual',
-            $viewerId,
-        ]
-    );
+    if ($hasDebtor) {
+        Database::execute(
+            'INSERT INTO accumul8_transactions
+                (owner_user_id, account_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                 is_paid, is_reconciled, source_kind, created_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $viewerId,
+                $accountIdOrNull,
+                $contactIdOrNull,
+                $debtorIdOrNull,
+                $transactionDate,
+                $dueDate,
+                $entryType,
+                $description,
+                $memo === '' ? null : $memo,
+                $amount,
+                $rtaAmount,
+                $isPaid,
+                $isReconciled,
+                'manual',
+                $viewerId,
+            ]
+        );
+    } else {
+        Database::execute(
+            'INSERT INTO accumul8_transactions
+                (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                 is_paid, is_reconciled, source_kind, created_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $viewerId,
+                $accountIdOrNull,
+                $contactIdOrNull,
+                $transactionDate,
+                $dueDate,
+                $entryType,
+                $description,
+                $memo === '' ? null : $memo,
+                $amount,
+                $rtaAmount,
+                $isPaid,
+                $isReconciled,
+                'manual',
+                $viewerId,
+            ]
+        );
+    }
 
     accumul8_recompute_running_balance($viewerId);
 
@@ -1251,7 +1357,8 @@ if ($action === 'update_transaction') {
     $debtorId = isset($body['debtor_id']) ? (int)$body['debtor_id'] : 0;
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
-    $debtorIdOrNull = accumul8_owned_id_or_null('debtors', $viewerId, $debtorId);
+    $hasDebtor = accumul8_has_debtor_support();
+    $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
 
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
@@ -1260,28 +1367,52 @@ if ($action === 'update_transaction') {
         catn8_json_response(['success' => false, 'error' => 'description is required'], 400);
     }
 
-    Database::execute(
-        'UPDATE accumul8_transactions
-         SET account_id = ?, contact_id = ?, debtor_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
-             memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?
-         WHERE id = ? AND owner_user_id = ?',
-        [
-            $accountIdOrNull,
-            $contactIdOrNull,
-            $debtorIdOrNull,
-            $transactionDate,
-            $dueDate,
-            $entryType,
-            $description,
-            $memo === '' ? null : $memo,
-            $amount,
-            $rtaAmount,
-            $isPaid,
-            $isReconciled,
-            $id,
-            $viewerId,
-        ]
-    );
+    if ($hasDebtor) {
+        Database::execute(
+            'UPDATE accumul8_transactions
+             SET account_id = ?, contact_id = ?, debtor_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $accountIdOrNull,
+                $contactIdOrNull,
+                $debtorIdOrNull,
+                $transactionDate,
+                $dueDate,
+                $entryType,
+                $description,
+                $memo === '' ? null : $memo,
+                $amount,
+                $rtaAmount,
+                $isPaid,
+                $isReconciled,
+                $id,
+                $viewerId,
+            ]
+        );
+    } else {
+        Database::execute(
+            'UPDATE accumul8_transactions
+             SET account_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $accountIdOrNull,
+                $contactIdOrNull,
+                $transactionDate,
+                $dueDate,
+                $entryType,
+                $description,
+                $memo === '' ? null : $memo,
+                $amount,
+                $rtaAmount,
+                $isPaid,
+                $isReconciled,
+                $id,
+                $viewerId,
+            ]
+        );
+    }
 
     accumul8_recompute_running_balance($viewerId);
 

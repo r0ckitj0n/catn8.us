@@ -93,6 +93,16 @@ export function SettingsPage({
                       }}>
                         AI Configuration
                       </button>
+                      <button type="button" className="btn btn-primary" onClick={() => {
+                        if (typeof onOpenAiVoiceCommunication === 'function') onOpenAiVoiceCommunication();
+                      }}>
+                        AI Voice Communication
+                      </button>
+                      <button type="button" className="btn btn-primary" onClick={() => {
+                        if (typeof onOpenAiImageConfig === 'function') onOpenAiImageConfig();
+                      }}>
+                        AI Image Configuration
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -119,3 +119,22 @@ export interface Accumul8BootstrapResponse {
   };
   summary: Accumul8Summary;
 }
+
+export interface Accumul8PlaidCreateLinkTokenResponse {
+  success: boolean;
+  link_token: string;
+  expiration: string;
+}
+
+export interface Accumul8PlaidExchangeResponse {
+  success: boolean;
+  connection_id: number;
+  item_id: string;
+}
+
+export interface Accumul8PlaidSyncResponse {
+  success: boolean;
+  added: number;
+  modified: number;
+  removed: number;
+}

@@ -47,7 +47,7 @@ export function PlaidConfigModal({ open, onClose, onToast }: PlaidConfigModalPro
             <div className="d-flex align-items-center gap-2">
               <button
                 type="button"
-                className={'btn btn-sm btn-primary catn8-dirty-save' + (state.isDirty ? ' catn8-dirty-save--visible' : '')}
+                className="btn btn-sm btn-primary"
                 onClick={(e) => void state.save(e)}
                 disabled={state.busy || !state.isDirty}
                 aria-label="Save"
@@ -131,11 +131,17 @@ export function PlaidConfigModal({ open, onClose, onToast }: PlaidConfigModalPro
                 </div>
 
                 <div className="d-flex gap-2">
+                  <button type="button" className="btn btn-primary" disabled={state.busy || !state.isDirty} onClick={(e) => void state.save(e)}>
+                    Save Changes
+                  </button>
                   <button type="button" className="btn btn-outline-secondary" disabled={state.busy} onClick={() => void state.load()}>
                     Reload
                   </button>
                   <button type="button" className="btn btn-outline-primary" disabled={state.busy} onClick={(e) => void state.test(e)}>
                     Test Plaid
+                  </button>
+                  <button type="button" className="btn btn-success" disabled={state.busy} onClick={() => void state.connectBank()}>
+                    Connect Bank via Plaid
                   </button>
                 </div>
               </div>

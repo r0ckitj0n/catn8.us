@@ -3,6 +3,12 @@ import { PageLayout } from '../layout/PageLayout';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
+import { openPlaidLink } from '../../core/plaidLink';
+import {
+  Accumul8PlaidCreateLinkTokenResponse,
+  Accumul8PlaidExchangeResponse,
+  Accumul8PlaidSyncResponse,
+} from '../../types/accumul8';
 import './Accumul8Page.css';
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
@@ -25,6 +31,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     payBills,
     bankConnections,
     syncProvider,
+    load,
     createContact,
     deleteContact,
     createRecurring,
@@ -51,22 +58,53 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setSyncHelpError(String(opts?.error || ''));
     setSyncHelpOpen(true);
   }, []);
-  const runPlaidCreateToken = React.useCallback(async () => {
+  const runPlaidLink = React.useCallback(async () => {
     if (!onToast) return;
+    if (!syncProvider.configured) {
+      onToast({ tone: 'error', message: 'Plaid is not configured. Save credentials in Settings first.' });
+      return;
+    }
+
     try {
-      const res = await ApiClient.post<any>('/api/accumul8.php?action=plaid_create_link_token', { client_name: 'Accumul8' });
-      const token = String(res?.link_token || '');
+      const tokenRes = await ApiClient.post<Accumul8PlaidCreateLinkTokenResponse>('/api/accumul8.php?action=plaid_create_link_token', { client_name: 'Accumul8' });
+      const token = String(tokenRes?.link_token || '');
       if (!token) {
         throw new Error('No link token returned');
       }
-      openSyncHelp({ token });
-      onToast({ tone: 'info', message: 'Plaid link token generated. See Sync panel for next step.' });
+
+      setSyncHelpError('');
+      setSyncHelpToken(token);
+
+      const linkResult = await openPlaidLink(token);
+
+      if (linkResult.outcome === 'cancelled') {
+        onToast({ tone: 'info', message: 'Plaid Link was closed before connecting an account.' });
+        return;
+      }
+
+      const institutionId = String(linkResult.metadata?.institution?.institution_id || '');
+      const institutionName = String(linkResult.metadata?.institution?.name || '');
+      const exchangeRes = await ApiClient.post<Accumul8PlaidExchangeResponse>('/api/accumul8.php?action=plaid_exchange_public_token', {
+        public_token: String(linkResult.publicToken || ''),
+        institution_id: institutionId,
+        institution_name: institutionName,
+      });
+      const connectionId = Number(exchangeRes?.connection_id || 0);
+      if (connectionId <= 0) {
+        throw new Error('Plaid exchange did not return a valid connection id');
+      }
+      const syncRes = await ApiClient.post<Accumul8PlaidSyncResponse>('/api/accumul8.php?action=plaid_sync_transactions', {
+        connection_id: connectionId,
+      });
+      const added = Number(syncRes?.added || 0);
+      onToast({ tone: 'success', message: `Plaid connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
+      await load();
     } catch (error: any) {
       const message = String(error?.message || 'Failed to create Plaid link token');
       openSyncHelp({ error: message });
       onToast({ tone: 'error', message });
     }
-  }, [onToast, openSyncHelp]);
+  }, [load, onToast, openSyncHelp, syncProvider.configured]);
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -262,7 +300,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <h3>Bank Sync Groundwork</h3>
               <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
               <div className="d-flex gap-2 flex-wrap mb-3">
-                <button type="button" className="btn btn-outline-primary" onClick={() => void runPlaidCreateToken()} disabled={busy || !syncProvider.configured}>Generate Plaid Link Token</button>
+                <button type="button" className="btn btn-outline-primary" onClick={() => void runPlaidLink()} disabled={busy || !syncProvider.configured}>Connect Bank via Plaid</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
               <h4 className="h6">Connected Institutions</h4>
@@ -296,10 +334,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <ol className="mb-2 ps-3">
                   <li>Create/get your Plaid credentials in <a href="https://dashboard.plaid.com/team/keys" target="_blank" rel="noreferrer">Plaid Dashboard Keys</a>.</li>
                   <li>Set `accumul8.plaid.client_id`, `accumul8.plaid.secret`, and optional `accumul8.plaid.env` in your server secret store.</li>
-                  <li>Implement Plaid Link in this page using the docs: <a href="https://plaid.com/docs/link/web/" target="_blank" rel="noreferrer">Link for Web</a>.</li>
-                  <li>Pass the generated `link_token` into Plaid Link and capture `public_token` on success.</li>
-                  <li>POST `public_token` to <code>/api/accumul8.php?action=plaid_exchange_public_token</code>.</li>
-                  <li>Then click Sync (or call <code>/api/accumul8.php?action=plaid_sync_transactions</code>) to import transactions.</li>
+                  <li>Click <strong>Connect Bank via Plaid</strong> in this tab.</li>
+                  <li>Complete Plaid Link and authorize your institution.</li>
+                  <li>Accumul8 will automatically exchange token, save the connection, and sync transactions.</li>
                 </ol>
                 <div className="small">
                   Quick references: <a href="https://plaid.com/docs/quickstart/" target="_blank" rel="noreferrer">Plaid Quickstart</a> | <a href="https://plaid.com/docs/api/items/#itempublic_tokenexchange" target="_blank" rel="noreferrer">Public Token Exchange API</a>

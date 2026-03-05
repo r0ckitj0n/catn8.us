@@ -159,7 +159,9 @@ body.catn8-noir-mode .modal-backdrop,
 }
 
 .modal-backdrop.show {
-  opacity: 1;
+  --bs-backdrop-opacity: 0.55 !important;
+  opacity: 0.55 !important;
+  background-color: rgba(8, 14, 26, 1) !important;
 }
 
 .modal {

@@ -209,15 +209,30 @@ if ($action === 'test') {
         $requestId = trim((string)($json['request_id'] ?? ''));
         $expiration = trim((string)($json['expiration'] ?? ''));
 
+        $savedFromTest = 0;
+        if ($clientIdInput !== '' && $secretInput !== '') {
+            if (!secret_set($keyEnv, $env)) {
+                $fail('settings.plaid.test', 500, 'Plaid test succeeded but failed to save environment', ['env' => $env]);
+            }
+            if (!secret_set($keyClientId, $clientIdInput)) {
+                $fail('settings.plaid.test', 500, 'Plaid test succeeded but failed to save client_id', ['env' => $env]);
+            }
+            if (!secret_set($keySecret, $secretInput)) {
+                $fail('settings.plaid.test', 500, 'Plaid test succeeded but failed to save secret', ['env' => $env]);
+            }
+            $savedFromTest = 1;
+        }
+
         catn8_diagnostics_log_event('settings.plaid.test', true, 200, 'Plaid test OK', [
             'env' => $env,
             'request_id' => $requestId,
+            'saved_from_test' => $savedFromTest,
         ]);
 
         catn8_json_response([
             'success' => true,
             'ok' => true,
-            'message' => 'Plaid credentials are valid',
+            'message' => $savedFromTest === 1 ? 'Plaid credentials are valid and saved' : 'Plaid credentials are valid',
             'plaid_env' => $env,
             'request_id' => $requestId,
             'expiration' => $expiration,

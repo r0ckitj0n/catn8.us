@@ -4,20 +4,23 @@
 
 .accumul8-page-header {
   display: flex;
-  align-items: end;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 1rem;
-  flex-wrap: wrap;
 }
 
-.accumul8-page-header-main {
+.accumul8-page-title-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
-  min-width: min(100%, 680px);
+  width: 100%;
+}
+
+.accumul8-page-title-row .section-title {
+  flex: 0 0 auto;
 }
 
 .accumul8-owner-selector {
+  align-self: flex-end;
   min-width: 240px;
 }
 
@@ -56,6 +59,9 @@
 }
 
 .accumul8-tabs--header {
+  flex: 1 1 auto;
+  width: 100%;
+  justify-content: flex-start;
   margin-top: 0.1rem;
 }
 
@@ -309,8 +315,9 @@
 }
 
 @media (max-width: 991px) {
-  .accumul8-page-header-main {
-    min-width: 100%;
+  .accumul8-page-title-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .accumul8-panel {
@@ -328,6 +335,11 @@
 
   .accumul8-month-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accumul8-owner-selector {
+    align-self: stretch;
+    min-width: 0;
   }
 }
 

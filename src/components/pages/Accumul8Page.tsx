@@ -430,7 +430,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       <section className="section">
         <div className="container accumul8-page">
           <div className="accumul8-page-header mb-2">
-            <div className="accumul8-page-header-main">
+            <div className="accumul8-page-title-row">
               <h1 className="section-title mb-0">Accumul8</h1>
               <div className="accumul8-tabs accumul8-tabs--header">
                 {[

@@ -2,6 +2,7 @@ import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
   Accumul8Account,
+  Accumul8AccessibleOwner,
   Accumul8BudgetRow,
   Accumul8BudgetRowUpsertRequest,
   Accumul8BillItem,
@@ -17,9 +18,14 @@ import {
   Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../types/accumul8';
-export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
+export function useAccumul8(
+  onToast?: (payload: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void,
+  selectedOwnerUserId?: number | null,
+) {
   const [busy, setBusy] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
+  const [activeOwnerUserId, setActiveOwnerUserId] = React.useState<number>(0);
+  const [accessibleAccountOwners, setAccessibleAccountOwners] = React.useState<Accumul8AccessibleOwner[]>([]);
   const [summary, setSummary] = React.useState({ net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
@@ -38,10 +44,20 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
       onToast({ tone: 'error', message });
     }
   }, [onToast]);
+  const scopedActionUrl = React.useCallback((action: string) => {
+    const params = new URLSearchParams({ action });
+    const ownerUserId = Number(selectedOwnerUserId || 0);
+    if (ownerUserId > 0) {
+      params.set('owner_user_id', String(ownerUserId));
+    }
+    return `/api/accumul8.php?${params.toString()}`;
+  }, [selectedOwnerUserId]);
   const load = React.useCallback(async () => {
     setBusy(true);
     try {
-      const res = await ApiClient.get<Accumul8BootstrapResponse>('/api/accumul8.php?action=bootstrap');
+      const res = await ApiClient.get<Accumul8BootstrapResponse>(scopedActionUrl('bootstrap'));
+      setActiveOwnerUserId(Number(res?.selected_owner_user_id || 0));
+      setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -60,7 +76,7 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     } finally {
       setBusy(false);
     }
-  }, [handleError]);
+  }, [handleError, scopedActionUrl]);
   const withReload = React.useCallback(async (action: () => Promise<any>, successMessage?: string) => {
     setBusy(true);
     try {
@@ -77,126 +93,126 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
   }, [handleError, load, onToast]);
   const createContact = React.useCallback(async (form: Accumul8ContactUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_contact', form),
+      () => ApiClient.post(scopedActionUrl('create_contact'), form),
       'Contact saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateContact = React.useCallback(async (id: number, form: Accumul8ContactUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_contact', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_contact'), { id, ...form }),
       'Contact updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteContact = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_contact', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_contact'), { id }),
       'Contact deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const createDebtor = React.useCallback(async (form: Accumul8DebtorUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_debtor', form),
+      () => ApiClient.post(scopedActionUrl('create_debtor'), form),
       'Debtor saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateDebtor = React.useCallback(async (id: number, form: Accumul8DebtorUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_debtor', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_debtor'), { id, ...form }),
       'Debtor updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteDebtor = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_debtor', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_debtor'), { id }),
       'Debtor deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const createRecurring = React.useCallback(async (form: Accumul8RecurringUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_recurring', form),
+      () => ApiClient.post(scopedActionUrl('create_recurring'), form),
       'Recurring payment saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateRecurring = React.useCallback(async (id: number, form: Accumul8RecurringUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_recurring', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_recurring'), { id, ...form }),
       'Recurring payment updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const toggleRecurring = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=toggle_recurring', { id }),
+      () => ApiClient.post(scopedActionUrl('toggle_recurring'), { id }),
       'Recurring payment updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteRecurring = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_recurring', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_recurring'), { id }),
       'Recurring payment deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const materializeDueRecurring = React.useCallback(async () => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=materialize_due_recurring', {}),
+      () => ApiClient.post(scopedActionUrl('materialize_due_recurring'), {}),
       'Recurring payments posted to ledger',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const createTransaction = React.useCallback(async (form: Accumul8TransactionUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_transaction', form),
+      () => ApiClient.post(scopedActionUrl('create_transaction'), form),
       'Transaction saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateTransaction = React.useCallback(async (id: number, form: Accumul8TransactionUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_transaction', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_transaction'), { id, ...form }),
       'Transaction updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteTransaction = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_transaction', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_transaction'), { id }),
       'Transaction deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const toggleTransactionPaid = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=toggle_transaction_paid', { id }),
+      () => ApiClient.post(scopedActionUrl('toggle_transaction_paid'), { id }),
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const toggleTransactionReconciled = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=toggle_transaction_reconciled', { id }),
+      () => ApiClient.post(scopedActionUrl('toggle_transaction_reconciled'), { id }),
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const createNotificationRule = React.useCallback(async (form: Accumul8NotificationRuleUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_notification_rule', form),
+      () => ApiClient.post(scopedActionUrl('create_notification_rule'), form),
       'Notification rule saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateNotificationRule = React.useCallback(async (id: number, form: Accumul8NotificationRuleUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_notification_rule', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_notification_rule'), { id, ...form }),
       'Notification rule updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const toggleNotificationRule = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=toggle_notification_rule', { id }),
+      () => ApiClient.post(scopedActionUrl('toggle_notification_rule'), { id }),
       'Notification rule updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteNotificationRule = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_notification_rule', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_notification_rule'), { id }),
       'Notification rule deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const sendNotification = React.useCallback(async (payload: { rule_id?: number; subject?: string; body?: string; target_scope?: 'group' | 'custom'; custom_user_ids?: number[] }) => {
     setBusy(true);
     try {
-      const res = await ApiClient.post<any>('/api/accumul8.php?action=send_notification', payload);
+      const res = await ApiClient.post<any>(scopedActionUrl('send_notification'), payload);
       const sent = Number(res?.sent_count || 0);
       const failed = Number(res?.failed_count || 0);
       if (onToast) {
@@ -208,11 +224,11 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast]);
+  }, [handleError, load, onToast, scopedActionUrl]);
   const syncBankConnection = React.useCallback(async (connectionId: number) => {
     setBusy(true);
     try {
-      const res = await ApiClient.post<any>('/api/accumul8.php?action=plaid_sync_transactions', { connection_id: connectionId });
+      const res = await ApiClient.post<any>(scopedActionUrl('plaid_sync_transactions'), { connection_id: connectionId });
       if (onToast) {
         onToast({ tone: 'success', message: `Synced bank transactions (added ${Number(res?.added || 0)}).` });
       }
@@ -222,25 +238,25 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast]);
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=create_budget_row', form),
+      () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
       'Spreadsheet row saved',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const updateBudgetRow = React.useCallback(async (id: number, form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=update_budget_row', { id, ...form }),
+      () => ApiClient.post(scopedActionUrl('update_budget_row'), { id, ...form }),
       'Spreadsheet row updated',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   const deleteBudgetRow = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post('/api/accumul8.php?action=delete_budget_row', { id }),
+      () => ApiClient.post(scopedActionUrl('delete_budget_row'), { id }),
       'Spreadsheet row deleted',
     );
-  }, [withReload]);
+  }, [scopedActionUrl, withReload]);
   React.useEffect(() => {
     void load();
   }, [load]);
@@ -248,6 +264,8 @@ export function useAccumul8(onToast?: (payload: { tone: 'success' | 'error' | 'i
     busy,
     loaded,
     summary,
+    activeOwnerUserId,
+    accessibleAccountOwners,
     contacts,
     recurringPayments,
     transactions,

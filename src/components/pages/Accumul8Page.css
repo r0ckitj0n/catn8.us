@@ -2,6 +2,18 @@
   padding-bottom: 2rem;
 }
 
+.accumul8-page-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.accumul8-owner-selector {
+  min-width: 240px;
+}
+
 .accumul8-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

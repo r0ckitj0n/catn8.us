@@ -22,6 +22,7 @@ import { SettingsPage } from '../components/pages/SettingsPage';
 import { SheriffStationPage } from '../components/pages/SheriffStationPage';
 import { StoriesPage } from '../components/pages/StoriesPage';
 import { TetrisPage } from '../components/pages/TetrisPage';
+import { Valid8Page } from '../components/pages/Valid8Page';
 import { VerifyPage } from '../components/pages/VerifyPage';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
 import { ApiClient } from '../core/ApiClient';
@@ -38,6 +39,7 @@ type AppPage =
   | 'arcade'
   | 'activities'
   | 'accumul8'
+  | 'valid8'
   | 'coloring'
   | 'build_wizard'
   | 'login'
@@ -78,6 +80,7 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   arcade: ArcadePage,
   activities: ActivitiesPage,
   accumul8: Accumul8Page,
+  valid8: Valid8Page,
   coloring: ColoringPage,
   wordsearch: WordsearchPage,
   photo_albums: PhotoAlbumsPage,

@@ -13,6 +13,7 @@ import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
 import { SiteMaintenanceModal } from '../modals/SiteMaintenanceModal';
 import { ColoringPagesModal } from '../modals/ColoringPagesModal';
 import { PlaidConfigModal } from '../modals/PlaidConfigModal';
+import { Accumul8AccessModal } from '../modals/Accumul8AccessModal';
 import { IToast } from '../../types/common';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
@@ -49,6 +50,7 @@ export function SettingsPage({
   const [siteMaintenanceOpen, setSiteMaintenanceOpen] = React.useState(false);
   const [coloringPagesOpen, setColoringPagesOpen] = React.useState(false);
   const [plaidConfigOpen, setPlaidConfigOpen] = React.useState(false);
+  const [accumul8AccessOpen, setAccumul8AccessOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
 
   return (
@@ -150,6 +152,11 @@ export function SettingsPage({
                           Plaid Configuration
                         </button>
                       ) : null}
+                      {isAdmin ? (
+                        <button type="button" className="btn btn-primary" onClick={() => setAccumul8AccessOpen(true)}>
+                          Accumul8 Access
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -190,6 +197,7 @@ export function SettingsPage({
       <SiteMaintenanceModal open={siteMaintenanceOpen} onClose={() => setSiteMaintenanceOpen(false)} onToast={onToast} />
       <ColoringPagesModal open={coloringPagesOpen} onClose={() => setColoringPagesOpen(false)} onToast={onToast} />
       <PlaidConfigModal open={plaidConfigOpen} onClose={() => setPlaidConfigOpen(false)} onToast={onToast} />
+      <Accumul8AccessModal open={accumul8AccessOpen} onClose={() => setAccumul8AccessOpen(false)} onToast={onToast} />
     </>
   );
 }

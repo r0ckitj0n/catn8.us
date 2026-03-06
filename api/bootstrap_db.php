@@ -110,6 +110,7 @@ function catn8_groups_seed_core(): void
     catn8_group_ensure('photo-albums-users', 'Photo Albums Users');
     catn8_group_ensure('photo-albums-administrators', 'Photo Albums Administrators');
     catn8_group_ensure('accumul8-users', 'Accumul8 Users');
+    catn8_group_ensure('valid8-users', 'VALID8 Users');
 
     $adminUsers = Database::queryAll('SELECT id FROM users WHERE is_admin = 1');
     foreach ($adminUsers as $r) {

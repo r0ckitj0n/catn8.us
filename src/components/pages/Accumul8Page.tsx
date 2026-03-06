@@ -18,15 +18,24 @@ interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring' | 'notifications' | 'sync';
+const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
   const isAdministrator = Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1;
   const isAccumul8User = Number(viewer?.is_accumul8_user || 0) === 1;
   const canAccess = isAuthed && (isAdministrator || isAccumul8User);
+  const [selectedOwnerUserId, setSelectedOwnerUserId] = React.useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(ACCUMUL8_OWNER_STORAGE_KEY);
+    const parsed = Number(raw || 0);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  });
   const {
     busy,
     loaded,
     summary,
+    activeOwnerUserId,
+    accessibleAccountOwners,
     contacts,
     recurringPayments,
     transactions,
@@ -64,7 +73,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     deleteNotificationRule,
     sendNotification,
     syncBankConnection,
-  } = useAccumul8(onToast);
+  } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [contactForm, setContactForm] = React.useState<{ contact_name: string; contact_type: Accumul8ContactType; default_amount: number; email: string; notes: string }>({ contact_name: '', contact_type: 'both', default_amount: 0, email: '', notes: '' });
   const [debtorForm, setDebtorForm] = React.useState<{ debtor_name: string; contact_id: string; notes: string; is_active: number }>({ debtor_name: '', contact_id: '', notes: '', is_active: 1 });
@@ -83,6 +92,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
+  const scopedActionUrl = React.useCallback((action: string) => {
+    const params = new URLSearchParams({ action });
+    const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
+    if (ownerUserId > 0) {
+      params.set('owner_user_id', String(ownerUserId));
+    }
+    return `/api/accumul8.php?${params.toString()}`;
+  }, [activeOwnerUserId, selectedOwnerUserId]);
+  React.useEffect(() => {
+    if (activeOwnerUserId <= 0) return;
+    setSelectedOwnerUserId((prev) => (prev === activeOwnerUserId ? prev : activeOwnerUserId));
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(activeOwnerUserId));
+    }
+  }, [activeOwnerUserId]);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
     setSyncHelpError(String(opts?.error || ''));
@@ -208,7 +232,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
 
     try {
-      const tokenRes = await ApiClient.post<Accumul8PlaidCreateLinkTokenResponse>('/api/accumul8.php?action=plaid_create_link_token', { client_name: 'Accumul8' });
+      const tokenRes = await ApiClient.post<Accumul8PlaidCreateLinkTokenResponse>(scopedActionUrl('plaid_create_link_token'), { client_name: 'Accumul8' });
       const token = String(tokenRes?.link_token || '');
       if (!token) {
         throw new Error('No link token returned');
@@ -226,7 +250,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 
       const institutionId = String(linkResult.metadata?.institution?.institution_id || '');
       const institutionName = String(linkResult.metadata?.institution?.name || '');
-      const exchangeRes = await ApiClient.post<Accumul8PlaidExchangeResponse>('/api/accumul8.php?action=plaid_exchange_public_token', {
+      const exchangeRes = await ApiClient.post<Accumul8PlaidExchangeResponse>(scopedActionUrl('plaid_exchange_public_token'), {
         public_token: String(linkResult.publicToken || ''),
         institution_id: institutionId,
         institution_name: institutionName,
@@ -235,7 +259,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       if (connectionId <= 0) {
         throw new Error('Plaid exchange did not return a valid connection id');
       }
-      const syncRes = await ApiClient.post<Accumul8PlaidSyncResponse>('/api/accumul8.php?action=plaid_sync_transactions', {
+      const syncRes = await ApiClient.post<Accumul8PlaidSyncResponse>(scopedActionUrl('plaid_sync_transactions'), {
         connection_id: connectionId,
       });
       const added = Number(syncRes?.added || 0);
@@ -246,7 +270,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       openSyncHelp({ error: message });
       onToast({ tone: 'error', message });
     }
-  }, [load, onToast, openSyncHelp, syncProvider.configured]);
+  }, [load, onToast, openSyncHelp, scopedActionUrl, syncProvider.configured]);
   const budgetRowsSorted = React.useMemo(() => (
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);
@@ -326,7 +350,33 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container accumul8-page">
-          <h1 className="section-title mb-2">Accumul8</h1>
+          <div className="accumul8-page-header mb-2">
+            <h1 className="section-title mb-0">Accumul8</h1>
+            <div className="accumul8-owner-selector">
+              <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing account</label>
+              <select
+                id="accumul8-owner-select"
+                className="form-select form-select-sm"
+                value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
+                onChange={(e) => {
+                  const next = Number(e.target.value || 0);
+                  if (!Number.isFinite(next) || next <= 0) return;
+                  setSelectedOwnerUserId(next);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+                  }
+                }}
+                disabled={busy || accessibleAccountOwners.length <= 1}
+              >
+                {accessibleAccountOwners.map((owner) => (
+                  <option key={owner.owner_user_id} value={owner.owner_user_id}>
+                    {owner.username}
+                    {owner.is_self ? ' (You)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="accumul8-summary-grid">
             <div className="accumul8-summary-card"><span>Net</span><strong>${summary.net_amount.toFixed(2)}</strong></div>
             <div className="accumul8-summary-card"><span>Inflow</span><strong>${summary.inflow_total.toFixed(2)}</strong></div>

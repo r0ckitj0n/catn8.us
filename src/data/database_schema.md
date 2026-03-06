@@ -6,6 +6,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 
 ### users
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `uuid` (CHAR(36), UNIQUE)
 - `username` (VARCHAR(64), UNIQUE)
 - `email` (VARCHAR(191), UNIQUE)
 - `password_hash` (VARCHAR(255))
@@ -53,6 +54,16 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `updated_at` (TIMESTAMP)
 
 ## Accumul8 Tables
+
+### accumul8_user_access_grants
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `grantee_user_id` (INT, FOREIGN KEY -> users.id)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `granted_by_user_id` (INT, NULLABLE, FOREIGN KEY -> users.id)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+- Unique key: (`grantee_user_id`, `owner_user_id`)
 
 ### accumul8_accounts
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
@@ -183,6 +194,35 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `last_error` (TEXT, NULLABLE)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
+
+## VALID8 Tables
+
+### vault_entries
+- `id` (CHAR(36), PRIMARY KEY, UUID)
+- `user_id` (CHAR(36), FOREIGN KEY -> users.uuid)
+- `title` (VARCHAR(191))
+- `url` (VARCHAR(2048), NULLABLE)
+- `username_encrypted` (LONGBLOB)
+- `username_auth_tag` (VARBINARY(16))
+- `password_encrypted` (LONGBLOB)
+- `password_auth_tag` (VARBINARY(16))
+- `encryption_iv` (VARBINARY(12))
+- `notes_encrypted` (LONGBLOB, NULLABLE)
+- `notes_auth_tag` (VARBINARY(16), NULLABLE)
+- `category` (VARCHAR(64))
+- `is_favorite` (TINYINT(1), DEFAULT 0)
+- `password_strength` (TINYINT UNSIGNED, 1-5)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `replaced_by_entry_id` (CHAR(36), NULLABLE, FOREIGN KEY -> vault_entries.id)
+- `source_tab` (VARCHAR(191), NULLABLE)
+- `source_document` (VARCHAR(191), NULLABLE)
+- `account_fingerprint` (CHAR(64), HMAC/SHA-256)
+- `entry_fingerprint` (CHAR(64), HMAC/SHA-256)
+- `last_changed_at` (DATETIME)
+- `deactivated_at` (DATETIME, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+- Unique key: (`user_id`, `entry_fingerprint`)
 
 ## Photo Albums Tables
 

@@ -7,7 +7,7 @@ require_once __DIR__ . '/emailer.php';
 
 catn8_session_start();
 catn8_groups_seed_core();
-$viewerId = catn8_require_group_or_admin('accumul8-users');
+$actorUserId = catn8_require_group_or_admin('accumul8-users');
 
 function accumul8_normalize_text($value, int $maxLen = 191): string
 {
@@ -106,6 +106,93 @@ function accumul8_table_add_column_if_missing(string $tableName, string $columnN
     }
 }
 
+function accumul8_list_accessible_owner_ids(int $actorUserId): array
+{
+    $rows = Database::queryAll(
+        'SELECT DISTINCT owner_user_id
+         FROM (
+            SELECT ? AS owner_user_id
+            UNION ALL
+            SELECT g.owner_user_id
+            FROM accumul8_user_access_grants g
+            INNER JOIN users u ON u.id = g.owner_user_id
+            WHERE g.grantee_user_id = ?
+              AND g.is_active = 1
+              AND u.is_active = 1
+         ) access_rows
+         ORDER BY owner_user_id ASC',
+        [$actorUserId, $actorUserId]
+    );
+    $ids = [];
+    foreach ($rows as $row) {
+        $id = (int)($row['owner_user_id'] ?? 0);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    return array_values(array_unique($ids));
+}
+
+function accumul8_list_accessible_owners(int $actorUserId): array
+{
+    $rows = Database::queryAll(
+        'SELECT DISTINCT u.id AS owner_user_id, u.username, u.email,
+                CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_self
+         FROM users u
+         LEFT JOIN accumul8_user_access_grants g
+           ON g.owner_user_id = u.id
+          AND g.grantee_user_id = ?
+          AND g.is_active = 1
+         WHERE u.is_active = 1
+           AND (u.id = ? OR g.id IS NOT NULL)
+         ORDER BY is_self DESC, u.username ASC, u.id ASC',
+        [$actorUserId, $actorUserId, $actorUserId]
+    );
+
+    return array_map(static function (array $row): array {
+        return [
+            'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+            'username' => (string)($row['username'] ?? ''),
+            'email' => (string)($row['email'] ?? ''),
+            'is_self' => (int)($row['is_self'] ?? 0),
+        ];
+    }, $rows);
+}
+
+function accumul8_resolve_scope_owner_user_id(int $actorUserId): int
+{
+    $sessionKey = 'accumul8_scope_owner_user_id';
+    $requested = (int)($_GET['owner_user_id'] ?? 0);
+    if ($requested <= 0) {
+        $requested = (int)($_SESSION[$sessionKey] ?? 0);
+    }
+
+    $accessibleOwnerIds = accumul8_list_accessible_owner_ids($actorUserId);
+    if (!$accessibleOwnerIds) {
+        catn8_json_response(['success' => false, 'error' => 'No Accumul8 account access grants found'], 403);
+    }
+
+    if ($requested > 0) {
+        if (in_array($requested, $accessibleOwnerIds, true)) {
+            $_SESSION[$sessionKey] = $requested;
+            return $requested;
+        }
+        unset($_SESSION[$sessionKey]);
+    }
+
+    if (in_array($actorUserId, $accessibleOwnerIds, true)) {
+        $_SESSION[$sessionKey] = $actorUserId;
+        return $actorUserId;
+    }
+
+    $fallback = (int)($accessibleOwnerIds[0] ?? 0);
+    if ($fallback <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'No Accumul8 account access grants found'], 403);
+    }
+    $_SESSION[$sessionKey] = $fallback;
+    return $fallback;
+}
+
 function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): ?int
 {
     if ($id <= 0) {
@@ -148,6 +235,21 @@ function accumul8_has_debtor_support(): bool
 
 function accumul8_tables_ensure(): void
 {
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_user_access_grants (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grantee_user_id INT NOT NULL,
+        owner_user_id INT NOT NULL,
+        granted_by_user_id INT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_access_grantee_owner (grantee_user_id, owner_user_id),
+        KEY idx_accumul8_access_owner (owner_user_id),
+        CONSTRAINT fk_accumul8_access_grantee FOREIGN KEY (grantee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_access_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_access_granted_by FOREIGN KEY (granted_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_accounts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
@@ -813,7 +915,9 @@ function accumul8_plaid_request(string $path, array $payload): array
 }
 
 accumul8_tables_ensure();
-accumul8_get_or_create_default_account($viewerId);
+$scopeOwnerUserId = accumul8_resolve_scope_owner_user_id($actorUserId);
+accumul8_get_or_create_default_account($scopeOwnerUserId);
+$viewerId = $scopeOwnerUserId;
 
 $action = accumul8_normalize_text((string)($_GET['action'] ?? ''), 80);
 if ($action === '') {
@@ -846,6 +950,8 @@ if ($action === 'bootstrap') {
 
     catn8_json_response([
         'success' => true,
+        'selected_owner_user_id' => $viewerId,
+        'accessible_account_owners' => accumul8_list_accessible_owners($actorUserId),
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,
@@ -1239,7 +1345,7 @@ if ($action === 'materialize_due_recurring') {
                     $amount,
                     $rpId,
                     'recurring',
-                    $viewerId,
+                    $actorUserId,
                 ]
             );
             $created++;
@@ -1305,7 +1411,7 @@ if ($action === 'create_transaction') {
                 $isPaid,
                 $isReconciled,
                 'manual',
-                $viewerId,
+                $actorUserId,
             ]
         );
     } else {
@@ -1328,7 +1434,7 @@ if ($action === 'create_transaction') {
                 $isPaid,
                 $isReconciled,
                 'manual',
-                $viewerId,
+                $actorUserId,
             ]
         );
     }
@@ -1897,7 +2003,7 @@ if ($action === 'plaid_sync_transactions') {
                     (string)($connection['plaid_item_id'] ?? ''),
                     $externalId,
                     $pending,
-                    $viewerId,
+                    $actorUserId,
                 ]
             );
             $addedTotal++;

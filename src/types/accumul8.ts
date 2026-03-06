@@ -99,6 +99,40 @@ export interface Accumul8Account {
   is_active: number;
 }
 
+export interface Accumul8AccessibleOwner {
+  owner_user_id: number;
+  username: string;
+  email: string;
+  is_self: number;
+}
+
+export interface Accumul8AccessUser {
+  id: number;
+  username: string;
+  email: string;
+  is_active: number;
+}
+
+export interface Accumul8AccessGrant {
+  id: number;
+  grantee_user_id: number;
+  owner_user_id: number;
+  granted_by_user_id: number | null;
+  grantee_username: string;
+  grantee_email: string;
+  owner_username: string;
+  owner_email: string;
+  granted_by_username: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Accumul8AccessListResponse {
+  success: boolean;
+  users: Accumul8AccessUser[];
+  grants: Accumul8AccessGrant[];
+}
+
 export interface Accumul8NotificationRule {
   id: number;
   rule_name: string;
@@ -190,6 +224,8 @@ export interface Accumul8BudgetRowUpsertRequest {
 
 export interface Accumul8BootstrapResponse {
   success: boolean;
+  selected_owner_user_id: number;
+  accessible_account_owners: Accumul8AccessibleOwner[];
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];

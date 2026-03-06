@@ -21,6 +21,14 @@ function catn8_render_react_shell(string $page, string $title): void
     echo "  <meta charset=\"UTF-8\">\n";
     echo "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     echo "  <title>" . htmlspecialchars($title) . "</title>\n";
+    echo "  <meta name=\"theme-color\" content=\"#ffffff\">\n";
+    echo "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">\n";
+    echo "  <meta name=\"apple-mobile-web-app-title\" content=\"catn8.us\">\n";
+    echo "  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n";
+    echo "  <link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/favicon-32x32.png\">\n";
+    echo "  <link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/favicon-16x16.png\">\n";
+    echo "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">\n";
+    echo "  <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n";
     echo "  <link rel=\"stylesheet\" href=\"/api/appearance.css.php\">\n";
     echo "  <link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css\" rel=\"stylesheet\">\n";
     echo "  <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css\">\n";

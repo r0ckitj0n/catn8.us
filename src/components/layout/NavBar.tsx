@@ -59,10 +59,10 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       ? [{ key: 'build_wizard', label: 'FABRIC8', href: 'build-wizard.php' }]
       : []),
     ...(canUsePhotoAlbums
-      ? [{ key: 'photo_albums', label: 'Photo M8', href: 'photo-albums.php' }]
+      ? [{ key: 'photo_albums', label: 'PHOTO M8', href: 'photo-albums.php' }]
       : []),
     ...(canUseAccumul8
-      ? [{ key: 'accumul8', label: 'Accumul8', href: 'accumul8.php' }]
+      ? [{ key: 'accumul8', label: 'ACCUMUL8', href: 'accumul8.php' }]
       : []),
     ...(canUseValid8
       ? [{ key: 'valid8', label: 'VALID8', href: 'VALID8/' }]

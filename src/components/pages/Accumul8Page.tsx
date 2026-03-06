@@ -398,10 +398,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [deleteTransaction]);
   if (!isAuthed) {
     return (
-      <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
-            <h1 className="section-title">Accumul8</h1>
+            <h1 className="section-title">ACCUMUL8</h1>
             <div className="catn8-card p-3">
               <p className="mb-2">Login required.</p>
               <button type="button" className="btn btn-primary" onClick={onLoginClick}>Log in</button>
@@ -413,10 +413,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }
   if (!canAccess) {
     return (
-      <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
-            <h1 className="section-title">Accumul8</h1>
+            <h1 className="section-title">ACCUMUL8</h1>
             <div className="catn8-card p-3">
               <p className="mb-0">Your account is not in the <strong>Accumul8 Users</strong> group. Ask an administrator to grant access.</p>
             </div>
@@ -426,12 +426,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     );
   }
   return (
-    <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container accumul8-page">
           <div className="accumul8-page-header mb-2">
             <div className="accumul8-page-title-row">
-              <h1 className="section-title mb-0">Accumul8</h1>
+              <h1 className="section-title mb-0">ACCUMUL8</h1>
               <div className="accumul8-tabs accumul8-tabs--header">
                 {[
                   ['ledger', 'Ledger'],
@@ -447,81 +447,83 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 ))}
               </div>
             </div>
-            <div className="accumul8-owner-selector">
-              <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
-              <select
-                id="accumul8-owner-select"
-                className="form-select form-select-sm"
-                value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
-                onChange={(e) => {
-                  const next = Number(e.target.value || 0);
-                  if (!Number.isFinite(next) || next <= 0) return;
-                  setSelectedOwnerUserId(next);
-                  if (typeof window !== 'undefined') {
-                    window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
-                  }
-                }}
-                disabled={busy || accessibleAccountOwners.length <= 1}
-              >
-                {accessibleAccountOwners.map((owner) => (
-                  <option key={owner.owner_user_id} value={owner.owner_user_id}>
-                    {owner.username}
-                    {owner.is_self ? ' (You)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="row g-2 align-items-end mb-3">
-            <div className="col-md-4">
-              <div className="accumul8-filter-label-row">
-                <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Banking Organization</label>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                  onClick={() => setBankingOrganizationManagerOpen(true)}
-                  aria-label="Manage banking organizations"
-                  title="Manage banking organizations"
-                >
-                  <i className="bi bi-gear"></i>
-                </button>
+            <div className="accumul8-page-toolbar mb-3">
+              <div className="accumul8-page-filters">
+                <div className="accumul8-toolbar-field">
+                  <div className="accumul8-filter-label-row">
+                    <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Banking Organization</label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                      onClick={() => setBankingOrganizationManagerOpen(true)}
+                      aria-label="Manage banking organizations"
+                      title="Manage banking organizations"
+                    >
+                      <i className="bi bi-gear"></i>
+                    </button>
+                  </div>
+                  <select
+                    id="accumul8-group-filter"
+                    className="form-select form-select-sm"
+                    value={selectedBankingOrganizationId}
+                    onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
+                  >
+                    <option value="">All Banking Organizations</option>
+                    {bankingOrganizations.map((organization) => (
+                      <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="accumul8-toolbar-field">
+                  <div className="accumul8-filter-label-row">
+                    <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                      onClick={() => setAccountManagerOpen(true)}
+                      aria-label="Manage bank accounts"
+                      title="Manage bank accounts"
+                    >
+                      <i className="bi bi-gear"></i>
+                    </button>
+                  </div>
+                  <select
+                    id="accumul8-bank-filter"
+                    className="form-select form-select-sm"
+                    value={selectedBankAccountId}
+                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                  >
+                    <option value="">All bank accounts</option>
+                    {visibleAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>{account.account_name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <select
-                id="accumul8-group-filter"
-                className="form-select form-select-sm"
-                value={selectedBankingOrganizationId}
-                onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
-              >
-                <option value="">All Banking Organizations</option>
-                {bankingOrganizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-4">
-              <div className="accumul8-filter-label-row">
-                <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                  onClick={() => setAccountManagerOpen(true)}
-                  aria-label="Manage bank accounts"
-                  title="Manage bank accounts"
+              <div className="accumul8-owner-selector">
+                <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
+                <select
+                  id="accumul8-owner-select"
+                  className="form-select form-select-sm"
+                  value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
+                  onChange={(e) => {
+                    const next = Number(e.target.value || 0);
+                    if (!Number.isFinite(next) || next <= 0) return;
+                    setSelectedOwnerUserId(next);
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+                    }
+                  }}
+                  disabled={busy || accessibleAccountOwners.length <= 1}
                 >
-                  <i className="bi bi-gear"></i>
-                </button>
+                  {accessibleAccountOwners.map((owner) => (
+                    <option key={owner.owner_user_id} value={owner.owner_user_id}>
+                      {owner.username}
+                      {owner.is_self ? ' (You)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                id="accumul8-bank-filter"
-                className="form-select form-select-sm"
-                value={selectedBankAccountId}
-                onChange={(e) => setSelectedBankAccountId(e.target.value)}
-              >
-                <option value="">All bank accounts</option>
-                {visibleAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>{account.account_name}</option>
-                ))}
-              </select>
             </div>
           </div>
           <div className="accumul8-summary-grid">

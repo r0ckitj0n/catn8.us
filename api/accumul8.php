@@ -106,6 +106,11 @@ function accumul8_table_add_column_if_missing(string $tableName, string $columnN
     }
 }
 
+function accumul8_optional_select(string $tableName, string $columnName, string $presentExpression, string $missingExpression): string
+{
+    return accumul8_table_has_column($tableName, $columnName) ? $presentExpression : $missingExpression;
+}
+
 function accumul8_list_accessible_owner_ids(int $actorUserId): array
 {
     $rows = Database::queryAll(
@@ -479,9 +484,29 @@ function accumul8_get_or_create_default_account(int $viewerId): int
         return (int)($row['id'] ?? 0);
     }
 
+    $columns = ['owner_user_id', 'account_name', 'current_balance'];
+    $placeholders = ['?', '?', '?'];
+    $params = [$viewerId, 'Primary Checking', 0.00];
+
+    if (accumul8_table_has_column('accumul8_accounts', 'account_type')) {
+        $columns[] = 'account_type';
+        $placeholders[] = '?';
+        $params[] = 'checking';
+    }
+    if (accumul8_table_has_column('accumul8_accounts', 'institution_name')) {
+        $columns[] = 'institution_name';
+        $placeholders[] = '?';
+        $params[] = 'Manual';
+    }
+    if (accumul8_table_has_column('accumul8_accounts', 'available_balance')) {
+        $columns[] = 'available_balance';
+        $placeholders[] = '?';
+        $params[] = 0.00;
+    }
+
     Database::execute(
-        'INSERT INTO accumul8_accounts (owner_user_id, account_name, account_type, institution_name, current_balance, available_balance) VALUES (?, ?, ?, ?, ?, ?)',
-        [$viewerId, 'Primary Checking', 'checking', 'Manual', 0.00, 0.00]
+        'INSERT INTO accumul8_accounts (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')',
+        $params
     );
 
     return (int)Database::lastInsertId();
@@ -514,13 +539,26 @@ function accumul8_list_contacts(int $viewerId): array
 
 function accumul8_list_recurring(int $viewerId): array
 {
+    $accountIdSelect = accumul8_optional_select('accumul8_recurring_payments', 'account_id', 'rp.account_id', 'NULL AS account_id');
+    $intervalCountSelect = accumul8_optional_select('accumul8_recurring_payments', 'interval_count', 'rp.interval_count', '1 AS interval_count');
+    $dayOfMonthSelect = accumul8_optional_select('accumul8_recurring_payments', 'day_of_month', 'rp.day_of_month', 'NULL AS day_of_month');
+    $dayOfWeekSelect = accumul8_optional_select('accumul8_recurring_payments', 'day_of_week', 'rp.day_of_week', 'NULL AS day_of_week');
+    $notesSelect = accumul8_optional_select('accumul8_recurring_payments', 'notes', 'rp.notes', "'' AS notes");
+    $isActiveSelect = accumul8_optional_select('accumul8_recurring_payments', 'is_active', 'rp.is_active', '1 AS is_active');
+    $accountJoin = accumul8_table_has_column('accumul8_recurring_payments', 'account_id')
+        ? 'LEFT JOIN accumul8_accounts a ON a.id = rp.account_id'
+        : '';
+    $accountNameSelect = accumul8_table_has_column('accumul8_recurring_payments', 'account_id')
+        ? 'a.account_name'
+        : "'' AS account_name";
+
     $rows = Database::queryAll(
-        'SELECT rp.id, rp.contact_id, rp.account_id, rp.title, rp.direction, rp.amount, rp.frequency, rp.interval_count,
-                rp.day_of_month, rp.day_of_week, rp.next_due_date, rp.notes, rp.is_active,
-                c.contact_name, a.account_name
+        'SELECT rp.id, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $intervalCountSelect . ',
+                ' . $dayOfMonthSelect . ', ' . $dayOfWeekSelect . ', rp.next_due_date, ' . $notesSelect . ', ' . $isActiveSelect . ',
+                c.contact_name, ' . $accountNameSelect . '
          FROM accumul8_recurring_payments rp
          LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
-         LEFT JOIN accumul8_accounts a ON a.id = rp.account_id
+         ' . $accountJoin . '
          WHERE rp.owner_user_id = ?
          ORDER BY rp.next_due_date ASC, rp.id ASC',
         [$viewerId]
@@ -549,8 +587,15 @@ function accumul8_list_recurring(int $viewerId): array
 
 function accumul8_list_accounts(int $viewerId): array
 {
+    $accountTypeSelect = accumul8_optional_select('accumul8_accounts', 'account_type', 'account_type', "'checking' AS account_type");
+    $institutionNameSelect = accumul8_optional_select('accumul8_accounts', 'institution_name', 'institution_name', "'' AS institution_name");
+    $maskLast4Select = accumul8_optional_select('accumul8_accounts', 'mask_last4', 'mask_last4', "'' AS mask_last4");
+    $availableBalanceSelect = accumul8_optional_select('accumul8_accounts', 'available_balance', 'available_balance', 'current_balance AS available_balance');
+    $isActiveSelect = accumul8_optional_select('accumul8_accounts', 'is_active', 'is_active', '1 AS is_active');
+
     $rows = Database::queryAll(
-        'SELECT id, account_name, account_type, institution_name, mask_last4, current_balance, available_balance, is_active
+        'SELECT id, account_name, ' . $accountTypeSelect . ', ' . $institutionNameSelect . ', ' . $maskLast4Select . ',
+                current_balance, ' . $availableBalanceSelect . ', ' . $isActiveSelect . '
          FROM accumul8_accounts
          WHERE owner_user_id = ?
          ORDER BY account_name ASC, id ASC',
@@ -643,8 +688,9 @@ function accumul8_list_budget_rows(int $viewerId): array
 
 function accumul8_recompute_running_balance(int $viewerId): void
 {
+    $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 'rta_amount', '0.00 AS rta_amount');
     $rows = Database::queryAll(
-        'SELECT id, amount, rta_amount
+        'SELECT id, amount, ' . $rtaSelect . '
          FROM accumul8_transactions
          WHERE owner_user_id = ?
          ORDER BY transaction_date ASC, id ASC',
@@ -670,12 +716,19 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
 {
     $limit = max(1, min(1000, $limit));
     $hasDebtor = accumul8_has_debtor_support();
+    $dueDateSelect = accumul8_optional_select('accumul8_transactions', 'due_date', 't.due_date', 'NULL AS due_date');
+    $entryTypeSelect = accumul8_optional_select('accumul8_transactions', 'entry_type', 't.entry_type', "'manual' AS entry_type");
+    $memoSelect = accumul8_optional_select('accumul8_transactions', 'memo', 't.memo', "'' AS memo");
+    $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 't.rta_amount', '0.00 AS rta_amount');
+    $isReconciledSelect = accumul8_optional_select('accumul8_transactions', 'is_reconciled', 't.is_reconciled', '0 AS is_reconciled');
+    $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 't.source_kind', "'manual' AS source_kind");
+    $pendingStatusSelect = accumul8_optional_select('accumul8_transactions', 'pending_status', 't.pending_status', '0 AS pending_status');
     $debtorSelect = $hasDebtor ? 't.debtor_id' : 'NULL AS debtor_id';
     $debtorNameSelect = $hasDebtor ? ', d.debtor_name' : ", '' AS debtor_name";
     $debtorJoin = $hasDebtor ? 'LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id' : '';
     $rows = Database::queryAll(
-        'SELECT t.id, t.account_id, t.contact_id, ' . $debtorSelect . ', t.transaction_date, t.due_date, t.entry_type, t.description, t.memo,
-                t.amount, t.rta_amount, t.running_balance, t.is_paid, t.is_reconciled, t.source_kind, t.pending_status,
+        'SELECT t.id, t.account_id, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
+                t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $sourceKindSelect . ', ' . $pendingStatusSelect . ',
                 c.contact_name, a.account_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
          LEFT JOIN accumul8_contacts c ON c.id = t.contact_id AND c.owner_user_id = t.owner_user_id
@@ -714,9 +767,15 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
 
 function accumul8_list_notification_rules(int $viewerId): array
 {
+    if (!accumul8_table_exists('accumul8_notification_rules')) {
+        return [];
+    }
+
+    $customUserIdsSelect = accumul8_optional_select('accumul8_notification_rules', 'custom_user_ids_json', 'custom_user_ids_json', "'[]' AS custom_user_ids_json");
+    $lastTriggeredAtSelect = accumul8_optional_select('accumul8_notification_rules', 'last_triggered_at', 'last_triggered_at', 'NULL AS last_triggered_at');
     $rows = Database::queryAll(
-        'SELECT id, rule_name, trigger_type, days_before_due, target_scope, custom_user_ids_json,
-                email_subject_template, email_body_template, is_active, last_triggered_at
+        'SELECT id, rule_name, trigger_type, days_before_due, target_scope, ' . $customUserIdsSelect . ',
+                email_subject_template, email_body_template, is_active, ' . $lastTriggeredAtSelect . '
          FROM accumul8_notification_rules
          WHERE owner_user_id = ?
          ORDER BY is_active DESC, rule_name ASC, id ASC',
@@ -742,8 +801,17 @@ function accumul8_list_notification_rules(int $viewerId): array
 
 function accumul8_list_bank_connections(int $viewerId): array
 {
+    if (!accumul8_table_exists('accumul8_bank_connections')) {
+        return [];
+    }
+
+    $institutionIdSelect = accumul8_optional_select('accumul8_bank_connections', 'institution_id', 'institution_id', "'' AS institution_id");
+    $institutionNameSelect = accumul8_optional_select('accumul8_bank_connections', 'institution_name', 'institution_name', "'' AS institution_name");
+    $statusSelect = accumul8_optional_select('accumul8_bank_connections', 'status', 'status', "'setup_pending' AS status");
+    $lastSyncAtSelect = accumul8_optional_select('accumul8_bank_connections', 'last_sync_at', 'last_sync_at', 'NULL AS last_sync_at');
+    $lastErrorSelect = accumul8_optional_select('accumul8_bank_connections', 'last_error', 'last_error', 'NULL AS last_error');
     $rows = Database::queryAll(
-        'SELECT id, provider_name, institution_id, institution_name, plaid_item_id, status, last_sync_at, last_error
+        'SELECT id, provider_name, ' . $institutionIdSelect . ', ' . $institutionNameSelect . ', plaid_item_id, ' . $statusSelect . ', ' . $lastSyncAtSelect . ', ' . $lastErrorSelect . '
          FROM accumul8_bank_connections
          WHERE owner_user_id = ?
          ORDER BY id DESC',
@@ -766,15 +834,23 @@ function accumul8_list_bank_connections(int $viewerId): array
 
 function accumul8_due_bills(int $viewerId): array
 {
+    $hasSourceKind = accumul8_table_has_column('accumul8_transactions', 'source_kind');
+    $hasEntryType = accumul8_table_has_column('accumul8_transactions', 'entry_type');
+    $sourceKindSelect = $hasSourceKind ? 'source_kind' : "'manual' AS source_kind";
+    $filters = [];
+    if ($hasSourceKind) {
+        $filters[] = "source_kind IN ('recurring', 'manual', 'plaid')";
+    }
+    if ($hasEntryType) {
+        $filters[] = "entry_type IN ('bill', 'auto', 'manual')";
+    }
+    $kindClause = $filters ? 'AND (' . implode(' OR ', $filters) . ')' : '';
     $rows = Database::queryAll(
-        "SELECT id, transaction_date, due_date, description, amount, is_paid, source_kind
+        "SELECT id, transaction_date, " . accumul8_optional_select('accumul8_transactions', 'due_date', 'due_date', 'NULL AS due_date') . ", description, amount, is_paid, " . $sourceKindSelect . "
          FROM accumul8_transactions
          WHERE owner_user_id = ?
            AND amount < 0
-           AND (
-             source_kind IN ('recurring', 'manual', 'plaid')
-             OR entry_type IN ('bill', 'auto', 'manual')
-           )
+           " . $kindClause . "
          ORDER BY COALESCE(due_date, transaction_date) ASC, id ASC",
         [$viewerId]
     );

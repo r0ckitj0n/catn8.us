@@ -435,7 +435,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="accumul8-tabs accumul8-tabs--header">
                 {[
                   ['ledger', 'Ledger'],
-                  ['spreadsheet', 'Spreadsheet'],
+                  ['spreadsheet', 'Budget'],
                   ['debtors', 'Debtors'],
                   ['pay_bills', 'Pay Bills'],
                   ['contacts', 'Payees/Payers'],

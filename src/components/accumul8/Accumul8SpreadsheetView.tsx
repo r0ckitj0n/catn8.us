@@ -51,7 +51,7 @@ export function Accumul8SpreadsheetView({
     <div className="accumul8-spreadsheet">
       <div className="accumul8-panel-toolbar mb-3">
         <div>
-          <h3 className="mb-1">Spreadsheet Planner</h3>
+          <h3 className="mb-1">Budget Planner</h3>
           <p className="small text-muted mb-0">Choose the center month to view the previous, current, and next month side-by-side from the ledger.</p>
         </div>
         <div className="accumul8-spreadsheet-selector">

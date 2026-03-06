@@ -1148,7 +1148,7 @@ if ($action === 'bootstrap') {
     catn8_require_method('GET');
 
     $warnings = [];
-    $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 500), [], $warnings);
+    $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
     $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
     $accountGroups = accumul8_bootstrap_section('account_groups', static fn() => accumul8_list_account_groups($viewerId), [], $warnings);

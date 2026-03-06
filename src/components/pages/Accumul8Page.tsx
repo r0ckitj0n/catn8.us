@@ -33,12 +33,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const {
     busy,
     loaded,
-    summary,
     activeOwnerUserId,
     accessibleAccountOwners,
     contacts,
     recurringPayments,
     transactions,
+    accountGroups,
     accounts,
     notificationRules,
     payBills,
@@ -89,6 +89,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [editingBudgetRowId, setEditingBudgetRowId] = React.useState<number | null>(null);
   const [editingNotificationRuleId, setEditingNotificationRuleId] = React.useState<number | null>(null);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
+  const [selectedAccountGroupId, setSelectedAccountGroupId] = React.useState<string>('');
+  const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
@@ -107,6 +109,68 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(activeOwnerUserId));
     }
   }, [activeOwnerUserId]);
+  const visibleAccounts = React.useMemo(() => {
+    const groupId = Number(selectedAccountGroupId || 0);
+    if (groupId <= 0) {
+      return accounts;
+    }
+    return accounts.filter((account) => Number(account.account_group_id || 0) === groupId);
+  }, [accounts, selectedAccountGroupId]);
+  React.useEffect(() => {
+    const bankAccountId = Number(selectedBankAccountId || 0);
+    if (bankAccountId <= 0) {
+      return;
+    }
+    if (!visibleAccounts.some((account) => account.id === bankAccountId)) {
+      setSelectedBankAccountId('');
+    }
+  }, [selectedBankAccountId, visibleAccounts]);
+  const filteredTransactions = React.useMemo(() => {
+    const groupId = Number(selectedAccountGroupId || 0);
+    const bankAccountId = Number(selectedBankAccountId || 0);
+    return transactions.filter((tx) => {
+      if (groupId > 0 && Number(tx.account_group_id || 0) !== groupId) {
+        return false;
+      }
+      if (bankAccountId > 0 && Number(tx.account_id || 0) !== bankAccountId) {
+        return false;
+      }
+      return true;
+    });
+  }, [selectedAccountGroupId, selectedBankAccountId, transactions]);
+  const filteredRecurringPayments = React.useMemo(() => {
+    const groupId = Number(selectedAccountGroupId || 0);
+    const bankAccountId = Number(selectedBankAccountId || 0);
+    return recurringPayments.filter((item) => {
+      if (groupId > 0 && Number(item.account_group_id || 0) !== groupId) {
+        return false;
+      }
+      if (bankAccountId > 0 && Number(item.account_id || 0) !== bankAccountId) {
+        return false;
+      }
+      return true;
+    });
+  }, [recurringPayments, selectedAccountGroupId, selectedBankAccountId]);
+  const filteredPayBills = React.useMemo(() => {
+    const transactionIds = new Set(filteredTransactions.map((tx) => tx.id));
+    return payBills.filter((bill) => transactionIds.has(bill.id));
+  }, [filteredTransactions, payBills]);
+  const filteredSummary = React.useMemo(() => {
+    const next = { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 };
+    filteredTransactions.forEach((tx) => {
+      const amount = Number(tx.amount || 0);
+      next.net_amount += amount;
+      if (amount > 0) {
+        next.inflow_total += amount;
+      } else if (amount < 0) {
+        next.outflow_total += amount;
+        if (!Number(tx.is_paid || 0)) {
+          next.unpaid_outflow_total += amount;
+        }
+      }
+    });
+    return next;
+  }, [filteredTransactions]);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
     setSyncHelpError(String(opts?.error || ''));
@@ -353,7 +417,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           <div className="accumul8-page-header mb-2">
             <h1 className="section-title mb-0">Accumul8</h1>
             <div className="accumul8-owner-selector">
-              <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing account</label>
+              <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
               <select
                 id="accumul8-owner-select"
                 className="form-select form-select-sm"
@@ -377,11 +441,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </select>
             </div>
           </div>
+          <div className="row g-2 align-items-end mb-3">
+            <div className="col-md-4">
+              <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Accumul8 account</label>
+              <select
+                id="accumul8-group-filter"
+                className="form-select form-select-sm"
+                value={selectedAccountGroupId}
+                onChange={(e) => setSelectedAccountGroupId(e.target.value)}
+              >
+                <option value="">All Accumul8 accounts</option>
+                {accountGroups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.group_name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-4">
+              <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
+              <select
+                id="accumul8-bank-filter"
+                className="form-select form-select-sm"
+                value={selectedBankAccountId}
+                onChange={(e) => setSelectedBankAccountId(e.target.value)}
+              >
+                <option value="">All bank accounts</option>
+                {visibleAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.account_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="accumul8-summary-grid">
-            <div className="accumul8-summary-card"><span>Net</span><strong>${summary.net_amount.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Inflow</span><strong>${summary.inflow_total.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Outflow</span><strong>${summary.outflow_total.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${summary.unpaid_outflow_total.toFixed(2)}</strong></div>
+            <div className="accumul8-summary-card"><span>Net</span><strong>${filteredSummary.net_amount.toFixed(2)}</strong></div>
+            <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
+            <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
+            <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
           </div>
           <div className="accumul8-tabs mt-3">
             {[
@@ -422,7 +516,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="col-md-3"><input className="form-control" placeholder="Description" value={ledgerForm.description} onChange={(e) => setLedgerForm((v) => ({ ...v, description: e.target.value }))} required /></div>
                 <div className="col-md-3"><input className="form-control" type="number" step="0.01" value={ledgerForm.amount} onChange={(e) => setLedgerForm((v) => ({ ...v, amount: Number(e.target.value) }))} required /></div>
                 <div className="col-md-3"><select className="form-select" value={ledgerForm.contact_id} onChange={(e) => setLedgerForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Contact</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
-                <div className="col-md-3"><select className="form-select" value={ledgerForm.account_id} onChange={(e) => setLedgerForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
+                <div className="col-md-3"><select className="form-select" value={ledgerForm.account_id} onChange={(e) => setLedgerForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{visibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
                 <div className="col-md-3"><select className="form-select" value={ledgerForm.debtor_id} onChange={(e) => setLedgerForm((v) => ({ ...v, debtor_id: e.target.value }))}><option value="">Debtor</option>{debtors.map((d) => <option key={d.id} value={d.id}>{d.debtor_name}</option>)}</select></div>
                 <div className="col-md-2"><input className="form-control" placeholder="RTA" type="number" step="0.01" value={ledgerForm.rta_amount} onChange={(e) => setLedgerForm((v) => ({ ...v, rta_amount: Number(e.target.value) }))} /></div>
                 <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingTransactionId ? 'Update' : 'Add'}</button></div>
@@ -432,11 +526,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table className="table table-sm accumul8-ledger-table accumul8-sticky-head">
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Debtor</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th>Paid</th><th>Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {transactions.map((tx) => (
+                    {filteredTransactions.map((tx) => (
                       <tr key={tx.id} className={`accumul8-list-item ${tx.amount < 0 ? 'is-outflow' : 'is-inflow'}`}>
                         <td>{tx.transaction_date}</td>
                         <td>{tx.due_date || '-'}</td>
-                        <td>{tx.description}</td>
+                        <td>{tx.account_name ? `${tx.description} (${tx.account_name})` : tx.description}</td>
                         <td>{tx.debtor_name || '-'}</td>
                         <td>{tx.memo || tx.contact_name || '-'}</td>
                         <td className="text-end">{tx.amount.toFixed(2)}</td>
@@ -615,7 +709,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table className="table table-striped table-sm accumul8-sticky-head">
                   <thead><tr><th>Due Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {payBills.map((bill) => (
+                    {filteredPayBills.map((bill) => (
                       <tr key={bill.id} className="accumul8-list-item">
                         <td>{bill.due_date || bill.transaction_date}</td>
                         <td>{bill.description}</td>
@@ -692,7 +786,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="col-md-1"><input className="form-control" type="number" value={recurringForm.interval_count} min={1} max={365} onChange={(e) => setRecurringForm((v) => ({ ...v, interval_count: Number(e.target.value) }))} /></div>
                 <div className="col-md-2"><input className="form-control" type="date" value={recurringForm.next_due_date} onChange={(e) => setRecurringForm((v) => ({ ...v, next_due_date: e.target.value }))} required /></div>
                 <div className="col-md-3"><select className="form-select" value={recurringForm.contact_id} onChange={(e) => setRecurringForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Contact</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
-                <div className="col-md-3"><select className="form-select" value={recurringForm.account_id} onChange={(e) => setRecurringForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
+                <div className="col-md-3"><select className="form-select" value={recurringForm.account_id} onChange={(e) => setRecurringForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{visibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
                 <div className="col-md-4"><input className="form-control" placeholder="Notes" value={recurringForm.notes} onChange={(e) => setRecurringForm((v) => ({ ...v, notes: e.target.value }))} /></div>
                 <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingRecurringId ? 'Update' : 'Save'}</button></div>
                 {editingRecurringId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetRecurringForm} disabled={busy}>Cancel</button></div> : null}
@@ -701,7 +795,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table className="table table-sm accumul8-sticky-head">
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {recurringPayments.map((rp) => (
+                    {filteredRecurringPayments.map((rp) => (
                       <tr key={rp.id} className="accumul8-list-item">
                         <td>{rp.title}</td>
                         <td>{rp.next_due_date}</td>

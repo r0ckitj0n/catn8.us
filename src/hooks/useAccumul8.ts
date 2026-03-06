@@ -2,6 +2,7 @@ import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
   Accumul8Account,
+  Accumul8AccountGroup,
   Accumul8AccessibleOwner,
   Accumul8BudgetRow,
   Accumul8BudgetRowUpsertRequest,
@@ -30,6 +31,7 @@ export function useAccumul8(
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
+  const [accountGroups, setAccountGroups] = React.useState<Accumul8AccountGroup[]>([]);
   const [accounts, setAccounts] = React.useState<Accumul8Account[]>([]);
   const [notificationRules, setNotificationRules] = React.useState<Accumul8NotificationRule[]>([]);
   const [payBills, setPayBills] = React.useState<Accumul8BillItem[]>([]);
@@ -61,6 +63,7 @@ export function useAccumul8(
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
+      setAccountGroups(Array.isArray(res?.account_groups) ? res.account_groups : []);
       setAccounts(Array.isArray(res?.accounts) ? res.accounts : []);
       setNotificationRules(Array.isArray(res?.notification_rules) ? res.notification_rules : []);
       setPayBills(Array.isArray(res?.pay_bills) ? res.pay_bills : []);
@@ -269,6 +272,7 @@ export function useAccumul8(
     contacts,
     recurringPayments,
     transactions,
+    accountGroups,
     accounts,
     notificationRules,
     payBills,

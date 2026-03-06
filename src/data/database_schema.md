@@ -65,9 +65,20 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `updated_at` (TIMESTAMP)
 - Unique key: (`grantee_user_id`, `owner_user_id`)
 
+### accumul8_account_groups
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `group_name` (VARCHAR(191))
+- `institution_name` (VARCHAR(191))
+- `notes` (TEXT, NULLABLE)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### accumul8_accounts
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `account_group_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_account_groups.id)
 - `account_name` (VARCHAR(191))
 - `account_type` (VARCHAR(40), default `checking`)
 - `institution_name` (VARCHAR(191))

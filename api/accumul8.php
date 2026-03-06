@@ -255,9 +255,24 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_access_granted_by FOREIGN KEY (granted_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_account_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        group_name VARCHAR(191) NOT NULL,
+        institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        notes TEXT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_account_group_owner_name (owner_user_id, group_name),
+        KEY idx_accumul8_account_groups_owner (owner_user_id),
+        CONSTRAINT fk_accumul8_account_groups_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_accounts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
+        account_group_id INT NULL,
         account_name VARCHAR(191) NOT NULL,
         account_type VARCHAR(40) NOT NULL DEFAULT 'checking',
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
@@ -268,6 +283,7 @@ function accumul8_tables_ensure(): void
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_accounts_owner (owner_user_id),
+        KEY idx_accumul8_accounts_group (account_group_id),
         CONSTRAINT fk_accumul8_accounts_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
@@ -428,11 +444,18 @@ function accumul8_tables_ensure(): void
 
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'account_group_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'account_type', "VARCHAR(40) NOT NULL DEFAULT 'checking'");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'institution_name', "VARCHAR(191) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'available_balance', "DECIMAL(10,2) NOT NULL DEFAULT 0.00");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+        if (!accumul8_table_has_index('accumul8_accounts', 'idx_accumul8_accounts_group')) {
+            Database::execute('ALTER TABLE accumul8_accounts ADD INDEX idx_accumul8_accounts_group (account_group_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_accounts', 'fk_accumul8_accounts_group')) {
+            Database::execute('ALTER TABLE accumul8_accounts ADD CONSTRAINT fk_accumul8_accounts_group FOREIGN KEY (account_group_id) REFERENCES accumul8_account_groups(id) ON DELETE SET NULL');
+        }
 
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'account_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'interval_count', 'INT NOT NULL DEFAULT 1');
@@ -512,6 +535,31 @@ function accumul8_get_or_create_default_account(int $viewerId): int
     return (int)Database::lastInsertId();
 }
 
+function accumul8_list_account_groups(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_account_groups')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, group_name, institution_name, COALESCE(notes, "") AS notes, is_active
+         FROM accumul8_account_groups
+         WHERE owner_user_id = ?
+         ORDER BY is_active DESC, group_name ASC, id ASC',
+        [$viewerId]
+    );
+
+    return array_map(static function (array $r): array {
+        return [
+            'id' => (int)($r['id'] ?? 0),
+            'group_name' => (string)($r['group_name'] ?? ''),
+            'institution_name' => (string)($r['institution_name'] ?? ''),
+            'notes' => (string)($r['notes'] ?? ''),
+            'is_active' => (int)($r['is_active'] ?? 0),
+        ];
+    }, $rows);
+}
+
 function accumul8_list_contacts(int $viewerId): array
 {
     $rows = Database::queryAll(
@@ -548,9 +596,12 @@ function accumul8_list_recurring(int $viewerId): array
     $accountJoin = accumul8_table_has_column('accumul8_recurring_payments', 'account_id')
         ? 'LEFT JOIN accumul8_accounts a ON a.id = rp.account_id'
         : '';
+    $accountGroupJoin = accumul8_table_has_column('accumul8_accounts', 'account_group_id')
+        ? 'LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = rp.owner_user_id'
+        : '';
     $accountNameSelect = accumul8_table_has_column('accumul8_recurring_payments', 'account_id')
-        ? 'a.account_name'
-        : "'' AS account_name";
+        ? 'a.account_name, a.account_group_id, COALESCE(ag.group_name, "") AS account_group_name'
+        : "'' AS account_name, NULL AS account_group_id, '' AS account_group_name";
 
     $rows = Database::queryAll(
         'SELECT rp.id, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $intervalCountSelect . ',
@@ -559,6 +610,7 @@ function accumul8_list_recurring(int $viewerId): array
          FROM accumul8_recurring_payments rp
          LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
          ' . $accountJoin . '
+         ' . $accountGroupJoin . '
          WHERE rp.owner_user_id = ?
          ORDER BY rp.next_due_date ASC, rp.id ASC',
         [$viewerId]
@@ -569,6 +621,7 @@ function accumul8_list_recurring(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'account_id' => isset($r['account_id']) ? (int)$r['account_id'] : null,
+            'account_group_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
             'title' => (string)($r['title'] ?? ''),
             'direction' => (string)($r['direction'] ?? 'outflow'),
             'amount' => (float)($r['amount'] ?? 0),
@@ -581,31 +634,36 @@ function accumul8_list_recurring(int $viewerId): array
             'is_active' => (int)($r['is_active'] ?? 0),
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'account_name' => (string)($r['account_name'] ?? ''),
+            'account_group_name' => (string)($r['account_group_name'] ?? ''),
         ];
     }, $rows);
 }
 
 function accumul8_list_accounts(int $viewerId): array
 {
-    $accountTypeSelect = accumul8_optional_select('accumul8_accounts', 'account_type', 'account_type', "'checking' AS account_type");
-    $institutionNameSelect = accumul8_optional_select('accumul8_accounts', 'institution_name', 'institution_name', "'' AS institution_name");
-    $maskLast4Select = accumul8_optional_select('accumul8_accounts', 'mask_last4', 'mask_last4', "'' AS mask_last4");
-    $availableBalanceSelect = accumul8_optional_select('accumul8_accounts', 'available_balance', 'available_balance', 'current_balance AS available_balance');
-    $isActiveSelect = accumul8_optional_select('accumul8_accounts', 'is_active', 'is_active', '1 AS is_active');
+    $accountGroupIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
+    $accountTypeSelect = accumul8_optional_select('accumul8_accounts', 'account_type', 'a.account_type', "'checking' AS account_type");
+    $institutionNameSelect = accumul8_optional_select('accumul8_accounts', 'institution_name', 'a.institution_name', "'' AS institution_name");
+    $maskLast4Select = accumul8_optional_select('accumul8_accounts', 'mask_last4', 'a.mask_last4', "'' AS mask_last4");
+    $availableBalanceSelect = accumul8_optional_select('accumul8_accounts', 'available_balance', 'a.available_balance', 'a.current_balance AS available_balance');
+    $isActiveSelect = accumul8_optional_select('accumul8_accounts', 'is_active', 'a.is_active', '1 AS is_active');
 
     $rows = Database::queryAll(
-        'SELECT id, account_name, ' . $accountTypeSelect . ', ' . $institutionNameSelect . ', ' . $maskLast4Select . ',
-                current_balance, ' . $availableBalanceSelect . ', ' . $isActiveSelect . '
-         FROM accumul8_accounts
-         WHERE owner_user_id = ?
-         ORDER BY account_name ASC, id ASC',
+        'SELECT a.id, ' . $accountGroupIdSelect . ', a.account_name, ' . $accountTypeSelect . ', ' . $institutionNameSelect . ', ' . $maskLast4Select . ',
+                a.current_balance, ' . $availableBalanceSelect . ', ' . $isActiveSelect . ', COALESCE(ag.group_name, "") AS account_group_name
+         FROM accumul8_accounts a
+         LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = a.owner_user_id
+         WHERE a.owner_user_id = ?
+         ORDER BY COALESCE(ag.group_name, ""), a.account_name ASC, a.id ASC',
         [$viewerId]
     );
 
     return array_map(static function (array $r): array {
         return [
             'id' => (int)($r['id'] ?? 0),
+            'account_group_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
             'account_name' => (string)($r['account_name'] ?? ''),
+            'account_group_name' => (string)($r['account_group_name'] ?? ''),
             'account_type' => (string)($r['account_type'] ?? 'checking'),
             'institution_name' => (string)($r['institution_name'] ?? ''),
             'mask_last4' => (string)($r['mask_last4'] ?? ''),
@@ -689,27 +747,53 @@ function accumul8_list_budget_rows(int $viewerId): array
 function accumul8_recompute_running_balance(int $viewerId): void
 {
     $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 'rta_amount', '0.00 AS rta_amount');
+    $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 'source_kind', "'manual' AS source_kind");
     $rows = Database::queryAll(
-        'SELECT id, amount, ' . $rtaSelect . '
+        'SELECT id, account_id, amount, running_balance, ' . $rtaSelect . ', ' . $sourceKindSelect . '
          FROM accumul8_transactions
          WHERE owner_user_id = ?
-         ORDER BY transaction_date ASC, id ASC',
+         ORDER BY account_id ASC, transaction_date ASC, id ASC',
         [$viewerId]
     );
 
-    $balance = 0.0;
+    $balances = [];
+    $statementBalances = [];
     foreach ($rows as $row) {
-        $balance += (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
+        $accountId = isset($row['account_id']) ? (int)$row['account_id'] : 0;
+        if (($row['source_kind'] ?? '') === 'statement_pdf') {
+            $statementBalances[$accountId] = (float)($row['running_balance'] ?? 0);
+            continue;
+        }
+        $balances[$accountId] = (float)($balances[$accountId] ?? 0);
+        $balances[$accountId] += (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
         Database::execute(
             'UPDATE accumul8_transactions SET running_balance = ? WHERE id = ? AND owner_user_id = ?',
-            [round($balance, 2), (int)($row['id'] ?? 0), $viewerId]
+            [round($balances[$accountId], 2), (int)($row['id'] ?? 0), $viewerId]
         );
     }
 
     Database::execute(
-        'UPDATE accumul8_accounts SET current_balance = ? WHERE owner_user_id = ? AND id = (SELECT t.account_id FROM (SELECT account_id FROM accumul8_transactions WHERE owner_user_id = ? ORDER BY transaction_date DESC, id DESC LIMIT 1) t)',
-        [round($balance, 2), $viewerId, $viewerId]
+        'UPDATE accumul8_accounts SET current_balance = 0.00 WHERE owner_user_id = ?',
+        [$viewerId]
     );
+    foreach ($balances as $accountId => $balance) {
+        if ($accountId <= 0) {
+            continue;
+        }
+        Database::execute(
+            'UPDATE accumul8_accounts SET current_balance = ? WHERE id = ? AND owner_user_id = ?',
+            [round($balance, 2), $accountId, $viewerId]
+        );
+    }
+    foreach ($statementBalances as $accountId => $balance) {
+        if ($accountId <= 0) {
+            continue;
+        }
+        Database::execute(
+            'UPDATE accumul8_accounts SET current_balance = ?, available_balance = ? WHERE id = ? AND owner_user_id = ?',
+            [round($balance, 2), round($balance, 2), $accountId, $viewerId]
+        );
+    }
 }
 
 function accumul8_list_transactions(int $viewerId, int $limit = 400): array
@@ -726,13 +810,15 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $debtorSelect = $hasDebtor ? 't.debtor_id' : 'NULL AS debtor_id';
     $debtorNameSelect = $hasDebtor ? ', d.debtor_name' : ", '' AS debtor_name";
     $debtorJoin = $hasDebtor ? 'LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id' : '';
+    $accountGroupIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
     $rows = Database::queryAll(
-        'SELECT t.id, t.account_id, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
+        'SELECT t.id, t.account_id, ' . $accountGroupIdSelect . ', t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
                 t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $sourceKindSelect . ', ' . $pendingStatusSelect . ',
-                c.contact_name, a.account_name' . $debtorNameSelect . '
+                c.contact_name, a.account_name, COALESCE(ag.group_name, "") AS account_group_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
          LEFT JOIN accumul8_contacts c ON c.id = t.contact_id AND c.owner_user_id = t.owner_user_id
          LEFT JOIN accumul8_accounts a ON a.id = t.account_id AND a.owner_user_id = t.owner_user_id
+         LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = t.owner_user_id
          ' . $debtorJoin . '
          WHERE t.owner_user_id = ?
          ORDER BY t.transaction_date DESC, t.id DESC
@@ -744,6 +830,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
         return [
             'id' => (int)($r['id'] ?? 0),
             'account_id' => isset($r['account_id']) ? (int)$r['account_id'] : null,
+            'account_group_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
             'transaction_date' => (string)($r['transaction_date'] ?? ''),
@@ -760,6 +847,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'pending_status' => (int)($r['pending_status'] ?? 0),
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'account_name' => (string)($r['account_name'] ?? ''),
+            'account_group_name' => (string)($r['account_group_name'] ?? ''),
             'debtor_name' => (string)($r['debtor_name'] ?? ''),
         ];
     }, $rows);
@@ -1063,6 +1151,7 @@ if ($action === 'bootstrap') {
     $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 500), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
     $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
+    $accountGroups = accumul8_bootstrap_section('account_groups', static fn() => accumul8_list_account_groups($viewerId), [], $warnings);
     $accounts = accumul8_bootstrap_section('accounts', static fn() => accumul8_list_accounts($viewerId), [], $warnings);
     $debtors = accumul8_bootstrap_section('debtors', static fn() => accumul8_list_debtors($viewerId), [], $warnings);
     $budgetRows = accumul8_bootstrap_section('budget_rows', static fn() => accumul8_list_budget_rows($viewerId), [], $warnings);
@@ -1087,6 +1176,7 @@ if ($action === 'bootstrap') {
         'debtor_ledger' => array_values(array_filter($transactions, static function (array $tx): bool {
             return isset($tx['debtor_id']) && (int)$tx['debtor_id'] > 0;
         })),
+        'account_groups' => $accountGroups,
         'accounts' => $accounts,
         'debtors' => $debtors,
         'budget_rows' => $budgetRows,

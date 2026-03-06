@@ -52,7 +52,7 @@ export function Accumul8SpreadsheetView({
       <div className="accumul8-panel-toolbar mb-3">
         <div>
           <h3 className="mb-1">Budget Planner</h3>
-          <p className="small text-muted mb-0">Choose the center month to view the previous, current, and next month side-by-side from the ledger.</p>
+          <p className="small text-muted mb-0">Reflect on last month, work through this month, and plan the next month using only your curated budget-planner records.</p>
         </div>
         <div className="accumul8-spreadsheet-selector">
           <label htmlFor="budget-month" className="small text-muted mb-1">Center month</label>
@@ -179,7 +179,7 @@ export function Accumul8SpreadsheetView({
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={11} className="text-center text-muted py-4">No ledger rows in this month yet.</td>
+                        <td colSpan={11} className="text-center text-muted py-4">No budget-planner rows in this month yet.</td>
                       </tr>
                     )}
                   </tbody>

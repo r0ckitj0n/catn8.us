@@ -226,6 +226,12 @@ export function useAccumul8(
       () => ApiClient.post(scopedActionUrl('toggle_transaction_reconciled'), { id }),
     );
   }, [scopedActionUrl, withReload]);
+  const toggleTransactionBudgetPlanner = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('toggle_transaction_budget_planner'), { id }),
+      'Budget planner inclusion updated',
+    );
+  }, [scopedActionUrl, withReload]);
   const createNotificationRule = React.useCallback(async (form: Accumul8NotificationRuleUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_notification_rule'), form),
@@ -342,6 +348,7 @@ export function useAccumul8(
     deleteTransaction,
     toggleTransactionPaid,
     toggleTransactionReconciled,
+    toggleTransactionBudgetPlanner,
     createBudgetRow,
     updateBudgetRow,
     deleteBudgetRow,

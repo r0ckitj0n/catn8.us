@@ -2,6 +2,7 @@ export type Accumul8ContactType = 'payee' | 'payer' | 'both';
 export type Accumul8Direction = 'outflow' | 'inflow';
 export type Accumul8Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
 export type Accumul8EntryType = 'manual' | 'auto' | 'transfer' | 'deposit' | 'bill';
+export type Accumul8PaymentMethod = 'unspecified' | 'autopay' | 'manual';
 
 export interface Accumul8Contact {
   id: number;
@@ -30,6 +31,7 @@ export interface Accumul8RecurringPayment {
   direction: Accumul8Direction;
   amount: number;
   frequency: Accumul8Frequency;
+  payment_method: Accumul8PaymentMethod;
   interval_count: number;
   day_of_month: number | null;
   day_of_week: number | null;
@@ -46,6 +48,7 @@ export interface Accumul8RecurringUpsertRequest {
   direction: Accumul8Direction;
   amount: number;
   frequency: Accumul8Frequency;
+  payment_method: Accumul8PaymentMethod;
   interval_count: number;
   next_due_date: string;
   contact_id?: number | null;
@@ -69,6 +72,7 @@ export interface Accumul8Transaction {
   running_balance: number;
   is_paid: number;
   is_reconciled: number;
+  is_budget_planner: number;
   source_kind: string;
   pending_status: number;
   contact_name: string;
@@ -102,6 +106,7 @@ export interface Accumul8TransactionUpsertRequest {
   rta_amount: number;
   is_paid: number;
   is_reconciled: number;
+  is_budget_planner: number;
   contact_id?: number | null;
   account_id?: number | null;
   debtor_id?: number | null;

@@ -436,7 +436,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 {[
                   ['ledger', 'Ledger'],
                   ['spreadsheet', 'Budget'],
-                  ['debtors', 'Debtors'],
+                  ['debtors', 'Balances'],
                   ['pay_bills', 'Pay Bills'],
                   ['contacts', 'Payees/Payers'],
                   ['recurring', 'Recurring'],
@@ -558,7 +558,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="col-md-3"><input className="form-control" type="number" step="0.01" value={ledgerForm.amount} onChange={(e) => setLedgerForm((v) => ({ ...v, amount: Number(e.target.value) }))} required /></div>
                 <div className="col-md-3"><select className="form-select" value={ledgerForm.contact_id} onChange={(e) => setLedgerForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Contact</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
                 <div className="col-md-3"><select className="form-select" value={ledgerForm.account_id} onChange={(e) => setLedgerForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{visibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
-                <div className="col-md-3"><select className="form-select" value={ledgerForm.debtor_id} onChange={(e) => setLedgerForm((v) => ({ ...v, debtor_id: e.target.value }))}><option value="">Debtor</option>{debtors.map((d) => <option key={d.id} value={d.id}>{d.debtor_name}</option>)}</select></div>
+                <div className="col-md-3"><select className="form-select" value={ledgerForm.debtor_id} onChange={(e) => setLedgerForm((v) => ({ ...v, debtor_id: e.target.value }))}><option value="">Person / Balance</option>{debtors.map((d) => <option key={d.id} value={d.id}>{d.debtor_name}</option>)}</select></div>
                 <div className="col-md-2"><input className="form-control" placeholder="RTA" type="number" step="0.01" value={ledgerForm.rta_amount} onChange={(e) => setLedgerForm((v) => ({ ...v, rta_amount: Number(e.target.value) }))} /></div>
                 <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingTransactionId ? 'Update' : 'Add'}</button></div>
                 {editingTransactionId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetLedgerForm} disabled={busy}>Cancel</button></div> : null}
@@ -678,7 +678,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           )}
           {tab === 'debtors' && (
             <div className="accumul8-panel">
-              <h3>Debtors</h3>
+              <h3>Personal Balances</h3>
               <form className="row g-2" onSubmit={(e) => {
                 e.preventDefault();
                 const payload = {
@@ -692,16 +692,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 }
                 void createDebtor(payload).then(() => resetDebtorForm());
               }}>
-                <div className="col-md-3"><input className="form-control" placeholder="Debtor name" value={debtorForm.debtor_name} onChange={(e) => setDebtorForm((v) => ({ ...v, debtor_name: e.target.value }))} required /></div>
+                <div className="col-md-3"><input className="form-control" placeholder="Person name" value={debtorForm.debtor_name} onChange={(e) => setDebtorForm((v) => ({ ...v, debtor_name: e.target.value }))} required /></div>
                 <div className="col-md-3"><select className="form-select" value={debtorForm.contact_id} onChange={(e) => setDebtorForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Link contact (optional)</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
                 <div className="col-md-3"><input className="form-control" placeholder="Notes" value={debtorForm.notes} onChange={(e) => setDebtorForm((v) => ({ ...v, notes: e.target.value }))} /></div>
                 <div className="col-md-1"><select className="form-select" value={String(debtorForm.is_active)} onChange={(e) => setDebtorForm((v) => ({ ...v, is_active: Number(e.target.value) }))}><option value="1">Active</option><option value="0">Paused</option></select></div>
-                <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingDebtorId ? 'Update' : 'Add Debtor'}</button></div>
+                <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingDebtorId ? 'Update' : 'Add Person'}</button></div>
                 {editingDebtorId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetDebtorForm} disabled={busy}>Cancel</button></div> : null}
               </form>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--bills">
                 <table className="table table-sm accumul8-sticky-head">
-                  <thead><tr><th>Debtor</th><th>Linked Contact</th><th className="text-end">Loaned</th><th className="text-end">Repaid</th><th className="text-end">Balance Owed</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Person</th><th>Linked Contact</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net Balance</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {debtors.map((debtor) => (
                       <tr key={debtor.id} className="accumul8-list-item">
@@ -725,18 +725,18 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <div className="accumul8-panel mt-3">
                 <div className="d-flex justify-content-between align-items-center gap-2 mb-2 flex-wrap">
-                  <h4 className="h6 mb-0">Debtor Ledger</h4>
+                  <h4 className="h6 mb-0">Balance Ledger</h4>
                   <div className="d-flex gap-2">
                     <select className="form-select form-select-sm" value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)}>
-                      <option value="">All Debtors</option>
+                      <option value="">All People</option>
                       {debtors.map((debtor) => <option key={debtor.id} value={debtor.id}>{debtor.debtor_name}</option>)}
                     </select>
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setTab('ledger')}>Add Loan/Payment</button>
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setTab('ledger')}>Add Charge / Credit</button>
                   </div>
                 </div>
                 <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--ledger">
                   <table className="table table-sm accumul8-sticky-head">
-                    <thead><tr><th>Date</th><th>Debtor</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running Balance</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running Balance</th></tr></thead>
                     <tbody>
                       {selectedDebtorEntries.map((tx) => (
                         <tr key={tx.id} className={`accumul8-list-item ${tx.amount < 0 ? 'is-outflow' : 'is-inflow'}`}>

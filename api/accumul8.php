@@ -770,8 +770,8 @@ function accumul8_list_debtors(int $viewerId): array
     $rows = Database::queryAll(
         'SELECT d.id, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at,
                 c.contact_name,
-                COALESCE(SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END), 0) AS total_loaned,
-                COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS total_repaid,
+                COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS total_loaned,
+                COALESCE(SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END), 0) AS total_repaid,
                 COALESCE(COUNT(t.id), 0) AS transaction_count,
                 MAX(t.transaction_date) AS last_activity_date
          FROM accumul8_debtors d

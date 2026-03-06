@@ -112,11 +112,16 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     prevShowAdminModalRef.current = state.showAdminModal;
   }, [restoreListScrollPosition, state.showAdminModal, state.showAlbumViewer]);
 
-  const openAlbum = React.useCallback(async (albumId: number, mode: 'view' | 'edit' = 'view', initialPageIndex?: number) => {
+  const openAlbum = React.useCallback(async (
+    albumId: number,
+    mode: 'view' | 'edit' = 'view',
+    initialPageIndex?: number,
+    nextViewMode: 'album' | 'list' = 'album',
+  ) => {
     if (!state.showAlbumViewer && !state.showAdminModal) {
       captureListScrollPosition();
     }
-    setViewMode('album');
+    setViewMode(nextViewMode);
     state.openAlbum(albumId, mode, initialPageIndex);
     if (state.isAdmin || mode === 'edit') {
       return;
@@ -230,7 +235,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                       type="button"
                       className="catn8-photo-album-card-open"
                       onClick={() => {
-                        void openAlbum(album.id);
+                        void openAlbum(album.id, 'view', undefined, 'album');
                       }}
                       aria-label={`Open album ${displayTitle}`}
                     />
@@ -248,7 +253,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            void openAlbum(album.id, 'edit');
+                            void openAlbum(album.id, 'edit', undefined, 'album');
                           }}
                           aria-label={`Edit album ${displayTitle}`}
                           title="Edit album"
@@ -334,7 +339,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
                           if (viewerAlbum?.id) {
-                            void openAlbum(viewerAlbum.id, 'edit', state.pageIndex);
+                            void openAlbum(viewerAlbum.id, 'edit', state.pageIndex, viewMode);
                           }
                         }}
                       >
@@ -438,6 +443,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         busy={state.busy}
         hasUnsavedChanges={state.hasUnsavedAdminChanges}
         album={state.adminDraft}
+        viewMode={viewMode}
         pageIndex={state.pageIndex}
         zoom={state.zoom}
         canPrev={state.canPrev}

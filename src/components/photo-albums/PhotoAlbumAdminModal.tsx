@@ -4,6 +4,7 @@ import { PhotoAlbum } from '../../types/photoAlbums';
 import { auditPhotoAlbum } from '../../utils/photoAlbumAudit';
 import { sanitizeAlbumMessageText, splitAlbumMessages, toAlbumDisplayName } from '../../utils/photoAlbumText';
 import { LockIcon } from './LockIcon';
+import { PhotoAlbumChronologicalList } from './PhotoAlbumChronologicalList';
 import { PhotoAlbumStage } from './PhotoAlbumStage';
 
 interface PhotoAlbumAdminModalProps {
@@ -38,6 +39,7 @@ interface PhotoAlbumAdminModalProps {
   onGenerateCoverFromFavorites: () => void;
   onRedesignPage: () => void;
   onAlbumChange: (updater: (prev: PhotoAlbum) => PhotoAlbum) => void;
+  viewMode?: 'album' | 'list';
 }
 
 const saveSvg = (
@@ -82,6 +84,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onGenerateCoverFromFavorites,
     onRedesignPage,
     onAlbumChange,
+    viewMode = 'album',
   } = props;
 
   const spread = album?.spec.spreads[pageIndex] || null;
@@ -742,29 +745,39 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
 
           </div>
 
-          <div className="catn8-admin-preview-panel">
-            <PhotoAlbumStage
-              album={album}
-              spreadIndex={pageIndex}
-              zoom={zoom}
-              contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
-              respectSavedPositions
-              canPrev={canPrev}
-              canNext={canNext}
-              pageFavorite={pageFavorite}
-              isMediaFavorite={isMediaFavorite}
-              isTextFavorite={isTextFavorite}
-              onPrev={onPrevPage}
-              onNext={onNextPage}
-              onTogglePageFavorite={onTogglePageFavorite}
-              onToggleMediaFavorite={onToggleMediaFavorite}
-              onToggleTextFavorite={onToggleTextFavorite}
-              pageLocked={spreadLocked}
-              albumLocked={albumLocked}
-              onTogglePageLock={() => onToggleSpreadLock(!spreadLocked)}
-              onBackToAlbums={onClose}
-              editable
-              onMoveMedia={(index, patch) => onAlbumChange((prev) => {
+          <div className={viewMode === 'list' ? 'catn8-admin-preview-panel catn8-admin-preview-panel--list' : 'catn8-admin-preview-panel'}>
+            {viewMode === 'list' ? (
+              <PhotoAlbumChronologicalList
+                album={album}
+                contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
+                isMediaFavorite={isMediaFavorite}
+                isTextFavorite={isTextFavorite}
+                onToggleMediaFavorite={onToggleMediaFavorite}
+                onToggleTextFavorite={onToggleTextFavorite}
+              />
+            ) : (
+              <PhotoAlbumStage
+                album={album}
+                spreadIndex={pageIndex}
+                zoom={zoom}
+                contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
+                respectSavedPositions
+                canPrev={canPrev}
+                canNext={canNext}
+                pageFavorite={pageFavorite}
+                isMediaFavorite={isMediaFavorite}
+                isTextFavorite={isTextFavorite}
+                onPrev={onPrevPage}
+                onNext={onNextPage}
+                onTogglePageFavorite={onTogglePageFavorite}
+                onToggleMediaFavorite={onToggleMediaFavorite}
+                onToggleTextFavorite={onToggleTextFavorite}
+                pageLocked={spreadLocked}
+                albumLocked={albumLocked}
+                onTogglePageLock={() => onToggleSpreadLock(!spreadLocked)}
+                onBackToAlbums={onClose}
+                editable
+                onMoveMedia={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const target = next.spec.spreads[pageIndex]?.images?.[index];
                 if (target) {
@@ -778,8 +791,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   }
                 }
                 return next;
-              })}
-              onMoveNote={(noteId, index, patch) => onAlbumChange((prev) => {
+                })}
+                onMoveNote={(noteId, index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread) {
@@ -858,8 +871,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   target.rotation = patch.rotation;
                 }
                 return next;
-              })}
-              onEditNoteText={(index, nextText) => onAlbumChange((prev) => {
+                })}
+                onEditNoteText={(index, nextText) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread) {
@@ -875,16 +888,16 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   targetSpread.text_items[index].text = nextText;
                 }
                 return next;
-              })}
-              onEditMediaCaption={(index, nextCaption) => onAlbumChange((prev) => {
+                })}
+                onEditMediaCaption={(index, nextCaption) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const target = next.spec.spreads[pageIndex]?.images?.[index];
                 if (target) {
                   target.caption = nextCaption;
                 }
                 return next;
-              })}
-              onEditDecor={(index, patch) => onAlbumChange((prev) => {
+                })}
+                onEditDecor={(index, patch) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const target = next.spec.spreads[pageIndex]?.decor_items?.[index];
                 if (target) {
@@ -896,8 +909,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   }
                 }
                 return next;
-              })}
-              onDuplicateMedia={(index) => onAlbumChange((prev) => {
+                })}
+                onDuplicateMedia={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread || !Array.isArray(targetSpread.images) || !targetSpread.images[index]) {
@@ -910,8 +923,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   y: Math.min(90, Number(source.y ?? 10) + 4),
                 });
                 return next;
-              })}
-              onDuplicateNote={(index) => onAlbumChange((prev) => {
+                })}
+                onDuplicateNote={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread) {
@@ -929,8 +942,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   y: Math.min(90, Number(source.y ?? 10) + 3),
                 });
                 return next;
-              })}
-              onDuplicateDecor={(index) => onAlbumChange((prev) => {
+                })}
+                onDuplicateDecor={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread || !Array.isArray(targetSpread.decor_items) || !targetSpread.decor_items[index]) {
@@ -944,8 +957,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   y: Math.min(92, Number(source.y ?? 20) + 4),
                 });
                 return next;
-              })}
-              onDeleteMedia={(index) => onAlbumChange((prev) => {
+                })}
+                onDeleteMedia={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread || !Array.isArray(targetSpread.images)) {
@@ -953,8 +966,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 targetSpread.images.splice(index, 1);
                 return next;
-              })}
-              onDeleteNote={(index) => onAlbumChange((prev) => {
+                })}
+                onDeleteNote={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread) {
@@ -966,8 +979,8 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 targetSpread.text_items.splice(index, 1);
                 return next;
-              })}
-              onDeleteDecor={(index) => onAlbumChange((prev) => {
+                })}
+                onDeleteDecor={(index) => onAlbumChange((prev) => {
                 const next = structuredClone(prev);
                 const targetSpread = next.spec.spreads[pageIndex];
                 if (!targetSpread || !Array.isArray(targetSpread.decor_items)) {
@@ -975,8 +988,9 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                 }
                 targetSpread.decor_items.splice(index, 1);
                 return next;
-              })}
-            />
+                })}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -868,6 +868,54 @@ function accumul8_due_bills(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_summary(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_transactions')) {
+        return [
+            'net_amount' => 0.0,
+            'inflow_total' => 0.0,
+            'outflow_total' => 0.0,
+            'unpaid_outflow_total' => 0.0,
+        ];
+    }
+
+    $isPaidExpr = accumul8_table_has_column('accumul8_transactions', 'is_paid')
+        ? 'CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END'
+        : '0';
+
+    $row = Database::queryOne(
+        'SELECT
+            COALESCE(SUM(amount), 0) AS net_amount,
+            COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS inflow_total,
+            COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) AS outflow_total,
+            COALESCE(SUM(' . $isPaidExpr . '), 0) AS unpaid_outflow_total
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    ) ?: [];
+
+    return [
+        'net_amount' => (float)($row['net_amount'] ?? 0),
+        'inflow_total' => (float)($row['inflow_total'] ?? 0),
+        'outflow_total' => (float)($row['outflow_total'] ?? 0),
+        'unpaid_outflow_total' => (float)($row['unpaid_outflow_total'] ?? 0),
+    ];
+}
+
+function accumul8_bootstrap_section(string $label, callable $loader, $fallback, array &$warnings)
+{
+    try {
+        return $loader();
+    } catch (Throwable $e) {
+        $warnings[] = [
+            'section' => $label,
+            'error' => $e->getMessage(),
+        ];
+        error_log('accumul8 bootstrap section failed [' . $label . ']: ' . $e->getMessage());
+        return $fallback;
+    }
+}
+
 function accumul8_notification_recipients_from_rule(int $viewerId, array $rule): array
 {
     $scope = (string)($rule['target_scope'] ?? 'group');
@@ -990,9 +1038,17 @@ function accumul8_plaid_request(string $path, array $payload): array
     return $json;
 }
 
-accumul8_tables_ensure();
+try {
+    accumul8_tables_ensure();
+} catch (Throwable $e) {
+    error_log('accumul8 schema ensure failed: ' . $e->getMessage());
+}
 $scopeOwnerUserId = accumul8_resolve_scope_owner_user_id($actorUserId);
-accumul8_get_or_create_default_account($scopeOwnerUserId);
+try {
+    accumul8_get_or_create_default_account($scopeOwnerUserId);
+} catch (Throwable $e) {
+    error_log('accumul8 default account ensure failed: ' . $e->getMessage());
+}
 $viewerId = $scopeOwnerUserId;
 
 $action = accumul8_normalize_text((string)($_GET['action'] ?? ''), 80);
@@ -1003,31 +1059,28 @@ if ($action === '') {
 if ($action === 'bootstrap') {
     catn8_require_method('GET');
 
-    $transactions = accumul8_list_transactions($viewerId, 500);
-    $contacts = accumul8_list_contacts($viewerId);
-    $recurring = accumul8_list_recurring($viewerId);
-    $accounts = accumul8_list_accounts($viewerId);
-    $debtors = accumul8_list_debtors($viewerId);
-    $budgetRows = accumul8_list_budget_rows($viewerId);
-    $rules = accumul8_list_notification_rules($viewerId);
-    $connections = accumul8_list_bank_connections($viewerId);
-    $payBills = accumul8_due_bills($viewerId);
-
-    $summary = Database::queryOne(
-        'SELECT
-            COALESCE(SUM(amount), 0) AS net_amount,
-            COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS inflow_total,
-            COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) AS outflow_total,
-            COALESCE(SUM(CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END), 0) AS unpaid_outflow_total
-         FROM accumul8_transactions
-         WHERE owner_user_id = ?',
-        [$viewerId]
-    ) ?: [];
+    $warnings = [];
+    $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 500), [], $warnings);
+    $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
+    $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
+    $accounts = accumul8_bootstrap_section('accounts', static fn() => accumul8_list_accounts($viewerId), [], $warnings);
+    $debtors = accumul8_bootstrap_section('debtors', static fn() => accumul8_list_debtors($viewerId), [], $warnings);
+    $budgetRows = accumul8_bootstrap_section('budget_rows', static fn() => accumul8_list_budget_rows($viewerId), [], $warnings);
+    $rules = accumul8_bootstrap_section('notification_rules', static fn() => accumul8_list_notification_rules($viewerId), [], $warnings);
+    $connections = accumul8_bootstrap_section('bank_connections', static fn() => accumul8_list_bank_connections($viewerId), [], $warnings);
+    $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
+    $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
+        'net_amount' => 0.0,
+        'inflow_total' => 0.0,
+        'outflow_total' => 0.0,
+        'unpaid_outflow_total' => 0.0,
+    ], $warnings);
+    $accessibleOwners = accumul8_bootstrap_section('accessible_account_owners', static fn() => accumul8_list_accessible_owners($actorUserId), [], $warnings);
 
     catn8_json_response([
         'success' => true,
         'selected_owner_user_id' => $viewerId,
-        'accessible_account_owners' => accumul8_list_accessible_owners($actorUserId),
+        'accessible_account_owners' => $accessibleOwners,
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,
@@ -1045,12 +1098,8 @@ if ($action === 'bootstrap') {
             'env' => accumul8_plaid_env(),
             'configured' => accumul8_plaid_is_configured() ? 1 : 0,
         ],
-        'summary' => [
-            'net_amount' => (float)($summary['net_amount'] ?? 0),
-            'inflow_total' => (float)($summary['inflow_total'] ?? 0),
-            'outflow_total' => (float)($summary['outflow_total'] ?? 0),
-            'unpaid_outflow_total' => (float)($summary['unpaid_outflow_total'] ?? 0),
-        ],
+        'summary' => $summary,
+        'warnings' => $warnings,
     ]);
 }
 

@@ -69,10 +69,10 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   }, [isFullscreen, state.showAlbumViewer]);
 
   React.useEffect(() => {
-    if (!state.showAlbumViewer) {
+    if (!state.showAlbumViewer && !state.showAdminModal) {
       setViewMode('album');
     }
-  }, [state.showAlbumViewer]);
+  }, [state.showAdminModal, state.showAlbumViewer]);
 
   React.useEffect(() => {
     const shouldFitPreview = state.showAlbumViewer && !isFullscreen;
@@ -444,6 +444,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
         hasUnsavedChanges={state.hasUnsavedAdminChanges}
         album={state.adminDraft}
         viewMode={viewMode}
+        onSetViewMode={setAlbumViewMode}
         pageIndex={state.pageIndex}
         zoom={state.zoom}
         canPrev={state.canPrev}

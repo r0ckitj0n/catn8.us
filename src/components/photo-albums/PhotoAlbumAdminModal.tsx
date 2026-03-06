@@ -40,6 +40,7 @@ interface PhotoAlbumAdminModalProps {
   onRedesignPage: () => void;
   onAlbumChange: (updater: (prev: PhotoAlbum) => PhotoAlbum) => void;
   viewMode?: 'album' | 'list';
+  onSetViewMode?: (nextMode: 'album' | 'list') => void | Promise<void>;
 }
 
 const saveSvg = (
@@ -85,6 +86,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
     onRedesignPage,
     onAlbumChange,
     viewMode = 'album',
+    onSetViewMode,
   } = props;
 
   const spread = album?.spec.spreads[pageIndex] || null;
@@ -187,7 +189,26 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
           <h2 className="h4 m-0">Edit Photo Album</h2>
           <div className="catn8-admin-modal-header-actions">
             <div className="catn8-admin-modal-header-tools">
-              <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
+              <div className="catn8-photo-albums-view-toggle" role="group" aria-label="View mode">
+                <span className="catn8-photo-albums-view-toggle-label">View</span>
+                <button
+                  type="button"
+                  className={viewMode === 'album' ? 'btn btn-sm btn-outline-secondary is-active' : 'btn btn-sm btn-outline-secondary'}
+                  onClick={() => { void onSetViewMode?.('album'); }}
+                  aria-pressed={viewMode === 'album'}
+                >
+                  Album
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === 'list' ? 'btn btn-sm btn-outline-secondary is-active' : 'btn btn-sm btn-outline-secondary'}
+                  onClick={() => { void onSetViewMode?.('list'); }}
+                  aria-pressed={viewMode === 'list'}
+                >
+                  List
+                </button>
+              </div>
+              {viewMode === 'album' ? <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button> : null}
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>

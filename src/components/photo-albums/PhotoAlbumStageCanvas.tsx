@@ -160,14 +160,35 @@ export function PhotoAlbumStageCanvas({
             const showCaption = Boolean(caption && !isTranscriptCaption(caption));
             const mediaFavorited = typeof isMediaFavorite === 'function' ? isMediaFavorite(spreadIndex, item.sourceIndex) : false;
             return (
-              <figure className={selectedItem?.type === 'media' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-media is-selected' : 'catn8-scatter-card catn8-scatter-media'} key={item.key} style={renderMediaStyle(index)} onPointerDown={editable && !isLayoutLocked ? (event) => onMediaPointerDown(index, item.sourceIndex, event) : undefined}>
+              <figure
+                className={selectedItem?.type === 'media' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-media is-selected' : 'catn8-scatter-card catn8-scatter-media'}
+                key={item.key}
+                style={renderMediaStyle(index)}
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onPointerDown={editable && !isLayoutLocked ? (event) => onMediaPointerDown(index, item.sourceIndex, event) : undefined}
+              >
                 {typeof onToggleMediaFavorite === 'function' && albumId > 0 && !albumIsVirtual ? (
                   <button type="button" className={mediaFavorited ? 'catn8-preview-favorite-toggle is-active' : 'catn8-preview-favorite-toggle'} onClick={(event) => { event.stopPropagation(); onToggleMediaFavorite(spreadIndex, item.sourceIndex); }} aria-label={mediaFavorited ? 'Remove media from favorites' : 'Add media to favorites'} aria-pressed={mediaFavorited} title={mediaFavorited ? 'Favorited media' : 'Favorite this media'}>♥</button>
                 ) : null}
+                {editable && !isLayoutLocked && typeof onDeleteMedia === 'function' ? (
+                  <button
+                    type="button"
+                    className="catn8-preview-delete-toggle"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteMedia(item.sourceIndex);
+                    }}
+                    aria-label="Delete media"
+                    title="Delete media"
+                  >
+                    🗑️
+                  </button>
+                ) : null}
                 {isVideoMedia(item.src, item.mediaType) ? (
-                  <video className="catn8-polaroid-photo catn8-polaroid-video" src={item.src} controls preload="metadata" onClick={(event) => { event.stopPropagation(); onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media'); }} />
+                  <video className="catn8-polaroid-photo catn8-polaroid-video" src={item.src} controls preload="metadata" onClick={(event) => { event.stopPropagation(); onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media'); }} onDragStart={(event) => event.preventDefault()} />
                 ) : (
-                  <img className="catn8-polaroid-photo" src={item.src} alt={caption || `Memory ${index + 1}`} loading="lazy" onClick={(event) => { event.stopPropagation(); onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media'); }} />
+                  <img className="catn8-polaroid-photo" src={item.src} alt={caption || `Memory ${index + 1}`} loading="lazy" draggable={false} onDragStart={(event) => event.preventDefault()} onClick={(event) => { event.stopPropagation(); onItemClick({ type: 'media', index, sourceIndex: item.sourceIndex }, 'media'); }} />
                 )}
                 {showCaption ? <figcaption className="catn8-polaroid-caption">{caption}</figcaption> : null}
               </figure>
@@ -178,9 +199,32 @@ export function PhotoAlbumStageCanvas({
             const display = formatNoteText(note);
             const noteFavorited = typeof isTextFavorite === 'function' ? isTextFavorite(spreadIndex, note.id) : false;
             return (
-              <div className={selectedItem?.type === 'note' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-note is-selected' : 'catn8-scatter-card catn8-scatter-note'} key={note.id} style={renderNoteStyle(note, index)} onClick={() => onItemClick({ type: 'note', index }, 'note')} onPointerDown={editable && !isLayoutLocked ? (event) => onNotePointerDown(index, event) : undefined} onDoubleClick={editable && !isLayoutLocked && onEditNoteText ? () => { const next = window.prompt('Edit text', display); if (typeof next === 'string' && next.trim()) { onEditNoteText(index, next.trim()); } } : undefined}>
+              <div
+                className={selectedItem?.type === 'note' && selectedItem.index === index ? 'catn8-scatter-card catn8-scatter-note is-selected' : 'catn8-scatter-card catn8-scatter-note'}
+                key={note.id}
+                style={renderNoteStyle(note, index)}
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onClick={() => onItemClick({ type: 'note', index }, 'note')}
+                onPointerDown={editable && !isLayoutLocked ? (event) => onNotePointerDown(index, event) : undefined}
+                onDoubleClick={editable && !isLayoutLocked && onEditNoteText ? () => { const next = window.prompt('Edit text', display); if (typeof next === 'string' && next.trim()) { onEditNoteText(index, next.trim()); } } : undefined}
+              >
                 {typeof onToggleTextFavorite === 'function' && albumId > 0 && !albumIsVirtual ? (
                   <button type="button" className={noteFavorited ? 'catn8-preview-favorite-toggle catn8-preview-favorite-toggle-note is-active' : 'catn8-preview-favorite-toggle catn8-preview-favorite-toggle-note'} onClick={(event) => { event.stopPropagation(); onToggleTextFavorite(spreadIndex, note.id); }} aria-label={noteFavorited ? 'Remove text from favorites' : 'Add text to favorites'} aria-pressed={noteFavorited} title={noteFavorited ? 'Favorited text' : 'Favorite this text'}>♥</button>
+                ) : null}
+                {editable && !isLayoutLocked && typeof onDeleteNote === 'function' ? (
+                  <button
+                    type="button"
+                    className="catn8-preview-delete-toggle catn8-preview-delete-toggle-note"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteNote(index);
+                    }}
+                    aria-label="Delete text"
+                    title="Delete text"
+                  >
+                    🗑️
+                  </button>
                 ) : null}
                 <div className="catn8-scatter-note-inner" style={{ borderColor: themeBorderColor, backgroundColor: themeAccentColor }}>
                   <span className="catn8-scatter-note-emoji">{themeEmojis[index % Math.max(1, themeEmojis.length)] || '✨'}</span>

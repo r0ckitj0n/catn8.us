@@ -2,9 +2,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../api/bootstrap.php';
-require_once __DIR__ . '/../../includes/valid8_vault_entry_model.php';
-
 /**
  * VALID8 metadata normalizer
  *
@@ -54,6 +51,9 @@ if ($options['db_profile'] === 'live') {
         }
     }
 }
+
+require_once __DIR__ . '/../../api/bootstrap.php';
+require_once __DIR__ . '/../../includes/valid8_vault_entry_model.php';
 
 Valid8VaultEntryModel::ensureSchema();
 

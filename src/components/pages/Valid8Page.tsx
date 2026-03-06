@@ -6,6 +6,7 @@ import { Valid8VaultEntryWithSecrets } from '../../types/valid8';
 import { StandardIconButton } from '../common/StandardIconButton';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { Valid8LookupManagerModal } from '../modals/Valid8LookupManagerModal';
+import { Valid8EntryEditModal } from '../modals/Valid8EntryEditModal';
 import './Valid8Page.css';
 
 function formatDate(value: string): string {
@@ -16,16 +17,7 @@ function formatDate(value: string): string {
   return new Date(parsed).toLocaleString();
 }
 
-interface EntryDraft {
-  title: string;
-  username: string;
-  password: string;
-  owner_name: string;
-  category: string;
-  is_active: number;
-}
-
-type SortColumn = 'title' | 'username' | 'password' | 'category' | 'owner_name' | 'is_active' | 'updated_at';
+type SortColumn = 'title' | 'username' | 'email_address' | 'category' | 'owner_name' | 'is_active' | 'updated_at';
 
 export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const isAuthed = Boolean(viewer?.id);
@@ -63,10 +55,10 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
   const [ownerFilter, setOwnerFilter] = React.useState('');
   const [sortBy, setSortBy] = React.useState<SortColumn>('updated_at');
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc');
-  const [drafts, setDrafts] = React.useState<Record<string, EntryDraft>>({});
   const [ownerModalOpen, setOwnerModalOpen] = React.useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = React.useState(false);
-  const titleInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
+  const [editingEntryId, setEditingEntryId] = React.useState('');
+  const [savingEdit, setSavingEdit] = React.useState(false);
 
   const ownerOptions = React.useMemo(() => {
     const set = new Set<string>();
@@ -115,9 +107,11 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
         entry.title,
         entry.username,
         entry.password,
+        entry.email_address,
         entry.category,
         entry.owner_name,
         entry.url,
+        entry.notes,
         entry.source_tab,
         entry.source_document,
         Number(entry.is_active) === 1 ? 'active' : 'inactive',
@@ -127,15 +121,10 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     return [...filtered].sort((a, b) => compareEntries(a, b, sortBy, sortDir));
   }, [entries, ownerFilter, query, sortBy, sortDir]);
 
-  React.useEffect(() => {
-    setDrafts((prev) => {
-      const next: Record<string, EntryDraft> = {};
-      visibleEntries.forEach((entry) => {
-        next[entry.id] = prev[entry.id] || makeDraft(entry);
-      });
-      return next;
-    });
-  }, [visibleEntries]);
+  const selectedEntry = React.useMemo(
+    () => entries.find((entry) => entry.id === editingEntryId) || null,
+    [editingEntryId, entries],
+  );
 
   const toggleSort = React.useCallback((nextSortBy: SortColumn) => {
     setSortBy((prevSortBy) => {
@@ -155,34 +144,32 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     return sortDir === 'asc' ? ' ▲' : ' ▼';
   }, [sortBy, sortDir]);
 
-  const patchDraft = React.useCallback((entryId: string, patch: Partial<EntryDraft>) => {
-    setDrafts((prev) => {
-      const current = prev[entryId];
-      if (!current) return prev;
-      return { ...prev, [entryId]: { ...current, ...patch } };
-    });
-  }, []);
-
-  const saveEntryDraft = React.useCallback(async (entry: Valid8VaultEntryWithSecrets) => {
-    const draft = drafts[entry.id];
-    if (!draft) return;
-    if (!isDirty(entry, draft)) return;
+  const saveEntry = React.useCallback(async (payload: {
+    entry_id: string;
+    title?: string;
+    url?: string | null;
+    email_address?: string | null;
+    notes?: string | null;
+    username?: string;
+    password?: string;
+    owner_name?: string;
+    category?: string;
+    is_active?: number;
+    source_tab?: string | null;
+    source_document?: string | null;
+  }) => {
+    setSavingEdit(true);
     try {
-      await updateEntry({
-        entry_id: entry.id,
-        title: draft.title,
-        username: draft.username,
-        password: draft.password,
-        owner_name: draft.owner_name,
-        category: draft.category,
-        is_active: draft.is_active,
-      });
+      await updateEntry(payload);
+      setEditingEntryId('');
     } catch (error: any) {
       if (onToast) {
         onToast({ tone: 'error', message: String(error?.message || 'Failed to update entry') });
       }
+    } finally {
+      setSavingEdit(false);
     }
-  }, [drafts, onToast, updateEntry]);
+  }, [onToast, updateEntry]);
 
   const confirmArchiveEntry = React.useCallback(async (entry: Valid8VaultEntryWithSecrets) => {
     const ok = await confirm({
@@ -299,7 +286,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                         <tr>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('title')}>Title{sortIndicator('title')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('username')}>Username{sortIndicator('username')}</button></th>
-                          <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('password')}>Password{sortIndicator('password')}</button></th>
+                          <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('email_address')}>Email{sortIndicator('email_address')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('owner_name')}>Owner{sortIndicator('owner_name')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('category')}>Category{sortIndicator('category')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('is_active')}>Active{sortIndicator('is_active')}</button></th>
@@ -310,102 +297,15 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                       </thead>
                       <tbody>
                         {visibleEntries.map((entry) => {
-                          const draft = drafts[entry.id] || makeDraft(entry);
                           const attachments = attachmentsByEntryId[entry.id] || [];
                           return (
                             <tr key={entry.id} className="valid8-entry-row">
-                              <td>
-                                <input
-                                  ref={(element) => { titleInputRefs.current[entry.id] = element; }}
-                                  className="form-control form-control-sm"
-                                  value={draft.title}
-                                  onChange={(event) => patchDraft(entry.id, { title: event.target.value })}
-                                  onBlur={() => void saveEntryDraft(entry)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      event.currentTarget.blur();
-                                    }
-                                  }}
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  className="form-control form-control-sm"
-                                  value={draft.username}
-                                  onChange={(event) => patchDraft(entry.id, { username: event.target.value })}
-                                  onBlur={() => void saveEntryDraft(entry)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      event.currentTarget.blur();
-                                    }
-                                  }}
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  className="form-control form-control-sm"
-                                  value={draft.password}
-                                  onChange={(event) => patchDraft(entry.id, { password: event.target.value })}
-                                  onBlur={() => void saveEntryDraft(entry)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      event.currentTarget.blur();
-                                    }
-                                  }}
-                                />
-                              </td>
-                              <td>
-                                <select
-                                  className="form-select form-select-sm"
-                                  value={draft.owner_name}
-                                  onChange={(event) => {
-                                    const next = event.target.value;
-                                    patchDraft(entry.id, { owner_name: next });
-                                    void updateEntry({ entry_id: entry.id, owner_name: next });
-                                  }}
-                                >
-                                  {ownerOptions.map((owner) => (
-                                    <option key={`${entry.id}-owner-${owner}`} value={owner}>{owner}</option>
-                                  ))}
-                                  {ownerOptions.includes(draft.owner_name) ? null : (
-                                    <option value={draft.owner_name}>{draft.owner_name}</option>
-                                  )}
-                                </select>
-                              </td>
-                              <td>
-                                <select
-                                  className="form-select form-select-sm"
-                                  value={draft.category}
-                                  onChange={(event) => {
-                                    const next = event.target.value;
-                                    patchDraft(entry.id, { category: next });
-                                    void updateEntry({ entry_id: entry.id, category: next });
-                                  }}
-                                >
-                                  {categoryOptions.map((category) => (
-                                    <option key={`${entry.id}-category-${category}`} value={category}>{category}</option>
-                                  ))}
-                                  {categoryOptions.includes(draft.category) ? null : (
-                                    <option value={draft.category}>{draft.category}</option>
-                                  )}
-                                </select>
-                              </td>
-                              <td>
-                                <label className="d-inline-flex align-items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={Number(draft.is_active || 0) === 1}
-                                    onChange={(event) => {
-                                      const next = event.target.checked ? 1 : 0;
-                                      patchDraft(entry.id, { is_active: next });
-                                      void updateEntry({ entry_id: entry.id, is_active: next });
-                                    }}
-                                  />
-                                </label>
-                              </td>
+                              <td>{entry.title || '-'}</td>
+                              <td>{entry.username || '-'}</td>
+                              <td>{entry.email_address || '-'}</td>
+                              <td>{entry.owner_name || '-'}</td>
+                              <td>{entry.category || '-'}</td>
+                              <td>{Number(entry.is_active || 0) === 1 ? 'Yes' : 'No'}</td>
                               <td className="small text-muted">{formatDate(entry.updated_at)}</td>
                               <td>
                                 <div className="d-flex flex-wrap align-items-center gap-2">
@@ -449,9 +349,9 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                                   <StandardIconButton
                                     iconKey="edit"
                                     ariaLabel={`Edit ${entry.title || entry.username || 'entry'}`}
-                                    title="Edit line"
+                                    title="Edit entry"
                                     className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
-                                    onClick={() => titleInputRefs.current[entry.id]?.focus()}
+                                    onClick={() => setEditingEntryId(entry.id)}
                                   />
                                   <StandardIconButton
                                     iconKey="archive"
@@ -505,29 +405,18 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
         onArchive={archiveCategory}
         onDelete={deleteCategory}
       />
+      <Valid8EntryEditModal
+        open={editingEntryId !== ''}
+        busy={savingEdit}
+        entry={selectedEntry}
+        owners={owners}
+        categories={categories}
+        onClose={() => setEditingEntryId('')}
+        onSave={saveEntry}
+      />
       {confirmDialog}
     </PageLayout>
   );
-}
-
-function makeDraft(entry: Valid8VaultEntryWithSecrets): EntryDraft {
-  return {
-    title: String(entry.title || ''),
-    username: String(entry.username || ''),
-    password: String(entry.password || ''),
-    owner_name: String(entry.owner_name || 'Unassigned'),
-    category: String(entry.category || 'General'),
-    is_active: Number(entry.is_active || 0) ? 1 : 0,
-  };
-}
-
-function isDirty(entry: Valid8VaultEntryWithSecrets, draft: EntryDraft): boolean {
-  return String(entry.title || '') !== draft.title
-    || String(entry.username || '') !== draft.username
-    || String(entry.password || '') !== draft.password
-    || String(entry.owner_name || 'Unassigned') !== draft.owner_name
-    || String(entry.category || 'General') !== draft.category
-    || Number(entry.is_active || 0) !== Number(draft.is_active || 0);
 }
 
 function compareText(a: string, b: string): number {

@@ -1,9 +1,8 @@
 import React from 'react';
-import { useBootstrapModal } from '../../hooks/useBootstrapModal';
-import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { StandardIconButton } from '../common/StandardIconButton';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { Valid8LookupItem } from '../../types/valid8';
+import './Valid8LookupManagerModal.css';
 
 interface Valid8LookupManagerModalProps {
   open: boolean;
@@ -30,19 +29,11 @@ export function Valid8LookupManagerModal({
   onArchive,
   onDelete,
 }: Valid8LookupManagerModalProps) {
-  const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const { confirm, confirmDialog } = useBrandedConfirm();
   const [busy, setBusy] = React.useState(false);
   const [newName, setNewName] = React.useState('');
   const [editId, setEditId] = React.useState('');
   const [editName, setEditName] = React.useState('');
-
-  React.useEffect(() => {
-    const modal = modalApiRef.current;
-    if (!modal) return;
-    if (open) modal.show();
-    else modal.hide();
-  }, [open, modalApiRef]);
 
   React.useEffect(() => {
     if (open) {
@@ -111,15 +102,20 @@ export function Valid8LookupManagerModal({
     }
   };
 
+  if (!open) {
+    return null;
+  }
+
   return (
-    <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content">
+    <>
+      <div className="valid8-lookup-modal-backdrop" onClick={onClose} />
+      <div className="valid8-lookup-modal-shell" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="valid8-lookup-modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>
-            <ModalCloseIconButton />
+            <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
           </div>
-          <div className="modal-body">
+          <div className="modal-body valid8-lookup-modal-body">
             <form className="d-flex align-items-end gap-2 mb-3" onSubmit={(event) => void saveNew(event)}>
               <div className="flex-grow-1">
                 <label className="form-label mb-1" htmlFor={`valid8-${itemLabel.toLowerCase()}-new-name`}>New {itemLabel}</label>
@@ -225,6 +221,6 @@ export function Valid8LookupManagerModal({
         </div>
       </div>
       {confirmDialog}
-    </div>
+    </>
   );
 }

@@ -5,6 +5,7 @@ export interface Valid8VaultEntry {
   url: string | null;
   category: string;
   owner_name: string;
+  email_address: string | null;
   is_favorite: number;
   password_strength: number;
   is_active: number;
@@ -71,11 +72,16 @@ export interface Valid8VaultAttachmentUploadResponse {
 export interface Valid8VaultEntryUpdateRequest {
   entry_id: string;
   title?: string;
+  url?: string | null;
+  notes?: string | null;
   username?: string;
   password?: string;
   owner_name?: string;
   category?: string;
+  email_address?: string | null;
   is_active?: number;
+  source_tab?: string | null;
+  source_document?: string | null;
 }
 
 export interface Valid8VaultEntryMutationResponse {

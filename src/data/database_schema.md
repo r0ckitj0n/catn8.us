@@ -202,6 +202,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `user_id` (CHAR(36), FOREIGN KEY -> users.uuid)
 - `title` (VARCHAR(191))
 - `url` (VARCHAR(2048), NULLABLE)
+- `email_address` (VARCHAR(191), NULLABLE)
 - `username_encrypted` (LONGBLOB)
 - `username_auth_tag` (VARBINARY(16))
 - `password_encrypted` (LONGBLOB)

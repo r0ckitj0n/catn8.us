@@ -20,6 +20,7 @@ final class Valid8VaultEntryModel
             user_id CHAR(36) NOT NULL,
             title VARCHAR(191) NOT NULL,
             url VARCHAR(2048) NULL,
+            email_address VARCHAR(191) NULL,
             username_encrypted LONGBLOB NOT NULL,
             username_auth_tag VARBINARY(16) NOT NULL,
             password_encrypted LONGBLOB NOT NULL,
@@ -114,6 +115,7 @@ final class Valid8VaultEntryModel
         }
 
         $url = self::normalizeNullableUrl($input['url'] ?? null);
+        $emailAddress = self::normalizeNullableEmail($input['email_address'] ?? null);
         $username = self::requireNonEmptyText((string)($input['username'] ?? ''), 'Username is required');
         $password = self::requireNonEmptyText((string)($input['password'] ?? ''), 'Password is required');
         $notes = self::normalizeNullableText($input['notes'] ?? null, 65535);
@@ -134,7 +136,7 @@ final class Valid8VaultEntryModel
         $entryFingerprint = self::computeEntryFingerprint($title, $url, $username, $password, $notes, $ownerName);
 
         $existing = Database::queryOne(
-            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+            'SELECT id, user_id, title, url, email_address, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
              FROM vault_entries
              WHERE user_id = ? AND entry_fingerprint = ?
              LIMIT 1',
@@ -153,13 +155,14 @@ final class Valid8VaultEntryModel
         try {
             Database::execute(
                 'INSERT INTO vault_entries
-                    (id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
+                    (id, user_id, title, url, email_address, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
                 [
                     $id,
                     $userUuid,
                     $title,
                     $url,
+                    $emailAddress,
                     $encrypted['username_encrypted'],
                     $encrypted['username_auth_tag'],
                     $encrypted['password_encrypted'],
@@ -217,7 +220,7 @@ final class Valid8VaultEntryModel
         self::ensureSchema();
         $userUuid = self::normalizeUuid($userUuid);
 
-        $sql = 'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+        $sql = 'SELECT id, user_id, title, url, email_address, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
                 FROM vault_entries
                 WHERE user_id = ?';
         $params = [$userUuid];
@@ -248,7 +251,12 @@ final class Valid8VaultEntryModel
             throw new RuntimeException('Title is required');
         }
 
-        $url = self::normalizeNullableUrl($row['url'] ?? null);
+        $url = array_key_exists('url', $input)
+            ? self::normalizeNullableUrl($input['url'] ?? null)
+            : self::normalizeNullableUrl($row['url'] ?? null);
+        $emailAddress = array_key_exists('email_address', $input)
+            ? self::normalizeNullableEmail($input['email_address'] ?? null)
+            : self::normalizeNullableEmail($row['email_address'] ?? null);
 
         $username = array_key_exists('username', $input)
             ? self::requireNonEmptyText((string)$input['username'], 'Username is required')
@@ -256,7 +264,15 @@ final class Valid8VaultEntryModel
         $password = array_key_exists('password', $input)
             ? self::requireNonEmptyText((string)$input['password'], 'Password is required')
             : self::requireNonEmptyText((string)($secret['password'] ?? ''), 'Password is required');
-        $notes = $secret['notes'] ?? null;
+        $notes = array_key_exists('notes', $input)
+            ? self::normalizeNullableText($input['notes'] ?? null, 65535)
+            : ($secret['notes'] ?? null);
+        $sourceTab = array_key_exists('source_tab', $input)
+            ? self::normalizeNullableText($input['source_tab'] ?? null, 191)
+            : self::normalizeNullableText($row['source_tab'] ?? null, 191);
+        $sourceDocument = array_key_exists('source_document', $input)
+            ? self::normalizeNullableText($input['source_document'] ?? null, 191)
+            : self::normalizeNullableText($row['source_document'] ?? null, 191);
 
         $category = array_key_exists('category', $input)
             ? self::normalizeCategoryName($input['category'] ?? null)
@@ -278,6 +294,8 @@ final class Valid8VaultEntryModel
             Database::execute(
                 'UPDATE ' . self::TABLE_NAME . '
                  SET title = ?,
+                     url = ?,
+                     email_address = ?,
                      category = ?,
                      owner_name = ?,
                      username_encrypted = ?,
@@ -289,6 +307,8 @@ final class Valid8VaultEntryModel
                      notes_auth_tag = ?,
                      is_active = ?,
                      replaced_by_entry_id = NULL,
+                     source_tab = ?,
+                     source_document = ?,
                      account_fingerprint = ?,
                      entry_fingerprint = ?,
                      last_changed_at = ?,
@@ -297,6 +317,8 @@ final class Valid8VaultEntryModel
                  LIMIT 1',
                 [
                     $title,
+                    $url,
+                    $emailAddress,
                     $category,
                     $ownerName,
                     $encrypted['username_encrypted'],
@@ -307,6 +329,8 @@ final class Valid8VaultEntryModel
                     $encrypted['notes_encrypted'],
                     $encrypted['notes_auth_tag'],
                     $isActive,
+                    $sourceTab,
+                    $sourceDocument,
                     $accountFingerprint,
                     $entryFingerprint,
                     gmdate('Y-m-d H:i:s'),
@@ -392,6 +416,7 @@ final class Valid8VaultEntryModel
             'user_id' => (string)($row['user_id'] ?? ''),
             'title' => (string)($row['title'] ?? ''),
             'url' => self::nullableString($row['url'] ?? null),
+            'email_address' => self::normalizeNullableEmail($row['email_address'] ?? null),
             'category' => (string)($row['category'] ?? ''),
             'owner_name' => self::normalizeOwnerName($row['owner_name'] ?? null),
             'is_favorite' => (int)($row['is_favorite'] ?? 0),
@@ -478,7 +503,7 @@ final class Valid8VaultEntryModel
         $entryId = self::normalizeUuid($entryId);
         $userUuid = self::normalizeUuid($userUuid);
         return Database::queryOne(
-            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+            'SELECT id, user_id, title, url, email_address, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
              FROM vault_entries
              WHERE id = ? AND user_id = ?
              LIMIT 1',
@@ -1052,6 +1077,9 @@ final class Valid8VaultEntryModel
         if (!self::tableHasColumn(self::TABLE_NAME, 'owner_name')) {
             Database::execute("ALTER TABLE vault_entries ADD COLUMN owner_name VARCHAR(120) NOT NULL DEFAULT 'Unassigned' AFTER category");
         }
+        if (!self::tableHasColumn(self::TABLE_NAME, 'email_address')) {
+            Database::execute('ALTER TABLE vault_entries ADD COLUMN email_address VARCHAR(191) NULL AFTER url');
+        }
 
         if (!self::tableHasIndex(self::TABLE_NAME, 'idx_vault_entries_user_active')) {
             Database::execute('ALTER TABLE vault_entries ADD KEY idx_vault_entries_user_active (user_id, is_active, updated_at)');
@@ -1200,6 +1228,16 @@ final class Valid8VaultEntryModel
             }
         }
         return null;
+    }
+
+    private static function normalizeNullableEmail($value): ?string
+    {
+        $email = self::normalizeNullableText($value, 191);
+        if ($email === null) {
+            return null;
+        }
+        $lowered = strtolower($email);
+        return filter_var($lowered, FILTER_VALIDATE_EMAIL) !== false ? $lowered : null;
     }
 
     private static function toLookupModel(array $row, int $nameMaxLen): array

@@ -193,6 +193,8 @@ export function PhotoAlbumStageImpl({
         albumIsVirtual={Boolean(album.is_virtual)}
         onToggleMediaFavorite={onToggleMediaFavorite}
         onToggleTextFavorite={onToggleTextFavorite}
+        onDeleteMedia={onDeleteMedia}
+        onDeleteNote={onDeleteNote}
         onEditNoteText={onEditNoteText}
         onDecorPointerDown={interactions.onDecorPointerDown}
         onMediaPointerDown={interactions.onMediaPointerDown}

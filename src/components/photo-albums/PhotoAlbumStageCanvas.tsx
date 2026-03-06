@@ -44,6 +44,8 @@ export function PhotoAlbumStageCanvas({
   albumIsVirtual,
   onToggleMediaFavorite,
   onToggleTextFavorite,
+  onDeleteMedia,
+  onDeleteNote,
   onEditNoteText,
   onDecorPointerDown,
   onMediaPointerDown,
@@ -100,6 +102,8 @@ export function PhotoAlbumStageCanvas({
   albumIsVirtual: boolean;
   onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
   onToggleTextFavorite?: (spreadIndex: number, textItemId: string) => void;
+  onDeleteMedia?: (index: number) => void;
+  onDeleteNote?: (index: number) => void;
   onEditNoteText?: (index: number, nextText: string) => void;
   onDecorPointerDown: (index: number, event: React.PointerEvent<HTMLElement>) => void;
   onMediaPointerDown: (index: number, sourceIndex: number, event: React.PointerEvent<HTMLElement>) => void;

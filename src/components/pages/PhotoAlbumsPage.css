@@ -837,9 +837,38 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   right: 0.34rem;
 }
 
+.catn8-preview-delete-toggle {
+  position: absolute;
+  right: 0.28rem;
+  bottom: 0.28rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid rgba(120, 30, 30, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 245, 245, 0.96);
+  color: #7f1d1d;
+  font-size: 0.9rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 36;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease;
+}
+
+.catn8-preview-delete-toggle-note {
+  right: 0.34rem;
+  bottom: 0.34rem;
+}
+
 .catn8-scatter-card:hover .catn8-preview-favorite-toggle,
 .catn8-scatter-card:focus-within .catn8-preview-favorite-toggle,
-.catn8-preview-favorite-toggle.is-active {
+.catn8-preview-favorite-toggle.is-active,
+.catn8-scatter-card:hover .catn8-preview-delete-toggle,
+.catn8-scatter-card:focus-within .catn8-preview-delete-toggle {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -847,6 +876,10 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
 
 .catn8-preview-favorite-toggle:hover {
   background: #fff;
+}
+
+.catn8-preview-delete-toggle:hover {
+  background: #ffe8e8;
 }
 
 .catn8-preview-favorite-toggle.is-active {

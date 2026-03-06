@@ -208,7 +208,7 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
                   List
                 </button>
               </div>
-              {viewMode === 'album' ? <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button> : null}
+              <button type="button" className="btn btn-sm btn-dark" onClick={onFullscreenPreview}>Full Screen</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayout} disabled={busy}>Auto Layout Album</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutAllUnlocked} disabled={busy}>Auto Layout All Unlocked</button>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={onAutoLayoutSpread} disabled={busy || albumLocked || spreadLocked}>Auto Layout This Spread</button>
@@ -771,10 +771,37 @@ export function PhotoAlbumAdminModal(props: PhotoAlbumAdminModalProps) {
               <PhotoAlbumChronologicalList
                 album={album}
                 contactDisplayName={toAlbumDisplayName(album.created_by_username || '')}
+                editable
                 isMediaFavorite={isMediaFavorite}
                 isTextFavorite={isTextFavorite}
                 onToggleMediaFavorite={onToggleMediaFavorite}
                 onToggleTextFavorite={onToggleTextFavorite}
+                onDeleteMedia={(spreadIndex, mediaSourceIndex) => onAlbumChange((prev) => {
+                  const next = structuredClone(prev);
+                  const targetSpread = next.spec.spreads[spreadIndex];
+                  if (!targetSpread || !Array.isArray(targetSpread.images)) {
+                    return prev;
+                  }
+                  targetSpread.images.splice(mediaSourceIndex, 1);
+                  return next;
+                })}
+                onDeleteText={(spreadIndex, textItemId) => onAlbumChange((prev) => {
+                  const next = structuredClone(prev);
+                  const targetSpread = next.spec.spreads[spreadIndex];
+                  if (!targetSpread) {
+                    return prev;
+                  }
+                  hydrateTextItems(targetSpread);
+                  if (!Array.isArray(targetSpread.text_items)) {
+                    return prev;
+                  }
+                  const targetIndex = targetSpread.text_items.findIndex((item) => String(item?.id || '') === String(textItemId || ''));
+                  if (targetIndex < 0) {
+                    return prev;
+                  }
+                  targetSpread.text_items.splice(targetIndex, 1);
+                  return next;
+                })}
               />
             ) : (
               <PhotoAlbumStage

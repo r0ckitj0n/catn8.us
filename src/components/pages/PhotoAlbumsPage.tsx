@@ -179,13 +179,6 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   }, []);
 
   const setAlbumViewMode = React.useCallback(async (nextMode: 'album' | 'list') => {
-    if (nextMode === 'list' && document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        // no-op
-      }
-    }
     setViewMode(nextMode);
   }, []);
 
@@ -359,11 +352,9 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         {viewerAlbumLocked ? 'Unlock Album' : 'Lock Album'}
                       </button>
                     ) : null}
-                    {viewMode === 'album' ? (
-                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
-                        Full Screen
-                      </button>
-                    ) : null}
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
+                      Full Screen
+                    </button>
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"

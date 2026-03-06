@@ -9,10 +9,13 @@ import { usePhotoAlbumStageViewer } from './hooks/usePhotoAlbumStageViewer';
 interface PhotoAlbumChronologicalListProps {
   album: PhotoAlbum;
   contactDisplayName?: string;
+  editable?: boolean;
   isMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => boolean;
   isTextFavorite?: (spreadIndex: number, textItemId: string) => boolean;
   onToggleMediaFavorite?: (spreadIndex: number, mediaSourceIndex: number) => void;
   onToggleTextFavorite?: (spreadIndex: number, textItemId: string) => void;
+  onDeleteMedia?: (spreadIndex: number, mediaSourceIndex: number) => void;
+  onDeleteText?: (spreadIndex: number, textItemId: string) => void;
 }
 
 type ChronologicalTextEntry = {
@@ -71,10 +74,13 @@ function isVideoMedia(src: string, mediaType?: string): boolean {
 export function PhotoAlbumChronologicalList({
   album,
   contactDisplayName,
+  editable = false,
   isMediaFavorite,
   isTextFavorite,
   onToggleMediaFavorite,
   onToggleTextFavorite,
+  onDeleteMedia,
+  onDeleteText,
 }: PhotoAlbumChronologicalListProps) {
   const viewer = usePhotoAlbumStageViewer({
     album,
@@ -201,6 +207,20 @@ export function PhotoAlbumChronologicalList({
                         ♥
                       </button>
                     ) : null}
+                    {editable && typeof onDeleteText === 'function' ? (
+                      <button
+                        type="button"
+                        className="catn8-preview-delete-toggle catn8-preview-delete-toggle-note"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteText(entry.spreadIndex, entry.note.id);
+                        }}
+                        aria-label="Delete text"
+                        title="Delete text"
+                      >
+                        🗑️
+                      </button>
+                    ) : null}
                     <div className="catn8-photo-albums-chron-meta">
                       <span>{entry.dateLabel}</span>
                       <span>{entry.spreadLabel}</span>
@@ -248,6 +268,20 @@ export function PhotoAlbumChronologicalList({
                         title={mediaFavorited ? 'Favorited media' : 'Favorite this media'}
                       >
                         ♥
+                      </button>
+                    ) : null}
+                    {editable && typeof onDeleteMedia === 'function' ? (
+                      <button
+                        type="button"
+                        className="catn8-preview-delete-toggle"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteMedia(entry.spreadIndex, entry.sourceIndex);
+                        }}
+                        aria-label="Delete media"
+                        title="Delete media"
+                      >
+                        🗑️
                       </button>
                     ) : null}
                     <div className="catn8-photo-albums-chron-meta">

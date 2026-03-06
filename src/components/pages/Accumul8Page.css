@@ -90,6 +90,161 @@
   gap: 0.75rem;
 }
 
+.accumul8-spreadsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.accumul8-spreadsheet-selector {
+  min-width: 220px;
+}
+
+.accumul8-spreadsheet-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.accumul8-month-panel {
+  border: 1px solid rgba(29, 44, 78, 0.14);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.94)),
+    radial-gradient(circle at top right, rgba(150, 187, 221, 0.18), transparent 45%);
+  padding: 0.85rem;
+  box-shadow: 0 14px 32px rgba(23, 34, 56, 0.08);
+}
+
+.accumul8-month-panel.is-center {
+  border-color: rgba(34, 84, 170, 0.32);
+  box-shadow: 0 18px 36px rgba(26, 53, 104, 0.12);
+}
+
+.accumul8-month-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.accumul8-month-panel-kicker {
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a6d8f;
+}
+
+.accumul8-month-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.accumul8-month-stats span,
+.accumul8-month-balance-row span,
+.accumul8-budget-totals span {
+  background: rgba(234, 240, 248, 0.92);
+  border: 1px solid rgba(41, 66, 102, 0.14);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  color: #31415f;
+}
+
+.accumul8-month-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.accumul8-month-summary div {
+  border-radius: 12px;
+  background: rgba(248, 250, 253, 0.95);
+  border: 1px solid rgba(38, 54, 88, 0.1);
+  padding: 0.55rem 0.65rem;
+}
+
+.accumul8-month-summary span {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5d6b86;
+}
+
+.accumul8-month-summary strong {
+  display: block;
+  font-size: 1rem;
+  color: #1b2b46;
+}
+
+.accumul8-month-balance-row,
+.accumul8-budget-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.accumul8-scroll-area--spreadsheet {
+  max-height: min(62vh, 760px);
+}
+
+.accumul8-month-table {
+  font-size: 0.79rem;
+}
+
+.accumul8-month-table td,
+.accumul8-month-table th {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.accumul8-month-table td:nth-child(4),
+.accumul8-month-table th:nth-child(4),
+.accumul8-month-table td:nth-child(10),
+.accumul8-month-table th:nth-child(10) {
+  white-space: normal;
+  min-width: 140px;
+}
+
+.accumul8-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(27, 48, 87, 0.12);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.accumul8-status-pill.is-on {
+  background: rgba(28, 135, 74, 0.14);
+  color: #1d6a3f;
+}
+
+.accumul8-status-pill.is-off {
+  background: rgba(140, 150, 166, 0.12);
+  color: #566273;
+}
+
+.accumul8-row-actions--always-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.accumul8-budget-rules {
+  border-top: 1px solid rgba(35, 45, 66, 0.12);
+  padding-top: 1rem;
+}
+
 .accumul8-ledger-table {
   font-family: 'Courier New', Courier, monospace;
 }
@@ -165,6 +320,14 @@
   .accumul8-panel-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+   .accumul8-spreadsheet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accumul8-month-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -25,7 +25,7 @@ export interface Accumul8RecurringPayment {
   id: number;
   contact_id: number | null;
   account_id: number | null;
-  account_group_id: number | null;
+  banking_organization_id: number | null;
   title: string;
   direction: Accumul8Direction;
   amount: number;
@@ -38,7 +38,7 @@ export interface Accumul8RecurringPayment {
   is_active: number;
   contact_name: string;
   account_name: string;
-  account_group_name: string;
+  banking_organization_name: string;
 }
 
 export interface Accumul8RecurringUpsertRequest {
@@ -56,7 +56,7 @@ export interface Accumul8RecurringUpsertRequest {
 export interface Accumul8Transaction {
   id: number;
   account_id: number | null;
-  account_group_id: number | null;
+  banking_organization_id: number | null;
   contact_id: number | null;
   debtor_id: number | null;
   transaction_date: string;
@@ -73,20 +73,20 @@ export interface Accumul8Transaction {
   pending_status: number;
   contact_name: string;
   account_name: string;
-  account_group_name: string;
+  banking_organization_name: string;
   debtor_name: string;
 }
 
-export interface Accumul8AccountGroup {
+export interface Accumul8BankingOrganization {
   id: number;
-  group_name: string;
+  banking_organization_name: string;
   institution_name: string;
   notes: string;
   is_active: number;
 }
 
-export interface Accumul8AccountGroupUpsertRequest {
-  group_name: string;
+export interface Accumul8BankingOrganizationUpsertRequest {
+  banking_organization_name: string;
   institution_name?: string;
   notes?: string;
   is_active?: number;
@@ -109,9 +109,9 @@ export interface Accumul8TransactionUpsertRequest {
 
 export interface Accumul8Account {
   id: number;
-  account_group_id: number | null;
+  banking_organization_id: number | null;
   account_name: string;
-  account_group_name: string;
+  banking_organization_name: string;
   account_type: string;
   institution_name: string;
   mask_last4: string;
@@ -121,7 +121,7 @@ export interface Accumul8Account {
 }
 
 export interface Accumul8AccountUpsertRequest {
-  account_group_id?: number | null;
+  banking_organization_id?: number | null;
   account_name: string;
   account_type?: string;
   institution_name?: string;
@@ -259,7 +259,7 @@ export interface Accumul8BootstrapResponse {
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];
-  account_groups: Accumul8AccountGroup[];
+  banking_organizations: Accumul8BankingOrganization[];
   accounts: Accumul8Account[];
   notification_rules: Accumul8NotificationRule[];
   pay_bills: Accumul8BillItem[];

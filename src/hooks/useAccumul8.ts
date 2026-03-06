@@ -2,8 +2,8 @@ import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import {
   Accumul8Account,
-  Accumul8AccountGroup,
-  Accumul8AccountGroupUpsertRequest,
+  Accumul8BankingOrganization,
+  Accumul8BankingOrganizationUpsertRequest,
   Accumul8AccountUpsertRequest,
   Accumul8AccessibleOwner,
   Accumul8BudgetRow,
@@ -33,7 +33,7 @@ export function useAccumul8(
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
-  const [accountGroups, setAccountGroups] = React.useState<Accumul8AccountGroup[]>([]);
+  const [bankingOrganizations, setBankingOrganizations] = React.useState<Accumul8BankingOrganization[]>([]);
   const [accounts, setAccounts] = React.useState<Accumul8Account[]>([]);
   const [notificationRules, setNotificationRules] = React.useState<Accumul8NotificationRule[]>([]);
   const [payBills, setPayBills] = React.useState<Accumul8BillItem[]>([]);
@@ -65,7 +65,7 @@ export function useAccumul8(
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
-      setAccountGroups(Array.isArray(res?.account_groups) ? res.account_groups : []);
+      setBankingOrganizations(Array.isArray(res?.banking_organizations) ? res.banking_organizations : []);
       setAccounts(Array.isArray(res?.accounts) ? res.accounts : []);
       setNotificationRules(Array.isArray(res?.notification_rules) ? res.notification_rules : []);
       setPayBills(Array.isArray(res?.pay_bills) ? res.pay_bills : []);
@@ -102,22 +102,22 @@ export function useAccumul8(
       'Contact saved',
     );
   }, [scopedActionUrl, withReload]);
-  const createAccountGroup = React.useCallback(async (form: Accumul8AccountGroupUpsertRequest) => {
+  const createBankingOrganization = React.useCallback(async (form: Accumul8BankingOrganizationUpsertRequest) => {
     await withReload(
-      () => ApiClient.post(scopedActionUrl('create_account_group'), form),
-      'Accumul8 account saved',
+      () => ApiClient.post(scopedActionUrl('create_banking_organization'), form),
+      'Banking organization saved',
     );
   }, [scopedActionUrl, withReload]);
-  const updateAccountGroup = React.useCallback(async (id: number, form: Accumul8AccountGroupUpsertRequest) => {
+  const updateBankingOrganization = React.useCallback(async (id: number, form: Accumul8BankingOrganizationUpsertRequest) => {
     await withReload(
-      () => ApiClient.post(scopedActionUrl('update_account_group'), { id, ...form }),
-      'Accumul8 account updated',
+      () => ApiClient.post(scopedActionUrl('update_banking_organization'), { id, ...form }),
+      'Banking organization updated',
     );
   }, [scopedActionUrl, withReload]);
-  const deleteAccountGroup = React.useCallback(async (id: number) => {
+  const deleteBankingOrganization = React.useCallback(async (id: number) => {
     await withReload(
-      () => ApiClient.post(scopedActionUrl('delete_account_group'), { id }),
-      'Accumul8 account deleted',
+      () => ApiClient.post(scopedActionUrl('delete_banking_organization'), { id }),
+      'Banking organization deleted',
     );
   }, [scopedActionUrl, withReload]);
   const createAccount = React.useCallback(async (form: Accumul8AccountUpsertRequest) => {
@@ -310,7 +310,7 @@ export function useAccumul8(
     contacts,
     recurringPayments,
     transactions,
-    accountGroups,
+    bankingOrganizations,
     accounts,
     notificationRules,
     payBills,
@@ -321,9 +321,9 @@ export function useAccumul8(
     syncProvider,
     load,
     createContact,
-    createAccountGroup,
-    updateAccountGroup,
-    deleteAccountGroup,
+    createBankingOrganization,
+    updateBankingOrganization,
+    deleteBankingOrganization,
     createAccount,
     updateAccount,
     deleteAccount,

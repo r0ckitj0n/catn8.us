@@ -3,38 +3,38 @@ import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import {
   Accumul8Account,
-  Accumul8AccountGroup,
-  Accumul8AccountGroupUpsertRequest,
+  Accumul8BankingOrganization,
+  Accumul8BankingOrganizationUpsertRequest,
   Accumul8AccountUpsertRequest,
 } from '../../types/accumul8';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
-type Mode = 'group' | 'account';
+type Mode = 'banking_organization' | 'account';
 
-interface Accumul8AccountManagerModalProps {
+interface BankingOrganizationManagerModalProps {
   open: boolean;
   onClose: () => void;
   mode: Mode;
   busy: boolean;
-  accountGroups: Accumul8AccountGroup[];
+  bankingOrganizations: Accumul8BankingOrganization[];
   accounts: Accumul8Account[];
-  createAccountGroup: (form: Accumul8AccountGroupUpsertRequest) => Promise<void>;
-  updateAccountGroup: (id: number, form: Accumul8AccountGroupUpsertRequest) => Promise<void>;
-  deleteAccountGroup: (id: number) => Promise<void>;
+  createBankingOrganization: (form: Accumul8BankingOrganizationUpsertRequest) => Promise<void>;
+  updateBankingOrganization: (id: number, form: Accumul8BankingOrganizationUpsertRequest) => Promise<void>;
+  deleteBankingOrganization: (id: number) => Promise<void>;
   createAccount: (form: Accumul8AccountUpsertRequest) => Promise<void>;
   updateAccount: (id: number, form: Accumul8AccountUpsertRequest) => Promise<void>;
   deleteAccount: (id: number) => Promise<void>;
 }
 
-const DEFAULT_GROUP_FORM: Accumul8AccountGroupUpsertRequest = {
-  group_name: '',
+const DEFAULT_BANKING_ORGANIZATION_FORM: Accumul8BankingOrganizationUpsertRequest = {
+  banking_organization_name: '',
   institution_name: '',
   notes: '',
   is_active: 1,
 };
 
 const DEFAULT_ACCOUNT_FORM: Accumul8AccountUpsertRequest = {
-  account_group_id: null,
+  banking_organization_id: null,
   account_name: '',
   account_type: 'checking',
   institution_name: '',
@@ -42,25 +42,25 @@ const DEFAULT_ACCOUNT_FORM: Accumul8AccountUpsertRequest = {
   is_active: 1,
 };
 
-export function Accumul8AccountManagerModal({
+export function BankingOrganizationManagerModal({
   open,
   onClose,
   mode,
   busy,
-  accountGroups,
+  bankingOrganizations,
   accounts,
-  createAccountGroup,
-  updateAccountGroup,
-  deleteAccountGroup,
+  createBankingOrganization,
+  updateBankingOrganization,
+  deleteBankingOrganization,
   createAccount,
   updateAccount,
   deleteAccount,
-}: Accumul8AccountManagerModalProps) {
+}: BankingOrganizationManagerModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const { confirm, confirmDialog } = useBrandedConfirm();
-  const [editingGroupId, setEditingGroupId] = React.useState<number | null>(null);
+  const [editingBankingOrganizationId, setEditingBankingOrganizationId] = React.useState<number | null>(null);
   const [editingAccountId, setEditingAccountId] = React.useState<number | null>(null);
-  const [groupForm, setGroupForm] = React.useState<Accumul8AccountGroupUpsertRequest>(DEFAULT_GROUP_FORM);
+  const [bankingOrganizationForm, setBankingOrganizationForm] = React.useState<Accumul8BankingOrganizationUpsertRequest>(DEFAULT_BANKING_ORGANIZATION_FORM);
   const [accountForm, setAccountForm] = React.useState<Accumul8AccountUpsertRequest>(DEFAULT_ACCOUNT_FORM);
 
   React.useEffect(() => {
@@ -72,16 +72,16 @@ export function Accumul8AccountManagerModal({
 
   React.useEffect(() => {
     if (!open) {
-      setEditingGroupId(null);
+      setEditingBankingOrganizationId(null);
       setEditingAccountId(null);
-      setGroupForm(DEFAULT_GROUP_FORM);
+      setBankingOrganizationForm(DEFAULT_BANKING_ORGANIZATION_FORM);
       setAccountForm(DEFAULT_ACCOUNT_FORM);
     }
   }, [open]);
 
-  const resetGroupForm = React.useCallback(() => {
-    setEditingGroupId(null);
-    setGroupForm(DEFAULT_GROUP_FORM);
+  const resetBankingOrganizationForm = React.useCallback(() => {
+    setEditingBankingOrganizationId(null);
+    setBankingOrganizationForm(DEFAULT_BANKING_ORGANIZATION_FORM);
   }, []);
 
   const resetAccountForm = React.useCallback(() => {
@@ -89,27 +89,27 @@ export function Accumul8AccountManagerModal({
     setAccountForm(DEFAULT_ACCOUNT_FORM);
   }, []);
 
-  const title = mode === 'group' ? 'Manage Accumul8 Accounts' : 'Manage Bank Accounts';
-  const visibleGroups = React.useMemo(
-    () => [...accountGroups].sort((a, b) => a.group_name.localeCompare(b.group_name) || a.id - b.id),
-    [accountGroups],
+  const title = mode === 'banking_organization' ? 'Manage Banking Organizations' : 'Manage Bank Accounts';
+  const visibleBankingOrganizations = React.useMemo(
+    () => [...bankingOrganizations].sort((a, b) => a.banking_organization_name.localeCompare(b.banking_organization_name) || a.id - b.id),
+    [bankingOrganizations],
   );
   const visibleAccounts = React.useMemo(
     () => [...accounts].sort((a, b) => a.account_name.localeCompare(b.account_name) || a.id - b.id),
     [accounts],
   );
 
-  const handleGroupDelete = React.useCallback(async (group: Accumul8AccountGroup) => {
+  const handleBankingOrganizationDelete = React.useCallback(async (bankingOrganization: Accumul8BankingOrganization) => {
     const confirmed = await confirm({
-      title: 'Delete Accumul8 Account?',
-      message: `Delete "${group.group_name}"? This will be blocked if bank accounts are still attached.`,
+      title: 'Delete Banking Organization?',
+      message: `Delete "${bankingOrganization.banking_organization_name}"? This will be blocked if bank accounts are still attached.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     });
     if (!confirmed) return;
-    await deleteAccountGroup(group.id);
-    resetGroupForm();
-  }, [confirm, deleteAccountGroup, resetGroupForm]);
+    await deleteBankingOrganization(bankingOrganization.id);
+    resetBankingOrganizationForm();
+  }, [confirm, deleteBankingOrganization, resetBankingOrganizationForm]);
 
   const handleAccountDelete = React.useCallback(async (account: Accumul8Account) => {
     const confirmed = await confirm({
@@ -132,52 +132,52 @@ export function Accumul8AccountManagerModal({
             <ModalCloseIconButton />
           </div>
           <div className="modal-body">
-            {mode === 'group' ? (
+            {mode === 'banking_organization' ? (
               <>
-                <p className="text-muted small mb-3">Create, rename, disable, or remove Accumul8 account groups. Deletion is blocked while bank accounts still belong to the group.</p>
+                <p className="text-muted small mb-3">Create, rename, disable, or remove banking organizations. Deletion is blocked while bank accounts still belong to the organization.</p>
                 <form
                   className="row g-2 mb-3"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const payload: Accumul8AccountGroupUpsertRequest = {
-                      group_name: String(groupForm.group_name || '').trim(),
-                      institution_name: String(groupForm.institution_name || '').trim(),
-                      notes: String(groupForm.notes || '').trim(),
-                      is_active: Number(groupForm.is_active || 0) ? 1 : 0,
+                    const payload: Accumul8BankingOrganizationUpsertRequest = {
+                      banking_organization_name: String(bankingOrganizationForm.banking_organization_name || '').trim(),
+                      institution_name: String(bankingOrganizationForm.institution_name || '').trim(),
+                      notes: String(bankingOrganizationForm.notes || '').trim(),
+                      is_active: Number(bankingOrganizationForm.is_active || 0) ? 1 : 0,
                     };
-                    if (editingGroupId) {
-                      void updateAccountGroup(editingGroupId, payload).then(() => resetGroupForm());
+                    if (editingBankingOrganizationId) {
+                      void updateBankingOrganization(editingBankingOrganizationId, payload).then(() => resetBankingOrganizationForm());
                       return;
                     }
-                    void createAccountGroup(payload).then(() => resetGroupForm());
+                    void createBankingOrganization(payload).then(() => resetBankingOrganizationForm());
                   }}
                 >
                   <div className="col-md-4">
-                    <label className="form-label" htmlFor="accumul8-group-name">Accumul8 account name</label>
+                    <label className="form-label" htmlFor="accumul8-banking-organization-name">Banking organization name</label>
                     <input
-                      id="accumul8-group-name"
+                      id="accumul8-banking-organization-name"
                       className="form-control"
-                      value={groupForm.group_name || ''}
-                      onChange={(e) => setGroupForm((prev) => ({ ...prev, group_name: e.target.value }))}
+                      value={bankingOrganizationForm.banking_organization_name || ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, banking_organization_name: e.target.value }))}
                       required
                     />
                   </div>
                   <div className="col-md-3">
-                    <label className="form-label" htmlFor="accumul8-group-institution">Institution</label>
+                    <label className="form-label" htmlFor="accumul8-banking-organization-institution">Institution</label>
                     <input
-                      id="accumul8-group-institution"
+                      id="accumul8-banking-organization-institution"
                       className="form-control"
-                      value={groupForm.institution_name || ''}
-                      onChange={(e) => setGroupForm((prev) => ({ ...prev, institution_name: e.target.value }))}
+                      value={bankingOrganizationForm.institution_name || ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, institution_name: e.target.value }))}
                     />
                   </div>
                   <div className="col-md-3">
-                    <label className="form-label" htmlFor="accumul8-group-active">Status</label>
+                    <label className="form-label" htmlFor="accumul8-banking-organization-active">Status</label>
                     <select
-                      id="accumul8-group-active"
+                      id="accumul8-banking-organization-active"
                       className="form-select"
-                      value={String(Number(groupForm.is_active || 0))}
-                      onChange={(e) => setGroupForm((prev) => ({ ...prev, is_active: Number(e.target.value) }))}
+                      value={String(Number(bankingOrganizationForm.is_active || 0))}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, is_active: Number(e.target.value) }))}
                     >
                       <option value="1">Active</option>
                       <option value="0">Inactive</option>
@@ -185,21 +185,21 @@ export function Accumul8AccountManagerModal({
                   </div>
                   <div className="col-md-2 d-grid">
                     <label className="form-label invisible">Save</label>
-                    <button type="submit" className="btn btn-success" disabled={busy}>{editingGroupId ? 'Update' : 'Add'}</button>
+                    <button type="submit" className="btn btn-success" disabled={busy}>{editingBankingOrganizationId ? 'Update' : 'Add'}</button>
                   </div>
                   <div className="col-12">
-                    <label className="form-label" htmlFor="accumul8-group-notes">Notes</label>
+                    <label className="form-label" htmlFor="accumul8-banking-organization-notes">Notes</label>
                     <textarea
-                      id="accumul8-group-notes"
+                      id="accumul8-banking-organization-notes"
                       className="form-control"
                       rows={2}
-                      value={groupForm.notes || ''}
-                      onChange={(e) => setGroupForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      value={bankingOrganizationForm.notes || ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, notes: e.target.value }))}
                     />
                   </div>
-                  {editingGroupId ? (
+                  {editingBankingOrganizationId ? (
                     <div className="col-md-2 d-grid">
-                      <button type="button" className="btn btn-outline-secondary" onClick={resetGroupForm} disabled={busy}>Cancel</button>
+                      <button type="button" className="btn btn-outline-secondary" onClick={resetBankingOrganizationForm} disabled={busy}>Cancel</button>
                     </div>
                   ) : null}
                 </form>
@@ -215,24 +215,24 @@ export function Accumul8AccountManagerModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleGroups.map((group) => (
-                        <tr key={group.id}>
-                          <td>{group.group_name}</td>
-                          <td>{group.institution_name || '-'}</td>
-                          <td>{group.is_active ? 'Active' : 'Inactive'}</td>
-                          <td>{group.notes || '-'}</td>
+                      {visibleBankingOrganizations.map((bankingOrganization) => (
+                        <tr key={bankingOrganization.id}>
+                          <td>{bankingOrganization.banking_organization_name}</td>
+                          <td>{bankingOrganization.institution_name || '-'}</td>
+                          <td>{bankingOrganization.is_active ? 'Active' : 'Inactive'}</td>
+                          <td>{bankingOrganization.notes || '-'}</td>
                           <td className="text-end">
                             <div className="d-inline-flex gap-2">
                               <button
                                 type="button"
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={() => {
-                                  setEditingGroupId(group.id);
-                                  setGroupForm({
-                                    group_name: group.group_name || '',
-                                    institution_name: group.institution_name || '',
-                                    notes: group.notes || '',
-                                    is_active: Number(group.is_active || 0),
+                                  setEditingBankingOrganizationId(bankingOrganization.id);
+                                  setBankingOrganizationForm({
+                                    banking_organization_name: bankingOrganization.banking_organization_name || '',
+                                    institution_name: bankingOrganization.institution_name || '',
+                                    notes: bankingOrganization.notes || '',
+                                    is_active: Number(bankingOrganization.is_active || 0),
                                   });
                                 }}
                                 disabled={busy}
@@ -242,7 +242,7 @@ export function Accumul8AccountManagerModal({
                               <button
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
-                                onClick={() => void handleGroupDelete(group)}
+                                onClick={() => void handleBankingOrganizationDelete(bankingOrganization)}
                                 disabled={busy}
                               >
                                 Delete
@@ -251,9 +251,9 @@ export function Accumul8AccountManagerModal({
                           </td>
                         </tr>
                       ))}
-                      {visibleGroups.length === 0 ? (
+                      {visibleBankingOrganizations.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="text-muted">No Accumul8 accounts created yet.</td>
+                          <td colSpan={5} className="text-muted">No banking organizations created yet.</td>
                         </tr>
                       ) : null}
                     </tbody>
@@ -268,7 +268,7 @@ export function Accumul8AccountManagerModal({
                   onSubmit={(e) => {
                     e.preventDefault();
                     const payload: Accumul8AccountUpsertRequest = {
-                      account_group_id: Number(accountForm.account_group_id || 0) > 0 ? Number(accountForm.account_group_id) : null,
+                      banking_organization_id: Number(accountForm.banking_organization_id || 0) > 0 ? Number(accountForm.banking_organization_id) : null,
                       account_name: String(accountForm.account_name || '').trim(),
                       account_type: String(accountForm.account_type || 'checking').trim().toLowerCase(),
                       institution_name: String(accountForm.institution_name || '').trim(),
@@ -293,16 +293,16 @@ export function Accumul8AccountManagerModal({
                     />
                   </div>
                   <div className="col-md-3">
-                    <label className="form-label" htmlFor="accumul8-account-group">Accumul8 account</label>
+                    <label className="form-label" htmlFor="accumul8-account-banking-organization">Banking organization</label>
                     <select
-                      id="accumul8-account-group"
+                      id="accumul8-account-banking-organization"
                       className="form-select"
-                      value={Number(accountForm.account_group_id || 0) > 0 ? String(accountForm.account_group_id) : ''}
-                      onChange={(e) => setAccountForm((prev) => ({ ...prev, account_group_id: e.target.value ? Number(e.target.value) : null }))}
+                      value={Number(accountForm.banking_organization_id || 0) > 0 ? String(accountForm.banking_organization_id) : ''}
+                      onChange={(e) => setAccountForm((prev) => ({ ...prev, banking_organization_id: e.target.value ? Number(e.target.value) : null }))}
                     >
-                      <option value="">No Accumul8 account</option>
-                      {visibleGroups.map((group) => (
-                        <option key={group.id} value={group.id}>{group.group_name}</option>
+                      <option value="">No banking organization</option>
+                      {visibleBankingOrganizations.map((bankingOrganization) => (
+                        <option key={bankingOrganization.id} value={bankingOrganization.id}>{bankingOrganization.banking_organization_name}</option>
                       ))}
                     </select>
                   </div>
@@ -362,7 +362,7 @@ export function Accumul8AccountManagerModal({
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Accumul8 Account</th>
+                        <th>Banking Organization</th>
                         <th>Institution</th>
                         <th>Type</th>
                         <th>Status</th>
@@ -376,7 +376,7 @@ export function Accumul8AccountManagerModal({
                             {account.account_name}
                             {account.mask_last4 ? <span className="text-muted"> • {account.mask_last4}</span> : null}
                           </td>
-                          <td>{account.account_group_name || '-'}</td>
+                          <td>{account.banking_organization_name || '-'}</td>
                           <td>{account.institution_name || '-'}</td>
                           <td>{account.account_type || '-'}</td>
                           <td>{account.is_active ? 'Active' : 'Inactive'}</td>
@@ -388,7 +388,7 @@ export function Accumul8AccountManagerModal({
                                 onClick={() => {
                                   setEditingAccountId(account.id);
                                   setAccountForm({
-                                    account_group_id: account.account_group_id ?? null,
+                                    banking_organization_id: account.banking_organization_id ?? null,
                                     account_name: account.account_name || '',
                                     account_type: account.account_type || 'checking',
                                     institution_name: account.institution_name || '',

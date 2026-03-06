@@ -1,6 +1,7 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
-import { Accumul8AccountManagerModal } from '../modals/Accumul8AccountManagerModal';
+import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
+import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
@@ -39,7 +40,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     contacts,
     recurringPayments,
     transactions,
-    accountGroups,
+    bankingOrganizations,
     accounts,
     notificationRules,
     payBills,
@@ -49,9 +50,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     bankConnections,
     syncProvider,
     load,
-    createAccountGroup,
-    updateAccountGroup,
-    deleteAccountGroup,
+    createBankingOrganization,
+    updateBankingOrganization,
+    deleteBankingOrganization,
     createAccount,
     updateAccount,
     deleteAccount,
@@ -96,9 +97,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [editingBudgetRowId, setEditingBudgetRowId] = React.useState<number | null>(null);
   const [editingNotificationRuleId, setEditingNotificationRuleId] = React.useState<number | null>(null);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
-  const [selectedAccountGroupId, setSelectedAccountGroupId] = React.useState<string>('');
+  const [selectedBankingOrganizationId, setSelectedBankingOrganizationId] = React.useState<string>('');
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
-  const [groupManagerOpen, setGroupManagerOpen] = React.useState(false);
+  const [bankingOrganizationManagerOpen, setBankingOrganizationManagerOpen] = React.useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
@@ -119,12 +120,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
   }, [activeOwnerUserId]);
   const visibleAccounts = React.useMemo(() => {
-    const groupId = Number(selectedAccountGroupId || 0);
-    if (groupId <= 0) {
+    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
+    if (bankingOrganizationId <= 0) {
       return accounts;
     }
-    return accounts.filter((account) => Number(account.account_group_id || 0) === groupId);
-  }, [accounts, selectedAccountGroupId]);
+    return accounts.filter((account) => Number(account.banking_organization_id || 0) === bankingOrganizationId);
+  }, [accounts, selectedBankingOrganizationId]);
   React.useEffect(() => {
     const bankAccountId = Number(selectedBankAccountId || 0);
     if (bankAccountId <= 0) {
@@ -135,10 +136,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
   }, [selectedBankAccountId, visibleAccounts]);
   const filteredTransactions = React.useMemo(() => {
-    const groupId = Number(selectedAccountGroupId || 0);
+    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
     return transactions.filter((tx) => {
-      if (groupId > 0 && Number(tx.account_group_id || 0) !== groupId) {
+      if (bankingOrganizationId > 0 && Number(tx.banking_organization_id || 0) !== bankingOrganizationId) {
         return false;
       }
       if (bankAccountId > 0 && Number(tx.account_id || 0) !== bankAccountId) {
@@ -146,12 +147,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       }
       return true;
     });
-  }, [selectedAccountGroupId, selectedBankAccountId, transactions]);
+  }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
   const filteredRecurringPayments = React.useMemo(() => {
-    const groupId = Number(selectedAccountGroupId || 0);
+    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
     return recurringPayments.filter((item) => {
-      if (groupId > 0 && Number(item.account_group_id || 0) !== groupId) {
+      if (bankingOrganizationId > 0 && Number(item.banking_organization_id || 0) !== bankingOrganizationId) {
         return false;
       }
       if (bankAccountId > 0 && Number(item.account_id || 0) !== bankAccountId) {
@@ -159,7 +160,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       }
       return true;
     });
-  }, [recurringPayments, selectedAccountGroupId, selectedBankAccountId]);
+  }, [recurringPayments, selectedBankingOrganizationId, selectedBankAccountId]);
   const filteredPayBills = React.useMemo(() => {
     const transactionIds = new Set(filteredTransactions.map((tx) => tx.id));
     return payBills.filter((bill) => transactionIds.has(bill.id));
@@ -348,8 +349,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);
   const ledgerRowsForBudgetMonth = React.useMemo(() => (
-    transactions.filter((tx) => String(tx.transaction_date || '').slice(0, 7) === budgetMonth)
-  ), [budgetMonth, transactions]);
+    filteredTransactions.filter((tx) => String(tx.transaction_date || '').slice(0, 7) === budgetMonth)
+  ), [budgetMonth, filteredTransactions]);
   const budgetActualByRowId = React.useMemo(() => {
     const map: Record<number, number> = {};
     for (const row of budgetRowsSorted) {
@@ -390,6 +391,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
   }, [debtorLedger, selectedDebtorId]);
+  const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
+    if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {
+      void deleteTransaction(id);
+    }
+  }, [deleteTransaction]);
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="Accumul8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -469,13 +475,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           <div className="row g-2 align-items-end mb-3">
             <div className="col-md-4">
               <div className="accumul8-filter-label-row">
-                <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Accumul8 account</label>
+                <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Banking Organization</label>
                 <button
                   type="button"
                   className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                  onClick={() => setGroupManagerOpen(true)}
-                  aria-label="Manage Accumul8 accounts"
-                  title="Manage Accumul8 accounts"
+                  onClick={() => setBankingOrganizationManagerOpen(true)}
+                  aria-label="Manage banking organizations"
+                  title="Manage banking organizations"
                 >
                   <i className="bi bi-gear"></i>
                 </button>
@@ -483,12 +489,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <select
                 id="accumul8-group-filter"
                 className="form-select form-select-sm"
-                value={selectedAccountGroupId}
-                onChange={(e) => setSelectedAccountGroupId(e.target.value)}
+                value={selectedBankingOrganizationId}
+                onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
               >
-                <option value="">All Accumul8 accounts</option>
-                {accountGroups.map((group) => (
-                  <option key={group.id} value={group.id}>{group.group_name}</option>
+                <option value="">All Banking Organizations</option>
+                {bankingOrganizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
                 ))}
               </select>
             </div>
@@ -585,73 +591,87 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           )}
           {tab === 'spreadsheet' && (
             <div className="accumul8-panel">
-              <div className="accumul8-panel-toolbar mb-2">
-                <h3 className="mb-0">Spreadsheet (Budget)</h3>
-                <div className="d-flex gap-2 align-items-center">
-                  <label htmlFor="budget-month" className="small text-muted mb-0">Month</label>
-                  <input id="budget-month" className="form-control form-control-sm" type="month" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
+              <Accumul8SpreadsheetView
+                busy={busy}
+                selectedMonth={budgetMonth}
+                transactions={filteredTransactions}
+                onSelectedMonthChange={setBudgetMonth}
+                onEditTransaction={beginEditTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
+              />
+              <div className="accumul8-budget-rules mt-4">
+                <div className="accumul8-panel-toolbar mb-2">
+                  <div>
+                    <h3 className="mb-1">Budget Categories</h3>
+                    <p className="small text-muted mb-0">These rows still drive the budget summary for the selected center month.</p>
+                  </div>
+                  <div className="accumul8-budget-totals">
+                    <span>Budget: <strong>${spreadsheetTotals.budget.toFixed(2)}</strong></span>
+                    <span>Actual: <strong>${spreadsheetTotals.actual.toFixed(2)}</strong></span>
+                    <span>Remaining: <strong>${spreadsheetTotals.remaining.toFixed(2)}</strong></span>
+                  </div>
                 </div>
+                <form className="row g-2 mb-3" onSubmit={(e) => {
+                  e.preventDefault();
+                  const payload = {
+                    ...budgetForm,
+                    monthly_budget: Number(budgetForm.monthly_budget),
+                    row_order: Number(budgetForm.row_order),
+                    is_active: Number(budgetForm.is_active),
+                  };
+                  if (editingBudgetRowId) {
+                    void updateBudgetRow(editingBudgetRowId, payload).then(() => resetBudgetForm());
+                    return;
+                  }
+                  void createBudgetRow(payload).then(() => resetBudgetForm());
+                }}>
+                  <div className="col-md-3"><input className="form-control" placeholder="Category (Housing, Food...)" value={budgetForm.category_name} onChange={(e) => setBudgetForm((v) => ({ ...v, category_name: e.target.value }))} required /></div>
+                  <div className="col-md-2"><input className="form-control" type="number" step="0.01" placeholder="Budget" value={budgetForm.monthly_budget} onChange={(e) => setBudgetForm((v) => ({ ...v, monthly_budget: Number(e.target.value) }))} required /></div>
+                  <div className="col-md-3"><input className="form-control" placeholder="Match text (for ledger actual)" value={budgetForm.match_pattern} onChange={(e) => setBudgetForm((v) => ({ ...v, match_pattern: e.target.value }))} /></div>
+                  <div className="col-md-1"><input className="form-control" type="number" min={0} step={1} placeholder="Order" value={budgetForm.row_order} onChange={(e) => setBudgetForm((v) => ({ ...v, row_order: Number(e.target.value) }))} /></div>
+                  <div className="col-md-1"><select className="form-select" value={String(budgetForm.is_active)} onChange={(e) => setBudgetForm((v) => ({ ...v, is_active: Number(e.target.value) }))}><option value="1">On</option><option value="0">Off</option></select></div>
+                  <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingBudgetRowId ? 'Update' : 'Add Row'}</button></div>
+                  {editingBudgetRowId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetBudgetForm} disabled={busy}>Cancel</button></div> : null}
+                </form>
+                <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--ledger">
+                  <table className="table table-sm accumul8-sticky-head accumul8-spreadsheet-table">
+                    <thead><tr><th>Category</th><th>Match</th><th className="text-end">Budget</th><th className="text-end">Actual</th><th className="text-end">Remaining</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                    <tbody>
+                      {budgetRowsSorted.map((row) => {
+                        const actual = Number(budgetActualByRowId[row.id] || 0);
+                        const remaining = Number((row.monthly_budget - actual).toFixed(2));
+                        return (
+                          <tr key={row.id} className={`accumul8-list-item ${remaining < 0 ? 'is-outflow' : 'is-inflow'}`}>
+                            <td>{row.category_name}</td>
+                            <td>{row.match_pattern || '-'}</td>
+                            <td className="text-end">{Number(row.monthly_budget || 0).toFixed(2)}</td>
+                            <td className="text-end">{actual.toFixed(2)}</td>
+                            <td className="text-end">{remaining.toFixed(2)}</td>
+                            <td>{row.is_active ? 'Active' : 'Paused'}</td>
+                            <td className="text-end">
+                              <div className="accumul8-row-actions">
+                                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditBudgetRow(row.id)} disabled={busy} aria-label={`Edit ${row.category_name}`}><i className="bi bi-pencil"></i></button>
+                                <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this spreadsheet row?')) { void deleteBudgetRow(row.id); } }} disabled={busy} aria-label={`Delete ${row.category_name}`}><i className="bi bi-trash"></i></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="fw-bold">
+                        <td>Total</td>
+                        <td>-</td>
+                        <td className="text-end">{spreadsheetTotals.budget.toFixed(2)}</td>
+                        <td className="text-end">{spreadsheetTotals.actual.toFixed(2)}</td>
+                        <td className="text-end">{spreadsheetTotals.remaining.toFixed(2)}</td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <p className="small text-muted mb-0 mt-2">`Actual` is calculated from ledger entries in the selected center month when `description`, `memo`, contact, or debtor text contains each row&apos;s Match value.</p>
               </div>
-              <form className="row g-2 mb-3" onSubmit={(e) => {
-                e.preventDefault();
-                const payload = {
-                  ...budgetForm,
-                  monthly_budget: Number(budgetForm.monthly_budget),
-                  row_order: Number(budgetForm.row_order),
-                  is_active: Number(budgetForm.is_active),
-                };
-                if (editingBudgetRowId) {
-                  void updateBudgetRow(editingBudgetRowId, payload).then(() => resetBudgetForm());
-                  return;
-                }
-                void createBudgetRow(payload).then(() => resetBudgetForm());
-              }}>
-                <div className="col-md-3"><input className="form-control" placeholder="Category (Housing, Food...)" value={budgetForm.category_name} onChange={(e) => setBudgetForm((v) => ({ ...v, category_name: e.target.value }))} required /></div>
-                <div className="col-md-2"><input className="form-control" type="number" step="0.01" placeholder="Budget" value={budgetForm.monthly_budget} onChange={(e) => setBudgetForm((v) => ({ ...v, monthly_budget: Number(e.target.value) }))} required /></div>
-                <div className="col-md-3"><input className="form-control" placeholder="Match text (for ledger actual)" value={budgetForm.match_pattern} onChange={(e) => setBudgetForm((v) => ({ ...v, match_pattern: e.target.value }))} /></div>
-                <div className="col-md-1"><input className="form-control" type="number" min={0} step={1} placeholder="Order" value={budgetForm.row_order} onChange={(e) => setBudgetForm((v) => ({ ...v, row_order: Number(e.target.value) }))} /></div>
-                <div className="col-md-1"><select className="form-select" value={String(budgetForm.is_active)} onChange={(e) => setBudgetForm((v) => ({ ...v, is_active: Number(e.target.value) }))}><option value="1">On</option><option value="0">Off</option></select></div>
-                <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingBudgetRowId ? 'Update' : 'Add Row'}</button></div>
-                {editingBudgetRowId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetBudgetForm} disabled={busy}>Cancel</button></div> : null}
-              </form>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--ledger">
-                <table className="table table-sm accumul8-sticky-head accumul8-spreadsheet-table">
-                  <thead><tr><th>Category</th><th>Match</th><th className="text-end">Budget</th><th className="text-end">Actual</th><th className="text-end">Remaining</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
-                  <tbody>
-                    {budgetRowsSorted.map((row) => {
-                      const actual = Number(budgetActualByRowId[row.id] || 0);
-                      const remaining = Number((row.monthly_budget - actual).toFixed(2));
-                      return (
-                        <tr key={row.id} className={`accumul8-list-item ${remaining < 0 ? 'is-outflow' : 'is-inflow'}`}>
-                          <td>{row.category_name}</td>
-                          <td>{row.match_pattern || '-'}</td>
-                          <td className="text-end">{Number(row.monthly_budget || 0).toFixed(2)}</td>
-                          <td className="text-end">{actual.toFixed(2)}</td>
-                          <td className="text-end">{remaining.toFixed(2)}</td>
-                          <td>{row.is_active ? 'Active' : 'Paused'}</td>
-                          <td className="text-end">
-                            <div className="accumul8-row-actions">
-                              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditBudgetRow(row.id)} disabled={busy} aria-label={`Edit ${row.category_name}`}><i className="bi bi-pencil"></i></button>
-                              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this spreadsheet row?')) { void deleteBudgetRow(row.id); } }} disabled={busy} aria-label={`Delete ${row.category_name}`}><i className="bi bi-trash"></i></button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="fw-bold">
-                      <td>Total</td>
-                      <td>-</td>
-                      <td className="text-end">{spreadsheetTotals.budget.toFixed(2)}</td>
-                      <td className="text-end">{spreadsheetTotals.actual.toFixed(2)}</td>
-                      <td className="text-end">{spreadsheetTotals.remaining.toFixed(2)}</td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <p className="small text-muted mb-0 mt-2">`Actual` is calculated from ledger entries in the selected month when `description`, `memo`, contact, or debtor text contains each row&apos;s Match value.</p>
             </div>
           )}
           {tab === 'debtors' && (
@@ -942,30 +962,30 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
             </div>
           )}
-          <Accumul8AccountManagerModal
-            open={groupManagerOpen}
-            onClose={() => setGroupManagerOpen(false)}
-            mode="group"
+          <BankingOrganizationManagerModal
+            open={bankingOrganizationManagerOpen}
+            onClose={() => setBankingOrganizationManagerOpen(false)}
+            mode="banking_organization"
             busy={busy}
-            accountGroups={accountGroups}
+            bankingOrganizations={bankingOrganizations}
             accounts={accounts}
-            createAccountGroup={createAccountGroup}
-            updateAccountGroup={updateAccountGroup}
-            deleteAccountGroup={deleteAccountGroup}
+            createBankingOrganization={createBankingOrganization}
+            updateBankingOrganization={updateBankingOrganization}
+            deleteBankingOrganization={deleteBankingOrganization}
             createAccount={createAccount}
             updateAccount={updateAccount}
             deleteAccount={deleteAccount}
           />
-          <Accumul8AccountManagerModal
+          <BankingOrganizationManagerModal
             open={accountManagerOpen}
             onClose={() => setAccountManagerOpen(false)}
             mode="account"
             busy={busy}
-            accountGroups={accountGroups}
+            bankingOrganizations={bankingOrganizations}
             accounts={accounts}
-            createAccountGroup={createAccountGroup}
-            updateAccountGroup={updateAccountGroup}
-            deleteAccountGroup={deleteAccountGroup}
+            createBankingOrganization={createBankingOrganization}
+            updateBankingOrganization={updateBankingOrganization}
+            deleteBankingOrganization={deleteBankingOrganization}
             createAccount={createAccount}
             updateAccount={updateAccount}
             deleteAccount={deleteAccount}

@@ -35,6 +35,21 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
           <div className="modal-body">
             <p className="text-muted small mb-3">Grant one login access to another person&apos;s Accumul8 account data.</p>
 
+            <div className="row g-2 mb-3">
+              <div className="col-md-6">
+                <label className="form-label" htmlFor="accumul8-user-search">Search users</label>
+                <input
+                  id="accumul8-user-search"
+                  className="form-control"
+                  type="search"
+                  placeholder="Username, email, or ID"
+                  value={state.userSearch}
+                  onChange={(e) => state.setUserSearch(e.target.value)}
+                  disabled={state.busy}
+                />
+              </div>
+            </div>
+
             <form className="row g-2 mb-3" onSubmit={(e) => void state.grantAccess(e)}>
               <div className="col-md-5">
                 <label className="form-label" htmlFor="accumul8-grantee-user">User receiving access</label>
@@ -47,7 +62,7 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                   required
                 >
                   <option value="">Select user…</option>
-                  {state.users.map((u) => (
+                  {state.filteredUsers.map((u) => (
                     <option key={`grantee-${u.id}`} value={u.id}>{u.username} (#{u.id})</option>
                   ))}
                 </select>
@@ -63,7 +78,7 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                   required
                 >
                   <option value="">Select owner…</option>
-                  {state.users.map((u) => (
+                  {state.filteredUsers.map((u) => (
                     <option key={`owner-${u.id}`} value={u.id}>{u.username} (#{u.id})</option>
                   ))}
                 </select>
@@ -85,6 +100,66 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
               />
             </div>
 
+            <div className="row g-2 mb-2">
+              <div className="col-md-5">
+                <label className="form-label" htmlFor="accumul8-grant-search">Search grants</label>
+                <input
+                  id="accumul8-grant-search"
+                  className="form-control"
+                  type="search"
+                  placeholder="User, owner, email, grant ID"
+                  value={state.grantSearch}
+                  onChange={(e) => state.setGrantSearch(e.target.value)}
+                  disabled={state.busy}
+                />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label" htmlFor="accumul8-owner-filter">Filter owner</label>
+                <select
+                  id="accumul8-owner-filter"
+                  className="form-select"
+                  value={state.grantOwnerFilter}
+                  onChange={(e) => state.setGrantOwnerFilter(e.target.value)}
+                  disabled={state.busy}
+                >
+                  <option value="">All owners</option>
+                  {state.users.map((u) => (
+                    <option key={`owner-filter-${u.id}`} value={u.id}>{u.username} (#{u.id})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label" htmlFor="accumul8-grantee-filter">Filter user</label>
+                <select
+                  id="accumul8-grantee-filter"
+                  className="form-select"
+                  value={state.grantGranteeFilter}
+                  onChange={(e) => state.setGrantGranteeFilter(e.target.value)}
+                  disabled={state.busy}
+                >
+                  <option value="">All users</option>
+                  {state.users.map((u) => (
+                    <option key={`grantee-filter-${u.id}`} value={u.id}>{u.username} (#{u.id})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-1 d-grid">
+                <label className="form-label invisible">Clear</label>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    state.setGrantSearch('');
+                    state.setGrantOwnerFilter('');
+                    state.setGrantGranteeFilter('');
+                  }}
+                  disabled={state.busy}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
             <div className="table-responsive">
               <table className="table table-sm align-middle">
                 <thead>
@@ -98,7 +173,7 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                   </tr>
                 </thead>
                 <tbody>
-                  {state.grants.map((grant) => (
+                  {state.filteredGrants.map((grant) => (
                     <tr key={grant.id}>
                       <td>{grant.id}</td>
                       <td>{grant.grantee_username} <span className="text-muted">(#{grant.grantee_user_id})</span></td>
@@ -117,9 +192,9 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                       </td>
                     </tr>
                   ))}
-                  {state.grants.length === 0 ? (
+                  {state.filteredGrants.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-muted">No active grants yet.</td>
+                      <td colSpan={6} className="text-muted">No grants match the current filters.</td>
                     </tr>
                   ) : null}
                 </tbody>

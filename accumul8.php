@@ -11,7 +11,7 @@ if ($uid !== null) {
 }
 
 if (!$isAllowed) {
-    http_response_code(403);
+    // Keep a normal response code so shared-host 403 overrides cannot replace this page with parking HTML.
     header('Content-Type: text/html; charset=UTF-8');
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Accumul8 Access</title></head><body style="font-family:Arial,sans-serif;padding:2rem;background:#f5f7fb;color:#1f2a44;">';
     echo '<h1 style="margin-top:0;">Accumul8 Access Restricted</h1>';

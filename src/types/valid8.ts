@@ -36,3 +36,11 @@ export interface Valid8VaultEntrySecretPayload {
   password: string;
   notes: string | null;
 }
+
+export interface Valid8VaultEntryWithSecrets extends Valid8VaultEntry, Valid8VaultEntrySecretPayload {}
+
+export interface Valid8VaultListResponse {
+  success: boolean;
+  entries: Valid8VaultEntryWithSecrets[];
+  include_inactive: number;
+}

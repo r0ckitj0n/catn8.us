@@ -12,6 +12,10 @@ export function useAccumul8Access(open: boolean, confirm: BrandedConfirmFn, onTo
   const [grants, setGrants] = React.useState<Accumul8AccessGrant[]>([]);
   const [granteeUserId, setGranteeUserId] = React.useState('');
   const [ownerUserId, setOwnerUserId] = React.useState('');
+  const [userSearch, setUserSearch] = React.useState('');
+  const [grantSearch, setGrantSearch] = React.useState('');
+  const [grantOwnerFilter, setGrantOwnerFilter] = React.useState('');
+  const [grantGranteeFilter, setGrantGranteeFilter] = React.useState('');
 
   const load = React.useCallback(async () => {
     setBusy(true);
@@ -95,14 +99,59 @@ export function useAccumul8Access(open: boolean, confirm: BrandedConfirmFn, onTo
     }
   }, [confirm, load]);
 
+  const filteredUsers = React.useMemo(() => {
+    const q = String(userSearch || '').trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) => {
+      const username = String(u.username || '').toLowerCase();
+      const email = String(u.email || '').toLowerCase();
+      const id = String(u.id || '');
+      return username.includes(q) || email.includes(q) || id.includes(q);
+    });
+  }, [userSearch, users]);
+
+  const filteredGrants = React.useMemo(() => {
+    const q = String(grantSearch || '').trim().toLowerCase();
+    return grants.filter((g) => {
+      if (grantOwnerFilter && String(g.owner_user_id) !== String(grantOwnerFilter)) {
+        return false;
+      }
+      if (grantGranteeFilter && String(g.grantee_user_id) !== String(grantGranteeFilter)) {
+        return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        g.grantee_username,
+        g.grantee_email,
+        g.owner_username,
+        g.owner_email,
+        g.granted_by_username,
+        String(g.id),
+        String(g.grantee_user_id),
+        String(g.owner_user_id),
+      ].join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [grantGranteeFilter, grantOwnerFilter, grantSearch, grants]);
+
   return {
     busy,
     users,
     grants,
+    filteredUsers,
+    filteredGrants,
     granteeUserId,
     ownerUserId,
     setGranteeUserId,
     setOwnerUserId,
+    userSearch,
+    setUserSearch,
+    grantSearch,
+    setGrantSearch,
+    grantOwnerFilter,
+    setGrantOwnerFilter,
+    grantGranteeFilter,
+    setGrantGranteeFilter,
     load,
     grantAccess,
     revokeAccess,

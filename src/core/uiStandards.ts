@@ -1,9 +1,13 @@
 import { DEFAULT_CUSTOM_CSS_SETTINGS, DEFAULT_STANDARDIZED_ICON_SETTINGS } from '../data/standardizedIcons';
-import { catn8LocalStorageGet, catn8LocalStorageSet } from '../utils/storageUtils';
-import { CustomCssSettings, StandardizedIconSetting } from '../types/uiStandards';
+import { CustomCssSettings, StandardIconKey, StandardizedIconSetting } from '../types/uiStandards';
 
-export const LS_STANDARDIZED_ICONS = 'catn8_standardized_icons_v1';
 export const UI_STANDARDS_EVENT = 'catn8:ui-standards-updated';
+
+declare global {
+  interface Window {
+    __CATN8_ICON_BUTTON_SETTINGS__?: StandardizedIconSetting[];
+  }
+}
 
 export function isMysteryExperiencePage(page: string): boolean {
   return page === 'mystery' || page === 'sheriff_station';
@@ -21,43 +25,60 @@ function parseColor(value: unknown, fallback: string): string {
   return raw;
 }
 
-export function loadStandardizedIconSettings(): StandardizedIconSetting[] {
-  const raw = catn8LocalStorageGet(LS_STANDARDIZED_ICONS);
-  if (!raw) return DEFAULT_STANDARDIZED_ICON_SETTINGS;
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_STANDARDIZED_ICON_SETTINGS;
-
-    const byKey = new Map<string, StandardizedIconSetting>();
-    parsed.forEach((item: any) => {
-      const key = String(item?.key || '').trim();
-      if (!key) return;
-      byKey.set(key, {
-        key: key as StandardizedIconSetting['key'],
-        label: String(item?.label || key),
-        keywords: Array.isArray(item?.keywords) ? item.keywords.map((keyword: any) => String(keyword || '').trim()).filter(Boolean) : [],
-        enabled: Boolean(item?.enabled),
-      });
-    });
-
-    return DEFAULT_STANDARDIZED_ICON_SETTINGS.map((defaults) => {
-      const candidate = byKey.get(defaults.key);
-      if (!candidate) return defaults;
-      return {
-        ...defaults,
-        label: candidate.label || defaults.label,
-        keywords: candidate.keywords.length ? candidate.keywords : defaults.keywords,
-        enabled: candidate.enabled,
-      };
-    });
-  } catch (_err) {
+function sanitizeIconSettings(raw: unknown): StandardizedIconSetting[] {
+  if (!Array.isArray(raw)) {
     return DEFAULT_STANDARDIZED_ICON_SETTINGS;
   }
+
+  const byKey = new Map<string, StandardizedIconSetting>();
+  raw.forEach((item: any) => {
+    const key = String(item?.key || '').trim();
+    if (!key) return;
+    byKey.set(key, {
+      key: key as StandardizedIconSetting['key'],
+      label: String(item?.label || key),
+      keywords: Array.isArray(item?.keywords)
+        ? item.keywords.map((keyword: any) => String(keyword || '').trim()).filter(Boolean)
+        : [],
+      emoji: String(item?.emoji || ''),
+      codepoint: String(item?.codepoint || ''),
+      asset_path: String(item?.asset_path || ''),
+      source_name: String(item?.source_name || 'Twemoji'),
+    });
+  });
+
+  return DEFAULT_STANDARDIZED_ICON_SETTINGS.map((defaults) => {
+    const candidate = byKey.get(defaults.key);
+    if (!candidate) {
+      return defaults;
+    }
+    return {
+      ...defaults,
+      label: candidate.label || defaults.label,
+      keywords: candidate.keywords.length ? candidate.keywords : defaults.keywords,
+      emoji: candidate.emoji || defaults.emoji,
+      codepoint: candidate.codepoint || defaults.codepoint,
+      asset_path: candidate.asset_path || defaults.asset_path,
+      source_name: candidate.source_name || defaults.source_name,
+    };
+  });
 }
 
-export function saveStandardizedIconSettings(settings: StandardizedIconSetting[]): void {
-  catn8LocalStorageSet(LS_STANDARDIZED_ICONS, JSON.stringify(settings));
+export function loadStandardizedIconSettings(): StandardizedIconSetting[] {
+  if (typeof window === 'undefined') {
+    return DEFAULT_STANDARDIZED_ICON_SETTINGS;
+  }
+  return sanitizeIconSettings(window.__CATN8_ICON_BUTTON_SETTINGS__);
+}
+
+export function replaceStandardizedIconSettings(settings: StandardizedIconSetting[]): void {
+  if (typeof window === 'undefined') return;
+  window.__CATN8_ICON_BUTTON_SETTINGS__ = sanitizeIconSettings(settings);
+}
+
+export function getStandardizedIconSetting(iconKey: StandardIconKey): StandardizedIconSetting {
+  const match = loadStandardizedIconSettings().find((item) => item.key === iconKey);
+  return match || DEFAULT_STANDARDIZED_ICON_SETTINGS.find((item) => item.key === iconKey) || DEFAULT_STANDARDIZED_ICON_SETTINGS[0];
 }
 
 export function sanitizeCustomCssSettings(raw: any): CustomCssSettings {

@@ -119,7 +119,7 @@ export function SettingsPage({
                         Site Appearance
                       </button>
                       <button type="button" className="btn btn-primary" onClick={() => setIconsOpen(true)}>
-                        Standardized Icons
+                        Icon Buttons
                       </button>
                     </div>
                   </div>

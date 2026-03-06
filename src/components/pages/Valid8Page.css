@@ -52,7 +52,17 @@
   color: #8a94a6;
 }
 
+.valid8-attachment-trigger--empty .catn8-icon-btn-glyph {
+  filter: grayscale(1) saturate(0);
+  opacity: 0.55;
+}
+
 .valid8-attachment-trigger--has-attachment {
   border-color: color-mix(in srgb, var(--bs-primary, #0d6efd) 35%, white);
   color: var(--bs-primary, #0d6efd);
+}
+
+.valid8-attachment-trigger--has-attachment .catn8-icon-btn-glyph {
+  filter: none;
+  opacity: 1;
 }

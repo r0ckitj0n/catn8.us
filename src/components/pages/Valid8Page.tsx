@@ -54,10 +54,12 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     createOwner,
     updateOwner,
     archiveOwner,
+    setOwnerArchived,
     deleteOwner,
     createCategory,
     updateCategory,
     archiveCategory,
+    setCategoryArchived,
     deleteCategory,
   } = useValid8(canAccess, onToast);
   const { confirm, confirmDialog } = useBrandedConfirm();
@@ -497,6 +499,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
         onRefresh={refreshLookups}
         onCreate={createOwner}
         onUpdate={updateOwner}
+        onSetActive={(id, isActive) => setOwnerArchived(id, isActive ? 0 : 1)}
         onArchive={archiveOwner}
         onDelete={deleteOwner}
       />
@@ -509,6 +512,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
         onRefresh={refreshLookups}
         onCreate={createCategory}
         onUpdate={updateCategory}
+        onSetActive={(id, isActive) => setCategoryArchived(id, isActive ? 0 : 1)}
         onArchive={archiveCategory}
         onDelete={deleteCategory}
       />

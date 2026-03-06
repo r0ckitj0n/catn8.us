@@ -105,6 +105,7 @@
 ## 7. Error Handling & Transparency Mandate
 - Silent `catch` blocks are prohibited for DB/API failures.
 - Do not mask failures with silent fallbacks that hide root causes.
+- Do not create runtime fallbacks that silently synthesize missing records, guessed configuration, or alternate data sources for core site behavior. If required data/config is missing, fix the persistence/bootstrap path or surface an explicit error/state instead.
 - Return safe structured errors to clients; keep sensitive detail in server logs.
 - Log auth failures, access denials, validation failures, and destructive admin actions.
 

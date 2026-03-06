@@ -94,6 +94,8 @@ body.catn8-global-ui a:hover {
 .catn8-icon-btn-glyph {
   width: 1rem;
   height: 1rem;
+  object-fit: contain;
+  display: block;
 }
 
 .catn8-action-icon-btn {
@@ -116,6 +118,8 @@ body.catn8-global-ui a:hover {
 .catn8-icon-library-glyph {
   width: 1rem;
   height: 1rem;
+  object-fit: contain;
+  display: block;
 }
 
 .catn8-background-image-layer {
@@ -159,8 +163,8 @@ body.catn8-noir-mode .modal-backdrop,
 }
 
 .modal-backdrop.show {
-  --bs-backdrop-opacity: 0.55 !important;
-  opacity: 0.55 !important;
+  --bs-backdrop-opacity: 0.68 !important;
+  opacity: 0.68 !important;
   background-color: rgba(8, 14, 26, 1) !important;
 }
 

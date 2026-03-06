@@ -666,36 +666,7 @@ final class Valid8VaultEntryModel
         }
         $sql .= ' ORDER BY name ASC, id ASC';
         $rows = Database::queryAll($sql, $params);
-
-        $nameMap = [];
-        foreach ($rows as $row) {
-            $name = self::normalizeOwnerName($row['name'] ?? null);
-            $nameMap[strtolower($name)] = self::toLookupModel($row, 120);
-        }
-
-        $entryRows = Database::queryAll(
-            'SELECT DISTINCT owner_name AS name
-             FROM ' . self::TABLE_NAME . '
-             WHERE user_id = ?
-             ORDER BY owner_name ASC',
-            [$userUuid]
-        );
-        foreach ($entryRows as $row) {
-            $name = self::normalizeOwnerName($row['name'] ?? null);
-            $key = strtolower($name);
-            if (!isset($nameMap[$key])) {
-                $nameMap[$key] = [
-                    'id' => '',
-                    'user_id' => $userUuid,
-                    'name' => $name,
-                    'is_archived' => 0,
-                    'created_at' => '',
-                    'updated_at' => '',
-                ];
-            }
-        }
-
-        $list = array_values($nameMap);
+        $list = array_map(static fn(array $row): array => self::toLookupModel($row, 120), $rows);
         usort($list, static fn(array $a, array $b): int => strcasecmp((string)$a['name'], (string)$b['name']));
         return $list;
     }
@@ -713,36 +684,7 @@ final class Valid8VaultEntryModel
         }
         $sql .= ' ORDER BY name ASC, id ASC';
         $rows = Database::queryAll($sql, $params);
-
-        $nameMap = [];
-        foreach ($rows as $row) {
-            $name = self::normalizeCategoryName($row['name'] ?? null);
-            $nameMap[strtolower($name)] = self::toLookupModel($row, 64);
-        }
-
-        $entryRows = Database::queryAll(
-            'SELECT DISTINCT category AS name
-             FROM ' . self::TABLE_NAME . '
-             WHERE user_id = ?
-             ORDER BY category ASC',
-            [$userUuid]
-        );
-        foreach ($entryRows as $row) {
-            $name = self::normalizeCategoryName($row['name'] ?? null);
-            $key = strtolower($name);
-            if (!isset($nameMap[$key])) {
-                $nameMap[$key] = [
-                    'id' => '',
-                    'user_id' => $userUuid,
-                    'name' => $name,
-                    'is_archived' => 0,
-                    'created_at' => '',
-                    'updated_at' => '',
-                ];
-            }
-        }
-
-        $list = array_values($nameMap);
+        $list = array_map(static fn(array $row): array => self::toLookupModel($row, 64), $rows);
         usort($list, static fn(array $a, array $b): int => strcasecmp((string)$a['name'], (string)$b['name']));
         return $list;
     }
@@ -914,6 +856,31 @@ final class Valid8VaultEntryModel
         return $affected > 0;
     }
 
+    public static function setOwnerArchived(string $userUuid, string $ownerId, bool $archived): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $ownerId = self::normalizeUuid($ownerId);
+        Database::execute(
+            'UPDATE ' . self::OWNER_TABLE_NAME . '
+             SET is_archived = ?
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$archived ? 1 : 0, $ownerId, $userUuid]
+        );
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::OWNER_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$ownerId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Owner not found');
+        }
+        return self::toLookupModel($row, 120);
+    }
+
     public static function archiveCategory(string $userUuid, string $categoryId): bool
     {
         self::ensureSchema();
@@ -927,6 +894,31 @@ final class Valid8VaultEntryModel
             [$categoryId, $userUuid]
         );
         return $affected > 0;
+    }
+
+    public static function setCategoryArchived(string $userUuid, string $categoryId, bool $archived): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $categoryId = self::normalizeUuid($categoryId);
+        Database::execute(
+            'UPDATE ' . self::CATEGORY_TABLE_NAME . '
+             SET is_archived = ?
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$archived ? 1 : 0, $categoryId, $userUuid]
+        );
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::CATEGORY_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$categoryId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Category not found');
+        }
+        return self::toLookupModel($row, 64);
     }
 
     public static function deleteOwner(string $userUuid, string $ownerId): bool
@@ -1251,6 +1243,7 @@ final class Valid8VaultEntryModel
             'updated_at' => (string)($row['updated_at'] ?? ''),
         ];
     }
+
 
     private static function normalizeBool($value): int
     {

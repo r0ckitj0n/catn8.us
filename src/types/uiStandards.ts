@@ -22,19 +22,22 @@ export type StandardIconKey =
   | 'user'
   | 'view';
 
+export interface EmojiAssetChoice {
+  id: string;
+  emoji: string;
+  codepoint: string;
+  asset_path: string;
+  label: string;
+}
+
 export interface StandardizedIconSetting {
   key: StandardIconKey;
   label: string;
   keywords: string[];
-  enabled: boolean;
-}
-
-export interface StandardizedIconDefinition {
-  key: StandardIconKey;
-  label: string;
-  keywords: string[];
-  viewBox: string;
-  path: string;
+  emoji: string;
+  codepoint: string;
+  asset_path: string;
+  source_name: string;
 }
 
 export interface CustomCssSettings {
@@ -49,4 +52,10 @@ export interface CustomCssSettings {
   icon_button_size_px: number;
   content_max_width_px: number;
   base_font_size_px: number;
+}
+
+export interface StandardizedIconSettingsResponse {
+  success: boolean;
+  settings: StandardizedIconSetting[];
+  emoji_catalog: EmojiAssetChoice[];
 }

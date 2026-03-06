@@ -359,6 +359,26 @@ if ($action === 'archive_owner') {
     ]);
 }
 
+if ($action === 'set_owner_archived') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $ownerId = trim((string)($body['owner_id'] ?? ''));
+    $isArchivedRaw = $body['is_archived'] ?? null;
+    if ($ownerId === '' || !in_array($isArchivedRaw, [0, 1, '0', '1'], true)) {
+        catn8_json_response(['success' => false, 'error' => 'owner_id and is_archived are required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $owner = Valid8VaultEntryModel::setOwnerArchived($userUuid, $ownerId, (string)$isArchivedRaw === '1' || (int)$isArchivedRaw === 1);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'owner' => $owner,
+    ]);
+}
+
 if ($action === 'archive_category') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -375,6 +395,26 @@ if ($action === 'archive_category') {
     catn8_json_response([
         'success' => true,
         'archived' => $archived ? 1 : 0,
+    ]);
+}
+
+if ($action === 'set_category_archived') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $categoryId = trim((string)($body['category_id'] ?? ''));
+    $isArchivedRaw = $body['is_archived'] ?? null;
+    if ($categoryId === '' || !in_array($isArchivedRaw, [0, 1, '0', '1'], true)) {
+        catn8_json_response(['success' => false, 'error' => 'category_id and is_archived are required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $category = Valid8VaultEntryModel::setCategoryArchived($userUuid, $categoryId, (string)$isArchivedRaw === '1' || (int)$isArchivedRaw === 1);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'category' => $category,
     ]);
 }
 

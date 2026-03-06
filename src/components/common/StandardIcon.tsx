@@ -1,6 +1,6 @@
 import React from 'react';
-import { STANDARDIZED_ICON_DEFINITIONS } from '../../data/standardizedIcons';
 import { StandardIconKey } from '../../types/uiStandards';
+import { UI_STANDARDS_EVENT, getStandardizedIconSetting } from '../../core/uiStandards';
 
 interface StandardIconProps {
   iconKey: StandardIconKey;
@@ -8,20 +8,24 @@ interface StandardIconProps {
 }
 
 export function StandardIcon({ iconKey, className = '' }: StandardIconProps) {
-  const iconDef = React.useMemo(
-    () => STANDARDIZED_ICON_DEFINITIONS.find((item) => item.key === iconKey) || STANDARDIZED_ICON_DEFINITIONS[0],
-    [iconKey],
-  );
+  const [version, setVersion] = React.useState(0);
+
+  React.useEffect(() => {
+    const handleChange = () => setVersion((current) => current + 1);
+    window.addEventListener(UI_STANDARDS_EVENT, handleChange);
+    return () => window.removeEventListener(UI_STANDARDS_EVENT, handleChange);
+  }, []);
+
+  const iconDef = React.useMemo(() => getStandardizedIconSetting(iconKey), [iconKey, version]);
 
   return (
-    <svg
+    <img
       className={className}
-      viewBox={iconDef.viewBox}
-      fill="currentColor"
+      src={iconDef.asset_path}
+      alt=""
       aria-hidden="true"
-      focusable="false"
-    >
-      <path d={iconDef.path} />
-    </svg>
+      loading="lazy"
+      decoding="async"
+    />
   );
 }

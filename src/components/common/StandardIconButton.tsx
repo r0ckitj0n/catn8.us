@@ -1,7 +1,7 @@
 import React from 'react';
 import { StandardIcon } from './StandardIcon';
 import { StandardIconKey } from '../../types/uiStandards';
-import { loadStandardizedIconSettings } from '../../core/uiStandards';
+import { UI_STANDARDS_EVENT, getStandardizedIconSetting } from '../../core/uiStandards';
 
 interface StandardIconButtonProps {
   iconKey: StandardIconKey;
@@ -24,11 +24,19 @@ export function StandardIconButton({
   disabled = false,
   type = 'button',
 }: StandardIconButtonProps) {
+  const [version, setVersion] = React.useState(0);
+
+  React.useEffect(() => {
+    const handleChange = () => setVersion((current) => current + 1);
+    window.addEventListener(UI_STANDARDS_EVENT, handleChange);
+    return () => window.removeEventListener(UI_STANDARDS_EVENT, handleChange);
+  }, []);
+
   const resolvedTitle = React.useMemo(() => {
     if (title) return title;
-    const match = loadStandardizedIconSettings().find((item) => item.key === iconKey);
+    const match = getStandardizedIconSetting(iconKey);
     return match?.label || ariaLabel;
-  }, [title, iconKey, ariaLabel]);
+  }, [title, iconKey, ariaLabel, version]);
 
   if (dismissModal) {
     return (

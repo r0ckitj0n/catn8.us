@@ -1,7 +1,7 @@
 .valid8-lookup-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 14, 26, 0.55);
+  background: rgba(8, 14, 26, 0.72);
   z-index: 5500;
 }
 
@@ -29,6 +29,46 @@
 
 .valid8-lookup-modal-body {
   overflow: auto;
+}
+
+.valid8-lookup-actions-column {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.valid8-lookup-row-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-in-out;
+}
+
+.valid8-lookup-row:hover .valid8-lookup-row-actions,
+.valid8-lookup-row:focus-within .valid8-lookup-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.valid8-lookup-modal-backdrop--nested {
+  z-index: 5520;
+  background: rgba(8, 14, 26, 0.78);
+}
+
+.valid8-lookup-edit-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 5530;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.valid8-lookup-edit-content {
+  width: min(420px, 96vw);
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
 }
 
 @media (max-width: 991.98px) {

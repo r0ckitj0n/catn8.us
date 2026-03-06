@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/vite_helper.php';
+require_once __DIR__ . '/../api/bootstrap.php';
+require_once __DIR__ . '/icon_button_settings.php';
 
 function catn8_render_react_shell(string $page, string $title): void
 {
@@ -34,6 +36,7 @@ function catn8_render_react_shell(string $page, string $title): void
 
     echo "<body class=\"$bodyClass\">\n";
     echo "  <div id=\"catn8-app\" data-page=\"" . htmlspecialchars($page) . "\"></div>\n";
+    echo "  <script>window.__CATN8_ICON_BUTTON_SETTINGS__ = " . json_encode(catn8_load_icon_button_settings(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ";</script>\n";
     echo "  <script src=\"https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js\"></script>\n";
     echo "  <script>try{AOS.init({duration:1000,once:true});}catch(e){};</script>\n";
     echo "</body>\n";

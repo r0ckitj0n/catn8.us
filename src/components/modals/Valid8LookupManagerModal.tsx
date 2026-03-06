@@ -13,9 +13,22 @@ interface Valid8LookupManagerModalProps {
   onRefresh: () => Promise<void>;
   onCreate: (name: string) => Promise<void>;
   onUpdate: (id: string, name: string) => Promise<void>;
+  onSetActive: (id: string, isActive: boolean) => Promise<void>;
   onArchive: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
+
+interface LookupFormState {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+const EMPTY_FORM: LookupFormState = {
+  id: '',
+  name: '',
+  isActive: true,
+};
 
 export function Valid8LookupManagerModal({
   open,
@@ -26,22 +39,26 @@ export function Valid8LookupManagerModal({
   onRefresh,
   onCreate,
   onUpdate,
+  onSetActive,
   onArchive,
   onDelete,
 }: Valid8LookupManagerModalProps) {
   const { confirm, confirmDialog } = useBrandedConfirm();
   const [busy, setBusy] = React.useState(false);
   const [newName, setNewName] = React.useState('');
-  const [editId, setEditId] = React.useState('');
-  const [editName, setEditName] = React.useState('');
+  const [editingItem, setEditingItem] = React.useState<LookupFormState>(EMPTY_FORM);
 
   React.useEffect(() => {
     if (open) {
       setNewName('');
-      setEditId('');
-      setEditName('');
+      setEditingItem(EMPTY_FORM);
     }
   }, [open]);
+
+  const sortedItems = React.useMemo(
+    () => [...items].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
+    [items],
+  );
 
   const saveNew = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -56,15 +73,26 @@ export function Valid8LookupManagerModal({
     }
   };
 
-  const saveEdit = async () => {
-    const id = editId.trim();
-    const name = editName.trim();
+  const saveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const id = editingItem.id.trim();
+    const name = editingItem.name.trim();
     if (!id || !name) return;
     setBusy(true);
     try {
       await onUpdate(id, name);
-      setEditId('');
-      setEditName('');
+      await onSetActive(id, editingItem.isActive);
+      setEditingItem(EMPTY_FORM);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleItemActive = async (itemId: string, isActive: boolean) => {
+    if (!itemId) return;
+    setBusy(true);
+    try {
+      await onSetActive(itemId, isActive);
     } finally {
       setBusy(false);
     }
@@ -144,72 +172,63 @@ export function Valid8LookupManagerModal({
                 <thead>
                   <tr>
                     <th>{itemLabel}</th>
-                    <th>Status</th>
+                    <th>Active</th>
                     <th>Updated</th>
-                    <th className="text-end">Actions</th>
+                    <th className="text-end valid8-lookup-actions-column">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id || item.name}>
-                      <td>
-                        {editId !== '' && editId === item.id ? (
-                          <div className="d-flex align-items-center gap-2">
-                            <input
-                              className="form-control form-control-sm"
-                              value={editName}
-                              onChange={(event) => setEditName(event.target.value)}
-                              disabled={busy}
-                              maxLength={itemLabel === 'Owner' ? 120 : 64}
-                            />
-                            <button type="button" className="btn btn-sm btn-primary" onClick={() => void saveEdit()} disabled={busy || !editName.trim()}>
-                              Save
-                            </button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setEditId(''); setEditName(''); }} disabled={busy}>
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          item.name
-                        )}
-                      </td>
-                      <td>{Number(item.is_archived) === 1 ? 'Archived' : 'Active'}</td>
-                      <td>{item.updated_at || item.created_at || '-'}</td>
-                      <td className="text-end">
-                        <div className="d-inline-flex gap-2">
-                          <StandardIconButton
-                            iconKey="edit"
-                            ariaLabel={`Edit ${itemLabel} ${item.name}`}
-                            title={`Edit ${itemLabel}`}
-                            className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
-                            onClick={() => {
-                              if (!item.id) return;
-                              setEditId(item.id);
-                              setEditName(item.name);
-                            }}
-                            disabled={busy || !item.id || Number(item.is_archived) === 1}
-                          />
-                          <StandardIconButton
-                            iconKey="archive"
-                            ariaLabel={`Archive ${itemLabel} ${item.name}`}
-                            title={`Archive ${itemLabel}`}
-                            className="btn btn-sm btn-outline-warning catn8-action-icon-btn"
-                            onClick={() => void archiveItem(item)}
-                            disabled={busy || !item.id || Number(item.is_archived) === 1}
-                          />
-                          <StandardIconButton
-                            iconKey="delete"
-                            ariaLabel={`Delete ${itemLabel} ${item.name}`}
-                            title={`Delete ${itemLabel}`}
-                            className="btn btn-sm btn-outline-danger catn8-action-icon-btn"
-                            onClick={() => void deleteItem(item)}
+                  {sortedItems.map((item) => {
+                    const isActive = Number(item.is_archived || 0) !== 1;
+                    return (
+                      <tr key={item.id || item.name} className="valid8-lookup-row">
+                        <td>{item.name}</td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={isActive}
                             disabled={busy || !item.id}
+                            aria-label={`Set ${itemLabel.toLowerCase()} ${item.name} active`}
+                            onChange={(event) => void toggleItemActive(item.id, event.target.checked)}
                           />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {items.length === 0 ? (
+                        </td>
+                        <td>{item.updated_at || item.created_at || '-'}</td>
+                        <td className="text-end valid8-lookup-actions-column">
+                          <div className="d-inline-flex gap-2 valid8-lookup-row-actions">
+                            <StandardIconButton
+                              iconKey="edit"
+                              ariaLabel={`Edit ${itemLabel} ${item.name}`}
+                              title={`Edit ${itemLabel}`}
+                              className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
+                              onClick={() => setEditingItem({
+                                id: item.id,
+                                name: item.name,
+                                isActive,
+                              })}
+                              disabled={busy || !item.id}
+                            />
+                            <StandardIconButton
+                              iconKey="archive"
+                              ariaLabel={`Archive ${itemLabel} ${item.name}`}
+                              title={`Archive ${itemLabel}`}
+                              className="btn btn-sm btn-outline-warning catn8-action-icon-btn"
+                              onClick={() => void archiveItem(item)}
+                              disabled={busy || !item.id || !isActive}
+                            />
+                            <StandardIconButton
+                              iconKey="delete"
+                              ariaLabel={`Delete ${itemLabel} ${item.name}`}
+                              title={`Delete ${itemLabel}`}
+                              className="btn btn-sm btn-outline-danger catn8-action-icon-btn"
+                              onClick={() => void deleteItem(item)}
+                              disabled={busy || !item.id}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sortedItems.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-muted">No {itemLabel.toLowerCase()} values yet.</td>
                     </tr>
@@ -220,6 +239,50 @@ export function Valid8LookupManagerModal({
           </div>
         </div>
       </div>
+
+      {editingItem.id ? (
+        <>
+          <div className="valid8-lookup-modal-backdrop valid8-lookup-modal-backdrop--nested" onClick={() => setEditingItem(EMPTY_FORM)} />
+          <div className="valid8-lookup-edit-shell" role="dialog" aria-modal="true" aria-label={`Edit ${itemLabel}`}>
+            <div className="valid8-lookup-edit-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Edit {itemLabel}</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setEditingItem(EMPTY_FORM)} />
+              </div>
+              <form className="modal-body d-grid gap-3" onSubmit={(event) => void saveEdit(event)}>
+                <div>
+                  <label className="form-label" htmlFor={`valid8-${itemLabel.toLowerCase()}-edit-name`}>{itemLabel}</label>
+                  <input
+                    id={`valid8-${itemLabel.toLowerCase()}-edit-name`}
+                    className="form-control"
+                    value={editingItem.name}
+                    onChange={(event) => setEditingItem((prev) => ({ ...prev, name: event.target.value }))}
+                    disabled={busy}
+                    maxLength={itemLabel === 'Owner' ? 120 : 64}
+                  />
+                </div>
+                <label className="form-check-label d-inline-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={editingItem.isActive}
+                    onChange={(event) => setEditingItem((prev) => ({ ...prev, isActive: event.target.checked }))}
+                    disabled={busy}
+                  />
+                  Active
+                </label>
+                <div className="modal-footer p-0 pt-2">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setEditingItem(EMPTY_FORM)} disabled={busy}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={busy || !editingItem.name.trim()}>
+                    {busy ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      ) : null}
       {confirmDialog}
     </>
   );

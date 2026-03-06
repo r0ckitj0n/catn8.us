@@ -45,12 +45,12 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
   }, []);
 
   const loadOwners = React.useCallback(async () => {
-    const res = await ApiClient.get<Valid8OwnersListResponse>('/api/valid8.php?action=list_owners&include_archived=0');
+    const res = await ApiClient.get<Valid8OwnersListResponse>('/api/valid8.php?action=list_owners&include_archived=1');
     setOwners(Array.isArray(res?.owners) ? res.owners : []);
   }, []);
 
   const loadCategories = React.useCallback(async () => {
-    const res = await ApiClient.get<Valid8CategoriesListResponse>('/api/valid8.php?action=list_categories&include_archived=0');
+    const res = await ApiClient.get<Valid8CategoriesListResponse>('/api/valid8.php?action=list_categories&include_archived=1');
     setCategories(Array.isArray(res?.categories) ? res.categories : []);
   }, []);
 
@@ -158,6 +158,11 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     await load(includeInactive);
   }, [includeInactive, load]);
 
+  const setOwnerArchived = React.useCallback(async (ownerId: string, isArchived: number) => {
+    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=set_owner_archived', { owner_id: ownerId, is_archived: isArchived ? 1 : 0 });
+    await load(includeInactive);
+  }, [includeInactive, load]);
+
   const deleteOwner = React.useCallback(async (ownerId: string) => {
     await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=delete_owner', { owner_id: ownerId });
     await load(includeInactive);
@@ -175,6 +180,11 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
 
   const archiveCategory = React.useCallback(async (categoryId: string) => {
     await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=archive_category', { category_id: categoryId });
+    await load(includeInactive);
+  }, [includeInactive, load]);
+
+  const setCategoryArchived = React.useCallback(async (categoryId: string, isArchived: number) => {
+    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=set_category_archived', { category_id: categoryId, is_archived: isArchived ? 1 : 0 });
     await load(includeInactive);
   }, [includeInactive, load]);
 
@@ -214,10 +224,12 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     createOwner,
     updateOwner,
     archiveOwner,
+    setOwnerArchived,
     deleteOwner,
     createCategory,
     updateCategory,
     archiveCategory,
+    setCategoryArchived,
     deleteCategory,
   };
 }

@@ -85,6 +85,13 @@ export interface Accumul8AccountGroup {
   is_active: number;
 }
 
+export interface Accumul8AccountGroupUpsertRequest {
+  group_name: string;
+  institution_name?: string;
+  notes?: string;
+  is_active?: number;
+}
+
 export interface Accumul8TransactionUpsertRequest {
   transaction_date: string;
   due_date?: string;
@@ -111,6 +118,15 @@ export interface Accumul8Account {
   current_balance: number;
   available_balance: number;
   is_active: number;
+}
+
+export interface Accumul8AccountUpsertRequest {
+  account_group_id?: number | null;
+  account_name: string;
+  account_type?: string;
+  institution_name?: string;
+  mask_last4?: string;
+  is_active?: number;
 }
 
 export interface Accumul8AccessibleOwner {

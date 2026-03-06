@@ -3,6 +3,8 @@ import { ApiClient } from '../core/ApiClient';
 import {
   Accumul8Account,
   Accumul8AccountGroup,
+  Accumul8AccountGroupUpsertRequest,
+  Accumul8AccountUpsertRequest,
   Accumul8AccessibleOwner,
   Accumul8BudgetRow,
   Accumul8BudgetRowUpsertRequest,
@@ -98,6 +100,42 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_contact'), form),
       'Contact saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const createAccountGroup = React.useCallback(async (form: Accumul8AccountGroupUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_account_group'), form),
+      'Accumul8 account saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const updateAccountGroup = React.useCallback(async (id: number, form: Accumul8AccountGroupUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('update_account_group'), { id, ...form }),
+      'Accumul8 account updated',
+    );
+  }, [scopedActionUrl, withReload]);
+  const deleteAccountGroup = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('delete_account_group'), { id }),
+      'Accumul8 account deleted',
+    );
+  }, [scopedActionUrl, withReload]);
+  const createAccount = React.useCallback(async (form: Accumul8AccountUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_account'), form),
+      'Bank account saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const updateAccount = React.useCallback(async (id: number, form: Accumul8AccountUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('update_account'), { id, ...form }),
+      'Bank account updated',
+    );
+  }, [scopedActionUrl, withReload]);
+  const deleteAccount = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('delete_account'), { id }),
+      'Bank account deleted',
     );
   }, [scopedActionUrl, withReload]);
   const updateContact = React.useCallback(async (id: number, form: Accumul8ContactUpsertRequest) => {
@@ -283,6 +321,12 @@ export function useAccumul8(
     syncProvider,
     load,
     createContact,
+    createAccountGroup,
+    updateAccountGroup,
+    deleteAccountGroup,
+    createAccount,
+    updateAccount,
+    deleteAccount,
     updateContact,
     deleteContact,
     createDebtor,

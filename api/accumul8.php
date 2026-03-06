@@ -69,34 +69,58 @@ function accumul8_validate_enum(string $fieldName, $value, array $allowed, strin
 
 function accumul8_table_has_column(string $tableName, string $columnName): bool
 {
-    $rows = Database::queryAll('SHOW COLUMNS FROM `' . $tableName . '` LIKE ?', [$columnName]);
-    return !empty($rows);
+    $row = Database::queryOne(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1',
+        [$tableName, $columnName]
+    );
+    return $row !== null;
 }
 
 function accumul8_table_exists(string $tableName): bool
 {
-    $rows = Database::queryAll('SHOW TABLES LIKE ?', [$tableName]);
-    return !empty($rows);
+    $row = Database::queryOne(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+         LIMIT 1',
+        [$tableName]
+    );
+    return $row !== null;
 }
 
 function accumul8_table_has_index(string $tableName, string $indexName): bool
 {
-    $rows = Database::queryAll('SHOW INDEX FROM `' . $tableName . '` WHERE Key_name = ?', [$indexName]);
-    return !empty($rows);
+    $row = Database::queryOne(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND INDEX_NAME = ?
+         LIMIT 1',
+        [$tableName, $indexName]
+    );
+    return $row !== null;
 }
 
 function accumul8_table_has_foreign_key(string $tableName, string $constraintName): bool
 {
-    $rows = Database::queryAll('SHOW CREATE TABLE `' . $tableName . '`');
-    if (!$rows) {
-        return false;
-    }
-    $first = (array)$rows[0];
-    $createSql = (string)($first['Create Table'] ?? $first['Create View'] ?? '');
-    if ($createSql === '') {
-        return false;
-    }
-    return stripos($createSql, 'CONSTRAINT `' . $constraintName . '`') !== false;
+    $row = Database::queryOne(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND CONSTRAINT_NAME = ?
+           AND CONSTRAINT_TYPE = ?
+         LIMIT 1',
+        [$tableName, $constraintName, 'FOREIGN KEY']
+    );
+    return $row !== null;
 }
 
 function accumul8_table_add_column_if_missing(string $tableName, string $columnName, string $columnDefinition): void
@@ -204,6 +228,7 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
         return null;
     }
     $tableByType = [
+        'account_groups' => 'accumul8_account_groups',
         'contacts' => 'accumul8_contacts',
         'accounts' => 'accumul8_accounts',
         'debtors' => 'accumul8_debtors',
@@ -217,6 +242,68 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
         [$id, $viewerId]
     );
     return $row ? $id : null;
+}
+
+function accumul8_require_owned_id(string $entityType, int $viewerId, int $id): int
+{
+    $ownedId = accumul8_owned_id_or_null($entityType, $viewerId, $id);
+    if ($ownedId === null) {
+        catn8_json_response(['success' => false, 'error' => 'Record not found'], 404);
+    }
+    return $ownedId;
+}
+
+function accumul8_validate_account_type($value): string
+{
+    $type = strtolower(accumul8_normalize_text($value, 40));
+    if ($type === '') {
+        $type = 'checking';
+    }
+    if (!preg_match('/^[a-z0-9 _-]{2,40}$/', $type)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid account_type'], 400);
+    }
+    return $type;
+}
+
+function accumul8_count_rows(string $sql, array $params): int
+{
+    $row = Database::queryOne($sql, $params);
+    return (int)($row['total_count'] ?? 0);
+}
+
+function accumul8_account_group_has_associations(int $viewerId, int $groupId): bool
+{
+    return accumul8_count_rows(
+        'SELECT COUNT(*) AS total_count
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?
+           AND account_group_id = ?',
+        [$viewerId, $groupId]
+    ) > 0;
+}
+
+function accumul8_account_has_associations(int $viewerId, int $accountId): bool
+{
+    $transactionCount = accumul8_count_rows(
+        'SELECT COUNT(*) AS total_count
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND account_id = ?',
+        [$viewerId, $accountId]
+    );
+    if ($transactionCount > 0) {
+        return true;
+    }
+
+    $recurringCount = accumul8_count_rows(
+        'SELECT COUNT(*) AS total_count
+         FROM accumul8_recurring_payments
+         WHERE owner_user_id = ?
+           AND account_id = ?',
+        [$viewerId, $accountId]
+    );
+
+    return $recurringCount > 0;
 }
 
 function accumul8_transactions_has_debtor_column(): bool
@@ -798,7 +885,7 @@ function accumul8_recompute_running_balance(int $viewerId): void
 
 function accumul8_list_transactions(int $viewerId, int $limit = 400): array
 {
-    $limit = max(1, min(1000, $limit));
+    $limit = max(1, min(10000, $limit));
     $hasDebtor = accumul8_has_debtor_support();
     $dueDateSelect = accumul8_optional_select('accumul8_transactions', 'due_date', 't.due_date', 'NULL AS due_date');
     $entryTypeSelect = accumul8_optional_select('accumul8_transactions', 'entry_type', 't.entry_type', "'manual' AS entry_type");
@@ -1214,6 +1301,151 @@ if ($action === 'create_contact') {
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+}
+
+if ($action === 'create_account_group') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $groupName = accumul8_normalize_text($body['group_name'] ?? '', 191);
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
+    $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
+
+    if ($groupName === '') {
+        catn8_json_response(['success' => false, 'error' => 'group_name is required'], 400);
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, notes, is_active)
+         VALUES (?, ?, ?, ?, ?)',
+        [$viewerId, $groupName, $institutionName, $notes === '' ? null : $notes, $isActive]
+    );
+
+    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+}
+
+if ($action === 'update_account_group') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $groupName = accumul8_normalize_text($body['group_name'] ?? '', 191);
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
+    $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($groupName === '') {
+        catn8_json_response(['success' => false, 'error' => 'group_name is required'], 400);
+    }
+
+    accumul8_require_owned_id('account_groups', $viewerId, $id);
+
+    Database::execute(
+        'UPDATE accumul8_account_groups
+         SET group_name = ?, institution_name = ?, notes = ?, is_active = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [$groupName, $institutionName, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_account_group') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    accumul8_require_owned_id('account_groups', $viewerId, $id);
+
+    if (accumul8_account_group_has_associations($viewerId, $id)) {
+        catn8_json_response(['success' => false, 'error' => 'Cannot delete an Accumul8 account that still has bank accounts associated with it'], 409);
+    }
+
+    Database::execute('DELETE FROM accumul8_account_groups WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'create_account') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $accountName = accumul8_normalize_text($body['account_name'] ?? '', 191);
+    $accountGroupId = isset($body['account_group_id']) ? (int)$body['account_group_id'] : 0;
+    $accountGroupIdOrNull = $accountGroupId > 0 ? accumul8_require_owned_id('account_groups', $viewerId, $accountGroupId) : null;
+    $accountType = accumul8_validate_account_type($body['account_type'] ?? 'checking');
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $maskLast4 = accumul8_normalize_text($body['mask_last4'] ?? '', 8);
+    $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
+
+    if ($accountName === '') {
+        catn8_json_response(['success' => false, 'error' => 'account_name is required'], 400);
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_accounts
+            (owner_user_id, account_group_id, account_name, account_type, institution_name, mask_last4, current_balance, available_balance, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 0.00, 0.00, ?)',
+        [$viewerId, $accountGroupIdOrNull, $accountName, $accountType, $institutionName, $maskLast4, $isActive]
+    );
+
+    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+}
+
+if ($action === 'update_account') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $accountName = accumul8_normalize_text($body['account_name'] ?? '', 191);
+    $accountGroupId = isset($body['account_group_id']) ? (int)$body['account_group_id'] : 0;
+    $accountGroupIdOrNull = $accountGroupId > 0 ? accumul8_require_owned_id('account_groups', $viewerId, $accountGroupId) : null;
+    $accountType = accumul8_validate_account_type($body['account_type'] ?? 'checking');
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $maskLast4 = accumul8_normalize_text($body['mask_last4'] ?? '', 8);
+    $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($accountName === '') {
+        catn8_json_response(['success' => false, 'error' => 'account_name is required'], 400);
+    }
+
+    accumul8_require_owned_id('accounts', $viewerId, $id);
+
+    Database::execute(
+        'UPDATE accumul8_accounts
+         SET account_group_id = ?, account_name = ?, account_type = ?, institution_name = ?, mask_last4 = ?, is_active = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [$accountGroupIdOrNull, $accountName, $accountType, $institutionName, $maskLast4, $isActive, $id, $viewerId]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_account') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    accumul8_require_owned_id('accounts', $viewerId, $id);
+
+    if (accumul8_account_has_associations($viewerId, $id)) {
+        catn8_json_response(['success' => false, 'error' => 'Cannot delete a bank account that has ledger or recurring records associated with it'], 409);
+    }
+
+    Database::execute('DELETE FROM accumul8_accounts WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
+    catn8_json_response(['success' => true]);
 }
 
 if ($action === 'update_contact') {

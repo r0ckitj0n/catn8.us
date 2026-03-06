@@ -257,4 +257,98 @@ if ($action === 'restore_database') {
     }
 }
 
+if ($action === 'inspect_accumul8') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'GET') {
+        $fail('database_maintenance.inspect_accumul8', 405, 'Method not allowed');
+    }
+
+    try {
+        $pdo = Database::getInstance();
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $users = $pdo->query(
+            "SELECT
+                u.id,
+                u.username,
+                u.email,
+                u.is_active,
+                (SELECT COUNT(*) FROM accumul8_accounts a WHERE a.owner_user_id = u.id) AS account_count,
+                (SELECT COUNT(*) FROM accumul8_account_groups ag WHERE ag.owner_user_id = u.id) AS account_group_count,
+                (SELECT COUNT(*) FROM accumul8_contacts c WHERE c.owner_user_id = u.id) AS contact_count,
+                (SELECT COUNT(*) FROM accumul8_transactions t WHERE t.owner_user_id = u.id) AS transaction_count,
+                (SELECT COUNT(*) FROM accumul8_transactions t WHERE t.owner_user_id = u.id AND t.source_kind = 'statement_pdf') AS statement_transaction_count
+             FROM users u
+             WHERE u.is_active = 1
+               AND (
+                    EXISTS (SELECT 1 FROM accumul8_transactions t WHERE t.owner_user_id = u.id)
+                    OR EXISTS (SELECT 1 FROM accumul8_accounts a WHERE a.owner_user_id = u.id)
+               )
+             ORDER BY statement_transaction_count DESC, transaction_count DESC, u.id ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $grants = $pdo->query(
+            "SELECT
+                g.id,
+                g.grantee_user_id,
+                gu.username AS grantee_username,
+                g.owner_user_id,
+                ou.username AS owner_username,
+                g.is_active
+             FROM accumul8_user_access_grants g
+             INNER JOIN users gu ON gu.id = g.grantee_user_id
+             INNER JOIN users ou ON ou.id = g.owner_user_id
+             ORDER BY g.owner_user_id ASC, g.grantee_user_id ASC, g.id ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $accounts = $pdo->query(
+            "SELECT
+                a.owner_user_id,
+                u.username,
+                a.id,
+                a.account_name,
+                COALESCE(a.institution_name, '') AS institution_name,
+                COALESCE(a.mask_last4, '') AS mask_last4,
+                COALESCE(ag.group_name, '') AS account_group_name,
+                COALESCE(a.current_balance, 0.00) AS current_balance
+             FROM accumul8_accounts a
+             INNER JOIN users u ON u.id = a.owner_user_id
+             LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id
+             ORDER BY a.owner_user_id ASC, ag.group_name ASC, a.account_name ASC, a.id ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $statementSummary = $pdo->query(
+            "SELECT
+                t.owner_user_id,
+                u.username,
+                COALESCE(ag.group_name, '') AS account_group_name,
+                COALESCE(a.account_name, '') AS account_name,
+                COUNT(*) AS count_rows,
+                ROUND(COALESCE(SUM(t.amount), 0), 2) AS amount_total,
+                MIN(t.transaction_date) AS min_date,
+                MAX(t.transaction_date) AS max_date
+             FROM accumul8_transactions t
+             INNER JOIN users u ON u.id = t.owner_user_id
+             LEFT JOIN accumul8_accounts a
+               ON a.id = t.account_id
+              AND a.owner_user_id = t.owner_user_id
+             LEFT JOIN accumul8_account_groups ag
+               ON ag.id = a.account_group_id
+              AND ag.owner_user_id = t.owner_user_id
+             WHERE t.source_kind = 'statement_pdf'
+             GROUP BY t.owner_user_id, u.username, COALESCE(ag.group_name, ''), COALESCE(a.account_name, '')
+             ORDER BY t.owner_user_id ASC, account_group_name ASC, account_name ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        catn8_json_response([
+            'success' => true,
+            'users' => $users,
+            'grants' => $grants,
+            'accounts' => $accounts,
+            'statement_summary' => $statementSummary,
+        ]);
+    } catch (Throwable $e) {
+        $fail('database_maintenance.inspect_accumul8', 500, (string)$e->getMessage());
+    }
+}
+
 $fail('database_maintenance', 400, 'Unknown action');

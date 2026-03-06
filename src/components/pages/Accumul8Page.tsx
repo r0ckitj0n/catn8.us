@@ -1,5 +1,6 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
+import { Accumul8AccountManagerModal } from '../modals/Accumul8AccountManagerModal';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
@@ -48,6 +49,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     bankConnections,
     syncProvider,
     load,
+    createAccountGroup,
+    updateAccountGroup,
+    deleteAccountGroup,
+    createAccount,
+    updateAccount,
+    deleteAccount,
     createContact,
     updateContact,
     deleteContact,
@@ -91,6 +98,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
   const [selectedAccountGroupId, setSelectedAccountGroupId] = React.useState<string>('');
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
+  const [groupManagerOpen, setGroupManagerOpen] = React.useState(false);
+  const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
@@ -415,7 +424,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       <section className="section">
         <div className="container accumul8-page">
           <div className="accumul8-page-header mb-2">
-            <h1 className="section-title mb-0">Accumul8</h1>
+            <div className="accumul8-page-header-main">
+              <h1 className="section-title mb-0">Accumul8</h1>
+              <div className="accumul8-tabs accumul8-tabs--header">
+                {[
+                  ['ledger', 'Ledger'],
+                  ['spreadsheet', 'Spreadsheet'],
+                  ['debtors', 'Debtors'],
+                  ['pay_bills', 'Pay Bills'],
+                  ['contacts', 'Payees/Payers'],
+                  ['recurring', 'Recurring'],
+                  ['notifications', 'Notifications'],
+                  ['sync', 'Sync'],
+                ].map(([key, label]) => (
+                  <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
+                ))}
+              </div>
+            </div>
             <div className="accumul8-owner-selector">
               <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
               <select
@@ -443,7 +468,18 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           </div>
           <div className="row g-2 align-items-end mb-3">
             <div className="col-md-4">
-              <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Accumul8 account</label>
+              <div className="accumul8-filter-label-row">
+                <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Accumul8 account</label>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                  onClick={() => setGroupManagerOpen(true)}
+                  aria-label="Manage Accumul8 accounts"
+                  title="Manage Accumul8 accounts"
+                >
+                  <i className="bi bi-gear"></i>
+                </button>
+              </div>
               <select
                 id="accumul8-group-filter"
                 className="form-select form-select-sm"
@@ -457,7 +493,18 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </select>
             </div>
             <div className="col-md-4">
-              <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
+              <div className="accumul8-filter-label-row">
+                <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                  onClick={() => setAccountManagerOpen(true)}
+                  aria-label="Manage bank accounts"
+                  title="Manage bank accounts"
+                >
+                  <i className="bi bi-gear"></i>
+                </button>
+              </div>
               <select
                 id="accumul8-bank-filter"
                 className="form-select form-select-sm"
@@ -476,20 +523,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
             <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
             <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
-          </div>
-          <div className="accumul8-tabs mt-3">
-            {[
-              ['ledger', 'Ledger'],
-              ['spreadsheet', 'Spreadsheet'],
-              ['debtors', 'Debtors'],
-              ['pay_bills', 'Pay Bills'],
-              ['contacts', 'Payees/Payers'],
-              ['recurring', 'Recurring'],
-              ['notifications', 'Notifications'],
-              ['sync', 'Sync'],
-            ].map(([key, label]) => (
-              <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
-            ))}
           </div>
           {tab === 'ledger' && (
             <div className="accumul8-panel">
@@ -909,6 +942,34 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
             </div>
           )}
+          <Accumul8AccountManagerModal
+            open={groupManagerOpen}
+            onClose={() => setGroupManagerOpen(false)}
+            mode="group"
+            busy={busy}
+            accountGroups={accountGroups}
+            accounts={accounts}
+            createAccountGroup={createAccountGroup}
+            updateAccountGroup={updateAccountGroup}
+            deleteAccountGroup={deleteAccountGroup}
+            createAccount={createAccount}
+            updateAccount={updateAccount}
+            deleteAccount={deleteAccount}
+          />
+          <Accumul8AccountManagerModal
+            open={accountManagerOpen}
+            onClose={() => setAccountManagerOpen(false)}
+            mode="account"
+            busy={busy}
+            accountGroups={accountGroups}
+            accounts={accounts}
+            createAccountGroup={createAccountGroup}
+            updateAccountGroup={updateAccountGroup}
+            deleteAccountGroup={deleteAccountGroup}
+            createAccount={createAccount}
+            updateAccount={updateAccount}
+            deleteAccount={deleteAccount}
+          />
           {!loaded && <div className="text-muted mt-2">Loading Accumul8...</div>}
         </div>
       </section>

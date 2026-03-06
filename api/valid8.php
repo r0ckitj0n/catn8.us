@@ -166,4 +166,254 @@ if ($action === 'delete_attachment') {
     ]);
 }
 
+if ($action === 'update_entry') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $entryId = trim((string)($body['entry_id'] ?? ''));
+    if ($entryId === '') {
+        catn8_json_response(['success' => false, 'error' => 'entry_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $row = Valid8VaultEntryModel::updateEntry($userUuid, $entryId, $body);
+        $entry = array_merge(Valid8VaultEntryModel::toEntryModel($row), Valid8VaultEntryModel::decryptEntry($row));
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'entry' => $entry,
+    ]);
+}
+
+if ($action === 'archive_entry') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $entryId = trim((string)($body['entry_id'] ?? ''));
+    if ($entryId === '') {
+        catn8_json_response(['success' => false, 'error' => 'entry_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $archived = Valid8VaultEntryModel::archiveEntry($userUuid, $entryId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'archived' => $archived ? 1 : 0,
+    ]);
+}
+
+if ($action === 'delete_entry') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $entryId = trim((string)($body['entry_id'] ?? ''));
+    if ($entryId === '') {
+        catn8_json_response(['success' => false, 'error' => 'entry_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $deleted = Valid8VaultEntryModel::deleteEntry($userUuid, $entryId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'deleted' => $deleted ? 1 : 0,
+    ]);
+}
+
+if ($action === 'list_owners') {
+    catn8_require_method('GET');
+    $includeArchivedRaw = trim((string)($_GET['include_archived'] ?? '0'));
+    if ($includeArchivedRaw !== '0' && $includeArchivedRaw !== '1') {
+        catn8_json_response(['success' => false, 'error' => 'include_archived must be 0 or 1'], 400);
+    }
+    $includeArchived = $includeArchivedRaw === '1';
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $owners = Valid8VaultEntryModel::listOwners($userUuid, $includeArchived);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'owners' => $owners,
+    ]);
+}
+
+if ($action === 'list_categories') {
+    catn8_require_method('GET');
+    $includeArchivedRaw = trim((string)($_GET['include_archived'] ?? '0'));
+    if ($includeArchivedRaw !== '0' && $includeArchivedRaw !== '1') {
+        catn8_json_response(['success' => false, 'error' => 'include_archived must be 0 or 1'], 400);
+    }
+    $includeArchived = $includeArchivedRaw === '1';
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $categories = Valid8VaultEntryModel::listCategories($userUuid, $includeArchived);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'categories' => $categories,
+    ]);
+}
+
+if ($action === 'create_owner') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $name = trim((string)($body['name'] ?? ''));
+    if ($name === '') {
+        catn8_json_response(['success' => false, 'error' => 'name is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $owner = Valid8VaultEntryModel::createOwner($userUuid, $name);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'owner' => $owner,
+    ]);
+}
+
+if ($action === 'create_category') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $name = trim((string)($body['name'] ?? ''));
+    if ($name === '') {
+        catn8_json_response(['success' => false, 'error' => 'name is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $category = Valid8VaultEntryModel::createCategory($userUuid, $name);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'category' => $category,
+    ]);
+}
+
+if ($action === 'update_owner') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $ownerId = trim((string)($body['owner_id'] ?? ''));
+    $name = trim((string)($body['name'] ?? ''));
+    if ($ownerId === '' || $name === '') {
+        catn8_json_response(['success' => false, 'error' => 'owner_id and name are required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $owner = Valid8VaultEntryModel::updateOwner($userUuid, $ownerId, $name);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'owner' => $owner,
+    ]);
+}
+
+if ($action === 'update_category') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $categoryId = trim((string)($body['category_id'] ?? ''));
+    $name = trim((string)($body['name'] ?? ''));
+    if ($categoryId === '' || $name === '') {
+        catn8_json_response(['success' => false, 'error' => 'category_id and name are required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $category = Valid8VaultEntryModel::updateCategory($userUuid, $categoryId, $name);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'category' => $category,
+    ]);
+}
+
+if ($action === 'archive_owner') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $ownerId = trim((string)($body['owner_id'] ?? ''));
+    if ($ownerId === '') {
+        catn8_json_response(['success' => false, 'error' => 'owner_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $archived = Valid8VaultEntryModel::archiveOwner($userUuid, $ownerId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'archived' => $archived ? 1 : 0,
+    ]);
+}
+
+if ($action === 'archive_category') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $categoryId = trim((string)($body['category_id'] ?? ''));
+    if ($categoryId === '') {
+        catn8_json_response(['success' => false, 'error' => 'category_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $archived = Valid8VaultEntryModel::archiveCategory($userUuid, $categoryId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'archived' => $archived ? 1 : 0,
+    ]);
+}
+
+if ($action === 'delete_owner') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $ownerId = trim((string)($body['owner_id'] ?? ''));
+    if ($ownerId === '') {
+        catn8_json_response(['success' => false, 'error' => 'owner_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $deleted = Valid8VaultEntryModel::deleteOwner($userUuid, $ownerId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'deleted' => $deleted ? 1 : 0,
+    ]);
+}
+
+if ($action === 'delete_category') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $categoryId = trim((string)($body['category_id'] ?? ''));
+    if ($categoryId === '') {
+        catn8_json_response(['success' => false, 'error' => 'category_id is required'], 400);
+    }
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $deleted = Valid8VaultEntryModel::deleteCategory($userUuid, $categoryId);
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'deleted' => $deleted ? 1 : 0,
+    ]);
+}
+
 catn8_json_response(['success' => false, 'error' => 'Unknown action'], 400);

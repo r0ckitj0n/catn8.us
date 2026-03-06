@@ -67,3 +67,53 @@ export interface Valid8VaultAttachmentUploadResponse {
   success: boolean;
   attachment: Valid8VaultAttachment;
 }
+
+export interface Valid8VaultEntryUpdateRequest {
+  entry_id: string;
+  title?: string;
+  username?: string;
+  password?: string;
+  owner_name?: string;
+  category?: string;
+  is_active?: number;
+}
+
+export interface Valid8VaultEntryMutationResponse {
+  success: boolean;
+  entry?: Valid8VaultEntryWithSecrets;
+  archived?: number;
+  deleted?: number;
+}
+
+export interface Valid8LookupItem {
+  id: string;
+  user_id: string;
+  name: string;
+  is_archived: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Valid8OwnersListResponse {
+  success: boolean;
+  owners: Valid8LookupItem[];
+}
+
+export interface Valid8CategoriesListResponse {
+  success: boolean;
+  categories: Valid8LookupItem[];
+}
+
+export interface Valid8OwnerMutationResponse {
+  success: boolean;
+  owner?: Valid8LookupItem;
+  archived?: number;
+  deleted?: number;
+}
+
+export interface Valid8CategoryMutationResponse {
+  success: boolean;
+  category?: Valid8LookupItem;
+  archived?: number;
+  deleted?: number;
+}

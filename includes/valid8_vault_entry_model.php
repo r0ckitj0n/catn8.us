@@ -6,6 +6,8 @@ final class Valid8VaultEntryModel
 {
     private const TABLE_NAME = 'vault_entries';
     private const ATTACHMENT_TABLE_NAME = 'vault_entry_attachments';
+    private const OWNER_TABLE_NAME = 'valid8_owners';
+    private const CATEGORY_TABLE_NAME = 'valid8_categories';
     private const KEY_SECRET_NAME = 'catn8.valid8.data_key';
     private const KEY_ENV_NAME = 'CATN8_VALID8_DATA_KEY';
 
@@ -51,6 +53,7 @@ final class Valid8VaultEntryModel
 
         self::ensureAddedColumns();
         self::ensureAttachmentSchema();
+        self::ensureOwnerCategorySchema();
     }
 
     private static function ensureAttachmentSchema(): void
@@ -70,6 +73,33 @@ final class Valid8VaultEntryModel
             KEY idx_vault_attach_entry_created (entry_id, created_at),
             CONSTRAINT fk_vault_attach_entry FOREIGN KEY (entry_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
             CONSTRAINT fk_vault_attach_user_uuid FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    private static function ensureOwnerCategorySchema(): void
+    {
+        Database::execute("CREATE TABLE IF NOT EXISTS " . self::OWNER_TABLE_NAME . " (
+            id CHAR(36) NOT NULL PRIMARY KEY,
+            user_id CHAR(36) NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            is_archived TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_valid8_owner_user_name (user_id, name),
+            KEY idx_valid8_owner_user_archived_name (user_id, is_archived, name),
+            CONSTRAINT fk_valid8_owner_user_uuid FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        Database::execute("CREATE TABLE IF NOT EXISTS " . self::CATEGORY_TABLE_NAME . " (
+            id CHAR(36) NOT NULL PRIMARY KEY,
+            user_id CHAR(36) NOT NULL,
+            name VARCHAR(64) NOT NULL,
+            is_archived TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_valid8_category_user_name (user_id, name),
+            KEY idx_valid8_category_user_archived_name (user_id, is_archived, name),
+            CONSTRAINT fk_valid8_category_user_uuid FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
@@ -197,6 +227,152 @@ final class Valid8VaultEntryModel
         $sql .= ' ORDER BY is_active DESC, updated_at DESC, created_at DESC';
 
         return Database::queryAll($sql, $params);
+    }
+
+    public static function updateEntry(string $userUuid, string $entryId, array $input): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $entryId = self::normalizeUuid($entryId);
+
+        $row = self::getEntryRow($entryId, $userUuid);
+        if ($row === null) {
+            throw new RuntimeException('Vault entry not found');
+        }
+        $secret = self::decryptCredentials($row);
+
+        $title = array_key_exists('title', $input)
+            ? self::normalizeText((string)$input['title'], 191)
+            : self::normalizeText((string)($row['title'] ?? ''), 191);
+        if ($title === '') {
+            throw new RuntimeException('Title is required');
+        }
+
+        $url = self::normalizeNullableUrl($row['url'] ?? null);
+
+        $username = array_key_exists('username', $input)
+            ? self::requireNonEmptyText((string)$input['username'], 'Username is required')
+            : self::requireNonEmptyText((string)($secret['username'] ?? ''), 'Username is required');
+        $password = array_key_exists('password', $input)
+            ? self::requireNonEmptyText((string)$input['password'], 'Password is required')
+            : self::requireNonEmptyText((string)($secret['password'] ?? ''), 'Password is required');
+        $notes = $secret['notes'] ?? null;
+
+        $category = array_key_exists('category', $input)
+            ? self::normalizeCategoryName($input['category'] ?? null)
+            : self::normalizeCategoryName($row['category'] ?? null);
+        $ownerName = array_key_exists('owner_name', $input)
+            ? self::normalizeOwnerName($input['owner_name'] ?? null)
+            : self::normalizeOwnerName($row['owner_name'] ?? null);
+        $isActive = array_key_exists('is_active', $input)
+            ? self::normalizeBool($input['is_active'])
+            : self::normalizeBool($row['is_active'] ?? 1);
+
+        $accountFingerprint = self::computeAccountFingerprint($title, $url, $username, $ownerName);
+        $entryFingerprint = self::computeEntryFingerprint($title, $url, $username, $password, $notes, $ownerName);
+        $encrypted = self::encryptCredentials($username, $password, $notes);
+        $deactivatedAt = $isActive === 1 ? null : gmdate('Y-m-d H:i:s');
+
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE ' . self::TABLE_NAME . '
+                 SET title = ?,
+                     category = ?,
+                     owner_name = ?,
+                     username_encrypted = ?,
+                     username_auth_tag = ?,
+                     password_encrypted = ?,
+                     password_auth_tag = ?,
+                     encryption_iv = ?,
+                     notes_encrypted = ?,
+                     notes_auth_tag = ?,
+                     is_active = ?,
+                     replaced_by_entry_id = NULL,
+                     account_fingerprint = ?,
+                     entry_fingerprint = ?,
+                     last_changed_at = ?,
+                     deactivated_at = ?
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [
+                    $title,
+                    $category,
+                    $ownerName,
+                    $encrypted['username_encrypted'],
+                    $encrypted['username_auth_tag'],
+                    $encrypted['password_encrypted'],
+                    $encrypted['password_auth_tag'],
+                    $encrypted['encryption_iv'],
+                    $encrypted['notes_encrypted'],
+                    $encrypted['notes_auth_tag'],
+                    $isActive,
+                    $accountFingerprint,
+                    $entryFingerprint,
+                    gmdate('Y-m-d H:i:s'),
+                    $deactivatedAt,
+                    $entryId,
+                    $userUuid,
+                ]
+            );
+
+            if ($isActive === 1) {
+                Database::execute(
+                    'UPDATE ' . self::TABLE_NAME . '
+                     SET is_active = 0,
+                         deactivated_at = COALESCE(deactivated_at, NOW()),
+                         replaced_by_entry_id = ?
+                     WHERE user_id = ?
+                       AND account_fingerprint = ?
+                       AND is_active = 1
+                       AND id <> ?',
+                    [$entryId, $userUuid, $accountFingerprint, $entryId]
+                );
+            }
+
+            $updated = self::getEntryRow($entryId, $userUuid);
+            if ($updated === null) {
+                throw new RuntimeException('Vault entry was updated but could not be reloaded');
+            }
+            Database::commit();
+            return $updated;
+        } catch (Throwable $error) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    public static function archiveEntry(string $userUuid, string $entryId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $entryId = self::normalizeUuid($entryId);
+        $affected = Database::execute(
+            'UPDATE ' . self::TABLE_NAME . '
+             SET is_active = 0,
+                 deactivated_at = COALESCE(deactivated_at, NOW()),
+                 replaced_by_entry_id = NULL
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$entryId, $userUuid]
+        );
+        return $affected > 0;
+    }
+
+    public static function deleteEntry(string $userUuid, string $entryId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $entryId = self::normalizeUuid($entryId);
+        $affected = Database::execute(
+            'DELETE FROM ' . self::TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$entryId, $userUuid]
+        );
+        return $affected > 0;
     }
 
     public static function decryptEntry(array $row): array
@@ -452,6 +628,356 @@ final class Valid8VaultEntryModel
         ];
     }
 
+    public static function listOwners(string $userUuid, bool $includeArchived = false): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $sql = 'SELECT id, user_id, name, is_archived, created_at, updated_at
+                FROM ' . self::OWNER_TABLE_NAME . '
+                WHERE user_id = ?';
+        $params = [$userUuid];
+        if (!$includeArchived) {
+            $sql .= ' AND is_archived = 0';
+        }
+        $sql .= ' ORDER BY name ASC, id ASC';
+        $rows = Database::queryAll($sql, $params);
+
+        $nameMap = [];
+        foreach ($rows as $row) {
+            $name = self::normalizeOwnerName($row['name'] ?? null);
+            $nameMap[strtolower($name)] = self::toLookupModel($row, 120);
+        }
+
+        $entryRows = Database::queryAll(
+            'SELECT DISTINCT owner_name AS name
+             FROM ' . self::TABLE_NAME . '
+             WHERE user_id = ?
+             ORDER BY owner_name ASC',
+            [$userUuid]
+        );
+        foreach ($entryRows as $row) {
+            $name = self::normalizeOwnerName($row['name'] ?? null);
+            $key = strtolower($name);
+            if (!isset($nameMap[$key])) {
+                $nameMap[$key] = [
+                    'id' => '',
+                    'user_id' => $userUuid,
+                    'name' => $name,
+                    'is_archived' => 0,
+                    'created_at' => '',
+                    'updated_at' => '',
+                ];
+            }
+        }
+
+        $list = array_values($nameMap);
+        usort($list, static fn(array $a, array $b): int => strcasecmp((string)$a['name'], (string)$b['name']));
+        return $list;
+    }
+
+    public static function listCategories(string $userUuid, bool $includeArchived = false): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $sql = 'SELECT id, user_id, name, is_archived, created_at, updated_at
+                FROM ' . self::CATEGORY_TABLE_NAME . '
+                WHERE user_id = ?';
+        $params = [$userUuid];
+        if (!$includeArchived) {
+            $sql .= ' AND is_archived = 0';
+        }
+        $sql .= ' ORDER BY name ASC, id ASC';
+        $rows = Database::queryAll($sql, $params);
+
+        $nameMap = [];
+        foreach ($rows as $row) {
+            $name = self::normalizeCategoryName($row['name'] ?? null);
+            $nameMap[strtolower($name)] = self::toLookupModel($row, 64);
+        }
+
+        $entryRows = Database::queryAll(
+            'SELECT DISTINCT category AS name
+             FROM ' . self::TABLE_NAME . '
+             WHERE user_id = ?
+             ORDER BY category ASC',
+            [$userUuid]
+        );
+        foreach ($entryRows as $row) {
+            $name = self::normalizeCategoryName($row['name'] ?? null);
+            $key = strtolower($name);
+            if (!isset($nameMap[$key])) {
+                $nameMap[$key] = [
+                    'id' => '',
+                    'user_id' => $userUuid,
+                    'name' => $name,
+                    'is_archived' => 0,
+                    'created_at' => '',
+                    'updated_at' => '',
+                ];
+            }
+        }
+
+        $list = array_values($nameMap);
+        usort($list, static fn(array $a, array $b): int => strcasecmp((string)$a['name'], (string)$b['name']));
+        return $list;
+    }
+
+    public static function createOwner(string $userUuid, string $name): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $normalized = self::normalizeOwnerName($name);
+        $id = self::generateUuidV4();
+        Database::execute(
+            'INSERT INTO ' . self::OWNER_TABLE_NAME . ' (id, user_id, name, is_archived) VALUES (?, ?, ?, 0)',
+            [$id, $userUuid, $normalized]
+        );
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::OWNER_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$id, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Owner created but could not be reloaded');
+        }
+        return self::toLookupModel($row, 120);
+    }
+
+    public static function createCategory(string $userUuid, string $name): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $normalized = self::normalizeCategoryName($name);
+        $id = self::generateUuidV4();
+        Database::execute(
+            'INSERT INTO ' . self::CATEGORY_TABLE_NAME . ' (id, user_id, name, is_archived) VALUES (?, ?, ?, 0)',
+            [$id, $userUuid, $normalized]
+        );
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::CATEGORY_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$id, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Category created but could not be reloaded');
+        }
+        return self::toLookupModel($row, 64);
+    }
+
+    public static function updateOwner(string $userUuid, string $ownerId, string $name): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $ownerId = self::normalizeUuid($ownerId);
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::OWNER_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$ownerId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Owner not found');
+        }
+        $oldName = self::normalizeOwnerName($row['name'] ?? null);
+        $newName = self::normalizeOwnerName($name);
+
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE ' . self::OWNER_TABLE_NAME . '
+                 SET name = ?
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$newName, $ownerId, $userUuid]
+            );
+            Database::execute(
+                'UPDATE ' . self::TABLE_NAME . '
+                 SET owner_name = ?
+                 WHERE user_id = ? AND owner_name = ?',
+                [$newName, $userUuid, $oldName]
+            );
+            $updated = Database::queryOne(
+                'SELECT id, user_id, name, is_archived, created_at, updated_at
+                 FROM ' . self::OWNER_TABLE_NAME . '
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$ownerId, $userUuid]
+            );
+            if ($updated === null) {
+                throw new RuntimeException('Owner was updated but could not be reloaded');
+            }
+            Database::commit();
+            return self::toLookupModel($updated, 120);
+        } catch (Throwable $error) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    public static function updateCategory(string $userUuid, string $categoryId, string $name): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $categoryId = self::normalizeUuid($categoryId);
+        $row = Database::queryOne(
+            'SELECT id, user_id, name, is_archived, created_at, updated_at
+             FROM ' . self::CATEGORY_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$categoryId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Category not found');
+        }
+        $oldName = self::normalizeCategoryName($row['name'] ?? null);
+        $newName = self::normalizeCategoryName($name);
+
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE ' . self::CATEGORY_TABLE_NAME . '
+                 SET name = ?
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$newName, $categoryId, $userUuid]
+            );
+            Database::execute(
+                'UPDATE ' . self::TABLE_NAME . '
+                 SET category = ?
+                 WHERE user_id = ? AND category = ?',
+                [$newName, $userUuid, $oldName]
+            );
+            $updated = Database::queryOne(
+                'SELECT id, user_id, name, is_archived, created_at, updated_at
+                 FROM ' . self::CATEGORY_TABLE_NAME . '
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$categoryId, $userUuid]
+            );
+            if ($updated === null) {
+                throw new RuntimeException('Category was updated but could not be reloaded');
+            }
+            Database::commit();
+            return self::toLookupModel($updated, 64);
+        } catch (Throwable $error) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    public static function archiveOwner(string $userUuid, string $ownerId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $ownerId = self::normalizeUuid($ownerId);
+        $affected = Database::execute(
+            'UPDATE ' . self::OWNER_TABLE_NAME . '
+             SET is_archived = 1
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$ownerId, $userUuid]
+        );
+        return $affected > 0;
+    }
+
+    public static function archiveCategory(string $userUuid, string $categoryId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $categoryId = self::normalizeUuid($categoryId);
+        $affected = Database::execute(
+            'UPDATE ' . self::CATEGORY_TABLE_NAME . '
+             SET is_archived = 1
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$categoryId, $userUuid]
+        );
+        return $affected > 0;
+    }
+
+    public static function deleteOwner(string $userUuid, string $ownerId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $ownerId = self::normalizeUuid($ownerId);
+        $row = Database::queryOne(
+            'SELECT name FROM ' . self::OWNER_TABLE_NAME . ' WHERE id = ? AND user_id = ? LIMIT 1',
+            [$ownerId, $userUuid]
+        );
+        if ($row === null) {
+            return false;
+        }
+        $name = self::normalizeOwnerName($row['name'] ?? null);
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE ' . self::TABLE_NAME . '
+                 SET owner_name = "Unassigned"
+                 WHERE user_id = ? AND owner_name = ?',
+                [$userUuid, $name]
+            );
+            $affected = Database::execute(
+                'DELETE FROM ' . self::OWNER_TABLE_NAME . '
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$ownerId, $userUuid]
+            );
+            Database::commit();
+            return $affected > 0;
+        } catch (Throwable $error) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    public static function deleteCategory(string $userUuid, string $categoryId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $categoryId = self::normalizeUuid($categoryId);
+        $row = Database::queryOne(
+            'SELECT name FROM ' . self::CATEGORY_TABLE_NAME . ' WHERE id = ? AND user_id = ? LIMIT 1',
+            [$categoryId, $userUuid]
+        );
+        if ($row === null) {
+            return false;
+        }
+        $name = self::normalizeCategoryName($row['name'] ?? null);
+        Database::beginTransaction();
+        try {
+            Database::execute(
+                'UPDATE ' . self::TABLE_NAME . '
+                 SET category = "General"
+                 WHERE user_id = ? AND category = ?',
+                [$userUuid, $name]
+            );
+            $affected = Database::execute(
+                'DELETE FROM ' . self::CATEGORY_TABLE_NAME . '
+                 WHERE id = ? AND user_id = ?
+                 LIMIT 1',
+                [$categoryId, $userUuid]
+            );
+            Database::commit();
+            return $affected > 0;
+        } catch (Throwable $error) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $error;
+        }
+    }
+
     private static function ensureUsersUuidColumn(): void
     {
         if (function_exists('catn8_users_table_ensure')) {
@@ -650,6 +1176,12 @@ final class Valid8VaultEntryModel
         return $owner === '' ? 'Unassigned' : $owner;
     }
 
+    private static function normalizeCategoryName($value): string
+    {
+        $category = self::normalizeText((string)($value ?? ''), 64);
+        return $category === '' ? 'General' : $category;
+    }
+
     private static function normalizeNullableUrl($value): ?string
     {
         $url = self::normalizeNullableText($value, 2048);
@@ -668,6 +1200,18 @@ final class Valid8VaultEntryModel
             }
         }
         return null;
+    }
+
+    private static function toLookupModel(array $row, int $nameMaxLen): array
+    {
+        return [
+            'id' => (string)($row['id'] ?? ''),
+            'user_id' => (string)($row['user_id'] ?? ''),
+            'name' => self::normalizeText((string)($row['name'] ?? ''), $nameMaxLen),
+            'is_archived' => (int)($row['is_archived'] ?? 0),
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'updated_at' => (string)($row['updated_at'] ?? ''),
+        ];
     }
 
     private static function normalizeBool($value): int

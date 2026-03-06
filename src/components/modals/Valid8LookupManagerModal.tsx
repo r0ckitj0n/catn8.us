@@ -153,7 +153,7 @@ export function Valid8LookupManagerModal({
                   {items.map((item) => (
                     <tr key={item.id || item.name}>
                       <td>
-                        {editId === item.id ? (
+                        {editId !== '' && editId === item.id ? (
                           <div className="d-flex align-items-center gap-2">
                             <input
                               className="form-control form-control-sm"

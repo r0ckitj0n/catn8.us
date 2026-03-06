@@ -4,6 +4,7 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useValid8 } from '../../hooks/useValid8';
 import { Valid8VaultEntryWithSecrets } from '../../types/valid8';
 import { StandardIconButton } from '../common/StandardIconButton';
+import { StandardIcon } from '../common/StandardIcon';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { Valid8LookupManagerModal } from '../modals/Valid8LookupManagerModal';
 import { Valid8EntryEditModal } from '../modals/Valid8EntryEditModal';
@@ -18,6 +19,16 @@ function formatDate(value: string): string {
 }
 
 type SortColumn = 'title' | 'username' | 'email_address' | 'category' | 'owner_name' | 'is_active' | 'updated_at';
+
+interface EntryDraft {
+  title: string;
+  username: string;
+  email_address: string;
+  password: string;
+  owner_name: string;
+  category: string;
+  is_active: number;
+}
 
 export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: AppShellPageProps) {
   const isAuthed = Boolean(viewer?.id);
@@ -55,6 +66,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
   const [ownerFilter, setOwnerFilter] = React.useState('');
   const [sortBy, setSortBy] = React.useState<SortColumn>('updated_at');
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc');
+  const [drafts, setDrafts] = React.useState<Record<string, EntryDraft>>({});
   const [ownerModalOpen, setOwnerModalOpen] = React.useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = React.useState(false);
   const [editingEntryId, setEditingEntryId] = React.useState('');
@@ -126,6 +138,16 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     [editingEntryId, entries],
   );
 
+  React.useEffect(() => {
+    setDrafts((prev) => {
+      const next: Record<string, EntryDraft> = {};
+      visibleEntries.forEach((entry) => {
+        next[entry.id] = prev[entry.id] || makeDraft(entry);
+      });
+      return next;
+    });
+  }, [visibleEntries]);
+
   const toggleSort = React.useCallback((nextSortBy: SortColumn) => {
     setSortBy((prevSortBy) => {
       if (prevSortBy !== nextSortBy) {
@@ -143,6 +165,39 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     }
     return sortDir === 'asc' ? ' ▲' : ' ▼';
   }, [sortBy, sortDir]);
+
+  const patchDraft = React.useCallback((entryId: string, patch: Partial<EntryDraft>) => {
+    setDrafts((prev) => {
+      const current = prev[entryId];
+      if (!current) {
+        return prev;
+      }
+      return { ...prev, [entryId]: { ...current, ...patch } };
+    });
+  }, []);
+
+  const saveInlineDraft = React.useCallback(async (entry: Valid8VaultEntryWithSecrets) => {
+    const draft = drafts[entry.id];
+    if (!draft || !isDirty(entry, draft)) {
+      return;
+    }
+    try {
+      await updateEntry({
+        entry_id: entry.id,
+        title: draft.title,
+        username: draft.username,
+        email_address: blankToNull(draft.email_address),
+        password: draft.password,
+        owner_name: draft.owner_name,
+        category: draft.category,
+        is_active: draft.is_active,
+      });
+    } catch (error: any) {
+      if (onToast) {
+        onToast({ tone: 'error', message: String(error?.message || 'Failed to update entry') });
+      }
+    }
+  }, [drafts, onToast, updateEntry]);
 
   const saveEntry = React.useCallback(async (payload: {
     entry_id: string;
@@ -291,65 +346,117 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('category')}>Category{sortIndicator('category')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('is_active')}>Active{sortIndicator('is_active')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('updated_at')}>Updated{sortIndicator('updated_at')}</button></th>
-                          <th scope="col">Attach image</th>
-                          <th scope="col" className="text-end">Actions</th>
+                          <th scope="col" className="text-end valid8-actions-column">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {visibleEntries.map((entry) => {
+                          const draft = drafts[entry.id] || makeDraft(entry);
                           const attachments = attachmentsByEntryId[entry.id] || [];
+                          const hasAttachments = attachments.length > 0;
                           return (
                             <tr key={entry.id} className="valid8-entry-row">
-                              <td>{entry.title || '-'}</td>
-                              <td>{entry.username || '-'}</td>
-                              <td>{entry.email_address || '-'}</td>
-                              <td>{entry.owner_name || '-'}</td>
-                              <td>{entry.category || '-'}</td>
-                              <td>{Number(entry.is_active || 0) === 1 ? 'Yes' : 'No'}</td>
-                              <td className="small text-muted">{formatDate(entry.updated_at)}</td>
                               <td>
-                                <div className="d-flex flex-wrap align-items-center gap-2">
-                                  {attachments.map((attachment) => (
-                                    <div key={attachment.id} className="valid8-inline-attachment">
-                                      <a href={attachment.download_url} target="_blank" rel="noreferrer">
-                                        <img
-                                          src={attachment.download_url}
-                                          alt={attachment.original_filename || 'Attachment'}
-                                          className="valid8-attachment-image"
-                                          loading="lazy"
-                                        />
-                                      </a>
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-danger valid8-attachment-remove-btn"
-                                        onClick={() => void deleteAttachment(entry.id, attachment.id)}
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={draft.title}
+                                  onChange={(event) => patchDraft(entry.id, { title: event.target.value })}
+                                  onBlur={() => void saveInlineDraft(entry)}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={draft.username}
+                                  onChange={(event) => patchDraft(entry.id, { username: event.target.value })}
+                                  onBlur={() => void saveInlineDraft(entry)}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={draft.email_address}
+                                  onChange={(event) => patchDraft(entry.id, { email_address: event.target.value })}
+                                  onBlur={() => void saveInlineDraft(entry)}
+                                />
+                              </td>
+                              <td>
+                                <select
+                                  className="form-select form-select-sm"
+                                  value={draft.owner_name}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    patchDraft(entry.id, { owner_name: value });
+                                    void updateEntry({ entry_id: entry.id, owner_name: value });
+                                  }}
+                                >
+                                  {ownerOptions.map((owner) => (
+                                    <option key={`${entry.id}-owner-${owner}`} value={owner}>{owner}</option>
                                   ))}
+                                  {ownerOptions.includes(draft.owner_name) ? null : (
+                                    <option value={draft.owner_name}>{draft.owner_name}</option>
+                                  )}
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  className="form-select form-select-sm"
+                                  value={draft.category}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    patchDraft(entry.id, { category: value });
+                                    void updateEntry({ entry_id: entry.id, category: value });
+                                  }}
+                                >
+                                  {categoryOptions.map((category) => (
+                                    <option key={`${entry.id}-category-${category}`} value={category}>{category}</option>
+                                  ))}
+                                  {categoryOptions.includes(draft.category) ? null : (
+                                    <option value={draft.category}>{draft.category}</option>
+                                  )}
+                                </select>
+                              </td>
+                              <td>
+                                <label className="d-inline-flex align-items-center gap-2">
                                   <input
-                                    id={`valid8-attach-${entry.id}`}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp,image/gif"
-                                    className="form-control form-control-sm valid8-attach-input"
-                                    aria-label={`Attach image for ${entry.title || entry.username || 'entry'}`}
+                                    type="checkbox"
+                                    checked={Number(draft.is_active || 0) === 1}
                                     onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      if (file) {
-                                        void uploadAttachment(entry.id, file);
-                                      }
-                                      event.currentTarget.value = '';
+                                      const value = event.target.checked ? 1 : 0;
+                                      patchDraft(entry.id, { is_active: value });
+                                      void updateEntry({ entry_id: entry.id, is_active: value });
                                     }}
                                   />
-                                </div>
+                                </label>
                               </td>
-                              <td className="text-end">
+                              <td className="small text-muted">{formatDate(entry.updated_at)}</td>
+                              <td className="text-end valid8-actions-column">
                                 <div className="d-inline-flex gap-2 valid8-row-actions">
+                                  <label
+                                    className={`btn btn-sm catn8-action-icon-btn valid8-attachment-trigger ${hasAttachments ? 'valid8-attachment-trigger--has-attachment' : 'valid8-attachment-trigger--empty'}`}
+                                    aria-label={`Attach image for ${entry.title || entry.username || 'entry'}`}
+                                    title={hasAttachments ? 'Manage attachment in full record' : 'Upload attachment'}
+                                  >
+                                    <StandardIcon iconKey="upload" className="catn8-icon-btn-glyph" />
+                                    <input
+                                      id={`valid8-attach-${entry.id}`}
+                                      type="file"
+                                      accept="image/jpeg,image/png,image/webp,image/gif"
+                                      className="valid8-attach-input"
+                                      aria-label={`Attach image for ${entry.title || entry.username || 'entry'}`}
+                                      onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) {
+                                          void uploadAttachment(entry.id, file);
+                                        }
+                                        event.currentTarget.value = '';
+                                      }}
+                                    />
+                                  </label>
                                   <StandardIconButton
                                     iconKey="edit"
                                     ariaLabel={`Edit ${entry.title || entry.username || 'entry'}`}
-                                    title="Edit entry"
+                                    title="Edit full record"
                                     className="btn btn-sm btn-outline-secondary catn8-action-icon-btn"
                                     onClick={() => setEditingEntryId(entry.id)}
                                   />
@@ -442,4 +549,31 @@ function compareEntries(
     result = compareText(String(a.title || ''), String(b.title || ''));
   }
   return result * direction;
+}
+
+function makeDraft(entry: Valid8VaultEntryWithSecrets): EntryDraft {
+  return {
+    title: String(entry.title || ''),
+    username: String(entry.username || ''),
+    email_address: String(entry.email_address || ''),
+    password: String(entry.password || ''),
+    owner_name: String(entry.owner_name || 'Unassigned'),
+    category: String(entry.category || 'General'),
+    is_active: Number(entry.is_active || 0) ? 1 : 0,
+  };
+}
+
+function isDirty(entry: Valid8VaultEntryWithSecrets, draft: EntryDraft): boolean {
+  return String(entry.title || '') !== draft.title
+    || String(entry.username || '') !== draft.username
+    || String(entry.email_address || '') !== draft.email_address
+    || String(entry.password || '') !== draft.password
+    || String(entry.owner_name || 'Unassigned') !== draft.owner_name
+    || String(entry.category || 'General') !== draft.category
+    || Number(entry.is_active || 0) !== Number(draft.is_active || 0);
+}
+
+function blankToNull(value: string): string | null {
+  const trimmed = String(value || '').trim();
+  return trimmed === '' ? null : trimmed;
 }

@@ -210,6 +210,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `notes_encrypted` (LONGBLOB, NULLABLE)
 - `notes_auth_tag` (VARBINARY(16), NULLABLE)
 - `category` (VARCHAR(64))
+- `owner_name` (VARCHAR(120), default `Unassigned`)
 - `is_favorite` (TINYINT(1), DEFAULT 0)
 - `password_strength` (TINYINT UNSIGNED, 1-5)
 - `is_active` (TINYINT(1), DEFAULT 1)
@@ -223,6 +224,20 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 - Unique key: (`user_id`, `entry_fingerprint`)
+- Index: (`user_id`, `owner_name`, `is_active`)
+
+### vault_entry_attachments
+- `id` (CHAR(36), PRIMARY KEY, UUID)
+- `entry_id` (CHAR(36), FOREIGN KEY -> vault_entries.id)
+- `user_id` (CHAR(36), FOREIGN KEY -> users.uuid)
+- `original_filename` (VARCHAR(191))
+- `mime_type` (VARCHAR(120))
+- `size_bytes` (INT UNSIGNED)
+- `image_encrypted` (LONGBLOB)
+- `image_auth_tag` (VARBINARY(16))
+- `encryption_iv` (VARBINARY(12))
+- `created_at` (TIMESTAMP)
+- Index: (`user_id`, `entry_id`, `created_at`)
 
 ## Photo Albums Tables
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 final class Valid8VaultEntryModel
 {
     private const TABLE_NAME = 'vault_entries';
+    private const ATTACHMENT_TABLE_NAME = 'vault_entry_attachments';
     private const KEY_SECRET_NAME = 'catn8.valid8.data_key';
     private const KEY_ENV_NAME = 'CATN8_VALID8_DATA_KEY';
 
@@ -25,6 +26,7 @@ final class Valid8VaultEntryModel
             notes_encrypted LONGBLOB NULL,
             notes_auth_tag VARBINARY(16) NULL,
             category VARCHAR(64) NOT NULL,
+            owner_name VARCHAR(120) NOT NULL DEFAULT 'Unassigned',
             is_favorite TINYINT(1) NOT NULL DEFAULT 0,
             password_strength TINYINT UNSIGNED NOT NULL DEFAULT 1,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -40,6 +42,7 @@ final class Valid8VaultEntryModel
             KEY idx_vault_entries_user_id (user_id),
             KEY idx_vault_entries_user_active (user_id, is_active, updated_at),
             KEY idx_vault_entries_user_category_active (user_id, category, is_active),
+            KEY idx_vault_entries_user_owner_active (user_id, owner_name, is_active),
             KEY idx_vault_entries_user_account_active (user_id, account_fingerprint, is_active),
             UNIQUE KEY uniq_vault_entries_user_entry_fp (user_id, entry_fingerprint),
             CONSTRAINT fk_vault_entries_user_uuid FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE,
@@ -47,6 +50,27 @@ final class Valid8VaultEntryModel
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         self::ensureAddedColumns();
+        self::ensureAttachmentSchema();
+    }
+
+    private static function ensureAttachmentSchema(): void
+    {
+        Database::execute("CREATE TABLE IF NOT EXISTS vault_entry_attachments (
+            id CHAR(36) NOT NULL PRIMARY KEY,
+            entry_id CHAR(36) NOT NULL,
+            user_id CHAR(36) NOT NULL,
+            original_filename VARCHAR(191) NOT NULL,
+            mime_type VARCHAR(120) NOT NULL,
+            size_bytes INT UNSIGNED NOT NULL,
+            image_encrypted LONGBLOB NOT NULL,
+            image_auth_tag VARBINARY(16) NOT NULL,
+            encryption_iv VARBINARY(12) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_vault_attach_user_entry_created (user_id, entry_id, created_at),
+            KEY idx_vault_attach_entry_created (entry_id, created_at),
+            CONSTRAINT fk_vault_attach_entry FOREIGN KEY (entry_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
+            CONSTRAINT fk_vault_attach_user_uuid FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     public static function createEntry(array $input): array
@@ -67,6 +91,7 @@ final class Valid8VaultEntryModel
         if ($category === '') {
             throw new RuntimeException('Category is required');
         }
+        $ownerName = self::normalizeOwnerName($input['owner_name'] ?? null);
 
         $sourceTab = self::normalizeNullableText($input['source_tab'] ?? null, 191);
         $sourceDocument = self::normalizeNullableText($input['source_document'] ?? null, 191);
@@ -75,11 +100,11 @@ final class Valid8VaultEntryModel
         $lastChangedAt = self::normalizeDatetime($input['last_changed_at'] ?? date('c'));
         $isActive = self::normalizeBool($input['is_active'] ?? true);
 
-        $accountFingerprint = self::computeAccountFingerprint($title, $url, $username);
-        $entryFingerprint = self::computeEntryFingerprint($title, $url, $username, $password, $notes);
+        $accountFingerprint = self::computeAccountFingerprint($title, $url, $username, $ownerName);
+        $entryFingerprint = self::computeEntryFingerprint($title, $url, $username, $password, $notes, $ownerName);
 
         $existing = Database::queryOne(
-            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
              FROM vault_entries
              WHERE user_id = ? AND entry_fingerprint = ?
              LIMIT 1',
@@ -98,8 +123,8 @@ final class Valid8VaultEntryModel
         try {
             Database::execute(
                 'INSERT INTO vault_entries
-                    (id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
+                    (id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
                 [
                     $id,
                     $userUuid,
@@ -113,6 +138,7 @@ final class Valid8VaultEntryModel
                     $encrypted['notes_encrypted'],
                     $encrypted['notes_auth_tag'],
                     $category,
+                    $ownerName,
                     $isFavorite,
                     $passwordStrength,
                     $isActive,
@@ -161,7 +187,7 @@ final class Valid8VaultEntryModel
         self::ensureSchema();
         $userUuid = self::normalizeUuid($userUuid);
 
-        $sql = 'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+        $sql = 'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
                 FROM vault_entries
                 WHERE user_id = ?';
         $params = [$userUuid];
@@ -191,6 +217,7 @@ final class Valid8VaultEntryModel
             'title' => (string)($row['title'] ?? ''),
             'url' => self::nullableString($row['url'] ?? null),
             'category' => (string)($row['category'] ?? ''),
+            'owner_name' => self::normalizeOwnerName($row['owner_name'] ?? null),
             'is_favorite' => (int)($row['is_favorite'] ?? 0),
             'password_strength' => (int)($row['password_strength'] ?? 1),
             'is_active' => (int)($row['is_active'] ?? 1),
@@ -275,12 +302,154 @@ final class Valid8VaultEntryModel
         $entryId = self::normalizeUuid($entryId);
         $userUuid = self::normalizeUuid($userUuid);
         return Database::queryOne(
-            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
+            'SELECT id, user_id, title, url, username_encrypted, username_auth_tag, password_encrypted, password_auth_tag, encryption_iv, notes_encrypted, notes_auth_tag, category, owner_name, is_favorite, password_strength, is_active, replaced_by_entry_id, source_tab, source_document, account_fingerprint, entry_fingerprint, last_changed_at, deactivated_at, created_at, updated_at
              FROM vault_entries
              WHERE id = ? AND user_id = ?
              LIMIT 1',
             [$entryId, $userUuid]
         );
+    }
+
+    public static function listAttachments(string $userUuid, ?string $entryId = null): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+
+        $sql = 'SELECT id, entry_id, user_id, original_filename, mime_type, size_bytes, created_at
+                FROM ' . self::ATTACHMENT_TABLE_NAME . '
+                WHERE user_id = ?';
+        $params = [$userUuid];
+        if ($entryId !== null && trim($entryId) !== '') {
+            $sql .= ' AND entry_id = ?';
+            $params[] = self::normalizeUuid($entryId);
+        }
+        $sql .= ' ORDER BY created_at DESC, id DESC';
+
+        return Database::queryAll($sql, $params);
+    }
+
+    public static function addAttachment(
+        string $userUuid,
+        string $entryId,
+        string $originalFilename,
+        string $mimeType,
+        string $imageBytes
+    ): array {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $entryId = self::normalizeUuid($entryId);
+
+        $filename = self::normalizeText($originalFilename, 191);
+        if ($filename === '') {
+            $filename = 'attachment';
+        }
+        $mime = strtolower(self::normalizeText($mimeType, 120));
+        if ($mime === '') {
+            throw new RuntimeException('Attachment mime_type is required');
+        }
+        if (strpos($mime, 'image/') !== 0) {
+            throw new RuntimeException('Only image attachments are allowed');
+        }
+        $sizeBytes = strlen($imageBytes);
+        if ($sizeBytes <= 0) {
+            throw new RuntimeException('Attachment payload is empty');
+        }
+
+        $entry = self::getEntryRow($entryId, $userUuid);
+        if ($entry === null) {
+            throw new RuntimeException('Vault entry not found');
+        }
+
+        $iv = random_bytes(12);
+        $encrypted = self::encryptField($imageBytes, $iv, 'attachment-image');
+        $attachmentId = self::generateUuidV4();
+
+        Database::execute(
+            'INSERT INTO ' . self::ATTACHMENT_TABLE_NAME . '
+                (id, entry_id, user_id, original_filename, mime_type, size_bytes, image_encrypted, image_auth_tag, encryption_iv)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $attachmentId,
+                $entryId,
+                $userUuid,
+                $filename,
+                $mime,
+                $sizeBytes,
+                $encrypted['ciphertext'],
+                $encrypted['tag'],
+                $iv,
+            ]
+        );
+
+        $row = Database::queryOne(
+            'SELECT id, entry_id, user_id, original_filename, mime_type, size_bytes, created_at
+             FROM ' . self::ATTACHMENT_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$attachmentId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Attachment was stored but could not be reloaded');
+        }
+
+        return self::toAttachmentModel($row);
+    }
+
+    public static function getAttachmentContent(string $userUuid, string $attachmentId): array
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $attachmentId = self::normalizeUuid($attachmentId);
+
+        $row = Database::queryOne(
+            'SELECT id, entry_id, user_id, original_filename, mime_type, size_bytes, image_encrypted, image_auth_tag, encryption_iv, created_at
+             FROM ' . self::ATTACHMENT_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$attachmentId, $userUuid]
+        );
+        if ($row === null) {
+            throw new RuntimeException('Attachment not found');
+        }
+
+        $iv = (string)($row['encryption_iv'] ?? '');
+        $ciphertext = (string)($row['image_encrypted'] ?? '');
+        $authTag = (string)($row['image_auth_tag'] ?? '');
+        $bytes = self::decryptField($ciphertext, $authTag, $iv, 'attachment-image');
+
+        return [
+            'attachment' => self::toAttachmentModel($row),
+            'bytes' => $bytes,
+            'mime_type' => (string)($row['mime_type'] ?? 'application/octet-stream'),
+            'filename' => self::normalizeText((string)($row['original_filename'] ?? 'attachment'), 191) ?: 'attachment',
+        ];
+    }
+
+    public static function deleteAttachment(string $userUuid, string $attachmentId): bool
+    {
+        self::ensureSchema();
+        $userUuid = self::normalizeUuid($userUuid);
+        $attachmentId = self::normalizeUuid($attachmentId);
+        $deleted = Database::execute(
+            'DELETE FROM ' . self::ATTACHMENT_TABLE_NAME . '
+             WHERE id = ? AND user_id = ?
+             LIMIT 1',
+            [$attachmentId, $userUuid]
+        );
+        return $deleted > 0;
+    }
+
+    public static function toAttachmentModel(array $row): array
+    {
+        return [
+            'id' => (string)($row['id'] ?? ''),
+            'entry_id' => (string)($row['entry_id'] ?? ''),
+            'user_id' => (string)($row['user_id'] ?? ''),
+            'original_filename' => self::normalizeText((string)($row['original_filename'] ?? ''), 191),
+            'mime_type' => self::normalizeText((string)($row['mime_type'] ?? ''), 120),
+            'size_bytes' => (int)($row['size_bytes'] ?? 0),
+            'created_at' => (string)($row['created_at'] ?? ''),
+        ];
     }
 
     private static function ensureUsersUuidColumn(): void
@@ -354,12 +523,18 @@ final class Valid8VaultEntryModel
         if (!self::tableHasColumn(self::TABLE_NAME, 'deactivated_at')) {
             Database::execute('ALTER TABLE vault_entries ADD COLUMN deactivated_at DATETIME NULL AFTER last_changed_at');
         }
+        if (!self::tableHasColumn(self::TABLE_NAME, 'owner_name')) {
+            Database::execute("ALTER TABLE vault_entries ADD COLUMN owner_name VARCHAR(120) NOT NULL DEFAULT 'Unassigned' AFTER category");
+        }
 
         if (!self::tableHasIndex(self::TABLE_NAME, 'idx_vault_entries_user_active')) {
             Database::execute('ALTER TABLE vault_entries ADD KEY idx_vault_entries_user_active (user_id, is_active, updated_at)');
         }
         if (!self::tableHasIndex(self::TABLE_NAME, 'idx_vault_entries_user_category_active')) {
             Database::execute('ALTER TABLE vault_entries ADD KEY idx_vault_entries_user_category_active (user_id, category, is_active)');
+        }
+        if (!self::tableHasIndex(self::TABLE_NAME, 'idx_vault_entries_user_owner_active')) {
+            Database::execute('ALTER TABLE vault_entries ADD KEY idx_vault_entries_user_owner_active (user_id, owner_name, is_active)');
         }
         if (!self::tableHasIndex(self::TABLE_NAME, 'idx_vault_entries_user_account_active')) {
             Database::execute('ALTER TABLE vault_entries ADD KEY idx_vault_entries_user_account_active (user_id, account_fingerprint, is_active)');
@@ -370,8 +545,9 @@ final class Valid8VaultEntryModel
 
         Database::execute(
             'UPDATE vault_entries
-             SET account_fingerprint = COALESCE(account_fingerprint, LOWER(SHA2(CONCAT_WS("|", COALESCE(title, ""), COALESCE(url, ""), COALESCE(HEX(username_encrypted), "")), 256))),
-                 entry_fingerprint = COALESCE(entry_fingerprint, LOWER(SHA2(CONCAT_WS("|", COALESCE(title, ""), COALESCE(url, ""), COALESCE(HEX(username_encrypted), ""), COALESCE(HEX(password_encrypted), "")), 256)))
+             SET owner_name = CASE WHEN owner_name IS NULL OR TRIM(owner_name) = "" THEN "Unassigned" ELSE owner_name END,
+                 account_fingerprint = COALESCE(account_fingerprint, LOWER(SHA2(CONCAT_WS("|", COALESCE(title, ""), COALESCE(url, ""), COALESCE(owner_name, ""), COALESCE(HEX(username_encrypted), "")), 256))),
+                 entry_fingerprint = COALESCE(entry_fingerprint, LOWER(SHA2(CONCAT_WS("|", COALESCE(title, ""), COALESCE(url, ""), COALESCE(owner_name, ""), COALESCE(HEX(username_encrypted), ""), COALESCE(HEX(password_encrypted), "")), 256)))
              WHERE account_fingerprint IS NULL OR entry_fingerprint IS NULL'
         );
 
@@ -468,6 +644,12 @@ final class Valid8VaultEntryModel
         return $normalized === '' ? null : $normalized;
     }
 
+    private static function normalizeOwnerName($value): string
+    {
+        $owner = self::normalizeText((string)($value ?? ''), 120);
+        return $owner === '' ? 'Unassigned' : $owner;
+    }
+
     private static function normalizeNullableUrl($value): ?string
     {
         $url = self::normalizeNullableText($value, 2048);
@@ -537,21 +719,23 @@ final class Valid8VaultEntryModel
         return trim($v);
     }
 
-    private static function computeAccountFingerprint(string $title, ?string $url, string $username): string
+    private static function computeAccountFingerprint(string $title, ?string $url, string $username, string $ownerName): string
     {
         $payload = implode('|', [
             self::canonicalize($title),
             self::canonicalize($url),
+            self::canonicalize($ownerName),
             self::canonicalize($username),
         ]);
         return self::hmacFingerprint($payload, 'account-fingerprint');
     }
 
-    private static function computeEntryFingerprint(string $title, ?string $url, string $username, string $password, ?string $notes): string
+    private static function computeEntryFingerprint(string $title, ?string $url, string $username, string $password, ?string $notes, string $ownerName): string
     {
         $payload = implode('|', [
             self::canonicalize($title),
             self::canonicalize($url),
+            self::canonicalize($ownerName),
             self::canonicalize($username),
             self::canonicalize($password),
             self::canonicalize($notes),

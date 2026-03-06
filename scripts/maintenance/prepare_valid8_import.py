@@ -38,6 +38,7 @@ HEADER_ALIASES = {
     "is_favorite": ("favorite", "favourite", "star", "is_favorite"),
     "password_strength": ("password strength", "strength", "security"),
     "last_changed_at": ("last changed", "changed", "updated", "last updated", "modified", "date changed"),
+    "owner_name": ("owner", "person", "belongs to", "password owner", "owned by"),
 }
 
 
@@ -84,7 +85,31 @@ def sheet_implies_inactive(sheet_name: str) -> bool:
     return False
 
 
-def row_to_record(row: List[str], cols: Dict[str, int], default_category: str, default_active: bool, source_doc: str, source_tab: str) -> Optional[Dict[str, object]]:
+def is_generic_sheet_name(value: str) -> bool:
+    s = (value or "").strip().lower()
+    return bool(re.fullmatch(r"sheet\s*\d*", s))
+
+
+def derive_owner_from_tab(tab_name: str) -> str:
+    s = (tab_name or "").strip()
+    if not s or is_generic_sheet_name(s):
+        return ""
+    m = re.match(r"^(.*?)\s+(?:19|20)\d{2}[-_/\.](?:0[1-9]|1[0-2])[-_/\.](?:0[1-9]|[12]\d|3[01])$", s)
+    if m:
+        return m.group(1).strip()
+    return s
+
+
+def row_to_record(
+    row: List[str],
+    cols: Dict[str, int],
+    default_category: str,
+    default_active: bool,
+    source_doc: str,
+    source_tab: str,
+    default_owner: str,
+    tab_owner: str,
+) -> Optional[Dict[str, object]]:
     def get(name: str) -> str:
         i = cols.get(name)
         if i is None or i >= len(row):
@@ -102,6 +127,7 @@ def row_to_record(row: List[str], cols: Dict[str, int], default_category: str, d
         return None
 
     category = get("category") or default_category or "Imported"
+    owner_name = get("owner_name") or tab_owner or default_owner or "Unassigned"
     notes = get("notes")
     active = parse_bool(get("is_active"), default_active)
 
@@ -112,6 +138,7 @@ def row_to_record(row: List[str], cols: Dict[str, int], default_category: str, d
         "password": password,
         "notes": notes or None,
         "category": category,
+        "owner_name": owner_name,
         "is_active": 1 if active else 0,
         "is_favorite": 1 if parse_bool(get("is_favorite"), False) else 0,
         "password_strength": get("password_strength") or "",
@@ -122,7 +149,14 @@ def row_to_record(row: List[str], cols: Dict[str, int], default_category: str, d
     return rec
 
 
-def parse_csv_bytes(data: bytes, source_doc: str, tab_name: str) -> List[Dict[str, object]]:
+def parse_csv_bytes(
+    data: bytes,
+    source_doc: str,
+    tab_name: str,
+    default_owner: str,
+    source_owner: str,
+    default_category: str,
+) -> List[Dict[str, object]]:
     text = data.decode("utf-8-sig", errors="replace")
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
@@ -131,15 +165,16 @@ def parse_csv_bytes(data: bytes, source_doc: str, tab_name: str) -> List[Dict[st
     headers = rows[0]
     cols = detect_columns(headers)
     inactive = sheet_implies_inactive(tab_name)
+    tab_owner = source_owner or derive_owner_from_tab(tab_name)
     records: List[Dict[str, object]] = []
     for raw in rows[1:]:
-        rec = row_to_record(raw, cols, tab_name, not inactive, source_doc, tab_name)
+        rec = row_to_record(raw, cols, default_category or tab_name, not inactive, source_doc, tab_name, default_owner, tab_owner)
         if rec:
             records.append(rec)
     return records
 
 
-def parse_xlsx(path: Path, source_doc: str) -> List[Dict[str, object]]:
+def parse_xlsx(path: Path, source_doc: str, default_owner: str, source_owner: str, default_category: str) -> List[Dict[str, object]]:
     wb = load_workbook(path, data_only=True, read_only=True)
     all_records: List[Dict[str, object]] = []
     for ws in wb.worksheets:
@@ -149,9 +184,10 @@ def parse_xlsx(path: Path, source_doc: str) -> List[Dict[str, object]]:
         headers = ["" if v is None else str(v) for v in rows[0]]
         cols = detect_columns(headers)
         inactive = sheet_implies_inactive(ws.title)
+        tab_owner = source_owner or derive_owner_from_tab(ws.title)
         for values in rows[1:]:
             raw = ["" if v is None else str(v) for v in values]
-            rec = row_to_record(raw, cols, ws.title, not inactive, source_doc, ws.title)
+            rec = row_to_record(raw, cols, default_category or "Imported", not inactive, source_doc, ws.title, default_owner, tab_owner)
             if rec:
                 all_records.append(rec)
     return all_records
@@ -197,7 +233,7 @@ def fetch_source(source: str) -> Tuple[bytes, str, str]:
     return data, "", str(path)
 
 
-def parse_source(source: str) -> List[Dict[str, object]]:
+def parse_source(source: str, default_owner: str, source_owner: str, default_category: str) -> List[Dict[str, object]]:
     data, ctype, source_name = fetch_source(source)
 
     lower_source = source.lower()
@@ -212,7 +248,7 @@ def parse_source(source: str) -> List[Dict[str, object]]:
             tmp.write(data)
             tmp_path = Path(tmp.name)
         try:
-            return parse_xlsx(tmp_path, source_name)
+            return parse_xlsx(tmp_path, source_name, default_owner, source_owner, default_category)
         finally:
             try:
                 tmp_path.unlink(missing_ok=True)
@@ -225,7 +261,7 @@ def parse_source(source: str) -> List[Dict[str, object]]:
     ):
         raise RuntimeError(f"Source requires login and is not directly readable: {source}")
 
-    return parse_csv_bytes(data, source_name, "Imported")
+    return parse_csv_bytes(data, source_name, "Imported", default_owner, source_owner, default_category)
 
 
 def normalize_strength(value: object) -> int:
@@ -251,6 +287,7 @@ def dedupe_records(records: List[Dict[str, object]]) -> List[Dict[str, object]]:
         key = (
             str(r.get("title") or "").strip().lower(),
             str(r.get("url") or "").strip().lower(),
+            str(r.get("owner_name") or "").strip().lower(),
             str(r.get("username") or "").strip().lower(),
             str(r.get("password") or ""),
             str(r.get("notes") or ""),
@@ -267,12 +304,22 @@ def dedupe_records(records: List[Dict[str, object]]) -> List[Dict[str, object]]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Prepare VALID8 import rows from spreadsheet sources")
     ap.add_argument("--source", action="append", required=True, help="Source file path or URL (repeatable)")
+    ap.add_argument("--source-owner", action="append", default=[], help="Per-source owner mapping in source=owner form (repeatable)")
+    ap.add_argument("--default-owner", default="", help="Fallback owner when not present in source data")
+    ap.add_argument("--default-category", default="Imported", help="Fallback category when source has no category")
     ap.add_argument("--output", default=".local/state/valid8/import_rows.json", help="Output JSON file")
     args = ap.parse_args()
 
+    source_owner_map: Dict[str, str] = {}
+    for item in args.source_owner:
+        parts = item.split("=", 1)
+        if len(parts) != 2:
+            raise RuntimeError(f"Invalid --source-owner value: {item}")
+        source_owner_map[parts[0].strip()] = parts[1].strip()
+
     records: List[Dict[str, object]] = []
     for src in args.source:
-        parsed = parse_source(src)
+        parsed = parse_source(src, args.default_owner.strip(), source_owner_map.get(src, "").strip(), args.default_category.strip() or "Imported")
         records.extend(parsed)
 
     records = dedupe_records(records)

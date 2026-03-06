@@ -102,6 +102,7 @@ foreach ($rows as $idx => $row) {
             'password' => (string)($row['password'] ?? ''),
             'notes' => isset($row['notes']) ? (string)$row['notes'] : null,
             'category' => (string)($row['category'] ?? ''),
+            'owner_name' => (string)($row['owner_name'] ?? ''),
             'is_favorite' => (int)($row['is_favorite'] ?? 0),
             'password_strength' => (int)($row['password_strength'] ?? 1),
             'is_active' => (int)($row['is_active'] ?? 1),

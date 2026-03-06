@@ -1,7 +1,6 @@
 import React from 'react';
 
 import { PhotoAlbum } from '../../../types/photoAlbums';
-import { sanitizeAlbumMessageText } from '../../../utils/photoAlbumText';
 import { findAdjacentItemTarget, formatNoteText, spreadMedia, spreadNotes } from '../photoAlbumStageEngine';
 import { ViewerTarget } from '../types';
 
@@ -59,14 +58,13 @@ export function usePhotoAlbumStageViewer({
     if (viewerTarget.type === 'media' && activeMedia?.capturedAtMs) {
       return new Date(activeMedia.capturedAtMs).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     }
-    const spreadForTarget = album.spec?.spreads?.[viewerTarget.spreadIndex];
     const spreadCaptured = spreadMedia(album, viewerTarget.spreadIndex)
       .map((item) => item.capturedAtMs)
       .filter((value): value is number => Number.isFinite(value));
     if (spreadCaptured.length > 0) {
       return new Date(Math.min(...spreadCaptured)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     }
-    return sanitizeAlbumMessageText(spreadForTarget?.title || '');
+    return '';
   }, [activeMedia?.capturedAtMs, album, viewerTarget]);
 
   React.useEffect(() => {

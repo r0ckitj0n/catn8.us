@@ -25,7 +25,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const viewerAlbumLocked = Number(viewerAlbum?.is_locked || 0) === 1;
   const viewerPageLocked = Number(viewerAlbum?.spec?.spreads?.[state.pageIndex]?.is_locked || 0) === 1;
   const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(viewerAlbum);
-  const [viewMode, setViewMode] = React.useState<'album' | 'list'>('album');
+  const [viewMode, setViewMode] = React.useState<'album' | 'list'>('list');
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const listScrollYRef = React.useRef<number | null>(null);
@@ -70,7 +70,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
 
   React.useEffect(() => {
     if (!state.showAlbumViewer && !state.showAdminModal) {
-      setViewMode('album');
+      setViewMode('list');
     }
   }, [state.showAdminModal, state.showAlbumViewer]);
 
@@ -116,7 +116,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     albumId: number,
     mode: 'view' | 'edit' = 'view',
     initialPageIndex?: number,
-    nextViewMode: 'album' | 'list' = 'album',
+    nextViewMode: 'album' | 'list' = 'list',
   ) => {
     if (!state.showAlbumViewer && !state.showAdminModal) {
       captureListScrollPosition();

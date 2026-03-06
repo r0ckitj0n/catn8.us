@@ -99,7 +99,7 @@ export function StandardizedIconsModal({ open, onClose, onToast }: StandardizedI
               Manage the emoji asset used for each shared icon button on catn8.us. Source graphics are Twemoji PNG assets.
             </p>
             <div className="d-flex justify-content-between align-items-center mb-2">
-              <a href="/emojis/twemoji/LICENSE-GRAPHICS.txt" target="_blank" rel="noreferrer">Twemoji graphics license</a>
+              <a href="/dist/emojis/twemoji/LICENSE-GRAPHICS.txt" target="_blank" rel="noreferrer">Twemoji graphics license</a>
               <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onReset} disabled={busy}>
                 Reset Defaults
               </button>

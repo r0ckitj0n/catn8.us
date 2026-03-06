@@ -8,6 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+NODE22_RUNNER=(npx -y node@22)
+TS_NODE22=("${NODE22_RUNNER[@]}" ./node_modules/typescript/bin/tsc)
+VITE_NODE22=("${NODE22_RUNNER[@]}" ./node_modules/vite/bin/vite.js)
+
 PROJECT_NAME="catn8.us"
 MANIFEST_PATH="dist/.vite/manifest.json"
 DIST_DIR="dist"
@@ -42,12 +46,12 @@ mkdir -p "$DIST_DIR"
 echo "[npmrunbuild] Running npm run typecheck and build from $PROJECT_ROOT..."
 if [ "${CATN8_SKIP_TYPECHECK:-0}" = "1" ] || [ "${CATN8_BUILD_NO_TYPECHECK:-0}" = "1" ]; then
   echo "[npmrunbuild] CATN8_SKIP_TYPECHECK=1 -> skipping typecheck"
-  npx vite build
+  "${VITE_NODE22[@]}" build
 else
   echo "[npmrunbuild] Typecheck starting..."
-  npm run typecheck
+  "${TS_NODE22[@]}" -p tsconfig.json --noEmit
   echo "[npmrunbuild] Typecheck completed."
-  npx vite build
+  "${VITE_NODE22[@]}" build
 fi
 
 echo "[npmrunbuild] Build completed successfully."

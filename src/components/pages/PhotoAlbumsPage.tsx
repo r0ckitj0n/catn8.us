@@ -228,7 +228,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                       type="button"
                       className="catn8-photo-album-card-open"
                       onClick={() => {
-                        void openAlbum(album.id, 'view', undefined, 'album');
+                        void openAlbum(album.id, 'view', undefined, 'list');
                       }}
                       aria-label={`Open album ${displayTitle}`}
                     />

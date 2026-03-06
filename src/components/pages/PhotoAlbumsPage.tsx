@@ -7,6 +7,7 @@ import { WebpImage } from '../common/WebpImage';
 import { PageLayout } from '../layout/PageLayout';
 import { PhotoAlbumCreateModal } from '../modals/PhotoAlbumCreateModal';
 import { PhotoAlbumAdminModal } from '../photo-albums/PhotoAlbumAdminModal';
+import { PhotoAlbumChronologicalList } from '../photo-albums/PhotoAlbumChronologicalList';
 import { LockIcon } from '../photo-albums/LockIcon';
 import { PhotoAlbumStage } from '../photo-albums/PhotoAlbumStage';
 
@@ -24,6 +25,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   const viewerAlbumLocked = Number(viewerAlbum?.is_locked || 0) === 1;
   const viewerPageLocked = Number(viewerAlbum?.spec?.spreads?.[state.pageIndex]?.is_locked || 0) === 1;
   const isAlbumViewerOpen = !state.loading && state.showAlbumViewer && Boolean(viewerAlbum);
+  const [viewMode, setViewMode] = React.useState<'album' | 'list'>('album');
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const listScrollYRef = React.useRef<number | null>(null);
@@ -67,6 +69,12 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   }, [isFullscreen, state.showAlbumViewer]);
 
   React.useEffect(() => {
+    if (!state.showAlbumViewer) {
+      setViewMode('album');
+    }
+  }, [state.showAlbumViewer]);
+
+  React.useEffect(() => {
     const shouldFitPreview = state.showAlbumViewer && !isFullscreen;
     document.body.classList.toggle('catn8-photo-albums-viewer-open', shouldFitPreview);
     const updateNavbarHeight = () => {
@@ -108,6 +116,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     if (!state.showAlbumViewer && !state.showAdminModal) {
       captureListScrollPosition();
     }
+    setViewMode('album');
     state.openAlbum(albumId, mode, initialPageIndex);
     if (state.isAdmin || mode === 'edit') {
       return;
@@ -162,6 +171,17 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
     } catch {
       // fullscreen can be blocked by browser context
     }
+  }, []);
+
+  const setAlbumViewMode = React.useCallback(async (nextMode: 'album' | 'list') => {
+    if (nextMode === 'list' && document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // no-op
+      }
+    }
+    setViewMode(nextMode);
   }, []);
 
   return (
@@ -281,7 +301,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
           ) : null}
 
           {!state.loading && state.showAlbumViewer && viewerAlbum ? (
-            <div className={isFullscreen ? 'catn8-photo-albums-main catn8-photo-albums-main--viewer is-fullscreen' : 'catn8-photo-albums-main catn8-photo-albums-main--viewer'}>
+            <div className={isFullscreen ? 'catn8-photo-albums-main catn8-photo-albums-main--viewer is-fullscreen' : viewMode === 'list' ? 'catn8-photo-albums-main catn8-photo-albums-main--viewer catn8-photo-albums-main--list' : 'catn8-photo-albums-main catn8-photo-albums-main--viewer'}>
               {!isFullscreen ? (
                 <div className="catn8-album-toolbar catn8-card">
                   <div className="catn8-album-toolbar-title-row">
@@ -289,6 +309,25 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                     {viewerAlbumSummary ? <div className="small text-muted">{viewerAlbumSummary}</div> : null}
                   </div>
                   <div className="catn8-album-controls">
+                    <div className="catn8-photo-albums-view-toggle" role="group" aria-label="View mode">
+                      <span className="catn8-photo-albums-view-toggle-label">View</span>
+                      <button
+                        type="button"
+                        className={viewMode === 'album' ? 'btn btn-sm btn-outline-secondary is-active' : 'btn btn-sm btn-outline-secondary'}
+                        onClick={() => { void setAlbumViewMode('album'); }}
+                        aria-pressed={viewMode === 'album'}
+                      >
+                        Album
+                      </button>
+                      <button
+                        type="button"
+                        className={viewMode === 'list' ? 'btn btn-sm btn-outline-secondary is-active' : 'btn btn-sm btn-outline-secondary'}
+                        onClick={() => { void setAlbumViewMode('list'); }}
+                        aria-pressed={viewMode === 'list'}
+                      >
+                        List
+                      </button>
+                    </div>
                     {state.isAdmin ? (
                       <button
                         type="button"
@@ -315,9 +354,11 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                         {viewerAlbumLocked ? 'Unlock Album' : 'Lock Album'}
                       </button>
                     ) : null}
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
-                      Full Screen
-                    </button>
+                    {viewMode === 'album' ? (
+                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void enterFullscreen(); }}>
+                        Full Screen
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-secondary catn8-close-viewer-btn"
@@ -331,27 +372,38 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
                 </div>
               ) : null}
 
-              <PhotoAlbumStage
-                album={viewerAlbum}
-                spreadIndex={state.pageIndex}
-                zoom={state.zoom}
-                contactDisplayName={toAlbumDisplayName(viewerAlbum.created_by_username || '')}
-                respectSavedPositions
-                canPrev={state.canPrev}
-                canNext={state.canNext}
-                onPrev={state.prevPage}
-                onNext={state.nextPage}
-                pageFavorite={viewerPageFavorite}
-                isMediaFavorite={(spreadIndex, mediaSourceIndex) => state.isMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex)}
-                isTextFavorite={(spreadIndex, textItemId) => state.isTextFavorite(viewerAlbum.id, spreadIndex, textItemId)}
-                onTogglePageFavorite={(spreadIndex) => { void state.togglePageFavorite(viewerAlbum.id, spreadIndex); }}
-                onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex); }}
-                onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(viewerAlbum.id, spreadIndex, textItemId); }}
-                pageLocked={viewerPageLocked}
-                albumLocked={viewerAlbumLocked}
-                onTogglePageLock={state.isAdmin ? (spreadIndex) => { void state.toggleSpreadLock(viewerAlbum.id, spreadIndex, !viewerPageLocked); } : undefined}
-                onBackToAlbums={() => { void closeViewer(); }}
-              />
+              {viewMode === 'album' ? (
+                <PhotoAlbumStage
+                  album={viewerAlbum}
+                  spreadIndex={state.pageIndex}
+                  zoom={state.zoom}
+                  contactDisplayName={toAlbumDisplayName(viewerAlbum.created_by_username || '')}
+                  respectSavedPositions
+                  canPrev={state.canPrev}
+                  canNext={state.canNext}
+                  onPrev={state.prevPage}
+                  onNext={state.nextPage}
+                  pageFavorite={viewerPageFavorite}
+                  isMediaFavorite={(spreadIndex, mediaSourceIndex) => state.isMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex)}
+                  isTextFavorite={(spreadIndex, textItemId) => state.isTextFavorite(viewerAlbum.id, spreadIndex, textItemId)}
+                  onTogglePageFavorite={(spreadIndex) => { void state.togglePageFavorite(viewerAlbum.id, spreadIndex); }}
+                  onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex); }}
+                  onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(viewerAlbum.id, spreadIndex, textItemId); }}
+                  pageLocked={viewerPageLocked}
+                  albumLocked={viewerAlbumLocked}
+                  onTogglePageLock={state.isAdmin ? (spreadIndex) => { void state.toggleSpreadLock(viewerAlbum.id, spreadIndex, !viewerPageLocked); } : undefined}
+                  onBackToAlbums={() => { void closeViewer(); }}
+                />
+              ) : (
+                <PhotoAlbumChronologicalList
+                  album={viewerAlbum}
+                  contactDisplayName={toAlbumDisplayName(viewerAlbum.created_by_username || '')}
+                  isMediaFavorite={(spreadIndex, mediaSourceIndex) => state.isMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex)}
+                  isTextFavorite={(spreadIndex, textItemId) => state.isTextFavorite(viewerAlbum.id, spreadIndex, textItemId)}
+                  onToggleMediaFavorite={(spreadIndex, mediaSourceIndex) => { void state.toggleMediaFavorite(viewerAlbum.id, spreadIndex, mediaSourceIndex); }}
+                  onToggleTextFavorite={(spreadIndex, textItemId) => { void state.toggleTextFavorite(viewerAlbum.id, spreadIndex, textItemId); }}
+                />
+              )}
             </div>
           ) : null}
         </div>

@@ -307,6 +307,16 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   display: flex;
 }
 
+.catn8-photo-albums-main--list {
+  overflow: auto;
+}
+
+.catn8-photo-albums-main--list .catn8-album-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
 .catn8-photo-albums-main--viewer .catn8-scrapbook-stage-user {
   min-height: 0;
   flex: 1;
@@ -449,6 +459,33 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   text-align: center;
   font-weight: 700;
   color: var(--catn8-albums-ink);
+}
+
+.catn8-photo-albums-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(248, 234, 214, 0.9);
+  border: 1px solid rgba(87, 61, 33, 0.16);
+}
+
+.catn8-photo-albums-view-toggle-label {
+  padding-left: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(60, 42, 24, 0.8);
+}
+
+.catn8-photo-albums-view-toggle .btn {
+  border-radius: 999px;
+}
+
+.catn8-photo-albums-view-toggle .btn.is-active {
+  color: #fff;
+  border-color: #7f5a38;
+  background: #7f5a38;
 }
 
 .catn8-scrapbook-stage {
@@ -1011,6 +1048,132 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   font-size: 1.05rem;
 }
 
+.catn8-photo-albums-list-view {
+  margin: 1rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 15% 8%, rgba(255, 255, 255, 0.52), transparent 35%),
+    linear-gradient(145deg, #f8ecd6, #ead3b4);
+}
+
+.catn8-photo-albums-list-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(87, 61, 33, 0.16);
+}
+
+.catn8-photo-albums-list-view-header h3 {
+  font-size: 1.15rem;
+}
+
+.catn8-photo-albums-list-view-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.catn8-photo-albums-list-view-summary span,
+.catn8-photo-albums-chron-column-header span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 248, 236, 0.92);
+  color: #5a3a22;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.catn8-photo-albums-chron-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.catn8-photo-albums-chron-column {
+  min-width: 0;
+}
+
+.catn8-photo-albums-chron-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.catn8-photo-albums-chron-column-header h4 {
+  margin: 0;
+}
+
+.catn8-photo-albums-chron-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.catn8-photo-albums-chron-card {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  transform: none !important;
+}
+
+.catn8-photo-albums-chron-card:hover,
+.catn8-photo-albums-chron-card:focus-within {
+  --catn8-card-scale: 1;
+  box-shadow: 0 14px 28px rgba(49, 34, 20, 0.18);
+}
+
+.catn8-photo-albums-chron-card--text {
+  overflow: visible;
+}
+
+.catn8-photo-albums-chron-card--text .catn8-scatter-note-inner {
+  padding-top: 2.1rem;
+}
+
+.catn8-photo-albums-chron-card--media {
+  padding-top: 2.2rem;
+}
+
+.catn8-photo-albums-chron-meta {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.6rem;
+  right: 2.4rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.catn8-photo-albums-chron-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.95);
+  color: rgba(60, 42, 24, 0.86);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.catn8-photo-albums-chron-empty {
+  padding: 1rem;
+  border: 1px dashed rgba(87, 61, 33, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 248, 236, 0.72);
+  color: rgba(60, 42, 24, 0.8);
+}
+
 .catn8-photo-albums-busy-overlay {
   position: fixed;
   inset: 0;
@@ -1238,6 +1401,20 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   }
 
   .catn8-admin-modal-body {
+    grid-template-columns: 1fr;
+  }
+
+  .catn8-photo-albums-list-view {
+    margin: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .catn8-photo-albums-list-view-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catn8-photo-albums-chron-grid {
     grid-template-columns: 1fr;
   }
 

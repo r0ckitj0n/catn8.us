@@ -120,6 +120,8 @@
 - Run repository hygiene checks before finalizing substantial refactors.
 - Archive genuinely orphaned files to `backups/`.
 - Any duplicate-suffix artifacts matching `* 2*` must be moved to `backups/` (preserve relative paths) instead of being deleted in place.
+- Do not create sibling duplicate files with numeric suffixes such as `* 2*`, `_02`, `_03`, `_04`, etc. If a replacement or variant is needed, update the canonical file in place or archive the old copy under `backups/` with preserved relative paths.
+- Before finalizing work, scan media and source trees for duplicate-suffix artifacts that have an unsuffixed counterpart and clean them up or archive them instead of leaving both copies in the repo.
 - If intentionally unreferenced files are required, document/whitelist with rationale.
 
 ## 9. Documentation Standards

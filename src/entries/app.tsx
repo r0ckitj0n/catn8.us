@@ -95,6 +95,7 @@ function App({ page }: { page: AppPage }) {
   const [aiConfigOpen, setAiConfigOpen] = React.useState(false);
   const [aiConfigTab, setAiConfigTab] = React.useState<AIConfigurationTab>('general');
   const [viewer, setViewer] = React.useState<Viewer>(null);
+  const [viewerResolved, setViewerResolved] = React.useState(false);
   const [toast, setToast] = React.useState<Toast>(null);
   const [mysteryTitle, setMysteryTitle] = React.useState(() => catn8LocalStorageGet('catn8_mystery_title') || '');
 
@@ -211,12 +212,20 @@ function App({ page }: { page: AppPage }) {
       console.error('[App] failed to refresh viewer', error);
       setViewer(null);
       return null;
+    } finally {
+      setViewerResolved(true);
     }
   }, []);
 
   React.useEffect(() => {
     void refreshViewer();
   }, [refreshViewer]);
+
+  React.useEffect(() => {
+    if (page === 'valid8' && viewerResolved && !viewer) {
+      setLoginOpen(true);
+    }
+  }, [page, viewer, viewerResolved]);
 
   const logout = React.useCallback(async () => {
     try {

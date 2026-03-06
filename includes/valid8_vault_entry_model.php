@@ -10,9 +10,18 @@ final class Valid8VaultEntryModel
     private const CATEGORY_TABLE_NAME = 'valid8_categories';
     private const KEY_SECRET_NAME = 'catn8.valid8.data_key';
     private const KEY_ENV_NAME = 'CATN8_VALID8_DATA_KEY';
+    private static bool $schemaEnsured = false;
+    private static bool $usersUuidEnsured = false;
+    private static ?string $masterKey = null;
+    /** @var array<string, string> */
+    private static array $fieldKeyCache = [];
 
     public static function ensureSchema(): void
     {
+        if (self::$schemaEnsured) {
+            return;
+        }
+
         self::ensureUsersUuidColumn();
 
         Database::execute("CREATE TABLE IF NOT EXISTS vault_entries (
@@ -55,6 +64,7 @@ final class Valid8VaultEntryModel
         self::ensureAddedColumns();
         self::ensureAttachmentSchema();
         self::ensureOwnerCategorySchema();
+        self::$schemaEnsured = true;
     }
 
     private static function ensureAttachmentSchema(): void
@@ -997,6 +1007,10 @@ final class Valid8VaultEntryModel
 
     private static function ensureUsersUuidColumn(): void
     {
+        if (self::$usersUuidEnsured) {
+            return;
+        }
+
         if (function_exists('catn8_users_table_ensure')) {
             catn8_users_table_ensure();
         }
@@ -1032,6 +1046,8 @@ final class Valid8VaultEntryModel
         if ($isNullable) {
             Database::execute('ALTER TABLE users MODIFY COLUMN uuid CHAR(36) NOT NULL');
         }
+
+        self::$usersUuidEnsured = true;
     }
 
     private static function ensureAddedColumns(): void
@@ -1370,24 +1386,35 @@ final class Valid8VaultEntryModel
 
     private static function deriveFieldKey(string $fieldName): string
     {
+        if (array_key_exists($fieldName, self::$fieldKeyCache)) {
+            return self::$fieldKeyCache[$fieldName];
+        }
+
         $masterKey = self::loadMasterKey();
         $key = hash_hkdf('sha256', $masterKey, 32, 'valid8:' . $fieldName, '');
         if (!is_string($key) || strlen($key) !== 32) {
             throw new RuntimeException('Could not derive encryption key');
         }
+        self::$fieldKeyCache[$fieldName] = $key;
         return $key;
     }
 
     private static function loadMasterKey(): string
     {
+        if (self::$masterKey !== null) {
+            return self::$masterKey;
+        }
+
         $envRaw = getenv(self::KEY_ENV_NAME);
         if (is_string($envRaw) && trim($envRaw) !== '') {
-            return self::normalizeKeyMaterial($envRaw);
+            self::$masterKey = self::normalizeKeyMaterial($envRaw);
+            return self::$masterKey;
         }
 
         $stored = secret_get(self::KEY_SECRET_NAME);
         if (is_string($stored) && trim($stored) !== '') {
-            return self::normalizeKeyMaterial($stored);
+            self::$masterKey = self::normalizeKeyMaterial($stored);
+            return self::$masterKey;
         }
 
         $generated = random_bytes(32);
@@ -1395,7 +1422,8 @@ final class Valid8VaultEntryModel
         if (!secret_set(self::KEY_SECRET_NAME, $encoded)) {
             throw new RuntimeException('Failed to persist VALID8 encryption key');
         }
-        return $generated;
+        self::$masterKey = $generated;
+        return self::$masterKey;
     }
 
     private static function normalizeKeyMaterial(string $raw): string

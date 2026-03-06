@@ -58,14 +58,25 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     setBusy(true);
     try {
       const includeInactiveValue = nextIncludeInactive ? 1 : 0;
-      const [res] = await Promise.all([
-        ApiClient.get<Valid8VaultListResponse>(`/api/valid8.php?action=list&include_inactive=${includeInactiveValue}`),
+      const res = await ApiClient.get<Valid8VaultListResponse>(`/api/valid8.php?action=list&include_inactive=${includeInactiveValue}`);
+      setEntries(Array.isArray(res?.entries) ? res.entries : []);
+      setLoaded(true);
+
+      void Promise.allSettled([
         loadAttachments(),
         loadOwners(),
         loadCategories(),
-      ]);
-      setEntries(Array.isArray(res?.entries) ? res.entries : []);
-      setLoaded(true);
+      ]).then((results) => {
+        const rejectedCount = results.filter((result) => result.status === 'rejected').length;
+        if (rejectedCount > 0 && onToast) {
+          onToast({
+            tone: 'error',
+            message: rejectedCount === 1
+              ? 'Some VALID8 metadata failed to load.'
+              : 'Some VALID8 metadata and attachments failed to load.',
+          });
+        }
+      });
     } catch (error: any) {
       const message = String(error?.message || 'Failed to load VALID8 entries');
       if (onToast) {

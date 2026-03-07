@@ -18,6 +18,7 @@ export interface Accumul8SpreadsheetMonthRow {
   contact_id: number | null;
   contact_name: string;
   account_id: number | null;
+  banking_organization_id: number | null;
   title: string;
   due_date: string;
   dueDayLabel: string;
@@ -198,6 +199,7 @@ export function buildSpreadsheetMonthData(
         contact_id: recurring.contact_id ?? null,
         contact_name: recurring.contact_name || '',
         account_id: recurring.account_id ?? null,
+        banking_organization_id: recurring.banking_organization_id ?? null,
         title: recurring.title || 'Recurring Payment',
         due_date: occurrenceDate,
         dueDayLabel: formatDayLabel(occurrenceDate),

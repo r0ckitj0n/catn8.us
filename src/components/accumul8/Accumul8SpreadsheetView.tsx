@@ -57,6 +57,27 @@ function shiftDateByDays(dateValue: string, dayDelta: number): string {
   return base.toISOString().slice(0, 10);
 }
 
+function getTodayDateValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function compareRowTimeline(left: EditableSpreadsheetRow, right: EditableSpreadsheetRow): number {
+  if (left.due_date !== right.due_date) {
+    return left.due_date.localeCompare(right.due_date);
+  }
+  return left.rowKey.localeCompare(right.rowKey);
+}
+
+function resolveBalanceScopeKey(row: EditableSpreadsheetRow): string {
+  if (Number(row.account_id || 0) > 0) {
+    return `account:${Number(row.account_id)}`;
+  }
+  if (Number(row.banking_organization_id || 0) > 0) {
+    return `banking_organization:${Number(row.banking_organization_id)}`;
+  }
+  return 'unassigned';
+}
+
 export function Accumul8SpreadsheetView({
   busy,
   selectedMonth,
@@ -92,29 +113,104 @@ export function Accumul8SpreadsheetView({
     () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, monthValue)),
     [recurringPayments, visibleMonths],
   );
-  const monthPanelsWithProjection = React.useMemo(
-    () => monthPanels.map((panel) => {
-      let runningBalance = 0;
-      const rows = panel.rows.map((row) => {
+  const todayDateValue = React.useMemo(() => getTodayDateValue(), []);
+  const balanceBaseByScope = React.useMemo(() => {
+    const next: Record<string, number> = { unassigned: NaN };
+    accounts.forEach((account) => {
+      next[`account:${account.id}`] = Number(account.current_balance || 0);
+    });
+    const totalsByBankingOrganization: Record<string, number> = {};
+    accounts.forEach((account) => {
+      const bankingOrganizationId = Number(account.banking_organization_id || 0);
+      if (bankingOrganizationId <= 0) {
+        return;
+      }
+      const key = `banking_organization:${bankingOrganizationId}`;
+      totalsByBankingOrganization[key] = Number((totalsByBankingOrganization[key] || 0) + Number(account.current_balance || 0));
+    });
+    Object.entries(totalsByBankingOrganization).forEach(([key, value]) => {
+      next[key] = Number(value.toFixed(2));
+    });
+    return next;
+  }, [accounts]);
+  const projectionRows = React.useMemo(() => {
+    const earliestMonth = todayDateValue.slice(0, 7) < visibleMonths[0] ? todayDateValue.slice(0, 7) : visibleMonths[0];
+    const latestMonth = todayDateValue.slice(0, 7) > visibleMonths[visibleMonths.length - 1] ? todayDateValue.slice(0, 7) : visibleMonths[visibleMonths.length - 1];
+    const allRows: EditableSpreadsheetRow[] = [];
+    let cursor = earliestMonth;
+    while (cursor <= latestMonth) {
+      buildSpreadsheetMonthData(recurringPayments, cursor).rows.forEach((row) => {
         const draft = draftRowByKey[row.rowKey] || null;
-        const mergedRow: EditableSpreadsheetRow = {
+        allRows.push({
           ...row,
           original_due_date: row.due_date,
           vendor_input: row.contact_name || row.title || '',
           rta: Number(rowRtaByKey[row.rowKey] || 0),
           balance: 0,
           ...draft,
-        };
-        runningBalance = Number((runningBalance + Number(mergedRow.amount || 0) + Number(mergedRow.rta || 0)).toFixed(2));
-        mergedRow.balance = runningBalance;
-        return mergedRow;
+        });
       });
-      return {
+      cursor = shiftMonthValue(cursor, 1);
+    }
+    return allRows.sort(compareRowTimeline);
+  }, [draftRowByKey, recurringPayments, rowRtaByKey, todayDateValue, visibleMonths]);
+  const monthPanelsWithProjection = React.useMemo(
+    () => {
+      const balanceByRowKey: Record<string, number> = {};
+      const rowsByScope = new Map<string, EditableSpreadsheetRow[]>();
+      projectionRows.forEach((row) => {
+        const scopeKey = resolveBalanceScopeKey(row);
+        const bucket = rowsByScope.get(scopeKey) || [];
+        bucket.push(row);
+        rowsByScope.set(scopeKey, bucket);
+      });
+
+      rowsByScope.forEach((scopeRows, scopeKey) => {
+        const baseBalance = Number(balanceBaseByScope[scopeKey]);
+        if (!Number.isFinite(baseBalance)) {
+          scopeRows.forEach((row) => {
+            balanceByRowKey[row.rowKey] = NaN;
+          });
+          return;
+        }
+
+        const pastRows = scopeRows.filter((row) => row.due_date < todayDateValue).sort(compareRowTimeline);
+        let cumulativeLater = 0;
+        for (let index = pastRows.length - 1; index >= 0; index -= 1) {
+          const row = pastRows[index];
+          balanceByRowKey[row.rowKey] = Number((baseBalance - cumulativeLater).toFixed(2));
+          cumulativeLater = Number((cumulativeLater + Number(row.amount || 0) + Number(row.rta || 0)).toFixed(2));
+        }
+
+        const todayRows = scopeRows.filter((row) => row.due_date === todayDateValue).sort(compareRowTimeline);
+        todayRows.forEach((row) => {
+          balanceByRowKey[row.rowKey] = Number(baseBalance.toFixed(2));
+        });
+
+        const futureRows = scopeRows.filter((row) => row.due_date > todayDateValue).sort(compareRowTimeline);
+        let cumulativeFuture = 0;
+        futureRows.forEach((row) => {
+          cumulativeFuture = Number((cumulativeFuture + Number(row.amount || 0) + Number(row.rta || 0)).toFixed(2));
+          balanceByRowKey[row.rowKey] = Number((baseBalance + cumulativeFuture).toFixed(2));
+        });
+      });
+
+      return monthPanels.map((panel) => ({
         ...panel,
-        rows,
-      };
-    }),
-    [draftRowByKey, monthPanels, rowRtaByKey],
+        rows: panel.rows.map((row) => {
+          const draft = draftRowByKey[row.rowKey] || null;
+          return {
+            ...row,
+            original_due_date: row.due_date,
+            vendor_input: row.contact_name || row.title || '',
+            rta: Number(rowRtaByKey[row.rowKey] || 0),
+            balance: Number.isFinite(balanceByRowKey[row.rowKey]) ? balanceByRowKey[row.rowKey] : NaN,
+            ...draft,
+          };
+        }),
+      }));
+    },
+    [balanceBaseByScope, draftRowByKey, monthPanels, projectionRows, rowRtaByKey, todayDateValue],
   );
 
   const handleMonthShift = React.useCallback((offset: number) => {
@@ -329,6 +425,7 @@ export function Accumul8SpreadsheetView({
                               const account = accounts.find((item) => item.id === selectedAccountId) || null;
                               setRowDraft(row, {
                                 account_id: selectedAccountId,
+                                banking_organization_id: account?.banking_organization_id ?? null,
                                 account_name: account?.account_name || '',
                                 banking_organization_name: account?.banking_organization_name || '',
                               });
@@ -390,7 +487,7 @@ export function Accumul8SpreadsheetView({
                             aria-label={`${row.title} real time adjustment`}
                           />
                         </td>
-                        <td className="text-end">{Number(row.balance || 0).toFixed(2)}</td>
+                        <td className="text-end">{Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-'}</td>
                         <td>
                           <input
                             className="form-control form-control-sm accumul8-month-table-input"

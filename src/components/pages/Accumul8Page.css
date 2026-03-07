@@ -116,6 +116,28 @@
   gap: 0.75rem;
 }
 
+.accumul8-inline-editor-row td {
+  background: rgba(236, 242, 250, 0.72);
+}
+
+.accumul8-inline-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.accumul8-inline-editor-notes {
+  grid-column: 1 / -2;
+}
+
+.accumul8-inline-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: end;
+}
+
 .accumul8-contact-card-copy {
   min-width: 0;
   flex: 1 1 auto;
@@ -443,6 +465,19 @@
 
   .accumul8-spreadsheet-grid {
     grid-template-columns: 1fr;
+  }
+
+  .accumul8-inline-editor-notes,
+  .accumul8-inline-editor-actions {
+    grid-column: auto;
+  }
+
+  .accumul8-inline-editor-actions {
+    justify-content: stretch;
+  }
+
+  .accumul8-inline-editor-actions .btn {
+    flex: 1 1 0;
   }
 
   .accumul8-month-summary {

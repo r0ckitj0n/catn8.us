@@ -1,4 +1,4 @@
-import { Accumul8Transaction } from '../types/accumul8';
+import { Accumul8RecurringPayment } from '../types/accumul8';
 
 export interface Accumul8SpreadsheetMonthOption {
   value: string;
@@ -6,23 +6,25 @@ export interface Accumul8SpreadsheetMonthOption {
 }
 
 export interface Accumul8SpreadsheetMonthSummary {
-  transactionCount: number;
-  paidCount: number;
-  reconciledCount: number;
+  recurringCount: number;
   inflow: number;
   outflow: number;
-  rta: number;
   net: number;
-  openingBalance: number | null;
-  closingBalance: number | null;
-  hasMixedAccounts: boolean;
 }
 
-export interface Accumul8SpreadsheetMonthRow extends Accumul8Transaction {
-  sortDate: string;
-  payDayLabel: string;
+export interface Accumul8SpreadsheetMonthRow {
+  rowKey: string;
+  recurring_id: number;
+  title: string;
+  due_date: string;
   dueDayLabel: string;
-  notesLabel: string;
+  amount: number;
+  direction: string;
+  frequency: string;
+  payment_method: string;
+  account_name: string;
+  banking_organization_name: string;
+  notes: string;
 }
 
 export interface Accumul8SpreadsheetMonthData {
@@ -38,10 +40,30 @@ function getCurrentMonthValue(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+function normalizeMonthValue(monthValue: string): string {
+  return MONTH_VALUE_PATTERN.test(monthValue) ? monthValue : getCurrentMonthValue();
+}
+
 function parseMonthValue(monthValue: string): Date {
   const normalized = normalizeMonthValue(monthValue);
   const [year, month] = normalized.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, 1));
+}
+
+function parseDate(dateValue: string): Date | null {
+  if (!dateValue) {
+    return null;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    return null;
+  }
+  const [, yearRaw, monthRaw, dayRaw] = match;
+  return new Date(Date.UTC(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw)));
+}
+
+function formatDate(dateValue: Date): string {
+  return `${dateValue.getUTCFullYear()}-${String(dateValue.getUTCMonth() + 1).padStart(2, '0')}-${String(dateValue.getUTCDate()).padStart(2, '0')}`;
 }
 
 function formatDayLabel(dateValue: string): string {
@@ -52,21 +74,62 @@ function formatDayLabel(dateValue: string): string {
   return Number.isFinite(day) && day > 0 ? String(day).padStart(2, '0') : '-';
 }
 
-function buildNotesLabel(transaction: Accumul8Transaction): string {
-  const parts = [
-    transaction.memo,
-    transaction.contact_name,
-    transaction.debtor_name,
-    transaction.account_name,
-  ]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean);
-
-  return parts.length > 0 ? parts.join(' | ') : '-';
+function addDays(base: Date, count: number): Date {
+  const next = new Date(base.getTime());
+  next.setUTCDate(next.getUTCDate() + count);
+  return next;
 }
 
-export function normalizeMonthValue(monthValue: string): string {
-  return MONTH_VALUE_PATTERN.test(monthValue) ? monthValue : getCurrentMonthValue();
+function addMonths(base: Date, count: number): Date {
+  const day = base.getUTCDate();
+  const next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + count, 1));
+  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDay));
+  return next;
+}
+
+function shiftOccurrence(base: Date, frequency: string, intervalCount: number, direction: 1 | -1): Date {
+  const safeInterval = Math.max(1, intervalCount || 1);
+  if (frequency === 'daily') {
+    return addDays(base, safeInterval * direction);
+  }
+  if (frequency === 'weekly') {
+    return addDays(base, safeInterval * 7 * direction);
+  }
+  if (frequency === 'biweekly') {
+    return addDays(base, safeInterval * 14 * direction);
+  }
+  return addMonths(base, safeInterval * direction);
+}
+
+function buildOccurrencesForMonth(recurring: Accumul8RecurringPayment, monthValue: string): string[] {
+  const anchor = parseDate(String(recurring.next_due_date || ''));
+  if (!anchor) {
+    return [];
+  }
+  const monthStart = parseMonthValue(monthValue);
+  const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0));
+  const dates: string[] = [];
+
+  let cursor = anchor;
+  let guard = 0;
+  while (cursor > monthEnd && guard < 240) {
+    cursor = shiftOccurrence(cursor, recurring.frequency || 'monthly', Number(recurring.interval_count || 1), -1);
+    guard += 1;
+  }
+  while (shiftOccurrence(cursor, recurring.frequency || 'monthly', Number(recurring.interval_count || 1), 1) <= monthEnd && guard < 480) {
+    cursor = shiftOccurrence(cursor, recurring.frequency || 'monthly', Number(recurring.interval_count || 1), 1);
+    guard += 1;
+  }
+
+  guard = 0;
+  while (cursor >= monthStart && cursor <= monthEnd && guard < 240) {
+    dates.push(formatDate(cursor));
+    cursor = shiftOccurrence(cursor, recurring.frequency || 'monthly', Number(recurring.interval_count || 1), -1);
+    guard += 1;
+  }
+
+  return dates.reverse();
 }
 
 export function shiftMonthValue(monthValue: string, offset: number): string {
@@ -84,7 +147,7 @@ export function formatMonthLabel(monthValue: string): string {
 }
 
 export function buildSpreadsheetMonthOptions(
-  transactions: Accumul8Transaction[],
+  recurringPayments: Accumul8RecurringPayment[],
   selectedMonth: string,
 ): Accumul8SpreadsheetMonthOption[] {
   const normalizedSelectedMonth = normalizeMonthValue(selectedMonth);
@@ -96,8 +159,8 @@ export function buildSpreadsheetMonthOptions(
     shiftMonthValue(normalizedSelectedMonth, 2),
   ]);
 
-  transactions.forEach((transaction) => {
-    const monthValue = String(transaction.transaction_date || '').slice(0, 7);
+  recurringPayments.forEach((recurring) => {
+    const monthValue = String(recurring.next_due_date || '').slice(0, 7);
     if (MONTH_VALUE_PATTERN.test(monthValue)) {
       monthValues.add(monthValue);
     }
@@ -112,77 +175,66 @@ export function buildSpreadsheetMonthOptions(
 }
 
 export function buildSpreadsheetMonthData(
-  transactions: Accumul8Transaction[],
+  recurringPayments: Accumul8RecurringPayment[],
   monthValue: string,
 ): Accumul8SpreadsheetMonthData {
   const normalizedMonth = normalizeMonthValue(monthValue);
-  const rows = transactions
-    .filter((transaction) => String(transaction.transaction_date || '').slice(0, 7) === normalizedMonth)
-    .sort((left, right) => {
-      const leftDate = String(left.transaction_date || '');
-      const rightDate = String(right.transaction_date || '');
-      if (leftDate !== rightDate) {
-        return leftDate.localeCompare(rightDate);
-      }
-      return left.id - right.id;
-    })
-    .map((transaction) => ({
-      ...transaction,
-      sortDate: String(transaction.transaction_date || ''),
-      payDayLabel: formatDayLabel(transaction.transaction_date),
-      dueDayLabel: formatDayLabel(transaction.due_date),
-      notesLabel: buildNotesLabel(transaction),
-    }));
+  const rows: Accumul8SpreadsheetMonthRow[] = [];
 
-  const accountIds = new Set(rows.map((row) => Number(row.account_id || 0)));
-  let inflow = 0;
-  let outflow = 0;
-  let rta = 0;
-  let net = 0;
-  let paidCount = 0;
-  let reconciledCount = 0;
-
-  rows.forEach((row) => {
-    const amount = Number(row.amount || 0);
-    const rowRta = Number(row.rta_amount || 0);
-    if (amount > 0) {
-      inflow += amount;
-    } else if (amount < 0) {
-      outflow += Math.abs(amount);
+  recurringPayments.forEach((recurring) => {
+    if (!Number(recurring.is_active || 0) || !Number(recurring.is_budget_planner || 0)) {
+      return;
     }
-    rta += rowRta;
-    net += amount + rowRta;
-    if (Number(row.is_paid || 0) === 1) {
-      paidCount += 1;
-    }
-    if (Number(row.is_reconciled || 0) === 1) {
-      reconciledCount += 1;
-    }
+    buildOccurrencesForMonth(recurring, normalizedMonth).forEach((occurrenceDate) => {
+      const signedAmount = recurring.direction === 'inflow'
+        ? Math.abs(Number(recurring.amount || 0))
+        : -Math.abs(Number(recurring.amount || 0));
+      rows.push({
+        rowKey: `${recurring.id}:${occurrenceDate}`,
+        recurring_id: recurring.id,
+        title: recurring.title || 'Recurring Payment',
+        due_date: occurrenceDate,
+        dueDayLabel: formatDayLabel(occurrenceDate),
+        amount: Number(signedAmount.toFixed(2)),
+        direction: recurring.direction || 'outflow',
+        frequency: recurring.frequency || 'monthly',
+        payment_method: recurring.payment_method || 'unspecified',
+        account_name: recurring.account_name || '',
+        banking_organization_name: recurring.banking_organization_name || '',
+        notes: recurring.notes || '',
+      });
+    });
   });
 
-  const firstRow = rows[0];
-  const lastRow = rows[rows.length - 1];
-  const hasMixedAccounts = accountIds.size > 1;
+  rows.sort((left, right) => {
+    if (left.due_date !== right.due_date) {
+      return left.due_date.localeCompare(right.due_date);
+    }
+    if (left.account_name !== right.account_name) {
+      return left.account_name.localeCompare(right.account_name);
+    }
+    return left.title.localeCompare(right.title);
+  });
+
+  let inflow = 0;
+  let outflow = 0;
+  rows.forEach((row) => {
+    if (row.amount > 0) {
+      inflow += row.amount;
+    } else if (row.amount < 0) {
+      outflow += Math.abs(row.amount);
+    }
+  });
 
   return {
     monthValue: normalizedMonth,
     monthLabel: formatMonthLabel(normalizedMonth),
     rows,
     summary: {
-      transactionCount: rows.length,
-      paidCount,
-      reconciledCount,
+      recurringCount: rows.length,
       inflow: Number(inflow.toFixed(2)),
       outflow: Number(outflow.toFixed(2)),
-      rta: Number(rta.toFixed(2)),
-      net: Number(net.toFixed(2)),
-      openingBalance: firstRow && !hasMixedAccounts
-        ? Number((firstRow.running_balance - firstRow.amount - firstRow.rta_amount).toFixed(2))
-        : null,
-      closingBalance: lastRow && !hasMixedAccounts
-        ? Number(Number(lastRow.running_balance || 0).toFixed(2))
-        : null,
-      hasMixedAccounts,
+      net: Number((inflow - outflow).toFixed(2)),
     },
   };
 }

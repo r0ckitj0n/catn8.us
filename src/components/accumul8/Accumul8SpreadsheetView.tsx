@@ -1,5 +1,5 @@
 import React from 'react';
-import { Accumul8Transaction } from '../../types/accumul8';
+import { Accumul8PaymentMethod, Accumul8RecurringPayment } from '../../types/accumul8';
 import {
   buildSpreadsheetMonthData,
   buildSpreadsheetMonthOptions,
@@ -9,10 +9,10 @@ import {
 interface Accumul8SpreadsheetViewProps {
   busy: boolean;
   selectedMonth: string;
-  transactions: Accumul8Transaction[];
+  recurringPayments: Accumul8RecurringPayment[];
   onSelectedMonthChange: (monthValue: string) => void;
-  onEditTransaction: (id: number) => void;
-  onDeleteTransaction: (id: number, description: string) => void;
+  onEditRecurring: (id: number) => void;
+  onDeleteRecurring: (id: number, description: string) => void;
 }
 
 function formatCurrency(value: number): string {
@@ -23,14 +23,19 @@ function formatCurrency(value: number): string {
 export function Accumul8SpreadsheetView({
   busy,
   selectedMonth,
-  transactions,
+  recurringPayments,
   onSelectedMonthChange,
-  onEditTransaction,
-  onDeleteTransaction,
+  onEditRecurring,
+  onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
+  const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
+    unspecified: 'Unspecified',
+    autopay: 'Autopay',
+    manual: 'Manual',
+  };
   const monthOptions = React.useMemo(
-    () => buildSpreadsheetMonthOptions(transactions, selectedMonth),
-    [selectedMonth, transactions],
+    () => buildSpreadsheetMonthOptions(recurringPayments, selectedMonth),
+    [recurringPayments, selectedMonth],
   );
 
   const visibleMonths = React.useMemo(
@@ -43,8 +48,8 @@ export function Accumul8SpreadsheetView({
   );
 
   const monthPanels = React.useMemo(
-    () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(transactions, monthValue)),
-    [transactions, visibleMonths],
+    () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, monthValue)),
+    [recurringPayments, visibleMonths],
   );
 
   return (
@@ -86,9 +91,7 @@ export function Accumul8SpreadsheetView({
                   <h4 className="mb-0">{panel.monthLabel}</h4>
                 </div>
                 <div className="accumul8-month-stats">
-                  <span>{summary.transactionCount} rows</span>
-                  <span>{summary.paidCount} paid</span>
-                  <span>{summary.reconciledCount} reconciled</span>
+                  <span>{summary.recurringCount} recurring</span>
                 </div>
               </header>
 
@@ -102,24 +105,9 @@ export function Accumul8SpreadsheetView({
                   <strong>{formatCurrency(summary.outflow)}</strong>
                 </div>
                 <div>
-                  <span>RTA</span>
-                  <strong>{formatCurrency(summary.rta)}</strong>
-                </div>
-                <div>
                   <span>Net</span>
                   <strong>{formatCurrency(summary.net)}</strong>
                 </div>
-              </div>
-
-              <div className="accumul8-month-balance-row">
-                <span>
-                  Opening balance:{' '}
-                  <strong>{summary.openingBalance === null ? (summary.hasMixedAccounts ? 'Mixed accounts' : '-') : formatCurrency(summary.openingBalance)}</strong>
-                </span>
-                <span>
-                  Closing balance:{' '}
-                  <strong>{summary.closingBalance === null ? (summary.hasMixedAccounts ? 'Mixed accounts' : '-') : formatCurrency(summary.closingBalance)}</strong>
-                </span>
               </div>
 
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--spreadsheet">
@@ -127,50 +115,38 @@ export function Accumul8SpreadsheetView({
                   <thead>
                     <tr>
                       <th>Type</th>
-                      <th>Pay</th>
                       <th>Due</th>
                       <th>Vendor</th>
-                      <th>Paid</th>
-                      <th>Reconciled</th>
+                      <th>Account</th>
+                      <th>Method</th>
+                      <th>Frequency</th>
                       <th className="text-end">Amount</th>
-                      <th className="text-end">Balance</th>
-                      <th className="text-end">RTA</th>
                       <th>Notes</th>
                       <th className="text-end">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {panel.rows.length > 0 ? panel.rows.map((transaction) => (
-                      <tr key={transaction.id} className={transaction.amount < 0 ? 'is-outflow' : 'is-inflow'}>
-                        <td>{transaction.entry_type || 'manual'}</td>
-                        <td title={transaction.transaction_date || ''}>{transaction.payDayLabel}</td>
-                        <td title={transaction.due_date || ''}>{transaction.dueDayLabel}</td>
-                        <td>{transaction.description || '-'}</td>
-                        <td>
-                          <span className={`accumul8-status-pill ${transaction.is_paid ? 'is-on' : 'is-off'}`}>
-                            {transaction.is_paid ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`accumul8-status-pill ${transaction.is_reconciled ? 'is-on' : 'is-off'}`}>
-                            {transaction.is_reconciled ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                        <td className="text-end">{Number(transaction.amount || 0).toFixed(2)}</td>
-                        <td className="text-end">{Number(transaction.running_balance || 0).toFixed(2)}</td>
-                        <td className="text-end">{Number(transaction.rta_amount || 0).toFixed(2)}</td>
-                        <td>{transaction.notesLabel}</td>
+                    {panel.rows.length > 0 ? panel.rows.map((row) => (
+                      <tr key={row.rowKey} className={row.amount < 0 ? 'is-outflow' : 'is-inflow'}>
+                        <td>{row.direction === 'inflow' ? 'Inflow' : 'Outflow'}</td>
+                        <td title={row.due_date || ''}>{row.dueDayLabel}</td>
+                        <td>{row.title || '-'}</td>
+                        <td>{row.account_name || row.banking_organization_name || '-'}</td>
+                        <td>{paymentMethodLabels[(row.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
+                        <td>{row.frequency}</td>
+                        <td className="text-end">{Number(row.amount || 0).toFixed(2)}</td>
+                        <td>{row.notes || '-'}</td>
                         <td className="text-end">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onEditTransaction(transaction.id)} disabled={busy} aria-label={`Edit ${transaction.description}`}>
+                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onEditRecurring(row.recurring_id)} disabled={busy} aria-label={`Edit ${row.title}`}>
                               <i className="bi bi-pencil"></i>
                             </button>
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-danger"
-                              onClick={() => onDeleteTransaction(transaction.id, transaction.description)}
+                              onClick={() => onDeleteRecurring(row.recurring_id, row.title)}
                               disabled={busy}
-                              aria-label={`Delete ${transaction.description}`}
+                              aria-label={`Delete ${row.title}`}
                             >
                               <i className="bi bi-trash"></i>
                             </button>
@@ -179,7 +155,7 @@ export function Accumul8SpreadsheetView({
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={11} className="text-center text-muted py-4">No budget-planner rows in this month yet.</td>
+                        <td colSpan={9} className="text-center text-muted py-4">No budget-planner recurring payments in this month yet.</td>
                       </tr>
                     )}
                   </tbody>

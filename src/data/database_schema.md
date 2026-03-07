@@ -139,6 +139,7 @@ Business term: Banking Organizations
 - `next_due_date` (DATE)
 - `notes` (TEXT, NULLABLE)
 - `is_active` (TINYINT(1), DEFAULT 1)
+- `is_budget_planner` (TINYINT(1), DEFAULT 0)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 

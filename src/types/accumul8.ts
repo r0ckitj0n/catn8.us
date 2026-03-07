@@ -38,6 +38,7 @@ export interface Accumul8RecurringPayment {
   next_due_date: string;
   notes: string;
   is_active: number;
+  is_budget_planner: number;
   contact_name: string;
   account_name: string;
   banking_organization_name: string;
@@ -53,6 +54,7 @@ export interface Accumul8RecurringUpsertRequest {
   next_due_date: string;
   contact_id?: number | null;
   account_id?: number | null;
+  is_budget_planner?: number;
   notes?: string;
 }
 

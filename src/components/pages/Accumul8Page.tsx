@@ -92,7 +92,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [contactForm, setContactForm] = React.useState<{ contact_name: string; contact_type: Accumul8ContactType; default_amount: number; email: string; notes: string }>({ contact_name: '', contact_type: 'both', default_amount: 0, email: '', notes: '' });
   const [debtorForm, setDebtorForm] = React.useState<{ debtor_name: string; contact_id: string; notes: string; is_active: number }>({ debtor_name: '', contact_id: '', notes: '', is_active: 1 });
-  const [recurringForm, setRecurringForm] = React.useState<{ title: string; direction: Accumul8Direction; amount: number; frequency: Accumul8Frequency; payment_method: Accumul8PaymentMethod; interval_count: number; next_due_date: string; contact_id: string; account_id: string; notes: string }>({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', payment_method: 'unspecified', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', notes: '' });
+  const [recurringForm, setRecurringForm] = React.useState<{ title: string; direction: Accumul8Direction; amount: number; frequency: Accumul8Frequency; payment_method: Accumul8PaymentMethod; interval_count: number; next_due_date: string; contact_id: string; account_id: string; is_budget_planner: number; notes: string }>({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', payment_method: 'unspecified', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', is_budget_planner: 0, notes: '' });
   const [ledgerForm, setLedgerForm] = React.useState<{ transaction_date: string; due_date: string; entry_type: Accumul8EntryType; description: string; memo: string; amount: number; rta_amount: number; is_paid: number; is_reconciled: number; is_budget_planner: number; contact_id: string; account_id: string; debtor_id: string }>({ transaction_date: new Date().toISOString().slice(0, 10), due_date: '', entry_type: 'manual', description: '', memo: '', amount: 0, rta_amount: 0, is_paid: 0, is_reconciled: 0, is_budget_planner: 1, contact_id: '', account_id: '', debtor_id: '' });
   const [budgetForm, setBudgetForm] = React.useState<{ category_name: string; monthly_budget: number; match_pattern: string; row_order: number; is_active: number }>({ category_name: '', monthly_budget: 0, match_pattern: '', row_order: 0, is_active: 1 });
   const [budgetMonth, setBudgetMonth] = React.useState<string>(new Date().toISOString().slice(0, 7));
@@ -203,7 +203,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, []);
   const resetRecurringForm = React.useCallback(() => {
     setEditingRecurringId(null);
-    setRecurringForm({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', payment_method: 'unspecified', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', notes: '' });
+    setRecurringForm({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', payment_method: 'unspecified', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', is_budget_planner: 0, notes: '' });
   }, []);
   const resetLedgerForm = React.useCallback(() => {
     setEditingTransactionId(null);
@@ -267,6 +267,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       next_due_date: recurring.next_due_date || '',
       contact_id: recurring.contact_id ? String(recurring.contact_id) : '',
       account_id: recurring.account_id ? String(recurring.account_id) : '',
+      is_budget_planner: Number(recurring.is_budget_planner || 0),
       notes: recurring.notes || '',
     });
   }, [recurringPayments]);
@@ -393,9 +394,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       remaining: Number((budget - actual).toFixed(2)),
     };
   }, [budgetActualByRowId, budgetRowsSorted]);
-  const budgetPlannerTransactions = React.useMemo(() => (
-    filteredTransactions.filter((tx) => Number(tx.is_budget_planner || 0) === 1)
-  ), [filteredTransactions]);
+  const budgetPlannerRecurringPayments = React.useMemo(() => (
+    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1 && String(rp.direction || 'outflow') === 'outflow')
+  ), [filteredRecurringPayments]);
   const selectedDebtorEntries = React.useMemo(() => {
     const debtorId = Number(selectedDebtorId || 0);
     if (debtorId <= 0) {
@@ -408,6 +409,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       void deleteTransaction(id);
     }
   }, [deleteTransaction]);
+  const handleDeleteRecurring = React.useCallback((id: number, description: string) => {
+    if (window.confirm(`Delete "${description || 'this recurring payment'}"?`)) {
+      void deleteRecurring(id);
+    }
+  }, [deleteRecurring]);
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -611,10 +617,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <Accumul8SpreadsheetView
                 busy={busy}
                 selectedMonth={budgetMonth}
-                transactions={budgetPlannerTransactions}
+                recurringPayments={budgetPlannerRecurringPayments}
                 onSelectedMonthChange={setBudgetMonth}
-                onEditTransaction={beginEditTransaction}
-                onDeleteTransaction={handleDeleteTransaction}
+                onEditRecurring={beginEditRecurring}
+                onDeleteRecurring={handleDeleteRecurring}
               />
             </div>
           )}
@@ -769,6 +775,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   interval_count: Number(recurringForm.interval_count),
                   contact_id: recurringForm.contact_id ? Number(recurringForm.contact_id) : null,
                   account_id: recurringForm.account_id ? Number(recurringForm.account_id) : null,
+                  is_budget_planner: Number(recurringForm.is_budget_planner),
                 };
                 if (editingRecurringId) {
                   void updateRecurring(editingRecurringId, payload).then(() => resetRecurringForm());
@@ -785,13 +792,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="col-md-2"><input className="form-control" type="date" value={recurringForm.next_due_date} onChange={(e) => setRecurringForm((v) => ({ ...v, next_due_date: e.target.value }))} required /></div>
                 <div className="col-md-3"><select className="form-select" value={recurringForm.contact_id} onChange={(e) => setRecurringForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Contact</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
                 <div className="col-md-3"><select className="form-select" value={recurringForm.account_id} onChange={(e) => setRecurringForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{visibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
+                <div className="col-md-2"><select className="form-select" value={String(recurringForm.is_budget_planner)} onChange={(e) => setRecurringForm((v) => ({ ...v, is_budget_planner: Number(e.target.value) }))}><option value="1">Show In Planner</option><option value="0">Hide From Planner</option></select></div>
                 <div className="col-md-4"><input className="form-control" placeholder="Notes" value={recurringForm.notes} onChange={(e) => setRecurringForm((v) => ({ ...v, notes: e.target.value }))} /></div>
                 <div className="col-md-2 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingRecurringId ? 'Update' : 'Save'}</button></div>
                 {editingRecurringId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetRecurringForm} disabled={busy}>Cancel</button></div> : null}
               </form>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
                 <table className="table table-sm accumul8-sticky-head">
-                  <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredRecurringPayments.map((rp) => (
                       <tr key={rp.id} className="accumul8-list-item">
@@ -800,6 +808,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <td className="text-end">{rp.amount.toFixed(2)}</td>
                         <td>{rp.frequency}</td>
                         <td>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
+                        <td>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</td>
                         <td><button type="button" className={`btn btn-sm ${rp.is_active ? 'btn-success' : 'btn-outline-secondary'}`} onClick={() => void toggleRecurring(rp.id)}>{rp.is_active ? 'Active' : 'Paused'}</button></td>
                         <td className="text-end">
                           <div className="accumul8-row-actions">

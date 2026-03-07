@@ -381,6 +381,11 @@ function accumul8_tables_ensure(): void
         contact_type VARCHAR(16) NOT NULL DEFAULT 'both',
         default_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         email VARCHAR(191) NULL,
+        phone_number VARCHAR(32) NULL,
+        street_address VARCHAR(191) NULL,
+        city VARCHAR(120) NULL,
+        state VARCHAR(64) NULL,
+        zip VARCHAR(20) NULL,
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -548,6 +553,12 @@ function accumul8_tables_ensure(): void
             Database::execute('ALTER TABLE accumul8_accounts ADD CONSTRAINT fk_accumul8_accounts_group FOREIGN KEY (account_group_id) REFERENCES accumul8_account_groups(id) ON DELETE SET NULL');
         }
 
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'phone_number', 'VARCHAR(32) NULL');
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'street_address', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'city', 'VARCHAR(120) NULL');
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'state', 'VARCHAR(64) NULL');
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'zip', 'VARCHAR(20) NULL');
+
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'account_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'interval_count', 'INT NOT NULL DEFAULT 1');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'payment_method', "VARCHAR(24) NOT NULL DEFAULT 'unspecified'");
@@ -669,7 +680,7 @@ function accumul8_list_banking_organizations(int $viewerId): array
 function accumul8_list_contacts(int $viewerId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, contact_name, contact_type, default_amount, email, notes, is_active, created_at, updated_at
+        'SELECT id, contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active, created_at, updated_at
          FROM accumul8_contacts
          WHERE owner_user_id = ?
          ORDER BY contact_name ASC, id ASC',
@@ -683,6 +694,11 @@ function accumul8_list_contacts(int $viewerId): array
             'contact_type' => (string)($r['contact_type'] ?? 'both'),
             'default_amount' => (float)($r['default_amount'] ?? 0),
             'email' => (string)($r['email'] ?? ''),
+            'phone_number' => (string)($r['phone_number'] ?? ''),
+            'street_address' => (string)($r['street_address'] ?? ''),
+            'city' => (string)($r['city'] ?? ''),
+            'state' => (string)($r['state'] ?? ''),
+            'zip' => (string)($r['zip'] ?? ''),
             'notes' => (string)($r['notes'] ?? ''),
             'is_active' => (int)($r['is_active'] ?? 0),
             'created_at' => (string)($r['created_at'] ?? ''),
@@ -1386,6 +1402,11 @@ if ($action === 'create_contact') {
     $type = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
     $amount = accumul8_normalize_amount($body['default_amount'] ?? 0);
     $email = accumul8_normalize_text($body['email'] ?? '', 191);
+    $phoneNumber = accumul8_normalize_text($body['phone_number'] ?? '', 32);
+    $streetAddress = accumul8_normalize_text($body['street_address'] ?? '', 191);
+    $city = accumul8_normalize_text($body['city'] ?? '', 120);
+    $state = accumul8_normalize_text($body['state'] ?? '', 64);
+    $zip = accumul8_normalize_text($body['zip'] ?? '', 20);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
 
     if ($name === '') {
@@ -1393,9 +1414,9 @@ if ($action === 'create_contact') {
     }
 
     Database::execute(
-        'INSERT INTO accumul8_contacts (owner_user_id, contact_name, contact_type, default_amount, email, notes, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, 1)',
-        [$viewerId, $name, $type, $amount, ($email === '' ? null : $email), ($notes === '' ? null : $notes)]
+        'INSERT INTO accumul8_contacts (owner_user_id, contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+        [$viewerId, $name, $type, $amount, ($email === '' ? null : $email), ($phoneNumber === '' ? null : $phoneNumber), ($streetAddress === '' ? null : $streetAddress), ($city === '' ? null : $city), ($state === '' ? null : $state), ($zip === '' ? null : $zip), ($notes === '' ? null : $notes)]
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
@@ -1555,6 +1576,11 @@ if ($action === 'update_contact') {
     $type = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
     $amount = accumul8_normalize_amount($body['default_amount'] ?? 0);
     $email = accumul8_normalize_text($body['email'] ?? '', 191);
+    $phoneNumber = accumul8_normalize_text($body['phone_number'] ?? '', 32);
+    $streetAddress = accumul8_normalize_text($body['street_address'] ?? '', 191);
+    $city = accumul8_normalize_text($body['city'] ?? '', 120);
+    $state = accumul8_normalize_text($body['state'] ?? '', 64);
+    $zip = accumul8_normalize_text($body['zip'] ?? '', 20);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
 
     if ($id <= 0) {
@@ -1566,9 +1592,9 @@ if ($action === 'update_contact') {
 
     Database::execute(
         'UPDATE accumul8_contacts
-         SET contact_name = ?, contact_type = ?, default_amount = ?, email = ?, notes = ?
+         SET contact_name = ?, contact_type = ?, default_amount = ?, email = ?, phone_number = ?, street_address = ?, city = ?, state = ?, zip = ?, notes = ?
          WHERE id = ? AND owner_user_id = ?',
-        [$name, $type, $amount, ($email === '' ? null : $email), ($notes === '' ? null : $notes), $id, $viewerId]
+        [$name, $type, $amount, ($email === '' ? null : $email), ($phoneNumber === '' ? null : $phoneNumber), ($streetAddress === '' ? null : $streetAddress), ($city === '' ? null : $city), ($state === '' ? null : $state), ($zip === '' ? null : $zip), ($notes === '' ? null : $notes), $id, $viewerId]
     );
 
     catn8_json_response(['success' => true]);

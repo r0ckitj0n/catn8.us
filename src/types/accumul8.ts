@@ -10,6 +10,11 @@ export interface Accumul8Contact {
   contact_type: Accumul8ContactType;
   default_amount: number;
   email: string;
+  phone_number: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
   notes: string;
   is_active: number;
 }
@@ -19,6 +24,11 @@ export interface Accumul8ContactUpsertRequest {
   contact_type: Accumul8ContactType;
   default_amount: number;
   email: string;
+  phone_number: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
   notes: string;
 }
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
+import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
@@ -26,6 +27,18 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   unspecified: 'Unspecified',
   autopay: 'Auto debit / autopay',
   manual: 'Manual payment',
+};
+const DEFAULT_CONTACT_FORM = {
+  contact_name: '',
+  contact_type: 'both' as Accumul8ContactType,
+  default_amount: 0,
+  email: '',
+  phone_number: '',
+  street_address: '',
+  city: '',
+  state: '',
+  zip: '',
+  notes: '',
 };
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
@@ -89,7 +102,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     syncBankConnection,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
-  const [contactForm, setContactForm] = React.useState<{ contact_name: string; contact_type: Accumul8ContactType; default_amount: number; email: string; notes: string }>({ contact_name: '', contact_type: 'both', default_amount: 0, email: '', notes: '' });
+  const [contactForm, setContactForm] = React.useState(DEFAULT_CONTACT_FORM);
   const [debtorForm, setDebtorForm] = React.useState<{ debtor_name: string; contact_id: string; notes: string; is_active: number }>({ debtor_name: '', contact_id: '', notes: '', is_active: 1 });
   const [recurringForm, setRecurringForm] = React.useState<{ title: string; direction: Accumul8Direction; amount: number; frequency: Accumul8Frequency; payment_method: Accumul8PaymentMethod; interval_count: number; next_due_date: string; contact_id: string; account_id: string; is_budget_planner: number; notes: string }>({ title: '', direction: 'outflow', amount: 0, frequency: 'monthly', payment_method: 'unspecified', interval_count: 1, next_due_date: '', contact_id: '', account_id: '', is_budget_planner: 0, notes: '' });
   const [ledgerForm, setLedgerForm] = React.useState<{ transaction_date: string; due_date: string; entry_type: Accumul8EntryType; description: string; memo: string; amount: number; rta_amount: number; is_paid: number; is_reconciled: number; is_budget_planner: number; contact_id: string; account_id: string; debtor_id: string }>({ transaction_date: new Date().toISOString().slice(0, 10), due_date: '', entry_type: 'manual', description: '', memo: '', amount: 0, rta_amount: 0, is_paid: 0, is_reconciled: 0, is_budget_planner: 1, contact_id: '', account_id: '', debtor_id: '' });
@@ -102,6 +115,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [editingTransactionId, setEditingTransactionId] = React.useState<number | null>(null);
   const [editingBudgetRowId, setEditingBudgetRowId] = React.useState<number | null>(null);
   const [editingNotificationRuleId, setEditingNotificationRuleId] = React.useState<number | null>(null);
+  const [contactModalOpen, setContactModalOpen] = React.useState(false);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
   const [selectedBankingOrganizationId, setSelectedBankingOrganizationId] = React.useState<string>('');
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
@@ -204,7 +218,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, []);
   const resetContactForm = React.useCallback(() => {
     setEditingContactId(null);
-    setContactForm({ contact_name: '', contact_type: 'both', default_amount: 0, email: '', notes: '' });
+    setContactForm(DEFAULT_CONTACT_FORM);
   }, []);
   const resetDebtorForm = React.useCallback(() => {
     setEditingDebtorId(null);
@@ -259,9 +273,32 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       contact_type: (contact.contact_type || 'both') as Accumul8ContactType,
       default_amount: Number(contact.default_amount || 0),
       email: contact.email || '',
+      phone_number: contact.phone_number || '',
+      street_address: contact.street_address || '',
+      city: contact.city || '',
+      state: contact.state || '',
+      zip: contact.zip || '',
       notes: contact.notes || '',
     });
+    setContactModalOpen(true);
   }, [contacts]);
+  const openCreateContactModal = React.useCallback(() => {
+    resetContactForm();
+    setContactModalOpen(true);
+  }, [resetContactForm]);
+  const closeContactModal = React.useCallback(() => {
+    setContactModalOpen(false);
+    resetContactForm();
+  }, [resetContactForm]);
+  const submitContactForm = React.useCallback(async (form: typeof DEFAULT_CONTACT_FORM) => {
+    const payload = { ...form, default_amount: Number(form.default_amount) };
+    if (editingContactId) {
+      await updateContact(editingContactId, payload);
+    } else {
+      await createContact(payload);
+    }
+    closeContactModal();
+  }, [closeContactModal, createContact, editingContactId, updateContact]);
   const beginEditRecurring = React.useCallback((id: number) => {
     const recurring = recurringPayments.find((v) => v.id === id);
     if (!recurring) return;
@@ -746,28 +783,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           )}
           {tab === 'contacts' && (
             <div className="accumul8-panel">
-              <h3>Manage Payees and Payers</h3>
-              <form className="row g-2" onSubmit={(e) => {
-                e.preventDefault();
-                const payload = { ...contactForm, default_amount: Number(contactForm.default_amount) };
-                if (editingContactId) {
-                  void updateContact(editingContactId, payload).then(() => resetContactForm());
-                  return;
-                }
-                void createContact(payload).then(() => resetContactForm());
-              }}>
-                <div className="col-md-3"><input className="form-control" placeholder="Name" value={contactForm.contact_name} onChange={(e) => setContactForm((v) => ({ ...v, contact_name: e.target.value }))} required /></div>
-                <div className="col-md-2"><select className="form-select" value={contactForm.contact_type} onChange={(e) => setContactForm((v) => ({ ...v, contact_type: e.target.value as Accumul8ContactType }))}><option value="payee">Payee</option><option value="payer">Payer</option><option value="both">Both</option></select></div>
-                <div className="col-md-2"><input className="form-control" type="number" step="0.01" placeholder="Default Amount" value={contactForm.default_amount} onChange={(e) => setContactForm((v) => ({ ...v, default_amount: Number(e.target.value) }))} /></div>
-                <div className="col-md-2"><input className="form-control" type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm((v) => ({ ...v, email: e.target.value }))} /></div>
-                <div className="col-md-2"><input className="form-control" placeholder="Notes" value={contactForm.notes} onChange={(e) => setContactForm((v) => ({ ...v, notes: e.target.value }))} /></div>
-                <div className="col-md-1 d-grid"><button className="btn btn-success" type="submit" disabled={busy}>{editingContactId ? 'Update' : 'Add'}</button></div>
-                {editingContactId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetContactForm} disabled={busy}>Cancel</button></div> : null}
-              </form>
+              <div className="accumul8-panel-toolbar mb-3">
+                <h3 className="mb-0">Manage Payees and Payers</h3>
+                <button type="button" className="btn btn-success btn-sm" onClick={openCreateContactModal} disabled={busy}>Add Payee / Payer</button>
+              </div>
               <ul className="list-group mt-3 accumul8-scroll-area accumul8-scroll-area--list">
                 {contacts.map((c) => (
-                  <li key={c.id} className="list-group-item d-flex justify-content-between align-items-center accumul8-list-item">
-                    <span>{c.contact_name} <small className="text-muted">({c.contact_type})</small></span>
+                  <li key={c.id} className="list-group-item d-flex justify-content-between align-items-start gap-3 accumul8-list-item">
+                    <div className="accumul8-contact-card-copy">
+                      <div className="fw-semibold">
+                        {c.contact_name} <small className="text-muted">({c.contact_type})</small>
+                      </div>
+                      <div className="small text-muted">
+                        {[
+                          c.phone_number || '',
+                          c.email || '',
+                          [c.city || '', c.state || '', c.zip || ''].filter(Boolean).join(', ').replace(/, ([^,]+)$/, ' $1'),
+                        ].filter(Boolean).join(' | ') || 'No phone, email, or city/state/zip yet.'}
+                      </div>
+                      {c.street_address ? <div className="small text-muted">{c.street_address}</div> : null}
+                      {Number(c.default_amount || 0) !== 0 ? <div className="small text-muted">Default amount: {Number(c.default_amount || 0).toFixed(2)}</div> : null}
+                      {c.notes ? <div className="small text-muted">{c.notes}</div> : null}
+                    </div>
                     <div className="accumul8-row-actions">
                       <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditContact(c.id)} disabled={busy} aria-label={`Edit ${c.contact_name}`}><i className="bi bi-pencil"></i></button>
                       <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this payee/payer?')) { void deleteContact(c.id); } }} disabled={busy} aria-label={`Delete ${c.contact_name}`}><i className="bi bi-trash"></i></button>
@@ -930,6 +967,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
             </div>
           )}
+          <Accumul8ContactModal
+            open={contactModalOpen}
+            busy={busy}
+            initialForm={contactForm}
+            editing={editingContactId !== null}
+            onClose={closeContactModal}
+            onSave={submitContactForm}
+          />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}
             onClose={() => setBankingOrganizationManagerOpen(false)}

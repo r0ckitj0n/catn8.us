@@ -28,6 +28,7 @@ export function Accumul8SpreadsheetView({
   onEditRecurring,
   onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
+  const [monthRtaByValue, setMonthRtaByValue] = React.useState<Record<string, number>>({});
   const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
     unspecified: 'Unspecified',
     autopay: 'Autopay',
@@ -51,6 +52,20 @@ export function Accumul8SpreadsheetView({
     () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, monthValue)),
     [recurringPayments, visibleMonths],
   );
+  const monthPanelsWithProjection = React.useMemo(() => {
+    let runningBalance = 0;
+    return monthPanels.map((panel) => {
+      const amount = Number(panel.summary.net || 0);
+      const rta = Number(monthRtaByValue[panel.monthValue] || 0);
+      runningBalance = Number((runningBalance + amount + rta).toFixed(2));
+      return {
+        ...panel,
+        amount,
+        rta,
+        balance: runningBalance,
+      };
+    });
+  }, [monthPanels, monthRtaByValue]);
 
   return (
     <div className="accumul8-spreadsheet">
@@ -76,7 +91,7 @@ export function Accumul8SpreadsheetView({
       </div>
 
       <div className="accumul8-spreadsheet-grid">
-        {monthPanels.map((panel, panelIndex) => {
+        {monthPanelsWithProjection.map((panel, panelIndex) => {
           const isCenter = panelIndex === 1;
           const summary = panel.summary;
           return (
@@ -103,6 +118,33 @@ export function Accumul8SpreadsheetView({
                 <div>
                   <span>Outflow</span>
                   <strong>{formatCurrency(summary.outflow)}</strong>
+                </div>
+                <div>
+                  <span>Amount</span>
+                  <strong>{formatCurrency(panel.amount)}</strong>
+                </div>
+                <div>
+                  <span>RTA</span>
+                  <input
+                    className="form-control form-control-sm accumul8-month-summary-input"
+                    type="number"
+                    step="0.01"
+                    value={panel.rta}
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      const parsed = raw === '' ? 0 : Number(raw);
+                      setMonthRtaByValue((prev) => ({
+                        ...prev,
+                        [panel.monthValue]: Number.isFinite(parsed) ? parsed : 0,
+                      }));
+                    }}
+                    disabled={busy}
+                    aria-label={`${panel.monthLabel} real time adjustment`}
+                  />
+                </div>
+                <div>
+                  <span>Balance</span>
+                  <strong>{formatCurrency(panel.balance)}</strong>
                 </div>
                 <div>
                   <span>Net</span>

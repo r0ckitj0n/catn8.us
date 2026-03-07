@@ -1,0 +1,47 @@
+.accumul8-contact-modal .modal-dialog {
+  width: min(60vw, 960px);
+  max-width: min(60vw, 960px);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.accumul8-contact-modal.fade .modal-dialog {
+  transform: translateY(18px) scale(0.96);
+}
+
+.accumul8-contact-modal.show .modal-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.accumul8-contact-modal .modal-content {
+  max-height: 60vh;
+  overflow: hidden;
+  border: 1px solid rgba(36, 52, 84, 0.2);
+  box-shadow: 0 28px 60px rgba(10, 20, 38, 0.28);
+}
+
+.accumul8-contact-modal .modal-body {
+  overflow-y: auto;
+}
+
+body.accumul8-contact-modal-open .modal-backdrop.show {
+  background: rgba(17, 32, 56, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+@media (max-width: 991.98px) {
+  .accumul8-contact-modal .modal-dialog {
+    width: min(calc(100vw - 2rem), 60vw);
+    max-width: min(calc(100vw - 2rem), 60vw);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .accumul8-contact-modal .modal-dialog {
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .accumul8-contact-modal .modal-content {
+    max-height: 75vh;
+  }
+}

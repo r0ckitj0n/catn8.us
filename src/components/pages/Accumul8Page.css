@@ -188,7 +188,7 @@
 
 .accumul8-month-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.6rem;
   margin-bottom: 0.75rem;
 }
@@ -212,6 +212,11 @@
   display: block;
   font-size: 1rem;
   color: #1b2b46;
+}
+
+.accumul8-month-summary-input {
+  margin-top: 0.35rem;
+  min-height: 2rem;
 }
 
 .accumul8-month-balance-row,

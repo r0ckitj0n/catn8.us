@@ -2,6 +2,7 @@ import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8ContactType, Accumul8ContactUpsertRequest } from '../../types/accumul8';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import './Accumul8ContactModal.css';
 
 interface Accumul8ContactModalProps {
   open: boolean;
@@ -37,8 +38,16 @@ export function Accumul8ContactModal({
     modal.hide();
   }, [modalApiRef, open]);
 
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('accumul8-contact-modal-open', open);
+    return () => {
+      document.body.classList.remove('accumul8-contact-modal-open');
+    };
+  }, [open]);
+
   return (
-    <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+    <div className="modal fade accumul8-contact-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">

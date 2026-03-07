@@ -172,7 +172,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     bankingOrganizations,
     accounts,
     notificationRules,
-    payBills,
     debtors,
     debtorLedger,
     budgetRows,
@@ -297,28 +296,35 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
   }, [recurringPayments, selectedBankingOrganizationId, selectedBankAccountId]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const filteredPayBills = React.useMemo(() => {
-    const transactionIds = new Set(filteredTransactions.map((tx) => tx.id));
-    return payBills.filter((bill) => {
-      if (!transactionIds.has(bill.id)) {
-        return false;
-      }
-      if (Number(bill.is_paid || 0) !== 0) {
-        return false;
-      }
-      const effectiveDueDate = bill.due_date || bill.transaction_date;
-      return effectiveDueDate !== '';
-    });
-  }, [filteredTransactions, payBills]);
   const payBillRows = React.useMemo(() => {
-    const transactionById = new Map<number, Accumul8Transaction>();
-    filteredTransactions.forEach((tx) => {
-      transactionById.set(tx.id, tx);
-    });
-    return filteredPayBills
-      .map((bill) => transactionById.get(bill.id) || null)
-      .filter((tx): tx is Accumul8Transaction => tx !== null);
-  }, [filteredPayBills, filteredTransactions]);
+    return filteredTransactions
+      .filter((tx) => {
+        if (Number(tx.amount || 0) >= 0) {
+          return false;
+        }
+        if (Number(tx.is_paid || 0) !== 0) {
+          return false;
+        }
+        const sourceKind = String(tx.source_kind || 'manual');
+        const entryType = String(tx.entry_type || 'manual');
+        const matchesSource = sourceKind === 'recurring' || sourceKind === 'manual' || sourceKind === 'plaid';
+        const matchesEntryType = entryType === 'bill' || entryType === 'auto' || entryType === 'manual';
+        if (!matchesSource && !matchesEntryType) {
+          return false;
+        }
+        return String(tx.due_date || tx.transaction_date || '').trim() !== '';
+      })
+      .slice()
+      .sort((a, b) => {
+        const aDate = String(a.due_date || a.transaction_date || '');
+        const bDate = String(b.due_date || b.transaction_date || '');
+        const dateCompare = aDate.localeCompare(bDate);
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+        return a.id - b.id;
+      });
+  }, [filteredTransactions]);
   const upcomingRecurringPayBills = React.useMemo(() => (
     filteredRecurringPayments
       .filter((item) => Number(item.is_active || 0) === 1 && String(item.direction || 'outflow') === 'outflow' && String(item.next_due_date || '').trim() !== '')

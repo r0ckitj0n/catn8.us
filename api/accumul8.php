@@ -1193,7 +1193,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
 {
     $effectiveToday = $today ?: date('Y-m-d');
     $dueRows = Database::queryAll(
-        'SELECT id, contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date
+        'SELECT id, contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner
          FROM accumul8_recurring_payments
          WHERE owner_user_id = ?
            AND is_active = 1
@@ -1212,6 +1212,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
         $amount = $direction === 'outflow' ? -abs($baseAmount) : abs($baseAmount);
         $frequency = (string)($row['frequency'] ?? 'monthly');
         $intervalCount = (int)($row['interval_count'] ?? 1);
+        $isBudgetPlanner = (int)($row['is_budget_planner'] ?? 1) === 1 ? 1 : 0;
 
         $existing = Database::queryOne(
             'SELECT id FROM accumul8_transactions
@@ -1226,7 +1227,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
                 'INSERT INTO accumul8_transactions
                     (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
                      is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1, 1, ?, ?, ?)',
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?)',
                 [
                     $viewerId,
                     isset($row['account_id']) ? (int)$row['account_id'] : null,
@@ -1236,6 +1237,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
                     'bill',
                     $description,
                     $amount,
+                    $isBudgetPlanner,
                     $rpId,
                     'recurring',
                     $actorUserId,

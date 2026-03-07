@@ -15,6 +15,9 @@ export interface Accumul8SpreadsheetMonthSummary {
 export interface Accumul8SpreadsheetMonthRow {
   rowKey: string;
   recurring_id: number;
+  contact_id: number | null;
+  contact_name: string;
+  account_id: number | null;
   title: string;
   due_date: string;
   dueDayLabel: string;
@@ -192,6 +195,9 @@ export function buildSpreadsheetMonthData(
       rows.push({
         rowKey: `${recurring.id}:${occurrenceDate}`,
         recurring_id: recurring.id,
+        contact_id: recurring.contact_id ?? null,
+        contact_name: recurring.contact_name || '',
+        account_id: recurring.account_id ?? null,
         title: recurring.title || 'Recurring Payment',
         due_date: occurrenceDate,
         dueDayLabel: formatDayLabel(occurrenceDate),

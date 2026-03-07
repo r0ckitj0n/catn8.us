@@ -1,6 +1,13 @@
 import React from 'react';
-import { Accumul8PaymentMethod, Accumul8RecurringPayment } from '../../types/accumul8';
 import {
+  Accumul8Account,
+  Accumul8Contact,
+  Accumul8PaymentMethod,
+  Accumul8RecurringPayment,
+  Accumul8RecurringUpsertRequest,
+} from '../../types/accumul8';
+import {
+  Accumul8SpreadsheetMonthRow,
   buildSpreadsheetMonthData,
   buildSpreadsheetMonthOptions,
   shiftMonthValue,
@@ -10,9 +17,30 @@ interface Accumul8SpreadsheetViewProps {
   busy: boolean;
   selectedMonth: string;
   recurringPayments: Accumul8RecurringPayment[];
+  contacts: Accumul8Contact[];
+  accounts: Accumul8Account[];
   onSelectedMonthChange: (monthValue: string) => void;
-  onEditRecurring: (id: number) => void;
+  onCreateContact: (form: {
+    contact_name: string;
+    contact_type: 'payee' | 'payer' | 'both';
+    default_amount: number;
+    email: string;
+    phone_number: string;
+    street_address: string;
+    city: string;
+    state: string;
+    zip: string;
+    notes: string;
+  }) => Promise<{ id?: number } | void>;
+  onUpdateRecurring: (id: number, form: Accumul8RecurringUpsertRequest) => Promise<void>;
   onDeleteRecurring: (id: number, description: string) => void;
+}
+
+interface EditableSpreadsheetRow extends Accumul8SpreadsheetMonthRow {
+  original_due_date: string;
+  rta: number;
+  balance: number;
+  vendor_input: string;
 }
 
 function formatCurrency(value: number): string {
@@ -20,15 +48,28 @@ function formatCurrency(value: number): string {
   return `${sign}$${Math.abs(value).toFixed(2)}`;
 }
 
+function shiftDateByDays(dateValue: string, dayDelta: number): string {
+  const base = new Date(`${dateValue}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) {
+    return dateValue;
+  }
+  base.setUTCDate(base.getUTCDate() + dayDelta);
+  return base.toISOString().slice(0, 10);
+}
+
 export function Accumul8SpreadsheetView({
   busy,
   selectedMonth,
   recurringPayments,
+  contacts,
+  accounts,
   onSelectedMonthChange,
-  onEditRecurring,
+  onCreateContact,
+  onUpdateRecurring,
   onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
-  const [monthRtaByValue, setMonthRtaByValue] = React.useState<Record<string, number>>({});
+  const [rowRtaByKey, setRowRtaByKey] = React.useState<Record<string, number>>({});
+  const [draftRowByKey, setDraftRowByKey] = React.useState<Record<string, EditableSpreadsheetRow>>({});
   const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
     unspecified: 'Unspecified',
     autopay: 'Autopay',
@@ -41,7 +82,6 @@ export function Accumul8SpreadsheetView({
 
   const visibleMonths = React.useMemo(
     () => [
-      shiftMonthValue(selectedMonth, -1),
       selectedMonth,
       shiftMonthValue(selectedMonth, 1),
     ],
@@ -52,41 +92,147 @@ export function Accumul8SpreadsheetView({
     () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, monthValue)),
     [recurringPayments, visibleMonths],
   );
-  const monthPanelsWithProjection = React.useMemo(() => {
-    let runningBalance = 0;
-    return monthPanels.map((panel) => {
-      const amount = Number(panel.summary.net || 0);
-      const rta = Number(monthRtaByValue[panel.monthValue] || 0);
-      runningBalance = Number((runningBalance + amount + rta).toFixed(2));
+  const monthPanelsWithProjection = React.useMemo(
+    () => monthPanels.map((panel) => {
+      let runningBalance = 0;
+      const rows = panel.rows.map((row) => {
+        const draft = draftRowByKey[row.rowKey] || null;
+        const mergedRow: EditableSpreadsheetRow = {
+          ...row,
+          original_due_date: row.due_date,
+          vendor_input: row.contact_name || row.title || '',
+          rta: Number(rowRtaByKey[row.rowKey] || 0),
+          balance: 0,
+          ...draft,
+        };
+        runningBalance = Number((runningBalance + Number(mergedRow.amount || 0) + Number(mergedRow.rta || 0)).toFixed(2));
+        mergedRow.balance = runningBalance;
+        return mergedRow;
+      });
       return {
         ...panel,
-        amount,
-        rta,
-        balance: runningBalance,
+        rows,
+      };
+    }),
+    [draftRowByKey, monthPanels, rowRtaByKey],
+  );
+
+  const handleMonthShift = React.useCallback((offset: number) => {
+    onSelectedMonthChange(shiftMonthValue(selectedMonth, offset));
+  }, [onSelectedMonthChange, selectedMonth]);
+
+  const handleRowRtaChange = React.useCallback((rowKey: string, rawValue: string) => {
+    const parsed = rawValue === '' ? 0 : Number(rawValue);
+    setRowRtaByKey((prev) => ({
+      ...prev,
+      [rowKey]: Number.isFinite(parsed) ? parsed : 0,
+    }));
+    setDraftRowByKey((prev) => {
+      const existing = prev[rowKey];
+      if (!existing) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [rowKey]: {
+          ...existing,
+          rta: Number.isFinite(parsed) ? parsed : 0,
+        },
       };
     });
-  }, [monthPanels, monthRtaByValue]);
+  }, []);
+  const setRowDraft = React.useCallback((row: EditableSpreadsheetRow, patch: Partial<EditableSpreadsheetRow>) => {
+    setDraftRowByKey((prev) => ({
+      ...prev,
+      [row.rowKey]: {
+        ...row,
+        ...prev[row.rowKey],
+        ...patch,
+      },
+    }));
+  }, []);
+  const saveRow = React.useCallback(async (row: EditableSpreadsheetRow) => {
+    const recurring = recurringPayments.find((item) => item.id === row.recurring_id);
+    if (!recurring) {
+      return;
+    }
+
+    let contactId: number | null = row.contact_id ?? null;
+    const vendorName = String(row.vendor_input || '').trim();
+    if (vendorName !== '') {
+      const matched = contacts.find((contact) => contact.contact_name.trim().toLowerCase() === vendorName.toLowerCase());
+      if (matched) {
+        contactId = matched.id;
+      } else {
+        const created = await onCreateContact({
+          contact_name: vendorName,
+          contact_type: 'payee',
+          default_amount: 0,
+          email: '',
+          phone_number: '',
+          street_address: '',
+          city: '',
+          state: '',
+          zip: '',
+          notes: '',
+        });
+        const createdId = created && typeof created === 'object' && 'id' in created ? Number(created.id || 0) : 0;
+        contactId = createdId > 0 ? createdId : null;
+      }
+    } else {
+      contactId = null;
+    }
+
+    const dayDelta = (() => {
+      const previous = new Date(`${row.original_due_date}T00:00:00Z`).getTime();
+      const next = new Date(`${String(row.due_date || '')}T00:00:00Z`).getTime();
+      if (!Number.isFinite(previous) || !Number.isFinite(next)) {
+        return 0;
+      }
+      return Math.round((next - previous) / 86400000);
+    })();
+
+    const nextDueDate = dayDelta === 0
+      ? recurring.next_due_date
+      : shiftDateByDays(recurring.next_due_date, dayDelta);
+
+    await onUpdateRecurring(row.recurring_id, {
+      title: vendorName || row.title || recurring.title,
+      direction: row.direction === 'inflow' ? 'inflow' : 'outflow',
+      amount: Math.abs(Number(row.amount || 0)),
+      frequency: (row.frequency || recurring.frequency) as 'daily' | 'weekly' | 'biweekly' | 'monthly',
+      payment_method: (row.payment_method || recurring.payment_method) as Accumul8PaymentMethod,
+      interval_count: Number(recurring.interval_count || 1),
+      next_due_date: nextDueDate,
+      contact_id: contactId,
+      account_id: row.account_id ?? null,
+      is_budget_planner: Number(recurring.is_budget_planner || 0),
+      notes: row.notes || '',
+    });
+    setDraftRowByKey((prev) => {
+      const next = { ...prev };
+      delete next[row.rowKey];
+      return next;
+    });
+  }, [contacts, onCreateContact, onUpdateRecurring, recurringPayments]);
 
   return (
     <div className="accumul8-spreadsheet">
       <div className="accumul8-panel-toolbar mb-3">
         <div>
           <h3 className="mb-1">Budget Planner</h3>
-          <p className="small text-muted mb-0">Reflect on last month, work through this month, and plan the next month using only your curated budget-planner records.</p>
+          <p className="small text-muted mb-0">Step month by month through your budget-planner records and test quick adjustments inline.</p>
         </div>
-        <div className="accumul8-spreadsheet-selector">
-          <label htmlFor="budget-month" className="small text-muted mb-1">Center month</label>
-          <select
-            id="budget-month"
-            className="form-select form-select-sm"
-            value={selectedMonth}
-            onChange={(event) => onSelectedMonthChange(event.target.value)}
-            disabled={busy}
-          >
-            {monthOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+        <div className="accumul8-spreadsheet-nav">
+          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(-1)} disabled={busy} aria-label="Previous month">
+            <i className="bi bi-chevron-left"></i>
+          </button>
+          <div className="accumul8-spreadsheet-nav-label">
+            {monthOptions.find((option) => option.value === selectedMonth)?.label || selectedMonth}
+          </div>
+          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(1)} disabled={busy} aria-label="Next month">
+            <i className="bi bi-chevron-right"></i>
+          </button>
         </div>
       </div>
 
@@ -120,39 +266,12 @@ export function Accumul8SpreadsheetView({
                   <strong>{formatCurrency(summary.outflow)}</strong>
                 </div>
                 <div>
-                  <span>Amount</span>
-                  <strong>{formatCurrency(panel.amount)}</strong>
-                </div>
-                <div>
-                  <span>RTA</span>
-                  <input
-                    className="form-control form-control-sm accumul8-month-summary-input"
-                    type="number"
-                    step="0.01"
-                    value={panel.rta}
-                    onChange={(event) => {
-                      const raw = event.target.value;
-                      const parsed = raw === '' ? 0 : Number(raw);
-                      setMonthRtaByValue((prev) => ({
-                        ...prev,
-                        [panel.monthValue]: Number.isFinite(parsed) ? parsed : 0,
-                      }));
-                    }}
-                    disabled={busy}
-                    aria-label={`${panel.monthLabel} real time adjustment`}
-                  />
-                </div>
-                <div>
-                  <span>Balance</span>
-                  <strong>{formatCurrency(panel.balance)}</strong>
-                </div>
-                <div>
                   <span>Net</span>
                   <strong>{formatCurrency(summary.net)}</strong>
                 </div>
               </div>
 
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--spreadsheet">
+              <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
                 <table className="table table-sm accumul8-sticky-head accumul8-month-table">
                   <thead>
                     <tr>
@@ -163,6 +282,8 @@ export function Accumul8SpreadsheetView({
                       <th>Method</th>
                       <th>Frequency</th>
                       <th className="text-end">Amount</th>
+                      <th className="text-end">RTA</th>
+                      <th className="text-end">Balance</th>
                       <th>Notes</th>
                       <th className="text-end">Actions</th>
                     </tr>
@@ -170,19 +291,117 @@ export function Accumul8SpreadsheetView({
                   <tbody>
                     {panel.rows.length > 0 ? panel.rows.map((row) => (
                       <tr key={row.rowKey} className={row.amount < 0 ? 'is-outflow' : 'is-inflow'}>
-                        <td>{row.direction === 'inflow' ? 'Inflow' : 'Outflow'}</td>
-                        <td title={row.due_date || ''}>{row.dueDayLabel}</td>
-                        <td>{row.title || '-'}</td>
-                        <td>{row.account_name || row.banking_organization_name || '-'}</td>
-                        <td>{paymentMethodLabels[(row.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
-                        <td>{row.frequency}</td>
-                        <td className="text-end">{Number(row.amount || 0).toFixed(2)}</td>
-                        <td>{row.notes || '-'}</td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm accumul8-month-table-select"
+                            value={row.direction}
+                            onChange={(event) => setRowDraft(row, { direction: event.target.value })}
+                            disabled={busy}
+                          >
+                            <option value="outflow">Outflow</option>
+                            <option value="inflow">Inflow</option>
+                          </select>
+                        </td>
+                        <td title={row.due_date || ''}>
+                          <input
+                            className="form-control form-control-sm accumul8-month-table-input"
+                            type="date"
+                            value={row.due_date}
+                            onChange={(event) => setRowDraft(row, { due_date: event.target.value, dueDayLabel: event.target.value.slice(8, 10) })}
+                            disabled={busy}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control form-control-sm accumul8-month-table-input"
+                            list={`accumul8-vendor-options-${panel.monthValue}`}
+                            value={row.vendor_input}
+                            onChange={(event) => setRowDraft(row, { vendor_input: event.target.value, title: event.target.value })}
+                            disabled={busy}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm accumul8-month-table-select"
+                            value={row.account_id ?? ''}
+                            onChange={(event) => {
+                              const selectedAccountId = event.target.value === '' ? null : Number(event.target.value);
+                              const account = accounts.find((item) => item.id === selectedAccountId) || null;
+                              setRowDraft(row, {
+                                account_id: selectedAccountId,
+                                account_name: account?.account_name || '',
+                                banking_organization_name: account?.banking_organization_name || '',
+                              });
+                            }}
+                            disabled={busy}
+                          >
+                            <option value="">None</option>
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id}>{account.account_name}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm accumul8-month-table-select"
+                            value={row.payment_method}
+                            onChange={(event) => setRowDraft(row, { payment_method: event.target.value })}
+                            disabled={busy}
+                          >
+                            {Object.entries(paymentMethodLabels).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm accumul8-month-table-select"
+                            value={row.frequency}
+                            onChange={(event) => setRowDraft(row, { frequency: event.target.value })}
+                            disabled={busy}
+                          >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Biweekly</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                        </td>
+                        <td className="text-end">
+                          <input
+                            className="form-control form-control-sm accumul8-month-table-input"
+                            type="number"
+                            step="0.01"
+                            value={row.amount}
+                            onChange={(event) => {
+                              const parsed = Number(event.target.value);
+                              setRowDraft(row, { amount: Number.isFinite(parsed) ? parsed : 0 });
+                            }}
+                            disabled={busy}
+                          />
+                        </td>
+                        <td className="text-end">
+                          <input
+                            className="form-control form-control-sm accumul8-month-table-input"
+                            type="number"
+                            step="0.01"
+                            value={row.rta}
+                            onChange={(event) => handleRowRtaChange(row.rowKey, event.target.value)}
+                            disabled={busy}
+                            aria-label={`${row.title} real time adjustment`}
+                          />
+                        </td>
+                        <td className="text-end">{Number(row.balance || 0).toFixed(2)}</td>
+                        <td>
+                          <input
+                            className="form-control form-control-sm accumul8-month-table-input"
+                            value={row.notes || ''}
+                            onChange={(event) => setRowDraft(row, { notes: event.target.value })}
+                            disabled={busy}
+                          />
+                        </td>
                         <td className="text-end">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onEditRecurring(row.recurring_id)} disabled={busy} aria-label={`Edit ${row.title}`}>
-                              <i className="bi bi-pencil"></i>
-                            </button>
+                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void saveRow(row)} disabled={busy} aria-label={`Save ${row.title || 'row'}`}>Save</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-danger"
@@ -197,11 +416,16 @@ export function Accumul8SpreadsheetView({
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={9} className="text-center text-muted py-4">No budget-planner recurring payments in this month yet.</td>
+                        <td colSpan={11} className="text-center text-muted py-4">No budget-planner recurring payments in this month yet.</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+                <datalist id={`accumul8-vendor-options-${panel.monthValue}`}>
+                  {contacts.map((contact) => (
+                    <option key={contact.id} value={contact.contact_name} />
+                  ))}
+                </datalist>
               </div>
             </section>
           );

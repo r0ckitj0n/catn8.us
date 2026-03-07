@@ -664,8 +664,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 busy={busy}
                 selectedMonth={budgetMonth}
                 recurringPayments={budgetPlannerRecurringPayments}
+                contacts={contacts}
+                accounts={visibleAccounts}
                 onSelectedMonthChange={setBudgetMonth}
-                onEditRecurring={beginEditRecurring}
+                onCreateContact={createContact}
+                onUpdateRecurring={updateRecurring}
                 onDeleteRecurring={handleDeleteRecurring}
               />
             </div>

@@ -82,16 +82,18 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, scopedActionUrl]);
-  const withReload = React.useCallback(async (action: () => Promise<any>, successMessage?: string) => {
+  const withReload = React.useCallback(async <T,>(action: () => Promise<T>, successMessage?: string): Promise<T> => {
     setBusy(true);
     try {
-      await action();
+      const result = await action();
       await load();
       if (successMessage && onToast) {
         onToast({ tone: 'success', message: successMessage });
       }
+      return result;
     } catch (error: any) {
       handleError(error);
+      throw error;
     } finally {
       setBusy(false);
     }

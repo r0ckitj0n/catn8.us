@@ -1,3 +1,7 @@
+.accumul8-contact-modal {
+  z-index: 6260 !important;
+}
+
 .accumul8-contact-modal .modal-dialog {
   width: min(60vw, 960px);
   max-width: min(60vw, 960px);
@@ -24,6 +28,7 @@
 }
 
 body.accumul8-contact-modal-open .modal-backdrop.show {
+  z-index: 6250 !important;
   background: rgba(17, 32, 56, 0.62);
   backdrop-filter: blur(2px);
 }

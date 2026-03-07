@@ -1,0 +1,52 @@
+.accumul8-recurring-modal {
+  z-index: 6260 !important;
+}
+
+.accumul8-recurring-modal .modal-dialog {
+  width: min(64vw, 980px);
+  max-width: min(64vw, 980px);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.accumul8-recurring-modal.fade .modal-dialog {
+  transform: translateY(18px) scale(0.96);
+}
+
+.accumul8-recurring-modal.show .modal-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.accumul8-recurring-modal .modal-content {
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid rgba(36, 52, 84, 0.2);
+  box-shadow: 0 28px 60px rgba(10, 20, 38, 0.28);
+}
+
+.accumul8-recurring-modal .modal-body {
+  overflow-y: auto;
+}
+
+body.accumul8-recurring-modal-open .modal-backdrop.show {
+  z-index: 6250 !important;
+  background: rgba(17, 32, 56, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+@media (max-width: 991.98px) {
+  .accumul8-recurring-modal .modal-dialog {
+    width: min(calc(100vw - 2rem), 64vw);
+    max-width: min(calc(100vw - 2rem), 64vw);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .accumul8-recurring-modal .modal-dialog {
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .accumul8-recurring-modal .modal-content {
+    max-height: 80vh;
+  }
+}

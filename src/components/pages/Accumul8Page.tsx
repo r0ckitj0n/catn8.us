@@ -2,6 +2,7 @@ import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
 import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
+import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
@@ -357,13 +358,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       notes: recurring.notes || '',
     });
   }, [recurringPayments]);
-  const saveInlineRecurring = React.useCallback(async () => {
+  const closeRecurringModal = React.useCallback(() => {
+    resetRecurringEditor();
+  }, [resetRecurringEditor]);
+  const submitRecurringModal = React.useCallback(async (form: ReturnType<typeof buildRecurringPayload>) => {
     if (!editingRecurringId) {
       return;
     }
-    await updateRecurring(editingRecurringId, buildRecurringPayload(editingRecurringForm));
-    resetRecurringEditor();
-  }, [editingRecurringForm, editingRecurringId, resetRecurringEditor, updateRecurring]);
+    await updateRecurring(editingRecurringId, form);
+    closeRecurringModal();
+  }, [closeRecurringModal, editingRecurringId, updateRecurring]);
   const beginEditDebtor = React.useCallback((id: number) => {
     const debtor = debtors.find((v) => v.id === id);
     if (!debtor) return;
@@ -889,46 +893,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredRecurringPayments.map((rp) => (
-                      <React.Fragment key={rp.id}>
-                        <tr className="accumul8-list-item">
-                          <td>{rp.title}</td>
-                          <td>{rp.next_due_date}</td>
-                          <td className="text-end">{rp.amount.toFixed(2)}</td>
-                          <td>{rp.frequency}</td>
-                          <td>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
-                          <td>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</td>
-                          <td><button type="button" className={`btn btn-sm ${rp.is_active ? 'btn-success' : 'btn-outline-secondary'}`} onClick={() => void toggleRecurring(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button></td>
-                          <td className="text-end">
-                            <div className="accumul8-row-actions">
-                              <button type="button" className={`btn btn-sm ${editingRecurringId === rp.id ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`}><i className="bi bi-pencil"></i></button>
-                              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this recurring payment?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
-                            </div>
-                          </td>
-                        </tr>
-                        {editingRecurringId === rp.id ? (
-                          <tr className="accumul8-inline-editor-row">
-                            <td colSpan={8}>
-                              <div className="accumul8-inline-editor-grid">
-                                <div><label className="form-label small mb-1">Title</label><input className="form-control form-control-sm" value={editingRecurringForm.title} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, title: e.target.value }))} required /></div>
-                                <div><label className="form-label small mb-1">Direction</label><select className="form-select form-select-sm" value={editingRecurringForm.direction} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, direction: e.target.value as Accumul8Direction }))}><option value="outflow">Outflow</option><option value="inflow">Inflow</option></select></div>
-                                <div><label className="form-label small mb-1">Amount</label><input className="form-control form-control-sm" type="number" step="0.01" value={editingRecurringForm.amount} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, amount: Number(e.target.value) }))} required /></div>
-                                <div><label className="form-label small mb-1">Frequency</label><select className="form-select form-select-sm" value={editingRecurringForm.frequency} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, frequency: e.target.value as Accumul8Frequency }))}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
-                                <div><label className="form-label small mb-1">Payment Method</label><select className="form-select form-select-sm" value={editingRecurringForm.payment_method} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, payment_method: e.target.value as Accumul8PaymentMethod }))}><option value="unspecified">Payment Method</option><option value="autopay">Auto debit / autopay</option><option value="manual">Manual payment</option></select></div>
-                                <div><label className="form-label small mb-1">Every</label><input className="form-control form-control-sm" type="number" min={1} max={365} value={editingRecurringForm.interval_count} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, interval_count: Number(e.target.value) }))} /></div>
-                                <div><label className="form-label small mb-1">Next Due</label><input className="form-control form-control-sm" type="date" value={editingRecurringForm.next_due_date} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, next_due_date: e.target.value }))} required /></div>
-                                <div><label className="form-label small mb-1">Contact</label><select className="form-select form-select-sm" value={editingRecurringForm.contact_id} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, contact_id: e.target.value }))}><option value="">Contact</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.contact_name}</option>)}</select></div>
-                                <div><label className="form-label small mb-1">Account</label><select className="form-select form-select-sm" value={editingRecurringForm.account_id} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, account_id: e.target.value }))}><option value="">Account</option>{visibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
-                                <div><label className="form-label small mb-1">Planner</label><select className="form-select form-select-sm" value={String(editingRecurringForm.is_budget_planner)} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, is_budget_planner: Number(e.target.value) }))}><option value="1">Show In Planner</option><option value="0">Hide From Planner</option></select></div>
-                                <div className="accumul8-inline-editor-notes"><label className="form-label small mb-1">Notes</label><input className="form-control form-control-sm" value={editingRecurringForm.notes} onChange={(e) => setEditingRecurringForm((v) => ({ ...v, notes: e.target.value }))} /></div>
-                                <div className="accumul8-inline-editor-actions">
-                                  <button type="button" className="btn btn-sm btn-success" onClick={() => void saveInlineRecurring()} disabled={busy || !editingRecurringForm.title.trim() || !editingRecurringForm.next_due_date}>Save Changes</button>
-                                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={resetRecurringEditor} disabled={busy}>Cancel</button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : null}
-                      </React.Fragment>
+                      <tr key={rp.id} className="accumul8-list-item">
+                        <td>{rp.title}</td>
+                        <td>{rp.next_due_date}</td>
+                        <td className="text-end">{rp.amount.toFixed(2)}</td>
+                        <td>{rp.frequency}</td>
+                        <td>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
+                        <td>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</td>
+                        <td><button type="button" className={`btn btn-sm ${rp.is_active ? 'btn-success' : 'btn-outline-secondary'}`} onClick={() => void toggleRecurring(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button></td>
+                        <td className="text-end">
+                          <div className="accumul8-row-actions">
+                            <button type="button" className={`btn btn-sm ${editingRecurringId === rp.id ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`}><i className="bi bi-pencil"></i></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this recurring payment?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -1036,6 +1015,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             editing={editingContactId !== null}
             onClose={closeContactModal}
             onSave={submitContactForm}
+          />
+          <Accumul8RecurringModal
+            open={editingRecurringId !== null}
+            busy={busy}
+            initialForm={editingRecurringForm}
+            contacts={contacts}
+            accounts={visibleAccounts}
+            onClose={closeRecurringModal}
+            onSave={submitRecurringModal}
           />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}

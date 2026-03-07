@@ -72,7 +72,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     updateRecurring,
     toggleRecurring,
     deleteRecurring,
-    materializeDueRecurring,
     createTransaction,
     updateTransaction,
     deleteTransaction,
@@ -168,9 +167,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return true;
     });
   }, [recurringPayments, selectedBankingOrganizationId, selectedBankAccountId]);
+  const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const filteredPayBills = React.useMemo(() => {
     const transactionIds = new Set(filteredTransactions.map((tx) => tx.id));
-    return payBills.filter((bill) => transactionIds.has(bill.id));
+    return payBills.filter((bill) => {
+      if (!transactionIds.has(bill.id)) {
+        return false;
+      }
+      if (Number(bill.is_paid || 0) !== 0) {
+        return false;
+      }
+      const effectiveDueDate = bill.due_date || bill.transaction_date;
+      return effectiveDueDate !== '';
+    });
   }, [filteredTransactions, payBills]);
   const filteredSummary = React.useMemo(() => {
     const next = { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 };
@@ -706,7 +715,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-2">
                 <h3 className="mb-0">Pay Bills Queue</h3>
-                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void materializeDueRecurring()} disabled={busy}>Post Due Recurring Bills</button>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
                 <table className="table table-striped table-sm accumul8-sticky-head">
@@ -717,7 +725,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <td>{bill.due_date || bill.transaction_date}</td>
                         <td>{bill.description}</td>
                         <td className="text-end">{bill.amount.toFixed(2)}</td>
-                        <td>{bill.is_paid ? 'Paid' : 'Unpaid'}</td>
+                        <td>{(bill.due_date || bill.transaction_date) < todayDate ? 'Past due' : 'Upcoming'}</td>
                         <td className="text-end">
                           <div className="accumul8-row-actions">
                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditTransaction(bill.id)} disabled={busy} aria-label={`Edit ${bill.description}`}><i className="bi bi-pencil"></i></button>
@@ -726,6 +734,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
+                    {filteredPayBills.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="text-center text-muted py-4">No unpaid upcoming or past-due bills.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -1050,6 +1050,7 @@ function accumul8_due_bills(int $viewerId): array
          FROM accumul8_transactions
          WHERE owner_user_id = ?
            AND amount < 0
+           AND is_paid = 0
            " . $kindClause . "
          ORDER BY COALESCE(due_date, transaction_date) ASC, id ASC",
         [$viewerId]
@@ -1172,6 +1173,77 @@ function accumul8_next_due_date(string $currentDate, string $frequency, int $int
     return date('Y-m-d', strtotime('+' . $intervalCount . ' day', $base));
 }
 
+function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorUserId, ?string $today = null): int
+{
+    $effectiveToday = $today ?: date('Y-m-d');
+    $dueRows = Database::queryAll(
+        'SELECT id, contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date
+         FROM accumul8_recurring_payments
+         WHERE owner_user_id = ?
+           AND is_active = 1
+           AND next_due_date <= ?
+         ORDER BY next_due_date ASC, id ASC',
+        [$viewerId, $effectiveToday]
+    );
+
+    $created = 0;
+    foreach ($dueRows as $row) {
+        $rpId = (int)($row['id'] ?? 0);
+        $nextDue = (string)($row['next_due_date'] ?? $effectiveToday);
+        $description = (string)($row['title'] ?? 'Recurring Payment');
+        $direction = (string)($row['direction'] ?? 'outflow');
+        $baseAmount = (float)($row['amount'] ?? 0);
+        $amount = $direction === 'outflow' ? -abs($baseAmount) : abs($baseAmount);
+        $frequency = (string)($row['frequency'] ?? 'monthly');
+        $intervalCount = (int)($row['interval_count'] ?? 1);
+
+        $existing = Database::queryOne(
+            'SELECT id FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND recurring_payment_id = ?
+               AND due_date = ?
+             LIMIT 1',
+            [$viewerId, $rpId, $nextDue]
+        );
+        if (!$existing) {
+            Database::execute(
+                'INSERT INTO accumul8_transactions
+                    (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
+                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, created_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1, 1, ?, ?, ?)',
+                [
+                    $viewerId,
+                    isset($row['account_id']) ? (int)$row['account_id'] : null,
+                    isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+                    $nextDue,
+                    $nextDue,
+                    'bill',
+                    $description,
+                    $amount,
+                    $rpId,
+                    'recurring',
+                    $actorUserId,
+                ]
+            );
+            $created++;
+        }
+
+        $nextGenerated = accumul8_next_due_date($nextDue, $frequency, $intervalCount);
+        Database::execute(
+            'UPDATE accumul8_recurring_payments
+             SET next_due_date = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [$nextGenerated, $rpId, $viewerId]
+        );
+    }
+
+    if ($created > 0) {
+        accumul8_recompute_running_balance($viewerId);
+    }
+
+    return $created;
+}
+
 function accumul8_plaid_env(): string
 {
     $env = strtolower(accumul8_normalize_text((string)(secret_get(catn8_secret_key('accumul8.plaid.env')) ?? getenv('PLAID_ENV') ?? 'sandbox'), 16));
@@ -1260,6 +1332,7 @@ if ($action === 'bootstrap') {
     catn8_require_method('GET');
 
     $warnings = [];
+    accumul8_bootstrap_section('materialize_due_recurring', static fn() => accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId), 0, $warnings);
     $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
     $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
@@ -1777,71 +1850,7 @@ if ($action === 'delete_recurring') {
 
 if ($action === 'materialize_due_recurring') {
     catn8_require_method('POST');
-
-    $today = date('Y-m-d');
-    $dueRows = Database::queryAll(
-        'SELECT id, contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date
-         FROM accumul8_recurring_payments
-         WHERE owner_user_id = ?
-           AND is_active = 1
-           AND next_due_date <= ?
-         ORDER BY next_due_date ASC, id ASC',
-        [$viewerId, $today]
-    );
-
-    $created = 0;
-    foreach ($dueRows as $row) {
-        $rpId = (int)($row['id'] ?? 0);
-        $nextDue = (string)($row['next_due_date'] ?? $today);
-        $description = (string)($row['title'] ?? 'Recurring Payment');
-        $direction = (string)($row['direction'] ?? 'outflow');
-        $baseAmount = (float)($row['amount'] ?? 0);
-        $amount = $direction === 'outflow' ? -abs($baseAmount) : abs($baseAmount);
-        $frequency = (string)($row['frequency'] ?? 'monthly');
-        $intervalCount = (int)($row['interval_count'] ?? 1);
-
-        $existing = Database::queryOne(
-            'SELECT id FROM accumul8_transactions
-             WHERE owner_user_id = ?
-               AND recurring_payment_id = ?
-               AND due_date = ?
-             LIMIT 1',
-            [$viewerId, $rpId, $nextDue]
-        );
-        if (!$existing) {
-            Database::execute(
-                'INSERT INTO accumul8_transactions
-                    (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
-                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1, 1, ?, ?, ?)',
-                [
-                    $viewerId,
-                    isset($row['account_id']) ? (int)$row['account_id'] : null,
-                    isset($row['contact_id']) ? (int)$row['contact_id'] : null,
-                    $nextDue,
-                    $nextDue,
-                    'bill',
-                    $description,
-                    $amount,
-                    $rpId,
-                    'recurring',
-                    $actorUserId,
-                ]
-            );
-            $created++;
-        }
-
-        $nextGenerated = accumul8_next_due_date($nextDue, $frequency, $intervalCount);
-        Database::execute(
-            'UPDATE accumul8_recurring_payments
-             SET next_due_date = ?
-             WHERE id = ? AND owner_user_id = ?',
-            [$nextGenerated, $rpId, $viewerId]
-        );
-    }
-
-    accumul8_recompute_running_balance($viewerId);
-
+    $created = accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId);
     catn8_json_response(['success' => true, 'created' => $created]);
 }
 

@@ -282,6 +282,26 @@
   padding: 0.35rem 0.3rem;
 }
 
+.accumul8-month-table tr.is-editing td {
+  background: rgba(235, 242, 251, 0.92);
+}
+
+.accumul8-month-table tr.has-draft:not(.is-editing) td {
+  background: rgba(248, 251, 255, 0.92);
+}
+
+.accumul8-sticky-head tbody tr.is-editing td,
+.accumul8-list-item.is-editing td,
+.accumul8-list-item.is-editing {
+  background: rgba(235, 242, 251, 0.92);
+}
+
+.accumul8-sticky-head tbody tr.has-draft:not(.is-editing) td,
+.accumul8-list-item.has-draft:not(.is-editing) td,
+.accumul8-list-item.has-draft:not(.is-editing) {
+  background: rgba(248, 251, 255, 0.92);
+}
+
 .accumul8-month-table th:nth-child(1),
 .accumul8-month-table td:nth-child(1) {
   width: 7%;
@@ -336,6 +356,41 @@
   width: 100%;
   padding: 0.2rem 0.35rem;
   font-size: 0.69rem;
+}
+
+.accumul8-inline-cell-trigger {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: #223453;
+  line-height: 1.15;
+  min-height: 1rem;
+}
+
+.accumul8-inline-cell-trigger:hover:not(:disabled),
+.accumul8-inline-cell-trigger:focus-visible {
+  color: #0f3f88;
+  text-decoration: underline;
+}
+
+.accumul8-inline-cell-trigger:disabled {
+  opacity: 0.7;
+}
+
+.accumul8-inline-cell-trigger--numeric {
+  text-align: right;
+}
+
+.accumul8-month-table td.is-compact-actions {
+  white-space: nowrap;
+}
+
+.accumul8-icon-action {
+  min-width: 2rem;
+  padding-inline: 0.45rem;
 }
 
 .accumul8-status-pill {

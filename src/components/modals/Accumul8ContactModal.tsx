@@ -1,6 +1,7 @@
 import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8ContactType, Accumul8ContactUpsertRequest } from '../../types/accumul8';
+import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8ContactModal.css';
 
@@ -175,7 +176,15 @@ export function Accumul8ContactModal({
             </div>
             <div className="d-flex justify-content-end gap-2">
               <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button type="submit" className="btn btn-success" disabled={busy}>{editing ? 'Save Changes' : 'Add Payee / Payer'}</button>
+              <button
+                type="submit"
+                className="btn btn-success"
+                disabled={busy}
+                aria-label={editing ? 'Save payee or payer changes' : 'Add payee or payer'}
+                title={editing ? 'Save payee or payer changes' : 'Add payee or payer'}
+              >
+                <span aria-hidden="true">{editing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
+              </button>
             </div>
           </form>
         </div>

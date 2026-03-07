@@ -8,6 +8,7 @@ import {
   Accumul8PaymentMethod,
   Accumul8RecurringUpsertRequest,
 } from '../../types/accumul8';
+import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8RecurringModal.css';
 
@@ -234,7 +235,15 @@ export function Accumul8RecurringModal({
             </div>
             <div className="d-flex justify-content-end gap-2">
               <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button type="submit" className="btn btn-success" disabled={busy || !form.title.trim() || !form.next_due_date}>Save Changes</button>
+              <button
+                type="submit"
+                className="btn btn-success"
+                disabled={busy || !form.title.trim() || !form.next_due_date}
+                aria-label="Save recurring payment changes"
+                title="Save recurring payment changes"
+              >
+                <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+              </button>
             </div>
           </form>
         </div>

@@ -12,6 +12,7 @@ import {
   buildSpreadsheetMonthOptions,
   shiftMonthValue,
 } from '../../utils/accumul8Spreadsheet';
+import { ACCUMUL8_SAVE_BUTTON_EMOJI } from './accumul8Ui';
 
 interface Accumul8SpreadsheetViewProps {
   busy: boolean;
@@ -61,6 +62,29 @@ function getTodayDateValue(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatDateLabel(value: string): string {
+  if (!value) {
+    return '-';
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit',
+  });
+}
+
+function formatEditableValue(value: string | number | null | undefined, fallback = '-'): string {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : fallback;
+  }
+  return String(value || '').trim() || fallback;
+}
+
 function compareRowTimeline(left: EditableSpreadsheetRow, right: EditableSpreadsheetRow): number {
   if (left.due_date !== right.due_date) {
     return left.due_date.localeCompare(right.due_date);
@@ -89,6 +113,7 @@ export function Accumul8SpreadsheetView({
   onUpdateRecurring,
   onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
+  const [activeRowKey, setActiveRowKey] = React.useState<string | null>(null);
   const [rowRtaByKey, setRowRtaByKey] = React.useState<Record<string, number>>({});
   const [draftRowByKey, setDraftRowByKey] = React.useState<Record<string, EditableSpreadsheetRow>>({});
   const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
@@ -247,6 +272,9 @@ export function Accumul8SpreadsheetView({
       },
     }));
   }, []);
+  const activateRow = React.useCallback((rowKey: string) => {
+    setActiveRowKey(rowKey);
+  }, []);
   const saveRow = React.useCallback(async (row: EditableSpreadsheetRow) => {
     const recurring = recurringPayments.find((item) => item.id === row.recurring_id);
     if (!recurring) {
@@ -310,6 +338,7 @@ export function Accumul8SpreadsheetView({
       delete next[row.rowKey];
       return next;
     });
+    setActiveRowKey((current) => (current === row.rowKey ? null : current));
   }, [contacts, onCreateContact, onUpdateRecurring, recurringPayments]);
 
   return (
@@ -386,122 +415,192 @@ export function Accumul8SpreadsheetView({
                   </thead>
                   <tbody>
                     {panel.rows.length > 0 ? panel.rows.map((row) => (
-                      <tr key={row.rowKey} className={row.amount < 0 ? 'is-outflow' : 'is-inflow'}>
+                      <tr
+                        key={row.rowKey}
+                        className={[
+                          row.amount < 0 ? 'is-outflow' : 'is-inflow',
+                          activeRowKey === row.rowKey ? 'is-editing' : '',
+                          draftRowByKey[row.rowKey] ? 'has-draft' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
                         <td>
-                          <select
-                            className="form-select form-select-sm accumul8-month-table-select"
-                            value={row.direction}
-                            onChange={(event) => setRowDraft(row, { direction: event.target.value })}
-                            disabled={busy}
-                          >
-                            <option value="outflow">Outflow</option>
-                            <option value="inflow">Inflow</option>
-                          </select>
+                          {activeRowKey === row.rowKey ? (
+                            <select
+                              className="form-select form-select-sm accumul8-month-table-select"
+                              value={row.direction}
+                              onChange={(event) => setRowDraft(row, { direction: event.target.value })}
+                              disabled={busy}
+                            >
+                              <option value="outflow">Outflow</option>
+                              <option value="inflow">Inflow</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {row.direction === 'inflow' ? 'Inflow' : 'Outflow'}
+                            </button>
+                          )}
                         </td>
                         <td title={row.due_date || ''}>
-                          <input
-                            className="form-control form-control-sm accumul8-month-table-input"
-                            type="date"
-                            value={row.due_date}
-                            onChange={(event) => setRowDraft(row, { due_date: event.target.value, dueDayLabel: event.target.value.slice(8, 10) })}
-                            disabled={busy}
-                          />
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              type="date"
+                              value={row.due_date}
+                              onChange={(event) => setRowDraft(row, { due_date: event.target.value, dueDayLabel: event.target.value.slice(8, 10) })}
+                              disabled={busy}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatDateLabel(row.due_date)}
+                            </button>
+                          )}
                         </td>
                         <td>
-                          <input
-                            className="form-control form-control-sm accumul8-month-table-input"
-                            list={`accumul8-vendor-options-${panel.monthValue}`}
-                            value={row.vendor_input}
-                            onChange={(event) => setRowDraft(row, { vendor_input: event.target.value, title: event.target.value })}
-                            disabled={busy}
-                          />
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              list={`accumul8-vendor-options-${panel.monthValue}`}
+                              value={row.vendor_input}
+                              onChange={(event) => setRowDraft(row, { vendor_input: event.target.value, title: event.target.value })}
+                              disabled={busy}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatEditableValue(row.vendor_input, 'Add vendor')}
+                            </button>
+                          )}
                         </td>
                         <td>
-                          <select
-                            className="form-select form-select-sm accumul8-month-table-select"
-                            value={row.account_id ?? ''}
-                            onChange={(event) => {
-                              const selectedAccountId = event.target.value === '' ? null : Number(event.target.value);
-                              const account = accounts.find((item) => item.id === selectedAccountId) || null;
-                              setRowDraft(row, {
-                                account_id: selectedAccountId,
-                                banking_organization_id: account?.banking_organization_id ?? null,
-                                account_name: account?.account_name || '',
-                                banking_organization_name: account?.banking_organization_name || '',
-                              });
-                            }}
-                            disabled={busy}
-                          >
-                            <option value="">None</option>
-                            {accounts.map((account) => (
-                              <option key={account.id} value={account.id}>{account.account_name}</option>
-                            ))}
-                          </select>
+                          {activeRowKey === row.rowKey ? (
+                            <select
+                              className="form-select form-select-sm accumul8-month-table-select"
+                              value={row.account_id ?? ''}
+                              onChange={(event) => {
+                                const selectedAccountId = event.target.value === '' ? null : Number(event.target.value);
+                                const account = accounts.find((item) => item.id === selectedAccountId) || null;
+                                setRowDraft(row, {
+                                  account_id: selectedAccountId,
+                                  banking_organization_id: account?.banking_organization_id ?? null,
+                                  account_name: account?.account_name || '',
+                                  banking_organization_name: account?.banking_organization_name || '',
+                                });
+                              }}
+                              disabled={busy}
+                            >
+                              <option value="">None</option>
+                              {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>{account.account_name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatEditableValue(row.account_name, 'None')}
+                            </button>
+                          )}
                         </td>
                         <td>
-                          <select
-                            className="form-select form-select-sm accumul8-month-table-select"
-                            value={row.payment_method}
-                            onChange={(event) => setRowDraft(row, { payment_method: event.target.value })}
-                            disabled={busy}
-                          >
-                            {Object.entries(paymentMethodLabels).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
+                          {activeRowKey === row.rowKey ? (
+                            <select
+                              className="form-select form-select-sm accumul8-month-table-select"
+                              value={row.payment_method}
+                              onChange={(event) => setRowDraft(row, { payment_method: event.target.value })}
+                              disabled={busy}
+                            >
+                              {Object.entries(paymentMethodLabels).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {paymentMethodLabels[row.payment_method] || 'Unspecified'}
+                            </button>
+                          )}
                         </td>
                         <td>
-                          <select
-                            className="form-select form-select-sm accumul8-month-table-select"
-                            value={row.frequency}
-                            onChange={(event) => setRowDraft(row, { frequency: event.target.value })}
-                            disabled={busy}
-                          >
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="biweekly">Biweekly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
+                          {activeRowKey === row.rowKey ? (
+                            <select
+                              className="form-select form-select-sm accumul8-month-table-select"
+                              value={row.frequency}
+                              onChange={(event) => setRowDraft(row, { frequency: event.target.value })}
+                              disabled={busy}
+                            >
+                              <option value="daily">Daily</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="biweekly">Biweekly</option>
+                              <option value="monthly">Monthly</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatEditableValue(row.frequency, '-')}
+                            </button>
+                          )}
                         </td>
                         <td className="text-end">
-                          <input
-                            className="form-control form-control-sm accumul8-month-table-input"
-                            type="number"
-                            step="0.01"
-                            value={row.amount}
-                            onChange={(event) => {
-                              const parsed = Number(event.target.value);
-                              setRowDraft(row, { amount: Number.isFinite(parsed) ? parsed : 0 });
-                            }}
-                            disabled={busy}
-                          />
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              type="number"
+                              step="0.01"
+                              value={row.amount}
+                              onChange={(event) => {
+                                const parsed = Number(event.target.value);
+                                setRowDraft(row, { amount: Number.isFinite(parsed) ? parsed : 0 });
+                              }}
+                              disabled={busy}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatCurrency(Number(row.amount || 0))}
+                            </button>
+                          )}
                         </td>
                         <td className="text-end">
-                          <input
-                            className="form-control form-control-sm accumul8-month-table-input"
-                            type="number"
-                            step="0.01"
-                            value={row.rta}
-                            onChange={(event) => handleRowRtaChange(row.rowKey, event.target.value)}
-                            disabled={busy}
-                            aria-label={`${row.title} real time adjustment`}
-                          />
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              type="number"
+                              step="0.01"
+                              value={row.rta}
+                              onChange={(event) => handleRowRtaChange(row.rowKey, event.target.value)}
+                              disabled={busy}
+                              aria-label={`${row.title} real time adjustment`}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {Number(row.rta || 0).toFixed(2)}
+                            </button>
+                          )}
                         </td>
                         <td className="text-end">{Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-'}</td>
                         <td>
-                          <input
-                            className="form-control form-control-sm accumul8-month-table-input"
-                            value={row.notes || ''}
-                            onChange={(event) => setRowDraft(row, { notes: event.target.value })}
-                            disabled={busy}
-                          />
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              value={row.notes || ''}
+                              onChange={(event) => setRowDraft(row, { notes: event.target.value })}
+                              disabled={busy}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatEditableValue(row.notes, 'Add notes')}
+                            </button>
+                          )}
                         </td>
-                        <td className="text-end">
+                        <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void saveRow(row)} disabled={busy} aria-label={`Save ${row.title || 'row'}`}>Save</button>
                             <button
                               type="button"
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
+                              onClick={() => void saveRow(row)}
+                              disabled={busy || !draftRowByKey[row.rowKey]}
+                              aria-label={`Save ${row.title || 'row'}`}
+                              title={`Save ${row.title || 'row'}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger accumul8-icon-action"
                               onClick={() => onDeleteRecurring(row.recurring_id, row.title)}
                               disabled={busy}
                               aria-label={`Delete ${row.title}`}

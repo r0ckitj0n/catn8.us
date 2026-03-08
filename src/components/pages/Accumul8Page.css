@@ -1220,6 +1220,47 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.accumul8-entity-aliases {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.accumul8-entity-aliases-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.accumul8-entity-alias-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.12rem 0.42rem;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  background: rgba(13, 21, 29, 0.7);
+  color: var(--accumul8-deco-paper);
+  font-size: 0.67rem;
+}
+
+.accumul8-entity-alias-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  line-height: 1;
+}
+
+.accumul8-entity-alias-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem;
+}
+
+.accumul8-entity-alias-summary {
+  margin-top: 0.18rem;
+  white-space: normal;
+}
+
 .accumul8-inline-check-grid {
   display: grid;
   gap: 0.2rem;

@@ -15,6 +15,7 @@ import {
   Accumul8Debtor,
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
+  Accumul8EntityAlias,
   Accumul8EntityUpsertRequest,
   Accumul8NotificationRule,
   Accumul8NotificationRuleUpsertRequest,
@@ -33,6 +34,7 @@ export function useAccumul8(
   const [accessibleAccountOwners, setAccessibleAccountOwners] = React.useState<Accumul8AccessibleOwner[]>([]);
   const [summary, setSummary] = React.useState({ net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
   const [entities, setEntities] = React.useState<Accumul8Entity[]>([]);
+  const [entityAliases, setEntityAliases] = React.useState<Accumul8EntityAlias[]>([]);
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
@@ -66,6 +68,7 @@ export function useAccumul8(
       setActiveOwnerUserId(Number(res?.selected_owner_user_id || 0));
       setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
       setEntities(Array.isArray(res?.entities) ? res.entities : []);
+      setEntityAliases(Array.isArray(res?.entity_aliases) ? res.entity_aliases : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -118,6 +121,18 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('update_entity'), { id, ...form }),
       'Entity updated',
+    );
+  }, [scopedActionUrl, withReload]);
+  const createEntityAlias = React.useCallback(async (entityId: number, aliasName: string) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_entity_alias'), { entity_id: entityId, alias_name: aliasName }),
+      'Alias saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const deleteEntityAlias = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('delete_entity_alias'), { id }),
+      'Alias deleted',
     );
   }, [scopedActionUrl, withReload]);
   const createBankingOrganization = React.useCallback(async (form: Accumul8BankingOrganizationUpsertRequest) => {
@@ -332,6 +347,7 @@ export function useAccumul8(
     activeOwnerUserId,
     accessibleAccountOwners,
     entities,
+    entityAliases,
     contacts,
     recurringPayments,
     transactions,
@@ -347,6 +363,8 @@ export function useAccumul8(
     load,
     createEntity,
     updateEntity,
+    createEntityAlias,
+    deleteEntityAlias,
     createContact,
     createBankingOrganization,
     updateBankingOrganization,

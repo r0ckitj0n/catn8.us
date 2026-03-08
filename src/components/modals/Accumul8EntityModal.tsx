@@ -49,7 +49,7 @@ export function Accumul8EntityModal({
 
   return (
     <div className="modal fade accumul8-contact-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
-      <div className="modal-dialog modal-dialog-centered modal-lg">
+      <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{editing ? 'Edit Entity' : 'Add Entity'}</h5>

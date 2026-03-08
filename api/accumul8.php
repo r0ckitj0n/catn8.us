@@ -155,11 +155,16 @@ function accumul8_canonical_entity_name(string $value): string
     }
 
     $replacements = [
+        '/\bamzn\.?\s*com\/?(?:bill|bil)\b/i',
         '/\(\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*\)/i',
         '/\b(?:debit|credit)\s*-\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
+        '/\b(?:debit|credit)\b/i',
         '/\b[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
         '/\b(?:x{3,}|\*{3,})[a-z0-9-]*\b/i',
         '/\b(?:acct|account|checking|savings|card)\s+(?:ending\s+in\s+)?(?:x{2,}|\*{2,})?[a-z0-9-]{2,}\b/i',
+        '/\b(?:pl\s*[a-z0-9]{1,6}\s+payment|payment)\b/i',
+        '/\b(?:cumming(?:\s+ga)?|dawsonville(?:\s+ga)?|alpharetta(?:\s+ga)?|atlanta(?:\s+ga)?|suwanee(?:\s+ga)?|buford(?:\s+ga)?)\b/i',
+        '/\b(?:wa|ga|al|fl|nc|sc|tn|va|md)\b$/i',
     ];
     foreach ($replacements as $pattern) {
         $next = preg_replace($pattern, ' ', $name);
@@ -194,38 +199,147 @@ function accumul8_canonical_entity_name(string $value): string
     }
 
     $name = trim($name);
+    $joinedInitials = preg_replace('/\b([a-z])[\.\s]+([a-z])\b/i', '$1$2', $name);
+    if (is_string($joinedInitials) && trim($joinedInitials) !== '') {
+        $name = trim($joinedInitials);
+    }
     if ($name === '') {
         return accumul8_normalize_text($value, 191);
     }
     return accumul8_normalize_text($name, 191);
 }
 
+function accumul8_entity_match_key(string $value): string
+{
+    $canonical = accumul8_canonical_entity_name($value);
+    if ($canonical === '') {
+        return '';
+    }
+    $key = preg_replace('/[^a-z0-9]+/i', '', strtolower($canonical));
+    return is_string($key) ? $key : '';
+}
+
+function accumul8_entity_alias_name(string $value): string
+{
+    $canonical = accumul8_canonical_entity_name($value);
+    $matchKey = accumul8_entity_match_key($canonical);
+    if ($matchKey === '') {
+        return $canonical;
+    }
+    if (preg_match('/^a[ze]pharmacyllc/', $matchKey) === 1) {
+        return 'AZ Pharmacy LLC';
+    }
+    if (preg_match('/^acehardwarehammonds/', $matchKey) === 1) {
+        return 'Ace Hardware Hammonds';
+    }
+    if (preg_match('/^achieve/', $matchKey) === 1) {
+        return 'Achieve';
+    }
+    return $canonical;
+}
+
 function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?int
 {
-    $normalizedName = accumul8_canonical_entity_name($displayName);
-    if ($normalizedName === '') {
+    $normalizedKey = accumul8_entity_match_key(accumul8_entity_alias_name($displayName));
+    if ($normalizedKey === '') {
         return null;
     }
 
-    $row = Database::queryOne(
-        'SELECT id
+    if (accumul8_table_exists('accumul8_entity_aliases')) {
+        $aliasRow = Database::queryOne(
+            'SELECT entity_id
+             FROM accumul8_entity_aliases
+             WHERE owner_user_id = ?
+               AND alias_key = ?
+             LIMIT 1',
+            [$viewerId, $normalizedKey]
+        );
+        if ($aliasRow && (int)($aliasRow['entity_id'] ?? 0) > 0) {
+            return (int)$aliasRow['entity_id'];
+        }
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, display_name
          FROM accumul8_entities
          WHERE owner_user_id = ?
-           AND LOWER(display_name) = LOWER(?)
          ORDER BY
            CASE WHEN legacy_contact_id IS NOT NULL THEN 0 ELSE 1 END,
            CASE WHEN legacy_debtor_id IS NOT NULL THEN 0 ELSE 1 END,
-           id ASC
-         LIMIT 1',
-        [$viewerId, $normalizedName]
+           id ASC',
+        [$viewerId]
     );
 
-    return $row ? (int)($row['id'] ?? 0) : null;
+    foreach ($rows as $row) {
+        if (accumul8_entity_match_key(accumul8_entity_alias_name((string)($row['display_name'] ?? ''))) === $normalizedKey) {
+            return (int)($row['id'] ?? 0);
+        }
+    }
+
+    return null;
+}
+
+function accumul8_upsert_entity_alias(int $viewerId, int $entityId, string $aliasName): ?int
+{
+    if ($entityId <= 0 || !accumul8_table_exists('accumul8_entity_aliases')) {
+        return null;
+    }
+
+    $normalizedAlias = accumul8_entity_alias_name($aliasName);
+    $aliasKey = accumul8_entity_match_key($normalizedAlias);
+    if ($normalizedAlias === '' || $aliasKey === '') {
+        return null;
+    }
+
+    $entity = Database::queryOne(
+        'SELECT display_name
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    if (!$entity) {
+        return null;
+    }
+
+    if ($aliasKey === accumul8_entity_match_key((string)($entity['display_name'] ?? ''))) {
+        return null;
+    }
+
+    $existing = Database::queryOne(
+        'SELECT id, entity_id
+         FROM accumul8_entity_aliases
+         WHERE owner_user_id = ?
+           AND alias_key = ?
+         LIMIT 1',
+        [$viewerId, $aliasKey]
+    );
+    if ($existing) {
+        $existingId = (int)($existing['id'] ?? 0);
+        $existingEntityId = (int)($existing['entity_id'] ?? 0);
+        if ($existingEntityId !== $entityId) {
+            catn8_json_response(['success' => false, 'error' => 'Alias already belongs to another entity'], 409);
+        }
+        Database::execute(
+            'UPDATE accumul8_entity_aliases
+             SET alias_name = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [$normalizedAlias, $existingId, $viewerId]
+        );
+        return $existingId;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_entity_aliases (owner_user_id, entity_id, alias_name, alias_key)
+         VALUES (?, ?, ?, ?)',
+        [$viewerId, $entityId, $normalizedAlias, $aliasKey]
+    );
+    return (int)Database::lastInsertId();
 }
 
 function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEntityId = null): int
 {
-    $displayName = accumul8_canonical_entity_name((string)($payload['display_name'] ?? ''));
+    $displayName = accumul8_entity_alias_name((string)($payload['display_name'] ?? ''));
     if ($displayName === '') {
         $displayName = 'Unnamed Entity';
     }
@@ -436,7 +550,7 @@ function accumul8_entity_id_from_name(int $viewerId, string $displayName, array 
     $contactType = accumul8_validate_enum('contact_type', $payload['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
     $flags = accumul8_contact_type_flags($contactType);
 
-    return accumul8_upsert_entity($viewerId, [
+    $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $normalizedName,
         'entity_kind' => (string)($payload['entity_kind'] ?? 'contact'),
         'contact_type' => $contactType,
@@ -454,6 +568,8 @@ function accumul8_entity_id_from_name(int $viewerId, string $displayName, array 
         'notes' => $payload['notes'] ?? '',
         'is_active' => $payload['is_active'] ?? 1,
     ]);
+    accumul8_upsert_entity_alias($viewerId, $entityId, $displayName);
+    return $entityId;
 }
 
 function accumul8_recurring_entity_id_or_create(int $viewerId, array $row): ?int
@@ -1002,6 +1118,20 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_entities_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entity_aliases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        entity_id INT NOT NULL,
+        alias_name VARCHAR(191) NOT NULL,
+        alias_key VARCHAR(191) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_entity_alias_owner_key (owner_user_id, alias_key),
+        KEY idx_accumul8_entity_aliases_entity (entity_id),
+        CONSTRAINT fk_accumul8_entity_aliases_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_entity_aliases_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_debtors (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
@@ -1313,7 +1443,7 @@ function accumul8_list_banking_organizations(int $viewerId): array
         [$viewerId]
     );
 
-    return array_map(static function (array $r): array {
+    return array_map(static function (array $r) use ($aliasesByEntityId): array {
         return [
             'id' => (int)($r['id'] ?? 0),
             'banking_organization_name' => (string)($r['group_name'] ?? ''),
@@ -1355,10 +1485,45 @@ function accumul8_list_contacts(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_list_entity_aliases(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_entity_aliases')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, entity_id, alias_name
+         FROM accumul8_entity_aliases
+         WHERE owner_user_id = ?
+         ORDER BY alias_name ASC, id ASC',
+        [$viewerId]
+    );
+
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'entity_id' => (int)($row['entity_id'] ?? 0),
+            'alias_name' => (string)($row['alias_name'] ?? ''),
+        ];
+    }, $rows);
+}
+
 function accumul8_list_entities(int $viewerId): array
 {
     if (!accumul8_table_exists('accumul8_entities')) {
         return [];
+    }
+
+    $aliasesByEntityId = [];
+    foreach (accumul8_list_entity_aliases($viewerId) as $alias) {
+        $entityId = (int)($alias['entity_id'] ?? 0);
+        if ($entityId <= 0) {
+            continue;
+        }
+        if (!isset($aliasesByEntityId[$entityId])) {
+            $aliasesByEntityId[$entityId] = [];
+        }
+        $aliasesByEntityId[$entityId][] = $alias;
     }
 
     $rows = Database::queryAll(
@@ -1405,6 +1570,7 @@ function accumul8_list_entities(int $viewerId): array
             'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'debtor_name' => (string)($r['debtor_name'] ?? ''),
+            'aliases' => $aliasesByEntityId[(int)($r['id'] ?? 0)] ?? [],
         ];
     }, $rows);
 }
@@ -2211,6 +2377,7 @@ if ($action === 'bootstrap') {
     accumul8_bootstrap_section('materialize_due_recurring', static fn() => accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId), 0, $warnings);
     $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
     $entities = accumul8_bootstrap_section('entities', static fn() => accumul8_list_entities($viewerId), [], $warnings);
+    $entityAliases = accumul8_bootstrap_section('entity_aliases', static fn() => accumul8_list_entity_aliases($viewerId), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
     $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
     $bankingOrganizations = accumul8_bootstrap_section('banking_organizations', static fn() => accumul8_list_banking_organizations($viewerId), [], $warnings);
@@ -2233,6 +2400,7 @@ if ($action === 'bootstrap') {
         'selected_owner_user_id' => $viewerId,
         'accessible_account_owners' => $accessibleOwners,
         'entities' => $entities,
+        'entity_aliases' => $entityAliases,
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,
@@ -2294,6 +2462,48 @@ if ($action === 'create_entity') {
     accumul8_sync_debtor_from_entity($viewerId, $entityId);
 
     catn8_json_response(['success' => true, 'id' => $entityId]);
+}
+
+if ($action === 'create_entity_alias') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $entityId = (int)($body['entity_id'] ?? 0);
+    $aliasName = (string)($body['alias_name'] ?? '');
+    if ($entityId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid entity_id'], 400);
+    }
+
+    $entity = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    if (!$entity) {
+        catn8_json_response(['success' => false, 'error' => 'Entity not found'], 404);
+    }
+
+    $aliasId = accumul8_upsert_entity_alias($viewerId, $entityId, $aliasName);
+    catn8_json_response(['success' => true, 'id' => $aliasId]);
+}
+
+if ($action === 'delete_entity_alias') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    Database::execute(
+        'DELETE FROM accumul8_entity_aliases
+         WHERE id = ? AND owner_user_id = ?',
+        [$id, $viewerId]
+    );
+    catn8_json_response(['success' => true]);
 }
 
 if ($action === 'update_entity') {

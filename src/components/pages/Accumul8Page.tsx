@@ -308,6 +308,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     load,
     createEntity,
     updateEntity,
+    createEntityAlias,
+    deleteEntityAlias,
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
@@ -364,6 +366,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [payBillDraftById, setPayBillDraftById] = React.useState<Record<number, LedgerInlineDraft>>({});
   const [debtorDraftById, setDebtorDraftById] = React.useState<Record<number, DebtorInlineDraft>>({});
   const [entityDraftById, setEntityDraftById] = React.useState<Record<number, EntityInlineDraft>>({});
+  const [entityAliasDraftById, setEntityAliasDraftById] = React.useState<Record<number, string>>({});
   const [recurringDraftById, setRecurringDraftById] = React.useState<Record<number, RecurringInlineDraft>>({});
   const [contactModalOpen, setContactModalOpen] = React.useState(false);
   const [entityModalOpen, setEntityModalOpen] = React.useState(false);
@@ -994,11 +997,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [debtorLedger, selectedDebtorId]);
   const entitiesColumnWidths = useMeasuredTableColumnWidths(entitiesTableRef, [
     { key: 'roles', index: 1, fallback: 120, header: 'Roles' },
-    { key: 'kind', index: 2, fallback: 96, header: 'Kind' },
-    { key: 'linked', index: 3, fallback: 140, header: 'Linked Records' },
-    { key: 'lastTransaction', index: 5, fallback: 172, header: 'Last Transaction' },
-    { key: 'status', index: 6, fallback: 96, header: 'Status' },
-    { key: 'actions', index: 7, fallback: 168, header: 'Actions' },
+    { key: 'lastTransaction', index: 3, fallback: 172, header: 'Last Transaction' },
+    { key: 'status', index: 4, fallback: 96, header: 'Status' },
+    { key: 'actions', index: 5, fallback: 168, header: 'Actions' },
   ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
@@ -1179,6 +1180,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     setActiveEntityRowId((current) => (current === entity.id ? null : current));
   }, [entityDraftById, updateEntity]);
+  const saveEntityAlias = React.useCallback(async (entity: Accumul8Entity) => {
+    const aliasName = String(entityAliasDraftById[entity.id] || '').trim();
+    if (!aliasName) {
+      return;
+    }
+    await createEntityAlias(entity.id, aliasName);
+    setEntityAliasDraftById((prev) => {
+      const next = { ...prev };
+      delete next[entity.id];
+      return next;
+    });
+  }, [createEntityAlias, entityAliasDraftById]);
+  const removeEntityAlias = React.useCallback(async (aliasId: number) => {
+    await deleteEntityAlias(aliasId);
+  }, [deleteEntityAlias]);
   const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
     const draft = recurringDraftById[row.id];
     if (!draft) {
@@ -1963,11 +1979,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   style={buildMeasuredTableStyle(entitiesColumnWidths)}
                 >
                   <colgroup>
-                    <col className="accumul8-col--flex-45" />
-                    <col style={{ width: 'var(--accumul8-col-roles-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-kind-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-linked-width)' }} />
                     <col className="accumul8-col--flex-55" />
+                    <col style={{ width: 'var(--accumul8-col-roles-width)' }} />
+                    <col className="accumul8-col--flex-45" />
                     <col style={{ width: 'var(--accumul8-col-lastTransaction-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-status-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
@@ -1976,8 +1990,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <tr>
                       <th>Name</th>
                       <th>Roles</th>
-                      <th>Kind</th>
-                      <th>Linked Records</th>
                       <th>Contact Info</th>
                       <th className="text-end">Last Transaction</th>
                       <th>Status</th>
@@ -2011,11 +2023,38 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <div className="accumul8-inline-stack">
                               <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={entityDraft?.display_name ?? entity.display_name} onChange={(e) => setEntityRowDraft(entity, { display_name: e.target.value })} disabled={busy} />
                               <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.notes ?? entity.notes ?? ''} onChange={(e) => setEntityRowDraft(entity, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
+                              <div className="accumul8-entity-aliases">
+                                <div className="accumul8-entity-aliases-list">
+                                  {entity.aliases.map((alias) => (
+                                    <span key={alias.id} className="accumul8-entity-alias-chip">
+                                      <span>{alias.alias_name}</span>
+                                      <button type="button" className="accumul8-entity-alias-remove" onClick={() => void removeEntityAlias(alias.id)} disabled={busy} aria-label={`Remove alias ${alias.alias_name}`}>x</button>
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="accumul8-entity-alias-add">
+                                  <input
+                                    className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted"
+                                    value={entityAliasDraftById[entity.id] ?? ''}
+                                    onChange={(e) => setEntityAliasDraftById((prev) => ({ ...prev, [entity.id]: e.target.value }))}
+                                    disabled={busy}
+                                    placeholder="Add alias"
+                                  />
+                                  <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => void saveEntityAlias(entity)} disabled={busy || !String(entityAliasDraftById[entity.id] || '').trim()}>
+                                    +
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
                               <span className="fw-semibold">{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
                               {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
+                              {entity.aliases.length > 0 ? (
+                                <span className="small text-muted d-block accumul8-entity-alias-summary">
+                                  Aliases: {entity.aliases.map((alias) => alias.alias_name).join(' | ')}
+                                </span>
+                              ) : null}
                             </button>
                           )}
                         </td>
@@ -2042,26 +2081,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>
                           )}
-                        </td>
-                        <td>
-                          {activeEntityRowId === entity.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={entityDraft?.entity_kind ?? entity.entity_kind} onChange={(e) => setEntityRowDraft(entity, { entity_kind: e.target.value })} disabled={busy}>
-                              <option value="contact">Contact</option>
-                              <option value="person">Person</option>
-                              <option value="vendor">Vendor</option>
-                              <option value="company">Company</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatInlineText(entity.entity_kind, 'contact')}</button>
-                          )}
-                        </td>
-                        <td>
-                          <div className="small text-muted">
-                            {[
-                              Number(entity.contact_id || 0) > 0 ? `Contact #${entity.contact_id}` : '',
-                              Number(entity.debtor_id || 0) > 0 ? `Balance #${entity.debtor_id}` : '',
-                            ].filter(Boolean).join(' | ') || 'Entity only'}
-                          </div>
                         </td>
                         <td>
                           {activeEntityRowId === entity.id ? (
@@ -2139,7 +2158,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     )})}
                     {entitiesSorted.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="text-center text-muted py-4">No entities yet.</td>
+                        <td colSpan={6} className="text-center text-muted py-4">No entities yet.</td>
                       </tr>
                     )}
                   </tbody>

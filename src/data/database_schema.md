@@ -132,6 +132,15 @@ Business term: Banking Organizations
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_entity_aliases
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `entity_id` (INT, FOREIGN KEY -> accumul8_entities.id)
+- `alias_name` (VARCHAR(191))
+- `alias_key` (VARCHAR(191), normalized lookup key)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### accumul8_debtors
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)

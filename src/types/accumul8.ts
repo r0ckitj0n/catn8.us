@@ -282,6 +282,13 @@ export interface Accumul8Entity {
   debtor_id: number | null;
   contact_name: string;
   debtor_name: string;
+  aliases: Accumul8EntityAlias[];
+}
+
+export interface Accumul8EntityAlias {
+  id: number;
+  entity_id: number;
+  alias_name: string;
 }
 
 export interface Accumul8EntityUpsertRequest {
@@ -332,6 +339,7 @@ export interface Accumul8BootstrapResponse {
   selected_owner_user_id: number;
   accessible_account_owners: Accumul8AccessibleOwner[];
   entities: Accumul8Entity[];
+  entity_aliases: Accumul8EntityAlias[];
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];

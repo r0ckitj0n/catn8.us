@@ -333,6 +333,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [bankingOrganizationManagerOpen, setBankingOrganizationManagerOpen] = React.useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
@@ -1164,22 +1165,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-page-title-row">
               <h1 className="section-title mb-0 accumul8-title-mark">
                 <span className="visually-hidden">ACCUMUL8</span>
-                <WebpImage className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" aria-hidden="true" />
+                <picture className="accumul8-title-mark-picture" aria-hidden="true">
+                  <source srcSet="/images/branding/accumul8-title.webp" type="image/webp" />
+                  <img className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" />
+                </picture>
               </h1>
               <div className="accumul8-tabs accumul8-tabs--header">
                 <div className="accumul8-tabs accumul8-tabs--header-buttons">
                   {[
-                    ['ledger', 'Ledger'],
-                    ['spreadsheet', 'Budget'],
                     ['debtors', 'Balances'],
+                    ['spreadsheet', 'Budget'],
+                    ['ledger', 'Ledger'],
                     ['pay_bills', 'Pay Bills'],
-                    ['contacts', 'Entities'],
-                    ['recurring', 'Recurring'],
-                    ['notifications', 'Notifications'],
-                    ['sync', 'Sync'],
                   ].map(([key, label]) => (
                     <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
                   ))}
+                  <button type="button" className={`btn ${settingsMenuOpen ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setSettingsMenuOpen(true)}>Settings</button>
                 </div>
                 <div className="accumul8-summary-grid">
                   <div className="accumul8-summary-card"><span>Net</span><strong>${filteredSummary.net_amount.toFixed(2)}</strong></div>
@@ -1192,6 +1193,42 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
             </div>
+            {settingsMenuOpen ? (
+              <div className="accumul8-settings-modal-backdrop" role="presentation" onClick={() => setSettingsMenuOpen(false)}>
+                <div
+                  className="accumul8-settings-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Accumul8 settings sections"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="accumul8-settings-modal-header">
+                    <h2 className="accumul8-settings-modal-title mb-0">Settings</h2>
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setSettingsMenuOpen(false)}>Close</button>
+                  </div>
+                  <div className="accumul8-settings-modal-actions">
+                    {[
+                      ['contacts', 'Entities'],
+                      ['notifications', 'Notifications'],
+                      ['recurring', 'Recurring'],
+                      ['sync', 'Sync'],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
+                        onClick={() => {
+                          setTab(key as TabKey);
+                          setSettingsMenuOpen(false);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="accumul8-page-toolbar mb-3">
               <div className="accumul8-page-filters">
                 <div className="accumul8-toolbar-field">

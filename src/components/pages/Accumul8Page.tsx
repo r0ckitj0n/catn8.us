@@ -72,6 +72,7 @@ type LedgerFormState = {
 };
 type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'debtor_id' | 'debtor_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
+type PayBillsDateFilter = '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
 const DEFAULT_CONTACT_FORM = {
   contact_name: '',
   contact_type: 'both' as Accumul8ContactType,
@@ -150,6 +151,15 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
   }
   return String(value || '').trim() || fallback;
 }
+
+function addUtcDays(baseDate: string, days: number): string {
+  const parsed = new Date(`${baseDate}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return baseDate;
+  }
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
   const isAdministrator = Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1;
@@ -212,6 +222,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [ledgerForm, setLedgerForm] = React.useState<LedgerFormState>(createDefaultLedgerForm);
   const [budgetForm, setBudgetForm] = React.useState<{ category_name: string; monthly_budget: number; match_pattern: string; row_order: number; is_active: number }>({ category_name: '', monthly_budget: 0, match_pattern: '', row_order: 0, is_active: 1 });
   const [budgetMonth, setBudgetMonth] = React.useState<string>(new Date().toISOString().slice(0, 7));
+  const [payBillsDateFilter, setPayBillsDateFilter] = React.useState<PayBillsDateFilter>('30_days');
+  const [customPayBillsStartDate, setCustomPayBillsStartDate] = React.useState<string>('');
+  const [customPayBillsEndDate, setCustomPayBillsEndDate] = React.useState<string>('');
   const [notificationForm, setNotificationForm] = React.useState({ rule_name: '', trigger_type: 'upcoming_due', days_before_due: 3, target_scope: 'group' as 'group' | 'custom', custom_user_ids: '', email_subject_template: '', email_body_template: '' });
   const [editingContactId, setEditingContactId] = React.useState<number | null>(null);
   const [editingDebtorId, setEditingDebtorId] = React.useState<number | null>(null);
@@ -325,18 +338,46 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         return a.id - b.id;
       });
   }, [filteredTransactions]);
-  const upcomingRecurringPayBills = React.useMemo(() => (
-    filteredRecurringPayments
-      .filter((item) => Number(item.is_active || 0) === 1 && String(item.direction || 'outflow') === 'outflow' && String(item.next_due_date || '').trim() !== '')
-      .slice()
-      .sort((a, b) => {
-        const dateCompare = String(a.next_due_date || '').localeCompare(String(b.next_due_date || ''));
-        if (dateCompare !== 0) {
-          return dateCompare;
-        }
-        return a.id - b.id;
-      })
-  ), [filteredRecurringPayments]);
+  const payBillsDateRange = React.useMemo(() => {
+    const startDate = todayDate;
+    if (payBillsDateFilter === 'custom') {
+      return {
+        startDate: customPayBillsStartDate || '',
+        endDate: customPayBillsEndDate || '',
+      };
+    }
+    if (payBillsDateFilter === '7_days') {
+      return { startDate, endDate: addUtcDays(todayDate, 7) };
+    }
+    if (payBillsDateFilter === '30_days') {
+      return { startDate, endDate: addUtcDays(todayDate, 30) };
+    }
+    if (payBillsDateFilter === '60_days') {
+      return { startDate, endDate: addUtcDays(todayDate, 60) };
+    }
+    if (payBillsDateFilter === '90_days') {
+      return { startDate, endDate: addUtcDays(todayDate, 90) };
+    }
+    return {
+      startDate,
+      endDate: `${todayDate.slice(0, 4)}-12-31`,
+    };
+  }, [customPayBillsEndDate, customPayBillsStartDate, payBillsDateFilter, todayDate]);
+  const filteredPayBillRows = React.useMemo(() => (
+    payBillRows.filter((tx) => {
+      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      if (!effectiveDate) {
+        return false;
+      }
+      if (payBillsDateRange.startDate && effectiveDate < payBillsDateRange.startDate) {
+        return false;
+      }
+      if (payBillsDateRange.endDate && effectiveDate > payBillsDateRange.endDate) {
+        return false;
+      }
+      return true;
+    })
+  ), [payBillRows, payBillsDateRange]);
   const filteredSummary = React.useMemo(() => {
     const next = { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 };
     filteredTransactions.forEach((tx) => {
@@ -1199,47 +1240,54 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Pay Bills Queue</h3>
-              </div>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills mb-4">
-                <table className="table table-striped table-sm accumul8-sticky-head">
-                  <thead><tr><th>Next Due</th><th>Recurring Payment</th><th>Payment Method</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
-                  <tbody>
-                    {upcomingRecurringPayBills.map((bill) => {
-                      const contactLabel = formatInlineText(bill.contact_name);
-                      const accountLabel = formatInlineText(bill.account_name);
-                      const recurringStatus = bill.next_due_date < todayDate ? 'Past due' : 'Upcoming';
-                      return (
-                        <tr key={`recurring-${bill.id}`} className="accumul8-list-item">
-                          <td>{bill.next_due_date}</td>
-                          <td>
-                            <div className="fw-semibold">{formatInlineText(bill.title, 'Untitled recurring payment')}</div>
-                            <div className="small text-muted">{contactLabel} • {accountLabel}</div>
-                          </td>
-                          <td>{RECURRING_PAYMENT_METHOD_LABELS[bill.payment_method] || 'Unspecified'}</td>
-                          <td className="text-end">{Math.abs(Number(bill.amount || 0)).toFixed(2)}</td>
-                          <td>{recurringStatus}</td>
-                          <td className="text-end">
-                            <div className="accumul8-row-actions">
-                              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditRecurring(bill.id)} disabled={busy} aria-label={`Edit recurring payment ${bill.title || bill.contact_name || bill.id}`} title={`Edit recurring payment ${bill.title || bill.contact_name || bill.id}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteRecurring(bill.id, bill.title || bill.contact_name)} disabled={busy} aria-label={`Delete recurring payment ${bill.title || bill.contact_name || bill.id}`}><i className="bi bi-trash"></i></button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {upcomingRecurringPayBills.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">No active recurring payments with a next due date.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                <div className="d-flex flex-wrap align-items-end gap-2">
+                  <div className="accumul8-toolbar-field">
+                    <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-range">Date Range</label>
+                    <select
+                      id="accumul8-pay-bills-range"
+                      className="form-select form-select-sm"
+                      value={payBillsDateFilter}
+                      onChange={(e) => setPayBillsDateFilter(e.target.value as PayBillsDateFilter)}
+                    >
+                      <option value="7_days">7 Days</option>
+                      <option value="30_days">30 Days</option>
+                      <option value="60_days">60 Days</option>
+                      <option value="90_days">90 Days</option>
+                      <option value="eoy">EOY</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
+                  {payBillsDateFilter === 'custom' && (
+                    <>
+                      <div className="accumul8-toolbar-field">
+                        <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-start">Start</label>
+                        <input
+                          id="accumul8-pay-bills-start"
+                          className="form-control form-control-sm"
+                          type="date"
+                          value={customPayBillsStartDate}
+                          onChange={(e) => setCustomPayBillsStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="accumul8-toolbar-field">
+                        <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-end">End</label>
+                        <input
+                          id="accumul8-pay-bills-end"
+                          className="form-control form-control-sm"
+                          type="date"
+                          value={customPayBillsEndDate}
+                          onChange={(e) => setCustomPayBillsEndDate(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
                 <table className="table table-striped table-sm accumul8-sticky-head">
                   <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {payBillRows.map((billTx) => (
+                    {filteredPayBillRows.map((billTx) => (
                       <tr key={billTx.id} className={['accumul8-list-item', activePayBillRowId === billTx.id ? 'is-editing' : '', payBillDraftById[billTx.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
                           {activePayBillRowId === billTx.id ? (
@@ -1316,7 +1364,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
-                    {payBillRows.length === 0 && (
+                    {filteredPayBillRows.length === 0 && (
                       <tr>
                         <td colSpan={6} className="text-center text-muted py-4">No unpaid upcoming or past-due bills.</td>
                       </tr>

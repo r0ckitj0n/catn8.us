@@ -372,8 +372,8 @@
 
 .accumul8-inline-cell-trigger:hover:not(:disabled),
 .accumul8-inline-cell-trigger:focus-visible {
-  color: #0f3f88;
-  text-decoration: underline;
+  color: #223453;
+  text-decoration: none;
 }
 
 .accumul8-inline-cell-trigger:disabled {

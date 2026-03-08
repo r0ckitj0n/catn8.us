@@ -1324,7 +1324,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
                 <table className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head">
-                  <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Debtor</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th>Paid</th><th>Reconciled</th><th>Planner</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredTransactions.map((tx) => (
                       <tr
@@ -1358,7 +1358,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.account_name ? `${tx.description} (${tx.account_name})` : tx.description}</button>
                           )}
                         </td>
-                        <td>{tx.debtor_name || '-'}</td>
                         <td>
                           {activeLedgerRowId === tx.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.memo ?? tx.memo} onChange={(e) => setLedgerRowDraft(tx, { memo: e.target.value })} disabled={busy} />
@@ -1374,39 +1373,30 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           )}
                         </td>
                         <td className="text-end">{tx.running_balance.toFixed(2)}</td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <select className="form-select form-select-sm accumul8-month-table-select" value={String(ledgerDraftById[tx.id]?.is_paid ?? tx.is_paid)} onChange={(e) => setLedgerRowDraft(tx, { is_paid: Number(e.target.value) })} disabled={busy}>
-                              <option value="0">No</option>
-                              <option value="1">Yes</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.is_paid ? 'Yes' : 'No'}</button>
-                          )}
+                        <td className="text-center accumul8-ledger-toggle-cell">
+                          <input
+                            className="form-check-input accumul8-ledger-checkbox"
+                            type="checkbox"
+                            checked={Number(ledgerDraftById[tx.id]?.is_paid ?? tx.is_paid) === 1}
+                            onChange={(e) => setLedgerRowDraft(tx, { is_paid: e.target.checked ? 1 : 0 })}
+                            disabled={busy}
+                            aria-label={`Mark ${tx.description} as paid`}
+                          />
                         </td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <select className="form-select form-select-sm accumul8-month-table-select" value={String(ledgerDraftById[tx.id]?.is_reconciled ?? tx.is_reconciled)} onChange={(e) => setLedgerRowDraft(tx, { is_reconciled: Number(e.target.value) })} disabled={busy}>
-                              <option value="0">No</option>
-                              <option value="1">Yes</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.is_reconciled ? 'Yes' : 'No'}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <select className="form-select form-select-sm accumul8-month-table-select" value={String(ledgerDraftById[tx.id]?.is_budget_planner ?? tx.is_budget_planner)} onChange={(e) => setLedgerRowDraft(tx, { is_budget_planner: Number(e.target.value) })} disabled={busy || tx.source_kind === 'plaid' || Number(tx.debtor_id || 0) > 0}>
-                              <option value="1">Included</option>
-                              <option value="0">Excluded</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.is_budget_planner ? 'Included' : 'Excluded'}</button>
-                          )}
+                        <td className="text-center accumul8-ledger-toggle-cell">
+                          <input
+                            className="form-check-input accumul8-ledger-checkbox"
+                            type="checkbox"
+                            checked={Number(ledgerDraftById[tx.id]?.is_reconciled ?? tx.is_reconciled) === 1}
+                            onChange={(e) => setLedgerRowDraft(tx, { is_reconciled: e.target.checked ? 1 : 0 })}
+                            disabled={busy}
+                            aria-label={`Mark ${tx.description} as reconciled`}
+                          />
                         </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
                             <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy || !ledgerDraftById[tx.id]} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditTransaction(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy} aria-label={`Delete ${tx.description}`}><i className="bi bi-trash"></i></button>
                           </div>
                         </td>
@@ -2183,7 +2173,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             open={transactionModalOpen}
             busy={busy}
             initialForm={ledgerForm}
-            editing={false}
+            editing={editingTransactionId !== null}
             entities={entitiesSorted}
             accounts={visibleAccounts}
             onClose={closeTransactionModal}

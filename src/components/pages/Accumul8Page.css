@@ -900,41 +900,31 @@
 
 .accumul8-ledger-table th:nth-child(4),
 .accumul8-ledger-table td:nth-child(4) {
-  min-width: 8rem;
-}
-
-.accumul8-ledger-table th:nth-child(5),
-.accumul8-ledger-table td:nth-child(5) {
   min-width: 10rem;
   max-width: 16rem;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
+.accumul8-ledger-table th:nth-child(5),
+.accumul8-ledger-table td:nth-child(5),
 .accumul8-ledger-table th:nth-child(6),
-.accumul8-ledger-table td:nth-child(6),
+.accumul8-ledger-table td:nth-child(6) {
+  min-width: 7rem;
+}
+
 .accumul8-ledger-table th:nth-child(7),
-.accumul8-ledger-table td:nth-child(7) {
-  min-width: 7rem;
-}
-
+.accumul8-ledger-table td:nth-child(7),
 .accumul8-ledger-table th:nth-child(8),
-.accumul8-ledger-table td:nth-child(8),
+.accumul8-ledger-table td:nth-child(8) {
+  min-width: 5.5rem;
+}
+
 .accumul8-ledger-table th:nth-child(9),
-.accumul8-ledger-table td:nth-child(9) {
-  min-width: 6rem;
-}
-
-.accumul8-ledger-table th:nth-child(10),
-.accumul8-ledger-table td:nth-child(10) {
-  min-width: 7rem;
-}
-
-.accumul8-ledger-table th:nth-child(11),
-.accumul8-ledger-table td:nth-child(11),
+.accumul8-ledger-table td:nth-child(9),
 .accumul8-month-table th:nth-child(11),
 .accumul8-month-table td:nth-child(11) {
-  min-width: 4.5rem;
+  min-width: 6.5rem;
 }
 
 .accumul8-table--debtors th:nth-child(1),
@@ -1234,7 +1224,6 @@
   font-weight: 500;
 }
 
-.accumul8-inline-cell-trigger:hover:not(:disabled),
 .accumul8-inline-cell-trigger:focus-visible {
   color: #fff1c6;
   text-decoration: none;
@@ -1262,6 +1251,14 @@
 
 .accumul8-icon-action.is-flashing {
   animation: accumul8-save-flash 0.9s ease-in-out 1;
+}
+
+.accumul8-ledger-toggle-cell {
+  vertical-align: middle;
+}
+
+.accumul8-ledger-checkbox {
+  margin: 0;
 }
 
 @keyframes accumul8-save-flash {
@@ -1322,33 +1319,18 @@
   background: linear-gradient(90deg, rgba(28, 79, 56, 0.4), rgba(19, 62, 43, 0.12));
 }
 
-.accumul8-list-item {
-  transition: background-color 140ms ease;
-}
-
-.accumul8-list-item:hover td {
-  background-color: rgba(212, 175, 55, 0.12);
-}
-
 .accumul8-list-item .accumul8-row-actions {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.22rem;
-  transition: opacity 0.16s ease;
 }
 
 .accumul8-list-item .accumul8-row-actions .btn.btn-sm {
   padding: 0.18rem 0.42rem;
   border-width: 1px;
   line-height: 1;
-}
-
-.accumul8-list-item:hover .accumul8-row-actions,
-.accumul8-list-item:focus-within .accumul8-row-actions {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .accumul8-scroll-area {

@@ -214,9 +214,11 @@
 }
 
 .accumul8-page-title-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr) clamp(86px, 10vw, 132px);
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 1rem;
   width: 100%;
   padding: 1.25rem;
   border: 3px solid var(--accumul8-deco-line-strong);
@@ -275,8 +277,7 @@
 .accumul8-title-mark {
   display: flex;
   align-items: center;
-  flex: 0 0 clamp(168px, 18vw, 260px);
-  width: clamp(168px, 18vw, 260px);
+  width: 100%;
   max-width: 100%;
   min-width: 168px;
   margin-top: 0;
@@ -333,13 +334,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
+  justify-content: center;
   gap: 0.75rem;
 }
 
 .accumul8-tabs--header .accumul8-summary-grid {
-  flex: 1 1 520px;
-  min-width: min(100%, 520px);
-  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 0;
 }
 
 .accumul8-summary-card {
@@ -405,19 +407,19 @@
   color: #1a1308;
 }
 
-.accumul8-summary-logo {
-  margin-left: auto;
+.accumul8-header-brand-logo {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: 7rem;
-  padding-inline: 0.4rem 0;
+  width: 100%;
+  min-width: 0;
+  align-self: center;
 }
 
-.accumul8-summary-logo-image {
+.accumul8-header-brand-logo-image {
   display: block;
   width: auto;
-  height: clamp(54px, 6vw, 86px);
+  height: clamp(60px, 7vw, 96px);
   object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.2));
 }
@@ -429,15 +431,17 @@
 }
 
 .accumul8-tabs--header {
-  flex: 1 1 auto;
   width: 100%;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  align-content: center;
   margin-top: 0.1rem;
+  gap: 1rem;
 }
 
 .accumul8-tabs--header-buttons {
   flex: 0 1 auto;
+  justify-content: center;
 }
 
 .accumul8-tabs--header-buttons .btn {
@@ -732,7 +736,7 @@
 
 .accumul8-ledger-table {
   font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.69rem;
   letter-spacing: 0.03em;
   color: #f5e8bd;
 }
@@ -753,12 +757,13 @@
 .accumul8-ledger-table th {
   white-space: normal;
   overflow-wrap: anywhere;
-  padding: 0.55rem 0.4rem;
+  padding: 0.34rem 0.32rem;
   border-color: rgba(212, 175, 55, 0.16);
 }
 
 .accumul8-ledger-table tbody td {
   color: #f3e6be;
+  line-height: 1.12;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -792,7 +797,7 @@
   color: #f6e8bb;
   box-shadow: inset 0 -2px 0 rgba(212, 175, 55, 0.24);
   font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   border-bottom: 0;
@@ -850,8 +855,11 @@
 .accumul8-month-table-input {
   min-width: 0;
   width: 100%;
-  padding: 0.3rem 0.42rem;
-  font-size: 0.69rem;
+  min-height: 2rem;
+  height: 2rem;
+  padding: 0.18rem 0.36rem;
+  font-size: 0.66rem;
+  line-height: 1.05;
 }
 
 .accumul8-month-table-select,
@@ -864,7 +872,13 @@
   padding: 0;
   color: inherit;
   font-size: inherit;
-  line-height: 1.15;
+  line-height: 1.05;
+}
+
+.accumul8-month-table-select {
+  min-height: 2rem;
+  height: 2rem;
+  padding-right: 1.35rem;
 }
 
 .accumul8-month-table-select:focus,
@@ -925,8 +939,8 @@
   padding: 0;
   text-align: left;
   color: inherit;
-  line-height: 1.25;
-  min-height: 1rem;
+  line-height: 1.1;
+  min-height: 0.92rem;
   font-weight: 500;
 }
 
@@ -946,11 +960,14 @@
 
 .accumul8-month-table td.is-compact-actions {
   white-space: nowrap;
+  padding-right: 0.24rem;
 }
 
 .accumul8-icon-action {
-  min-width: 2.1rem;
-  padding-inline: 0.45rem;
+  min-width: 1.82rem;
+  min-height: 1.82rem;
+  padding: 0.18rem 0.3rem;
+  font-size: 0.7rem;
 }
 
 .accumul8-icon-action.is-flashing {
@@ -1027,8 +1044,15 @@
   opacity: 0;
   pointer-events: none;
   display: inline-flex;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.22rem;
   transition: opacity 0.16s ease;
+}
+
+.accumul8-list-item .accumul8-row-actions .btn.btn-sm {
+  padding: 0.18rem 0.42rem;
+  border-width: 1px;
+  line-height: 1;
 }
 
 .accumul8-list-item:hover .accumul8-row-actions,
@@ -1109,7 +1133,7 @@
 
   .accumul8-page-title-row {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .accumul8-title-mark {
@@ -1130,9 +1154,12 @@
   }
 
   .accumul8-tabs--header .accumul8-summary-grid {
-    margin-left: 0;
     min-width: 0;
     width: 100%;
+  }
+
+  .accumul8-header-brand-logo {
+    justify-content: center;
   }
 
   .accumul8-page-filters {
@@ -1192,13 +1219,6 @@
 
   .accumul8-summary-grid {
     width: 100%;
-  }
-
-  .accumul8-summary-logo {
-    flex-basis: 100%;
-    justify-content: center;
-    margin-left: 0;
-    min-width: 0;
   }
 
   .accumul8-tabs--header-buttons .btn,

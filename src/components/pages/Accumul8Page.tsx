@@ -1187,10 +1187,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
                   <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
                   <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
-                  <div className="accumul8-summary-logo" aria-hidden="true">
-                    <WebpImage className="accumul8-summary-logo-image" src="/images/catn8_logo.png" alt="" />
-                  </div>
                 </div>
+              </div>
+              <div className="accumul8-header-brand-logo" aria-hidden="true">
+                <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="" />
               </div>
             </div>
             {settingsMenuOpen ? (

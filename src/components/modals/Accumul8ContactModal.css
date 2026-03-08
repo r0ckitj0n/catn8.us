@@ -5,7 +5,7 @@
 .accumul8-contact-modal .modal-dialog {
   width: min(60vw, 960px);
   max-width: min(60vw, 960px);
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
 .accumul8-contact-modal.fade .modal-dialog {
@@ -17,20 +17,105 @@
 }
 
 .accumul8-contact-modal .modal-content {
-  max-height: 60vh;
+  max-height: 68vh;
   overflow: hidden;
-  border: 1px solid rgba(36, 52, 84, 0.2);
-  box-shadow: 0 28px 60px rgba(10, 20, 38, 0.28);
+  border: 3px solid rgba(212, 175, 55, 0.72);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(245, 236, 208, 0.985), rgba(225, 208, 165, 0.985)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.06) 0,
+      rgba(212, 175, 55, 0.06) 3px,
+      transparent 3px,
+      transparent 18px
+    );
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.42);
+  color: #241d12;
+  position: relative;
+}
+
+.accumul8-contact-modal .modal-content::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  pointer-events: none;
+}
+
+.accumul8-contact-modal .modal-header {
+  border-bottom: 2px solid rgba(124, 92, 25, 0.3);
+  background: linear-gradient(180deg, rgba(29, 25, 18, 0.96), rgba(19, 15, 10, 0.98));
+  color: #f5f0da;
+}
+
+.accumul8-contact-modal .modal-title {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .accumul8-contact-modal .modal-body {
   overflow-y: auto;
+  color: #241d12;
+}
+
+.accumul8-contact-modal .form-label {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(67, 49, 14, 0.82);
+}
+
+.accumul8-contact-modal .form-control,
+.accumul8-contact-modal .form-select,
+.accumul8-contact-modal textarea,
+.accumul8-contact-modal .btn {
+  border-radius: 0;
+}
+
+.accumul8-contact-modal .form-control,
+.accumul8-contact-modal .form-select,
+.accumul8-contact-modal textarea {
+  background: linear-gradient(180deg, rgba(252, 246, 231, 0.98), rgba(235, 223, 190, 0.98));
+  border: 2px solid rgba(124, 92, 25, 0.45);
+  color: #241d12;
+  box-shadow: none;
+}
+
+.accumul8-contact-modal .form-control:focus,
+.accumul8-contact-modal .form-select:focus,
+.accumul8-contact-modal textarea:focus {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 1px rgba(25, 18, 8, 0.84), 0 0 0 3px rgba(212, 175, 55, 0.18);
+}
+
+.accumul8-contact-modal .btn {
+  font-family: 'Lexend Exa', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-width: 2px;
+}
+
+.accumul8-contact-modal .btn-success {
+  color: #1d170d;
+  background: linear-gradient(180deg, #e1c86d, #d4af37);
+  border-color: #f1dc96;
+}
+
+.accumul8-contact-modal .btn-outline-secondary {
+  background: rgba(20, 17, 11, 0.82);
+  color: #f2ead0;
+  border-color: rgba(121, 98, 48, 0.64);
 }
 
 body.accumul8-contact-modal-open .modal-backdrop.show {
   z-index: 6250 !important;
-  background: rgba(17, 32, 56, 0.62);
-  backdrop-filter: blur(2px);
+  background:
+    radial-gradient(circle at top center, rgba(212, 175, 55, 0.12), transparent 30%),
+    rgba(9, 13, 18, 0.84);
+  backdrop-filter: blur(3px);
 }
 
 @media (max-width: 991.98px) {
@@ -47,6 +132,6 @@ body.accumul8-contact-modal-open .modal-backdrop.show {
   }
 
   .accumul8-contact-modal .modal-content {
-    max-height: 75vh;
+    max-height: 78vh;
   }
 }

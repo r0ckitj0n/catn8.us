@@ -1,9 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,700&family=Lexend+Exa:wght@300;400;500;600&display=swap');
+
+:root {
+  --accumul8-deco-navy: #0e1a24;
+  --accumul8-deco-charcoal: #151618;
+  --accumul8-deco-forest: #183128;
+  --accumul8-deco-gold: #d4af37;
+  --accumul8-deco-brass: #b88a2a;
+  --accumul8-deco-cream: #f5f5dc;
+  --accumul8-deco-paper: #e9dfc3;
+  --accumul8-deco-ink: #241d12;
+  --accumul8-deco-muted: #bcae86;
+  --accumul8-deco-line: rgba(212, 175, 55, 0.42);
+  --accumul8-deco-line-strong: rgba(212, 175, 55, 0.72);
+  --accumul8-deco-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+}
+
 .catn8-page[data-page="accumul8"] {
+  color: var(--accumul8-deco-cream);
   background:
-    linear-gradient(180deg, rgba(245, 249, 255, 0.7), rgba(243, 247, 252, 0.82)),
-    url('/images/backgrounds/accumul8-background.png') center top / cover no-repeat;
-  background:
-    linear-gradient(180deg, rgba(245, 249, 255, 0.7), rgba(243, 247, 252, 0.82)),
+    linear-gradient(180deg, rgba(9, 15, 21, 0.86), rgba(11, 17, 23, 0.96)),
+    radial-gradient(circle at 20% 10%, rgba(212, 175, 55, 0.1), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgba(212, 175, 55, 0.08), transparent 24%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(245, 245, 220, 0.015) 0,
+      rgba(245, 245, 220, 0.015) 2px,
+      transparent 2px,
+      transparent 15px
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 40%),
     image-set(
       url('/images/backgrounds/accumul8-background.webp') type('image/webp') 1x,
       url('/images/backgrounds/accumul8-background.png') type('image/png') 1x
@@ -16,14 +41,166 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top center, rgba(255, 255, 255, 0.22), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.22));
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.46)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.012) 0,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 10px
+    ),
+    radial-gradient(circle at center top, rgba(212, 175, 55, 0.22), transparent 36%);
   pointer-events: none;
+}
+
+.catn8-page[data-page="accumul8"]::after {
+  content: '';
+  position: absolute;
+  inset: auto 4vw 2rem 4vw;
+  height: min(30vh, 260px);
+  opacity: 0.2;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0 4%, rgba(212, 175, 55, 0.35) 4% 5%, transparent 5% 9%, rgba(212, 175, 55, 0.22) 9% 10%, transparent 10% 16%, rgba(212, 175, 55, 0.28) 16% 18%, transparent 18% 24%, rgba(212, 175, 55, 0.4) 24% 25%, transparent 25% 31%, rgba(212, 175, 55, 0.3) 31% 33%, transparent 33% 40%, rgba(212, 175, 55, 0.34) 40% 42%, transparent 42% 49%, rgba(212, 175, 55, 0.24) 49% 50%, transparent 50% 58%, rgba(212, 175, 55, 0.36) 58% 59%, transparent 59% 66%, rgba(212, 175, 55, 0.24) 66% 67%, transparent 67% 74%, rgba(212, 175, 55, 0.4) 74% 76%, transparent 76% 84%, rgba(212, 175, 55, 0.28) 84% 86%, transparent 86% 100%),
+    linear-gradient(180deg, transparent 0 56%, rgba(212, 175, 55, 0.16) 56% 100%),
+    linear-gradient(90deg, transparent 0 6%, rgba(10, 16, 22, 0.96) 6% 13%, transparent 13% 16%, rgba(10, 16, 22, 0.96) 16% 21%, transparent 21% 27%, rgba(10, 16, 22, 0.96) 27% 34%, transparent 34% 39%, rgba(10, 16, 22, 0.96) 39% 45%, transparent 45% 52%, rgba(10, 16, 22, 0.96) 52% 60%, transparent 60% 65%, rgba(10, 16, 22, 0.96) 65% 72%, transparent 72% 78%, rgba(10, 16, 22, 0.96) 78% 84%, transparent 84% 90%, rgba(10, 16, 22, 0.96) 90% 96%, transparent 96% 100%);
+  clip-path: polygon(0 100%, 0 62%, 8% 62%, 8% 38%, 14% 38%, 14% 58%, 19% 58%, 19% 25%, 28% 25%, 28% 48%, 35% 48%, 35% 18%, 44% 18%, 44% 55%, 53% 55%, 53% 24%, 61% 24%, 61% 46%, 69% 46%, 69% 31%, 77% 31%, 77% 57%, 86% 57%, 86% 40%, 94% 40%, 94% 68%, 100% 68%, 100% 100%);
 }
 
 .catn8-page[data-page="accumul8"] > * {
   position: relative;
   z-index: 1;
+}
+
+.catn8-page[data-page="accumul8"] .section-title,
+.catn8-page[data-page="accumul8"] h3,
+.catn8-page[data-page="accumul8"] h4,
+.catn8-page[data-page="accumul8"] .h6 {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  color: var(--accumul8-deco-cream);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+.catn8-page[data-page="accumul8"] .section-title {
+  font-size: clamp(2rem, 3vw, 3rem);
+}
+
+.catn8-page[data-page="accumul8"] .catn8-card {
+  border-radius: 0;
+  border: 2px solid var(--accumul8-deco-line);
+  background:
+    linear-gradient(180deg, rgba(27, 36, 44, 0.96), rgba(15, 23, 29, 0.96)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.06), transparent 60%);
+  color: var(--accumul8-deco-cream);
+  box-shadow: var(--accumul8-deco-shadow);
+}
+
+.catn8-page[data-page="accumul8"] .text-muted,
+.catn8-page[data-page="accumul8"] .small.text-muted,
+.catn8-page[data-page="accumul8"] .form-label.small.text-muted {
+  color: var(--accumul8-deco-muted) !important;
+}
+
+.catn8-page[data-page="accumul8"] .btn,
+.catn8-page[data-page="accumul8"] .form-control,
+.catn8-page[data-page="accumul8"] .form-select,
+.catn8-page[data-page="accumul8"] textarea {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.catn8-page[data-page="accumul8"] .btn {
+  font-family: 'Lexend Exa', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border-width: 2px;
+  padding: 0.72rem 0.95rem;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.catn8-page[data-page="accumul8"] .btn:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn:focus-visible {
+  transform: none;
+  box-shadow: 0 0 0 1px rgba(15, 10, 2, 0.85), 0 0 0 3px rgba(212, 175, 55, 0.28);
+}
+
+.catn8-page[data-page="accumul8"] .btn-primary,
+.catn8-page[data-page="accumul8"] .btn-success {
+  color: #1d170d;
+  background:
+    linear-gradient(180deg, #e1c86d, var(--accumul8-deco-gold));
+  border-color: #f0d98d;
+}
+
+.catn8-page[data-page="accumul8"] .btn-primary:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn-success:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn-primary:focus-visible,
+.catn8-page[data-page="accumul8"] .btn-success:focus-visible {
+  color: #1d170d;
+  background: linear-gradient(180deg, #f1dc95, #d4af37);
+  border-color: #f6e3a5;
+}
+
+.catn8-page[data-page="accumul8"] .btn-outline-primary,
+.catn8-page[data-page="accumul8"] .btn-outline-secondary,
+.catn8-page[data-page="accumul8"] .btn-outline-danger {
+  background: rgba(13, 20, 27, 0.78);
+  color: var(--accumul8-deco-cream);
+  border-color: var(--accumul8-deco-line-strong);
+}
+
+.catn8-page[data-page="accumul8"] .btn-outline-primary:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn-outline-secondary:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn-outline-danger:hover:not(:disabled),
+.catn8-page[data-page="accumul8"] .btn-outline-primary:focus-visible,
+.catn8-page[data-page="accumul8"] .btn-outline-secondary:focus-visible,
+.catn8-page[data-page="accumul8"] .btn-outline-danger:focus-visible {
+  background: rgba(212, 175, 55, 0.14);
+  color: #fff8e8;
+  border-color: #f3d87d;
+}
+
+.catn8-page[data-page="accumul8"] .btn-outline-danger {
+  border-color: rgba(211, 135, 99, 0.75);
+  color: #f1d4c0;
+}
+
+.catn8-page[data-page="accumul8"] .form-control,
+.catn8-page[data-page="accumul8"] .form-select,
+.catn8-page[data-page="accumul8"] textarea {
+  background: linear-gradient(180deg, rgba(247, 239, 214, 0.98), rgba(230, 219, 188, 0.98));
+  color: var(--accumul8-deco-ink);
+  border: 2px solid rgba(96, 74, 25, 0.5);
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+}
+
+.catn8-page[data-page="accumul8"] .form-control::placeholder,
+.catn8-page[data-page="accumul8"] textarea::placeholder {
+  color: rgba(68, 52, 19, 0.7);
+}
+
+.catn8-page[data-page="accumul8"] .form-control:focus,
+.catn8-page[data-page="accumul8"] .form-select:focus,
+.catn8-page[data-page="accumul8"] textarea:focus {
+  background: linear-gradient(180deg, #fbf6e7, #efe0b3);
+  border-color: var(--accumul8-deco-gold);
+  box-shadow: 0 0 0 1px rgba(20, 15, 6, 0.85), 0 0 0 3px rgba(212, 175, 55, 0.22);
+  color: #1a140c;
+}
+
+.catn8-page[data-page="accumul8"] .table {
+  color: var(--accumul8-deco-cream);
+  margin-bottom: 0;
 }
 
 .accumul8-page {
@@ -38,13 +215,61 @@
 
 .accumul8-page-title-row {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: flex-start;
+  gap: 1rem;
   width: 100%;
+  padding: 1.25rem;
+  border: 3px solid var(--accumul8-deco-line-strong);
+  background:
+    linear-gradient(180deg, rgba(18, 26, 33, 0.94), rgba(12, 18, 24, 0.98)),
+    radial-gradient(circle at top center, rgba(212, 175, 55, 0.16), transparent 38%);
+  box-shadow: var(--accumul8-deco-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.accumul8-page-title-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.06) 0,
+      rgba(212, 175, 55, 0.06) 2px,
+      transparent 2px,
+      transparent 18px
+    );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.accumul8-page-title-row::after {
+  content: '';
+  position: absolute;
+  inset: -18% auto auto 48%;
+  width: 18rem;
+  height: 18rem;
+  transform: translateX(-50%);
+  background:
+    repeating-conic-gradient(
+      from 270deg,
+      rgba(212, 175, 55, 0.22) 0deg 6deg,
+      transparent 6deg 18deg
+    );
+  opacity: 0.22;
+  clip-path: polygon(50% 50%, 100% 0, 100% 100%, 0 100%, 0 0);
+  pointer-events: none;
+}
+
+.accumul8-page-title-row > * {
+  position: relative;
+  z-index: 1;
 }
 
 .accumul8-page-title-row .section-title {
   flex: 0 0 auto;
+  margin-top: 0.2rem;
 }
 
 .accumul8-owner-selector {
@@ -57,6 +282,10 @@
   justify-content: space-between;
   gap: 1rem;
   width: 100%;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 2px solid rgba(212, 175, 55, 0.34);
+  border-top: 0;
+  background: linear-gradient(180deg, rgba(16, 23, 30, 0.88), rgba(10, 16, 21, 0.94));
 }
 
 .accumul8-page-filters {
@@ -73,8 +302,9 @@
 }
 
 .accumul8-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.75rem;
 }
 
@@ -85,25 +315,83 @@
 }
 
 .accumul8-summary-card {
-  background: linear-gradient(135deg, rgba(248, 246, 236, 0.9), rgba(226, 233, 241, 0.9));
-  border: 1px solid rgba(35, 45, 66, 0.14);
-  border-radius: 12px;
-  padding: 0.7rem 0.9rem;
-  display: flex;
+  background:
+    linear-gradient(180deg, rgba(245, 235, 201, 0.98), rgba(226, 211, 168, 0.98));
+  border: 3px solid rgba(113, 87, 28, 0.55);
+  padding: 0.85rem 0.95rem;
+  display: inline-flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  color: var(--accumul8-deco-ink);
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.65);
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.accumul8-summary-card::before,
+.accumul8-summary-card::after,
+.accumul8-panel::before,
+.accumul8-month-panel::before,
+.accumul8-help-modal::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.42);
+  pointer-events: none;
+}
+
+.accumul8-summary-card::after,
+.accumul8-panel::after,
+.accumul8-month-panel::after,
+.accumul8-help-modal::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background:
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top left / 14px 3px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top left / 3px 14px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top right / 14px 3px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top right / 3px 14px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom left / 14px 3px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom left / 3px 14px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom right / 14px 3px no-repeat,
+    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom right / 3px 14px no-repeat;
+  pointer-events: none;
 }
 
 .accumul8-summary-card span {
-  font-size: 0.78rem;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.66rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #394868;
+  letter-spacing: 0.16em;
+  color: rgba(74, 54, 14, 0.82);
 }
 
 .accumul8-summary-card strong {
-  font-size: 1.08rem;
-  color: #18243a;
+  font-family: 'Bodoni Moda', Georgia, serif;
+  font-size: 1.3rem;
+  color: #1a1308;
+}
+
+.accumul8-summary-logo {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 7rem;
+  padding-inline: 0.4rem 0;
+}
+
+.accumul8-summary-logo-image {
+  display: block;
+  width: auto;
+  height: clamp(54px, 6vw, 86px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.2));
 }
 
 .accumul8-tabs {
@@ -124,6 +412,10 @@
   flex: 0 1 auto;
 }
 
+.accumul8-tabs--header-buttons .btn {
+  min-height: 2.7rem;
+}
+
 .accumul8-filter-label-row {
   display: flex;
   align-items: center;
@@ -132,8 +424,8 @@
 }
 
 .accumul8-filter-gear {
-  width: 2rem;
-  height: 2rem;
+  width: 2.2rem;
+  height: 2.2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,10 +434,26 @@
 
 .accumul8-panel {
   margin-top: 1rem;
-  border: 1px solid rgba(33, 41, 56, 0.14);
-  background: rgba(250, 251, 252, 0.92);
-  border-radius: 14px;
+  border: 3px solid var(--accumul8-deco-line-strong);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 31, 0.97), rgba(10, 16, 22, 0.98)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 56%);
   padding: 1rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--accumul8-deco-shadow);
+}
+
+.accumul8-panel::before,
+.accumul8-month-panel::before,
+.accumul8-help-modal::before {
+  inset: 10px;
+}
+
+.accumul8-panel::after,
+.accumul8-month-panel::after,
+.accumul8-help-modal::after {
+  inset: 8px;
 }
 
 .accumul8-panel-toolbar {
@@ -156,7 +464,7 @@
 }
 
 .accumul8-inline-editor-row td {
-  background: rgba(236, 242, 250, 0.72);
+  background: rgba(232, 214, 161, 0.12);
 }
 
 .accumul8-inline-editor-grid {
@@ -201,9 +509,12 @@
 .accumul8-spreadsheet-nav-label {
   min-width: 9.5rem;
   text-align: center;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #223453;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accumul8-deco-paper);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .accumul8-spreadsheet-grid {
@@ -214,18 +525,20 @@
 }
 
 .accumul8-month-panel {
-  border: 1px solid rgba(29, 44, 78, 0.14);
-  border-radius: 16px;
+  border: 3px solid rgba(212, 175, 55, 0.4);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.94)),
-    radial-gradient(circle at top right, rgba(150, 187, 221, 0.18), transparent 45%);
-  padding: 0.85rem;
-  box-shadow: 0 14px 32px rgba(23, 34, 56, 0.08);
+    linear-gradient(180deg, rgba(245, 235, 206, 0.96), rgba(221, 203, 160, 0.97)),
+    radial-gradient(circle at top center, rgba(212, 175, 55, 0.12), transparent 36%);
+  padding: 1rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.58), 0 16px 30px rgba(0, 0, 0, 0.18);
+  position: relative;
+  overflow: hidden;
+  color: var(--accumul8-deco-ink);
 }
 
 .accumul8-month-panel.is-center {
-  border-color: rgba(34, 84, 170, 0.32);
-  box-shadow: 0 18px 36px rgba(26, 53, 104, 0.12);
+  border-color: rgba(212, 175, 55, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.7), 0 18px 36px rgba(0, 0, 0, 0.24);
 }
 
 .accumul8-month-panel-header {
@@ -237,10 +550,18 @@
 }
 
 .accumul8-month-panel-kicker {
-  font-size: 0.73rem;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.62rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #5a6d8f;
+  letter-spacing: 0.18em;
+  color: rgba(96, 68, 16, 0.74);
+}
+
+.accumul8-month-panel h4,
+.accumul8-month-panel h5,
+.accumul8-month-panel strong,
+.accumul8-month-panel .h6 {
+  color: var(--accumul8-deco-ink);
 }
 
 .accumul8-month-stats {
@@ -253,12 +574,14 @@
 .accumul8-month-stats span,
 .accumul8-month-balance-row span,
 .accumul8-budget-totals span {
-  background: rgba(234, 240, 248, 0.92);
-  border: 1px solid rgba(41, 66, 102, 0.14);
-  border-radius: 999px;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.78rem;
-  color: #31415f;
+  background: rgba(31, 25, 14, 0.88);
+  border: 2px solid rgba(212, 175, 55, 0.42);
+  padding: 0.28rem 0.58rem;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: var(--accumul8-deco-paper);
+  text-transform: uppercase;
 }
 
 .accumul8-month-summary {
@@ -269,24 +592,25 @@
 }
 
 .accumul8-month-summary div {
-  border-radius: 12px;
-  background: rgba(248, 250, 253, 0.95);
-  border: 1px solid rgba(38, 54, 88, 0.1);
-  padding: 0.55rem 0.65rem;
+  background: rgba(22, 19, 13, 0.9);
+  border: 2px solid rgba(212, 175, 55, 0.44);
+  padding: 0.65rem 0.7rem;
 }
 
 .accumul8-month-summary span {
   display: block;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #5d6b86;
+  color: rgba(245, 235, 201, 0.8);
 }
 
 .accumul8-month-summary strong {
   display: block;
+  font-family: 'Bodoni Moda', Georgia, serif;
   font-size: 1rem;
-  color: #1b2b46;
+  color: #fff5d5;
 }
 
 .accumul8-month-summary-input {
@@ -307,38 +631,76 @@
   overflow-x: hidden;
 }
 
-.accumul8-month-table {
+.accumul8-month-table,
+.accumul8-ledger-table {
   width: 100%;
   table-layout: fixed;
+}
+
+.accumul8-month-table {
   font-size: 0.69rem;
 }
 
+.accumul8-ledger-table {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+
+.accumul8-sticky-head thead th,
+.accumul8-month-table th,
 .accumul8-month-table td,
-.accumul8-month-table th {
+.accumul8-ledger-table th,
+.accumul8-ledger-table td,
+.accumul8-spreadsheet-table td,
+.accumul8-spreadsheet-table th {
   vertical-align: middle;
+}
+
+.accumul8-month-table td,
+.accumul8-month-table th,
+.accumul8-ledger-table td,
+.accumul8-ledger-table th {
   white-space: normal;
   overflow-wrap: anywhere;
-  padding: 0.35rem 0.3rem;
+  padding: 0.55rem 0.4rem;
+  border-color: rgba(212, 175, 55, 0.16);
 }
 
 .accumul8-month-table tr.is-editing td {
-  background: rgba(235, 242, 251, 0.92);
+  background: rgba(247, 237, 206, 0.88);
 }
 
 .accumul8-month-table tr.has-draft:not(.is-editing) td {
-  background: rgba(248, 251, 255, 0.92);
+  background: rgba(236, 223, 181, 0.82);
 }
 
 .accumul8-sticky-head tbody tr.is-editing td,
 .accumul8-list-item.is-editing td,
 .accumul8-list-item.is-editing {
-  background: rgba(235, 242, 251, 0.92);
+  background: rgba(247, 237, 206, 0.9);
+  color: var(--accumul8-deco-ink);
 }
 
 .accumul8-sticky-head tbody tr.has-draft:not(.is-editing) td,
 .accumul8-list-item.has-draft:not(.is-editing) td,
 .accumul8-list-item.has-draft:not(.is-editing) {
-  background: rgba(248, 251, 255, 0.92);
+  background: rgba(216, 197, 149, 0.12);
+}
+
+.accumul8-sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(33, 26, 15, 0.98), rgba(17, 13, 7, 0.98));
+  color: #f6e8bb;
+  box-shadow: inset 0 -2px 0 rgba(212, 175, 55, 0.24);
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-bottom: 0;
 }
 
 .accumul8-month-table th:nth-child(1),
@@ -393,7 +755,7 @@
 .accumul8-month-table-input {
   min-width: 0;
   width: 100%;
-  padding: 0.2rem 0.35rem;
+  padding: 0.3rem 0.42rem;
   font-size: 0.69rem;
 }
 
@@ -405,16 +767,15 @@
   background: transparent;
   box-shadow: none;
   padding: 0;
-  color: #223453;
+  color: inherit;
   font-size: inherit;
   line-height: 1.15;
-  border-radius: 0;
 }
 
 .accumul8-month-table-select:focus,
 .accumul8-inline-editor:focus {
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(34, 52, 83, 0.22);
+  background: rgba(255, 247, 226, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(96, 74, 25, 0.24);
 }
 
 .accumul8-inline-editor--text,
@@ -427,7 +788,7 @@
 }
 
 .accumul8-inline-editor--muted {
-  color: #5d6b80;
+  color: rgba(245, 235, 201, 0.72);
 }
 
 .accumul8-inline-stack {
@@ -453,8 +814,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.76rem;
-  color: #223453;
+  font-size: 0.72rem;
+  color: inherit;
 }
 
 .accumul8-inline-check input {
@@ -468,14 +829,14 @@
   background: transparent;
   padding: 0;
   text-align: left;
-  color: #223453;
-  line-height: 1.15;
+  color: inherit;
+  line-height: 1.25;
   min-height: 1rem;
 }
 
 .accumul8-inline-cell-trigger:hover:not(:disabled),
 .accumul8-inline-cell-trigger:focus-visible {
-  color: #223453;
+  color: inherit;
   text-decoration: none;
 }
 
@@ -492,7 +853,7 @@
 }
 
 .accumul8-icon-action {
-  min-width: 2rem;
+  min-width: 2.1rem;
   padding-inline: 0.45rem;
 }
 
@@ -503,13 +864,11 @@
 @keyframes accumul8-save-flash {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
-    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
   }
   30%,
   70% {
-    box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.28);
-    transform: scale(1.03);
+    box-shadow: 0 0 0 0.28rem rgba(212, 175, 55, 0.28);
   }
 }
 
@@ -518,21 +877,23 @@
   align-items: center;
   justify-content: center;
   min-width: 2.5rem;
-  padding: 0.18rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid rgba(27, 48, 87, 0.12);
-  font-size: 0.72rem;
-  font-weight: 600;
+  padding: 0.2rem 0.45rem;
+  border: 2px solid rgba(212, 175, 55, 0.4);
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .accumul8-status-pill.is-on {
-  background: rgba(28, 135, 74, 0.14);
-  color: #1d6a3f;
+  background: rgba(30, 76, 52, 0.85);
+  color: #eef3dc;
 }
 
 .accumul8-status-pill.is-off {
-  background: rgba(140, 150, 166, 0.12);
-  color: #566273;
+  background: rgba(61, 57, 47, 0.8);
+  color: #d7ccb1;
 }
 
 .accumul8-row-actions--always-on {
@@ -541,29 +902,29 @@
 }
 
 .accumul8-budget-rules {
-  border-top: 1px solid rgba(35, 45, 66, 0.12);
+  border-top: 2px solid rgba(212, 175, 55, 0.24);
   padding-top: 1rem;
 }
 
-.accumul8-ledger-table {
-  font-family: 'Courier New', Courier, monospace;
-}
-
-.accumul8-spreadsheet-table td,
-.accumul8-spreadsheet-table th {
-  vertical-align: middle;
-}
-
 .accumul8-spreadsheet-table tfoot td {
-  background: #eef3fb;
+  background: rgba(31, 25, 14, 0.88);
+  color: var(--accumul8-deco-paper);
 }
 
 .accumul8-ledger-table tr.is-outflow td {
-  background: rgba(195, 25, 18, 0.08);
+  background: linear-gradient(90deg, rgba(86, 27, 16, 0.34), rgba(86, 27, 16, 0.08));
 }
 
 .accumul8-ledger-table tr.is-inflow td {
-  background: rgba(14, 135, 50, 0.08);
+  background: linear-gradient(90deg, rgba(19, 62, 43, 0.32), rgba(19, 62, 43, 0.08));
+}
+
+.accumul8-list-item {
+  transition: background-color 140ms ease;
+}
+
+.accumul8-list-item:hover td {
+  background-color: rgba(212, 175, 55, 0.08);
 }
 
 .accumul8-list-item .accumul8-row-actions {
@@ -582,6 +943,21 @@
 
 .accumul8-scroll-area {
   overflow: auto;
+  scrollbar-color: rgba(212, 175, 55, 0.56) rgba(15, 20, 24, 0.86);
+}
+
+.accumul8-scroll-area::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.accumul8-scroll-area::-webkit-scrollbar-track {
+  background: rgba(15, 20, 24, 0.86);
+}
+
+.accumul8-scroll-area::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d9bd67, #8a6921);
+  border: 2px solid rgba(15, 20, 24, 0.86);
 }
 
 .accumul8-scroll-area--ledger,
@@ -600,18 +976,39 @@
   margin-bottom: 0;
 }
 
-.accumul8-sticky-head thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f5f8fc;
-  box-shadow: inset 0 -1px 0 rgba(33, 41, 56, 0.14);
+.accumul8-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background:
+    linear-gradient(180deg, rgba(10, 14, 18, 0.86), rgba(7, 10, 14, 0.92));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.accumul8-help-modal {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(246, 237, 210, 0.98), rgba(222, 207, 165, 0.98));
+  padding: 1.25rem;
+  border: 3px solid var(--accumul8-deco-line-strong);
+  color: var(--accumul8-deco-ink);
+  position: relative;
+  box-shadow: 0 28px 56px rgba(0, 0, 0, 0.42);
 }
 
 @media (max-width: 991px) {
   .catn8-page[data-page="accumul8"] {
     background-attachment: scroll;
     background-position: center top;
+  }
+
+  .catn8-page[data-page="accumul8"]::after {
+    inset-inline: 2vw;
   }
 
   .accumul8-page-title-row {
@@ -681,23 +1078,28 @@
   }
 }
 
-.accumul8-help-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  background: rgba(17, 22, 32, 0.52);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
+@media (max-width: 767px) {
+  .accumul8-page-title-row,
+  .accumul8-page-toolbar,
+  .accumul8-panel,
+  .accumul8-month-panel,
+  .accumul8-help-modal {
+    padding-inline: 0.85rem;
+  }
 
-.accumul8-help-modal {
-  width: min(760px, 96vw);
-  max-height: 90vh;
-  overflow: auto;
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 1rem;
-  border: 1px solid rgba(19, 36, 66, 0.2);
+  .accumul8-summary-grid {
+    width: 100%;
+  }
+
+  .accumul8-summary-logo {
+    flex-basis: 100%;
+    justify-content: center;
+    margin-left: 0;
+    min-width: 0;
+  }
+
+  .accumul8-tabs--header-buttons .btn,
+  .accumul8-panel-toolbar .btn {
+    width: 100%;
+  }
 }

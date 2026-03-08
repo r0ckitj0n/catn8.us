@@ -8,6 +8,7 @@ import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
+import { WebpImage } from '../common/WebpImage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
@@ -1182,6 +1183,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
                   <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
                   <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
+                  <div className="accumul8-summary-logo" aria-hidden="true">
+                    <WebpImage className="accumul8-summary-logo-image" src="/images/catn8_logo.png" alt="" />
+                  </div>
                 </div>
               </div>
             </div>

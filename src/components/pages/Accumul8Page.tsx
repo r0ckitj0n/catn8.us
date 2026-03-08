@@ -39,6 +39,7 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   manual: 'Manual payment',
 };
 const ACCUMUL8_EDIT_BUTTON_EMOJI = '✏️';
+const ACCUMUL8_VIEW_BUTTON_EMOJI = '👁️';
 type RecurringFormState = {
   title: string;
   direction: Accumul8Direction;
@@ -242,6 +243,12 @@ type MeasuredTableColumn = {
   header: string;
 };
 
+type EntityTransactionSummary = {
+  count: number;
+  lastAmount: number | null;
+  lastDate: string;
+};
+
 function estimateHeaderWidth(label: string): number {
   const normalized = label.replace(/\s+/g, ' ').trim();
   return Math.ceil(24 + normalized.length * 8.75);
@@ -363,6 +370,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [debtorModalOpen, setDebtorModalOpen] = React.useState(false);
   const [recurringModalOpen, setRecurringModalOpen] = React.useState(false);
   const [transactionModalOpen, setTransactionModalOpen] = React.useState(false);
+  const [entityHistoryEntityId, setEntityHistoryEntityId] = React.useState<number | null>(null);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
   const [selectedBankingOrganizationId, setSelectedBankingOrganizationId] = React.useState<string>('');
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
@@ -900,6 +908,38 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const entitiesSorted = React.useMemo(() => (
     [...entities].sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
   ), [entities]);
+  const entityTransactionsById = React.useMemo(() => {
+    const grouped: Record<number, Accumul8Transaction[]> = {};
+    for (const tx of transactions) {
+      const entityId = Number(tx.entity_id || 0);
+      if (entityId <= 0) {
+        continue;
+      }
+      if (!grouped[entityId]) {
+        grouped[entityId] = [];
+      }
+      grouped[entityId].push(tx);
+    }
+    return grouped;
+  }, [transactions]);
+  const entityTransactionSummaryById = React.useMemo(() => {
+    const summary: Record<number, EntityTransactionSummary> = {};
+    Object.entries(entityTransactionsById).forEach(([entityId, rows]) => {
+      const latest = rows[0] || null;
+      summary[Number(entityId)] = {
+        count: rows.length,
+        lastAmount: latest ? Number(latest.amount || 0) : null,
+        lastDate: latest?.transaction_date || latest?.due_date || '',
+      };
+    });
+    return summary;
+  }, [entityTransactionsById]);
+  const selectedEntityHistory = React.useMemo(() => (
+    entityHistoryEntityId ? entities.find((entity) => entity.id === entityHistoryEntityId) || null : null
+  ), [entities, entityHistoryEntityId]);
+  const selectedEntityTransactions = React.useMemo(() => (
+    entityHistoryEntityId ? entityTransactionsById[entityHistoryEntityId] || [] : []
+  ), [entityHistoryEntityId, entityTransactionsById]);
   const contactEntities = React.useMemo(() => (
     entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 0)
   ), [entitiesSorted]);
@@ -956,9 +996,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'roles', index: 1, fallback: 120, header: 'Roles' },
     { key: 'kind', index: 2, fallback: 96, header: 'Kind' },
     { key: 'linked', index: 3, fallback: 140, header: 'Linked Records' },
-    { key: 'amount', index: 5, fallback: 152, header: 'Default Amount' },
+    { key: 'lastTransaction', index: 5, fallback: 172, header: 'Last Transaction' },
     { key: 'status', index: 6, fallback: 96, header: 'Status' },
-    { key: 'actions', index: 7, fallback: 132, header: 'Actions' },
+    { key: 'actions', index: 7, fallback: 168, header: 'Actions' },
   ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
@@ -1928,7 +1968,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={{ width: 'var(--accumul8-col-kind-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-linked-width)' }} />
                     <col className="accumul8-col--flex-55" />
-                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-lastTransaction-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-status-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
@@ -1939,7 +1979,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       <th>Kind</th>
                       <th>Linked Records</th>
                       <th>Contact Info</th>
-                      <th className="text-end">Default Amount</th>
+                      <th className="text-end">Last Transaction</th>
                       <th>Status</th>
                       <th className="text-end">Actions</th>
                     </tr>
@@ -1947,6 +1987,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <tbody>
                     {entitiesSorted.map((entity) => {
                       const entityDraft = entityDraftById[entity.id];
+                      const entitySummary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
                       const entityContactSummary = formatEntityContactSummary({
                         phone_number: entityDraft?.phone_number ?? entity.phone_number,
                         email: entityDraft?.email ?? entity.email,
@@ -2043,11 +2084,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           )}
                         </td>
                         <td className="text-end">
-                          {activeEntityRowId === entity.id ? (
-                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={entityDraft?.default_amount ?? entity.default_amount} onChange={(e) => setEntityRowDraft(entity, { default_amount: Number(e.target.value) })} disabled={busy} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{Number(entity.default_amount || 0).toFixed(2)}</button>
-                          )}
+                          <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => setEntityHistoryEntityId(entity.id)} disabled={busy}>
+                            {entitySummary.lastAmount === null ? '-' : Number(entitySummary.lastAmount || 0).toFixed(2)}
+                            <span className="small text-muted d-block accumul8-inline-cell-meta">
+                              {entitySummary.lastDate ? `${formatInlineDate(entitySummary.lastDate)} · ${entitySummary.count} tx` : `${entitySummary.count} tx`}
+                            </span>
+                          </button>
                         </td>
                         <td>
                           {activeEntityRowId === entity.id ? (
@@ -2070,6 +2112,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               title={`Save ${entity.display_name}`}
                             >
                               <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
+                              onClick={() => setEntityHistoryEntityId(entity.id)}
+                              disabled={busy}
+                              aria-label={`View transactions for ${entity.display_name}`}
+                              title={`View transactions for ${entity.display_name}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span>
                             </button>
                             <button
                               type="button"
@@ -2324,6 +2376,50 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </ol>
                 <div className="small">
                   Quick references: <a href="https://plaid.com/docs/quickstart/" target="_blank" rel="noreferrer">Plaid Quickstart</a> | <a href="https://plaid.com/docs/api/items/#itempublic_tokenexchange" target="_blank" rel="noreferrer">Public Token Exchange API</a>
+                </div>
+              </div>
+            </div>
+          )}
+          {selectedEntityHistory && (
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label={`${selectedEntityHistory.display_name} transactions`} onClick={() => setEntityHistoryEntityId(null)}>
+              <div className="accumul8-help-modal accumul8-entity-history-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="accumul8-settings-modal-header">
+                  <div>
+                    <h2 className="accumul8-settings-modal-title mb-0">{selectedEntityHistory.display_name}</h2>
+                    <div className="small text-muted">
+                      {selectedEntityTransactions.length} linked transaction{selectedEntityTransactions.length === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityHistoryEntityId(null)}>Close</button>
+                </div>
+                <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--cards">
+                  <table className="table table-sm accumul8-table accumul8-entity-history-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Memo</th>
+                        <th>Account</th>
+                        <th className="text-end">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedEntityTransactions.map((tx) => (
+                        <tr key={tx.id} className={Number(tx.amount || 0) < 0 ? 'is-outflow' : 'is-inflow'}>
+                          <td>{formatInlineDate(tx.transaction_date || tx.due_date)}</td>
+                          <td>{formatInlineText(tx.description, '-')}</td>
+                          <td>{formatInlineText(tx.memo, '-')}</td>
+                          <td>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</td>
+                          <td className="text-end">{Number(tx.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      {selectedEntityTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="text-center text-muted py-4">No transactions are linked to this entity yet.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

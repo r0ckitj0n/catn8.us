@@ -147,9 +147,62 @@ function accumul8_contact_type_flags(string $contactType): array
     return ['is_payee' => 1, 'is_payer' => 1];
 }
 
+function accumul8_canonical_entity_name(string $value): string
+{
+    $name = accumul8_normalize_text($value, 191);
+    if ($name === '') {
+        return '';
+    }
+
+    $replacements = [
+        '/\(\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*\)/i',
+        '/\b(?:debit|credit)\s*-\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
+        '/\b[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
+        '/\b(?:x{3,}|\*{3,})[a-z0-9-]*\b/i',
+        '/\b(?:acct|account|checking|savings|card)\s+(?:ending\s+in\s+)?(?:x{2,}|\*{2,})?[a-z0-9-]{2,}\b/i',
+    ];
+    foreach ($replacements as $pattern) {
+        $next = preg_replace($pattern, ' ', $name);
+        if (is_string($next)) {
+            $name = $next;
+        }
+    }
+
+    $prefixPatterns = [
+        '/^(?:debit card purchase|digital card purchase|card purchase|purchase)\s*-\s*/i',
+        '/^(?:withdrawal|deposit|payment|transfer)\s+(?:to|from)\s+/i',
+        '/^(?:direct\s+(?:from|to)|online transfer\s+(?:from|to)|ach\s+(?:credit|debit|payment|transfer))\s*[-:]?\s*/i',
+    ];
+    foreach ($prefixPatterns as $pattern) {
+        $next = preg_replace($pattern, '', $name, 1);
+        if (is_string($next)) {
+            $name = $next;
+        }
+    }
+
+    $cleanupPatterns = [
+        '/\b(?:debit|credit)\b\s*$/i',
+        '/^[\s\-:;,]+/u',
+        '/[\s\-:;,]+$/u',
+        '/\s+/u',
+    ];
+    foreach ($cleanupPatterns as $pattern) {
+        $next = preg_replace($pattern, $pattern === '/\s+/u' ? ' ' : '', $name);
+        if (is_string($next)) {
+            $name = $next;
+        }
+    }
+
+    $name = trim($name);
+    if ($name === '') {
+        return accumul8_normalize_text($value, 191);
+    }
+    return accumul8_normalize_text($name, 191);
+}
+
 function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?int
 {
-    $normalizedName = accumul8_normalize_text($displayName, 191);
+    $normalizedName = accumul8_canonical_entity_name($displayName);
     if ($normalizedName === '') {
         return null;
     }
@@ -172,7 +225,7 @@ function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?
 
 function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEntityId = null): int
 {
-    $displayName = accumul8_normalize_text($payload['display_name'] ?? '', 191);
+    $displayName = accumul8_canonical_entity_name((string)($payload['display_name'] ?? ''));
     if ($displayName === '') {
         $displayName = 'Unnamed Entity';
     }
@@ -375,7 +428,7 @@ function accumul8_entity_contact_type_for_amount(float $amount): string
 
 function accumul8_entity_id_from_name(int $viewerId, string $displayName, array $payload = []): ?int
 {
-    $normalizedName = accumul8_normalize_text($displayName, 191);
+    $normalizedName = accumul8_canonical_entity_name($displayName);
     if ($normalizedName === '') {
         return null;
     }

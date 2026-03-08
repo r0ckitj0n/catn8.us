@@ -1271,6 +1271,11 @@
   text-align: right;
 }
 
+.accumul8-inline-cell-meta {
+  white-space: normal;
+  line-height: 1.15;
+}
+
 .accumul8-month-table td.is-compact-actions {
   white-space: nowrap;
   padding-right: 1px;
@@ -1505,6 +1510,28 @@
   color: var(--accumul8-deco-ink);
   position: relative;
   box-shadow: 0 28px 56px rgba(0, 0, 0, 0.42);
+}
+
+.accumul8-entity-history-modal {
+  width: min(1080px, 96vw);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 31, 0.98), rgba(9, 14, 19, 0.98)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 58%);
+  color: var(--accumul8-deco-paper);
+}
+
+.accumul8-entity-history-modal .small.text-muted {
+  color: var(--accumul8-deco-muted) !important;
+}
+
+.accumul8-entity-history-table th,
+.accumul8-entity-history-table td {
+  white-space: nowrap;
+}
+
+.accumul8-entity-history-table td:nth-child(2),
+.accumul8-entity-history-table td:nth-child(3) {
+  white-space: normal;
 }
 
 @media (max-width: 991px) {

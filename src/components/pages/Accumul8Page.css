@@ -1,3 +1,31 @@
+.catn8-page[data-page="accumul8"] {
+  background:
+    linear-gradient(180deg, rgba(245, 249, 255, 0.7), rgba(243, 247, 252, 0.82)),
+    url('/images/backgrounds/accumul8-background.png') center top / cover no-repeat;
+  background:
+    linear-gradient(180deg, rgba(245, 249, 255, 0.7), rgba(243, 247, 252, 0.82)),
+    image-set(
+      url('/images/backgrounds/accumul8-background.webp') type('image/webp') 1x,
+      url('/images/backgrounds/accumul8-background.png') type('image/png') 1x
+    ) center top / cover no-repeat;
+  background-attachment: fixed;
+}
+
+.catn8-page[data-page="accumul8"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.22), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.22));
+  pointer-events: none;
+}
+
+.catn8-page[data-page="accumul8"] > * {
+  position: relative;
+  z-index: 1;
+}
+
 .accumul8-page {
   padding-bottom: 2rem;
 }
@@ -393,6 +421,23 @@
   padding-inline: 0.45rem;
 }
 
+.accumul8-icon-action.is-flashing {
+  animation: accumul8-save-flash 0.9s ease-in-out 1;
+}
+
+@keyframes accumul8-save-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+    transform: scale(1);
+  }
+  30%,
+  70% {
+    box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.28);
+    transform: scale(1.03);
+  }
+}
+
 .accumul8-status-pill {
   display: inline-flex;
   align-items: center;
@@ -489,6 +534,11 @@
 }
 
 @media (max-width: 991px) {
+  .catn8-page[data-page="accumul8"] {
+    background-attachment: scroll;
+    background-position: center top;
+  }
+
   .accumul8-page-title-row {
     align-items: flex-start;
     flex-direction: column;

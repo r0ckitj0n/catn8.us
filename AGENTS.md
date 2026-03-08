@@ -93,6 +93,7 @@
 - Avoid unnecessary inline styles.
 - Use semantic HTML (`<button>` for actions, `<a>` for links).
 - All meaningful images require `alt`; lazy-load below-the-fold images when appropriate.
+- For site image assets, use `.webp` as the primary source when supported and keep a `.png` fallback available for compatibility; when wiring backgrounds or responsive image assets, prefer WebP first with explicit PNG fallback.
 - Avoid hardcoded IDs and magic values; use constants/enums.
 - Do not use raw `fetch`/`axios` in UI components; use `src/core/ApiClient.ts`.
 - Do not commit debug `console.log` statements.

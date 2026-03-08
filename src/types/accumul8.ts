@@ -6,6 +6,7 @@ export type Accumul8PaymentMethod = 'unspecified' | 'autopay' | 'manual';
 
 export interface Accumul8Contact {
   id: number;
+  entity_id: number | null;
   contact_name: string;
   contact_type: Accumul8ContactType;
   default_amount: number;
@@ -34,6 +35,8 @@ export interface Accumul8ContactUpsertRequest {
 
 export interface Accumul8RecurringPayment {
   id: number;
+  entity_id: number | null;
+  entity_name: string;
   contact_id: number | null;
   account_id: number | null;
   banking_organization_id: number | null;
@@ -62,6 +65,7 @@ export interface Accumul8RecurringUpsertRequest {
   payment_method: Accumul8PaymentMethod;
   interval_count: number;
   next_due_date: string;
+  entity_id?: number | null;
   contact_id?: number | null;
   account_id?: number | null;
   is_budget_planner?: number;
@@ -72,6 +76,10 @@ export interface Accumul8Transaction {
   id: number;
   account_id: number | null;
   banking_organization_id: number | null;
+  entity_id: number | null;
+  entity_name: string;
+  balance_entity_id: number | null;
+  balance_entity_name: string;
   contact_id: number | null;
   debtor_id: number | null;
   transaction_date: string;
@@ -119,6 +127,8 @@ export interface Accumul8TransactionUpsertRequest {
   is_paid: number;
   is_reconciled: number;
   is_budget_planner: number;
+  entity_id?: number | null;
+  balance_entity_id?: number | null;
   contact_id?: number | null;
   account_id?: number | null;
   debtor_id?: number | null;
@@ -233,6 +243,8 @@ export interface Accumul8Summary {
 
 export interface Accumul8Debtor {
   id: number;
+  entity_id: number | null;
+  entity_name: string;
   contact_id: number | null;
   debtor_name: string;
   notes: string;
@@ -243,6 +255,52 @@ export interface Accumul8Debtor {
   transaction_count: number;
   last_activity_date: string;
   contact_name: string;
+}
+
+export interface Accumul8Entity {
+  id: number;
+  owner_user_id: number;
+  display_name: string;
+  entity_kind: string;
+  contact_type: Accumul8ContactType;
+  is_payee: number;
+  is_payer: number;
+  is_vendor: number;
+  is_balance_person: number;
+  default_amount: number;
+  email: string;
+  phone_number: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
+  notes: string;
+  is_active: number;
+  legacy_contact_id: number | null;
+  legacy_debtor_id: number | null;
+  contact_id: number | null;
+  debtor_id: number | null;
+  contact_name: string;
+  debtor_name: string;
+}
+
+export interface Accumul8EntityUpsertRequest {
+  display_name: string;
+  entity_kind?: string;
+  contact_type: Accumul8ContactType;
+  is_payee: number;
+  is_payer: number;
+  is_vendor?: number;
+  is_balance_person?: number;
+  default_amount?: number;
+  email?: string;
+  phone_number?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  is_active?: number;
 }
 
 export interface Accumul8DebtorUpsertRequest {
@@ -273,6 +331,7 @@ export interface Accumul8BootstrapResponse {
   success: boolean;
   selected_owner_user_id: number;
   accessible_account_owners: Accumul8AccessibleOwner[];
+  entities: Accumul8Entity[];
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];

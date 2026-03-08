@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Accumul8Account,
-  Accumul8Contact,
+  Accumul8Entity,
   Accumul8PaymentMethod,
   Accumul8RecurringPayment,
   Accumul8RecurringUpsertRequest,
@@ -18,21 +18,9 @@ interface Accumul8SpreadsheetViewProps {
   busy: boolean;
   selectedMonth: string;
   recurringPayments: Accumul8RecurringPayment[];
-  contacts: Accumul8Contact[];
+  entities: Accumul8Entity[];
   accounts: Accumul8Account[];
   onSelectedMonthChange: (monthValue: string) => void;
-  onCreateContact: (form: {
-    contact_name: string;
-    contact_type: 'payee' | 'payer' | 'both';
-    default_amount: number;
-    email: string;
-    phone_number: string;
-    street_address: string;
-    city: string;
-    state: string;
-    zip: string;
-    notes: string;
-  }) => Promise<{ id?: number } | void>;
   onUpdateRecurring: (id: number, form: Accumul8RecurringUpsertRequest) => Promise<void>;
   onDeleteRecurring: (id: number, description: string) => void;
 }
@@ -106,10 +94,9 @@ export function Accumul8SpreadsheetView({
   busy,
   selectedMonth,
   recurringPayments,
-  contacts,
+  entities,
   accounts,
   onSelectedMonthChange,
-  onCreateContact,
   onUpdateRecurring,
   onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
@@ -169,7 +156,7 @@ export function Accumul8SpreadsheetView({
         allRows.push({
           ...row,
           original_due_date: row.due_date,
-          vendor_input: row.contact_name || row.title || '',
+          vendor_input: row.entity_name || row.contact_name || row.title || '',
           rta: Number(rowRtaByKey[row.rowKey] || 0),
           balance: 0,
           ...draft,
@@ -227,7 +214,7 @@ export function Accumul8SpreadsheetView({
           return {
             ...row,
             original_due_date: row.due_date,
-            vendor_input: row.contact_name || row.title || '',
+            vendor_input: row.entity_name || row.contact_name || row.title || '',
             rta: Number(rowRtaByKey[row.rowKey] || 0),
             balance: Number.isFinite(balanceByRowKey[row.rowKey]) ? balanceByRowKey[row.rowKey] : NaN,
             ...draft,
@@ -281,30 +268,15 @@ export function Accumul8SpreadsheetView({
       return;
     }
 
-    let contactId: number | null = row.contact_id ?? null;
+    let entityId: number | null = row.entity_id ?? null;
     const vendorName = String(row.vendor_input || '').trim();
     if (vendorName !== '') {
-      const matched = contacts.find((contact) => contact.contact_name.trim().toLowerCase() === vendorName.toLowerCase());
+      const matched = entities.find((entity) => entity.display_name.trim().toLowerCase() === vendorName.toLowerCase());
       if (matched) {
-        contactId = matched.id;
+        entityId = matched.id;
       } else {
-        const created = await onCreateContact({
-          contact_name: vendorName,
-          contact_type: 'payee',
-          default_amount: 0,
-          email: '',
-          phone_number: '',
-          street_address: '',
-          city: '',
-          state: '',
-          zip: '',
-          notes: '',
-        });
-        const createdId = created && typeof created === 'object' && 'id' in created ? Number(created.id || 0) : 0;
-        contactId = createdId > 0 ? createdId : null;
+        entityId = null;
       }
-    } else {
-      contactId = null;
     }
 
     const dayDelta = (() => {
@@ -328,7 +300,7 @@ export function Accumul8SpreadsheetView({
       payment_method: (row.payment_method || recurring.payment_method) as Accumul8PaymentMethod,
       interval_count: Number(recurring.interval_count || 1),
       next_due_date: nextDueDate,
-      contact_id: contactId,
+      entity_id: entityId,
       account_id: row.account_id ?? null,
       is_budget_planner: Number(recurring.is_budget_planner || 0),
       notes: row.notes || '',
@@ -339,7 +311,7 @@ export function Accumul8SpreadsheetView({
       return next;
     });
     setActiveRowKey((current) => (current === row.rowKey ? null : current));
-  }, [contacts, onCreateContact, onUpdateRecurring, recurringPayments]);
+  }, [entities, onUpdateRecurring, recurringPayments]);
 
   return (
     <div className="accumul8-spreadsheet">
@@ -618,8 +590,10 @@ export function Accumul8SpreadsheetView({
                   </tbody>
                 </table>
                 <datalist id={`accumul8-vendor-options-${panel.monthValue}`}>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.contact_name} />
+                  {entities
+                    .filter((entity) => Number(entity.is_balance_person || 0) === 0)
+                    .map((entity) => (
+                    <option key={entity.id} value={entity.display_name} />
                   ))}
                 </datalist>
               </div>

@@ -135,6 +135,494 @@ function accumul8_optional_select(string $tableName, string $columnName, string 
     return accumul8_table_has_column($tableName, $columnName) ? $presentExpression : $missingExpression;
 }
 
+function accumul8_contact_type_flags(string $contactType): array
+{
+    $normalized = strtolower(trim($contactType));
+    if ($normalized === 'payee') {
+        return ['is_payee' => 1, 'is_payer' => 0];
+    }
+    if ($normalized === 'payer') {
+        return ['is_payee' => 0, 'is_payer' => 1];
+    }
+    return ['is_payee' => 1, 'is_payer' => 1];
+}
+
+function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?int
+{
+    $normalizedName = accumul8_normalize_text($displayName, 191);
+    if ($normalizedName === '') {
+        return null;
+    }
+
+    $row = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entities
+         WHERE owner_user_id = ?
+           AND LOWER(display_name) = LOWER(?)
+         ORDER BY
+           CASE WHEN legacy_contact_id IS NOT NULL THEN 0 ELSE 1 END,
+           CASE WHEN legacy_debtor_id IS NOT NULL THEN 0 ELSE 1 END,
+           id ASC
+         LIMIT 1',
+        [$viewerId, $normalizedName]
+    );
+
+    return $row ? (int)($row['id'] ?? 0) : null;
+}
+
+function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEntityId = null): int
+{
+    $displayName = accumul8_normalize_text($payload['display_name'] ?? '', 191);
+    if ($displayName === '') {
+        $displayName = 'Unnamed Entity';
+    }
+    $entityKind = accumul8_normalize_text($payload['entity_kind'] ?? 'contact', 24);
+    $contactType = accumul8_validate_enum('contact_type', $payload['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $defaultAmount = accumul8_normalize_amount($payload['default_amount'] ?? 0);
+    $email = accumul8_normalize_text($payload['email'] ?? '', 191);
+    $phoneNumber = accumul8_normalize_text($payload['phone_number'] ?? '', 32);
+    $streetAddress = accumul8_normalize_text($payload['street_address'] ?? '', 191);
+    $city = accumul8_normalize_text($payload['city'] ?? '', 120);
+    $state = accumul8_normalize_text($payload['state'] ?? '', 64);
+    $zip = accumul8_normalize_text($payload['zip'] ?? '', 20);
+    $notes = accumul8_normalize_text($payload['notes'] ?? '', 1500);
+    $isActive = accumul8_normalize_bool($payload['is_active'] ?? 1);
+    $isPayee = accumul8_normalize_bool($payload['is_payee'] ?? 0);
+    $isPayer = accumul8_normalize_bool($payload['is_payer'] ?? 0);
+    $isVendor = accumul8_normalize_bool($payload['is_vendor'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($payload['is_balance_person'] ?? 0);
+    $legacyContactId = isset($payload['legacy_contact_id']) && (int)$payload['legacy_contact_id'] > 0 ? (int)$payload['legacy_contact_id'] : null;
+    $legacyDebtorId = isset($payload['legacy_debtor_id']) && (int)$payload['legacy_debtor_id'] > 0 ? (int)$payload['legacy_debtor_id'] : null;
+    if (($existingEntityId === null || $existingEntityId <= 0) && $legacyContactId === null && $legacyDebtorId === null) {
+        $matchingEntityId = accumul8_find_matching_entity_id($viewerId, $displayName);
+        if ($matchingEntityId !== null && $matchingEntityId > 0) {
+            $existingEntityId = $matchingEntityId;
+        }
+    }
+
+    if ($existingEntityId !== null && $existingEntityId > 0) {
+        Database::execute(
+            'UPDATE accumul8_entities
+             SET display_name = ?, entity_kind = ?, contact_type = ?, is_payee = ?, is_payer = ?, is_vendor = ?, is_balance_person = ?,
+                 default_amount = ?, email = ?, phone_number = ?, street_address = ?, city = ?, state = ?, zip = ?, notes = ?, is_active = ?,
+                 legacy_contact_id = COALESCE(?, legacy_contact_id), legacy_debtor_id = COALESCE(?, legacy_debtor_id)
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $displayName,
+                $entityKind,
+                $contactType,
+                $isPayee,
+                $isPayer,
+                $isVendor,
+                $isBalancePerson,
+                $defaultAmount,
+                $email === '' ? null : $email,
+                $phoneNumber === '' ? null : $phoneNumber,
+                $streetAddress === '' ? null : $streetAddress,
+                $city === '' ? null : $city,
+                $state === '' ? null : $state,
+                $zip === '' ? null : $zip,
+                $notes === '' ? null : $notes,
+                $isActive,
+                $legacyContactId,
+                $legacyDebtorId,
+                $existingEntityId,
+                $viewerId,
+            ]
+        );
+        return $existingEntityId;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_entities
+            (owner_user_id, display_name, entity_kind, contact_type, is_payee, is_payer, is_vendor, is_balance_person,
+             default_amount, email, phone_number, street_address, city, state, zip, notes, is_active, legacy_contact_id, legacy_debtor_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $displayName,
+            $entityKind,
+            $contactType,
+            $isPayee,
+            $isPayer,
+            $isVendor,
+            $isBalancePerson,
+            $defaultAmount,
+            $email === '' ? null : $email,
+            $phoneNumber === '' ? null : $phoneNumber,
+            $streetAddress === '' ? null : $streetAddress,
+            $city === '' ? null : $city,
+            $state === '' ? null : $state,
+            $zip === '' ? null : $zip,
+            $notes === '' ? null : $notes,
+            $isActive,
+            $legacyContactId,
+            $legacyDebtorId,
+        ]
+    );
+
+    return (int)Database::lastInsertId();
+}
+
+function accumul8_contact_entity_id_or_create(int $viewerId, int $contactId): ?int
+{
+    if ($contactId <= 0 || !accumul8_table_has_column('accumul8_contacts', 'entity_id')) {
+        return null;
+    }
+    $row = Database::queryOne(
+        'SELECT id, entity_id, contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active
+         FROM accumul8_contacts
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$contactId, $viewerId]
+    );
+    if (!$row) {
+        return null;
+    }
+    $existingEntityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
+    $flags = accumul8_contact_type_flags((string)($row['contact_type'] ?? 'both'));
+    $entityId = accumul8_upsert_entity($viewerId, [
+        'display_name' => (string)($row['contact_name'] ?? ''),
+        'entity_kind' => 'contact',
+        'contact_type' => (string)($row['contact_type'] ?? 'both'),
+        'is_payee' => $flags['is_payee'],
+        'is_payer' => $flags['is_payer'],
+        'is_vendor' => 0,
+        'is_balance_person' => 0,
+        'default_amount' => (float)($row['default_amount'] ?? 0),
+        'email' => (string)($row['email'] ?? ''),
+        'phone_number' => (string)($row['phone_number'] ?? ''),
+        'street_address' => (string)($row['street_address'] ?? ''),
+        'city' => (string)($row['city'] ?? ''),
+        'state' => (string)($row['state'] ?? ''),
+        'zip' => (string)($row['zip'] ?? ''),
+        'notes' => (string)($row['notes'] ?? ''),
+        'is_active' => (int)($row['is_active'] ?? 1),
+        'legacy_contact_id' => (int)($row['id'] ?? 0),
+    ], $existingEntityId > 0 ? $existingEntityId : null);
+    Database::execute(
+        'UPDATE accumul8_contacts SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
+        [$entityId, $contactId, $viewerId]
+    );
+    return $entityId;
+}
+
+function accumul8_debtor_entity_id_or_create(int $viewerId, int $debtorId): ?int
+{
+    if ($debtorId <= 0 || !accumul8_table_has_column('accumul8_debtors', 'entity_id')) {
+        return null;
+    }
+    $row = Database::queryOne(
+        'SELECT d.id, d.entity_id, d.contact_id, d.debtor_name, d.notes, d.is_active,
+                c.entity_id AS contact_entity_id, c.contact_name, c.contact_type, c.default_amount, c.email, c.phone_number, c.street_address, c.city, c.state, c.zip
+         FROM accumul8_debtors d
+         LEFT JOIN accumul8_contacts c
+           ON c.id = d.contact_id
+          AND c.owner_user_id = d.owner_user_id
+         WHERE d.id = ? AND d.owner_user_id = ?
+         LIMIT 1',
+        [$debtorId, $viewerId]
+    );
+    if (!$row) {
+        return null;
+    }
+    $linkedContactEntityId = isset($row['contact_entity_id']) ? (int)$row['contact_entity_id'] : 0;
+    if ($linkedContactEntityId <= 0 && isset($row['contact_id']) && (int)$row['contact_id'] > 0) {
+        $linkedContactEntityId = (int)(accumul8_contact_entity_id_or_create($viewerId, (int)$row['contact_id']) ?? 0);
+    }
+    $existingEntityId = $linkedContactEntityId > 0
+        ? $linkedContactEntityId
+        : (isset($row['entity_id']) ? (int)$row['entity_id'] : 0);
+    $contactType = $linkedContactEntityId > 0 ? (string)($row['contact_type'] ?? 'both') : 'both';
+    $flags = accumul8_contact_type_flags($contactType);
+    $entityId = accumul8_upsert_entity($viewerId, [
+        'display_name' => $linkedContactEntityId > 0 ? (string)($row['contact_name'] ?? $row['debtor_name'] ?? '') : (string)($row['debtor_name'] ?? ''),
+        'entity_kind' => 'person',
+        'contact_type' => $contactType,
+        'is_payee' => $flags['is_payee'],
+        'is_payer' => $flags['is_payer'],
+        'is_vendor' => 0,
+        'is_balance_person' => 1,
+        'default_amount' => (float)($row['default_amount'] ?? 0),
+        'email' => (string)($row['email'] ?? ''),
+        'phone_number' => (string)($row['phone_number'] ?? ''),
+        'street_address' => (string)($row['street_address'] ?? ''),
+        'city' => (string)($row['city'] ?? ''),
+        'state' => (string)($row['state'] ?? ''),
+        'zip' => (string)($row['zip'] ?? ''),
+        'notes' => (string)($row['notes'] ?? ''),
+        'is_active' => (int)($row['is_active'] ?? 1),
+        'legacy_contact_id' => isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+        'legacy_debtor_id' => (int)($row['id'] ?? 0),
+    ], $existingEntityId > 0 ? $existingEntityId : null);
+    Database::execute(
+        'UPDATE accumul8_debtors SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
+        [$entityId, $debtorId, $viewerId]
+    );
+    return $entityId;
+}
+
+function accumul8_entity_contact_type_for_amount(float $amount): string
+{
+    if ($amount < 0) {
+        return 'payee';
+    }
+    if ($amount > 0) {
+        return 'payer';
+    }
+    return 'both';
+}
+
+function accumul8_entity_id_from_name(int $viewerId, string $displayName, array $payload = []): ?int
+{
+    $normalizedName = accumul8_normalize_text($displayName, 191);
+    if ($normalizedName === '') {
+        return null;
+    }
+
+    $contactType = accumul8_validate_enum('contact_type', $payload['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $flags = accumul8_contact_type_flags($contactType);
+
+    return accumul8_upsert_entity($viewerId, [
+        'display_name' => $normalizedName,
+        'entity_kind' => (string)($payload['entity_kind'] ?? 'contact'),
+        'contact_type' => $contactType,
+        'is_payee' => $payload['is_payee'] ?? $flags['is_payee'],
+        'is_payer' => $payload['is_payer'] ?? $flags['is_payer'],
+        'is_vendor' => $payload['is_vendor'] ?? ($contactType === 'payee' ? 1 : 0),
+        'is_balance_person' => $payload['is_balance_person'] ?? 0,
+        'default_amount' => $payload['default_amount'] ?? 0,
+        'email' => $payload['email'] ?? '',
+        'phone_number' => $payload['phone_number'] ?? '',
+        'street_address' => $payload['street_address'] ?? '',
+        'city' => $payload['city'] ?? '',
+        'state' => $payload['state'] ?? '',
+        'zip' => $payload['zip'] ?? '',
+        'notes' => $payload['notes'] ?? '',
+        'is_active' => $payload['is_active'] ?? 1,
+    ]);
+}
+
+function accumul8_recurring_entity_id_or_create(int $viewerId, array $row): ?int
+{
+    $contactId = isset($row['contact_id']) ? (int)$row['contact_id'] : 0;
+    if ($contactId > 0) {
+        return accumul8_contact_entity_id_or_create($viewerId, $contactId);
+    }
+
+    $title = (string)($row['title'] ?? '');
+    $direction = (string)($row['direction'] ?? 'outflow');
+    $amount = (float)($row['amount'] ?? 0);
+    $contactType = $direction === 'inflow'
+        ? 'payer'
+        : ($direction === 'outflow' ? 'payee' : accumul8_entity_contact_type_for_amount($amount));
+
+    return accumul8_entity_id_from_name($viewerId, $title, [
+        'entity_kind' => 'contact',
+        'contact_type' => $contactType,
+        'default_amount' => abs($amount),
+        'notes' => (string)($row['notes'] ?? ''),
+        'is_vendor' => $direction === 'outflow' ? 1 : 0,
+        'is_active' => (int)($row['is_active'] ?? 1),
+    ]);
+}
+
+function accumul8_transaction_entity_id_or_create(int $viewerId, array $row): ?int
+{
+    $contactId = isset($row['contact_id']) ? (int)$row['contact_id'] : 0;
+    if ($contactId > 0) {
+        return accumul8_contact_entity_id_or_create($viewerId, $contactId);
+    }
+
+    $description = (string)($row['description'] ?? '');
+    $amount = (float)($row['amount'] ?? 0);
+    $contactType = accumul8_entity_contact_type_for_amount($amount);
+
+    return accumul8_entity_id_from_name($viewerId, $description, [
+        'entity_kind' => 'contact',
+        'contact_type' => $contactType,
+        'default_amount' => abs($amount),
+        'notes' => (string)($row['memo'] ?? ''),
+        'is_vendor' => $amount < 0 ? 1 : 0,
+        'is_active' => 1,
+    ]);
+}
+
+function accumul8_contact_type_from_roles(int $isPayee, int $isPayer): string
+{
+    if ($isPayee === 1 && $isPayer === 1) {
+        return 'both';
+    }
+    if ($isPayee === 1) {
+        return 'payee';
+    }
+    if ($isPayer === 1) {
+        return 'payer';
+    }
+    return 'both';
+}
+
+function accumul8_sync_contact_from_entity(int $viewerId, int $entityId): ?int
+{
+    $entity = Database::queryOne(
+        'SELECT *
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    if (!$entity) {
+        return null;
+    }
+
+    $contactId = isset($entity['legacy_contact_id']) && (int)$entity['legacy_contact_id'] > 0 ? (int)$entity['legacy_contact_id'] : null;
+    $isPayee = (int)($entity['is_payee'] ?? 0) === 1 ? 1 : 0;
+    $isPayer = (int)($entity['is_payer'] ?? 0) === 1 ? 1 : 0;
+    $isVendor = (int)($entity['is_vendor'] ?? 0) === 1 ? 1 : 0;
+    $shouldProject = $isPayee === 1 || $isPayer === 1 || $isVendor === 1;
+    $contactType = accumul8_contact_type_from_roles($isPayee, $isPayer);
+    $isActive = $shouldProject ? ((int)($entity['is_active'] ?? 1) === 1 ? 1 : 0) : 0;
+
+    if ($contactId !== null && $contactId > 0) {
+        Database::execute(
+            'UPDATE accumul8_contacts
+             SET entity_id = ?, contact_name = ?, contact_type = ?, default_amount = ?, email = ?, phone_number = ?, street_address = ?, city = ?, state = ?, zip = ?, notes = ?, is_active = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $entityId,
+                (string)($entity['display_name'] ?? ''),
+                $contactType,
+                (float)($entity['default_amount'] ?? 0),
+                (string)($entity['email'] ?? '') === '' ? null : (string)$entity['email'],
+                (string)($entity['phone_number'] ?? '') === '' ? null : (string)$entity['phone_number'],
+                (string)($entity['street_address'] ?? '') === '' ? null : (string)$entity['street_address'],
+                (string)($entity['city'] ?? '') === '' ? null : (string)$entity['city'],
+                (string)($entity['state'] ?? '') === '' ? null : (string)$entity['state'],
+                (string)($entity['zip'] ?? '') === '' ? null : (string)$entity['zip'],
+                (string)($entity['notes'] ?? '') === '' ? null : (string)$entity['notes'],
+                $isActive,
+                $contactId,
+                $viewerId,
+            ]
+        );
+        return $contactId;
+    }
+
+    if (!$shouldProject) {
+        return null;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_contacts (owner_user_id, entity_id, contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $entityId,
+            (string)($entity['display_name'] ?? ''),
+            $contactType,
+            (float)($entity['default_amount'] ?? 0),
+            (string)($entity['email'] ?? '') === '' ? null : (string)$entity['email'],
+            (string)($entity['phone_number'] ?? '') === '' ? null : (string)$entity['phone_number'],
+            (string)($entity['street_address'] ?? '') === '' ? null : (string)$entity['street_address'],
+            (string)($entity['city'] ?? '') === '' ? null : (string)$entity['city'],
+            (string)($entity['state'] ?? '') === '' ? null : (string)$entity['state'],
+            (string)($entity['zip'] ?? '') === '' ? null : (string)$entity['zip'],
+            (string)($entity['notes'] ?? '') === '' ? null : (string)$entity['notes'],
+            $isActive,
+        ]
+    );
+    $contactId = (int)Database::lastInsertId();
+    Database::execute(
+        'UPDATE accumul8_entities
+         SET legacy_contact_id = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [$contactId, $entityId, $viewerId]
+    );
+    Database::execute(
+        'UPDATE accumul8_recurring_payments
+         SET contact_id = COALESCE(contact_id, ?)
+         WHERE owner_user_id = ? AND entity_id = ?',
+        [$contactId, $viewerId, $entityId]
+    );
+    Database::execute(
+        'UPDATE accumul8_transactions
+         SET contact_id = COALESCE(contact_id, ?)
+         WHERE owner_user_id = ? AND entity_id = ?',
+        [$contactId, $viewerId, $entityId]
+    );
+
+    return $contactId;
+}
+
+function accumul8_sync_debtor_from_entity(int $viewerId, int $entityId): ?int
+{
+    $entity = Database::queryOne(
+        'SELECT *
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    if (!$entity) {
+        return null;
+    }
+
+    $debtorId = isset($entity['legacy_debtor_id']) && (int)$entity['legacy_debtor_id'] > 0 ? (int)$entity['legacy_debtor_id'] : null;
+    $contactId = isset($entity['legacy_contact_id']) && (int)$entity['legacy_contact_id'] > 0 ? (int)$entity['legacy_contact_id'] : null;
+    $shouldProject = (int)($entity['is_balance_person'] ?? 0) === 1;
+    $isActive = $shouldProject ? ((int)($entity['is_active'] ?? 1) === 1 ? 1 : 0) : 0;
+
+    if ($debtorId !== null && $debtorId > 0) {
+        Database::execute(
+            'UPDATE accumul8_debtors
+             SET entity_id = ?, contact_id = ?, debtor_name = ?, notes = ?, is_active = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $entityId,
+                $contactId,
+                (string)($entity['display_name'] ?? ''),
+                (string)($entity['notes'] ?? '') === '' ? null : (string)$entity['notes'],
+                $isActive,
+                $debtorId,
+                $viewerId,
+            ]
+        );
+        return $debtorId;
+    }
+
+    if (!$shouldProject) {
+        return null;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_debtors (owner_user_id, entity_id, contact_id, debtor_name, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $entityId,
+            $contactId,
+            (string)($entity['display_name'] ?? ''),
+            (string)($entity['notes'] ?? '') === '' ? null : (string)$entity['notes'],
+            $isActive,
+        ]
+    );
+    $debtorId = (int)Database::lastInsertId();
+    Database::execute(
+        'UPDATE accumul8_entities
+         SET legacy_debtor_id = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [$debtorId, $entityId, $viewerId]
+    );
+    Database::execute(
+        'UPDATE accumul8_transactions
+         SET debtor_id = COALESCE(debtor_id, ?), balance_entity_id = COALESCE(balance_entity_id, ?)
+         WHERE owner_user_id = ? AND balance_entity_id = ?',
+        [$debtorId, $entityId, $viewerId, $entityId]
+    );
+
+    return $debtorId;
+}
+
 function accumul8_list_accessible_owner_ids(int $actorUserId): array
 {
     $rows = Database::queryAll(
@@ -230,6 +718,7 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
     $tableByType = [
         'account_groups' => 'accumul8_account_groups',
         'contacts' => 'accumul8_contacts',
+        'entities' => 'accumul8_entities',
         'accounts' => 'accumul8_accounts',
         'debtors' => 'accumul8_debtors',
     ];
@@ -242,6 +731,40 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
         [$id, $viewerId]
     );
     return $row ? $id : null;
+}
+
+function accumul8_entity_contact_id_or_null(int $viewerId, ?int $entityId): ?int
+{
+    if ($entityId === null || $entityId <= 0) {
+        return null;
+    }
+    accumul8_sync_contact_from_entity($viewerId, $entityId);
+    $row = Database::queryOne(
+        'SELECT legacy_contact_id
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    $contactId = isset($row['legacy_contact_id']) ? (int)$row['legacy_contact_id'] : 0;
+    return $contactId > 0 ? $contactId : null;
+}
+
+function accumul8_entity_debtor_id_or_null(int $viewerId, ?int $entityId): ?int
+{
+    if ($entityId === null || $entityId <= 0) {
+        return null;
+    }
+    accumul8_sync_debtor_from_entity($viewerId, $entityId);
+    $row = Database::queryOne(
+        'SELECT legacy_debtor_id
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    $debtorId = isset($row['legacy_debtor_id']) ? (int)$row['legacy_debtor_id'] : 0;
+    return $debtorId > 0 ? $debtorId : null;
 }
 
 function accumul8_require_owned_id(string $entityType, int $viewerId, int $id): int
@@ -377,6 +900,7 @@ function accumul8_tables_ensure(): void
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_contacts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
+        entity_id INT NULL,
         contact_name VARCHAR(191) NOT NULL,
         contact_type VARCHAR(16) NOT NULL DEFAULT 'both',
         default_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -395,9 +919,40 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_contacts_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entities (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        display_name VARCHAR(191) NOT NULL,
+        entity_kind VARCHAR(24) NOT NULL DEFAULT 'contact',
+        contact_type VARCHAR(16) NOT NULL DEFAULT 'both',
+        is_payee TINYINT(1) NOT NULL DEFAULT 0,
+        is_payer TINYINT(1) NOT NULL DEFAULT 0,
+        is_vendor TINYINT(1) NOT NULL DEFAULT 0,
+        is_balance_person TINYINT(1) NOT NULL DEFAULT 0,
+        default_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        email VARCHAR(191) NULL,
+        phone_number VARCHAR(32) NULL,
+        street_address VARCHAR(191) NULL,
+        city VARCHAR(120) NULL,
+        state VARCHAR(64) NULL,
+        zip VARCHAR(20) NULL,
+        notes TEXT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        legacy_contact_id INT NULL,
+        legacy_debtor_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_accumul8_entities_owner_name (owner_user_id, display_name),
+        KEY idx_accumul8_entities_owner_kind (owner_user_id, entity_kind),
+        KEY idx_accumul8_entities_legacy_contact (legacy_contact_id),
+        KEY idx_accumul8_entities_legacy_debtor (legacy_debtor_id),
+        CONSTRAINT fk_accumul8_entities_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_debtors (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
+        entity_id INT NULL,
         contact_id INT NULL,
         debtor_name VARCHAR(191) NOT NULL,
         notes TEXT NULL,
@@ -428,6 +983,7 @@ function accumul8_tables_ensure(): void
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_recurring_payments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
+        entity_id INT NULL,
         contact_id INT NULL,
         account_id INT NULL,
         title VARCHAR(191) NOT NULL,
@@ -455,6 +1011,8 @@ function accumul8_tables_ensure(): void
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
         account_id INT NULL,
+        entity_id INT NULL,
+        balance_entity_id INT NULL,
         contact_id INT NULL,
         transaction_date DATE NOT NULL,
         due_date DATE NULL,
@@ -558,8 +1116,12 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_contacts', 'city', 'VARCHAR(120) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'state', 'VARCHAR(64) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'zip', 'VARCHAR(20) NULL');
+        accumul8_table_add_column_if_missing('accumul8_contacts', 'entity_id', 'INT NULL');
+
+        accumul8_table_add_column_if_missing('accumul8_debtors', 'entity_id', 'INT NULL');
 
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'account_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'entity_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'interval_count', 'INT NOT NULL DEFAULT 1');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'payment_method', "VARCHAR(24) NOT NULL DEFAULT 'unspecified'");
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'day_of_month', 'INT NULL');
@@ -570,6 +1132,8 @@ function accumul8_tables_ensure(): void
 
         accumul8_table_add_column_if_missing('accumul8_transactions', 'due_date', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'entry_type', "VARCHAR(24) NOT NULL DEFAULT 'manual'");
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'entity_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'balance_entity_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'memo', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'rta_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'is_reconciled', 'TINYINT(1) NOT NULL DEFAULT 0');
@@ -593,6 +1157,36 @@ function accumul8_tables_ensure(): void
 
         if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
             Database::execute('ALTER TABLE accumul8_transactions ADD COLUMN debtor_id INT NULL AFTER contact_id');
+        }
+        if (!accumul8_table_has_index('accumul8_contacts', 'idx_accumul8_contacts_entity')) {
+            Database::execute('ALTER TABLE accumul8_contacts ADD INDEX idx_accumul8_contacts_entity (entity_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_contacts', 'fk_accumul8_contacts_entity')) {
+            Database::execute('ALTER TABLE accumul8_contacts ADD CONSTRAINT fk_accumul8_contacts_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
+        }
+        if (!accumul8_table_has_index('accumul8_debtors', 'idx_accumul8_debtors_entity')) {
+            Database::execute('ALTER TABLE accumul8_debtors ADD INDEX idx_accumul8_debtors_entity (entity_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_debtors', 'fk_accumul8_debtors_entity')) {
+            Database::execute('ALTER TABLE accumul8_debtors ADD CONSTRAINT fk_accumul8_debtors_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
+        }
+        if (!accumul8_table_has_index('accumul8_recurring_payments', 'idx_accumul8_recurring_entity')) {
+            Database::execute('ALTER TABLE accumul8_recurring_payments ADD INDEX idx_accumul8_recurring_entity (entity_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_recurring_payments', 'fk_accumul8_recurring_entity')) {
+            Database::execute('ALTER TABLE accumul8_recurring_payments ADD CONSTRAINT fk_accumul8_recurring_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_entity')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_entity (entity_id)');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_balance_entity')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_balance_entity (balance_entity_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_transactions', 'fk_accumul8_tx_entity')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD CONSTRAINT fk_accumul8_tx_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_transactions', 'fk_accumul8_tx_balance_entity')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD CONSTRAINT fk_accumul8_tx_balance_entity FOREIGN KEY (balance_entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
         }
         if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_debtor')) {
             Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_debtor (debtor_id)');
@@ -680,7 +1274,7 @@ function accumul8_list_banking_organizations(int $viewerId): array
 function accumul8_list_contacts(int $viewerId): array
 {
     $rows = Database::queryAll(
-        'SELECT id, contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active, created_at, updated_at
+        'SELECT id, ' . accumul8_optional_select('accumul8_contacts', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_name, contact_type, default_amount, email, phone_number, street_address, city, state, zip, notes, is_active, created_at, updated_at
          FROM accumul8_contacts
          WHERE owner_user_id = ?
          ORDER BY contact_name ASC, id ASC',
@@ -690,6 +1284,7 @@ function accumul8_list_contacts(int $viewerId): array
     return array_map(static function (array $r): array {
         return [
             'id' => (int)($r['id'] ?? 0),
+            'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'contact_type' => (string)($r['contact_type'] ?? 'both'),
             'default_amount' => (float)($r['default_amount'] ?? 0),
@@ -707,8 +1302,63 @@ function accumul8_list_contacts(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_list_entities(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_entities')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT e.id, e.owner_user_id, e.display_name, e.entity_kind, e.contact_type, e.is_payee, e.is_payer, e.is_vendor, e.is_balance_person,
+                e.default_amount, e.email, e.phone_number, e.street_address, e.city, e.state, e.zip, e.notes, e.is_active,
+                e.legacy_contact_id, e.legacy_debtor_id,
+                c.id AS contact_id, c.contact_name,
+                d.id AS debtor_id, d.debtor_name
+         FROM accumul8_entities e
+         LEFT JOIN accumul8_contacts c
+           ON c.id = e.legacy_contact_id
+          AND c.owner_user_id = e.owner_user_id
+         LEFT JOIN accumul8_debtors d
+           ON d.id = e.legacy_debtor_id
+          AND d.owner_user_id = e.owner_user_id
+         WHERE e.owner_user_id = ?
+         ORDER BY e.display_name ASC, e.id ASC',
+        [$viewerId]
+    );
+
+    return array_map(static function (array $r): array {
+        return [
+            'id' => (int)($r['id'] ?? 0),
+            'owner_user_id' => (int)($r['owner_user_id'] ?? 0),
+            'display_name' => (string)($r['display_name'] ?? ''),
+            'entity_kind' => (string)($r['entity_kind'] ?? 'contact'),
+            'contact_type' => (string)($r['contact_type'] ?? 'both'),
+            'is_payee' => (int)($r['is_payee'] ?? 0),
+            'is_payer' => (int)($r['is_payer'] ?? 0),
+            'is_vendor' => (int)($r['is_vendor'] ?? 0),
+            'is_balance_person' => (int)($r['is_balance_person'] ?? 0),
+            'default_amount' => (float)($r['default_amount'] ?? 0),
+            'email' => (string)($r['email'] ?? ''),
+            'phone_number' => (string)($r['phone_number'] ?? ''),
+            'street_address' => (string)($r['street_address'] ?? ''),
+            'city' => (string)($r['city'] ?? ''),
+            'state' => (string)($r['state'] ?? ''),
+            'zip' => (string)($r['zip'] ?? ''),
+            'notes' => (string)($r['notes'] ?? ''),
+            'is_active' => (int)($r['is_active'] ?? 0),
+            'legacy_contact_id' => isset($r['legacy_contact_id']) ? (int)$r['legacy_contact_id'] : null,
+            'legacy_debtor_id' => isset($r['legacy_debtor_id']) ? (int)$r['legacy_debtor_id'] : null,
+            'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
+            'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
+            'contact_name' => (string)($r['contact_name'] ?? ''),
+            'debtor_name' => (string)($r['debtor_name'] ?? ''),
+        ];
+    }, $rows);
+}
+
 function accumul8_list_recurring(int $viewerId): array
 {
+    $entityIdSelect = accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'rp.entity_id', 'NULL AS entity_id');
     $accountIdSelect = accumul8_optional_select('accumul8_recurring_payments', 'account_id', 'rp.account_id', 'NULL AS account_id');
     $intervalCountSelect = accumul8_optional_select('accumul8_recurring_payments', 'interval_count', 'rp.interval_count', '1 AS interval_count');
     $paymentMethodSelect = accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'rp.payment_method', "'unspecified' AS payment_method");
@@ -728,11 +1378,12 @@ function accumul8_list_recurring(int $viewerId): array
         : "'' AS account_name, NULL AS account_group_id, '' AS banking_organization_name";
 
     $rows = Database::queryAll(
-        'SELECT rp.id, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $paymentMethodSelect . ', ' . $intervalCountSelect . ',
+        'SELECT rp.id, ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $paymentMethodSelect . ', ' . $intervalCountSelect . ',
                 ' . $dayOfMonthSelect . ', ' . $dayOfWeekSelect . ', rp.next_due_date, ' . $notesSelect . ', ' . $isActiveSelect . ', ' . $isBudgetPlannerSelect . ',
                 c.contact_name, ' . $accountNameSelect . '
          FROM accumul8_recurring_payments rp
          LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
+         LEFT JOIN accumul8_entities e ON e.id = rp.entity_id
          ' . $accountJoin . '
          ' . $bankingOrganizationJoin . '
          WHERE rp.owner_user_id = ?
@@ -743,6 +1394,8 @@ function accumul8_list_recurring(int $viewerId): array
     return array_map(static function (array $r): array {
         return [
             'id' => (int)($r['id'] ?? 0),
+            'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
+            'entity_name' => (string)($r['entity_name'] ?? ''),
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'account_id' => isset($r['account_id']) ? (int)$r['account_id'] : null,
             'banking_organization_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
@@ -807,7 +1460,7 @@ function accumul8_list_debtors(int $viewerId): array
     }
 
     $rows = Database::queryAll(
-        'SELECT d.id, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at,
+        'SELECT d.id, ' . accumul8_optional_select('accumul8_debtors', 'entity_id', 'd.entity_id', 'NULL AS entity_id') . ', COALESCE(e.display_name, "") AS entity_name, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at,
                 c.contact_name,
                 COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS total_loaned,
                 COALESCE(SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END), 0) AS total_repaid,
@@ -816,11 +1469,13 @@ function accumul8_list_debtors(int $viewerId): array
          FROM accumul8_debtors d
          LEFT JOIN accumul8_contacts c
            ON c.id = d.contact_id
+         LEFT JOIN accumul8_entities e
+           ON e.id = d.entity_id
          LEFT JOIN accumul8_transactions t
            ON t.debtor_id = d.id
           AND t.owner_user_id = d.owner_user_id
          WHERE d.owner_user_id = ?
-         GROUP BY d.id, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at, c.contact_name
+         GROUP BY d.id, d.entity_id, e.display_name, d.contact_id, d.debtor_name, d.notes, d.is_active, d.created_at, d.updated_at, c.contact_name
          ORDER BY d.debtor_name ASC, d.id ASC',
         [$viewerId]
     );
@@ -830,6 +1485,8 @@ function accumul8_list_debtors(int $viewerId): array
         $totalRepaid = (float)($r['total_repaid'] ?? 0);
         return [
             'id' => (int)($r['id'] ?? 0),
+            'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
+            'entity_name' => (string)($r['entity_name'] ?? ''),
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'debtor_name' => (string)($r['debtor_name'] ?? ''),
             'notes' => (string)($r['notes'] ?? ''),
@@ -934,16 +1591,20 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $isBudgetPlannerSelect = accumul8_optional_select('accumul8_transactions', 'is_budget_planner', 't.is_budget_planner', '1 AS is_budget_planner');
     $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 't.source_kind', "'manual' AS source_kind");
     $pendingStatusSelect = accumul8_optional_select('accumul8_transactions', 'pending_status', 't.pending_status', '0 AS pending_status');
+    $entityIdSelect = accumul8_optional_select('accumul8_transactions', 'entity_id', 't.entity_id', 'NULL AS entity_id');
+    $balanceEntityIdSelect = accumul8_optional_select('accumul8_transactions', 'balance_entity_id', 't.balance_entity_id', 'NULL AS balance_entity_id');
     $debtorSelect = $hasDebtor ? 't.debtor_id' : 'NULL AS debtor_id';
     $debtorNameSelect = $hasDebtor ? ', d.debtor_name' : ", '' AS debtor_name";
     $debtorJoin = $hasDebtor ? 'LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id' : '';
     $bankingOrganizationIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
     $rows = Database::queryAll(
-        'SELECT t.id, t.account_id, ' . $bankingOrganizationIdSelect . ', t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
+        'SELECT t.id, t.account_id, ' . $bankingOrganizationIdSelect . ', ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, ' . $balanceEntityIdSelect . ', COALESCE(be.display_name, "") AS balance_entity_name, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
                 t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $isBudgetPlannerSelect . ', ' . $sourceKindSelect . ', ' . $pendingStatusSelect . ',
                 c.contact_name, a.account_name, COALESCE(ag.group_name, "") AS banking_organization_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
          LEFT JOIN accumul8_contacts c ON c.id = t.contact_id AND c.owner_user_id = t.owner_user_id
+         LEFT JOIN accumul8_entities e ON e.id = t.entity_id
+         LEFT JOIN accumul8_entities be ON be.id = t.balance_entity_id
          LEFT JOIN accumul8_accounts a ON a.id = t.account_id AND a.owner_user_id = t.owner_user_id
          LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = t.owner_user_id
          ' . $debtorJoin . '
@@ -958,6 +1619,10 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'id' => (int)($r['id'] ?? 0),
             'account_id' => isset($r['account_id']) ? (int)$r['account_id'] : null,
             'banking_organization_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
+            'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
+            'entity_name' => (string)($r['entity_name'] ?? ''),
+            'balance_entity_id' => isset($r['balance_entity_id']) ? (int)$r['balance_entity_id'] : null,
+            'balance_entity_name' => (string)($r['balance_entity_name'] ?? ''),
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
             'transaction_date' => (string)($r['transaction_date'] ?? ''),
@@ -1193,7 +1858,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
 {
     $effectiveToday = $today ?: date('Y-m-d');
     $dueRows = Database::queryAll(
-        'SELECT id, contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner
+        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner
          FROM accumul8_recurring_payments
          WHERE owner_user_id = ?
            AND is_active = 1
@@ -1213,6 +1878,16 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
         $frequency = (string)($row['frequency'] ?? 'monthly');
         $intervalCount = (int)($row['interval_count'] ?? 1);
         $isBudgetPlanner = (int)($row['is_budget_planner'] ?? 1) === 1 ? 1 : 0;
+        $entityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
+        if ($entityId <= 0) {
+            $entityId = (int)(accumul8_recurring_entity_id_or_create($viewerId, $row) ?? 0);
+        }
+        if ($entityId > 0 && accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
+            Database::execute(
+                'UPDATE accumul8_recurring_payments SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
+                [$entityId, $rpId, $viewerId]
+            );
+        }
 
         $existing = Database::queryOne(
             'SELECT id FROM accumul8_transactions
@@ -1225,12 +1900,13 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
         if (!$existing) {
             Database::execute(
                 'INSERT INTO accumul8_transactions
-                    (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
+                    (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
                      is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?)',
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?)',
                 [
                     $viewerId,
                     isset($row['account_id']) ? (int)$row['account_id'] : null,
+                    $entityId > 0 ? $entityId : null,
                     isset($row['contact_id']) ? (int)$row['contact_id'] : null,
                     $nextDue,
                     $nextDue,
@@ -1260,6 +1936,135 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
     }
 
     return $created;
+}
+
+function accumul8_backfill_entities_for_owner(int $viewerId): array
+{
+    $stats = [
+        'contacts_processed' => 0,
+        'debtors_processed' => 0,
+        'recurring_linked' => 0,
+        'transactions_linked' => 0,
+        'balance_transactions_linked' => 0,
+    ];
+
+    if (accumul8_table_has_column('accumul8_contacts', 'entity_id')) {
+        $contactRows = Database::queryAll(
+            'SELECT id
+             FROM accumul8_contacts
+             WHERE owner_user_id = ?
+             ORDER BY id ASC',
+            [$viewerId]
+        );
+        foreach ($contactRows as $row) {
+            $contactId = (int)($row['id'] ?? 0);
+            if ($contactId > 0 && accumul8_contact_entity_id_or_create($viewerId, $contactId) !== null) {
+                $stats['contacts_processed']++;
+            }
+        }
+    }
+
+    if (accumul8_has_debtor_support() && accumul8_table_has_column('accumul8_debtors', 'entity_id')) {
+        $debtorRows = Database::queryAll(
+            'SELECT id
+             FROM accumul8_debtors
+             WHERE owner_user_id = ?
+             ORDER BY id ASC',
+            [$viewerId]
+        );
+        foreach ($debtorRows as $row) {
+            $debtorId = (int)($row['id'] ?? 0);
+            if ($debtorId > 0 && accumul8_debtor_entity_id_or_create($viewerId, $debtorId) !== null) {
+                $stats['debtors_processed']++;
+            }
+        }
+    }
+
+    if (accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
+        $recurringRows = Database::queryAll(
+            'SELECT id, contact_id, title, direction, amount, notes, is_active
+             FROM accumul8_recurring_payments
+             WHERE owner_user_id = ?
+             ORDER BY id ASC',
+            [$viewerId]
+        );
+        foreach ($recurringRows as $row) {
+            $recurringId = (int)($row['id'] ?? 0);
+            if ($recurringId <= 0) {
+                continue;
+            }
+            $entityId = accumul8_recurring_entity_id_or_create($viewerId, $row);
+            if ($entityId === null || $entityId <= 0) {
+                continue;
+            }
+            $updated = Database::execute(
+                'UPDATE accumul8_recurring_payments
+                 SET entity_id = ?
+                 WHERE id = ? AND owner_user_id = ? AND (entity_id IS NULL OR entity_id <> ?)',
+                [$entityId, $recurringId, $viewerId, $entityId]
+            );
+            if ($updated > 0) {
+                $stats['recurring_linked']++;
+            }
+        }
+    }
+
+    if (accumul8_table_has_column('accumul8_transactions', 'entity_id')) {
+        $transactionRows = Database::queryAll(
+            'SELECT id, contact_id, description, amount, memo
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+             ORDER BY id ASC',
+            [$viewerId]
+        );
+        foreach ($transactionRows as $row) {
+            $transactionId = (int)($row['id'] ?? 0);
+            if ($transactionId <= 0) {
+                continue;
+            }
+            $entityId = accumul8_transaction_entity_id_or_create($viewerId, $row);
+            if ($entityId === null || $entityId <= 0) {
+                continue;
+            }
+            $updated = Database::execute(
+                'UPDATE accumul8_transactions
+                 SET entity_id = ?
+                 WHERE id = ? AND owner_user_id = ? AND (entity_id IS NULL OR entity_id <> ?)',
+                [$entityId, $transactionId, $viewerId, $entityId]
+            );
+            if ($updated > 0) {
+                $stats['transactions_linked']++;
+            }
+        }
+    }
+
+    if (accumul8_has_debtor_support() && accumul8_table_has_column('accumul8_transactions', 'balance_entity_id')) {
+        $row = Database::queryOne(
+            'SELECT COUNT(*) AS total
+             FROM accumul8_transactions t
+             INNER JOIN accumul8_debtors d
+                ON d.id = t.debtor_id
+               AND d.owner_user_id = t.owner_user_id
+             WHERE t.owner_user_id = ?
+               AND d.entity_id IS NOT NULL
+               AND (t.balance_entity_id IS NULL OR t.balance_entity_id <> d.entity_id)',
+            [$viewerId]
+        );
+        $stats['balance_transactions_linked'] = (int)($row['total'] ?? 0);
+        Database::execute(
+            'UPDATE accumul8_transactions t
+             INNER JOIN accumul8_debtors d
+                ON d.id = t.debtor_id
+               AND d.owner_user_id = t.owner_user_id
+             SET t.balance_entity_id = d.entity_id
+             WHERE t.owner_user_id = ?
+               AND d.entity_id IS NOT NULL
+               AND (t.balance_entity_id IS NULL OR t.balance_entity_id <> d.entity_id)',
+            [$viewerId]
+        );
+    }
+
+    return $stats;
 }
 
 function accumul8_plaid_env(): string
@@ -1352,6 +2157,7 @@ if ($action === 'bootstrap') {
     $warnings = [];
     accumul8_bootstrap_section('materialize_due_recurring', static fn() => accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId), 0, $warnings);
     $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
+    $entities = accumul8_bootstrap_section('entities', static fn() => accumul8_list_entities($viewerId), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
     $recurring = accumul8_bootstrap_section('recurring_payments', static fn() => accumul8_list_recurring($viewerId), [], $warnings);
     $bankingOrganizations = accumul8_bootstrap_section('banking_organizations', static fn() => accumul8_list_banking_organizations($viewerId), [], $warnings);
@@ -1373,6 +2179,7 @@ if ($action === 'bootstrap') {
         'success' => true,
         'selected_owner_user_id' => $viewerId,
         'accessible_account_owners' => $accessibleOwners,
+        'entities' => $entities,
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,
@@ -1394,6 +2201,101 @@ if ($action === 'bootstrap') {
         'summary' => $summary,
         'warnings' => $warnings,
     ]);
+}
+
+if ($action === 'create_entity') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $displayName = accumul8_normalize_text($body['display_name'] ?? '', 191);
+    $contactType = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType !== 'payer' ? 1 : 0));
+    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType !== 'payee' ? 1 : 0));
+    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? 0);
+
+    if ($displayName === '') {
+        catn8_json_response(['success' => false, 'error' => 'display_name is required'], 400);
+    }
+
+    $entityId = accumul8_upsert_entity($viewerId, [
+        'display_name' => $displayName,
+        'entity_kind' => accumul8_normalize_text($body['entity_kind'] ?? ($isBalancePerson ? 'person' : 'contact'), 24),
+        'contact_type' => $contactType,
+        'is_payee' => $isPayee,
+        'is_payer' => $isPayer,
+        'is_vendor' => $isVendor,
+        'is_balance_person' => $isBalancePerson,
+        'default_amount' => accumul8_normalize_amount($body['default_amount'] ?? 0),
+        'email' => accumul8_normalize_text($body['email'] ?? '', 191),
+        'phone_number' => accumul8_normalize_text($body['phone_number'] ?? '', 32),
+        'street_address' => accumul8_normalize_text($body['street_address'] ?? '', 191),
+        'city' => accumul8_normalize_text($body['city'] ?? '', 120),
+        'state' => accumul8_normalize_text($body['state'] ?? '', 64),
+        'zip' => accumul8_normalize_text($body['zip'] ?? '', 20),
+        'notes' => accumul8_normalize_text($body['notes'] ?? '', 1500),
+        'is_active' => accumul8_normalize_bool($body['is_active'] ?? 1),
+    ]);
+
+    accumul8_sync_contact_from_entity($viewerId, $entityId);
+    accumul8_sync_debtor_from_entity($viewerId, $entityId);
+
+    catn8_json_response(['success' => true, 'id' => $entityId]);
+}
+
+if ($action === 'update_entity') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $displayName = accumul8_normalize_text($body['display_name'] ?? '', 191);
+    $contactType = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType !== 'payer' ? 1 : 0));
+    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType !== 'payee' ? 1 : 0));
+    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? 0);
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($displayName === '') {
+        catn8_json_response(['success' => false, 'error' => 'display_name is required'], 400);
+    }
+
+    $existing = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+    if (!$existing) {
+        catn8_json_response(['success' => false, 'error' => 'Entity not found'], 404);
+    }
+
+    $entityId = accumul8_upsert_entity($viewerId, [
+        'display_name' => $displayName,
+        'entity_kind' => accumul8_normalize_text($body['entity_kind'] ?? ($isBalancePerson ? 'person' : 'contact'), 24),
+        'contact_type' => $contactType,
+        'is_payee' => $isPayee,
+        'is_payer' => $isPayer,
+        'is_vendor' => $isVendor,
+        'is_balance_person' => $isBalancePerson,
+        'default_amount' => accumul8_normalize_amount($body['default_amount'] ?? 0),
+        'email' => accumul8_normalize_text($body['email'] ?? '', 191),
+        'phone_number' => accumul8_normalize_text($body['phone_number'] ?? '', 32),
+        'street_address' => accumul8_normalize_text($body['street_address'] ?? '', 191),
+        'city' => accumul8_normalize_text($body['city'] ?? '', 120),
+        'state' => accumul8_normalize_text($body['state'] ?? '', 64),
+        'zip' => accumul8_normalize_text($body['zip'] ?? '', 20),
+        'notes' => accumul8_normalize_text($body['notes'] ?? '', 1500),
+        'is_active' => accumul8_normalize_bool($body['is_active'] ?? 1),
+    ], $id);
+
+    accumul8_sync_contact_from_entity($viewerId, $entityId);
+    accumul8_sync_debtor_from_entity($viewerId, $entityId);
+
+    catn8_json_response(['success' => true, 'id' => $entityId]);
 }
 
 if ($action === 'create_contact') {
@@ -1421,7 +2323,10 @@ if ($action === 'create_contact') {
         [$viewerId, $name, $type, $amount, ($email === '' ? null : $email), ($phoneNumber === '' ? null : $phoneNumber), ($streetAddress === '' ? null : $streetAddress), ($city === '' ? null : $city), ($state === '' ? null : $state), ($zip === '' ? null : $zip), ($notes === '' ? null : $notes)]
     );
 
-    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+    $contactId = (int)Database::lastInsertId();
+    accumul8_contact_entity_id_or_create($viewerId, $contactId);
+
+    catn8_json_response(['success' => true, 'id' => $contactId]);
 }
 
 if ($action === 'create_banking_organization') {
@@ -1599,6 +2504,8 @@ if ($action === 'update_contact') {
         [$name, $type, $amount, ($email === '' ? null : $email), ($phoneNumber === '' ? null : $phoneNumber), ($streetAddress === '' ? null : $streetAddress), ($city === '' ? null : $city), ($state === '' ? null : $state), ($zip === '' ? null : $zip), ($notes === '' ? null : $notes), $id, $viewerId]
     );
 
+    accumul8_contact_entity_id_or_create($viewerId, $id);
+
     catn8_json_response(['success' => true]);
 }
 
@@ -1634,7 +2541,10 @@ if ($action === 'create_debtor') {
         [$viewerId, $contactIdOrNull, $debtorName, $notes === '' ? null : $notes, $isActive]
     );
 
-    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+    $debtorId = (int)Database::lastInsertId();
+    accumul8_debtor_entity_id_or_create($viewerId, $debtorId);
+
+    catn8_json_response(['success' => true, 'id' => $debtorId]);
 }
 
 if ($action === 'update_debtor') {
@@ -1661,6 +2571,8 @@ if ($action === 'update_debtor') {
          WHERE id = ? AND owner_user_id = ?',
         [$contactIdOrNull, $debtorName, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
+
+    accumul8_debtor_entity_id_or_create($viewerId, $id);
 
     catn8_json_response(['success' => true]);
 }
@@ -1759,9 +2671,27 @@ if ($action === 'create_recurring') {
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 0);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $entityId = isset($body['entity_id']) ? (int)$body['entity_id'] : 0;
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $dayOfMonth = isset($body['day_of_month']) && $body['day_of_month'] !== '' ? (int)$body['day_of_month'] : null;
     $dayOfWeek = isset($body['day_of_week']) && $body['day_of_week'] !== '' ? (int)$body['day_of_week'] : null;
+    $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
+    $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
+    $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
+    $entityIdOrNull = $requestedEntityIdOrNull !== null
+        ? $requestedEntityIdOrNull
+        : ($contactIdOrNull !== null
+        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+        : accumul8_recurring_entity_id_or_create($viewerId, [
+            'title' => $title,
+            'direction' => $direction,
+            'amount' => $amount,
+            'notes' => $notes,
+            'is_active' => 1,
+        ]));
+    if ($requestedEntityIdOrNull !== null) {
+        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+    }
 
     if ($title === '') {
         catn8_json_response(['success' => false, 'error' => 'title is required'], 400);
@@ -1769,12 +2699,13 @@ if ($action === 'create_recurring') {
 
     Database::execute(
         'INSERT INTO accumul8_recurring_payments
-            (owner_user_id, contact_id, account_id, title, direction, amount, frequency, payment_method, interval_count, day_of_month, day_of_week, next_due_date, notes, is_active, is_budget_planner)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+            (owner_user_id, entity_id, contact_id, account_id, title, direction, amount, frequency, payment_method, interval_count, day_of_month, day_of_week, next_due_date, notes, is_active, is_budget_planner)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
         [
             $viewerId,
-            $contactId > 0 ? $contactId : null,
-            $accountId > 0 ? $accountId : null,
+            $entityIdOrNull,
+            $contactIdOrNull,
+            $accountIdOrNull,
             $title,
             $direction,
             $amount,
@@ -1808,9 +2739,27 @@ if ($action === 'update_recurring') {
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 0);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $entityId = isset($body['entity_id']) ? (int)$body['entity_id'] : 0;
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $dayOfMonth = isset($body['day_of_month']) && $body['day_of_month'] !== '' ? (int)$body['day_of_month'] : null;
     $dayOfWeek = isset($body['day_of_week']) && $body['day_of_week'] !== '' ? (int)$body['day_of_week'] : null;
+    $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
+    $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
+    $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
+    $entityIdOrNull = $requestedEntityIdOrNull !== null
+        ? $requestedEntityIdOrNull
+        : ($contactIdOrNull !== null
+        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+        : accumul8_recurring_entity_id_or_create($viewerId, [
+            'title' => $title,
+            'direction' => $direction,
+            'amount' => $amount,
+            'notes' => $notes,
+            'is_active' => 1,
+        ]));
+    if ($requestedEntityIdOrNull !== null) {
+        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+    }
 
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
@@ -1821,12 +2770,13 @@ if ($action === 'update_recurring') {
 
     Database::execute(
         'UPDATE accumul8_recurring_payments
-         SET contact_id = ?, account_id = ?, title = ?, direction = ?, amount = ?, frequency = ?, payment_method = ?, interval_count = ?,
+         SET entity_id = ?, contact_id = ?, account_id = ?, title = ?, direction = ?, amount = ?, frequency = ?, payment_method = ?, interval_count = ?,
              day_of_month = ?, day_of_week = ?, next_due_date = ?, notes = ?, is_budget_planner = ?
          WHERE id = ? AND owner_user_id = ?',
         [
-            $contactId > 0 ? $contactId : null,
-            $accountId > 0 ? $accountId : null,
+            $entityIdOrNull,
+            $contactIdOrNull,
+            $accountIdOrNull,
             $title,
             $direction,
             $amount,
@@ -1882,6 +2832,18 @@ if ($action === 'materialize_due_recurring') {
     catn8_json_response(['success' => true, 'created' => $created]);
 }
 
+if ($action === 'backfill_entities_phase1') {
+    catn8_require_method('POST');
+    $stats = accumul8_backfill_entities_for_owner($viewerId);
+    catn8_json_response(['success' => true, 'stats' => $stats]);
+}
+
+if ($action === 'backfill_entities_phase2') {
+    catn8_require_method('POST');
+    $stats = accumul8_backfill_entities_for_owner($viewerId);
+    catn8_json_response(['success' => true, 'stats' => $stats]);
+}
+
 if ($action === 'create_transaction') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -1897,12 +2859,34 @@ if ($action === 'create_transaction') {
     $isReconciled = accumul8_normalize_bool($body['is_reconciled'] ?? 0);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 1);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $entityId = isset($body['entity_id']) ? (int)$body['entity_id'] : 0;
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $debtorId = isset($body['debtor_id']) ? (int)$body['debtor_id'] : 0;
+    $balanceEntityId = isset($body['balance_entity_id']) ? (int)$body['balance_entity_id'] : 0;
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
+    $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
     $hasDebtor = accumul8_has_debtor_support();
     $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
+    $requestedBalanceEntityIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('entities', $viewerId, $balanceEntityId) : null;
+    $entityIdOrNull = $requestedEntityIdOrNull !== null
+        ? $requestedEntityIdOrNull
+        : ($contactIdOrNull !== null
+        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+        : accumul8_transaction_entity_id_or_create($viewerId, [
+            'description' => $description,
+            'amount' => $amount,
+            'memo' => $memo,
+        ]));
+    if ($requestedEntityIdOrNull !== null) {
+        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+    }
+    $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
+        ? $requestedBalanceEntityIdOrNull
+        : ($debtorIdOrNull !== null ? accumul8_debtor_entity_id_or_create($viewerId, (int)$debtorIdOrNull) : null);
+    if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
+        $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
+    }
     if ($debtorIdOrNull !== null) {
         $isBudgetPlanner = 0;
     }
@@ -1914,12 +2898,14 @@ if ($action === 'create_transaction') {
     if ($hasDebtor) {
         Database::execute(
             'INSERT INTO accumul8_transactions
-                (owner_user_id, account_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                (owner_user_id, account_id, entity_id, balance_entity_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
                  is_paid, is_reconciled, is_budget_planner, source_kind, created_by_user_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $viewerId,
                 $accountIdOrNull,
+                $entityIdOrNull,
+                $balanceEntityIdOrNull,
                 $contactIdOrNull,
                 $debtorIdOrNull,
                 $transactionDate,
@@ -1939,12 +2925,13 @@ if ($action === 'create_transaction') {
     } else {
         Database::execute(
             'INSERT INTO accumul8_transactions
-                (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
                  is_paid, is_reconciled, is_budget_planner, source_kind, created_by_user_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $viewerId,
                 $accountIdOrNull,
+                $entityIdOrNull,
                 $contactIdOrNull,
                 $transactionDate,
                 $dueDate,
@@ -1983,12 +2970,34 @@ if ($action === 'update_transaction') {
     $isReconciled = accumul8_normalize_bool($body['is_reconciled'] ?? 0);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 1);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
+    $entityId = isset($body['entity_id']) ? (int)$body['entity_id'] : 0;
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $debtorId = isset($body['debtor_id']) ? (int)$body['debtor_id'] : 0;
+    $balanceEntityId = isset($body['balance_entity_id']) ? (int)$body['balance_entity_id'] : 0;
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
+    $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
     $hasDebtor = accumul8_has_debtor_support();
     $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
+    $requestedBalanceEntityIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('entities', $viewerId, $balanceEntityId) : null;
+    $entityIdOrNull = $requestedEntityIdOrNull !== null
+        ? $requestedEntityIdOrNull
+        : ($contactIdOrNull !== null
+        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+        : accumul8_transaction_entity_id_or_create($viewerId, [
+            'description' => $description,
+            'amount' => $amount,
+            'memo' => $memo,
+        ]));
+    if ($requestedEntityIdOrNull !== null) {
+        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+    }
+    $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
+        ? $requestedBalanceEntityIdOrNull
+        : ($debtorIdOrNull !== null ? accumul8_debtor_entity_id_or_create($viewerId, (int)$debtorIdOrNull) : null);
+    if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
+        $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
+    }
     if ($debtorIdOrNull !== null) {
         $isBudgetPlanner = 0;
     }
@@ -2003,11 +3012,13 @@ if ($action === 'update_transaction') {
     if ($hasDebtor) {
         Database::execute(
             'UPDATE accumul8_transactions
-             SET account_id = ?, contact_id = ?, debtor_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+             SET account_id = ?, entity_id = ?, balance_entity_id = ?, contact_id = ?, debtor_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
                  memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?
              WHERE id = ? AND owner_user_id = ?',
             [
                 $accountIdOrNull,
+                $entityIdOrNull,
+                $balanceEntityIdOrNull,
                 $contactIdOrNull,
                 $debtorIdOrNull,
                 $transactionDate,
@@ -2027,11 +3038,12 @@ if ($action === 'update_transaction') {
     } else {
         Database::execute(
             'UPDATE accumul8_transactions
-             SET account_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+             SET account_id = ?, entity_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
                  memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?
              WHERE id = ? AND owner_user_id = ?',
             [
                 $accountIdOrNull,
+                $entityIdOrNull,
                 $contactIdOrNull,
                 $transactionDate,
                 $dueDate,

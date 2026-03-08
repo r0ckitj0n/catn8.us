@@ -14,6 +14,8 @@ import {
   Accumul8ContactUpsertRequest,
   Accumul8Debtor,
   Accumul8DebtorUpsertRequest,
+  Accumul8Entity,
+  Accumul8EntityUpsertRequest,
   Accumul8NotificationRule,
   Accumul8NotificationRuleUpsertRequest,
   Accumul8RecurringPayment,
@@ -30,6 +32,7 @@ export function useAccumul8(
   const [activeOwnerUserId, setActiveOwnerUserId] = React.useState<number>(0);
   const [accessibleAccountOwners, setAccessibleAccountOwners] = React.useState<Accumul8AccessibleOwner[]>([]);
   const [summary, setSummary] = React.useState({ net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
+  const [entities, setEntities] = React.useState<Accumul8Entity[]>([]);
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
@@ -62,6 +65,7 @@ export function useAccumul8(
       const res = await ApiClient.get<Accumul8BootstrapResponse>(scopedActionUrl('bootstrap'));
       setActiveOwnerUserId(Number(res?.selected_owner_user_id || 0));
       setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
+      setEntities(Array.isArray(res?.entities) ? res.entities : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -102,6 +106,18 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_contact'), form),
       'Contact saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const createEntity = React.useCallback(async (form: Accumul8EntityUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_entity'), form),
+      'Entity saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const updateEntity = React.useCallback(async (id: number, form: Accumul8EntityUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('update_entity'), { id, ...form }),
+      'Entity updated',
     );
   }, [scopedActionUrl, withReload]);
   const createBankingOrganization = React.useCallback(async (form: Accumul8BankingOrganizationUpsertRequest) => {
@@ -315,6 +331,7 @@ export function useAccumul8(
     summary,
     activeOwnerUserId,
     accessibleAccountOwners,
+    entities,
     contacts,
     recurringPayments,
     transactions,
@@ -328,6 +345,8 @@ export function useAccumul8(
     bankConnections,
     syncProvider,
     load,
+    createEntity,
+    updateEntity,
     createContact,
     createBankingOrganization,
     updateBankingOrganization,

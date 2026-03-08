@@ -2,8 +2,8 @@ import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import {
   Accumul8Account,
-  Accumul8Contact,
   Accumul8Direction,
+  Accumul8Entity,
   Accumul8Frequency,
   Accumul8PaymentMethod,
   Accumul8RecurringUpsertRequest,
@@ -20,7 +20,7 @@ interface Accumul8RecurringModalFormState {
   payment_method: Accumul8PaymentMethod;
   interval_count: number;
   next_due_date: string;
-  contact_id: string;
+  entity_id: string;
   account_id: string;
   is_budget_planner: number;
   notes: string;
@@ -30,7 +30,7 @@ interface Accumul8RecurringModalProps {
   open: boolean;
   busy: boolean;
   initialForm: Accumul8RecurringModalFormState;
-  contacts: Accumul8Contact[];
+  entities: Accumul8Entity[];
   accounts: Accumul8Account[];
   onClose: () => void;
   onSave: (form: Accumul8RecurringUpsertRequest) => Promise<void>;
@@ -40,7 +40,7 @@ export function Accumul8RecurringModal({
   open,
   busy,
   initialForm,
-  contacts,
+  entities,
   accounts,
   onClose,
   onSave,
@@ -90,7 +90,7 @@ export function Accumul8RecurringModal({
                 payment_method: (form.payment_method || 'unspecified') as Accumul8PaymentMethod,
                 interval_count: Math.max(1, Number(form.interval_count || 1)),
                 next_due_date: String(form.next_due_date || ''),
-                contact_id: form.contact_id ? Number(form.contact_id) : null,
+                entity_id: form.entity_id ? Number(form.entity_id) : null,
                 account_id: form.account_id ? Number(form.account_id) : null,
                 is_budget_planner: Number(form.is_budget_planner || 0),
                 notes: String(form.notes || '').trim(),
@@ -183,16 +183,16 @@ export function Accumul8RecurringModal({
                 />
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-recurring-contact">Contact</label>
+                <label className="form-label" htmlFor="accumul8-recurring-contact">Entity</label>
                 <select
                   id="accumul8-recurring-contact"
                   className="form-select"
-                  value={form.contact_id}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contact_id: e.target.value }))}
+                  value={form.entity_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, entity_id: e.target.value }))}
                 >
-                  <option value="">Contact</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>{contact.contact_name}</option>
+                  <option value="">Entity</option>
+                  {entities.map((entity) => (
+                    <option key={entity.id} value={entity.id}>{entity.display_name}</option>
                   ))}
                 </select>
               </div>

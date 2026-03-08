@@ -15,6 +15,8 @@ export interface Accumul8SpreadsheetMonthSummary {
 export interface Accumul8SpreadsheetMonthRow {
   rowKey: string;
   recurring_id: number;
+  entity_id: number | null;
+  entity_name: string;
   contact_id: number | null;
   contact_name: string;
   account_id: number | null;
@@ -196,6 +198,8 @@ export function buildSpreadsheetMonthData(
       rows.push({
         rowKey: `${recurring.id}:${occurrenceDate}`,
         recurring_id: recurring.id,
+        entity_id: recurring.entity_id ?? null,
+        entity_name: recurring.entity_name || '',
         contact_id: recurring.contact_id ?? null,
         contact_name: recurring.contact_name || '',
         account_id: recurring.account_id ?? null,

@@ -2,8 +2,7 @@ import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import {
   Accumul8Account,
-  Accumul8Contact,
-  Accumul8Debtor,
+  Accumul8Entity,
   Accumul8EntryType,
   Accumul8TransactionUpsertRequest,
 } from '../../types/accumul8';
@@ -21,9 +20,9 @@ interface Accumul8TransactionModalFormState {
   is_paid: number;
   is_reconciled: number;
   is_budget_planner: number;
-  contact_id: string;
+  entity_id: string;
   account_id: string;
-  debtor_id: string;
+  balance_entity_id: string;
 }
 
 interface Accumul8TransactionModalProps {
@@ -31,9 +30,8 @@ interface Accumul8TransactionModalProps {
   busy: boolean;
   editing: boolean;
   initialForm: Accumul8TransactionModalFormState;
-  contacts: Accumul8Contact[];
+  entities: Accumul8Entity[];
   accounts: Accumul8Account[];
-  debtors: Accumul8Debtor[];
   onClose: () => void;
   onSave: (form: Accumul8TransactionUpsertRequest) => Promise<void>;
 }
@@ -43,9 +41,8 @@ export function Accumul8TransactionModal({
   busy,
   editing,
   initialForm,
-  contacts,
+  entities,
   accounts,
-  debtors,
   onClose,
   onSave,
 }: Accumul8TransactionModalProps) {
@@ -89,9 +86,9 @@ export function Accumul8TransactionModal({
                 is_paid: Number(form.is_paid || 0),
                 is_reconciled: Number(form.is_reconciled || 0),
                 is_budget_planner: Number(form.is_budget_planner || 0),
-                contact_id: form.contact_id ? Number(form.contact_id) : null,
+                entity_id: form.entity_id ? Number(form.entity_id) : null,
                 account_id: form.account_id ? Number(form.account_id) : null,
-                debtor_id: form.debtor_id ? Number(form.debtor_id) : null,
+                balance_entity_id: form.balance_entity_id ? Number(form.balance_entity_id) : null,
               });
             }}
           >
@@ -155,16 +152,18 @@ export function Accumul8TransactionModal({
                 />
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-contact">Contact</label>
+                <label className="form-label" htmlFor="accumul8-transaction-contact">Entity</label>
                 <select
                   id="accumul8-transaction-contact"
                   className="form-select"
-                  value={form.contact_id}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contact_id: e.target.value }))}
+                  value={form.entity_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, entity_id: e.target.value }))}
                 >
-                  <option value="">Contact</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>{contact.contact_name}</option>
+                  <option value="">Entity</option>
+                  {entities
+                    .filter((entity) => Number(entity.is_balance_person || 0) === 0)
+                    .map((entity) => (
+                    <option key={entity.id} value={entity.id}>{entity.display_name}</option>
                   ))}
                 </select>
               </div>
@@ -183,20 +182,22 @@ export function Accumul8TransactionModal({
                 </select>
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-debtor">Person / Balance</label>
+                <label className="form-label" htmlFor="accumul8-transaction-debtor">Balance Person</label>
                 <select
                   id="accumul8-transaction-debtor"
                   className="form-select"
-                  value={form.debtor_id}
+                  value={form.balance_entity_id}
                   onChange={(e) => setForm((prev) => ({
                     ...prev,
-                    debtor_id: e.target.value,
+                    balance_entity_id: e.target.value,
                     is_budget_planner: e.target.value ? 0 : prev.is_budget_planner,
                   }))}
                 >
-                  <option value="">Person / Balance</option>
-                  {debtors.map((debtor) => (
-                    <option key={debtor.id} value={debtor.id}>{debtor.debtor_name}</option>
+                  <option value="">Balance Person</option>
+                  {entities
+                    .filter((entity) => Number(entity.is_balance_person || 0) === 1)
+                    .map((entity) => (
+                    <option key={entity.id} value={entity.id}>{entity.display_name}</option>
                   ))}
                 </select>
               </div>
@@ -218,7 +219,7 @@ export function Accumul8TransactionModal({
                   className="form-select"
                   value={String(form.is_budget_planner)}
                   onChange={(e) => setForm((prev) => ({ ...prev, is_budget_planner: Number(e.target.value) }))}
-                  disabled={Boolean(form.debtor_id)}
+                  disabled={Boolean(form.balance_entity_id)}
                 >
                   <option value="1">In Budget Planner</option>
                   <option value="0">Exclude From Planner</option>

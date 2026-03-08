@@ -761,9 +761,10 @@ if [ "$MODE" != "env-only" ]; then
     VERIFY_FAILED=1
   fi
   
-  # Homepage should never reference source paths in production.
+  # Homepage should never ship live src/href asset tags that point at /src/.
+  # Ignore inert inline-script strings used by the localhost dev-loader path.
   HOME_HTML=$(curl -sS --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" "$BASE_URL/")
-  if echo "$HOME_HTML" | grep -q "/src/"; then
+  if echo "$HOME_HTML" | grep -Eqi '(src|href)=["'\'']/src/'; then
     echo -e "${YELLOW}⚠️  Homepage still references /src/ paths${NC}"
     VERIFY_FAILED=1
   else

@@ -397,6 +397,70 @@
   font-size: 0.69rem;
 }
 
+.accumul8-month-table-select,
+.accumul8-inline-editor {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  color: #223453;
+  font-size: inherit;
+  line-height: 1.15;
+  border-radius: 0;
+}
+
+.accumul8-month-table-select:focus,
+.accumul8-inline-editor:focus {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(34, 52, 83, 0.22);
+}
+
+.accumul8-inline-editor--text,
+.accumul8-inline-editor--date {
+  text-align: left;
+}
+
+.accumul8-inline-editor--numeric {
+  text-align: right;
+}
+
+.accumul8-inline-editor--muted {
+  color: #5d6b80;
+}
+
+.accumul8-inline-stack {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.accumul8-inline-grid {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.accumul8-inline-grid--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.accumul8-inline-check-grid {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.accumul8-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  color: #223453;
+}
+
+.accumul8-inline-check input {
+  margin: 0;
+}
+
 .accumul8-inline-cell-trigger {
   display: block;
   width: 100%;

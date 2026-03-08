@@ -6,6 +6,7 @@ QUALITY="${WEBP_QUALITY:-100}"
 IMAGE_DIRS=(
   "${ROOT_DIR}/images"
   "${ROOT_DIR}/public/images"
+  "${ROOT_DIR}/public/emojis/twemoji"
 )
 
 if ! command -v cwebp >/dev/null 2>&1; then
@@ -66,7 +67,6 @@ for dir in "${IMAGE_DIRS[@]}"; do
 
   while IFS= read -r -d '' src; do
     case "${src}" in
-      */emojis/*) continue ;;
       *.ico|*.ICO) continue ;;
     esac
 

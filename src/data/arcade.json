@@ -4,21 +4,21 @@
     "title": "Tetris",
     "description": "Classic block-stacking puzzle game",
     "href": "tetris-game.php",
-    "image": "images/.png"
+    "image": "images/tetris-preview.png"
   },
   {
     "id": "asteroids",
     "title": "Asteroids",
     "description": "Classic space shooter game",
     "href": "asteroids-game.php",
-    "image": "images/.png"
+    "image": "images/asteroids-preview.png"
   },
   {
     "id": "frogger",
     "title": "Frogger",
     "description": "Help the frog cross the road safely!",
     "href": "frogger-game.php",
-    "image": "images/.png"
+    "image": "images/frogger-preview.png"
   },
   {
     "id": "pacman",

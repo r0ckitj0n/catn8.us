@@ -1,4 +1,5 @@
 import React from 'react';
+import { WebpImage } from './WebpImage';
 import { StandardIconKey } from '../../types/uiStandards';
 import { UI_STANDARDS_EVENT, getStandardizedIconSetting } from '../../core/uiStandards';
 
@@ -19,7 +20,7 @@ export function StandardIcon({ iconKey, className = '' }: StandardIconProps) {
   const iconDef = React.useMemo(() => getStandardizedIconSetting(iconKey), [iconKey, version]);
 
   return (
-    <img
+    <WebpImage
       className={className}
       src={iconDef.asset_path}
       alt=""

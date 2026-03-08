@@ -5,7 +5,7 @@ type WebpImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
   finalFallbackSrc?: string;
 };
 
-const STATIC_IMAGE_PATH = /^(?:https?:\/\/[^/]+)?\/?images\//i;
+const STATIC_IMAGE_PATH = /^(?:https?:\/\/[^/]+)?\/(?:images|dist\/emojis\/twemoji)\//i;
 const RASTER_IMAGE_EXT = /\.(?:avif|bmp|gif|jpe?g|png|tiff?)(?=[?#]|$)/i;
 
 function getWebpPrimary(src: string): string {

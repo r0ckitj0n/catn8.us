@@ -3,6 +3,7 @@ import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
 import { EmojiAssetChoice, StandardizedIconSetting, StandardizedIconSettingsResponse } from '../../types/uiStandards';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { WebpImage } from '../common/WebpImage';
 import { DEFAULT_STANDARDIZED_ICON_SETTINGS, EMOJI_ASSET_CATALOG } from '../../data/standardizedIcons';
 import { ApiClient } from '../../core/ApiClient';
 import {
@@ -96,7 +97,7 @@ export function StandardizedIconsModal({ open, onClose, onToast }: StandardizedI
           </div>
           <div className="modal-body">
             <p className="text-muted mb-3">
-              Manage the emoji asset used for each shared icon button on catn8.us. Source graphics are Twemoji PNG assets.
+              Manage the emoji asset used for each shared icon button on catn8.us. Source graphics are Twemoji raster assets with WebP preferred and PNG fallback.
             </p>
             <div className="d-flex justify-content-between align-items-center mb-2">
               <a href="/dist/emojis/twemoji/LICENSE-GRAPHICS.txt" target="_blank" rel="noreferrer">Twemoji graphics license</a>
@@ -120,7 +121,7 @@ export function StandardizedIconsModal({ open, onClose, onToast }: StandardizedI
                     <tr key={icon.key}>
                       <td>
                         <span className="catn8-icon-library-preview" title={`${icon.label} ${icon.emoji}`}>
-                          <img src={icon.asset_path} alt="" className="catn8-icon-library-glyph" />
+                          <WebpImage src={icon.asset_path} alt="" className="catn8-icon-library-glyph" />
                         </span>
                       </td>
                       <td><code>{icon.key}</code></td>

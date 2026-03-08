@@ -19,7 +19,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
                   but hearts. Founded by Jon and Sarah Graves, our community is built on the foundation of family, love, and
                   connection.
                 </p>
-                <WebpImage className="catn8-hero-image" src="/images/.png" alt="Family Connection" />
+                <WebpImage className="catn8-hero-image" src="/images/homepage_family.png" alt="Family Connection" />
               </div>
             </div>
           </div>
@@ -40,7 +40,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
                 Veronica, Reuel, and Ezra, and now to the next generation – we envision a future where every individual feels a
                 deep sense of belonging.
               </p>
-              <WebpImage className="catn8-inline-image" src="/images/.png" alt="Community Vision" />
+              <WebpImage className="catn8-inline-image" src="/images/homepage_kindness.png" alt="Community Vision" />
             </div>
             <div className="col-lg-5">
               <div className="catn8-quote catn8-glass-card">
@@ -58,7 +58,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
           <div className="row g-4">
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Family First" />
+                <WebpImage className="catn8-card-image" src="/images/about_family.png" alt="Family First" />
                 <div className="catn8-value-icon">💝</div>
                 <h3 className="story-title">Family First</h3>
                 <p className="story-text">
@@ -69,7 +69,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
             </div>
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Empathy in Action" />
+                <WebpImage className="catn8-card-image" src="/images/about_community.png" alt="Empathy in Action" />
                 <div className="catn8-value-icon">🤝</div>
                 <h3 className="story-title">Empathy in Action</h3>
                 <p className="story-text">
@@ -80,7 +80,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
             </div>
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Gentle Growth" />
+                <WebpImage className="catn8-card-image" src="/images/about_growth.png" alt="Gentle Growth" />
                 <div className="catn8-value-icon">🌱</div>
                 <h3 className="story-title">Gentle Growth</h3>
                 <p className="story-text">
@@ -99,7 +99,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
           <div className="row g-4">
             <div className="col-md-6">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="The Beginning" />
+                <WebpImage className="catn8-card-image" src="/images/homepage_family.png" alt="The Beginning" />
                 <h3 className="story-title">The Beginning</h3>
                 <p className="story-text">
                   It all started with Jon and Sarah's vision of creating a space where family values and community connection
@@ -110,7 +110,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
             </div>
             <div className="col-md-6">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Our Growth" />
+                <WebpImage className="catn8-card-image" src="/images/homepage_kindness.png" alt="Our Growth" />
                 <h3 className="story-title">Our Growth</h3>
                 <p className="story-text">
                   As the Graves family has grown, so has our understanding of what it means to truly connect. From Trinity and
@@ -129,7 +129,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
           <div className="row g-4">
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Family Leaders" />
+                <WebpImage className="catn8-card-image" src="/images/homepage_friends.png" alt="Family Leaders" />
                 <h3 className="story-title">Family Leaders</h3>
                 <p className="story-text">
                   Jon and Sarah's vision and leadership continue to guide our community, while Trinity and Elijah bring their
@@ -139,7 +139,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
             </div>
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Community Builders" />
+                <WebpImage className="catn8-card-image" src="/images/about_community.png" alt="Community Builders" />
                 <h3 className="story-title">Community Builders</h3>
                 <p className="story-text">
                   Mariah and Veronica's commitment to community service and connection helps us create meaningful experiences
@@ -149,7 +149,7 @@ export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
             </div>
             <div className="col-md-4">
               <div className="catn8-card p-4 h-100">
-                <WebpImage className="catn8-card-image" src="/images/.png" alt="Creative Minds" />
+                <WebpImage className="catn8-card-image" src="/images/about_growth.png" alt="Creative Minds" />
                 <h3 className="story-title">Creative Minds</h3>
                 <p className="story-text">
                   Reuel and Ezra's unique perspectives and creative approaches help us find new ways to express our values and

@@ -7,9 +7,9 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const cards = [
-    { href: 'stories.php', title: 'Stories', text: 'Read our fun adventures!', image: '/images/.png' },
-    { href: 'games.php', title: 'Games', text: 'Play and learn together!', image: '/images/.png' },
-    { href: 'activities.php', title: 'Activities', text: 'Fun things to do!', image: '/images/.png' },
+    { href: 'stories.php', title: 'Stories', text: 'Read our fun adventures!', image: '/images/homepage_friends.png' },
+    { href: 'games.php', title: 'Games', text: 'Play and learn together!', image: '/images/homepage_growth.png' },
+    { href: 'activities.php', title: 'Activities', text: 'Fun things to do!', image: '/images/homepage_kindness.png' },
   ];
 
   return (
@@ -37,14 +37,14 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
                       <div>1. to link together; form into a chain</div>
                     </div>
                     <div className="col-md-4 text-center">
-                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.png" finalFallbackSrc="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.png" alt="catn8.us Logo" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
             <div className="col-lg-6 text-center">
-              <WebpImage className="catn8-hero-image" src="/images/.png" alt="The Graves Family" />
+              <WebpImage className="catn8-hero-image" src="/images/catfamily.png" alt="The Graves Family" />
             </div>
           </div>
         </div>
@@ -69,7 +69,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
           <h2 className="section-title">What Makes Us Special</h2>
           <div className="featured-grid">
               <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
-              <WebpImage className="catn8-featured-image" src="/images/.png" alt="Making Friends" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_friends.png" alt="Making Friends" />
               <div className="featured-card-content">
                 <h3>Making Friends</h3>
                 <p>
@@ -79,7 +79,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               </div>
             </div>
               <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
-              <WebpImage className="catn8-featured-image" src="/images/.png" alt="Spreading Joy" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_kindness.png" alt="Spreading Joy" />
               <div className="featured-card-content">
                 <h3>Spreading Joy</h3>
                 <p>
@@ -89,7 +89,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               </div>
             </div>
               <div className="featured-card catn8-glass-card catn8-glass-card--interactive">
-              <WebpImage className="catn8-featured-image" src="/images/.png" alt="Growing Together" />
+              <WebpImage className="catn8-featured-image" src="/images/homepage_growth.png" alt="Growing Together" />
               <div className="featured-card-content">
                 <h3>Growing Together</h3>
                 <p>
@@ -113,7 +113,7 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
               <p>Join us on this amazing journey where every moment is a chance to discover something wonderful!</p>
             </div>
             <div className="col-lg-6 text-center">
-              <WebpImage className="catn8-hero-image" src="/images/.png" alt="Adventure" />
+              <WebpImage className="catn8-hero-image" src="/images/homepage_adventure.png" alt="Adventure" />
             </div>
           </div>
         </div>

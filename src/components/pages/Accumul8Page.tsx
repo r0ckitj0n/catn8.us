@@ -74,6 +74,8 @@ type LedgerFormState = {
 };
 type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'balance_entity_id' | 'balance_entity_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
+type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
+type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes'>>;
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
@@ -207,6 +209,22 @@ function formatEntityRoles(entity: Pick<Accumul8Entity, 'is_payee' | 'is_payer' 
   return roles.join(' • ') || 'Unassigned';
 }
 
+function formatEntityContactSummary(entity: Pick<Accumul8Entity, 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip'>): string[] {
+  const lines: string[] = [];
+  const primary = [entity.phone_number || '', entity.email || ''].filter(Boolean).join(' | ');
+  if (primary) {
+    lines.push(primary);
+  }
+  if (entity.street_address) {
+    lines.push(entity.street_address);
+  }
+  const locality = [entity.city || '', entity.state || '', entity.zip || ''].filter(Boolean).join(', ');
+  if (locality) {
+    lines.push(locality);
+  }
+  return lines;
+}
+
 function addUtcDays(baseDate: string, days: number): string {
   const parsed = new Date(`${baseDate}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) {
@@ -296,9 +314,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [activeLedgerRowId, setActiveLedgerRowId] = React.useState<number | null>(null);
   const [activePayBillRowId, setActivePayBillRowId] = React.useState<number | null>(null);
   const [activeDebtorRowId, setActiveDebtorRowId] = React.useState<number | null>(null);
+  const [activeEntityRowId, setActiveEntityRowId] = React.useState<number | null>(null);
+  const [activeRecurringRowId, setActiveRecurringRowId] = React.useState<number | null>(null);
   const [ledgerDraftById, setLedgerDraftById] = React.useState<Record<number, LedgerInlineDraft>>({});
   const [payBillDraftById, setPayBillDraftById] = React.useState<Record<number, LedgerInlineDraft>>({});
   const [debtorDraftById, setDebtorDraftById] = React.useState<Record<number, DebtorInlineDraft>>({});
+  const [entityDraftById, setEntityDraftById] = React.useState<Record<number, EntityInlineDraft>>({});
+  const [recurringDraftById, setRecurringDraftById] = React.useState<Record<number, RecurringInlineDraft>>({});
   const [contactModalOpen, setContactModalOpen] = React.useState(false);
   const [entityModalOpen, setEntityModalOpen] = React.useState(false);
   const [debtorModalOpen, setDebtorModalOpen] = React.useState(false);
@@ -867,6 +889,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const activateDebtorRow = React.useCallback((id: number) => {
     setActiveDebtorRowId(id);
   }, []);
+  const activateEntityRow = React.useCallback((id: number) => {
+    setActiveEntityRowId(id);
+  }, []);
+  const activateRecurringRow = React.useCallback((id: number) => {
+    setActiveRecurringRowId(id);
+  }, []);
   const setLedgerRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
     setLedgerDraftById((prev) => ({
       ...prev,
@@ -885,11 +913,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       },
     }));
   }, []);
+  const setEntityRowDraft = React.useCallback((row: Accumul8Entity, patch: EntityInlineDraft) => {
+    setEntityDraftById((prev) => ({
+      ...prev,
+      [row.id]: {
+        ...prev[row.id],
+        ...patch,
+      },
+    }));
+  }, []);
   const setPayBillRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
     setPayBillDraftById((prev) => ({
       ...prev,
       [tx.id]: {
         ...prev[tx.id],
+        ...patch,
+      },
+    }));
+  }, []);
+  const setRecurringRowDraft = React.useCallback((row: Accumul8RecurringPayment, patch: RecurringInlineDraft) => {
+    setRecurringDraftById((prev) => ({
+      ...prev,
+      [row.id]: {
+        ...prev[row.id],
         ...patch,
       },
     }));
@@ -966,6 +1012,61 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     setActiveDebtorRowId((current) => (current === row.id ? null : current));
   }, [debtorDraftById, updateDebtor]);
+  const saveEntityRow = React.useCallback(async (entity: Accumul8Entity) => {
+    const draft = entityDraftById[entity.id];
+    if (!draft) {
+      return;
+    }
+    await updateEntity(entity.id, {
+      display_name: draft.display_name ?? entity.display_name,
+      entity_kind: draft.entity_kind ?? entity.entity_kind,
+      contact_type: entity.contact_type,
+      is_payee: Number(draft.is_payee ?? entity.is_payee ?? 0),
+      is_payer: Number(draft.is_payer ?? entity.is_payer ?? 0),
+      is_vendor: Number(draft.is_vendor ?? entity.is_vendor ?? 0),
+      is_balance_person: Number(draft.is_balance_person ?? entity.is_balance_person ?? 0),
+      default_amount: Number(draft.default_amount ?? entity.default_amount ?? 0),
+      email: draft.email ?? entity.email ?? '',
+      phone_number: draft.phone_number ?? entity.phone_number ?? '',
+      street_address: draft.street_address ?? entity.street_address ?? '',
+      city: draft.city ?? entity.city ?? '',
+      state: draft.state ?? entity.state ?? '',
+      zip: draft.zip ?? entity.zip ?? '',
+      notes: draft.notes ?? entity.notes ?? '',
+      is_active: Number(draft.is_active ?? entity.is_active ?? 0),
+    });
+    setEntityDraftById((prev) => {
+      const next = { ...prev };
+      delete next[entity.id];
+      return next;
+    });
+    setActiveEntityRowId((current) => (current === entity.id ? null : current));
+  }, [entityDraftById, updateEntity]);
+  const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
+    const draft = recurringDraftById[row.id];
+    if (!draft) {
+      return;
+    }
+    await updateRecurring(row.id, {
+      title: draft.title ?? row.title,
+      direction: row.direction,
+      amount: Number(draft.amount ?? row.amount ?? 0),
+      frequency: (draft.frequency ?? row.frequency) as Accumul8Frequency,
+      payment_method: (draft.payment_method ?? row.payment_method) as Accumul8PaymentMethod,
+      interval_count: Number(row.interval_count || 1),
+      next_due_date: draft.next_due_date ?? row.next_due_date,
+      entity_id: row.entity_id ?? null,
+      account_id: row.account_id ?? null,
+      is_budget_planner: Number(draft.is_budget_planner ?? row.is_budget_planner ?? 0),
+      notes: draft.notes ?? row.notes ?? '',
+    });
+    setRecurringDraftById((prev) => {
+      const next = { ...prev };
+      delete next[row.id];
+      return next;
+    });
+    setActiveRecurringRowId((current) => (current === row.id ? null : current));
+  }, [recurringDraftById, updateRecurring]);
   React.useEffect(() => {
     return () => {
       if (flashSaveButtonTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -990,6 +1091,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         hasDraft: Boolean(debtorDraftById[activeDebtorRowId]),
         clear: () => setActiveDebtorRowId((current) => (current === activeDebtorRowId ? null : current)),
       } : null,
+      activeEntityRowId !== null ? {
+        key: `entity-${activeEntityRowId}`,
+        hasDraft: Boolean(entityDraftById[activeEntityRowId]),
+        clear: () => setActiveEntityRowId((current) => (current === activeEntityRowId ? null : current)),
+      } : null,
+      activeRecurringRowId !== null ? {
+        key: `recurring-${activeRecurringRowId}`,
+        hasDraft: Boolean(recurringDraftById[activeRecurringRowId]),
+        clear: () => setActiveRecurringRowId((current) => (current === activeRecurringRowId ? null : current)),
+      } : null,
     ].filter(Boolean) as Array<{ key: string; hasDraft: boolean; clear: () => void }>;
     if (activeRows.length === 0 || typeof document === 'undefined') {
       return;
@@ -1005,10 +1116,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           continue;
         }
         if (row.hasDraft) {
-          event.preventDefault();
-          event.stopPropagation();
           flashSaveButton(row.key);
-          return;
         }
         row.clear();
       }
@@ -1017,7 +1125,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true);
     };
-  }, [activeDebtorRowId, activeLedgerRowId, activePayBillRowId, debtorDraftById, flashSaveButton, ledgerDraftById, payBillDraftById]);
+  }, [activeDebtorRowId, activeEntityRowId, activeLedgerRowId, activePayBillRowId, activeRecurringRowId, debtorDraftById, entityDraftById, flashSaveButton, ledgerDraftById, payBillDraftById, recurringDraftById]);
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -1647,14 +1755,75 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </tr>
                   </thead>
                   <tbody>
-                    {entitiesSorted.map((entity) => (
-                      <tr key={entity.id} className="accumul8-list-item">
+                    {entitiesSorted.map((entity) => {
+                      const entityDraft = entityDraftById[entity.id];
+                      const entityContactSummary = formatEntityContactSummary({
+                        phone_number: entityDraft?.phone_number ?? entity.phone_number,
+                        email: entityDraft?.email ?? entity.email,
+                        street_address: entityDraft?.street_address ?? entity.street_address,
+                        city: entityDraft?.city ?? entity.city,
+                        state: entityDraft?.state ?? entity.state,
+                        zip: entityDraft?.zip ?? entity.zip,
+                      });
+                      return (
+                      <tr
+                        key={entity.id}
+                        ref={(node) => setInlineRowRef(`entity-${entity.id}`, node)}
+                        className={[
+                          'accumul8-list-item',
+                          activeEntityRowId === entity.id ? 'is-editing' : '',
+                          entityDraft ? 'has-draft' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
                         <td>
-                          <div className="fw-semibold">{formatInlineText(entity.display_name, 'Unnamed entity')}</div>
-                          {entity.notes ? <div className="small text-muted">{entity.notes}</div> : null}
+                          {activeEntityRowId === entity.id ? (
+                            <div className="accumul8-inline-stack">
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={entityDraft?.display_name ?? entity.display_name} onChange={(e) => setEntityRowDraft(entity, { display_name: e.target.value })} disabled={busy} />
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.notes ?? entity.notes ?? ''} onChange={(e) => setEntityRowDraft(entity, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
+                            </div>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
+                              <span className="fw-semibold">{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
+                              {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
+                            </button>
+                          )}
                         </td>
-                        <td>{formatEntityRoles(entity)}</td>
-                        <td>{formatInlineText(entity.entity_kind, 'contact')}</td>
+                        <td>
+                          {activeEntityRowId === entity.id ? (
+                            <div className="accumul8-inline-check-grid">
+                              {[
+                                ['is_payee', 'Payee'],
+                                ['is_payer', 'Payer'],
+                                ['is_vendor', 'Vendor'],
+                                ['is_balance_person', 'Balance'],
+                              ].map(([field, label]) => (
+                                <label key={field} className="accumul8-inline-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={Number(entityDraft?.[field as keyof EntityInlineDraft] ?? entity[field as keyof Accumul8Entity] ?? 0) === 1}
+                                    onChange={(e) => setEntityRowDraft(entity, { [field]: e.target.checked ? 1 : 0 } as EntityInlineDraft)}
+                                    disabled={busy}
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeEntityRowId === entity.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={entityDraft?.entity_kind ?? entity.entity_kind} onChange={(e) => setEntityRowDraft(entity, { entity_kind: e.target.value })} disabled={busy}>
+                              <option value="contact">Contact</option>
+                              <option value="person">Person</option>
+                              <option value="vendor">Vendor</option>
+                              <option value="company">Company</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatInlineText(entity.entity_kind, 'contact')}</button>
+                          )}
+                        </td>
                         <td>
                           <div className="small text-muted">
                             {[
@@ -1664,18 +1833,54 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           </div>
                         </td>
                         <td>
-                          <div className="small text-muted">
-                            {[entity.phone_number || '', entity.email || ''].filter(Boolean).join(' | ') || 'No phone or email'}
-                          </div>
-                          {entity.street_address ? <div className="small text-muted">{entity.street_address}</div> : null}
-                          {[entity.city || '', entity.state || '', entity.zip || ''].filter(Boolean).length > 0 ? (
-                            <div className="small text-muted">{[entity.city || '', entity.state || '', entity.zip || ''].filter(Boolean).join(', ')}</div>
-                          ) : null}
+                          {activeEntityRowId === entity.id ? (
+                            <div className="accumul8-inline-stack">
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.phone_number ?? entity.phone_number ?? ''} onChange={(e) => setEntityRowDraft(entity, { phone_number: e.target.value })} disabled={busy} placeholder="Phone" />
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.email ?? entity.email ?? ''} onChange={(e) => setEntityRowDraft(entity, { email: e.target.value })} disabled={busy} placeholder="Email" />
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.street_address ?? entity.street_address ?? ''} onChange={(e) => setEntityRowDraft(entity, { street_address: e.target.value })} disabled={busy} placeholder="Street address" />
+                              <div className="accumul8-inline-grid accumul8-inline-grid--triple">
+                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.city ?? entity.city ?? ''} onChange={(e) => setEntityRowDraft(entity, { city: e.target.value })} disabled={busy} placeholder="City" />
+                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.state ?? entity.state ?? ''} onChange={(e) => setEntityRowDraft(entity, { state: e.target.value })} disabled={busy} placeholder="State" />
+                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.zip ?? entity.zip ?? ''} onChange={(e) => setEntityRowDraft(entity, { zip: e.target.value })} disabled={busy} placeholder="ZIP" />
+                              </div>
+                            </div>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
+                              {entityContactSummary.length > 0 ? entityContactSummary.map((line) => (
+                                <span key={line} className="small text-muted d-block">{line}</span>
+                              )) : <span className="small text-muted">No phone or email</span>}
+                            </button>
+                          )}
                         </td>
-                        <td className="text-end">{Number(entity.default_amount || 0).toFixed(2)}</td>
-                        <td>{Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused'}</td>
+                        <td className="text-end">
+                          {activeEntityRowId === entity.id ? (
+                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={entityDraft?.default_amount ?? entity.default_amount} onChange={(e) => setEntityRowDraft(entity, { default_amount: Number(e.target.value) })} disabled={busy} />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{Number(entity.default_amount || 0).toFixed(2)}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeEntityRowId === entity.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(entityDraft?.is_active ?? entity.is_active)} onChange={(e) => setEntityRowDraft(entity, { is_active: Number(e.target.value) })} disabled={busy}>
+                              <option value="1">Active</option>
+                              <option value="0">Paused</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused'}</button>
+                          )}
+                        </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
+                            <button
+                              type="button"
+                              className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `entity-${entity.id}` ? ' is-flashing' : ''}`}
+                              onClick={() => void saveEntityRow(entity)}
+                              disabled={busy || !entityDraft}
+                              aria-label={`Save ${entity.display_name}`}
+                              title={`Save ${entity.display_name}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                            </button>
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-primary accumul8-icon-action"
@@ -1689,7 +1894,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                     {entitiesSorted.length === 0 && (
                       <tr>
                         <td colSpan={8} className="text-center text-muted py-4">No entities yet.</td>
@@ -1710,23 +1915,89 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table className="table table-sm accumul8-sticky-head">
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {filteredRecurringPayments.map((rp) => (
-                      <tr key={rp.id} className="accumul8-list-item">
-                        <td>{formatInlineText(rp.title, 'Untitled recurring payment')}</td>
-                        <td>{formatInlineDate(rp.next_due_date)}</td>
-                        <td className="text-end">{Number(rp.amount || 0).toFixed(2)}</td>
-                        <td>{formatInlineText(rp.frequency)}</td>
-                        <td>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</td>
-                        <td>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</td>
-                        <td>{rp.is_active ? 'Active' : 'Paused'}</td>
+                    {filteredRecurringPayments.map((rp) => {
+                      const recurringDraft = recurringDraftById[rp.id];
+                      return (
+                      <tr ref={(node) => setInlineRowRef(`recurring-${rp.id}`, node)} key={rp.id} className={['accumul8-list-item', activeRecurringRowId === rp.id ? 'is-editing' : '', recurringDraft ? 'has-draft' : ''].filter(Boolean).join(' ')}>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <div className="accumul8-inline-stack">
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={recurringDraft?.title ?? rp.title} onChange={(e) => setRecurringRowDraft(rp, { title: e.target.value })} disabled={busy} />
+                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={recurringDraft?.notes ?? rp.notes ?? ''} onChange={(e) => setRecurringRowDraft(rp, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
+                            </div>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>
+                              {formatInlineText(rp.title, 'Untitled recurring payment')}
+                              {rp.notes ? <span className="small text-muted d-block">{rp.notes}</span> : null}
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--date" type="date" value={recurringDraft?.next_due_date ?? rp.next_due_date} onChange={(e) => setRecurringRowDraft(rp, { next_due_date: e.target.value })} disabled={busy} />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineDate(rp.next_due_date)}</button>
+                          )}
+                        </td>
+                        <td className="text-end">
+                          {activeRecurringRowId === rp.id ? (
+                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={recurringDraft?.amount ?? rp.amount} onChange={(e) => setRecurringRowDraft(rp, { amount: Number(e.target.value) })} disabled={busy} />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{Number(rp.amount || 0).toFixed(2)}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={recurringDraft?.frequency ?? rp.frequency} onChange={(e) => setRecurringRowDraft(rp, { frequency: e.target.value as Accumul8Frequency })} disabled={busy}>
+                              <option value="daily">Daily</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="biweekly">Biweekly</option>
+                              <option value="monthly">Monthly</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineText(rp.frequency)}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={recurringDraft?.payment_method ?? rp.payment_method} onChange={(e) => setRecurringRowDraft(rp, { payment_method: e.target.value as Accumul8PaymentMethod })} disabled={busy}>
+                              {Object.entries(RECURRING_PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(recurringDraft?.is_budget_planner ?? rp.is_budget_planner)} onChange={(e) => setRecurringRowDraft(rp, { is_budget_planner: Number(e.target.value) })} disabled={busy}>
+                              <option value="1">Shown</option>
+                              <option value="0">Hidden</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
+                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(recurringDraft?.is_active ?? rp.is_active)} onChange={(e) => setRecurringRowDraft(rp, { is_active: Number(e.target.value) })} disabled={busy}>
+                              <option value="1">Active</option>
+                              <option value="0">Paused</option>
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button>
+                          )}
+                        </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy || !recurringDraft} aria-label={`Save ${rp.title}`} title={`Save ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring payment?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>

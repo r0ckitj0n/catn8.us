@@ -135,7 +135,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
           <ul className="navbar-nav catn8-nav-account ms-auto">
             <li className="nav-item">
               <a className="navbar-brand catn8-nav-logo-link" href="/">
-                <WebpImage src="/images/catn8_logo.png" finalFallbackSrc="/images/catn8_logo.svg" alt="catn8.us Logo" />
+                <WebpImage src="/images/catn8_logo.png" alt="catn8.us Logo" />
               </a>
             </li>
             {isAuthed ? (

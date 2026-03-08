@@ -103,6 +103,7 @@ export function Accumul8SpreadsheetView({
   const [activeRowKey, setActiveRowKey] = React.useState<string | null>(null);
   const [rowRtaByKey, setRowRtaByKey] = React.useState<Record<string, number>>({});
   const [draftRowByKey, setDraftRowByKey] = React.useState<Record<string, EditableSpreadsheetRow>>({});
+  const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
   const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
     unspecified: 'Unspecified',
     autopay: 'Autopay',
@@ -262,6 +263,13 @@ export function Accumul8SpreadsheetView({
   const activateRow = React.useCallback((rowKey: string) => {
     setActiveRowKey(rowKey);
   }, []);
+  const setInlineRowRef = React.useCallback((rowKey: string, node: HTMLTableRowElement | null) => {
+    if (node) {
+      inlineRowRefs.current[rowKey] = node;
+      return;
+    }
+    delete inlineRowRefs.current[rowKey];
+  }, []);
   const saveRow = React.useCallback(async (row: EditableSpreadsheetRow) => {
     const recurring = recurringPayments.find((item) => item.id === row.recurring_id);
     if (!recurring) {
@@ -312,6 +320,27 @@ export function Accumul8SpreadsheetView({
     });
     setActiveRowKey((current) => (current === row.rowKey ? null : current));
   }, [entities, onUpdateRecurring, recurringPayments]);
+
+  React.useEffect(() => {
+    if (!activeRowKey || typeof document === 'undefined') {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      const node = inlineRowRefs.current[activeRowKey];
+      if (!node || node.contains(target)) {
+        return;
+      }
+      setActiveRowKey((current) => (current === activeRowKey ? null : current));
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  }, [activeRowKey]);
 
   return (
     <div className="accumul8-spreadsheet">
@@ -388,6 +417,7 @@ export function Accumul8SpreadsheetView({
                   <tbody>
                     {panel.rows.length > 0 ? panel.rows.map((row) => (
                       <tr
+                        ref={(node) => setInlineRowRef(row.rowKey, node)}
                         key={row.rowKey}
                         className={[
                           row.amount < 0 ? 'is-outflow' : 'is-inflow',

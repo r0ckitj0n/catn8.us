@@ -5,37 +5,37 @@
       {
         "title": "PBS Kids Learning Adventure",
         "description": "Join your favorite PBS Kids characters in fun learning games!",
-        "image": "images/.png",
+        "image": "images/pbs-kids-learning-adventure.png",
         "href": "https://pbskids.org/games/"
       },
       {
         "title": "Nick Jr. Character Playground",
         "description": "Play with your favorite Nick Jr. characters in this fun playground!",
-        "image": "images/.png",
+        "image": "images/nick-jr-character-playground.png",
         "href": "https://www.nickjr.com/games/"
       },
       {
         "title": "Starfall Reading Adventure",
         "description": "Learn to read with fun interactive stories and games!",
-        "image": "images/.png",
+        "image": "images/starfall-reading-adventure.png",
         "href": "https://www.starfall.com/h/"
       },
       {
         "title": "Cool Math Puzzle Challenge",
         "description": "Solve fun math puzzles and improve your skills!",
-        "image": "images/.png",
+        "image": "images/cool-math-puzzle-challenge.png",
         "href": "https://www.coolmathgames.com/"
       },
       {
         "title": "ABCya Elementary Learning",
         "description": "Fun educational games for elementary school students!",
-        "image": "images/.png",
+        "image": "images/abcya-elementary-learning.png",
         "href": "https://www.abcya.com/"
       },
       {
         "title": "Prodigy Math RPG Adventure",
         "description": "Embark on an epic math adventure in this RPG game!",
-        "image": "images/.png",
+        "image": "images/prodigy-math-rpg-adventure.png",
         "href": "https://www.prodigygame.com/main-en/"
       }
     ]
@@ -46,37 +46,37 @@
       {
         "title": "Animal Crossing: Island Life",
         "description": "Create your own island paradise and make new friends!",
-        "image": "images/.png",
+        "image": "images/animal-crossing-island-life.png",
         "href": "https://www.nintendo.com/us/store/products/animal-crossing-new-horizons-switch/"
       },
       {
         "title": "Stardew Valley: Farm Life",
         "description": "Build your dream farm and live a peaceful life!",
-        "image": "images/.png",
+        "image": "images/stardew-valley-farm-life.png",
         "href": "https://www.stardewvalley.net/"
       },
       {
         "title": "Overcooked: Kitchen Chaos",
         "description": "Work together to create delicious meals in this fun cooking game!",
-        "image": "images/.png",
+        "image": "images/overcooked-kitchen-chaos.png",
         "href": "https://www.team17.com/games/overcooked-2/"
       },
       {
         "title": "Minecraft: Blocky World",
         "description": "Build, explore, and create in this amazing blocky world!",
-        "image": "images/.png",
+        "image": "images/minecraft-blocky-world.png",
         "href": "https://www.minecraft.net/en-us"
       },
       {
         "title": "Roblox: Social Gaming",
         "description": "Play with friends in this creative social gaming platform!",
-        "image": "images/.png",
+        "image": "images/roblox-social-gaming.png",
         "href": "https://www.roblox.com/"
       },
       {
         "title": "LEGO Fun Adventures",
         "description": "Build and play with LEGO in exciting virtual worlds!",
-        "image": "images/.png",
+        "image": "images/lego-fun-adventures.png",
         "href": "https://www.lego.com/en-us/kids/games"
       }
     ]
@@ -87,19 +87,19 @@
       {
         "title": "Civilization: Ancient Times",
         "description": "Build your own civilization and lead it to greatness!",
-        "image": "images/.png",
+        "image": "images/civilization-ancient-times.png",
         "href": "https://civilization.2k.com/"
       },
       {
         "title": "The Sims: Life Simulation",
         "description": "Create and control your own virtual family!",
-        "image": "images/.png",
+        "image": "images/the-sims-life-simulation.png",
         "href": "https://www.ea.com/games/the-sims"
       },
       {
         "title": "Grand Theft Auto V: Open World",
         "description": "Explore a vast open world in this action-packed game!",
-        "image": "images/.png",
+        "image": "images/grand-theft-auto-v-open-world.png",
         "href": "https://www.rockstargames.com/gta-v"
       }
     ]

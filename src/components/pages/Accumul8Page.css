@@ -303,6 +303,7 @@
 
 .accumul8-owner-selector {
   min-width: 240px;
+  flex: 0 1 240px;
 }
 
 .accumul8-page-toolbar {
@@ -328,6 +329,21 @@
 .accumul8-toolbar-field {
   flex: 0 1 320px;
   min-width: 0;
+}
+
+.accumul8-toolbar-summary {
+  display: flex;
+  flex: 1 1 420px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.accumul8-toolbar-summary .accumul8-summary-card {
+  flex: 1 1 150px;
+  width: auto;
+  min-width: 140px;
 }
 
 .accumul8-summary-grid {
@@ -1444,6 +1460,10 @@
 
   .accumul8-toolbar-field {
     flex-basis: auto;
+  }
+
+  .accumul8-toolbar-summary {
+    width: 100%;
   }
 
   .accumul8-panel {

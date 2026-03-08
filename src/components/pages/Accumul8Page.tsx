@@ -1229,7 +1229,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
             ) : null}
-            <div className="accumul8-page-toolbar mb-3">
+              <div className="accumul8-page-toolbar mb-3">
               <div className="accumul8-page-filters">
                 <div className="accumul8-toolbar-field">
                   <div className="accumul8-filter-label-row">
@@ -1281,30 +1281,38 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="accumul8-owner-selector">
-                <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
-                <select
-                  id="accumul8-owner-select"
-                  className="form-select form-select-sm"
-                  value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
-                  onChange={(e) => {
-                    const next = Number(e.target.value || 0);
-                    if (!Number.isFinite(next) || next <= 0) return;
-                    setSelectedOwnerUserId(next);
-                    if (typeof window !== 'undefined') {
-                      window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
-                    }
-                  }}
-                  disabled={busy || accessibleAccountOwners.length <= 1}
-                >
-                  {accessibleAccountOwners.map((owner) => (
-                    <option key={owner.owner_user_id} value={owner.owner_user_id}>
-                      {owner.username}
-                      {owner.is_self ? ' (You)' : ''}
-                    </option>
-                  ))}
-                </select>
+                {tab === 'contacts' && (
+                  <div className="accumul8-toolbar-summary" aria-label="Entity summary">
+                    <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
+                    <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
+                    <div className="accumul8-summary-card"><span>Vendors</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_vendor || 0) === 1).length}</strong></div>
+                    <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
+                  </div>
+                )}
+                <div className="accumul8-owner-selector">
+                  <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
+                  <select
+                    id="accumul8-owner-select"
+                    className="form-select form-select-sm"
+                    value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
+                    onChange={(e) => {
+                      const next = Number(e.target.value || 0);
+                      if (!Number.isFinite(next) || next <= 0) return;
+                      setSelectedOwnerUserId(next);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+                      }
+                    }}
+                    disabled={busy || accessibleAccountOwners.length <= 1}
+                  >
+                    {accessibleAccountOwners.map((owner) => (
+                      <option key={owner.owner_user_id} value={owner.owner_user_id}>
+                        {owner.username}
+                        {owner.is_self ? ' (You)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -1769,20 +1777,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Entity Manager</h3>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
-              </div>
-              <div className="row g-2 mb-3">
-                <div className="col-sm-6 col-lg-3">
-                  <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
-                </div>
-                <div className="col-sm-6 col-lg-3">
-                  <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
-                </div>
-                <div className="col-sm-6 col-lg-3">
-                  <div className="accumul8-summary-card"><span>Vendors</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_vendor || 0) === 1).length}</strong></div>
-                </div>
-                <div className="col-sm-6 col-lg-3">
-                  <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
-                </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
                 <table className="table table-sm accumul8-table accumul8-table--entities accumul8-sticky-head">

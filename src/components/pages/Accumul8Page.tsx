@@ -1324,6 +1324,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
                 <table className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head">
+                  <colgroup>
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--desc" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--memo" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                  </colgroup>
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredTransactions.map((tx) => (

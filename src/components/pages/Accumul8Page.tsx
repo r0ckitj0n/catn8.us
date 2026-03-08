@@ -1055,18 +1055,26 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-page-title-row">
               <h1 className="section-title mb-0">ACCUMUL8</h1>
               <div className="accumul8-tabs accumul8-tabs--header">
-                {[
-                  ['ledger', 'Ledger'],
-                  ['spreadsheet', 'Budget'],
-                  ['debtors', 'Balances'],
-                  ['pay_bills', 'Pay Bills'],
-                  ['contacts', 'Entities'],
-                  ['recurring', 'Recurring'],
-                  ['notifications', 'Notifications'],
-                  ['sync', 'Sync'],
-                ].map(([key, label]) => (
-                  <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
-                ))}
+                <div className="accumul8-tabs accumul8-tabs--header-buttons">
+                  {[
+                    ['ledger', 'Ledger'],
+                    ['spreadsheet', 'Budget'],
+                    ['debtors', 'Balances'],
+                    ['pay_bills', 'Pay Bills'],
+                    ['contacts', 'Entities'],
+                    ['recurring', 'Recurring'],
+                    ['notifications', 'Notifications'],
+                    ['sync', 'Sync'],
+                  ].map(([key, label]) => (
+                    <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
+                  ))}
+                </div>
+                <div className="accumul8-summary-grid">
+                  <div className="accumul8-summary-card"><span>Net</span><strong>${filteredSummary.net_amount.toFixed(2)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
+                </div>
               </div>
             </div>
             <div className="accumul8-page-toolbar mb-3">
@@ -1147,12 +1155,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </select>
               </div>
             </div>
-          </div>
-          <div className="accumul8-summary-grid">
-            <div className="accumul8-summary-card"><span>Net</span><strong>${filteredSummary.net_amount.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
-            <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
           </div>
           {tab === 'ledger' && (
             <div className="accumul8-panel">

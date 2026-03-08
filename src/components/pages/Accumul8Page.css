@@ -78,6 +78,12 @@
   gap: 0.75rem;
 }
 
+.accumul8-tabs--header .accumul8-summary-grid {
+  flex: 1 1 520px;
+  min-width: min(100%, 520px);
+  margin-left: auto;
+}
+
 .accumul8-summary-card {
   background: linear-gradient(135deg, rgba(248, 246, 236, 0.9), rgba(226, 233, 241, 0.9));
   border: 1px solid rgba(35, 45, 66, 0.14);
@@ -109,8 +115,13 @@
 .accumul8-tabs--header {
   flex: 1 1 auto;
   width: 100%;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 0.1rem;
+}
+
+.accumul8-tabs--header-buttons {
+  flex: 0 1 auto;
 }
 
 .accumul8-filter-label-row {
@@ -547,6 +558,17 @@
   .accumul8-page-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .accumul8-tabs--header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .accumul8-tabs--header .accumul8-summary-grid {
+    margin-left: 0;
+    min-width: 0;
+    width: 100%;
   }
 
   .accumul8-page-filters {

@@ -68,8 +68,8 @@ type SharedLayoutProps = {
 };
 
 const BACKGROUND_LAYER_STYLE: React.CSSProperties = {
-  background: 'url("/images/homepage_friends.jpg") center / cover no-repeat fixed',
-  backgroundImage: 'image-set(url("/images/homepage_friends.webp") type("image/webp"), url("/images/homepage_friends.jpg") type("image/jpeg"))',
+  background: 'url("/images/homepage_friends.png") center / cover no-repeat fixed',
+  backgroundImage: 'image-set(url("/images/homepage_friends.webp") type("image/webp"), url("/images/homepage_friends.png") type("image/png"))',
 };
 
 const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>> = {

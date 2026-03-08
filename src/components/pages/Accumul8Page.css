@@ -760,21 +760,68 @@
 }
 
 .accumul8-table--ledger {
+  --accumul8-ledger-date-width: 6rem;
+  --accumul8-ledger-due-width: 6rem;
+  --accumul8-ledger-amount-width: 7.5rem;
+  --accumul8-ledger-balance-width: 8.5rem;
+  --accumul8-ledger-paid-width: 5.5rem;
+  --accumul8-ledger-reconciled-width: 10rem;
+  --accumul8-ledger-actions-width: 8rem;
   width: 100%;
   min-width: 100%;
   table-layout: fixed;
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--fit {
-  width: 1%;
+.accumul8-table--ledger .accumul8-ledger-col--date {
+  width: var(--accumul8-ledger-date-width);
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--due {
+  width: var(--accumul8-ledger-due-width);
 }
 
 .accumul8-table--ledger .accumul8-ledger-col--desc {
-  width: 60%;
+  width: max(0px, calc((100% - (
+    var(--accumul8-ledger-date-width)
+    + var(--accumul8-ledger-due-width)
+    + var(--accumul8-ledger-amount-width)
+    + var(--accumul8-ledger-balance-width)
+    + var(--accumul8-ledger-paid-width)
+    + var(--accumul8-ledger-reconciled-width)
+    + var(--accumul8-ledger-actions-width)
+  )) * 0.6));
 }
 
 .accumul8-table--ledger .accumul8-ledger-col--memo {
-  width: 40%;
+  width: max(0px, calc((100% - (
+    var(--accumul8-ledger-date-width)
+    + var(--accumul8-ledger-due-width)
+    + var(--accumul8-ledger-amount-width)
+    + var(--accumul8-ledger-balance-width)
+    + var(--accumul8-ledger-paid-width)
+    + var(--accumul8-ledger-reconciled-width)
+    + var(--accumul8-ledger-actions-width)
+  )) * 0.4));
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--amount {
+  width: var(--accumul8-ledger-amount-width);
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--balance {
+  width: var(--accumul8-ledger-balance-width);
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--paid {
+  width: var(--accumul8-ledger-paid-width);
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--reconciled {
+  width: var(--accumul8-ledger-reconciled-width);
+}
+
+.accumul8-table--ledger .accumul8-ledger-col--actions {
+  width: var(--accumul8-ledger-actions-width);
 }
 
 .accumul8-sticky-head thead th,
@@ -818,6 +865,7 @@
 
 .accumul8-table--ledger th,
 .accumul8-table--ledger td {
+  width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -909,48 +957,9 @@
   overflow-wrap: anywhere;
 }
 
-.accumul8-ledger-table th:nth-child(3),
-.accumul8-ledger-table td:nth-child(3) {
-  min-width: 0;
-  max-width: none;
-  white-space: nowrap;
-  overflow-wrap: normal;
-}
-
-.accumul8-ledger-table th:nth-child(1),
-.accumul8-ledger-table td:nth-child(1),
-.accumul8-ledger-table th:nth-child(2),
-.accumul8-ledger-table td:nth-child(2) {
-  min-width: 5.5rem;
-}
-
-.accumul8-ledger-table th:nth-child(4),
-.accumul8-ledger-table td:nth-child(4) {
-  min-width: 0;
-  max-width: none;
-  white-space: nowrap;
-  overflow-wrap: normal;
-}
-
-.accumul8-ledger-table th:nth-child(5),
-.accumul8-ledger-table td:nth-child(5),
-.accumul8-ledger-table th:nth-child(6),
-.accumul8-ledger-table td:nth-child(6) {
-  min-width: 7rem;
-}
-
-.accumul8-ledger-table th:nth-child(7),
-.accumul8-ledger-table td:nth-child(7),
-.accumul8-ledger-table th:nth-child(8),
-.accumul8-ledger-table td:nth-child(8) {
-  min-width: 5.5rem;
-}
-
-.accumul8-ledger-table th:nth-child(9),
-.accumul8-ledger-table td:nth-child(9),
 .accumul8-month-table th:nth-child(11),
 .accumul8-month-table td:nth-child(11) {
-  min-width: 6.5rem;
+  min-width: 8rem;
 }
 
 .accumul8-table--debtors th:nth-child(1),

@@ -339,6 +339,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
   const flashSaveButtonTimeoutRef = React.useRef<number | null>(null);
+  const ledgerTableRef = React.useRef<HTMLTableElement | null>(null);
+  const [ledgerColumnWidths, setLedgerColumnWidths] = React.useState({
+    date: 0,
+    due: 0,
+    amount: 0,
+    balance: 0,
+    paid: 0,
+    reconciled: 0,
+    actions: 0,
+  });
   const scopedActionUrl = React.useCallback((action: string) => {
     const params = new URLSearchParams({ action });
     const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
@@ -482,6 +492,62 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [filteredTransactions]);
+  React.useLayoutEffect(() => {
+    const table = ledgerTableRef.current;
+    if (!table) {
+      return undefined;
+    }
+    const measureCellWidth = (cell: Element | null): number => {
+      if (!(cell instanceof HTMLElement)) {
+        return 0;
+      }
+      const computed = window.getComputedStyle(cell);
+      const padding = Number.parseFloat(computed.paddingLeft || '0') + Number.parseFloat(computed.paddingRight || '0');
+      const childWidths = Array.from(cell.children).map((child) => (
+        child instanceof HTMLElement ? Math.max(child.scrollWidth, Math.ceil(child.getBoundingClientRect().width)) : 0
+      ));
+      return Math.ceil(Math.max(cell.scrollWidth, ...childWidths) + padding + 4);
+    };
+    const updateWidths = () => {
+      const rows = Array.from(table.tBodies[0]?.rows || []);
+      const next = {
+        date: 0,
+        due: 0,
+        amount: 0,
+        balance: 0,
+        paid: 0,
+        reconciled: 0,
+        actions: 0,
+      };
+      const headerCells = Array.from(table.tHead?.rows[0]?.cells || []);
+      next.date = Math.max(measureCellWidth(headerCells[0]), ...rows.map((row) => measureCellWidth(row.cells[0])));
+      next.due = Math.max(measureCellWidth(headerCells[1]), ...rows.map((row) => measureCellWidth(row.cells[1])));
+      next.amount = Math.max(measureCellWidth(headerCells[4]), ...rows.map((row) => measureCellWidth(row.cells[4])));
+      next.balance = Math.max(measureCellWidth(headerCells[5]), ...rows.map((row) => measureCellWidth(row.cells[5])));
+      next.paid = Math.max(measureCellWidth(headerCells[6]), ...rows.map((row) => measureCellWidth(row.cells[6])));
+      next.reconciled = Math.max(measureCellWidth(headerCells[7]), ...rows.map((row) => measureCellWidth(row.cells[7])));
+      next.actions = Math.max(measureCellWidth(headerCells[8]), ...rows.map((row) => measureCellWidth(row.cells[8])));
+      setLedgerColumnWidths((current) => (
+        current.date === next.date
+        && current.due === next.due
+        && current.amount === next.amount
+        && current.balance === next.balance
+        && current.paid === next.paid
+        && current.reconciled === next.reconciled
+        && current.actions === next.actions
+          ? current
+          : next
+      ));
+    };
+    updateWidths();
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidths();
+    });
+    resizeObserver.observe(table);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [filteredTransactions, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
     setSyncHelpError(String(opts?.error || ''));
@@ -1323,17 +1389,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
-                <table className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head">
+                <table
+                  ref={ledgerTableRef}
+                  className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head"
+                  style={{
+                    ['--accumul8-ledger-date-width' as string]: `${ledgerColumnWidths.date}px`,
+                    ['--accumul8-ledger-due-width' as string]: `${ledgerColumnWidths.due}px`,
+                    ['--accumul8-ledger-amount-width' as string]: `${ledgerColumnWidths.amount}px`,
+                    ['--accumul8-ledger-balance-width' as string]: `${ledgerColumnWidths.balance}px`,
+                    ['--accumul8-ledger-paid-width' as string]: `${ledgerColumnWidths.paid}px`,
+                    ['--accumul8-ledger-reconciled-width' as string]: `${ledgerColumnWidths.reconciled}px`,
+                    ['--accumul8-ledger-actions-width' as string]: `${ledgerColumnWidths.actions}px`,
+                  } as React.CSSProperties}
+                >
                   <colgroup>
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--date" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--due" />
                     <col className="accumul8-ledger-col accumul8-ledger-col--desc" />
                     <col className="accumul8-ledger-col accumul8-ledger-col--memo" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--fit" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--amount" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--balance" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--paid" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--reconciled" />
+                    <col className="accumul8-ledger-col accumul8-ledger-col--actions" />
                   </colgroup>
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>

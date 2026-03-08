@@ -752,76 +752,41 @@
   font-size: 0.69rem;
 }
 
-.accumul8-ledger-table {
+.accumul8-table {
   font-family: 'Lexend Exa', sans-serif;
   font-size: 0.8rem;
   letter-spacing: 0.03em;
   color: #f5e8bd;
 }
 
-.accumul8-table--ledger {
-  --accumul8-ledger-date-width: 6rem;
-  --accumul8-ledger-due-width: 6rem;
-  --accumul8-ledger-amount-width: 7.5rem;
-  --accumul8-ledger-balance-width: 8.5rem;
-  --accumul8-ledger-paid-width: 5.5rem;
-  --accumul8-ledger-reconciled-width: 10rem;
-  --accumul8-ledger-actions-width: 8rem;
+.accumul8-ledger-table {
+  color: inherit;
+}
+
+.accumul8-table--measured {
   width: 100%;
   min-width: 100%;
   table-layout: fixed;
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--date {
-  width: var(--accumul8-ledger-date-width);
+.accumul8-table--measured .accumul8-col--flex-100 {
+  width: max(0px, calc(100% - var(--accumul8-col-fit-total, 0px)));
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--due {
-  width: var(--accumul8-ledger-due-width);
+.accumul8-table--measured .accumul8-col--flex-60 {
+  width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.6));
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--desc {
-  width: max(0px, calc((100% - (
-    var(--accumul8-ledger-date-width)
-    + var(--accumul8-ledger-due-width)
-    + var(--accumul8-ledger-amount-width)
-    + var(--accumul8-ledger-balance-width)
-    + var(--accumul8-ledger-paid-width)
-    + var(--accumul8-ledger-reconciled-width)
-    + var(--accumul8-ledger-actions-width)
-  )) * 0.6));
+.accumul8-table--measured .accumul8-col--flex-55 {
+  width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.55));
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--memo {
-  width: max(0px, calc((100% - (
-    var(--accumul8-ledger-date-width)
-    + var(--accumul8-ledger-due-width)
-    + var(--accumul8-ledger-amount-width)
-    + var(--accumul8-ledger-balance-width)
-    + var(--accumul8-ledger-paid-width)
-    + var(--accumul8-ledger-reconciled-width)
-    + var(--accumul8-ledger-actions-width)
-  )) * 0.4));
+.accumul8-table--measured .accumul8-col--flex-45 {
+  width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.45));
 }
 
-.accumul8-table--ledger .accumul8-ledger-col--amount {
-  width: var(--accumul8-ledger-amount-width);
-}
-
-.accumul8-table--ledger .accumul8-ledger-col--balance {
-  width: var(--accumul8-ledger-balance-width);
-}
-
-.accumul8-table--ledger .accumul8-ledger-col--paid {
-  width: var(--accumul8-ledger-paid-width);
-}
-
-.accumul8-table--ledger .accumul8-ledger-col--reconciled {
-  width: var(--accumul8-ledger-reconciled-width);
-}
-
-.accumul8-table--ledger .accumul8-ledger-col--actions {
-  width: var(--accumul8-ledger-actions-width);
+.accumul8-table--measured .accumul8-col--flex-40 {
+  width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.4));
 }
 
 .accumul8-sticky-head thead th,
@@ -863,9 +828,18 @@
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
-.accumul8-table--ledger th,
-.accumul8-table--ledger td {
-  width: auto;
+.accumul8-table tbody td {
+  color: #f3e6be;
+  font-size: 0.8rem;
+  line-height: 1.22;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
+}
+
+.accumul8-table--measured th,
+.accumul8-table--measured td {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1296,7 +1270,7 @@
   margin: 0;
 }
 
-.accumul8-table--ledger .accumul8-inline-cell-trigger {
+.accumul8-table--measured .accumul8-inline-cell-trigger {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

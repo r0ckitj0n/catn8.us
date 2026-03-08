@@ -234,6 +234,87 @@ function addUtcDays(baseDate: string, days: number): string {
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
 }
+
+type MeasuredTableColumn = {
+  key: string;
+  index: number;
+  fallback: number;
+};
+
+function useMeasuredTableColumnWidths(
+  tableRef: React.RefObject<HTMLTableElement | null>,
+  columns: readonly MeasuredTableColumn[],
+  deps: React.DependencyList,
+): Record<string, number> {
+  const [widths, setWidths] = React.useState<Record<string, number>>(() => (
+    columns.reduce<Record<string, number>>((acc, column) => {
+      acc[column.key] = column.fallback;
+      return acc;
+    }, {})
+  ));
+
+  React.useLayoutEffect(() => {
+    const table = tableRef.current;
+    if (!table || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const measureCellWidth = (cell: HTMLTableCellElement | null | undefined): number => {
+      if (!(cell instanceof HTMLElement)) {
+        return 0;
+      }
+      const computed = window.getComputedStyle(cell);
+      const padding = Number.parseFloat(computed.paddingLeft || '0') + Number.parseFloat(computed.paddingRight || '0');
+      const childWidths = Array.from(cell.children).map((child) => (
+        child instanceof HTMLElement ? Math.max(child.scrollWidth, Math.ceil(child.getBoundingClientRect().width)) : 0
+      ));
+      return Math.ceil(Math.max(cell.scrollWidth, ...childWidths) + padding + 4);
+    };
+
+    const updateWidths = () => {
+      const rows = Array.from(table.tBodies[0]?.rows || []);
+      const headerCells = Array.from(table.tHead?.rows[0]?.cells || []);
+      const next = columns.reduce<Record<string, number>>((acc, column) => {
+        acc[column.key] = Math.max(
+          column.fallback,
+          measureCellWidth(headerCells[column.index]),
+          ...rows.map((row) => measureCellWidth(row.cells[column.index])),
+        );
+        return acc;
+      }, {});
+      setWidths((current) => {
+        const unchanged = columns.every((column) => current[column.key] === next[column.key]);
+        return unchanged ? current : next;
+      });
+    };
+
+    updateWidths();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidths();
+    });
+    resizeObserver.observe(table);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, deps);
+
+  return widths;
+}
+
+function buildMeasuredTableStyle(widths: Record<string, number>): React.CSSProperties {
+  const style: Record<string, string> = {};
+  let fitTotal = 0;
+  Object.entries(widths).forEach(([key, value]) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    fitTotal += safeValue;
+    style[`--accumul8-col-${key}-width`] = `${safeValue}px`;
+  });
+  style['--accumul8-col-fit-total'] = `${fitTotal}px`;
+  return style as React.CSSProperties;
+}
+
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
   const isAdministrator = Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1;
@@ -340,15 +421,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
   const flashSaveButtonTimeoutRef = React.useRef<number | null>(null);
   const ledgerTableRef = React.useRef<HTMLTableElement | null>(null);
-  const [ledgerColumnWidths, setLedgerColumnWidths] = React.useState({
-    date: 0,
-    due: 0,
-    amount: 0,
-    balance: 0,
-    paid: 0,
-    reconciled: 0,
-    actions: 0,
-  });
+  const debtorsTableRef = React.useRef<HTMLTableElement | null>(null);
+  const balanceLedgerTableRef = React.useRef<HTMLTableElement | null>(null);
+  const payBillsTableRef = React.useRef<HTMLTableElement | null>(null);
+  const entitiesTableRef = React.useRef<HTMLTableElement | null>(null);
+  const recurringTableRef = React.useRef<HTMLTableElement | null>(null);
+  const syncTableRef = React.useRef<HTMLTableElement | null>(null);
   const scopedActionUrl = React.useCallback((action: string) => {
     const params = new URLSearchParams({ action });
     const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
@@ -492,62 +570,43 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [filteredTransactions]);
-  React.useLayoutEffect(() => {
-    const table = ledgerTableRef.current;
-    if (!table) {
-      return undefined;
-    }
-    const measureCellWidth = (cell: Element | null): number => {
-      if (!(cell instanceof HTMLElement)) {
-        return 0;
-      }
-      const computed = window.getComputedStyle(cell);
-      const padding = Number.parseFloat(computed.paddingLeft || '0') + Number.parseFloat(computed.paddingRight || '0');
-      const childWidths = Array.from(cell.children).map((child) => (
-        child instanceof HTMLElement ? Math.max(child.scrollWidth, Math.ceil(child.getBoundingClientRect().width)) : 0
-      ));
-      return Math.ceil(Math.max(cell.scrollWidth, ...childWidths) + padding + 4);
-    };
-    const updateWidths = () => {
-      const rows = Array.from(table.tBodies[0]?.rows || []);
-      const next = {
-        date: 0,
-        due: 0,
-        amount: 0,
-        balance: 0,
-        paid: 0,
-        reconciled: 0,
-        actions: 0,
-      };
-      const headerCells = Array.from(table.tHead?.rows[0]?.cells || []);
-      next.date = Math.max(measureCellWidth(headerCells[0]), ...rows.map((row) => measureCellWidth(row.cells[0])));
-      next.due = Math.max(measureCellWidth(headerCells[1]), ...rows.map((row) => measureCellWidth(row.cells[1])));
-      next.amount = Math.max(measureCellWidth(headerCells[4]), ...rows.map((row) => measureCellWidth(row.cells[4])));
-      next.balance = Math.max(measureCellWidth(headerCells[5]), ...rows.map((row) => measureCellWidth(row.cells[5])));
-      next.paid = Math.max(measureCellWidth(headerCells[6]), ...rows.map((row) => measureCellWidth(row.cells[6])));
-      next.reconciled = Math.max(measureCellWidth(headerCells[7]), ...rows.map((row) => measureCellWidth(row.cells[7])));
-      next.actions = Math.max(measureCellWidth(headerCells[8]), ...rows.map((row) => measureCellWidth(row.cells[8])));
-      setLedgerColumnWidths((current) => (
-        current.date === next.date
-        && current.due === next.due
-        && current.amount === next.amount
-        && current.balance === next.balance
-        && current.paid === next.paid
-        && current.reconciled === next.reconciled
-        && current.actions === next.actions
-          ? current
-          : next
-      ));
-    };
-    updateWidths();
-    const resizeObserver = new ResizeObserver(() => {
-      updateWidths();
-    });
-    resizeObserver.observe(table);
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [filteredTransactions, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
+  const ledgerColumnWidths = useMeasuredTableColumnWidths(ledgerTableRef, [
+    { key: 'date', index: 0, fallback: 96 },
+    { key: 'due', index: 1, fallback: 96 },
+    { key: 'amount', index: 4, fallback: 120 },
+    { key: 'balance', index: 5, fallback: 136 },
+    { key: 'paid', index: 6, fallback: 88 },
+    { key: 'reconciled', index: 7, fallback: 160 },
+    { key: 'actions', index: 8, fallback: 132 },
+  ], [ledgerTableRef, filteredTransactions, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
+  const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
+    { key: 'charges', index: 2, fallback: 112 },
+    { key: 'credits', index: 3, fallback: 112 },
+    { key: 'net', index: 4, fallback: 136 },
+    { key: 'activity', index: 5, fallback: 132 },
+    { key: 'actions', index: 6, fallback: 188 },
+  ], [debtorsTableRef, debtors, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
+  const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
+    { key: 'due', index: 0, fallback: 120 },
+    { key: 'paidDate', index: 1, fallback: 120 },
+    { key: 'amount', index: 3, fallback: 112 },
+    { key: 'status', index: 4, fallback: 116 },
+    { key: 'actions', index: 5, fallback: 132 },
+  ], [payBillsTableRef, filteredPayBillRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
+  const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
+    { key: 'nextDue', index: 1, fallback: 124 },
+    { key: 'amount', index: 2, fallback: 112 },
+    { key: 'frequency', index: 3, fallback: 120 },
+    { key: 'paymentMethod', index: 4, fallback: 172 },
+    { key: 'planner', index: 5, fallback: 108 },
+    { key: 'status', index: 6, fallback: 104 },
+    { key: 'actions', index: 7, fallback: 132 },
+  ], [recurringTableRef, filteredRecurringPayments, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
+  const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
+    { key: 'status', index: 1, fallback: 96 },
+    { key: 'lastSync', index: 2, fallback: 156 },
+    { key: 'actions', index: 3, fallback: 88 },
+  ], [syncTableRef, bankConnections, busy]);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
     setSyncHelpError(String(opts?.error || ''));
@@ -938,6 +997,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
   }, [debtorLedger, selectedDebtorId]);
+  const entitiesColumnWidths = useMeasuredTableColumnWidths(entitiesTableRef, [
+    { key: 'roles', index: 1, fallback: 120 },
+    { key: 'kind', index: 2, fallback: 96 },
+    { key: 'linked', index: 3, fallback: 140 },
+    { key: 'amount', index: 5, fallback: 152 },
+    { key: 'status', index: 6, fallback: 96 },
+    { key: 'actions', index: 7, fallback: 132 },
+  ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
+  const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
+    { key: 'date', index: 0, fallback: 96 },
+    { key: 'person', index: 1, fallback: 132 },
+    { key: 'amount', index: 4, fallback: 112 },
+    { key: 'running', index: 5, fallback: 168 },
+    { key: 'actions', index: 6, fallback: 132 },
+  ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
     if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {
       void deleteTransaction(id);
@@ -1391,27 +1465,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
                 <table
                   ref={ledgerTableRef}
-                  className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head"
-                  style={{
-                    ['--accumul8-ledger-date-width' as string]: `${ledgerColumnWidths.date}px`,
-                    ['--accumul8-ledger-due-width' as string]: `${ledgerColumnWidths.due}px`,
-                    ['--accumul8-ledger-amount-width' as string]: `${ledgerColumnWidths.amount}px`,
-                    ['--accumul8-ledger-balance-width' as string]: `${ledgerColumnWidths.balance}px`,
-                    ['--accumul8-ledger-paid-width' as string]: `${ledgerColumnWidths.paid}px`,
-                    ['--accumul8-ledger-reconciled-width' as string]: `${ledgerColumnWidths.reconciled}px`,
-                    ['--accumul8-ledger-actions-width' as string]: `${ledgerColumnWidths.actions}px`,
-                  } as React.CSSProperties}
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(ledgerColumnWidths)}
                 >
                   <colgroup>
-                    <col className="accumul8-ledger-col accumul8-ledger-col--date" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--due" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--desc" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--memo" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--amount" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--balance" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--paid" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--reconciled" />
-                    <col className="accumul8-ledger-col accumul8-ledger-col--actions" />
+                    <col style={{ width: 'var(--accumul8-col-date-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-due-width)' }} />
+                    <col className="accumul8-col--flex-60" />
+                    <col className="accumul8-col--flex-40" />
+                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-paid-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-reconciled-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
@@ -1517,7 +1583,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateDebtorModal} disabled={busy}>Add Person</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--bills">
-                <table className="table table-sm accumul8-table accumul8-table--debtors accumul8-sticky-head">
+                <table
+                  ref={debtorsTableRef}
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--debtors accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(debtorsColumnWidths)}
+                >
+                  <colgroup>
+                    <col className="accumul8-col--flex-60" />
+                    <col className="accumul8-col--flex-40" />
+                    <col style={{ width: 'var(--accumul8-col-charges-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-credits-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-net-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-activity-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                  </colgroup>
                   <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net Balance</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {debtors.map((debtor) => (
@@ -1609,7 +1688,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                 </div>
                 <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--ledger">
-                  <table className="table table-sm accumul8-table accumul8-table--balance-ledger accumul8-sticky-head">
+                  <table
+                    ref={balanceLedgerTableRef}
+                    className="table table-sm accumul8-table accumul8-table--measured accumul8-table--balance-ledger accumul8-sticky-head"
+                    style={buildMeasuredTableStyle(balanceLedgerColumnWidths)}
+                  >
+                    <colgroup>
+                      <col style={{ width: 'var(--accumul8-col-date-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-person-width)' }} />
+                      <col className="accumul8-col--flex-60" />
+                      <col className="accumul8-col--flex-40" />
+                      <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-running-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    </colgroup>
                     <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running Balance</th><th className="text-end">Actions</th></tr></thead>
                     <tbody>
                       {selectedDebtorEntries.map((tx) => (
@@ -1761,7 +1853,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
-                <table className="table table-striped table-sm accumul8-table accumul8-table--pay-bills accumul8-sticky-head">
+                <table
+                  ref={payBillsTableRef}
+                  className="table table-striped table-sm accumul8-table accumul8-table--measured accumul8-table--pay-bills accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(payBillsColumnWidths)}
+                >
+                  <colgroup>
+                    <col style={{ width: 'var(--accumul8-col-due-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-paidDate-width)' }} />
+                    <col className="accumul8-col--flex-100" />
+                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                  </colgroup>
                   <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredPayBillRows.map((billTx) => (
@@ -1858,7 +1962,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
-                <table className="table table-sm accumul8-table accumul8-table--entities accumul8-sticky-head">
+                <table
+                  ref={entitiesTableRef}
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(entitiesColumnWidths)}
+                >
+                  <colgroup>
+                    <col className="accumul8-col--flex-45" />
+                    <col style={{ width: 'var(--accumul8-col-roles-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-kind-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-linked-width)' }} />
+                    <col className="accumul8-col--flex-55" />
+                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Name</th>
@@ -2029,7 +2147,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Payment</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
-                <table className="table table-sm accumul8-table accumul8-table--recurring accumul8-sticky-head">
+                <table
+                  ref={recurringTableRef}
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--recurring accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(recurringColumnWidths)}
+                >
+                    <colgroup>
+                      <col className="accumul8-col--flex-100" />
+                      <col style={{ width: 'var(--accumul8-col-nextDue-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-frequency-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-paymentMethod-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-planner-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-status-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    </colgroup>
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredRecurringPayments.map((rp) => {
@@ -2185,7 +2317,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <h4 className="h6">Connected Institutions</h4>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--sync">
-                <table className="table table-sm accumul8-table accumul8-table--sync-list accumul8-sticky-head">
+                <table
+                  ref={syncTableRef}
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--sync-list accumul8-sticky-head"
+                  style={buildMeasuredTableStyle(syncColumnWidths)}
+                >
+                  <colgroup>
+                    <col className="accumul8-col--flex-100" />
+                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-lastSync-width)' }} />
+                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                  </colgroup>
                   <thead><tr><th>Institution</th><th>Status</th><th>Last Sync</th><th></th></tr></thead>
                   <tbody>
                     {bankConnections.map((c: any) => (

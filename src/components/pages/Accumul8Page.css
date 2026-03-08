@@ -272,6 +272,20 @@
   margin-top: 0.2rem;
 }
 
+.accumul8-title-mark {
+  display: flex;
+  align-items: center;
+  max-width: min(100%, 360px);
+}
+
+.accumul8-title-mark-image {
+  display: block;
+  width: min(100%, 360px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.34));
+}
+
 .accumul8-owner-selector {
   min-width: 240px;
 }
@@ -645,6 +659,7 @@
   font-family: 'Lexend Exa', sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
+  color: #f5e8bd;
 }
 
 .accumul8-sticky-head thead th,
@@ -665,6 +680,11 @@
   overflow-wrap: anywhere;
   padding: 0.55rem 0.4rem;
   border-color: rgba(212, 175, 55, 0.16);
+}
+
+.accumul8-ledger-table tbody td {
+  color: #f3e6be;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
 .accumul8-month-table tr.is-editing td {
@@ -832,11 +852,12 @@
   color: inherit;
   line-height: 1.25;
   min-height: 1rem;
+  font-weight: 500;
 }
 
 .accumul8-inline-cell-trigger:hover:not(:disabled),
 .accumul8-inline-cell-trigger:focus-visible {
-  color: inherit;
+  color: #fff1c6;
   text-decoration: none;
 }
 
@@ -912,11 +933,11 @@
 }
 
 .accumul8-ledger-table tr.is-outflow td {
-  background: linear-gradient(90deg, rgba(86, 27, 16, 0.34), rgba(86, 27, 16, 0.08));
+  background: linear-gradient(90deg, rgba(111, 42, 20, 0.42), rgba(86, 27, 16, 0.12));
 }
 
 .accumul8-ledger-table tr.is-inflow td {
-  background: linear-gradient(90deg, rgba(19, 62, 43, 0.32), rgba(19, 62, 43, 0.08));
+  background: linear-gradient(90deg, rgba(28, 79, 56, 0.4), rgba(19, 62, 43, 0.12));
 }
 
 .accumul8-list-item {
@@ -924,7 +945,7 @@
 }
 
 .accumul8-list-item:hover td {
-  background-color: rgba(212, 175, 55, 0.08);
+  background-color: rgba(212, 175, 55, 0.12);
 }
 
 .accumul8-list-item .accumul8-row-actions {

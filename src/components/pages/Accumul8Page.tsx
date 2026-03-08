@@ -1162,7 +1162,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         <div className="container accumul8-page">
           <div className="accumul8-page-header mb-2">
             <div className="accumul8-page-title-row">
-              <h1 className="section-title mb-0">ACCUMUL8</h1>
+              <h1 className="section-title mb-0 accumul8-title-mark">
+                <span className="visually-hidden">ACCUMUL8</span>
+                <WebpImage className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" aria-hidden="true" />
+              </h1>
               <div className="accumul8-tabs accumul8-tabs--header">
                 <div className="accumul8-tabs accumul8-tabs--header-buttons">
                   {[

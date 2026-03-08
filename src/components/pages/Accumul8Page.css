@@ -634,20 +634,20 @@
 }
 
 .accumul8-month-panel {
-  border: 3px solid rgba(212, 175, 55, 0.4);
+  border: 3px solid rgba(212, 175, 55, 0.54);
   background:
-    linear-gradient(180deg, rgba(245, 235, 206, 0.96), rgba(221, 203, 160, 0.97)),
-    radial-gradient(circle at top center, rgba(212, 175, 55, 0.12), transparent 36%);
+    linear-gradient(180deg, rgba(18, 26, 33, 0.97), rgba(10, 16, 22, 0.98)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 56%);
   padding: 1rem;
-  box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.58), 0 16px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--accumul8-deco-shadow);
   position: relative;
   overflow: hidden;
-  color: var(--accumul8-deco-ink);
+  color: var(--accumul8-deco-cream);
 }
 
 .accumul8-month-panel.is-center {
   border-color: rgba(212, 175, 55, 0.82);
-  box-shadow: inset 0 0 0 1px rgba(255, 248, 225, 0.7), 0 18px 36px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.22), var(--accumul8-deco-shadow);
 }
 
 .accumul8-month-panel-header {
@@ -663,7 +663,7 @@
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: rgba(96, 68, 16, 0.74);
+  color: var(--accumul8-deco-muted);
 }
 
 .accumul8-month-panel h4,
@@ -683,7 +683,7 @@
 .accumul8-month-stats span,
 .accumul8-month-balance-row span,
 .accumul8-budget-totals span {
-  background: rgba(31, 25, 14, 0.88);
+  background: rgba(31, 25, 14, 0.92);
   border: 2px solid rgba(212, 175, 55, 0.42);
   padding: 0.28rem 0.58rem;
   font-family: 'Lexend Exa', sans-serif;
@@ -701,7 +701,7 @@
 }
 
 .accumul8-month-summary div {
-  background: rgba(22, 19, 13, 0.9);
+  background: linear-gradient(180deg, rgba(31, 24, 14, 0.92), rgba(17, 13, 8, 0.92));
   border: 2px solid rgba(212, 175, 55, 0.44);
   padding: 0.65rem 0.7rem;
 }
@@ -829,9 +829,21 @@
 }
 
 .accumul8-table tbody td {
+  background: linear-gradient(180deg, rgba(17, 22, 28, 0.94), rgba(11, 15, 20, 0.96)) !important;
   color: #f3e6be;
   font-size: 0.8rem;
   line-height: 1.22;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
+}
+
+.accumul8-table tbody tr:nth-child(even) td,
+.accumul8-month-table tbody tr:nth-child(even) td {
+  background: linear-gradient(180deg, rgba(20, 27, 35, 0.96), rgba(12, 17, 23, 0.98)) !important;
+}
+
+.accumul8-month-table tbody td {
+  background: linear-gradient(180deg, rgba(17, 22, 28, 0.94), rgba(11, 15, 20, 0.96)) !important;
+  color: #f3e6be;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -855,14 +867,14 @@
 .accumul8-sticky-head tbody tr.is-editing td,
 .accumul8-list-item.is-editing td,
 .accumul8-list-item.is-editing {
-  background: rgba(247, 237, 206, 0.9);
-  color: var(--accumul8-deco-ink);
+  background: linear-gradient(180deg, rgba(247, 237, 206, 0.9), rgba(230, 214, 173, 0.92)) !important;
+  color: var(--accumul8-deco-ink) !important;
 }
 
 .accumul8-sticky-head tbody tr.has-draft:not(.is-editing) td,
 .accumul8-list-item.has-draft:not(.is-editing) td,
 .accumul8-list-item.has-draft:not(.is-editing) {
-  background: rgba(216, 197, 149, 0.12);
+  background: linear-gradient(180deg, rgba(81, 64, 24, 0.42), rgba(39, 29, 9, 0.34)) !important;
 }
 
 .accumul8-sticky-head thead th {
@@ -1334,6 +1346,16 @@
   background: linear-gradient(90deg, rgba(28, 79, 56, 0.4), rgba(19, 62, 43, 0.12));
 }
 
+.accumul8-table tr.is-outflow td,
+.accumul8-month-table tr.is-outflow td {
+  background: linear-gradient(90deg, rgba(111, 42, 20, 0.42), rgba(86, 27, 16, 0.16)) !important;
+}
+
+.accumul8-table tr.is-inflow td,
+.accumul8-month-table tr.is-inflow td {
+  background: linear-gradient(90deg, rgba(28, 79, 56, 0.4), rgba(19, 62, 43, 0.16)) !important;
+}
+
 .accumul8-list-item .accumul8-row-actions {
   opacity: 1;
   pointer-events: auto;
@@ -1381,6 +1403,48 @@
 
 .accumul8-scroll-area .table {
   margin-bottom: 0;
+}
+
+.accumul8-notification-form {
+  margin-top: 0.75rem;
+}
+
+.accumul8-notification-form .form-control,
+.accumul8-notification-form .form-select,
+.accumul8-notification-form textarea {
+  min-height: 3rem;
+}
+
+.accumul8-notification-form textarea {
+  resize: vertical;
+}
+
+.accumul8-notification-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.accumul8-notification-actions .btn {
+  min-height: 100%;
+}
+
+.accumul8-notification-card {
+  padding: 0.9rem 1rem;
+  border: 2px solid rgba(212, 175, 55, 0.34);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 31, 0.97), rgba(10, 16, 22, 0.98)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 56%);
+}
+
+.accumul8-notification-card .fw-bold {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.accumul8-notification-card .small.text-muted {
+  color: var(--accumul8-deco-muted) !important;
 }
 
 .accumul8-help-overlay {

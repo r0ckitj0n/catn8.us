@@ -1855,7 +1855,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
                 <table
                   ref={payBillsTableRef}
-                  className="table table-striped table-sm accumul8-table accumul8-table--measured accumul8-table--pay-bills accumul8-sticky-head"
+                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--pay-bills accumul8-sticky-head"
                   style={buildMeasuredTableStyle(payBillsColumnWidths)}
                 >
                   <colgroup>
@@ -2254,8 +2254,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           )}
           {tab === 'notifications' && (
             <div className="accumul8-panel">
-              <h3>Notification Rules</h3>
-              <form className="row g-2" onSubmit={(e) => {
+              <div className="accumul8-panel-toolbar">
+                <div>
+                  <h3 className="mb-1">Notification Rules</h3>
+                  <p className="small text-muted mb-0">Build due-date alerts with the same ledger styling as the rest of Accumul8.</p>
+                </div>
+              </div>
+              <form className="row g-2 accumul8-notification-form" onSubmit={(e) => {
                 e.preventDefault();
                 const payload = {
                   ...notificationForm,
@@ -2274,22 +2279,24 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="col-md-2"><input className="form-control" placeholder="User IDs (1,2,3)" value={notificationForm.custom_user_ids} onChange={(e) => setNotificationForm((v) => ({ ...v, custom_user_ids: e.target.value }))} /></div>
                 <div className="col-md-4"><input className="form-control" placeholder="Email Subject" value={notificationForm.email_subject_template} onChange={(e) => setNotificationForm((v) => ({ ...v, email_subject_template: e.target.value }))} required /></div>
                 <div className="col-md-10"><textarea className="form-control" rows={2} placeholder="Email Body" value={notificationForm.email_body_template} onChange={(e) => setNotificationForm((v) => ({ ...v, email_body_template: e.target.value }))} required /></div>
-                <div className="col-md-2 d-grid">
-                  <button
-                    className="btn btn-success"
-                    type="submit"
-                    disabled={busy}
-                    aria-label={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
-                    title={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
-                  >
-                    <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
-                  </button>
+                <div className="col-md-2">
+                  <div className="accumul8-notification-actions">
+                    <button
+                      className="btn btn-success flex-fill"
+                      type="submit"
+                      disabled={busy}
+                      aria-label={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
+                      title={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
+                    >
+                      <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                    </button>
+                  </div>
                 </div>
-                {editingNotificationRuleId ? <div className="col-md-2 d-grid"><button className="btn btn-outline-secondary" type="button" onClick={resetNotificationForm} disabled={busy}>Cancel</button></div> : null}
+                {editingNotificationRuleId ? <div className="col-md-2"><div className="accumul8-notification-actions"><button className="btn btn-outline-secondary flex-fill" type="button" onClick={resetNotificationForm} disabled={busy}>Cancel</button></div></div> : null}
               </form>
               <div className="mt-3 d-flex flex-column gap-2 accumul8-scroll-area accumul8-scroll-area--cards">
                 {notificationRules.map((r) => (
-                  <div key={r.id} className="catn8-card p-2 d-flex justify-content-between align-items-center gap-2 accumul8-list-item">
+                  <div key={r.id} className="catn8-card d-flex justify-content-between align-items-center gap-2 accumul8-list-item accumul8-notification-card">
                     <div>
                       <div className="fw-bold">{r.rule_name}</div>
                       <div className="text-muted small">{r.target_scope === 'group' ? 'Group recipients' : 'Custom recipients'} | {r.days_before_due} day lead</div>

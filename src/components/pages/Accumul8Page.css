@@ -754,7 +754,7 @@
 
 .accumul8-ledger-table {
   font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.69rem;
+  font-size: 0.8rem;
   letter-spacing: 0.03em;
   color: #f5e8bd;
 }
@@ -793,7 +793,8 @@
 
 .accumul8-ledger-table tbody td {
   color: #f3e6be;
-  line-height: 1.12;
+  font-size: 0.8rem;
+  line-height: 1.22;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -827,7 +828,8 @@
   color: #f6e8bb;
   box-shadow: inset 0 -2px 0 rgba(212, 175, 55, 0.24);
   font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.56rem;
+  font-size: 0.92rem;
+  font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   border-bottom: 0;
@@ -885,10 +887,10 @@
 
 .accumul8-ledger-table th:nth-child(3),
 .accumul8-ledger-table td:nth-child(3) {
-  min-width: 12rem;
-  max-width: 18rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  min-width: 20rem;
+  max-width: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .accumul8-ledger-table th:nth-child(1),
@@ -900,10 +902,10 @@
 
 .accumul8-ledger-table th:nth-child(4),
 .accumul8-ledger-table td:nth-child(4) {
-  min-width: 10rem;
-  max-width: 16rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  min-width: 18rem;
+  max-width: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .accumul8-ledger-table th:nth-child(5),

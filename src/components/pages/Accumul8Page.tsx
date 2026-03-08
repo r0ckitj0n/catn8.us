@@ -1315,7 +1315,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
-                <table className="table table-sm accumul8-ledger-table accumul8-sticky-head">
+                <table className="table table-sm accumul8-table accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head">
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Debtor</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th>Paid</th><th>Reconciled</th><th>Planner</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredTransactions.map((tx) => (
@@ -1430,7 +1430,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateDebtorModal} disabled={busy}>Add Person</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--bills">
-                <table className="table table-sm accumul8-sticky-head">
+                <table className="table table-sm accumul8-table accumul8-table--debtors accumul8-sticky-head">
                   <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net Balance</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {debtors.map((debtor) => (
@@ -1522,7 +1522,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                 </div>
                 <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--ledger">
-                  <table className="table table-sm accumul8-sticky-head">
+                  <table className="table table-sm accumul8-table accumul8-table--balance-ledger accumul8-sticky-head">
                     <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running Balance</th><th className="text-end">Actions</th></tr></thead>
                     <tbody>
                       {selectedDebtorEntries.map((tx) => (
@@ -1674,7 +1674,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
-                <table className="table table-striped table-sm accumul8-sticky-head">
+                <table className="table table-striped table-sm accumul8-table accumul8-table--pay-bills accumul8-sticky-head">
                   <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredPayBillRows.map((billTx) => (
@@ -1785,7 +1785,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
-                <table className="table table-sm accumul8-sticky-head">
+                <table className="table table-sm accumul8-table accumul8-table--entities accumul8-sticky-head">
                   <thead>
                     <tr>
                       <th>Name</th>
@@ -1956,7 +1956,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Payment</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
-                <table className="table table-sm accumul8-sticky-head">
+                <table className="table table-sm accumul8-table accumul8-table--recurring accumul8-sticky-head">
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {filteredRecurringPayments.map((rp) => {
@@ -2112,7 +2112,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <h4 className="h6">Connected Institutions</h4>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--sync">
-                <table className="table table-sm accumul8-sticky-head">
+                <table className="table table-sm accumul8-table accumul8-table--sync-list accumul8-sticky-head">
                   <thead><tr><th>Institution</th><th>Status</th><th>Last Sync</th><th></th></tr></thead>
                   <tbody>
                     {bankConnections.map((c: any) => (

@@ -268,7 +268,10 @@ function useMeasuredTableColumnWidths(
       const childWidths = Array.from(cell.children).map((child) => (
         child instanceof HTMLElement ? Math.max(child.scrollWidth, Math.ceil(child.getBoundingClientRect().width)) : 0
       ));
-      return Math.ceil(Math.max(cell.scrollWidth, ...childWidths) + padding + 4);
+      const contentWidth = Math.max(cell.scrollWidth, ...childWidths);
+      const isHeaderCell = cell.tagName.toUpperCase() === 'TH';
+      const safetyBuffer = isHeaderCell ? 20 : 10;
+      return Math.ceil(contentWidth + padding + safetyBuffer);
     };
 
     const updateWidths = () => {
@@ -582,25 +585,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
     { key: 'charges', index: 2, fallback: 112 },
     { key: 'credits', index: 3, fallback: 112 },
-    { key: 'net', index: 4, fallback: 136 },
-    { key: 'activity', index: 5, fallback: 132 },
-    { key: 'actions', index: 6, fallback: 188 },
+    { key: 'net', index: 4, fallback: 164 },
+    { key: 'activity', index: 5, fallback: 160 },
+    { key: 'actions', index: 6, fallback: 196 },
   ], [debtorsTableRef, debtors, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
   const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
     { key: 'due', index: 0, fallback: 120 },
     { key: 'paidDate', index: 1, fallback: 120 },
     { key: 'amount', index: 3, fallback: 112 },
-    { key: 'status', index: 4, fallback: 116 },
-    { key: 'actions', index: 5, fallback: 132 },
+    { key: 'status', index: 4, fallback: 126 },
+    { key: 'actions', index: 5, fallback: 140 },
   ], [payBillsTableRef, filteredPayBillRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
   const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
-    { key: 'nextDue', index: 1, fallback: 124 },
+    { key: 'nextDue', index: 1, fallback: 136 },
     { key: 'amount', index: 2, fallback: 112 },
-    { key: 'frequency', index: 3, fallback: 120 },
-    { key: 'paymentMethod', index: 4, fallback: 172 },
-    { key: 'planner', index: 5, fallback: 108 },
-    { key: 'status', index: 6, fallback: 104 },
-    { key: 'actions', index: 7, fallback: 132 },
+    { key: 'frequency', index: 3, fallback: 142 },
+    { key: 'paymentMethod', index: 4, fallback: 188 },
+    { key: 'planner', index: 5, fallback: 118 },
+    { key: 'status', index: 6, fallback: 108 },
+    { key: 'actions', index: 7, fallback: 140 },
   ], [recurringTableRef, filteredRecurringPayments, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
     { key: 'status', index: 1, fallback: 96 },
@@ -998,19 +1001,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
   }, [debtorLedger, selectedDebtorId]);
   const entitiesColumnWidths = useMeasuredTableColumnWidths(entitiesTableRef, [
-    { key: 'roles', index: 1, fallback: 120 },
-    { key: 'kind', index: 2, fallback: 96 },
-    { key: 'linked', index: 3, fallback: 140 },
-    { key: 'amount', index: 5, fallback: 152 },
-    { key: 'status', index: 6, fallback: 96 },
-    { key: 'actions', index: 7, fallback: 132 },
+    { key: 'roles', index: 1, fallback: 136 },
+    { key: 'kind', index: 2, fallback: 108 },
+    { key: 'linked', index: 3, fallback: 156 },
+    { key: 'amount', index: 5, fallback: 176 },
+    { key: 'status', index: 6, fallback: 104 },
+    { key: 'actions', index: 7, fallback: 140 },
   ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
     { key: 'date', index: 0, fallback: 96 },
     { key: 'person', index: 1, fallback: 132 },
     { key: 'amount', index: 4, fallback: 112 },
-    { key: 'running', index: 5, fallback: 168 },
-    { key: 'actions', index: 6, fallback: 132 },
+    { key: 'running', index: 5, fallback: 180 },
+    { key: 'actions', index: 6, fallback: 140 },
   ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
     if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {

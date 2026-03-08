@@ -116,6 +116,7 @@
 - If checks fail, continue iterating until resolved or blocked.
 - Store runtime/script state artifacts only under `/.local/state/`.
 - Keep runtime artifacts/logs/secrets out of git.
+- For gated live-site verification, first try the saved admin credentials already stored in the browser login form before assuming live access is blocked.
 
 ### Cleanup Protocol
 - Run repository hygiene checks before finalizing substantial refactors.

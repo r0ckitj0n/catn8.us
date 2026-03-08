@@ -969,17 +969,17 @@
 .accumul8-table--debtors td:nth-child(4),
 .accumul8-table--debtors th:nth-child(5),
 .accumul8-table--debtors td:nth-child(5) {
-  min-width: 7.75rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--debtors th:nth-child(6),
 .accumul8-table--debtors td:nth-child(6) {
-  min-width: 8.75rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--debtors th:nth-child(7),
 .accumul8-table--debtors td:nth-child(7) {
-  min-width: 12.25rem;
+  min-width: 8rem;
 }
 
 .accumul8-table--balance-ledger th:nth-child(2),
@@ -1019,14 +1019,14 @@
 .accumul8-table--balance-ledger td:nth-child(6),
 .accumul8-table--pay-bills th:nth-child(4),
 .accumul8-table--pay-bills td:nth-child(4) {
-  min-width: 7.75rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--balance-ledger th:nth-child(7),
 .accumul8-table--balance-ledger td:nth-child(7),
 .accumul8-table--pay-bills th:nth-child(6),
 .accumul8-table--pay-bills td:nth-child(6) {
-  min-width: 5.75rem;
+  min-width: 4.5rem;
 }
 
 .accumul8-table--pay-bills th:nth-child(1),
@@ -1038,7 +1038,7 @@
 
 .accumul8-table--pay-bills th:nth-child(5),
 .accumul8-table--pay-bills td:nth-child(5) {
-  min-width: 7.5rem;
+  min-width: 6.5rem;
 }
 
 .accumul8-table--entities th:nth-child(1),
@@ -1059,13 +1059,13 @@
 
 .accumul8-table--entities th:nth-child(3),
 .accumul8-table--entities td:nth-child(3) {
-  min-width: 6.75rem;
+  min-width: 6rem;
 }
 
 .accumul8-table--entities th:nth-child(4),
 .accumul8-table--entities td:nth-child(4) {
-  min-width: 9.25rem;
-  max-width: 10.5rem;
+  min-width: 8rem;
+  max-width: 9rem;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -1080,17 +1080,17 @@
 
 .accumul8-table--entities th:nth-child(6),
 .accumul8-table--entities td:nth-child(6) {
-  min-width: 9rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--entities th:nth-child(7),
 .accumul8-table--entities td:nth-child(7) {
-  min-width: 6.5rem;
+  min-width: 5.5rem;
 }
 
 .accumul8-table--entities th:nth-child(8),
 .accumul8-table--entities td:nth-child(8) {
-  min-width: 5.75rem;
+  min-width: 4.5rem;
 }
 
 .accumul8-table--recurring th:nth-child(1),
@@ -1103,34 +1103,34 @@
 
 .accumul8-table--recurring th:nth-child(2),
 .accumul8-table--recurring td:nth-child(2) {
-  min-width: 6.5rem;
+  min-width: 5.5rem;
 }
 
 .accumul8-table--recurring th:nth-child(3),
 .accumul8-table--recurring td:nth-child(3) {
-  min-width: 7.75rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--recurring th:nth-child(4),
 .accumul8-table--recurring td:nth-child(4) {
-  min-width: 8.75rem;
+  min-width: 7rem;
 }
 
 .accumul8-table--recurring th:nth-child(5),
 .accumul8-table--recurring td:nth-child(5) {
-  min-width: 10.75rem;
+  min-width: 9rem;
 }
 
 .accumul8-table--recurring th:nth-child(6),
 .accumul8-table--recurring td:nth-child(6),
 .accumul8-table--recurring th:nth-child(7),
 .accumul8-table--recurring td:nth-child(7) {
-  min-width: 7rem;
+  min-width: 6rem;
 }
 
 .accumul8-table--recurring th:nth-child(8),
 .accumul8-table--recurring td:nth-child(8) {
-  min-width: 5.75rem;
+  min-width: 4.5rem;
 }
 
 .accumul8-table--sync-list th:nth-child(1),
@@ -1416,7 +1416,6 @@
 
 .accumul8-scroll-area .table {
   margin-bottom: 0;
-  box-sizing: border-box;
 }
 
 .accumul8-notification-form {
@@ -1461,8 +1460,6 @@
 .accumul8-panel .table-responsive {
   border: 1px solid rgba(212, 175, 55, 0.18);
   background: linear-gradient(180deg, rgba(10, 16, 22, 0.92), rgba(7, 12, 17, 0.96));
-  box-sizing: border-box;
-  padding: 0 1px 1px;
 }
 
 .accumul8-panel .accumul8-table tbody tr,

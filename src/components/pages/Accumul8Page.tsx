@@ -239,71 +239,23 @@ type MeasuredTableColumn = {
   key: string;
   index: number;
   fallback: number;
+  header: string;
 };
 
+function estimateHeaderWidth(label: string): number {
+  const normalized = label.replace(/\s+/g, ' ').trim();
+  return Math.ceil(24 + normalized.length * 8.75);
+}
+
 function useMeasuredTableColumnWidths(
-  tableRef: React.RefObject<HTMLTableElement | null>,
+  _tableRef: React.RefObject<HTMLTableElement | null>,
   columns: readonly MeasuredTableColumn[],
-  deps: React.DependencyList,
+  _deps: React.DependencyList,
 ): Record<string, number> {
-  const [widths, setWidths] = React.useState<Record<string, number>>(() => (
-    columns.reduce<Record<string, number>>((acc, column) => {
-      acc[column.key] = column.fallback;
-      return acc;
-    }, {})
-  ));
-
-  React.useLayoutEffect(() => {
-    const table = tableRef.current;
-    if (!table || typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const measureCellWidth = (cell: HTMLTableCellElement | null | undefined): number => {
-      if (!(cell instanceof HTMLElement)) {
-        return 0;
-      }
-      const computed = window.getComputedStyle(cell);
-      const padding = Number.parseFloat(computed.paddingLeft || '0') + Number.parseFloat(computed.paddingRight || '0');
-      const childWidths = Array.from(cell.children).map((child) => (
-        child instanceof HTMLElement ? Math.max(child.scrollWidth, Math.ceil(child.getBoundingClientRect().width)) : 0
-      ));
-      const contentWidth = Math.max(cell.scrollWidth, ...childWidths);
-      const isHeaderCell = cell.tagName.toUpperCase() === 'TH';
-      const safetyBuffer = isHeaderCell ? 20 : 10;
-      return Math.ceil(contentWidth + padding + safetyBuffer);
-    };
-
-    const updateWidths = () => {
-      const rows = Array.from(table.tBodies[0]?.rows || []);
-      const headerCells = Array.from(table.tHead?.rows[0]?.cells || []);
-      const next = columns.reduce<Record<string, number>>((acc, column) => {
-        acc[column.key] = Math.max(
-          column.fallback,
-          measureCellWidth(headerCells[column.index]),
-          ...rows.map((row) => measureCellWidth(row.cells[column.index])),
-        );
-        return acc;
-      }, {});
-      setWidths((current) => {
-        const unchanged = columns.every((column) => current[column.key] === next[column.key]);
-        return unchanged ? current : next;
-      });
-    };
-
-    updateWidths();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateWidths();
-    });
-    resizeObserver.observe(table);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, deps);
-
-  return widths;
+  return columns.reduce<Record<string, number>>((acc, column) => {
+    acc[column.key] = Math.max(column.fallback, estimateHeaderWidth(column.header));
+    return acc;
+  }, {});
 }
 
 function buildMeasuredTableStyle(widths: Record<string, number>): React.CSSProperties {
@@ -574,41 +526,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     return next;
   }, [filteredTransactions]);
   const ledgerColumnWidths = useMeasuredTableColumnWidths(ledgerTableRef, [
-    { key: 'date', index: 0, fallback: 96 },
-    { key: 'due', index: 1, fallback: 96 },
-    { key: 'amount', index: 4, fallback: 120 },
-    { key: 'balance', index: 5, fallback: 136 },
-    { key: 'paid', index: 6, fallback: 88 },
-    { key: 'reconciled', index: 7, fallback: 160 },
-    { key: 'actions', index: 8, fallback: 132 },
+    { key: 'date', index: 0, fallback: 96, header: 'Date' },
+    { key: 'due', index: 1, fallback: 96, header: 'Due' },
+    { key: 'amount', index: 4, fallback: 120, header: 'Amount' },
+    { key: 'balance', index: 5, fallback: 136, header: 'Balance' },
+    { key: 'paid', index: 6, fallback: 88, header: 'Paid' },
+    { key: 'reconciled', index: 7, fallback: 160, header: 'Reconciled' },
+    { key: 'actions', index: 8, fallback: 132, header: 'Actions' },
   ], [ledgerTableRef, filteredTransactions, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
-    { key: 'charges', index: 2, fallback: 112 },
-    { key: 'credits', index: 3, fallback: 112 },
-    { key: 'net', index: 4, fallback: 164 },
-    { key: 'activity', index: 5, fallback: 160 },
-    { key: 'actions', index: 6, fallback: 196 },
+    { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
+    { key: 'credits', index: 3, fallback: 112, header: 'Credits' },
+    { key: 'net', index: 4, fallback: 136, header: 'Net Balance' },
+    { key: 'activity', index: 5, fallback: 132, header: 'Last Activity' },
+    { key: 'actions', index: 6, fallback: 188, header: 'Actions' },
   ], [debtorsTableRef, debtors, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
   const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
-    { key: 'due', index: 0, fallback: 120 },
-    { key: 'paidDate', index: 1, fallback: 120 },
-    { key: 'amount', index: 3, fallback: 112 },
-    { key: 'status', index: 4, fallback: 126 },
-    { key: 'actions', index: 5, fallback: 140 },
+    { key: 'due', index: 0, fallback: 120, header: 'Due Date' },
+    { key: 'paidDate', index: 1, fallback: 120, header: 'Paid Date' },
+    { key: 'amount', index: 3, fallback: 112, header: 'Amount' },
+    { key: 'status', index: 4, fallback: 116, header: 'Status' },
+    { key: 'actions', index: 5, fallback: 132, header: 'Actions' },
   ], [payBillsTableRef, filteredPayBillRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
   const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
-    { key: 'nextDue', index: 1, fallback: 136 },
-    { key: 'amount', index: 2, fallback: 112 },
-    { key: 'frequency', index: 3, fallback: 142 },
-    { key: 'paymentMethod', index: 4, fallback: 188 },
-    { key: 'planner', index: 5, fallback: 118 },
-    { key: 'status', index: 6, fallback: 108 },
-    { key: 'actions', index: 7, fallback: 140 },
+    { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
+    { key: 'amount', index: 2, fallback: 112, header: 'Amount' },
+    { key: 'frequency', index: 3, fallback: 120, header: 'Frequency' },
+    { key: 'paymentMethod', index: 4, fallback: 172, header: 'Payment Method' },
+    { key: 'planner', index: 5, fallback: 108, header: 'Planner' },
+    { key: 'status', index: 6, fallback: 104, header: 'Status' },
+    { key: 'actions', index: 7, fallback: 132, header: 'Actions' },
   ], [recurringTableRef, filteredRecurringPayments, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
-    { key: 'status', index: 1, fallback: 96 },
-    { key: 'lastSync', index: 2, fallback: 156 },
-    { key: 'actions', index: 3, fallback: 88 },
+    { key: 'status', index: 1, fallback: 96, header: 'Status' },
+    { key: 'lastSync', index: 2, fallback: 156, header: 'Last Sync' },
+    { key: 'actions', index: 3, fallback: 88, header: 'Actions' },
   ], [syncTableRef, bankConnections, busy]);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
@@ -1001,19 +953,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
   }, [debtorLedger, selectedDebtorId]);
   const entitiesColumnWidths = useMeasuredTableColumnWidths(entitiesTableRef, [
-    { key: 'roles', index: 1, fallback: 136 },
-    { key: 'kind', index: 2, fallback: 108 },
-    { key: 'linked', index: 3, fallback: 156 },
-    { key: 'amount', index: 5, fallback: 176 },
-    { key: 'status', index: 6, fallback: 104 },
-    { key: 'actions', index: 7, fallback: 140 },
+    { key: 'roles', index: 1, fallback: 120, header: 'Roles' },
+    { key: 'kind', index: 2, fallback: 96, header: 'Kind' },
+    { key: 'linked', index: 3, fallback: 140, header: 'Linked Records' },
+    { key: 'amount', index: 5, fallback: 152, header: 'Default Amount' },
+    { key: 'status', index: 6, fallback: 96, header: 'Status' },
+    { key: 'actions', index: 7, fallback: 132, header: 'Actions' },
   ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
-    { key: 'date', index: 0, fallback: 96 },
-    { key: 'person', index: 1, fallback: 132 },
-    { key: 'amount', index: 4, fallback: 112 },
-    { key: 'running', index: 5, fallback: 180 },
-    { key: 'actions', index: 6, fallback: 140 },
+    { key: 'date', index: 0, fallback: 96, header: 'Date' },
+    { key: 'person', index: 1, fallback: 132, header: 'Person' },
+    { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
+    { key: 'running', index: 5, fallback: 168, header: 'Running Balance' },
+    { key: 'actions', index: 6, fallback: 132, header: 'Actions' },
   ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
     if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {

@@ -5,6 +5,7 @@ import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
+import { Accumul8StatementModal } from '../modals/Accumul8StatementModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
@@ -370,6 +371,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     debtorLedger,
     budgetRows,
     bankConnections,
+    statementUploads,
     syncProvider,
     load,
     createEntity,
@@ -403,6 +405,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     deleteNotificationRule,
     sendNotification,
     syncBankConnection,
+    uploadStatement,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [entityForm, setEntityForm] = React.useState<EntityFormState>(DEFAULT_ENTITY_FORM);
@@ -445,6 +448,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
   const [bankingOrganizationManagerOpen, setBankingOrganizationManagerOpen] = React.useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
+  const [statementModalOpen, setStatementModalOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
@@ -1783,6 +1787,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         }}
                       >
                         <div className="accumul8-settings-modal-actions">
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            onClick={() => {
+                              setStatementModalOpen(true);
+                              setSettingsMenuOpen(false);
+                            }}
+                          >
+                            Bank Statements
+                          </button>
                           {[
                             ['contacts', 'Entities'],
                             ['entity_endex', 'Entity Endex'],
@@ -3106,6 +3120,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             accounts={visibleAccounts}
             onClose={closeTransactionModal}
             onSave={submitTransactionModal}
+          />
+          <Accumul8StatementModal
+            open={statementModalOpen}
+            busy={busy}
+            accounts={accounts}
+            statementUploads={statementUploads}
+            ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
+            onClose={() => setStatementModalOpen(false)}
+            onUpload={uploadStatement}
           />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}

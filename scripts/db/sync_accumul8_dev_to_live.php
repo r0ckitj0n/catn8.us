@@ -1,0 +1,493 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+if (PHP_SAPI !== 'cli') {
+    fwrite(STDERR, "Run from CLI only.\n");
+    exit(1);
+}
+
+$root = dirname(__DIR__, 2);
+
+require_once $root . '/api/config.php';
+require_once $root . '/includes/database.php';
+
+const ACCUMUL8_SYNC_TABLES = [
+    'accumul8_user_access_grants',
+    'accumul8_account_groups',
+    'accumul8_accounts',
+    'accumul8_entities',
+    'accumul8_contacts',
+    'accumul8_entity_aliases',
+    'accumul8_debtors',
+    'accumul8_budget_rows',
+    'accumul8_recurring_payments',
+    'accumul8_transactions',
+    'accumul8_notification_rules',
+    'accumul8_notification_logs',
+    'accumul8_bank_connections',
+    'accumul8_statement_uploads',
+];
+
+function sync_usage(): void
+{
+    $msg = <<<TXT
+Usage: php scripts/db/sync_accumul8_dev_to_live.php [--apply] [--skip-live-backup] [--base-url=https://catn8.us]
+
+Creates a scoped dev dump for accumul8 tables only, optionally backs up live accumul8,
+restores the dev dump to live through the maintenance API, and verifies row counts.
+
+Dry-run is default. Use --apply to perform the live restore.
+TXT;
+    fwrite(STDOUT, $msg . "\n");
+}
+
+function sync_has_flag(array $argv, string $flag): bool
+{
+    return in_array($flag, $argv, true);
+}
+
+function sync_get_opt(array $argv, string $prefix, ?string $default = null): ?string
+{
+    foreach ($argv as $arg) {
+        if (str_starts_with($arg, $prefix)) {
+            return substr($arg, strlen($prefix));
+        }
+    }
+    return $default;
+}
+
+function sync_out(string $msg): void
+{
+    fwrite(STDOUT, $msg . "\n");
+}
+
+function sync_err(string $msg): void
+{
+    fwrite(STDERR, $msg . "\n");
+}
+
+function sync_q(string $value): string
+{
+    return '`' . str_replace('`', '``', $value) . '`';
+}
+
+function sync_sql_value(PDO $pdo, $value): string
+{
+    if ($value === null) {
+        return 'NULL';
+    }
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+    if (is_int($value) || is_float($value)) {
+        return (string) $value;
+    }
+    return $pdo->quote((string) $value);
+}
+
+function sync_require_env(string $key): string
+{
+    $value = trim((string) (getenv($key) ?: catn8_env($key, '')));
+    if ($value === '') {
+        throw new RuntimeException("Missing required env value: {$key}");
+    }
+    return $value;
+}
+
+function sync_run(array $command, ?string $cwd = null): array
+{
+    $parts = array_map(static fn(string $part): string => escapeshellarg($part), $command);
+    $cmd = implode(' ', $parts);
+    if ($cwd !== null) {
+        $cmd = 'cd ' . escapeshellarg($cwd) . ' && ' . $cmd;
+    }
+
+    $output = [];
+    $status = 0;
+    exec($cmd . ' 2>&1', $output, $status);
+
+    return [
+        'status' => $status,
+        'output' => implode("\n", $output),
+        'command' => $cmd,
+    ];
+}
+
+function sync_probe_source(array $tables): string
+{
+    $tablesJson = json_encode(array_values($tables), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    return <<<PHP
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/api/bootstrap.php';
+
+header('Cache-Control: no-store');
+
+\$expected = (string) catn8_env('CATN8_ADMIN_TOKEN', '');
+\$got = (string) (\$_GET['admin_token'] ?? '');
+if (\$expected === '' || \$got === '' || !hash_equals(\$expected, \$got)) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false, 'error' => 'Invalid admin token']);
+    exit;
+}
+
+\$tables = {$tablesJson};
+\$mode = trim((string) (\$_GET['mode'] ?? 'counts'));
+
+function probe_q(string \$value): string
+{
+    return '`' . str_replace('`', '``', \$value) . '`';
+}
+
+function probe_sql_value(PDO \$pdo, \$value): string
+{
+    if (\$value === null) {
+        return 'NULL';
+    }
+    if (is_bool(\$value)) {
+        return \$value ? '1' : '0';
+    }
+    if (is_int(\$value) || is_float(\$value)) {
+        return (string) \$value;
+    }
+    return \$pdo->quote((string) \$value);
+}
+
+try {
+    \$pdo = Database::getInstance();
+
+    if (\$mode === 'counts') {
+        header('Content-Type: application/json; charset=UTF-8');
+        \$counts = [];
+        foreach (\$tables as \$table) {
+            \$stmt = \$pdo->query('SELECT COUNT(*) AS c FROM ' . probe_q((string) \$table));
+            \$row = \$stmt->fetch(PDO::FETCH_ASSOC) ?: ['c' => 0];
+            \$counts[(string) \$table] = (int) (\$row['c'] ?? 0);
+        }
+        echo json_encode(['success' => true, 'counts' => \$counts], JSON_PRETTY_PRINT);
+        exit;
+    }
+
+    if (\$mode !== 'dump') {
+        http_response_code(400);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['success' => false, 'error' => 'Unsupported mode']);
+        exit;
+    }
+
+    header('Content-Type: text/plain; charset=UTF-8');
+
+    echo "-- Live accumul8 backup generated by sync_accumul8_dev_to_live.php\\n";
+    echo 'SET FOREIGN_KEY_CHECKS=0;' . "\\n\\n";
+
+    foreach (array_reverse(\$tables) as \$table) {
+        echo 'DROP TABLE IF EXISTS ' . probe_q((string) \$table) . ';' . "\\n";
+    }
+    echo "\\n";
+
+    foreach (\$tables as \$table) {
+        \$tableName = (string) \$table;
+        \$create = \$pdo->query('SHOW CREATE TABLE ' . probe_q(\$tableName))->fetch(PDO::FETCH_ASSOC);
+        \$createSql = (string) (\$create['Create Table'] ?? '');
+        echo \$createSql . ';' . "\\n\\n";
+
+        \$countStmt = \$pdo->query('SELECT COUNT(*) AS c FROM ' . probe_q(\$tableName));
+        \$countRow = \$countStmt->fetch(PDO::FETCH_ASSOC) ?: ['c' => 0];
+        \$total = (int) (\$countRow['c'] ?? 0);
+        if (\$total <= 0) {
+            continue;
+        }
+
+        \$cols = [];
+        \$colStmt = \$pdo->query('SHOW COLUMNS FROM ' . probe_q(\$tableName));
+        while (\$col = \$colStmt->fetch(PDO::FETCH_ASSOC)) {
+            \$cols[] = (string) (\$col['Field'] ?? '');
+        }
+        \$colList = '(' . implode(', ', array_map('probe_q', \$cols)) . ')';
+
+        \$offset = 0;
+        \$batch = 1000;
+        while (\$offset < \$total) {
+            \$rows = \$pdo->query('SELECT * FROM ' . probe_q(\$tableName) . ' LIMIT ' . (int) \$batch . ' OFFSET ' . (int) \$offset)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            if (empty(\$rows)) {
+                break;
+            }
+
+            \$valuesSets = [];
+            foreach (\$rows as \$row) {
+                \$vals = [];
+                foreach (\$cols as \$colName) {
+                    \$vals[] = probe_sql_value(\$pdo, \$row[\$colName] ?? null);
+                }
+                \$valuesSets[] = '(' . implode(', ', \$vals) . ')';
+                if (count(\$valuesSets) >= 200) {
+                    echo 'INSERT INTO ' . probe_q(\$tableName) . ' ' . \$colList . " VALUES\\n  " . implode(",\\n  ", \$valuesSets) . ';' . "\\n";
+                    \$valuesSets = [];
+                }
+            }
+
+            if (!empty(\$valuesSets)) {
+                echo 'INSERT INTO ' . probe_q(\$tableName) . ' ' . \$colList . " VALUES\\n  " . implode(",\\n  ", \$valuesSets) . ';' . "\\n";
+            }
+
+            \$offset += \$batch;
+        }
+
+        echo "\\n";
+    }
+
+    echo 'SET FOREIGN_KEY_CHECKS=1;' . "\\n";
+} catch (Throwable \$e) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false, 'error' => \$e->getMessage()]);
+}
+PHP;
+}
+
+function sync_write_scoped_dump(PDO $pdo, array $tables, string $outPath, string $label): void
+{
+    $fh = fopen($outPath, 'wb');
+    if (!$fh) {
+        throw new RuntimeException("Failed to open dump path: {$outPath}");
+    }
+
+    fwrite($fh, "-- {$label} accumul8 dump\n");
+    fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
+
+    foreach (array_reverse($tables) as $table) {
+        fwrite($fh, 'DROP TABLE IF EXISTS ' . sync_q($table) . ";\n");
+    }
+    fwrite($fh, "\n");
+
+    foreach ($tables as $table) {
+        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+        if (!$exists) {
+            throw new RuntimeException("Source table missing: {$table}");
+        }
+
+        $create = $pdo->query('SHOW CREATE TABLE ' . sync_q($table))->fetch(PDO::FETCH_ASSOC);
+        $createSql = (string) ($create['Create Table'] ?? '');
+        if ($createSql === '') {
+            throw new RuntimeException("SHOW CREATE TABLE returned empty SQL for {$table}");
+        }
+        fwrite($fh, $createSql . ";\n\n");
+
+        $countRow = $pdo->query('SELECT COUNT(*) AS c FROM ' . sync_q($table))->fetch(PDO::FETCH_ASSOC) ?: ['c' => 0];
+        $total = (int) ($countRow['c'] ?? 0);
+        if ($total <= 0) {
+            continue;
+        }
+
+        $cols = [];
+        $colStmt = $pdo->query('SHOW COLUMNS FROM ' . sync_q($table));
+        while ($col = $colStmt->fetch(PDO::FETCH_ASSOC)) {
+            $cols[] = (string) ($col['Field'] ?? '');
+        }
+        $colList = '(' . implode(', ', array_map('sync_q', $cols)) . ')';
+
+        $offset = 0;
+        $batch = 1000;
+        while ($offset < $total) {
+            $rows = $pdo->query('SELECT * FROM ' . sync_q($table) . ' LIMIT ' . (int) $batch . ' OFFSET ' . (int) $offset)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            if (empty($rows)) {
+                break;
+            }
+
+            $valuesSets = [];
+            foreach ($rows as $row) {
+                $vals = [];
+                foreach ($cols as $colName) {
+                    $vals[] = sync_sql_value($pdo, $row[$colName] ?? null);
+                }
+                $valuesSets[] = '(' . implode(', ', $vals) . ')';
+
+                if (count($valuesSets) >= 200) {
+                    fwrite($fh, 'INSERT INTO ' . sync_q($table) . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valuesSets) . ";\n");
+                    $valuesSets = [];
+                }
+            }
+
+            if (!empty($valuesSets)) {
+                fwrite($fh, 'INSERT INTO ' . sync_q($table) . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valuesSets) . ";\n");
+            }
+
+            $offset += $batch;
+        }
+
+        fwrite($fh, "\n");
+    }
+
+    fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
+    fclose($fh);
+}
+
+function sync_local_counts(PDO $pdo, array $tables): array
+{
+    $counts = [];
+    foreach ($tables as $table) {
+        $row = $pdo->query('SELECT COUNT(*) AS c FROM ' . sync_q($table))->fetch(PDO::FETCH_ASSOC) ?: ['c' => 0];
+        $counts[$table] = (int) ($row['c'] ?? 0);
+    }
+    return $counts;
+}
+
+$argvList = $argv;
+array_shift($argvList);
+
+if (sync_has_flag($argvList, '--help') || sync_has_flag($argvList, '-h')) {
+    sync_usage();
+    exit(0);
+}
+
+$apply = sync_has_flag($argvList, '--apply');
+$skipLiveBackup = sync_has_flag($argvList, '--skip-live-backup');
+$baseUrl = rtrim((string) (sync_get_opt($argvList, '--base-url=', 'https://catn8.us') ?? 'https://catn8.us'), '/');
+$timestamp = gmdate('Ymd_His');
+$stateDir = $root . '/.local/state/accumul8-sync/' . $timestamp;
+
+@mkdir($stateDir, 0777, true);
+
+try {
+    $adminToken = sync_require_env('CATN8_ADMIN_TOKEN');
+    $deployHost = sync_require_env('CATN8_DEPLOY_HOST');
+    $deployUser = sync_require_env('CATN8_DEPLOY_USER');
+    $deployPass = sync_require_env('CATN8_DEPLOY_PASS');
+
+    $localCfg = catn8_get_db_config('local');
+    $localPdo = Database::createConnection(
+        (string) ($localCfg['host'] ?? '127.0.0.1'),
+        (string) ($localCfg['db'] ?? 'catn8'),
+        (string) ($localCfg['user'] ?? 'root'),
+        (string) ($localCfg['pass'] ?? ''),
+        (int) ($localCfg['port'] ?? 3306),
+        (string) ($localCfg['socket'] ?? '')
+    );
+
+    $localCounts = sync_local_counts($localPdo, ACCUMUL8_SYNC_TABLES);
+    file_put_contents($stateDir . '/dev-counts.json', json_encode($localCounts, JSON_PRETTY_PRINT));
+    sync_out('Saved dev accumul8 counts to ' . $stateDir . '/dev-counts.json');
+
+    $probeName = 'accumul8_sync_probe_' . $timestamp . '.php';
+    $probeLocalPath = $stateDir . '/' . $probeName;
+    file_put_contents($probeLocalPath, sync_probe_source(ACCUMUL8_SYNC_TABLES));
+
+    $uploadResult = sync_run([
+        'lftp',
+        '-u',
+        $deployUser . ',' . $deployPass,
+        'sftp://' . $deployHost,
+        '-e',
+        'set sftp:auto-confirm yes; set ssl:verify-certificate no; put ' . $probeLocalPath . ' -o ' . $probeName . '; bye',
+    ], $root);
+    if ($uploadResult['status'] !== 0) {
+        throw new RuntimeException("Failed to upload live probe:\n" . $uploadResult['output']);
+    }
+
+    $probeUrl = $baseUrl . '/' . $probeName;
+    $countsBeforePath = $stateDir . '/live-counts-before.json';
+    $countsResult = sync_run([
+        'curl',
+        '-sS',
+        '--max-time',
+        '60',
+        $probeUrl . '?admin_token=' . rawurlencode($adminToken) . '&mode=counts',
+        '-o',
+        $countsBeforePath,
+    ], $root);
+    if ($countsResult['status'] !== 0) {
+        throw new RuntimeException("Failed to fetch live counts before sync:\n" . $countsResult['output']);
+    }
+
+    if (!$skipLiveBackup) {
+        $liveBackupPath = $stateDir . '/live-accumul8-backup.sql';
+        $backupResult = sync_run([
+            'curl',
+            '-sS',
+            '--max-time',
+            '300',
+            $probeUrl . '?admin_token=' . rawurlencode($adminToken) . '&mode=dump',
+            '-o',
+            $liveBackupPath,
+        ], $root);
+        if ($backupResult['status'] !== 0) {
+            throw new RuntimeException("Failed to download live accumul8 backup:\n" . $backupResult['output']);
+        }
+        sync_out('Saved live accumul8 backup to ' . $liveBackupPath);
+    }
+
+    $devDumpPath = $stateDir . '/dev-accumul8-dump.sql';
+    sync_write_scoped_dump($localPdo, ACCUMUL8_SYNC_TABLES, $devDumpPath, 'Dev');
+    sync_out('Saved dev accumul8 dump to ' . $devDumpPath);
+
+    if (!$apply) {
+        sync_out('Dry-run only. No live restore was performed.');
+    } else {
+        $restoreUrl = $baseUrl . '/api/database_maintenance.php?action=restore_database&admin_token=' . rawurlencode($adminToken);
+        $restoreResult = sync_run([
+            'curl',
+            '-sS',
+            '--max-time',
+            '600',
+            '-F',
+            'backup_file=@' . $devDumpPath,
+            $restoreUrl,
+            '-o',
+            $stateDir . '/restore-response.json',
+        ], $root);
+        if ($restoreResult['status'] !== 0) {
+            throw new RuntimeException("Live restore request failed:\n" . $restoreResult['output']);
+        }
+        sync_out('Saved live restore response to ' . $stateDir . '/restore-response.json');
+
+        $countsAfterPath = $stateDir . '/live-counts-after.json';
+        $countsAfterResult = sync_run([
+            'curl',
+            '-sS',
+            '--max-time',
+            '60',
+            $probeUrl . '?admin_token=' . rawurlencode($adminToken) . '&mode=counts',
+            '-o',
+            $countsAfterPath,
+        ], $root);
+        if ($countsAfterResult['status'] !== 0) {
+            throw new RuntimeException("Failed to fetch live counts after sync:\n" . $countsAfterResult['output']);
+        }
+
+        $inspectResult = sync_run([
+            'curl',
+            '-sS',
+            '--max-time',
+            '60',
+            $baseUrl . '/api/database_maintenance.php?action=inspect_accumul8&admin_token=' . rawurlencode($adminToken),
+            '-o',
+            $stateDir . '/inspect-accumul8.json',
+        ], $root);
+        if ($inspectResult['status'] !== 0) {
+            throw new RuntimeException("Failed to fetch inspect_accumul8 after sync:\n" . $inspectResult['output']);
+        }
+        sync_out('Saved live inspect output to ' . $stateDir . '/inspect-accumul8.json');
+    }
+
+    $cleanupResult = sync_run([
+        'lftp',
+        '-u',
+        $deployUser . ',' . $deployPass,
+        'sftp://' . $deployHost,
+        '-e',
+        'set sftp:auto-confirm yes; set ssl:verify-certificate no; rm -f ' . $probeName . '; bye',
+    ], $root);
+    if ($cleanupResult['status'] !== 0) {
+        sync_err("Warning: failed to remove live probe {$probeName}");
+    }
+
+    sync_out('Artifacts saved under ' . $stateDir);
+} catch (Throwable $e) {
+    sync_err($e->getMessage());
+    exit(1);
+}

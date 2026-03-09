@@ -3,6 +3,46 @@ export type Accumul8Direction = 'outflow' | 'inflow';
 export type Accumul8Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
 export type Accumul8EntryType = 'manual' | 'auto' | 'transfer' | 'deposit' | 'bill';
 export type Accumul8PaymentMethod = 'unspecified' | 'autopay' | 'manual';
+export type Accumul8StatementKind = 'bank_account' | 'credit_card' | 'loan' | 'mortgage' | 'other';
+
+export interface Accumul8StatementAlert {
+  severity: string;
+  reason: string;
+  transaction_description: string;
+  transaction_date: string;
+  amount: number;
+  baseline_mean: number | null;
+  baseline_max: number | null;
+}
+
+export interface Accumul8StatementUpload {
+  id: number;
+  account_id: number | null;
+  account_name: string;
+  banking_organization_name: string;
+  statement_kind: Accumul8StatementKind;
+  status: string;
+  original_filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+  extracted_method: string;
+  ai_provider: string;
+  ai_model: string;
+  period_start: string;
+  period_end: string;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  imported_transaction_count: number;
+  duplicate_transaction_count: number;
+  suspicious_item_count: number;
+  reconciliation_status: string;
+  reconciliation_note: string;
+  suspicious_items: Accumul8StatementAlert[];
+  processing_notes: string[];
+  last_error: string;
+  processed_at: string;
+  created_at: string;
+}
 
 export interface Accumul8Contact {
   id: number;
@@ -367,6 +407,7 @@ export interface Accumul8BootstrapResponse {
   notification_rules: Accumul8NotificationRule[];
   pay_bills: Accumul8BillItem[];
   bank_connections: Accumul8BankConnection[];
+  statement_uploads: Accumul8StatementUpload[];
   debtors: Accumul8Debtor[];
   debtor_ledger: Accumul8Transaction[];
   budget_rows: Accumul8BudgetRow[];

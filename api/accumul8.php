@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/emailer.php';
+require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
+require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
 catn8_session_start();
 catn8_groups_seed_core();
@@ -66,6 +68,267 @@ function accumul8_validate_enum(string $fieldName, $value, array $allowed, strin
         catn8_json_response(['success' => false, 'error' => 'Invalid ' . $fieldName], 400);
     }
     return $v;
+}
+
+function accumul8_extract_json_from_text(string $content): string
+{
+    $content = trim($content);
+    if ($content === '') {
+        return '';
+    }
+    if ($content[0] === '{' || $content[0] === '[') {
+        return $content;
+    }
+    if (preg_match('/```(?:json)?\s*(\{.*\}|\[.*\])\s*```/si', $content, $matches)) {
+        return trim((string)($matches[1] ?? ''));
+    }
+    $start = strpos($content, '{');
+    $end = strrpos($content, '}');
+    if ($start !== false && $end !== false && $end > $start) {
+        return trim(substr($content, $start, $end - $start + 1));
+    }
+    return '';
+}
+
+function accumul8_statement_normalize_kind($value): string
+{
+    return accumul8_validate_enum('statement_kind', $value, ['bank_account', 'credit_card', 'loan', 'mortgage', 'other'], 'bank_account');
+}
+
+function accumul8_statement_find_binary(string $name, array $candidates): ?string
+{
+    foreach ($candidates as $candidate) {
+        if (is_string($candidate) && $candidate !== '' && is_file($candidate) && is_executable($candidate)) {
+            return $candidate;
+        }
+    }
+    $which = trim((string)@shell_exec('command -v ' . escapeshellarg($name) . ' 2>/dev/null'));
+    if ($which !== '' && is_file($which) && is_executable($which)) {
+        return $which;
+    }
+    return null;
+}
+
+function accumul8_statement_text_from_bytes(string $text, int $maxLen = 120000): string
+{
+    $text = str_replace("\0", ' ', $text);
+    $text = preg_replace('/[^\P{C}\t\r\n]+/u', ' ', $text) ?? $text;
+    $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+    if ($maxLen > 0 && strlen($text) > $maxLen) {
+        $text = substr($text, 0, $maxLen);
+    }
+    return trim($text);
+}
+
+function accumul8_statement_extract_pdf_text_from_path(string $pdfPath): string
+{
+    if ($pdfPath === '' || !is_file($pdfPath) || !function_exists('shell_exec')) {
+        return '';
+    }
+    $bin = accumul8_statement_find_binary('pdftotext', [
+        '/usr/bin/pdftotext',
+        '/usr/local/bin/pdftotext',
+        '/opt/homebrew/bin/pdftotext',
+    ]);
+    if ($bin === null) {
+        return '';
+    }
+    $tmpOut = tempnam(sys_get_temp_dir(), 'accumul8_pdf_txt_');
+    if (!is_string($tmpOut) || $tmpOut === '') {
+        return '';
+    }
+    $cmd = escapeshellarg($bin) . ' -enc UTF-8 -layout -q ' . escapeshellarg($pdfPath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
+    shell_exec($cmd);
+    $txt = is_file($tmpOut) ? (string)file_get_contents($tmpOut) : '';
+    if (is_file($tmpOut)) {
+        @unlink($tmpOut);
+    }
+    return accumul8_statement_text_from_bytes($txt);
+}
+
+function accumul8_statement_extract_image_text_with_tesseract(string $imagePath): string
+{
+    if ($imagePath === '' || !is_file($imagePath) || !function_exists('shell_exec')) {
+        return '';
+    }
+    $bin = accumul8_statement_find_binary('tesseract', [
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/opt/homebrew/bin/tesseract',
+    ]);
+    if ($bin === null) {
+        return '';
+    }
+    $tmpOutBase = tempnam(sys_get_temp_dir(), 'accumul8_ocr_');
+    if (!is_string($tmpOutBase) || $tmpOutBase === '') {
+        return '';
+    }
+    @unlink($tmpOutBase);
+    $cmd = escapeshellarg($bin) . ' ' . escapeshellarg($imagePath) . ' ' . escapeshellarg($tmpOutBase) . ' -l eng --psm 6 txt 2>/dev/null';
+    shell_exec($cmd);
+    $txtPath = $tmpOutBase . '.txt';
+    $txt = is_file($txtPath) ? (string)file_get_contents($txtPath) : '';
+    if (is_file($txtPath)) {
+        @unlink($txtPath);
+    }
+    return accumul8_statement_text_from_bytes($txt);
+}
+
+function accumul8_statement_extract_pdf_text_with_ocr_fallback(string $pdfPath): string
+{
+    if ($pdfPath === '' || !is_file($pdfPath) || !function_exists('shell_exec')) {
+        return '';
+    }
+    $pdftoppm = accumul8_statement_find_binary('pdftoppm', [
+        '/usr/bin/pdftoppm',
+        '/usr/local/bin/pdftoppm',
+        '/opt/homebrew/bin/pdftoppm',
+    ]);
+    if ($pdftoppm === null) {
+        return '';
+    }
+    $base = tempnam(sys_get_temp_dir(), 'accumul8_pdf_ocr_');
+    if (!is_string($base) || $base === '') {
+        return '';
+    }
+    @unlink($base);
+    $cmd = escapeshellarg($pdftoppm) . ' -png ' . escapeshellarg($pdfPath) . ' ' . escapeshellarg($base) . ' 2>/dev/null';
+    shell_exec($cmd);
+    $chunks = [];
+    foreach (glob($base . '-*.png') ?: [] as $pngPath) {
+        $chunk = accumul8_statement_extract_image_text_with_tesseract($pngPath);
+        if ($chunk !== '') {
+            $chunks[] = $chunk;
+        }
+        @unlink($pngPath);
+        if (strlen(implode("\n", $chunks)) > 90000) {
+            break;
+        }
+    }
+    return accumul8_statement_text_from_bytes(implode("\n\n", $chunks));
+}
+
+function accumul8_statement_extract_text_from_file(string $tmpPath, string $mimeType): array
+{
+    $mime = strtolower($mimeType);
+    if (str_contains($mime, 'pdf')) {
+        $text = accumul8_statement_extract_pdf_text_from_path($tmpPath);
+        $method = 'pdftotext';
+        if ($text === '') {
+            $text = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
+            $method = 'pdf_ocr';
+        }
+        return ['text' => $text, 'method' => $method];
+    }
+    $text = accumul8_statement_extract_image_text_with_tesseract($tmpPath);
+    return ['text' => $text, 'method' => 'image_ocr'];
+}
+
+function accumul8_ai_generate_statement_json(string $text, array $accountCatalog): array
+{
+    $cfg = catn8_settings_ai_get_config();
+    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $model = trim((string)($cfg['model'] ?? ''));
+    $baseUrl = trim((string)($cfg['base_url'] ?? ''));
+    $location = trim((string)($cfg['location'] ?? 'us-central1'));
+    $temperature = (float)($cfg['temperature'] ?? 0.1);
+    $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $truncatedText = accumul8_statement_text_from_bytes($text, 65000);
+
+    $systemPrompt = <<<TXT
+You extract financial statement data into strict JSON.
+Amounts must be signed exactly how they affect the account balance.
+Return one JSON object only.
+Use this schema:
+{
+  "statement_kind": "bank_account|credit_card|loan|mortgage|other",
+  "institution_name": "",
+  "account_name_hint": "",
+  "account_last4": "",
+  "period_start": "YYYY-MM-DD or empty",
+  "period_end": "YYYY-MM-DD or empty",
+  "opening_balance": number|null,
+  "closing_balance": number|null,
+  "transactions": [
+    {
+      "transaction_date": "YYYY-MM-DD",
+      "posted_date": "YYYY-MM-DD or empty",
+      "description": "",
+      "memo": "",
+      "amount": number,
+      "running_balance": number|null
+    }
+  ],
+  "reconciliation_notes": [""],
+  "account_match_hints": [""]
+}
+TXT;
+
+    $userPrompt = "Known accounts JSON:\n" . $accountsJson . "\n\nStatement OCR text:\n" . $truncatedText;
+
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        if (!is_string($saJson) || trim($saJson) === '') {
+            throw new RuntimeException('Missing AI service account JSON (google_vertex_ai)');
+        }
+        $sa = json_decode((string)$saJson, true);
+        if (!is_array($sa)) {
+            throw new RuntimeException('AI Vertex service account JSON is invalid');
+        }
+        $content = catn8_vertex_ai_gemini_generate_text([
+            'service_account_json' => $saJson,
+            'project_id' => trim((string)($sa['project_id'] ?? '')),
+            'location' => $location !== '' ? $location : 'us-central1',
+            'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'temperature' => $temperature,
+            'max_output_tokens' => 4096,
+        ]);
+    } elseif ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+        $resp = catn8_http_json_with_status('POST', 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent', ['x-goog-api-key' => trim($apiKey)], [
+            'contents' => [['role' => 'user', 'parts' => [['text' => $userPrompt]]]],
+            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            'generationConfig' => ['temperature' => $temperature],
+        ], 10, 45);
+        $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+    } else {
+        $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (openai)');
+        }
+        $factory = OpenAI::factory()->withApiKey(trim((string)$apiKey));
+        if ($baseUrl !== '') {
+            $factory = $factory->withBaseUri(catn8_validate_external_base_url($baseUrl));
+        }
+        $client = $factory->make();
+        $resp = $client->chat()->create([
+            'model' => ($model !== '' ? $model : 'gpt-4o-mini'),
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+            'temperature' => $temperature,
+            'max_tokens' => 4096,
+            'response_format' => ['type' => 'json_object'],
+        ]);
+        $content = (string)($resp->choices[0]->message->content ?? '');
+    }
+
+    $jsonText = accumul8_extract_json_from_text((string)$content);
+    $decoded = json_decode($jsonText, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('AI returned invalid statement JSON');
+    }
+    return [
+        'provider' => $provider,
+        'model' => $model,
+        'json' => $decoded,
+    ];
 }
 
 function accumul8_table_has_column(string $tableName, string $columnName): bool
@@ -1040,6 +1303,173 @@ function accumul8_count_rows(string $sql, array $params): int
     return (int)($row['total_count'] ?? 0);
 }
 
+function accumul8_statement_account_catalog(int $viewerId): array
+{
+    $rows = Database::queryAll(
+        'SELECT a.id, a.account_name, a.account_type, a.mask_last4, a.institution_name, COALESCE(ag.group_name, "") AS banking_organization_name
+         FROM accumul8_accounts a
+         LEFT JOIN accumul8_account_groups ag
+           ON ag.id = a.account_group_id
+          AND ag.owner_user_id = a.owner_user_id
+         WHERE a.owner_user_id = ?
+         ORDER BY a.account_name ASC, a.id ASC',
+        [$viewerId]
+    );
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'account_type' => (string)($row['account_type'] ?? ''),
+            'mask_last4' => (string)($row['mask_last4'] ?? ''),
+            'institution_name' => (string)($row['institution_name'] ?? ''),
+            'banking_organization_name' => (string)($row['banking_organization_name'] ?? ''),
+        ];
+    }, $rows);
+}
+
+function accumul8_statement_pick_account_id(int $viewerId, array $statementJson, ?int $selectedAccountId = null): ?int
+{
+    if ($selectedAccountId !== null && $selectedAccountId > 0) {
+        return accumul8_owned_id_or_null('accounts', $viewerId, $selectedAccountId);
+    }
+    $catalog = accumul8_statement_account_catalog($viewerId);
+    $last4 = preg_replace('/\D+/', '', (string)($statementJson['account_last4'] ?? ''));
+    $nameHint = strtolower(accumul8_normalize_text((string)($statementJson['account_name_hint'] ?? ''), 191));
+    $institution = strtolower(accumul8_normalize_text((string)($statementJson['institution_name'] ?? ''), 191));
+    $bestId = null;
+    $bestScore = 0;
+    foreach ($catalog as $account) {
+        $score = 0;
+        $accountName = strtolower((string)($account['account_name'] ?? ''));
+        $orgName = strtolower((string)($account['banking_organization_name'] ?? ''));
+        $instName = strtolower((string)($account['institution_name'] ?? ''));
+        $maskLast4 = preg_replace('/\D+/', '', (string)($account['mask_last4'] ?? ''));
+        if ($last4 !== '' && $maskLast4 !== '' && $last4 === $maskLast4) {
+            $score += 5;
+        }
+        if ($nameHint !== '' && ($accountName !== '' && (str_contains($accountName, $nameHint) || str_contains($nameHint, $accountName)))) {
+            $score += 3;
+        }
+        if ($institution !== '' && (($orgName !== '' && str_contains($orgName, $institution)) || ($instName !== '' && str_contains($instName, $institution)))) {
+            $score += 2;
+        }
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestId = (int)($account['id'] ?? 0);
+        }
+    }
+    return $bestScore >= 3 && $bestId > 0 ? $bestId : null;
+}
+
+function accumul8_statement_serialize_alert(array $alert): array
+{
+    return [
+        'severity' => accumul8_normalize_text((string)($alert['severity'] ?? 'warning'), 24),
+        'reason' => accumul8_normalize_text((string)($alert['reason'] ?? ''), 255),
+        'transaction_description' => accumul8_normalize_text((string)($alert['transaction_description'] ?? ''), 255),
+        'transaction_date' => accumul8_normalize_text((string)($alert['transaction_date'] ?? ''), 20),
+        'amount' => accumul8_normalize_amount($alert['amount'] ?? 0),
+        'baseline_mean' => isset($alert['baseline_mean']) ? accumul8_normalize_amount($alert['baseline_mean']) : null,
+        'baseline_max' => isset($alert['baseline_max']) ? accumul8_normalize_amount($alert['baseline_max']) : null,
+    ];
+}
+
+function accumul8_statement_detect_suspicious_items(int $viewerId, array $transactions): array
+{
+    $alerts = [];
+    foreach ($transactions as $tx) {
+        $entityId = (int)($tx['entity_id'] ?? 0);
+        $amount = accumul8_normalize_amount($tx['amount'] ?? 0);
+        $txDate = accumul8_normalize_date($tx['transaction_date'] ?? '') ?? '';
+        if ($entityId <= 0 || $amount >= 0 || $txDate === '') {
+            continue;
+        }
+        $row = Database::queryOne(
+            'SELECT COUNT(*) AS sample_size,
+                    AVG(ABS(amount)) AS mean_amount,
+                    MAX(ABS(amount)) AS max_amount,
+                    STDDEV_POP(ABS(amount)) AS stddev_amount
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND entity_id = ?
+               AND amount < 0
+               AND transaction_date >= DATE_SUB(?, INTERVAL 2 YEAR)
+               AND transaction_date < ?',
+            [$viewerId, $entityId, $txDate, $txDate]
+        );
+        $sample = (int)($row['sample_size'] ?? 0);
+        $absAmount = abs($amount);
+        $mean = (float)($row['mean_amount'] ?? 0);
+        $max = (float)($row['max_amount'] ?? 0);
+        $stddev = (float)($row['stddev_amount'] ?? 0);
+        if ($sample >= 4 && $absAmount > max($mean * 2.75, $mean + ($stddev * 3), $max * 1.4, 75)) {
+            $alerts[] = accumul8_statement_serialize_alert([
+                'severity' => 'warning',
+                'reason' => 'Spending for this merchant is well above the prior two-year pattern.',
+                'transaction_description' => (string)($tx['description'] ?? ''),
+                'transaction_date' => $txDate,
+                'amount' => $amount,
+                'baseline_mean' => $mean,
+                'baseline_max' => $max,
+            ]);
+            continue;
+        }
+        if ($sample === 0 && $absAmount >= 500) {
+            $alerts[] = accumul8_statement_serialize_alert([
+                'severity' => 'warning',
+                'reason' => 'Large charge from a merchant with no prior two-year history.',
+                'transaction_description' => (string)($tx['description'] ?? ''),
+                'transaction_date' => $txDate,
+                'amount' => $amount,
+            ]);
+        }
+    }
+    return $alerts;
+}
+
+function accumul8_statement_resolve_entity_id(int $viewerId, string $rawDescription): ?int
+{
+    $rawDescription = accumul8_normalize_text($rawDescription, 255);
+    if ($rawDescription === '') {
+        return null;
+    }
+    $existingId = accumul8_find_matching_entity_id($viewerId, $rawDescription);
+    if ($existingId !== null && $existingId > 0) {
+        return $existingId;
+    }
+
+    $parentName = accumul8_entity_alias_name($rawDescription);
+    if ($parentName === '') {
+        return null;
+    }
+
+    $entityRow = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entities
+         WHERE owner_user_id = ?
+           AND display_name = ?
+         LIMIT 1',
+        [$viewerId, $parentName]
+    );
+    $entityId = $entityRow ? (int)($entityRow['id'] ?? 0) : 0;
+    if ($entityId <= 0) {
+        $family = accumul8_find_entity_family_definition($rawDescription);
+        $notes = is_array($family) && !empty($family['match_rule'])
+            ? 'Statement import parent. ' . (string)$family['match_rule']
+            : 'Statement import parent.';
+        $contactFlags = accumul8_contact_type_flags('payee');
+        Database::execute(
+            'INSERT INTO accumul8_entities
+             (owner_user_id, display_name, entity_kind, contact_type, is_payee, is_payer, is_vendor, is_balance_person, default_amount, notes, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0.00, ?, 1)',
+            [$viewerId, $parentName, 'business', 'payee', $contactFlags['is_payee'], $contactFlags['is_payer'], 1, $notes]
+        );
+        $entityId = (int)Database::lastInsertId();
+    }
+    accumul8_assign_entity_alias($viewerId, $entityId, $rawDescription, true);
+    return $entityId > 0 ? $entityId : null;
+}
+
 function accumul8_account_group_has_associations(int $viewerId, int $groupId): bool
 {
     return accumul8_count_rows(
@@ -1169,7 +1599,7 @@ function accumul8_tables_ensure(): void
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
         display_name VARCHAR(191) NOT NULL,
-        entity_kind VARCHAR(24) NOT NULL DEFAULT 'business',
+        entity_kind VARCHAR(32) NOT NULL DEFAULT 'business',
         contact_type VARCHAR(16) NOT NULL DEFAULT 'payee',
         is_payee TINYINT(1) NOT NULL DEFAULT 0,
         is_payer TINYINT(1) NOT NULL DEFAULT 0,
@@ -1355,6 +1785,44 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_bank_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_statement_uploads (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        account_id INT NULL,
+        statement_kind VARCHAR(24) NOT NULL DEFAULT 'bank_account',
+        status VARCHAR(24) NOT NULL DEFAULT 'uploaded',
+        original_filename VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(191) NOT NULL,
+        file_size_bytes INT NOT NULL DEFAULT 0,
+        file_sha256 CHAR(64) NOT NULL,
+        file_blob LONGBLOB NOT NULL,
+        extracted_text LONGTEXT NULL,
+        extracted_method VARCHAR(32) NOT NULL DEFAULT '',
+        ai_provider VARCHAR(64) NOT NULL DEFAULT '',
+        ai_model VARCHAR(191) NOT NULL DEFAULT '',
+        period_start DATE NULL,
+        period_end DATE NULL,
+        opening_balance DECIMAL(10,2) NULL,
+        closing_balance DECIMAL(10,2) NULL,
+        imported_transaction_count INT NOT NULL DEFAULT 0,
+        duplicate_transaction_count INT NOT NULL DEFAULT 0,
+        suspicious_item_count INT NOT NULL DEFAULT 0,
+        reconciliation_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+        reconciliation_note TEXT NULL,
+        suspicious_items_json LONGTEXT NULL,
+        processing_notes_json LONGTEXT NULL,
+        parsed_payload_json LONGTEXT NULL,
+        last_error TEXT NULL,
+        processed_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_accumul8_statement_owner (owner_user_id),
+        KEY idx_accumul8_statement_account (account_id),
+        KEY idx_accumul8_statement_status (status),
+        CONSTRAINT fk_accumul8_statement_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
         $hadBudgetPlannerColumn = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
@@ -1377,6 +1845,18 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_contacts', 'state', 'VARCHAR(64) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'zip', 'VARCHAR(20) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'entity_id', 'INT NULL');
+
+        $entityKindColumn = Database::queryOne(
+            "SELECT CHARACTER_MAXIMUM_LENGTH AS max_len
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'accumul8_entities'
+               AND COLUMN_NAME = 'entity_kind'
+             LIMIT 1"
+        );
+        if ((int)($entityKindColumn['max_len'] ?? 0) > 0 && (int)($entityKindColumn['max_len'] ?? 0) < 32) {
+            Database::execute("ALTER TABLE accumul8_entities MODIFY COLUMN entity_kind VARCHAR(32) NOT NULL DEFAULT 'business'");
+        }
 
         accumul8_table_add_column_if_missing('accumul8_debtors', 'entity_id', 'INT NULL');
 
@@ -1414,6 +1894,36 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'status', "VARCHAR(32) NOT NULL DEFAULT 'setup_pending'");
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_sync_at', 'DATETIME NULL');
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_error', 'TEXT NULL');
+
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'account_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'statement_kind', "VARCHAR(24) NOT NULL DEFAULT 'bank_account'");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'status', "VARCHAR(24) NOT NULL DEFAULT 'uploaded'");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'file_size_bytes', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'file_sha256', "CHAR(64) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'extracted_text', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'extracted_method', "VARCHAR(32) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'ai_provider', "VARCHAR(64) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'ai_model', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'period_start', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'period_end', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'opening_balance', 'DECIMAL(10,2) NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'closing_balance', 'DECIMAL(10,2) NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'imported_transaction_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'duplicate_transaction_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'suspicious_item_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'reconciliation_status', "VARCHAR(24) NOT NULL DEFAULT 'pending'");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'reconciliation_note', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'suspicious_items_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'processing_notes_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'parsed_payload_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'last_error', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'processed_at', 'DATETIME NULL');
+        if (!accumul8_table_has_index('accumul8_statement_uploads', 'idx_accumul8_statement_account')) {
+            Database::execute('ALTER TABLE accumul8_statement_uploads ADD INDEX idx_accumul8_statement_account (account_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_statement_uploads', 'fk_accumul8_statement_account')) {
+            Database::execute('ALTER TABLE accumul8_statement_uploads ADD CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL');
+        }
 
         if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
             Database::execute('ALTER TABLE accumul8_transactions ADD COLUMN debtor_id INT NULL AFTER contact_id');
@@ -2011,6 +2521,276 @@ function accumul8_list_bank_connections(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_list_statement_uploads(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_statement_uploads')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT su.id, su.account_id, su.statement_kind, su.status, su.original_filename, su.mime_type, su.file_size_bytes, su.extracted_method,
+                su.ai_provider, su.ai_model, su.period_start, su.period_end, su.opening_balance, su.closing_balance,
+                su.imported_transaction_count, su.duplicate_transaction_count, su.suspicious_item_count,
+                su.reconciliation_status, COALESCE(su.reconciliation_note, "") AS reconciliation_note,
+                COALESCE(su.suspicious_items_json, "[]") AS suspicious_items_json,
+                COALESCE(su.processing_notes_json, "[]") AS processing_notes_json,
+                COALESCE(su.last_error, "") AS last_error, su.processed_at, su.created_at,
+                COALESCE(a.account_name, "") AS account_name,
+                COALESCE(ag.group_name, "") AS banking_organization_name
+         FROM accumul8_statement_uploads su
+         LEFT JOIN accumul8_accounts a
+           ON a.id = su.account_id
+          AND a.owner_user_id = su.owner_user_id
+         LEFT JOIN accumul8_account_groups ag
+           ON ag.id = a.account_group_id
+          AND ag.owner_user_id = a.owner_user_id
+         WHERE su.owner_user_id = ?
+         ORDER BY su.created_at DESC, su.id DESC
+         LIMIT 200',
+        [$viewerId]
+    );
+
+    return array_map(static function (array $row): array {
+        $suspicious = json_decode((string)($row['suspicious_items_json'] ?? '[]'), true);
+        $notes = json_decode((string)($row['processing_notes_json'] ?? '[]'), true);
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'banking_organization_name' => (string)($row['banking_organization_name'] ?? ''),
+            'statement_kind' => (string)($row['statement_kind'] ?? 'bank_account'),
+            'status' => (string)($row['status'] ?? 'uploaded'),
+            'original_filename' => (string)($row['original_filename'] ?? ''),
+            'mime_type' => (string)($row['mime_type'] ?? ''),
+            'file_size_bytes' => (int)($row['file_size_bytes'] ?? 0),
+            'extracted_method' => (string)($row['extracted_method'] ?? ''),
+            'ai_provider' => (string)($row['ai_provider'] ?? ''),
+            'ai_model' => (string)($row['ai_model'] ?? ''),
+            'period_start' => (string)($row['period_start'] ?? ''),
+            'period_end' => (string)($row['period_end'] ?? ''),
+            'opening_balance' => isset($row['opening_balance']) ? (float)$row['opening_balance'] : null,
+            'closing_balance' => isset($row['closing_balance']) ? (float)$row['closing_balance'] : null,
+            'imported_transaction_count' => (int)($row['imported_transaction_count'] ?? 0),
+            'duplicate_transaction_count' => (int)($row['duplicate_transaction_count'] ?? 0),
+            'suspicious_item_count' => (int)($row['suspicious_item_count'] ?? 0),
+            'reconciliation_status' => (string)($row['reconciliation_status'] ?? 'pending'),
+            'reconciliation_note' => (string)($row['reconciliation_note'] ?? ''),
+            'suspicious_items' => is_array($suspicious) ? $suspicious : [],
+            'processing_notes' => is_array($notes) ? $notes : [],
+            'last_error' => (string)($row['last_error'] ?? ''),
+            'processed_at' => (string)($row['processed_at'] ?? ''),
+            'created_at' => (string)($row['created_at'] ?? ''),
+        ];
+    }, $rows);
+}
+
+function accumul8_statement_reconciliation_payload(array $parsed, array $importedRows, int $duplicateCount): array
+{
+    $opening = isset($parsed['opening_balance']) && is_numeric($parsed['opening_balance']) ? accumul8_normalize_amount($parsed['opening_balance']) : null;
+    $closing = isset($parsed['closing_balance']) && is_numeric($parsed['closing_balance']) ? accumul8_normalize_amount($parsed['closing_balance']) : null;
+    $sum = 0.0;
+    foreach ($importedRows as $row) {
+        $sum += accumul8_normalize_amount($row['amount'] ?? 0);
+    }
+    $expectedClosing = $opening !== null ? round($opening + $sum, 2) : null;
+    $status = 'pending';
+    $noteParts = [];
+    if ($opening !== null && $closing !== null) {
+        $delta = round(abs($expectedClosing - $closing), 2);
+        if ($delta <= 0.01) {
+            $status = 'balanced';
+            $noteParts[] = 'Opening balance plus imported activity matches the closing balance.';
+        } else {
+            $status = 'needs_review';
+            $noteParts[] = 'Imported activity does not fully reconcile to the closing balance.';
+            $noteParts[] = 'Expected closing ' . number_format($expectedClosing, 2) . ', statement closing ' . number_format($closing, 2) . '.';
+        }
+    } else {
+        $noteParts[] = 'Statement did not provide both opening and closing balances.';
+    }
+    if ($duplicateCount > 0) {
+        $noteParts[] = $duplicateCount . ' probable duplicate transaction(s) were skipped.';
+    }
+    if (!empty($parsed['reconciliation_notes']) && is_array($parsed['reconciliation_notes'])) {
+        foreach ($parsed['reconciliation_notes'] as $note) {
+            $note = accumul8_normalize_text((string)$note, 255);
+            if ($note !== '') {
+                $noteParts[] = $note;
+            }
+        }
+    }
+    return [
+        'status' => $status,
+        'note' => implode(' ', array_values(array_unique($noteParts))),
+        'opening_balance' => $opening,
+        'closing_balance' => $closing,
+    ];
+}
+
+function accumul8_statement_process_upload(int $viewerId, int $actorUserId, int $uploadId, ?int $selectedAccountId = null): array
+{
+    $upload = Database::queryOne(
+        'SELECT *
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$upload) {
+        throw new RuntimeException('Statement upload not found');
+    }
+
+    $tmpPath = tempnam(sys_get_temp_dir(), 'accumul8_stmt_');
+    if (!is_string($tmpPath) || $tmpPath === '') {
+        throw new RuntimeException('Could not create temporary statement file');
+    }
+    file_put_contents($tmpPath, (string)($upload['file_blob'] ?? ''));
+    try {
+        $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+        $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+        if ($text === '') {
+            throw new RuntimeException('Could not extract readable text from the statement');
+        }
+
+        $ai = accumul8_ai_generate_statement_json($text, accumul8_statement_account_catalog($viewerId));
+        $parsed = is_array($ai['json'] ?? null) ? $ai['json'] : [];
+        $accountId = accumul8_statement_pick_account_id($viewerId, $parsed, $selectedAccountId);
+        $txRows = [];
+        $duplicateCount = 0;
+        foreach ((array)($parsed['transactions'] ?? []) as $tx) {
+            if (!is_array($tx)) {
+                continue;
+            }
+            $txDate = accumul8_normalize_date($tx['transaction_date'] ?? $tx['posted_date'] ?? '');
+            $description = accumul8_normalize_text((string)($tx['description'] ?? ''), 255);
+            if ($txDate === null || $description === '' || !is_numeric($tx['amount'] ?? null)) {
+                continue;
+            }
+            $amount = accumul8_normalize_amount($tx['amount']);
+            $memo = accumul8_normalize_text((string)($tx['memo'] ?? ''), 2000);
+            $entityId = accumul8_statement_resolve_entity_id($viewerId, $description);
+            $externalKey = hash('sha256', implode('|', [$viewerId, $uploadId, $accountId ?: 0, $txDate, $description, number_format($amount, 2, '.', '')]));
+            $duplicate = Database::queryOne(
+                'SELECT id
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND COALESCE(account_id, 0) = ?
+                   AND transaction_date = ?
+                   AND ROUND(amount, 2) = ?
+                   AND description = ?
+                 LIMIT 1',
+                [$viewerId, $accountId ?: 0, $txDate, $amount, $description]
+            );
+            if ($duplicate) {
+                $duplicateCount++;
+                $txRows[] = [
+                    'transaction_date' => $txDate,
+                    'description' => $description,
+                    'amount' => $amount,
+                    'entity_id' => $entityId,
+                    'skipped_duplicate' => 1,
+                ];
+                continue;
+            }
+            Database::execute(
+                'INSERT INTO accumul8_transactions
+                 (owner_user_id, account_id, entity_id, balance_entity_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount, running_balance, is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, source_ref, external_id, pending_status, created_by_user_id)
+                 VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, 0.00, ?, 1, 1, 0, 0, NULL, ?, ?, ?, 0, ?)',
+                [
+                    $viewerId,
+                    $accountId,
+                    $entityId,
+                    $txDate,
+                    $txDate,
+                    $amount < 0 ? 'bill' : 'deposit',
+                    $description,
+                    $memo,
+                    $amount,
+                    isset($tx['running_balance']) && is_numeric($tx['running_balance']) ? accumul8_normalize_amount($tx['running_balance']) : 0.00,
+                    'statement_upload',
+                    'statement_upload:' . $uploadId,
+                    $externalKey,
+                    $actorUserId,
+                ]
+            );
+            $txRows[] = [
+                'transaction_date' => $txDate,
+                'description' => $description,
+                'amount' => $amount,
+                'entity_id' => $entityId,
+                'running_balance' => isset($tx['running_balance']) && is_numeric($tx['running_balance']) ? accumul8_normalize_amount($tx['running_balance']) : null,
+                'id' => (int)Database::lastInsertId(),
+            ];
+        }
+
+        $alerts = accumul8_statement_detect_suspicious_items($viewerId, $txRows);
+        $reconciliation = accumul8_statement_reconciliation_payload($parsed, array_values(array_filter($txRows, static fn(array $row): bool => (int)($row['skipped_duplicate'] ?? 0) !== 1)), $duplicateCount);
+        $periodStart = accumul8_normalize_date($parsed['period_start'] ?? '');
+        $periodEnd = accumul8_normalize_date($parsed['period_end'] ?? '');
+        $notes = [];
+        if ($accountId === null) {
+            $notes[] = 'No matching account was found automatically. The transactions were still imported.';
+        }
+        foreach ((array)($parsed['account_match_hints'] ?? []) as $hint) {
+            $hint = accumul8_normalize_text((string)$hint, 255);
+            if ($hint !== '') {
+                $notes[] = $hint;
+            }
+        }
+
+        Database::execute(
+            'UPDATE accumul8_statement_uploads
+             SET account_id = ?, statement_kind = ?, status = ?, extracted_text = ?, extracted_method = ?, ai_provider = ?, ai_model = ?,
+                 period_start = ?, period_end = ?, opening_balance = ?, closing_balance = ?,
+                 imported_transaction_count = ?, duplicate_transaction_count = ?, suspicious_item_count = ?,
+                 reconciliation_status = ?, reconciliation_note = ?, suspicious_items_json = ?, processing_notes_json = ?, parsed_payload_json = ?,
+                 last_error = NULL, processed_at = NOW()
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $accountId,
+                accumul8_statement_normalize_kind($parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account'),
+                $reconciliation['status'] === 'balanced' ? 'processed' : 'needs_review',
+                $text,
+                (string)($extract['method'] ?? ''),
+                (string)($ai['provider'] ?? ''),
+                (string)($ai['model'] ?? ''),
+                $periodStart,
+                $periodEnd,
+                $reconciliation['opening_balance'],
+                $reconciliation['closing_balance'],
+                count(array_values(array_filter($txRows, static fn(array $row): bool => (int)($row['skipped_duplicate'] ?? 0) !== 1))),
+                $duplicateCount,
+                count($alerts),
+                $reconciliation['status'],
+                $reconciliation['note'],
+                json_encode($alerts, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                json_encode(array_values(array_unique($notes)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                json_encode($parsed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                $uploadId,
+                $viewerId,
+            ]
+        );
+    } catch (Throwable $e) {
+        Database::execute(
+            'UPDATE accumul8_statement_uploads
+             SET status = ?, reconciliation_status = ?, last_error = ?, processed_at = NOW()
+             WHERE id = ? AND owner_user_id = ?',
+            ['failed', 'needs_review', accumul8_normalize_text($e->getMessage(), 1000), $uploadId, $viewerId]
+        );
+        throw $e;
+    } finally {
+        @unlink($tmpPath);
+    }
+
+    $final = accumul8_list_statement_uploads($viewerId);
+    foreach ($final as $row) {
+        if ((int)($row['id'] ?? 0) === $uploadId) {
+            return $row;
+        }
+    }
+    throw new RuntimeException('Processed statement upload could not be reloaded');
+}
+
 function accumul8_due_bills(int $viewerId): array
 {
     $hasSourceKind = accumul8_table_has_column('accumul8_transactions', 'source_kind');
@@ -2465,6 +3245,7 @@ if ($action === 'bootstrap') {
     $budgetRows = accumul8_bootstrap_section('budget_rows', static fn() => accumul8_list_budget_rows($viewerId), [], $warnings);
     $rules = accumul8_bootstrap_section('notification_rules', static fn() => accumul8_list_notification_rules($viewerId), [], $warnings);
     $connections = accumul8_bootstrap_section('bank_connections', static fn() => accumul8_list_bank_connections($viewerId), [], $warnings);
+    $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId), [], $warnings);
     $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
     $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
         'net_amount' => 0.0,
@@ -2494,6 +3275,7 @@ if ($action === 'bootstrap') {
         'notification_rules' => $rules,
         'pay_bills' => $payBills,
         'bank_connections' => $connections,
+        'statement_uploads' => $statementUploads,
         'sync_provider' => [
             'provider' => 'plaid',
             'env' => accumul8_plaid_env(),
@@ -3761,6 +4543,94 @@ if ($action === 'send_notification') {
         'sent' => $sent,
         'failed' => $failed,
     ]);
+}
+
+if ($action === 'upload_statement') {
+    catn8_require_method('POST');
+
+    if (!isset($_FILES['statement_file']) || !is_array($_FILES['statement_file'])) {
+        catn8_json_response(['success' => false, 'error' => 'statement_file is required'], 400);
+    }
+
+    $file = $_FILES['statement_file'];
+    $tmpName = (string)($file['tmp_name'] ?? '');
+    $originalName = accumul8_normalize_text((string)($file['name'] ?? ''), 255);
+    $mimeType = accumul8_normalize_text((string)($file['type'] ?? 'application/octet-stream'), 191);
+    $sizeBytes = (int)($file['size'] ?? 0);
+    $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errorCode !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
+        catn8_json_response(['success' => false, 'error' => 'Upload failed'], 400);
+    }
+    if ($sizeBytes <= 0 || $sizeBytes > 15 * 1024 * 1024) {
+        catn8_json_response(['success' => false, 'error' => 'Statement upload must be between 1 byte and 15 MB'], 400);
+    }
+
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if (!in_array($extension, ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif'], true)) {
+        catn8_json_response(['success' => false, 'error' => 'Unsupported statement file type'], 400);
+    }
+
+    $bytes = @file_get_contents($tmpName);
+    if (!is_string($bytes) || $bytes === '') {
+        catn8_json_response(['success' => false, 'error' => 'Failed to read uploaded statement'], 500);
+    }
+
+    $selectedAccountId = isset($_POST['account_id']) && $_POST['account_id'] !== ''
+        ? accumul8_owned_id_or_null('accounts', $viewerId, (int)$_POST['account_id'])
+        : null;
+    $statementKind = accumul8_statement_normalize_kind((string)($_POST['statement_kind'] ?? 'bank_account'));
+
+    Database::execute(
+        'INSERT INTO accumul8_statement_uploads
+         (owner_user_id, account_id, statement_kind, status, original_filename, mime_type, file_size_bytes, file_sha256, file_blob)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $selectedAccountId,
+            $statementKind,
+            'processing',
+            $originalName !== '' ? $originalName : ('statement.' . $extension),
+            $mimeType !== '' ? $mimeType : 'application/octet-stream',
+            $sizeBytes,
+            hash('sha256', $bytes),
+            $bytes,
+        ]
+    );
+    $uploadId = (int)Database::lastInsertId();
+
+    try {
+        $row = accumul8_statement_process_upload($viewerId, $actorUserId, $uploadId, $selectedAccountId);
+        catn8_json_response(['success' => true, 'upload' => $row]);
+    } catch (Throwable $e) {
+        catn8_json_response([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'upload' => ['id' => $uploadId],
+        ], 500);
+    }
+}
+
+if ($action === 'download_statement_upload') {
+    catn8_require_method('GET');
+    $id = (int)($_GET['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $row = Database::queryOne(
+        'SELECT original_filename, mime_type, file_blob
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Statement upload not found'], 404);
+    }
+    header('Content-Type: ' . (string)($row['mime_type'] ?? 'application/octet-stream'));
+    header('Content-Length: ' . strlen((string)($row['file_blob'] ?? '')));
+    header('Content-Disposition: inline; filename="' . str_replace('"', '', (string)($row['original_filename'] ?? ('statement-' . $id))) . '"');
+    echo (string)($row['file_blob'] ?? '');
+    exit;
 }
 
 if ($action === 'plaid_create_link_token') {

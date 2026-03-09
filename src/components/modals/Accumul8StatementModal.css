@@ -1,0 +1,121 @@
+.accumul8-statement-hero {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.accumul8-statement-hero-card,
+.accumul8-statement-history-card {
+  border: 2px solid rgba(124, 92, 25, 0.35);
+  background: linear-gradient(180deg, rgba(252, 246, 231, 0.9), rgba(232, 219, 183, 0.94));
+  padding: 0.9rem 1rem;
+}
+
+.accumul8-statement-hero-card strong,
+.accumul8-statement-history-card strong {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.accumul8-statement-upload-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.accumul8-statement-history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.accumul8-statement-history-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.accumul8-statement-history-empty {
+  border: 2px dashed rgba(124, 92, 25, 0.35);
+  padding: 1rem;
+  color: rgba(54, 40, 13, 0.78);
+  text-align: center;
+}
+
+.accumul8-statement-history-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.65rem;
+}
+
+.accumul8-statement-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.accumul8-statement-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(124, 92, 25, 0.42);
+  background: rgba(20, 17, 11, 0.88);
+  color: #f3ead0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.accumul8-statement-chip.is-processed,
+.accumul8-statement-chip.is-balanced {
+  background: rgba(21, 80, 42, 0.92);
+}
+
+.accumul8-statement-chip.is-needs_review,
+.accumul8-statement-chip.is-warning,
+.accumul8-statement-chip.is-failed {
+  background: rgba(115, 45, 14, 0.92);
+}
+
+.accumul8-statement-note {
+  margin-bottom: 0.45rem;
+  color: #241d12;
+}
+
+.accumul8-statement-alert-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.accumul8-statement-alert {
+  border-left: 3px solid rgba(158, 78, 34, 0.7);
+  padding-left: 0.65rem;
+  color: rgba(54, 40, 13, 0.88);
+}
+
+.accumul8-statement-alert span,
+.accumul8-statement-error {
+  display: block;
+  font-size: 0.8rem;
+}
+
+.accumul8-statement-error {
+  color: #8b1e1e;
+  margin-top: 0.55rem;
+}
+
+@media (max-width: 767.98px) {
+  .accumul8-statement-hero,
+  .accumul8-statement-history-head,
+  .accumul8-statement-upload-actions,
+  .accumul8-statement-history-card-head {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}

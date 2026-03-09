@@ -23,6 +23,7 @@ import {
   Accumul8NotificationRuleUpsertRequest,
   Accumul8RecurringPayment,
   Accumul8RecurringUpsertRequest,
+  Accumul8StatementUpload,
   Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../types/accumul8';
@@ -49,6 +50,7 @@ export function useAccumul8(
   const [debtorLedger, setDebtorLedger] = React.useState<Accumul8Transaction[]>([]);
   const [budgetRows, setBudgetRows] = React.useState<Accumul8BudgetRow[]>([]);
   const [bankConnections, setBankConnections] = React.useState<any[]>([]);
+  const [statementUploads, setStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'plaid', env: 'sandbox', configured: 0 });
   const handleError = React.useCallback((error: any, fallback = 'Accumul8 request failed') => {
     const message = String(error?.message || fallback);
@@ -84,6 +86,7 @@ export function useAccumul8(
       setDebtorLedger(Array.isArray(res?.debtor_ledger) ? res.debtor_ledger : []);
       setBudgetRows(Array.isArray(res?.budget_rows) ? res.budget_rows : []);
       setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
+      setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
       setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
       setLoaded(true);
@@ -323,6 +326,12 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const uploadStatement = React.useCallback(async (formData: FormData) => {
+    await withReload(
+      () => ApiClient.postFormData(scopedActionUrl('upload_statement'), formData),
+      'Statement uploaded and processed',
+    );
+  }, [scopedActionUrl, withReload]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -364,6 +373,7 @@ export function useAccumul8(
     debtorLedger,
     budgetRows,
     bankConnections,
+    statementUploads,
     syncProvider,
     load,
     createEntity,
@@ -402,5 +412,6 @@ export function useAccumul8(
     deleteNotificationRule,
     sendNotification,
     syncBankConnection,
+    uploadStatement,
   };
 }

@@ -601,6 +601,18 @@
   width: min(100%, 26rem);
 }
 
+.catn8-page[data-page="accumul8"] .form-control.accumul8-filter-control--active,
+.catn8-page[data-page="accumul8"] .form-select.accumul8-filter-control--active {
+  background: linear-gradient(180deg, #fff2c6, #ecd27d);
+  border-color: #f0d98d;
+  color: #1f180c;
+  box-shadow: 0 0 0 1px rgba(30, 21, 4, 0.8), 0 0 0 3px rgba(212, 175, 55, 0.26);
+}
+
+.catn8-page[data-page="accumul8"] .form-control.accumul8-filter-control--active::placeholder {
+  color: rgba(68, 52, 19, 0.86);
+}
+
 .accumul8-inline-editor-row td {
   background: rgba(232, 214, 161, 0.12);
 }
@@ -816,6 +828,10 @@
 
 .accumul8-table--measured .accumul8-col--flex-40 {
   width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.4));
+}
+
+.accumul8-table--measured .accumul8-col--flex-20 {
+  width: max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.2));
 }
 
 .accumul8-sticky-head thead th,

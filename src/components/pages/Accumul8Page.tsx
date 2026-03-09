@@ -231,6 +231,10 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
   return String(value || '').trim() || fallback;
 }
 
+function getActiveFilterClass(baseClassName: string, isActive: boolean): string {
+  return isActive ? `${baseClassName} accumul8-filter-control--active` : baseClassName;
+}
+
 function getLedgerDescriptionLabel(
   transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
   draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
@@ -1952,7 +1956,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </button>
                     <select
                       id="accumul8-group-filter"
-                      className="form-select form-select-sm"
+                      className={getActiveFilterClass('form-select form-select-sm', selectedBankingOrganizationId !== '')}
                       aria-label="Banking Organization"
                       value={selectedBankingOrganizationId}
                       onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
@@ -1977,7 +1981,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </button>
                     <select
                       id="accumul8-bank-filter"
-                      className="form-select form-select-sm"
+                      className={getActiveFilterClass('form-select form-select-sm', selectedBankAccountId !== '')}
                       aria-label="Bank account"
                       value={selectedBankAccountId}
                       onChange={(e) => setSelectedBankAccountId(e.target.value)}
@@ -2030,7 +2034,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <h3 className="mb-0">Ledger</h3>
                 <div className="accumul8-panel-toolbar-search">
                   <select
-                    className="form-select form-select-sm"
+                    className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'all')}
                     value={ledgerFilterPreset}
                     onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
                     aria-label="Ledger quick filter"
@@ -2041,7 +2045,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </select>
                   <input
                     type="text"
-                    className="form-control form-control-sm"
+                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.ledger.trim() !== '')}
                     value={listSearchQueryByTab.ledger}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
                     placeholder="Search visible ledger rows"
@@ -2059,8 +2063,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col className="accumul8-col--flex-30" />
-                    <col className="accumul8-col--flex-30" />
+                    <col className="accumul8-col--flex-20" />
+                    <col className="accumul8-col--flex-40" />
                     <col className="accumul8-col--flex-40" />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
@@ -2196,7 +2200,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
-                    className="form-control form-control-sm"
+                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.debtors.trim() !== '')}
                     value={listSearchQueryByTab.debtors}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: e.target.value }))}
                     placeholder="Filter IOU fields"
@@ -2440,7 +2444,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
-                    className="form-control form-control-sm"
+                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.pay_bills.trim() !== '')}
                     value={listSearchQueryByTab.pay_bills}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: e.target.value }))}
                     placeholder="Filter bill fields"
@@ -2452,7 +2456,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-range">Date Range</label>
                     <select
                       id="accumul8-pay-bills-range"
-                      className="form-select form-select-sm"
+                      className={getActiveFilterClass('form-select form-select-sm', payBillsDateFilter !== '30_days')}
                       value={payBillsDateFilter}
                       onChange={(e) => setPayBillsDateFilter(e.target.value as PayBillsDateFilter)}
                     >
@@ -2470,7 +2474,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-start">Start</label>
                         <input
                           id="accumul8-pay-bills-start"
-                          className="form-control form-control-sm"
+                          className={getActiveFilterClass('form-control form-control-sm', customPayBillsStartDate.trim() !== '')}
                           type="date"
                           value={customPayBillsStartDate}
                           onChange={(e) => setCustomPayBillsStartDate(e.target.value)}
@@ -2480,7 +2484,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-end">End</label>
                         <input
                           id="accumul8-pay-bills-end"
-                          className="form-control form-control-sm"
+                          className={getActiveFilterClass('form-control form-control-sm', customPayBillsEndDate.trim() !== '')}
                           type="date"
                           value={customPayBillsEndDate}
                           onChange={(e) => setCustomPayBillsEndDate(e.target.value)}
@@ -2612,7 +2616,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
-                    className="form-control form-control-sm"
+                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.contacts.trim() !== '')}
                     value={listSearchQueryByTab.contacts}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: e.target.value }))}
                     placeholder="Filter entity fields"
@@ -2915,7 +2919,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
-                    className="form-control form-control-sm"
+                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.recurring.trim() !== '')}
                     value={listSearchQueryByTab.recurring}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: e.target.value }))}
                     placeholder="Filter recurring fields"

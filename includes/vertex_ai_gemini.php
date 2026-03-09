@@ -4,6 +4,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/google_oauth_service_account.php';
 
+function catn8_http_response_status_from_last_headers(): int
+{
+    $headers = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : null;
+    if (!is_array($headers)) {
+        return 0;
+    }
+    foreach ($headers as $header) {
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#', (string)$header, $matches)) {
+            return (int)$matches[1];
+        }
+    }
+    return 0;
+}
+
 function catn8_vertex_ai_gemini_generate_text(array $opts): string
 {
     $serviceAccountJson = (string)($opts['service_account_json'] ?? '');
@@ -99,15 +113,7 @@ function catn8_vertex_ai_gemini_generate_text(array $opts): string
 
     $resp = @file_get_contents($url, false, $context);
 
-    $status = 0;
-    if (isset($http_response_header) && is_array($http_response_header)) {
-        foreach ($http_response_header as $h) {
-            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $h, $m)) {
-                $status = (int)$m[1];
-                break;
-            }
-        }
-    }
+    $status = catn8_http_response_status_from_last_headers();
 
     if (!is_string($resp) || $resp === '') {
         $last = error_get_last();

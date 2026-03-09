@@ -1800,6 +1800,9 @@ function accumul8_tables_ensure(): void
         extracted_method VARCHAR(32) NOT NULL DEFAULT '',
         ai_provider VARCHAR(64) NOT NULL DEFAULT '',
         ai_model VARCHAR(191) NOT NULL DEFAULT '',
+        institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        account_name_hint VARCHAR(191) NOT NULL DEFAULT '',
+        account_mask_last4 VARCHAR(16) NOT NULL DEFAULT '',
         period_start DATE NULL,
         period_end DATE NULL,
         opening_balance DECIMAL(10,2) NULL,
@@ -1811,6 +1814,7 @@ function accumul8_tables_ensure(): void
         reconciliation_note TEXT NULL,
         suspicious_items_json LONGTEXT NULL,
         processing_notes_json LONGTEXT NULL,
+        transaction_locator_json LONGTEXT NULL,
         parsed_payload_json LONGTEXT NULL,
         last_error TEXT NULL,
         processed_at DATETIME NULL,
@@ -1904,6 +1908,9 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'extracted_method', "VARCHAR(32) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'ai_provider', "VARCHAR(64) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'ai_model', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'institution_name', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'account_name_hint', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'account_mask_last4', "VARCHAR(16) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'period_start', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'period_end', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'opening_balance', 'DECIMAL(10,2) NULL');
@@ -1915,6 +1922,7 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'reconciliation_note', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'suspicious_items_json', 'LONGTEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'processing_notes_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'transaction_locator_json', 'LONGTEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'parsed_payload_json', 'LONGTEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'last_error', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'processed_at', 'DATETIME NULL');
@@ -2398,6 +2406,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $isReconciledSelect = accumul8_optional_select('accumul8_transactions', 'is_reconciled', 't.is_reconciled', '0 AS is_reconciled');
     $isBudgetPlannerSelect = accumul8_optional_select('accumul8_transactions', 'is_budget_planner', 't.is_budget_planner', '1 AS is_budget_planner');
     $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 't.source_kind', "'manual' AS source_kind");
+    $sourceRefSelect = accumul8_optional_select('accumul8_transactions', 'source_ref', 't.source_ref', "'' AS source_ref");
     $pendingStatusSelect = accumul8_optional_select('accumul8_transactions', 'pending_status', 't.pending_status', '0 AS pending_status');
     $entityIdSelect = accumul8_optional_select('accumul8_transactions', 'entity_id', 't.entity_id', 'NULL AS entity_id');
     $balanceEntityIdSelect = accumul8_optional_select('accumul8_transactions', 'balance_entity_id', 't.balance_entity_id', 'NULL AS balance_entity_id');
@@ -2407,7 +2416,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $bankingOrganizationIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
     $rows = Database::queryAll(
         'SELECT t.id, t.account_id, ' . $bankingOrganizationIdSelect . ', ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, ' . $balanceEntityIdSelect . ', COALESCE(be.display_name, "") AS balance_entity_name, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
-                t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $isBudgetPlannerSelect . ', ' . $sourceKindSelect . ', ' . $pendingStatusSelect . ',
+                t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $isBudgetPlannerSelect . ', ' . $sourceKindSelect . ', ' . $sourceRefSelect . ', ' . $pendingStatusSelect . ',
                 c.contact_name, a.account_name, COALESCE(ag.group_name, "") AS banking_organization_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
          LEFT JOIN accumul8_contacts c ON c.id = t.contact_id AND c.owner_user_id = t.owner_user_id
@@ -2445,6 +2454,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'is_reconciled' => (int)($r['is_reconciled'] ?? 0),
             'is_budget_planner' => (int)($r['is_budget_planner'] ?? 0),
             'source_kind' => (string)($r['source_kind'] ?? ''),
+            'source_ref' => (string)($r['source_ref'] ?? ''),
             'pending_status' => (int)($r['pending_status'] ?? 0),
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'account_name' => (string)($r['account_name'] ?? ''),
@@ -2529,11 +2539,13 @@ function accumul8_list_statement_uploads(int $viewerId): array
 
     $rows = Database::queryAll(
         'SELECT su.id, su.account_id, su.statement_kind, su.status, su.original_filename, su.mime_type, su.file_size_bytes, su.extracted_method,
-                su.ai_provider, su.ai_model, su.period_start, su.period_end, su.opening_balance, su.closing_balance,
+                su.ai_provider, su.ai_model, su.institution_name, su.account_name_hint, su.account_mask_last4,
+                su.period_start, su.period_end, su.opening_balance, su.closing_balance,
                 su.imported_transaction_count, su.duplicate_transaction_count, su.suspicious_item_count,
                 su.reconciliation_status, COALESCE(su.reconciliation_note, "") AS reconciliation_note,
                 COALESCE(su.suspicious_items_json, "[]") AS suspicious_items_json,
                 COALESCE(su.processing_notes_json, "[]") AS processing_notes_json,
+                COALESCE(su.transaction_locator_json, "[]") AS transaction_locator_json,
                 COALESCE(su.last_error, "") AS last_error, su.processed_at, su.created_at,
                 COALESCE(a.account_name, "") AS account_name,
                 COALESCE(ag.group_name, "") AS banking_organization_name
@@ -2553,11 +2565,15 @@ function accumul8_list_statement_uploads(int $viewerId): array
     return array_map(static function (array $row): array {
         $suspicious = json_decode((string)($row['suspicious_items_json'] ?? '[]'), true);
         $notes = json_decode((string)($row['processing_notes_json'] ?? '[]'), true);
+        $locators = json_decode((string)($row['transaction_locator_json'] ?? '[]'), true);
         return [
             'id' => (int)($row['id'] ?? 0),
             'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
             'account_name' => (string)($row['account_name'] ?? ''),
             'banking_organization_name' => (string)($row['banking_organization_name'] ?? ''),
+            'institution_name' => (string)($row['institution_name'] ?? ''),
+            'account_name_hint' => (string)($row['account_name_hint'] ?? ''),
+            'account_mask_last4' => (string)($row['account_mask_last4'] ?? ''),
             'statement_kind' => (string)($row['statement_kind'] ?? 'bank_account'),
             'status' => (string)($row['status'] ?? 'uploaded'),
             'original_filename' => (string)($row['original_filename'] ?? ''),
@@ -2577,6 +2593,7 @@ function accumul8_list_statement_uploads(int $viewerId): array
             'reconciliation_note' => (string)($row['reconciliation_note'] ?? ''),
             'suspicious_items' => is_array($suspicious) ? $suspicious : [],
             'processing_notes' => is_array($notes) ? $notes : [],
+            'transaction_locators' => is_array($locators) ? $locators : [],
             'last_error' => (string)($row['last_error'] ?? ''),
             'processed_at' => (string)($row['processed_at'] ?? ''),
             'created_at' => (string)($row['created_at'] ?? ''),
@@ -4629,6 +4646,10 @@ if ($action === 'download_statement_upload') {
     header('Content-Type: ' . (string)($row['mime_type'] ?? 'application/octet-stream'));
     header('Content-Length: ' . strlen((string)($row['file_blob'] ?? '')));
     header('Content-Disposition: inline; filename="' . str_replace('"', '', (string)($row['original_filename'] ?? ('statement-' . $id))) . '"');
+    header('Cache-Control: private, no-store, max-age=0');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+    header("Content-Security-Policy: default-src 'none'; frame-ancestors 'self'; sandbox");
     echo (string)($row['file_blob'] ?? '');
     exit;
 }

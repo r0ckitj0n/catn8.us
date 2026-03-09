@@ -3116,8 +3116,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             busy={busy}
             initialForm={ledgerForm}
             editing={editingTransactionId !== null}
+            transaction={editingTransactionId !== null ? (transactions.find((tx) => tx.id === editingTransactionId) || null) : null}
             entities={entitiesSorted}
             accounts={visibleAccounts}
+            statementUploads={statementUploads}
+            ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
             onClose={closeTransactionModal}
             onSave={submitTransactionModal}
           />

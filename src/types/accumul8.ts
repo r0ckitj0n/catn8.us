@@ -15,11 +15,22 @@ export interface Accumul8StatementAlert {
   baseline_max: number | null;
 }
 
+export interface Accumul8StatementTransactionLocator {
+  transaction_date: string;
+  description: string;
+  amount: number;
+  running_balance: number | null;
+  page_number: number | null;
+}
+
 export interface Accumul8StatementUpload {
   id: number;
   account_id: number | null;
   account_name: string;
   banking_organization_name: string;
+  institution_name: string;
+  account_name_hint: string;
+  account_mask_last4: string;
   statement_kind: Accumul8StatementKind;
   status: string;
   original_filename: string;
@@ -39,6 +50,7 @@ export interface Accumul8StatementUpload {
   reconciliation_note: string;
   suspicious_items: Accumul8StatementAlert[];
   processing_notes: string[];
+  transaction_locators: Accumul8StatementTransactionLocator[];
   last_error: string;
   processed_at: string;
   created_at: string;
@@ -134,6 +146,7 @@ export interface Accumul8Transaction {
   is_reconciled: number;
   is_budget_planner: number;
   source_kind: string;
+  source_ref: string;
   pending_status: number;
   contact_name: string;
   account_name: string;

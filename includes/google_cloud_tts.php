@@ -187,10 +187,11 @@ function catn8_google_cloud_tts_synthesize(array $opts): array
     $resp = @file_get_contents($url, false, $context);
 
     $status = 0;
-    if (isset($http_response_header) && is_array($http_response_header)) {
-        foreach ($http_response_header as $h) {
-            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $h, $m)) {
-                $status = (int)$m[1];
+    $responseHeaders = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : null;
+    if (is_array($responseHeaders)) {
+        foreach ($responseHeaders as $header) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', (string)$header, $matches)) {
+                $status = (int)$matches[1];
                 break;
             }
         }

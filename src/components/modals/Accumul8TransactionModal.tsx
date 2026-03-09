@@ -4,6 +4,8 @@ import {
   Accumul8Account,
   Accumul8Entity,
   Accumul8EntryType,
+  Accumul8StatementUpload,
+  Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../../types/accumul8';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
@@ -30,10 +32,67 @@ interface Accumul8TransactionModalProps {
   busy: boolean;
   editing: boolean;
   initialForm: Accumul8TransactionModalFormState;
+  transaction: Accumul8Transaction | null;
   entities: Accumul8Entity[];
   accounts: Accumul8Account[];
+  statementUploads: Accumul8StatementUpload[];
+  ownerUserId: number;
   onClose: () => void;
   onSave: (form: Accumul8TransactionUpsertRequest) => Promise<void>;
+}
+
+function normalizeLocatorText(value: string): string {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+}
+
+function resolveStatementLink(
+  transaction: Accumul8Transaction | null,
+  statementUploads: Accumul8StatementUpload[],
+  ownerUserId: number,
+): { href: string; label: string } | null {
+  if (!transaction || ownerUserId <= 0) {
+    return null;
+  }
+
+  const sourceKind = String(transaction.source_kind || '').trim().toLowerCase();
+  const sourceRef = String(transaction.source_ref || '').trim();
+  if (!sourceRef || (sourceKind !== 'statement_pdf' && sourceKind !== 'statement_upload')) {
+    return null;
+  }
+
+  const directUploadIdMatch = sourceRef.match(/^statement_upload:(\d+)$/);
+  let candidates = directUploadIdMatch
+    ? statementUploads.filter((upload) => upload.id === Number(directUploadIdMatch[1]))
+    : statementUploads.filter((upload) => upload.original_filename === sourceRef);
+
+  if (Number(transaction.account_id || 0) > 0) {
+    const accountScoped = candidates.filter((upload) => Number(upload.account_id || 0) === Number(transaction.account_id || 0));
+    if (accountScoped.length > 0) {
+      candidates = accountScoped;
+    }
+  }
+
+  const normalizedDescription = normalizeLocatorText(transaction.description);
+  const amount = Number(transaction.amount || 0);
+  for (const upload of candidates) {
+    const matchedLocator = upload.transaction_locators.find((locator) => {
+      if (String(locator.transaction_date || '') !== String(transaction.transaction_date || '')) {
+        return false;
+      }
+      if (Math.abs(Number(locator.amount || 0) - amount) > 0.01) {
+        return false;
+      }
+      return normalizeLocatorText(locator.description) === normalizedDescription;
+    });
+    const pageNumber = Number(matchedLocator?.page_number || 0);
+    const pageSuffix = pageNumber > 0 ? `#page=${pageNumber}` : '';
+    return {
+      href: `/api/accumul8.php?action=download_statement_upload&id=${upload.id}&owner_user_id=${ownerUserId}${pageSuffix}`,
+      label: pageNumber > 0 ? `Open statement page ${pageNumber}` : 'Open statement PDF',
+    };
+  }
+
+  return null;
 }
 
 export function Accumul8TransactionModal({
@@ -41,13 +100,20 @@ export function Accumul8TransactionModal({
   busy,
   editing,
   initialForm,
+  transaction,
   entities,
   accounts,
+  statementUploads,
+  ownerUserId,
   onClose,
   onSave,
 }: Accumul8TransactionModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8TransactionModalFormState>(initialForm);
+  const statementLink = React.useMemo(
+    () => resolveStatementLink(transaction, statementUploads, ownerUserId),
+    [ownerUserId, statementUploads, transaction],
+  );
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -92,6 +158,14 @@ export function Accumul8TransactionModal({
               });
             }}
           >
+            {editing && statementLink ? (
+              <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div className="small text-muted">This ledger record is tied to a saved bank statement.</div>
+                <a className="btn btn-outline-primary btn-sm" href={statementLink.href} target="_blank" rel="noreferrer">
+                  {statementLink.label}
+                </a>
+              </div>
+            ) : null}
             <div className="row g-3">
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-transaction-date">Transaction Date</label>

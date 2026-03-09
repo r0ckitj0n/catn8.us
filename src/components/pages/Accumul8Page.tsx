@@ -2490,7 +2490,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <option value="1">Paid</option>
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{Number(billTx.is_paid || 0) === 1 ? 'Paid' : ((billTx.due_date || billTx.transaction_date) < todayDate ? 'Past due' : 'Upcoming')}</button>
+                            <button
+                              type="button"
+                              className={`accumul8-inline-cell-trigger${Number(billTx.is_paid || 0) !== 1 && (billTx.due_date || billTx.transaction_date) < todayDate ? ' accumul8-inline-cell-trigger--past-due' : ''}`}
+                              onClick={() => activatePayBillRow(billTx.id)}
+                              disabled={busy}
+                            >
+                              {Number(billTx.is_paid || 0) === 1 ? 'Paid' : ((billTx.due_date || billTx.transaction_date) < todayDate ? 'Past due' : 'Upcoming')}
+                            </button>
                           )}
                         </td>
                         <td className="text-end">

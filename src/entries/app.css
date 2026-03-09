@@ -200,14 +200,31 @@ body.catn8-noir-mode .modal-backdrop,
 .modal.catn8-modal-layer-9 { z-index: 5190 !important; }
 
 .modal.show .modal-dialog {
-  display: block !important;
   width: auto !important;
   min-width: 1px;
   min-height: 1px;
+  margin: var(--bs-modal-margin, 0.5rem) auto;
+}
+
+.modal.show .modal-dialog.modal-dialog-centered {
+  display: flex !important;
+  align-items: center;
+  min-height: calc(100% - (var(--bs-modal-margin, 0.5rem) * 2));
+}
+
+.modal.show .modal-dialog.modal-dialog-scrollable {
+  height: calc(100% - (var(--bs-modal-margin, 0.5rem) * 2));
+}
+
+.modal.show .modal-dialog.modal-dialog-scrollable .modal-content {
+  max-height: 100%;
+}
+
+.modal.show .modal-dialog.modal-dialog-scrollable .modal-body {
+  overflow-y: auto;
 }
 
 .modal.show .modal-content {
-  display: block;
   min-width: 1px;
   min-height: 1px;
 }

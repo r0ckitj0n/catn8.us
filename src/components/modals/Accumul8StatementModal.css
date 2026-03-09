@@ -1,8 +1,28 @@
+.accumul8-statement-modal {
+  padding: 1rem 0;
+}
+
+.accumul8-statement-modal .modal-dialog {
+  min-height: calc(100vh - 2rem);
+  display: flex;
+  align-items: center;
+}
+
+.accumul8-statement-modal .modal-content {
+  width: 100%;
+  max-height: min(86vh, 980px);
+}
+
+.accumul8-statement-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .accumul8-statement-hero {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
-  margin-bottom: 1.1rem;
 }
 
 .accumul8-statement-hero-card,
@@ -35,6 +55,9 @@
 .accumul8-statement-history-list {
   display: grid;
   gap: 0.85rem;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 0.2rem;
 }
 
 .accumul8-statement-history-empty {
@@ -111,6 +134,18 @@
 }
 
 @media (max-width: 767.98px) {
+  .accumul8-statement-modal {
+    padding: 0.75rem 0;
+  }
+
+  .accumul8-statement-modal .modal-dialog {
+    min-height: calc(100vh - 1.5rem);
+  }
+
+  .accumul8-statement-modal .modal-content {
+    max-height: calc(100vh - 1.5rem);
+  }
+
   .accumul8-statement-hero,
   .accumul8-statement-history-head,
   .accumul8-statement-upload-actions,

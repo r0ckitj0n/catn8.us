@@ -863,11 +863,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const ledgerColumnWidths = useMeasuredTableColumnWidths(ledgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
     { key: 'due', index: 1, fallback: 96, header: 'Due' },
-    { key: 'amount', index: 4, fallback: 120, header: 'Amount' },
-    { key: 'balance', index: 5, fallback: 136, header: 'Balance' },
-    { key: 'paid', index: 6, fallback: 88, header: 'Paid' },
-    { key: 'reconciled', index: 7, fallback: 160, header: 'Reconciled' },
-    { key: 'actions', index: 8, fallback: 132, header: 'Actions' },
+    { key: 'account', index: 2, fallback: 104, header: 'Account' },
+    { key: 'amount', index: 5, fallback: 120, header: 'Amount' },
+    { key: 'balance', index: 6, fallback: 136, header: 'Balance' },
+    { key: 'paid', index: 7, fallback: 88, header: 'Paid' },
+    { key: 'reconciled', index: 8, fallback: 160, header: 'Reconciled' },
+    { key: 'actions', index: 9, fallback: 132, header: 'Actions' },
   ], [ledgerTableRef, ledgerRows, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
     { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
@@ -2063,9 +2064,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col className="accumul8-col--flex-20" />
-                    <col className="accumul8-col--flex-40" />
-                    <col className="accumul8-col--flex-40" />
+                    <col style={{ width: 'var(--accumul8-col-account-width)' }} />
+                    <col className="accumul8-col--flex-45" />
+                    <col className="accumul8-col--flex-55" />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-paid-width)' }} />

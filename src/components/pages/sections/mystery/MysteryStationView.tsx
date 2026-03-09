@@ -39,7 +39,7 @@ export function MysteryStationView({
   onOpenCrimeLab
 }: MysteryStationViewProps) {
   const handleEnterStation = () => {
-    window.location.href = '/sheriff_station.php';
+    window.location.href = '/sheriff_station';
   };
 
   return (

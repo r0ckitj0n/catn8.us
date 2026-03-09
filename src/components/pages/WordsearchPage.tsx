@@ -115,7 +115,7 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   if (!state.isLoggedIn) {
     return (
-      <PageLayout page="wordsearch" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="loc8" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
             <h1 className="section-title">LOC8</h1>
@@ -132,7 +132,7 @@ export function WordsearchPage({ viewer, onLoginClick, onLogout, onAccountClick,
 
   return (
     <>
-      <PageLayout page="wordsearch" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+      <PageLayout page="loc8" title="LOC8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
         <section className="section">
           <div className="container">
             <h1 className="section-title">LOC8</h1>

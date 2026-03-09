@@ -30,7 +30,7 @@ export function ArcadePage({ viewer, onLoginClick, onLogout, onAccountClick, mys
   }, []);
 
   return (
-    <PageLayout page="arcade" title="RECRE8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="recre8" title="RECRE8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
           <h1 className="section-title">RECRE8</h1>

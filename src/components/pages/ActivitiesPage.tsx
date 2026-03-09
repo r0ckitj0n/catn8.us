@@ -36,7 +36,7 @@ export function ActivitiesPage({ viewer, onLoginClick, onLogout, onAccountClick,
   ];
 
   return (
-    <PageLayout page="activities" title="ACTIV8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="activ8" title="ACTIV8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       {sections.map((sec) => (
         <section className="section" key={sec.title}>
           <div className="container">

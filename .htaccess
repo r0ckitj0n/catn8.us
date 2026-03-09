@@ -8,6 +8,92 @@ DirectoryIndex index.html index.php
   RewriteCond %{HTTP_HOST} ^www\.catn8\.us$ [NC]
   RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
 
+  # Canonical clean URLs for app entrypoints.
+  RewriteCond %{REQUEST_URI} !^/elucid8$
+  RewriteRule ^elucid8\.php/?$ /elucid8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/activ8$
+  RewriteRule ^activ8\.php/?$ /activ8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/recre8$
+  RewriteRule ^recre8\.php/?$ /recre8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/illumin8$
+  RewriteRule ^illumin8\.php/?$ /illumin8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/stimul8$
+  RewriteRule ^stimul8\.php/?$ /stimul8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/narr8$
+  RewriteRule ^narr8\.php/?$ /narr8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/loc8$
+  RewriteRule ^loc8\.php/?$ /loc8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/investig8$
+  RewriteRule ^investig8\.php/?$ /investig8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/fabric8$
+  RewriteRule ^fabric8\.php/?$ /fabric8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/photo-m8$
+  RewriteRule ^photo-m8\.php/?$ /photo-m8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/accumul8$
+  RewriteRule ^accumul8(?:/index\.php|\.php)?/?$ /accumul8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/valid8$
+  RewriteRule ^valid8(?:/index\.php|\.php)?/?$ /valid8 [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/login$
+  RewriteRule ^login(?:\.php)?/?$ /login [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/sheriff_station$
+  RewriteRule ^sheriff_station(?:\.php)?/?$ /sheriff_station [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/settings$
+  RewriteRule ^settings(?:\.php)?/?$ /settings [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/frogger$
+  RewriteRule ^frogger(?:-game)?(?:\.php)?/?$ /frogger [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/asteroids$
+  RewriteRule ^asteroids(?:-game)?(?:\.php)?/?$ /asteroids [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/tetris$
+  RewriteRule ^tetris(?:-game)?(?:\.php)?/?$ /tetris [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/verify$
+  RewriteRule ^verify(?:\.php)?/?$ /verify [R=301,L,NC]
+
+  RewriteCond %{REQUEST_URI} !^/reset$
+  RewriteRule ^reset(?:\.php)?/?$ /reset [R=301,L,NC]
+
+  # Retire legacy clean slugs instead of silently serving the SPA home shell.
+  RewriteRule ^(?:about|activities|arcade|coloring|games|stories|wordsearch|mystery|photo-albums|build-wizard|build_wizard)/?$ - [R=404,L,NC]
+
+  # Route clean entrypoint URLs through PHP wrappers so server-side auth still runs.
+  RewriteRule ^elucid8/?$ /elucid8.php [L,NC,QSA]
+  RewriteRule ^activ8/?$ /activ8.php [L,NC,QSA]
+  RewriteRule ^recre8/?$ /recre8.php [L,NC,QSA]
+  RewriteRule ^illumin8/?$ /illumin8.php [L,NC,QSA]
+  RewriteRule ^stimul8/?$ /stimul8.php [L,NC,QSA]
+  RewriteRule ^narr8/?$ /narr8.php [L,NC,QSA]
+  RewriteRule ^loc8/?$ /loc8.php [L,NC,QSA]
+  RewriteRule ^investig8/?$ /investig8.php [L,NC,QSA]
+  RewriteRule ^fabric8/?$ /fabric8.php [L,NC,QSA]
+  RewriteRule ^photo-m8/?$ /photo-m8.php [L,NC,QSA]
+  RewriteRule ^accumul8/?$ /accumul8.php [L,NC,QSA]
+  RewriteRule ^valid8/?$ /valid8.php [L,NC,QSA]
+  RewriteRule ^login/?$ /login.php [L,NC,QSA]
+  RewriteRule ^sheriff_station/?$ /sheriff_station.php [L,NC,QSA]
+  RewriteRule ^settings/?$ /settings.php [L,NC,QSA]
+  RewriteRule ^frogger/?$ /frogger-game.php [L,NC,QSA]
+  RewriteRule ^asteroids/?$ /asteroids-game.php [L,NC,QSA]
+  RewriteRule ^tetris/?$ /tetris-game.php [L,NC,QSA]
+  RewriteRule ^verify/?$ /verify.php [L,NC,QSA]
+  RewriteRule ^reset/?$ /reset.php [L,NC,QSA]
+
   # Let real files and directories resolve directly.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d

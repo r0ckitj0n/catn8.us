@@ -137,7 +137,7 @@ export function SheriffStationPage({
 
   React.useEffect(() => {
     if (isAuthed && !mysteryState.caseId && !busy) {
-      window.location.href = '/mystery';
+      window.location.href = '/investig8';
     }
   }, [isAuthed, mysteryState.caseId, busy]);
 
@@ -199,7 +199,7 @@ export function SheriffStationPage({
             }}
             onOpenGameMgmt={handleOpenGameMgmt}
             onOpenCrimeLab={handleOpenCrimeLab}
-            onClose={() => { window.location.href = '/mystery.php'; }}
+            onClose={() => { window.location.href = '/investig8'; }}
           />
         </div>
       </section>

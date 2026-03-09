@@ -17,7 +17,7 @@ if ($uid !== null && !$isAllowed) {
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>VALID8 Access</title></head><body style="font-family:Arial,sans-serif;padding:2rem;background:#f5f7fb;color:#1f2a44;">';
     echo '<h1 style="margin-top:0;">VALID8 Access Restricted</h1>';
     echo '<p>This page is only available to users in <strong>VALID8 Users</strong> or administrators.</p>';
-    echo '<p><a href="/login.php">Log in</a> or contact an administrator to request access.</p>';
+    echo '<p><a href="/login">Log in</a> or contact an administrator to request access.</p>';
     echo '</body></html>';
     exit;
 }

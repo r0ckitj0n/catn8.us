@@ -183,7 +183,7 @@ export function PhotoAlbumsPage({ viewer, onLoginClick, onLogout, onAccountClick
   }, []);
 
   return (
-    <PageLayout page="photo_albums" title="PHOTO M8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="photo_m8" title="PHOTO M8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className={isAlbumViewerOpen ? 'section catn8-photo-albums-page catn8-photo-albums-page--viewer' : 'section catn8-photo-albums-page'}>
         <div className={isAlbumViewerOpen ? 'container catn8-photo-albums-container--viewer' : 'container'}>
           {state.loading ? <div className="catn8-card p-4 mt-3">Loading albums...</div> : null}

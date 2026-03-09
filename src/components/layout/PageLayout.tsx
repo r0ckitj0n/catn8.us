@@ -18,20 +18,20 @@ export function PageLayout({ page, title, children, viewer, isAdmin = false, onL
   const pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
   const p = String(pathname || '').toLowerCase();
   const hideNav = (
-    p === '/mystery.php'
-    || p.startsWith('/mystery.php/')
-    || p === '/mystery'
-    || p.startsWith('/mystery/')
+    p === '/investig8.php'
+    || p.startsWith('/investig8.php/')
+    || p === '/investig8'
+    || p.startsWith('/investig8/')
     || p === '/accumul8.php'
     || p.startsWith('/accumul8.php/')
     || p === '/accumul8'
     || p.startsWith('/accumul8/')
     || p === '/sheriff_station.php'
     || p === '/sheriff_station'
-    || p === '/photo-albums.php'
-    || p.startsWith('/photo-albums.php/')
-    || p === '/photo-albums'
-    || p.startsWith('/photo-albums/')
+    || p === '/photo-m8.php'
+    || p.startsWith('/photo-m8.php/')
+    || p === '/photo-m8'
+    || p.startsWith('/photo-m8/')
   );
 
   return (

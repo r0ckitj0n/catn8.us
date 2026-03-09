@@ -7,7 +7,7 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 export function AboutPage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   return (
-    <PageLayout page="about" title="ELUCID8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="elucid8" title="ELUCID8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="hero">
         <div className="container hero-content">
           <div className="row justify-content-center">

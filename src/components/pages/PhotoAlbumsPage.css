@@ -28,7 +28,7 @@ body.catn8-photo-albums-viewer-open {
   overflow: hidden;
 }
 
-body.catn8-photo-albums-viewer-open .catn8-page[data-page="photo_albums"] {
+body.catn8-photo-albums-viewer-open .catn8-page[data-page="photo_m8"] {
   height: 100dvh;
   overflow: hidden;
 }
@@ -379,19 +379,19 @@ body.catn8-photo-albums-viewer-open .catn8-photo-albums-main--viewer {
   margin: 0 auto;
 }
 
-.catn8-page[data-page="photo_albums"] {
+.catn8-page[data-page="photo_m8"] {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
-.catn8-page[data-page="photo_albums"] .catn8-photo-albums-page--viewer {
+.catn8-page[data-page="photo_m8"] .catn8-photo-albums-page--viewer {
   flex: 1;
   display: flex;
   min-height: 0;
 }
 
-.catn8-page[data-page="photo_albums"] .catn8-photo-albums-page--viewer > .catn8-photo-albums-container--viewer {
+.catn8-page[data-page="photo_m8"] .catn8-photo-albums-page--viewer > .catn8-photo-albums-container--viewer {
   flex: 1;
   display: flex;
   min-height: 0;

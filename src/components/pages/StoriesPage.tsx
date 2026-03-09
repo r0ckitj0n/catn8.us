@@ -31,7 +31,7 @@ export function StoriesPage({ viewer, onLoginClick, onLogout, onAccountClick, my
   };
 
   return (
-    <PageLayout page="stories" title="NARR8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="narr8" title="NARR8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
           <h1 className="section-title">NARR8</h1>

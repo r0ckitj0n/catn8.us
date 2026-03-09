@@ -33,21 +33,21 @@ import './app.css';
 
 type AppPage =
   | 'home'
-  | 'about'
-  | 'stories'
-  | 'games'
-  | 'arcade'
-  | 'activities'
+  | 'elucid8'
+  | 'narr8'
+  | 'stimul8'
+  | 'recre8'
+  | 'activ8'
   | 'accumul8'
   | 'valid8'
-  | 'coloring'
-  | 'build_wizard'
+  | 'illumin8'
+  | 'fabric8'
   | 'login'
-  | 'mystery'
-  | 'photo_albums'
+  | 'investig8'
+  | 'photo_m8'
   | 'sheriff_station'
   | 'settings'
-  | 'wordsearch'
+  | 'loc8'
   | 'frogger'
   | 'asteroids'
   | 'tetris'
@@ -74,16 +74,16 @@ const BACKGROUND_LAYER_STYLE: React.CSSProperties = {
 
 const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>> = {
   home: HomePage,
-  about: AboutPage,
-  stories: StoriesPage,
-  games: GamesPage,
-  arcade: ArcadePage,
-  activities: ActivitiesPage,
+  elucid8: AboutPage,
+  narr8: StoriesPage,
+  stimul8: GamesPage,
+  recre8: ArcadePage,
+  activ8: ActivitiesPage,
   accumul8: Accumul8Page,
   valid8: Valid8Page,
-  coloring: ColoringPage,
-  wordsearch: WordsearchPage,
-  photo_albums: PhotoAlbumsPage,
+  illumin8: ColoringPage,
+  loc8: WordsearchPage,
+  photo_m8: PhotoAlbumsPage,
   frogger: FroggerPage,
   asteroids: AsteroidsPage,
   tetris: TetrisPage,
@@ -111,7 +111,7 @@ function App({ page }: { page: AppPage }) {
   }, [viewer]);
 
   React.useEffect(() => {
-    const isNoirPage = page === 'mystery' || page === 'sheriff_station';
+    const isNoirPage = page === 'investig8' || page === 'sheriff_station';
     document.documentElement.classList.toggle('catn8-noir-mode', isNoirPage);
     document.body.classList.toggle('catn8-noir-mode', isNoirPage);
   }, [page]);
@@ -252,11 +252,11 @@ function App({ page }: { page: AppPage }) {
       return <SimplePage {...sharedProps} onToast={setToast} />;
     }
 
-    if (page === 'build_wizard') {
+    if (page === 'fabric8') {
       return <BuildWizardPage {...sharedProps} onToast={setToast} />;
     }
 
-    if (page === 'mystery') {
+    if (page === 'investig8') {
       return (
         <MysteryPage
           {...sharedProps}

@@ -22,7 +22,7 @@ export function GamesPage({ viewer, onLoginClick, onLogout, onAccountClick, myst
   }, [q]);
 
   return (
-    <PageLayout page="games" title="STIMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
+    <PageLayout page="stimul8" title="STIMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container">
           <h1 className="section-title">STIMUL8</h1>

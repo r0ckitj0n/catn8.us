@@ -69,6 +69,60 @@ function catn8_router_respond_file(string $file): void
 $isApiRoute = strncmp($path, '/api/', 5) === 0;
 $isPhpRoute = $isApiRoute || substr($path, -4) === '.php';
 
+$appPhpRoutes = [
+    '/elucid8' => '/elucid8.php',
+    '/activ8' => '/activ8.php',
+    '/recre8' => '/recre8.php',
+    '/illumin8' => '/illumin8.php',
+    '/stimul8' => '/stimul8.php',
+    '/narr8' => '/narr8.php',
+    '/loc8' => '/loc8.php',
+    '/investig8' => '/investig8.php',
+    '/fabric8' => '/fabric8.php',
+    '/photo-m8' => '/photo-m8.php',
+    '/accumul8' => '/accumul8.php',
+    '/valid8' => '/valid8.php',
+    '/login' => '/login.php',
+    '/sheriff_station' => '/sheriff_station.php',
+    '/settings' => '/settings.php',
+    '/frogger' => '/frogger-game.php',
+    '/asteroids' => '/asteroids-game.php',
+    '/tetris' => '/tetris-game.php',
+    '/verify' => '/verify.php',
+    '/reset' => '/reset.php',
+];
+
+$retiredPaths = [
+    '/about',
+    '/activities',
+    '/arcade',
+    '/coloring',
+    '/games',
+    '/stories',
+    '/wordsearch',
+    '/mystery',
+    '/photo-albums',
+    '/build-wizard',
+    '/build_wizard',
+];
+
+if (!$isPhpRoute) {
+    $canonical = rtrim($path, '/');
+    if ($canonical === '') {
+        $canonical = '/';
+    }
+    if (in_array($canonical, $retiredPaths, true)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'Not found';
+        exit;
+    }
+    if (isset($appPhpRoutes[$canonical])) {
+        require $root . $appPhpRoutes[$canonical];
+        exit;
+    }
+}
+
 if ($isPhpRoute) {
     $candidate = $path === '/' ? '/index.php' : $path;
     $target = $root . '/' . ltrim($candidate, '/');

@@ -10,7 +10,7 @@ declare global {
 }
 
 export function isMysteryExperiencePage(page: string): boolean {
-  return page === 'mystery' || page === 'sheriff_station';
+  return page === 'investig8' || page === 'sheriff_station';
 }
 
 function parseNumber(value: unknown, fallback: number, min: number, max: number): number {

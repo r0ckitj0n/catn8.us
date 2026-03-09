@@ -125,7 +125,7 @@ export function useMysteryPageModals(
       if (takeCaseModalApiRef.current) {
         takeCaseModalApiRef.current.hide();
       }
-      window.location.href = '/sheriff_station.php'; return;
+      window.location.href = '/sheriff_station'; return;
     } catch (err) {
       console.error("takeCaseSelect: CRITICAL ERROR", err);
     }

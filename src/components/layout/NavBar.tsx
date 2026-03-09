@@ -34,13 +34,13 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const canUseValid8 = isAuthed && (isAdministrator || isValid8User);
 
   const links = [
-    { key: 'about', href: 'about.php', label: 'ELUCID8' },
-    { key: 'activities', href: 'activities.php', label: 'ACTIV8' },
-    { key: 'arcade', href: 'arcade.php', label: 'RECRE8' },
-    { key: 'coloring', href: 'coloring.php', label: 'ILLUMIN8' },
-    { key: 'games', href: 'games.php', label: 'STIMUL8' },
-    { key: 'stories', href: 'stories.php', label: 'NARR8' },
-    ...(isAuthed && isWordsearchUser ? [{ key: 'wordsearch', href: 'wordsearch.php', label: 'LOC8' }] : []),
+    { key: 'elucid8', href: '/elucid8', label: 'ELUCID8' },
+    { key: 'activ8', href: '/activ8', label: 'ACTIV8' },
+    { key: 'recre8', href: '/recre8', label: 'RECRE8' },
+    { key: 'illumin8', href: '/illumin8', label: 'ILLUMIN8' },
+    { key: 'stimul8', href: '/stimul8', label: 'STIMUL8' },
+    { key: 'narr8', href: '/narr8', label: 'NARR8' },
+    ...(isAuthed && isWordsearchUser ? [{ key: 'loc8', href: '/loc8', label: 'LOC8' }] : []),
   ];
   const shortcutItems: Array<{
     key: string;
@@ -53,13 +53,13 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   }> = [
     ...links.map((l) => ({ key: l.key, label: l.label, href: l.href })),
     ...(isAuthed && isMysteryGameUser
-      ? [{ key: 'mystery', label: 'INVESTIG8', href: 'mystery.php' }]
+      ? [{ key: 'investig8', label: 'INVESTIG8', href: '/investig8' }]
       : []),
     ...(canUseBuildWizard
-      ? [{ key: 'build_wizard', label: 'FABRIC8', href: 'build-wizard.php' }]
+      ? [{ key: 'fabric8', label: 'FABRIC8', href: '/fabric8' }]
       : []),
     ...(canUsePhotoAlbums
-      ? [{ key: 'photo_albums', label: 'PHOTO M8', href: 'photo-albums.php' }]
+      ? [{ key: 'photo_m8', label: 'PHOTO M8', href: '/photo-m8' }]
       : []),
     ...(canUseAccumul8
       ? [{ key: 'accumul8', label: 'ACCUMUL8', href: 'accumul8.php' }]
@@ -67,7 +67,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     ...(canUseValid8
       ? [{ key: 'valid8', label: 'VALID8', href: 'VALID8/' }]
       : []),
-    ...((active === 'mystery' || active === 'sheriff_station') && isAuthed && isAdministrator
+    ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [
           {
             key: 'dossier',
@@ -157,7 +157,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
               <li className="nav-item">
                 <a
                   className={"nav-link catn8-login-link" + (active === 'login' ? ' active' : '')}
-                  href="login.php"
+                  href="/login"
                   onClick={(e) => {
                     if (typeof onLoginClick === 'function') {
                       e.preventDefault();
@@ -172,7 +172,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
                           || document.querySelector('[aria-label="Account"]'),
                         );
                         if (!modalOpen) {
-                          window.location.assign('/login.php');
+                          window.location.assign('/login');
                         }
                       }, 180);
                     }
@@ -184,7 +184,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
             )}
             {isAuthed && isInAdministratorGroup ? (
               <li className="nav-item">
-                <a className={"nav-link" + (active === 'settings' ? ' active' : '')} href="settings.php">
+                <a className={"nav-link" + (active === 'settings' ? ' active' : '')} href="/settings">
                   Settings
                 </a>
               </li>

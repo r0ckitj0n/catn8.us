@@ -7,9 +7,9 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 
 export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle }: AppShellPageProps) {
   const cards = [
-    { href: 'stories.php', title: 'Stories', text: 'Read our fun adventures!', image: '/images/homepage_friends.png' },
-    { href: 'games.php', title: 'Games', text: 'Play and learn together!', image: '/images/homepage_growth.png' },
-    { href: 'activities.php', title: 'Activities', text: 'Fun things to do!', image: '/images/homepage_kindness.png' },
+    { href: '/narr8', title: 'Stories', text: 'Read our fun adventures!', image: '/images/homepage_friends.png' },
+    { href: '/stimul8', title: 'Games', text: 'Play and learn together!', image: '/images/homepage_growth.png' },
+    { href: '/activ8', title: 'Activities', text: 'Fun things to do!', image: '/images/homepage_kindness.png' },
   ];
 
   return (

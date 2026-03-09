@@ -24,6 +24,36 @@ function accumul8_normalize_text($value, int $maxLen = 191): string
     return trim($v);
 }
 
+function accumul8_is_generic_import_artifact_text($value): bool
+{
+    $text = accumul8_normalize_text($value, 4000);
+    if ($text === '') {
+        return false;
+    }
+
+    $patterns = [
+        '/^Imported from Budget\.xlsx(?:\b.*)?$/i',
+        '/^Imported from monthly PDF statements$/i',
+        '/^Imported from statement opening balance$/i',
+        '/^Imported from .+ sheet(?:\b.*)?$/i',
+        '/^Statement import parent(?:\..*)?$/i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $text) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function accumul8_filter_note_for_display($value, int $maxLen = 4000): string
+{
+    $text = accumul8_normalize_text($value, $maxLen);
+    return accumul8_is_generic_import_artifact_text($text) ? '' : $text;
+}
+
 function accumul8_normalize_amount($value): float
 {
     if (is_string($value)) {
@@ -689,7 +719,7 @@ function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEnt
     $city = accumul8_normalize_text($payload['city'] ?? '', 120);
     $state = accumul8_normalize_text($payload['state'] ?? '', 64);
     $zip = accumul8_normalize_text($payload['zip'] ?? '', 20);
-    $notes = accumul8_normalize_text($payload['notes'] ?? '', 1500);
+    $notes = accumul8_filter_note_for_display($payload['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($payload['is_active'] ?? 1);
     $flags = accumul8_contact_type_flags($contactType);
     $isPayee = accumul8_normalize_bool($payload['is_payee'] ?? $flags['is_payee']);
@@ -1454,15 +1484,12 @@ function accumul8_statement_resolve_entity_id(int $viewerId, string $rawDescript
     $entityId = $entityRow ? (int)($entityRow['id'] ?? 0) : 0;
     if ($entityId <= 0) {
         $family = accumul8_find_entity_family_definition($rawDescription);
-        $notes = is_array($family) && !empty($family['match_rule'])
-            ? 'Statement import parent. ' . (string)$family['match_rule']
-            : 'Statement import parent.';
         $contactFlags = accumul8_contact_type_flags('payee');
         Database::execute(
             'INSERT INTO accumul8_entities
              (owner_user_id, display_name, entity_kind, contact_type, is_payee, is_payer, is_vendor, is_balance_person, default_amount, notes, is_active)
              VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0.00, ?, 1)',
-            [$viewerId, $parentName, 'business', 'payee', $contactFlags['is_payee'], $contactFlags['is_payer'], 1, $notes]
+            [$viewerId, $parentName, 'business', 'payee', $contactFlags['is_payee'], $contactFlags['is_payer'], 1, null]
         );
         $entityId = (int)Database::lastInsertId();
     }
@@ -2074,7 +2101,7 @@ function accumul8_list_banking_organizations(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'banking_organization_name' => (string)($r['group_name'] ?? ''),
             'institution_name' => (string)($r['institution_name'] ?? ''),
-            'notes' => (string)($r['notes'] ?? ''),
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
         ];
     }, $rows);
@@ -2103,7 +2130,7 @@ function accumul8_list_contacts(int $viewerId): array
             'city' => (string)($r['city'] ?? ''),
             'state' => (string)($r['state'] ?? ''),
             'zip' => (string)($r['zip'] ?? ''),
-            'notes' => (string)($r['notes'] ?? ''),
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
             'created_at' => (string)($r['created_at'] ?? ''),
             'updated_at' => (string)($r['updated_at'] ?? ''),
@@ -2190,7 +2217,7 @@ function accumul8_list_entities(int $viewerId): array
             'city' => (string)($r['city'] ?? ''),
             'state' => (string)($r['state'] ?? ''),
             'zip' => (string)($r['zip'] ?? ''),
-            'notes' => (string)($r['notes'] ?? ''),
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
             'legacy_contact_id' => isset($r['legacy_contact_id']) ? (int)$r['legacy_contact_id'] : null,
             'legacy_debtor_id' => isset($r['legacy_debtor_id']) ? (int)$r['legacy_debtor_id'] : null,
@@ -2255,7 +2282,7 @@ function accumul8_list_recurring(int $viewerId): array
             'day_of_month' => isset($r['day_of_month']) ? (int)$r['day_of_month'] : null,
             'day_of_week' => isset($r['day_of_week']) ? (int)$r['day_of_week'] : null,
             'next_due_date' => (string)($r['next_due_date'] ?? ''),
-            'notes' => (string)($r['notes'] ?? ''),
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
             'is_budget_planner' => (int)($r['is_budget_planner'] ?? 0),
             'contact_name' => (string)($r['contact_name'] ?? ''),
@@ -2336,7 +2363,7 @@ function accumul8_list_debtors(int $viewerId): array
             'entity_name' => (string)($r['entity_name'] ?? ''),
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'debtor_name' => (string)($r['debtor_name'] ?? ''),
-            'notes' => (string)($r['notes'] ?? ''),
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
             'total_loaned' => $totalLoaned,
             'total_repaid' => $totalRepaid,
@@ -2479,7 +2506,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'paid_date' => (string)($r['paid_date'] ?? ''),
             'entry_type' => (string)($r['entry_type'] ?? ''),
             'description' => (string)($r['description'] ?? ''),
-            'memo' => (string)($r['memo'] ?? ''),
+            'memo' => accumul8_filter_note_for_display($r['memo'] ?? '', 2000),
             'amount' => (float)($r['amount'] ?? 0),
             'rta_amount' => (float)($r['rta_amount'] ?? 0),
             'running_balance' => (float)($r['running_balance'] ?? 0),

@@ -1302,7 +1302,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const entityEndexParents = React.useMemo(() => {
     const query = String(entityEndexQuery || '').trim().toLowerCase();
     return entitiesSorted.filter((entity) => {
-      const importedBudgetParent = String(entity.notes || '').includes('Imported from Budget.xlsx');
+      const importedBudgetParent = Number(entity.legacy_contact_id || 0) > 0 || Number(entity.legacy_debtor_id || 0) > 0;
       const aliases = entity.aliases || [];
       const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
       if (!importedBudgetParent && aliases.length === 0 && linkedChildren.length === 0) {
@@ -1866,7 +1866,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="" />
               </div>
             </div>
-            <div className="accumul8-page-toolbar mb-3">
+            <div className="accumul8-page-toolbar">
               <div className="accumul8-page-filters">
                 <div className="accumul8-toolbar-field">
                   <div className="accumul8-filter-control-row">
@@ -2767,7 +2767,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                        <div>
 	                          <h4>{entity.display_name}</h4>
 	                          <div className="accumul8-entity-endex-meta">
-	                            {String(entity.notes || '').includes('Imported from Budget.xlsx') ? 'Budget parent' : 'Alias parent'}
+	                            {Number(entity.legacy_contact_id || 0) > 0 || Number(entity.legacy_debtor_id || 0) > 0 ? 'Budget parent' : 'Alias parent'}
 	                            {summary.count > 0 ? ` · ${summary.count} tx` : ''}
 	                            {summary.lastDate ? ` · ${formatInlineDate(summary.lastDate)}` : ''}
 	                          </div>

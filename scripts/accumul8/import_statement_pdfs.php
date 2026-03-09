@@ -625,7 +625,7 @@ function accumul8_import_ensure_group(int $ownerUserId, string $groupName, strin
     Database::execute(
         'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, notes, is_active)
          VALUES (?, ?, ?, ?, 1)',
-        [$ownerUserId, $groupName, $institutionName, 'Imported from monthly PDF statements']
+        [$ownerUserId, $groupName, $institutionName, null]
     );
     $cache[$key] = (int)Database::lastInsertId();
     return $cache[$key];
@@ -877,7 +877,7 @@ foreach ($openingBalancesByAccountNumber as $openingData) {
             (string)$openingData['date'],
             (float)$openingData['amount'] >= 0 ? 'deposit' : 'manual',
             'Opening Balance',
-            'Imported from statement opening balance',
+            null,
             round((float)$openingData['amount'], 2),
             round((float)$openingData['amount'], 2),
             ACCUMUL8_STATEMENT_SOURCE_KIND,

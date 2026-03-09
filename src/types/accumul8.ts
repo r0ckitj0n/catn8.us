@@ -1,4 +1,4 @@
-export type Accumul8ContactType = 'payee' | 'payer' | 'both';
+export type Accumul8ContactType = 'payee' | 'payer' | 'repayment';
 export type Accumul8Direction = 'outflow' | 'inflow';
 export type Accumul8Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
 export type Accumul8EntryType = 'manual' | 'auto' | 'transfer' | 'deposit' | 'bill';
@@ -295,8 +295,8 @@ export interface Accumul8EntityUpsertRequest {
   display_name: string;
   entity_kind?: string;
   contact_type: Accumul8ContactType;
-  is_payee: number;
-  is_payer: number;
+  is_payee?: number;
+  is_payer?: number;
   is_vendor?: number;
   is_balance_person?: number;
   default_amount?: number;

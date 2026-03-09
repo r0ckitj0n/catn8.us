@@ -26,6 +26,7 @@ import {
   Accumul8Transaction,
   Accumul8Debtor,
   Accumul8Entity,
+  Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import './Accumul8Page.css';
 interface Accumul8PageProps extends AppShellPageProps {
@@ -76,16 +77,13 @@ type LedgerFormState = {
 };
 type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'balance_entity_id' | 'balance_entity_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
-type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
+type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes'>>;
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
   contact_type: Accumul8ContactType;
-  is_payee: number;
-  is_payer: number;
   is_vendor: number;
-  is_balance_person: number;
   default_amount: number;
   email: string;
   phone_number: string;
@@ -99,7 +97,7 @@ type EntityFormState = {
 type PayBillsDateFilter = '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
 const DEFAULT_CONTACT_FORM = {
   contact_name: '',
-  contact_type: 'both' as Accumul8ContactType,
+  contact_type: 'payee' as Accumul8ContactType,
   default_amount: 0,
   email: '',
   phone_number: '',
@@ -124,12 +122,9 @@ const DEFAULT_RECURRING_FORM: RecurringFormState = {
 };
 const DEFAULT_ENTITY_FORM: EntityFormState = {
   display_name: '',
-  entity_kind: 'contact',
-  contact_type: 'both',
-  is_payee: 1,
-  is_payer: 1,
+  entity_kind: 'business',
+  contact_type: 'payee',
   is_vendor: 0,
-  is_balance_person: 0,
   default_amount: 0,
   email: '',
   phone_number: '',
@@ -194,19 +189,36 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
   return String(value || '').trim() || fallback;
 }
 
-function formatEntityRoles(entity: Pick<Accumul8Entity, 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person'>): string {
-  const roles: string[] = [];
-  if (Number(entity.is_payee || 0) === 1) {
-    roles.push('Payee');
+function normalizeEntityContactType(entity: Pick<Accumul8Entity, 'contact_type' | 'is_payee' | 'is_payer' | 'is_balance_person'>): Accumul8ContactType {
+  const raw = String(entity.contact_type || '').trim().toLowerCase();
+  if (raw === 'repayment' || Number(entity.is_balance_person || 0) === 1) {
+    return 'repayment';
   }
-  if (Number(entity.is_payer || 0) === 1) {
-    roles.push('Payer');
+  if (raw === 'payer' || (Number(entity.is_payer || 0) === 1 && Number(entity.is_payee || 0) === 0)) {
+    return 'payer';
+  }
+  return 'payee';
+}
+
+function normalizeEntityKind(value: string | null | undefined): 'business' | 'contact' {
+  return String(value || '').trim().toLowerCase() === 'business' ? 'business' : 'contact';
+}
+
+function formatEntityTypeLabel(contactType: Accumul8ContactType): string {
+  if (contactType === 'repayment') {
+    return 'Repayment';
+  }
+  return contactType === 'payer' ? 'Payer' : 'Payee';
+}
+
+function formatEntityRoles(entity: Pick<Accumul8Entity, 'contact_type' | 'entity_kind' | 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person'>): string {
+  const roles: string[] = [];
+  roles.push(formatEntityTypeLabel(normalizeEntityContactType(entity)));
+  if (normalizeEntityKind(entity.entity_kind) === 'business') {
+    roles.push('Business');
   }
   if (Number(entity.is_vendor || 0) === 1) {
     roles.push('Vendor');
-  }
-  if (Number(entity.is_balance_person || 0) === 1) {
-    roles.push('Balance');
   }
   return roles.join(' • ') || 'Unassigned';
 }
@@ -656,7 +668,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingContactId(contact.id);
     setContactForm({
       contact_name: contact.contact_name || '',
-      contact_type: (contact.contact_type || 'both') as Accumul8ContactType,
+      contact_type: ((String(contact.contact_type || '').trim().toLowerCase() === 'payer'
+        ? 'payer'
+        : String(contact.contact_type || '').trim().toLowerCase() === 'repayment'
+          ? 'repayment'
+          : 'payee') as Accumul8ContactType),
       default_amount: Number(contact.default_amount || 0),
       email: contact.email || '',
       phone_number: contact.phone_number || '',
@@ -674,12 +690,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingEntityId(entity.id);
     setEntityForm({
       display_name: entity.display_name || '',
-      entity_kind: entity.entity_kind || (entity.is_balance_person ? 'person' : 'contact'),
-      contact_type: (entity.contact_type || 'both') as Accumul8ContactType,
-      is_payee: Number(entity.is_payee || 0),
-      is_payer: Number(entity.is_payer || 0),
+      entity_kind: normalizeEntityKind(entity.entity_kind),
+      contact_type: normalizeEntityContactType(entity),
       is_vendor: Number(entity.is_vendor || 0),
-      is_balance_person: Number(entity.is_balance_person || 0),
       default_amount: Number(entity.default_amount || 0),
       email: entity.email || '',
       phone_number: entity.phone_number || '',
@@ -711,12 +724,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [resetContactForm]);
   const openCreateDebtorModal = React.useCallback(() => {
     openCreateEntityModal({
-      entity_kind: 'person',
-      contact_type: 'both',
-      is_payee: 0,
-      is_payer: 0,
+      entity_kind: 'contact',
+      contact_type: 'repayment',
       is_vendor: 0,
-      is_balance_person: 1,
     });
   }, [openCreateEntityModal]);
   const closeDebtorModal = React.useCallback(() => {
@@ -741,24 +751,24 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     closeContactModal();
   }, [closeContactModal, createContact, editingContactId, updateContact]);
-  const submitEntityForm = React.useCallback(async (form: EntityFormState) => {
+  const submitEntityForm = React.useCallback(async (form: Accumul8EntityUpsertRequest) => {
     const payload = {
       display_name: form.display_name,
-      entity_kind: form.entity_kind,
+      entity_kind: form.entity_kind || 'business',
       contact_type: form.contact_type,
-      is_payee: Number(form.is_payee),
-      is_payer: Number(form.is_payer),
-      is_vendor: Number(form.is_vendor),
-      is_balance_person: Number(form.is_balance_person),
-      default_amount: Number(form.default_amount),
-      email: form.email,
-      phone_number: form.phone_number,
-      street_address: form.street_address,
-      city: form.city,
-      state: form.state,
-      zip: form.zip,
-      notes: form.notes,
-      is_active: Number(form.is_active),
+      is_payee: form.contact_type === 'payee' ? 1 : 0,
+      is_payer: form.contact_type === 'payer' ? 1 : 0,
+      is_vendor: Number(form.is_vendor || 0),
+      is_balance_person: form.contact_type === 'repayment' ? 1 : 0,
+      default_amount: Number(form.default_amount || 0),
+      email: form.email || '',
+      phone_number: form.phone_number || '',
+      street_address: form.street_address || '',
+      city: form.city || '',
+      state: form.state || '',
+      zip: form.zip || '',
+      notes: form.notes || '',
+      is_active: Number(form.is_active ?? 1),
     };
     if (editingEntityId) {
       await updateEntity(editingEntityId, payload);
@@ -1157,12 +1167,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     await updateEntity(entity.id, {
       display_name: draft.display_name ?? entity.display_name,
-      entity_kind: draft.entity_kind ?? entity.entity_kind,
-      contact_type: entity.contact_type,
-      is_payee: Number(draft.is_payee ?? entity.is_payee ?? 0),
-      is_payer: Number(draft.is_payer ?? entity.is_payer ?? 0),
+      entity_kind: draft.entity_kind ?? normalizeEntityKind(entity.entity_kind),
+      contact_type: draft.contact_type ?? normalizeEntityContactType(entity),
+      is_payee: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payee' ? 1 : 0,
+      is_payer: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payer' ? 1 : 0,
       is_vendor: Number(draft.is_vendor ?? entity.is_vendor ?? 0),
-      is_balance_person: Number(draft.is_balance_person ?? entity.is_balance_person ?? 0),
+      is_balance_person: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'repayment' ? 1 : 0,
       default_amount: Number(draft.default_amount ?? entity.default_amount ?? 0),
       email: draft.email ?? entity.email ?? '',
       phone_number: draft.phone_number ?? entity.phone_number ?? '',
@@ -2060,23 +2070,37 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                         <td>
                           {activeEntityRowId === entity.id ? (
-                            <div className="accumul8-inline-check-grid">
-                              {[
-                                ['is_payee', 'Payee'],
-                                ['is_payer', 'Payer'],
-                                ['is_vendor', 'Vendor'],
-                                ['is_balance_person', 'Balance'],
-                              ].map(([field, label]) => (
-                                <label key={field} className="accumul8-inline-check">
+                            <div className="accumul8-inline-stack">
+                              <select
+                                className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select"
+                                value={entityDraft?.contact_type ?? normalizeEntityContactType(entity)}
+                                onChange={(e) => setEntityRowDraft(entity, { contact_type: e.target.value as Accumul8ContactType })}
+                                disabled={busy}
+                              >
+                                <option value="payee">Payee</option>
+                                <option value="payer">Payer</option>
+                                <option value="repayment">Repayment</option>
+                              </select>
+                              <div className="accumul8-inline-check-grid">
+                                <label className="accumul8-inline-check">
                                   <input
                                     type="checkbox"
-                                    checked={Number(entityDraft?.[field as keyof EntityInlineDraft] ?? entity[field as keyof Accumul8Entity] ?? 0) === 1}
-                                    onChange={(e) => setEntityRowDraft(entity, { [field]: e.target.checked ? 1 : 0 } as EntityInlineDraft)}
+                                    checked={normalizeEntityKind(entityDraft?.entity_kind ?? entity.entity_kind) === 'business'}
+                                    onChange={(e) => setEntityRowDraft(entity, { entity_kind: e.target.checked ? 'business' : 'contact' })}
                                     disabled={busy}
                                   />
-                                  <span>{label}</span>
+                                  <span>Business</span>
                                 </label>
-                              ))}
+                                <label className="accumul8-inline-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={Number(entityDraft?.is_vendor ?? entity.is_vendor ?? 0) === 1}
+                                    onChange={(e) => setEntityRowDraft(entity, { is_vendor: e.target.checked ? 1 : 0 })}
+                                    disabled={busy}
+                                  />
+                                  <span>Vendor</span>
+                                </label>
+                              </div>
                             </div>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>

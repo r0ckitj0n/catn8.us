@@ -5,6 +5,10 @@ import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8ContactModal.css';
 
+function normalizeBusinessKind(value: string | undefined): 'business' | 'contact' {
+  return String(value || '').trim().toLowerCase() === 'business' ? 'business' : 'contact';
+}
+
 interface Accumul8EntityModalProps {
   open: boolean;
   busy: boolean;
@@ -24,6 +28,7 @@ export function Accumul8EntityModal({
 }: Accumul8EntityModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8EntityUpsertRequest>(initialForm);
+  const bodyRef = React.useRef<HTMLFormElement>(null);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -47,26 +52,42 @@ export function Accumul8EntityModal({
     };
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      bodyRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
   return (
     <div className="modal fade accumul8-contact-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
-        <div className="modal-content">
+        <div
+          className="modal-content"
+          onWheelCapture={(event) => event.stopPropagation()}
+          onTouchMoveCapture={(event) => event.stopPropagation()}
+        >
           <div className="modal-header">
             <h5 className="modal-title">{editing ? 'Edit Entity' : 'Add Entity'}</h5>
             <ModalCloseIconButton />
           </div>
           <form
+            ref={bodyRef}
             className="modal-body d-grid gap-3"
+            tabIndex={-1}
             onSubmit={(event) => {
               event.preventDefault();
+              const contactType = (form.contact_type || 'payee') as Accumul8ContactType;
+              const isBusiness = normalizeBusinessKind(form.entity_kind) === 'business';
               void onSave({
                 display_name: String(form.display_name || '').trim(),
-                entity_kind: String(form.entity_kind || (Number(form.is_balance_person || 0) === 1 ? 'person' : 'contact')).trim() || 'contact',
-                contact_type: (form.contact_type || 'both') as Accumul8ContactType,
-                is_payee: Number(form.is_payee || 0),
-                is_payer: Number(form.is_payer || 0),
+                entity_kind: isBusiness ? 'business' : 'contact',
+                contact_type: contactType,
+                is_payee: contactType === 'payee' ? 1 : 0,
+                is_payer: contactType === 'payer' ? 1 : 0,
                 is_vendor: Number(form.is_vendor || 0),
-                is_balance_person: Number(form.is_balance_person || 0),
+                is_balance_person: contactType === 'repayment' ? 1 : 0,
                 default_amount: Number(form.default_amount || 0),
                 email: String(form.email || '').trim(),
                 phone_number: String(form.phone_number || '').trim(),
@@ -103,7 +124,7 @@ export function Accumul8EntityModal({
                 </select>
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-entity-contact-type">Contact Type</label>
+                <label className="form-label" htmlFor="accumul8-entity-contact-type">Type</label>
                 <select
                   id="accumul8-entity-contact-type"
                   className="form-select"
@@ -113,28 +134,28 @@ export function Accumul8EntityModal({
                     setForm((prev) => ({
                       ...prev,
                       contact_type: contactType,
-                      is_payee: contactType === 'payer' ? 0 : 1,
-                      is_payer: contactType === 'payee' ? 0 : 1,
+                      is_payee: contactType === 'payee' ? 1 : 0,
+                      is_payer: contactType === 'payer' ? 1 : 0,
+                      is_balance_person: contactType === 'repayment' ? 1 : 0,
                     }));
                   }}
                 >
                   <option value="payee">Payee</option>
                   <option value="payer">Payer</option>
-                  <option value="both">Both</option>
+                  <option value="repayment">Repayment</option>
                 </select>
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-entity-kind">Kind</label>
-                <select
-                  id="accumul8-entity-kind"
-                  className="form-select"
-                  value={form.entity_kind || 'contact'}
-                  onChange={(e) => setForm((prev) => ({ ...prev, entity_kind: e.target.value }))}
-                >
-                  <option value="contact">Contact</option>
-                  <option value="person">Person</option>
-                  <option value="business">Business</option>
-                </select>
+                <label className="form-label d-block">Business</label>
+                <label className="form-check-label d-flex align-items-center gap-2 mt-2">
+                  <input
+                    className="form-check-input m-0"
+                    type="checkbox"
+                    checked={normalizeBusinessKind(form.entity_kind) === 'business'}
+                    onChange={(e) => setForm((prev) => ({ ...prev, entity_kind: e.target.checked ? 'business' : 'contact' }))}
+                  />
+                  <span>{normalizeBusinessKind(form.entity_kind) === 'business' ? 'Yes' : 'No'}</span>
+                </label>
               </div>
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-entity-default-amount">Default Amount</label>
@@ -150,20 +171,8 @@ export function Accumul8EntityModal({
               <div className="col-12">
                 <div className="d-flex flex-wrap gap-3">
                   <label className="form-check-label d-flex align-items-center gap-2">
-                    <input className="form-check-input m-0" type="checkbox" checked={Number(form.is_payee || 0) === 1} onChange={(e) => setForm((prev) => ({ ...prev, is_payee: e.target.checked ? 1 : 0 }))} />
-                    <span>Show as payee</span>
-                  </label>
-                  <label className="form-check-label d-flex align-items-center gap-2">
-                    <input className="form-check-input m-0" type="checkbox" checked={Number(form.is_payer || 0) === 1} onChange={(e) => setForm((prev) => ({ ...prev, is_payer: e.target.checked ? 1 : 0 }))} />
-                    <span>Show as payer</span>
-                  </label>
-                  <label className="form-check-label d-flex align-items-center gap-2">
                     <input className="form-check-input m-0" type="checkbox" checked={Number(form.is_vendor || 0) === 1} onChange={(e) => setForm((prev) => ({ ...prev, is_vendor: e.target.checked ? 1 : 0 }))} />
                     <span>Show as vendor</span>
-                  </label>
-                  <label className="form-check-label d-flex align-items-center gap-2">
-                    <input className="form-check-input m-0" type="checkbox" checked={Number(form.is_balance_person || 0) === 1} onChange={(e) => setForm((prev) => ({ ...prev, is_balance_person: e.target.checked ? 1 : 0, entity_kind: e.target.checked ? 'person' : prev.entity_kind }))} />
-                    <span>Show in balances</span>
                   </label>
                 </div>
               </div>

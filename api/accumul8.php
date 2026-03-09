@@ -135,16 +135,43 @@ function accumul8_optional_select(string $tableName, string $columnName, string 
     return accumul8_table_has_column($tableName, $columnName) ? $presentExpression : $missingExpression;
 }
 
+function accumul8_normalize_contact_type_value($value, string $default = 'payee'): string
+{
+    $normalized = strtolower(trim((string)$value));
+    if ($normalized === 'repayment') {
+        return 'repayment';
+    }
+    if ($normalized === 'payer') {
+        return 'payer';
+    }
+    if ($normalized === 'payee' || $normalized === 'both' || $normalized === 'contact' || $normalized === '') {
+        return $normalized === '' ? $default : 'payee';
+    }
+    return $default;
+}
+
+function accumul8_normalize_entity_kind_value($value, string $default = 'business'): string
+{
+    $normalized = strtolower(trim((string)$value));
+    if ($normalized === 'business') {
+        return 'business';
+    }
+    if ($normalized === 'contact' || $normalized === 'person' || $normalized === '') {
+        return $normalized === '' ? $default : 'contact';
+    }
+    return $default;
+}
+
 function accumul8_contact_type_flags(string $contactType): array
 {
-    $normalized = strtolower(trim($contactType));
+    $normalized = accumul8_normalize_contact_type_value($contactType);
     if ($normalized === 'payee') {
         return ['is_payee' => 1, 'is_payer' => 0];
     }
     if ($normalized === 'payer') {
         return ['is_payee' => 0, 'is_payer' => 1];
     }
-    return ['is_payee' => 1, 'is_payer' => 1];
+    return ['is_payee' => 0, 'is_payer' => 0];
 }
 
 function accumul8_canonical_entity_name(string $value): string
@@ -343,8 +370,8 @@ function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEnt
     if ($displayName === '') {
         $displayName = 'Unnamed Entity';
     }
-    $entityKind = accumul8_normalize_text($payload['entity_kind'] ?? 'contact', 24);
-    $contactType = accumul8_validate_enum('contact_type', $payload['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $entityKind = accumul8_normalize_entity_kind_value($payload['entity_kind'] ?? 'business');
+    $contactType = accumul8_normalize_contact_type_value($payload['contact_type'] ?? ($payload['is_balance_person'] ?? 0 ? 'repayment' : 'payee'));
     $defaultAmount = accumul8_normalize_amount($payload['default_amount'] ?? 0);
     $email = accumul8_normalize_text($payload['email'] ?? '', 191);
     $phoneNumber = accumul8_normalize_text($payload['phone_number'] ?? '', 32);
@@ -354,10 +381,11 @@ function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEnt
     $zip = accumul8_normalize_text($payload['zip'] ?? '', 20);
     $notes = accumul8_normalize_text($payload['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($payload['is_active'] ?? 1);
-    $isPayee = accumul8_normalize_bool($payload['is_payee'] ?? 0);
-    $isPayer = accumul8_normalize_bool($payload['is_payer'] ?? 0);
+    $flags = accumul8_contact_type_flags($contactType);
+    $isPayee = accumul8_normalize_bool($payload['is_payee'] ?? $flags['is_payee']);
+    $isPayer = accumul8_normalize_bool($payload['is_payer'] ?? $flags['is_payer']);
     $isVendor = accumul8_normalize_bool($payload['is_vendor'] ?? 0);
-    $isBalancePerson = accumul8_normalize_bool($payload['is_balance_person'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($payload['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
     $legacyContactId = isset($payload['legacy_contact_id']) && (int)$payload['legacy_contact_id'] > 0 ? (int)$payload['legacy_contact_id'] : null;
     $legacyDebtorId = isset($payload['legacy_debtor_id']) && (int)$payload['legacy_debtor_id'] > 0 ? (int)$payload['legacy_debtor_id'] : null;
     if (($existingEntityId === null || $existingEntityId <= 0) && $legacyContactId === null && $legacyDebtorId === null) {
@@ -447,11 +475,11 @@ function accumul8_contact_entity_id_or_create(int $viewerId, int $contactId): ?i
         return null;
     }
     $existingEntityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
-    $flags = accumul8_contact_type_flags((string)($row['contact_type'] ?? 'both'));
+    $flags = accumul8_contact_type_flags((string)($row['contact_type'] ?? 'payee'));
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => (string)($row['contact_name'] ?? ''),
-        'entity_kind' => 'contact',
-        'contact_type' => (string)($row['contact_type'] ?? 'both'),
+        'entity_kind' => 'business',
+        'contact_type' => accumul8_normalize_contact_type_value((string)($row['contact_type'] ?? 'payee')),
         'is_payee' => $flags['is_payee'],
         'is_payer' => $flags['is_payer'],
         'is_vendor' => 0,
@@ -500,11 +528,13 @@ function accumul8_debtor_entity_id_or_create(int $viewerId, int $debtorId): ?int
     $existingEntityId = $linkedContactEntityId > 0
         ? $linkedContactEntityId
         : (isset($row['entity_id']) ? (int)$row['entity_id'] : 0);
-    $contactType = $linkedContactEntityId > 0 ? (string)($row['contact_type'] ?? 'both') : 'both';
+    $contactType = $linkedContactEntityId > 0
+        ? accumul8_normalize_contact_type_value((string)($row['contact_type'] ?? 'payee'))
+        : 'repayment';
     $flags = accumul8_contact_type_flags($contactType);
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $linkedContactEntityId > 0 ? (string)($row['contact_name'] ?? $row['debtor_name'] ?? '') : (string)($row['debtor_name'] ?? ''),
-        'entity_kind' => 'person',
+        'entity_kind' => 'contact',
         'contact_type' => $contactType,
         'is_payee' => $flags['is_payee'],
         'is_payer' => $flags['is_payer'],
@@ -537,7 +567,7 @@ function accumul8_entity_contact_type_for_amount(float $amount): string
     if ($amount > 0) {
         return 'payer';
     }
-    return 'both';
+    return 'payee';
 }
 
 function accumul8_entity_id_from_name(int $viewerId, string $displayName, array $payload = []): ?int
@@ -547,17 +577,17 @@ function accumul8_entity_id_from_name(int $viewerId, string $displayName, array 
         return null;
     }
 
-    $contactType = accumul8_validate_enum('contact_type', $payload['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $contactType = accumul8_normalize_contact_type_value($payload['contact_type'] ?? 'payee');
     $flags = accumul8_contact_type_flags($contactType);
 
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $normalizedName,
-        'entity_kind' => (string)($payload['entity_kind'] ?? 'contact'),
+        'entity_kind' => accumul8_normalize_entity_kind_value($payload['entity_kind'] ?? ($contactType === 'repayment' ? 'contact' : 'business')),
         'contact_type' => $contactType,
         'is_payee' => $payload['is_payee'] ?? $flags['is_payee'],
         'is_payer' => $payload['is_payer'] ?? $flags['is_payer'],
         'is_vendor' => $payload['is_vendor'] ?? ($contactType === 'payee' ? 1 : 0),
-        'is_balance_person' => $payload['is_balance_person'] ?? 0,
+        'is_balance_person' => $payload['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0),
         'default_amount' => $payload['default_amount'] ?? 0,
         'email' => $payload['email'] ?? '',
         'phone_number' => $payload['phone_number'] ?? '',
@@ -587,7 +617,7 @@ function accumul8_recurring_entity_id_or_create(int $viewerId, array $row): ?int
         : ($direction === 'outflow' ? 'payee' : accumul8_entity_contact_type_for_amount($amount));
 
     return accumul8_entity_id_from_name($viewerId, $title, [
-        'entity_kind' => 'contact',
+        'entity_kind' => 'business',
         'contact_type' => $contactType,
         'default_amount' => abs($amount),
         'notes' => (string)($row['notes'] ?? ''),
@@ -608,7 +638,7 @@ function accumul8_transaction_entity_id_or_create(int $viewerId, array $row): ?i
     $contactType = accumul8_entity_contact_type_for_amount($amount);
 
     return accumul8_entity_id_from_name($viewerId, $description, [
-        'entity_kind' => 'contact',
+        'entity_kind' => 'business',
         'contact_type' => $contactType,
         'default_amount' => abs($amount),
         'notes' => (string)($row['memo'] ?? ''),
@@ -619,16 +649,13 @@ function accumul8_transaction_entity_id_or_create(int $viewerId, array $row): ?i
 
 function accumul8_contact_type_from_roles(int $isPayee, int $isPayer): string
 {
-    if ($isPayee === 1 && $isPayer === 1) {
-        return 'both';
-    }
     if ($isPayee === 1) {
         return 'payee';
     }
     if ($isPayer === 1) {
         return 'payer';
     }
-    return 'both';
+    return 'payee';
 }
 
 function accumul8_sync_contact_from_entity(int $viewerId, int $entityId): ?int
@@ -649,7 +676,9 @@ function accumul8_sync_contact_from_entity(int $viewerId, int $entityId): ?int
     $isPayer = (int)($entity['is_payer'] ?? 0) === 1 ? 1 : 0;
     $isVendor = (int)($entity['is_vendor'] ?? 0) === 1 ? 1 : 0;
     $shouldProject = $isPayee === 1 || $isPayer === 1 || $isVendor === 1;
-    $contactType = accumul8_contact_type_from_roles($isPayee, $isPayer);
+    $contactType = (int)($entity['is_balance_person'] ?? 0) === 1
+        ? 'repayment'
+        : accumul8_contact_type_from_roles($isPayee, $isPayer);
     $isActive = $shouldProject ? ((int)($entity['is_active'] ?? 1) === 1 ? 1 : 0) : 0;
 
     if ($contactId !== null && $contactId > 0) {
@@ -1071,7 +1100,7 @@ function accumul8_tables_ensure(): void
         owner_user_id INT NOT NULL,
         entity_id INT NULL,
         contact_name VARCHAR(191) NOT NULL,
-        contact_type VARCHAR(16) NOT NULL DEFAULT 'both',
+        contact_type VARCHAR(16) NOT NULL DEFAULT 'payee',
         default_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         email VARCHAR(191) NULL,
         phone_number VARCHAR(32) NULL,
@@ -1092,8 +1121,8 @@ function accumul8_tables_ensure(): void
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
         display_name VARCHAR(191) NOT NULL,
-        entity_kind VARCHAR(24) NOT NULL DEFAULT 'contact',
-        contact_type VARCHAR(16) NOT NULL DEFAULT 'both',
+        entity_kind VARCHAR(24) NOT NULL DEFAULT 'business',
+        contact_type VARCHAR(16) NOT NULL DEFAULT 'payee',
         is_payee TINYINT(1) NOT NULL DEFAULT 0,
         is_payer TINYINT(1) NOT NULL DEFAULT 0,
         is_vendor TINYINT(1) NOT NULL DEFAULT 0,
@@ -1469,7 +1498,7 @@ function accumul8_list_contacts(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
             'contact_name' => (string)($r['contact_name'] ?? ''),
-            'contact_type' => (string)($r['contact_type'] ?? 'both'),
+            'contact_type' => accumul8_normalize_contact_type_value((string)($r['contact_type'] ?? 'payee')),
             'default_amount' => (float)($r['default_amount'] ?? 0),
             'email' => (string)($r['email'] ?? ''),
             'phone_number' => (string)($r['phone_number'] ?? ''),
@@ -1549,8 +1578,10 @@ function accumul8_list_entities(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'owner_user_id' => (int)($r['owner_user_id'] ?? 0),
             'display_name' => (string)($r['display_name'] ?? ''),
-            'entity_kind' => (string)($r['entity_kind'] ?? 'contact'),
-            'contact_type' => (string)($r['contact_type'] ?? 'both'),
+            'entity_kind' => accumul8_normalize_entity_kind_value((string)($r['entity_kind'] ?? 'business')),
+            'contact_type' => accumul8_normalize_contact_type_value(
+                (int)($r['is_balance_person'] ?? 0) === 1 ? 'repayment' : (string)($r['contact_type'] ?? 'payee')
+            ),
             'is_payee' => (int)($r['is_payee'] ?? 0),
             'is_payer' => (int)($r['is_payer'] ?? 0),
             'is_vendor' => (int)($r['is_vendor'] ?? 0),
@@ -2429,11 +2460,11 @@ if ($action === 'create_entity') {
     $body = catn8_read_json_body();
 
     $displayName = accumul8_normalize_text($body['display_name'] ?? '', 191);
-    $contactType = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
-    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType !== 'payer' ? 1 : 0));
-    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType !== 'payee' ? 1 : 0));
+    $contactType = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
+    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType === 'payee' ? 1 : 0));
+    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType === 'payer' ? 1 : 0));
     $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
-    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
 
     if ($displayName === '') {
         catn8_json_response(['success' => false, 'error' => 'display_name is required'], 400);
@@ -2441,7 +2472,7 @@ if ($action === 'create_entity') {
 
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $displayName,
-        'entity_kind' => accumul8_normalize_text($body['entity_kind'] ?? ($isBalancePerson ? 'person' : 'contact'), 24),
+        'entity_kind' => accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business')),
         'contact_type' => $contactType,
         'is_payee' => $isPayee,
         'is_payer' => $isPayer,
@@ -2512,11 +2543,11 @@ if ($action === 'update_entity') {
 
     $id = (int)($body['id'] ?? 0);
     $displayName = accumul8_normalize_text($body['display_name'] ?? '', 191);
-    $contactType = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
-    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType !== 'payer' ? 1 : 0));
-    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType !== 'payee' ? 1 : 0));
+    $contactType = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
+    $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType === 'payee' ? 1 : 0));
+    $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType === 'payer' ? 1 : 0));
     $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
-    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? 0);
+    $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
 
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
@@ -2538,7 +2569,7 @@ if ($action === 'update_entity') {
 
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $displayName,
-        'entity_kind' => accumul8_normalize_text($body['entity_kind'] ?? ($isBalancePerson ? 'person' : 'contact'), 24),
+        'entity_kind' => accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business')),
         'contact_type' => $contactType,
         'is_payee' => $isPayee,
         'is_payer' => $isPayer,
@@ -2566,7 +2597,7 @@ if ($action === 'create_contact') {
     $body = catn8_read_json_body();
 
     $name = accumul8_normalize_text($body['contact_name'] ?? '', 191);
-    $type = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $type = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
     $amount = accumul8_normalize_amount($body['default_amount'] ?? 0);
     $email = accumul8_normalize_text($body['email'] ?? '', 191);
     $phoneNumber = accumul8_normalize_text($body['phone_number'] ?? '', 32);
@@ -2743,7 +2774,7 @@ if ($action === 'update_contact') {
 
     $id = (int)($body['id'] ?? 0);
     $name = accumul8_normalize_text($body['contact_name'] ?? '', 191);
-    $type = accumul8_validate_enum('contact_type', $body['contact_type'] ?? 'both', ['payee', 'payer', 'both'], 'both');
+    $type = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
     $amount = accumul8_normalize_amount($body['default_amount'] ?? 0);
     $email = accumul8_normalize_text($body['email'] ?? '', 191);
     $phoneNumber = accumul8_normalize_text($body['phone_number'] ?? '', 32);

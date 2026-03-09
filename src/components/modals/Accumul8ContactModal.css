@@ -20,6 +20,7 @@
 .accumul8-contact-modal .modal-content {
   max-height: 68vh;
   overflow: hidden;
+  overscroll-behavior: contain;
   border: 3px solid rgba(212, 175, 55, 0.72);
   border-radius: 0;
   background:
@@ -61,6 +62,10 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   color: #241d12;
+}
+
+.accumul8-contact-modal .modal-body:focus {
+  outline: none;
 }
 
 .accumul8-contact-modal .form-label {

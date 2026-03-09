@@ -52,7 +52,7 @@ export function Accumul8ContactModal({
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">{editing ? 'Edit Payee / Payer' : 'Add Payee / Payer'}</h5>
+            <h5 className="modal-title">{editing ? 'Edit Contact Type' : 'Add Contact Type'}</h5>
             <ModalCloseIconButton />
           </div>
           <form
@@ -61,7 +61,7 @@ export function Accumul8ContactModal({
               event.preventDefault();
               void onSave({
                 contact_name: String(form.contact_name || '').trim(),
-                contact_type: (form.contact_type || 'both') as Accumul8ContactType,
+                contact_type: (form.contact_type || 'payee') as Accumul8ContactType,
                 default_amount: Number(form.default_amount || 0),
                 email: String(form.email || '').trim(),
                 phone_number: String(form.phone_number || '').trim(),
@@ -94,7 +94,7 @@ export function Accumul8ContactModal({
                 >
                   <option value="payee">Payee</option>
                   <option value="payer">Payer</option>
-                  <option value="both">Both</option>
+                  <option value="repayment">Repayment</option>
                 </select>
               </div>
               <div className="col-md-4">
@@ -180,8 +180,8 @@ export function Accumul8ContactModal({
                 type="submit"
                 className="btn btn-success"
                 disabled={busy}
-                aria-label={editing ? 'Save payee or payer changes' : 'Add payee or payer'}
-                title={editing ? 'Save payee or payer changes' : 'Add payee or payer'}
+                aria-label={editing ? 'Save contact type changes' : 'Add contact type'}
+                title={editing ? 'Save contact type changes' : 'Add contact type'}
               >
                 <span aria-hidden="true">{editing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
               </button>

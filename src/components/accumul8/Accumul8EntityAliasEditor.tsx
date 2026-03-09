@@ -1,5 +1,4 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { Accumul8Entity, Accumul8EntityAliasDraft } from '../../types/accumul8';
 import './Accumul8EntityAliasEditor.css';
 
@@ -31,8 +30,6 @@ export function Accumul8EntityAliasEditor({
   const [isFocused, setIsFocused] = React.useState(false);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const portalRef = React.useRef<HTMLDivElement | null>(null);
-  const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties | null>(null);
   const aliasKeys = React.useMemo(() => {
     const keys = new Set<string>();
     keys.add(normalizeKey(entity.display_name));
@@ -91,36 +88,6 @@ export function Accumul8EntityAliasEditor({
 
   const showSuggestions = isFocused && suggestions.length > 0;
 
-  React.useEffect(() => {
-    if (!showSuggestions || typeof window === 'undefined') {
-      setPortalStyle(null);
-      return undefined;
-    }
-
-    const updatePortalPosition = () => {
-      const input = inputRef.current;
-      if (!input) {
-        setPortalStyle(null);
-        return;
-      }
-      const rect = input.getBoundingClientRect();
-      setPortalStyle({
-        position: 'fixed',
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    };
-
-    updatePortalPosition();
-    window.addEventListener('resize', updatePortalPosition);
-    window.addEventListener('scroll', updatePortalPosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePortalPosition);
-      window.removeEventListener('scroll', updatePortalPosition, true);
-    };
-  }, [showSuggestions]);
-
   return (
     <div
       className="accumul8-entity-aliases"
@@ -131,7 +98,7 @@ export function Accumul8EntityAliasEditor({
             return;
           }
           const activeNode = document.activeElement;
-          if (activeNode instanceof Node && (wrapperRef.current?.contains(activeNode) || portalRef.current?.contains(activeNode))) {
+          if (activeNode instanceof Node && wrapperRef.current?.contains(activeNode)) {
             return;
           }
           setIsFocused(false);
@@ -194,13 +161,11 @@ export function Accumul8EntityAliasEditor({
         </button>
       </div>
       {pendingAliasNames.length > 0 ? <div className="accumul8-entity-alias-merge-note">Queued aliases: {pendingAliasNames.length}</div> : null}
-      {showSuggestions && portalStyle && typeof document !== 'undefined' ? createPortal(
+      {showSuggestions ? (
         <div
-          ref={portalRef}
-          className="accumul8-entity-alias-suggestions accumul8-entity-alias-suggestions--portal"
+          className="accumul8-entity-alias-suggestions"
           role="listbox"
           aria-label={`Alias suggestions for ${entity.display_name}`}
-          style={portalStyle}
         >
           {suggestions.map((suggestion) => (
             <button
@@ -222,8 +187,7 @@ export function Accumul8EntityAliasEditor({
               {suggestion.alias_name}
             </button>
           ))}
-        </div>,
-        document.body,
+        </div>
       ) : null}
     </div>
   );

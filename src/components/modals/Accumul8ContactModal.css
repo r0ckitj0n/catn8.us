@@ -3,9 +3,9 @@
 }
 
 .accumul8-contact-modal .modal-dialog {
-  width: min(60vw, 960px);
-  max-width: min(60vw, 960px);
-  margin: 1.25rem auto;
+  width: min(74vw, 1180px);
+  max-width: min(74vw, 1180px);
+  margin: auto;
   transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
@@ -18,7 +18,7 @@
 }
 
 .accumul8-contact-modal .modal-content {
-  max-height: 68vh;
+  max-height: 82vh;
   overflow: hidden;
   overscroll-behavior: contain;
   border: 3px solid rgba(212, 175, 55, 0.72);
@@ -35,6 +35,59 @@
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.42);
   color: #241d12;
   position: relative;
+}
+
+.accumul8-entity-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.accumul8-entity-modal-summary-card {
+  border: 2px solid rgba(124, 92, 25, 0.35);
+  background: linear-gradient(180deg, rgba(252, 246, 231, 0.9), rgba(232, 219, 183, 0.94));
+  padding: 0.85rem 0.95rem;
+}
+
+.accumul8-entity-modal-summary-card strong {
+  display: block;
+  font-family: 'Bodoni Moda', Georgia, serif;
+  font-size: 1.35rem;
+  margin-bottom: 0.45rem;
+  color: #241d12;
+}
+
+.accumul8-entity-modal-summary-label {
+  display: block;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(67, 49, 14, 0.82);
+  margin-bottom: 0.2rem;
+}
+
+.accumul8-entity-modal-alias-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.accumul8-entity-modal-alias-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid rgba(124, 92, 25, 0.45);
+  background: rgba(33, 25, 13, 0.9);
+  color: #f4ebd0;
+  font-size: 0.7rem;
+}
+
+.accumul8-entity-modal-summary-meta,
+.accumul8-entity-modal-empty {
+  font-size: 0.78rem;
+  color: rgba(54, 40, 13, 0.78);
 }
 
 .accumul8-contact-modal .modal-content::before {
@@ -132,8 +185,8 @@ body.accumul8-contact-modal-open {
 
 @media (max-width: 991.98px) {
   .accumul8-contact-modal .modal-dialog {
-    width: min(calc(100vw - 2rem), 60vw);
-    max-width: min(calc(100vw - 2rem), 60vw);
+    width: min(calc(100vw - 2rem), 74vw);
+    max-width: min(calc(100vw - 2rem), 74vw);
   }
 }
 
@@ -145,5 +198,9 @@ body.accumul8-contact-modal-open {
 
   .accumul8-contact-modal .modal-content {
     max-height: 78vh;
+  }
+
+  .accumul8-entity-modal-summary {
+    grid-template-columns: 1fr;
   }
 }

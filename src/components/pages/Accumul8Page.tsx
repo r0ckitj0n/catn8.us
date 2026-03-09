@@ -314,6 +314,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     activeOwnerUserId,
     accessibleAccountOwners,
     entities,
+    entityAliases,
     contacts,
     recurringPayments,
     transactions,
@@ -416,9 +417,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const entitiesTableRef = React.useRef<HTMLTableElement | null>(null);
   const recurringTableRef = React.useRef<HTMLTableElement | null>(null);
   const syncTableRef = React.useRef<HTMLTableElement | null>(null);
+  const aliasRowsByEntityId = React.useMemo(() => {
+    const next: Record<number, typeof entityAliases> = {};
+    entityAliases.forEach((alias) => {
+      const entityId = Number(alias.entity_id || 0);
+      if (entityId <= 0) {
+        return;
+      }
+      if (!next[entityId]) {
+        next[entityId] = [];
+      }
+      next[entityId].push(alias);
+    });
+    return next;
+  }, [entityAliases]);
+  const entitiesWithResolvedAliases = React.useMemo(() => (
+    entities.map((entity) => ({
+      ...entity,
+      aliases: aliasRowsByEntityId[entity.id] || entity.aliases || [],
+    }))
+  ), [aliasRowsByEntityId, entities]);
   const editingEntity = React.useMemo(() => (
-    editingEntityId !== null ? (entities.find((entity) => entity.id === editingEntityId) || null) : null
-  ), [editingEntityId, entities]);
+    editingEntityId !== null ? (entitiesWithResolvedAliases.find((entity) => entity.id === editingEntityId) || null) : null
+  ), [editingEntityId, entitiesWithResolvedAliases]);
   const scopedActionUrl = React.useCallback((action: string) => {
     const params = new URLSearchParams({ action });
     const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
@@ -768,6 +789,31 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setTransactionModalOpen(false);
     resetLedgerForm();
   }, [resetLedgerForm]);
+  const collectEntityAliasNames = React.useCallback((entityId: number, entityDisplayName: string) => {
+    const draft = entityAliasDraftById[entityId] || DEFAULT_ENTITY_ALIAS_DRAFT;
+    return Array.from(new Set([
+      ...((draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean)),
+      String(draft.alias_name || '').trim(),
+    ])).filter((value) => value !== '' && value !== String(entityDisplayName || '').trim());
+  }, [entityAliasDraftById]);
+  const persistEntityAliases = React.useCallback(async (entityId: number, entityDisplayName: string, aliasNames?: string[]) => {
+    const namesToSave = aliasNames || collectEntityAliasNames(entityId, entityDisplayName);
+    if (namesToSave.length === 0) {
+      return;
+    }
+    for (const aliasName of namesToSave) {
+      await createEntityAlias({
+        entity_id: entityId,
+        alias_name: aliasName,
+        merge_entity_id: null,
+      });
+    }
+    setEntityAliasDraftById((prev) => {
+      const next = { ...prev };
+      next[entityId] = DEFAULT_ENTITY_ALIAS_DRAFT;
+      return next;
+    });
+  }, [collectEntityAliasNames, createEntityAlias]);
   const submitContactForm = React.useCallback(async (form: typeof DEFAULT_CONTACT_FORM) => {
     const payload = { ...form, default_amount: Number(form.default_amount) };
     if (editingContactId) {
@@ -797,12 +843,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       is_active: Number(form.is_active ?? 1),
     };
     if (editingEntityId) {
+      const aliasNames = collectEntityAliasNames(editingEntityId, payload.display_name);
       await updateEntity(editingEntityId, payload);
+      await persistEntityAliases(editingEntityId, payload.display_name, aliasNames);
     } else {
       await createEntity(payload);
     }
     closeEntityModal();
-  }, [closeEntityModal, createEntity, editingEntityId, updateEntity]);
+  }, [closeEntityModal, collectEntityAliasNames, createEntity, editingEntityId, persistEntityAliases, updateEntity]);
   const beginEditRecurring = React.useCallback((id: number) => {
     const recurring = recurringPayments.find((v) => v.id === id);
     if (!recurring) return;
@@ -948,7 +996,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     const hiddenIds = new Set<number>();
     const entityIdsByNameKey = new Map<string, number[]>();
 
-    entities.forEach((entity) => {
+    entitiesWithResolvedAliases.forEach((entity) => {
       const nameKey = normalizeEntityAliasKey(entity.display_name);
       if (!nameKey) {
         return;
@@ -958,7 +1006,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       entityIdsByNameKey.set(nameKey, bucket);
     });
 
-    entities.forEach((entity) => {
+    entitiesWithResolvedAliases.forEach((entity) => {
       entity.aliases.forEach((alias) => {
         const aliasKey = normalizeEntityAliasKey(alias.alias_name);
         if (!aliasKey) {
@@ -973,12 +1021,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
 
     return hiddenIds;
-  }, [entities]);
+  }, [entitiesWithResolvedAliases]);
   const entitiesSorted = React.useMemo(() => (
-    [...entities]
+    [...entitiesWithResolvedAliases]
       .filter((entity) => !linkedAliasEntityIds.has(entity.id))
       .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
-  ), [entities, linkedAliasEntityIds]);
+  ), [entitiesWithResolvedAliases, linkedAliasEntityIds]);
   const entityTransactionsById = React.useMemo(() => {
     const grouped: Record<number, Accumul8Transaction[]> = {};
     for (const tx of transactions) {
@@ -1249,27 +1297,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setActiveEntityRowId((current) => (current === entity.id ? null : current));
   }, [entityDraftById, updateEntity]);
   const saveEntityAlias = React.useCallback(async (entity: Accumul8Entity) => {
-    const draft = entityAliasDraftById[entity.id] || DEFAULT_ENTITY_ALIAS_DRAFT;
-    const aliasNames = Array.from(new Set([
-      ...((draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean)),
-      String(draft.alias_name || '').trim(),
-    ])).filter((value) => value !== '' && value !== String(entity.display_name || '').trim());
-    if (aliasNames.length === 0) {
-      return;
-    }
-    for (const aliasName of aliasNames) {
-      await createEntityAlias({
-        entity_id: entity.id,
-        alias_name: aliasName,
-        merge_entity_id: null,
-      });
-    }
-    setEntityAliasDraftById((prev) => {
-      const next = { ...prev };
-      next[entity.id] = DEFAULT_ENTITY_ALIAS_DRAFT;
-      return next;
-    });
-  }, [createEntityAlias, entityAliasDraftById]);
+    await persistEntityAliases(entity.id, entity.display_name);
+  }, [persistEntityAliases]);
   const removeEntityAlias = React.useCallback(async (aliasId: number) => {
     await deleteEntityAlias(aliasId);
   }, [deleteEntityAlias]);
@@ -2590,6 +2619,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             entity={editingEntity}
             entities={entities}
             aliasDraft={editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT}
+            entitySummary={editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null}
             editing={editingEntityId !== null}
             onClose={closeEntityModal}
             onAliasDraftChange={(draft) => {

@@ -18,6 +18,11 @@ interface Accumul8EntityModalProps {
   entity: Accumul8Entity | null;
   entities: Accumul8Entity[];
   aliasDraft: Accumul8EntityAliasDraft;
+  entitySummary?: {
+    count: number;
+    lastAmount: number | null;
+    lastDate: string;
+  } | null;
   onClose: () => void;
   onAliasDraftChange: (draft: Accumul8EntityAliasDraft) => void;
   onAddAlias: () => Promise<void>;
@@ -33,6 +38,7 @@ export function Accumul8EntityModal({
   entity,
   entities,
   aliasDraft,
+  entitySummary,
   onClose,
   onAliasDraftChange,
   onAddAlias,
@@ -113,6 +119,29 @@ export function Accumul8EntityModal({
               });
             }}
           >
+            {editing && entity ? (
+              <div className="accumul8-entity-modal-summary">
+                <div className="accumul8-entity-modal-summary-card">
+                  <span className="accumul8-entity-modal-summary-label">Linked Aliases</span>
+                  <strong>{entity.aliases.length}</strong>
+                  <div className="accumul8-entity-modal-alias-list">
+                    {entity.aliases.length > 0 ? entity.aliases.map((alias) => (
+                      <span key={alias.id} className="accumul8-entity-modal-alias-chip">{alias.alias_name}</span>
+                    )) : <span className="accumul8-entity-modal-empty">No saved aliases yet.</span>}
+                  </div>
+                </div>
+                <div className="accumul8-entity-modal-summary-card">
+                  <span className="accumul8-entity-modal-summary-label">Transaction History</span>
+                  <strong>{Number(entitySummary?.count || 0)}</strong>
+                  <div className="accumul8-entity-modal-summary-meta">
+                    {entitySummary?.lastDate ? `Last activity ${entitySummary.lastDate}` : 'No linked transactions yet.'}
+                  </div>
+                  <div className="accumul8-entity-modal-summary-meta">
+                    {entitySummary?.lastAmount === null || entitySummary?.lastAmount === undefined ? '' : `Last amount ${Number(entitySummary.lastAmount).toFixed(2)}`}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="row g-3">
               <div className="col-md-8">
                 <label className="form-label" htmlFor="accumul8-entity-name">Name</label>

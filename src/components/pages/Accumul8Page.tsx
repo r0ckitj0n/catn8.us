@@ -231,6 +231,15 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
   return String(value || '').trim() || fallback;
 }
 
+function getLedgerDescriptionLabel(
+  transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
+  draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
+): string {
+  const preferredEntityName = formatInlineText(draft?.entity_name ?? transaction.entity_name, '');
+  const fallbackDescription = draft?.description ?? transaction.description;
+  return formatInlineText(preferredEntityName || fallbackDescription, '-');
+}
+
 function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean {
   const normalizedDescription = String(transaction.description || '').trim().toLowerCase();
   const normalizedMemo = String(transaction.memo || '').trim().toLowerCase();
@@ -2050,7 +2059,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col className="accumul8-col--flex-60" />
+                    <col className="accumul8-col--flex-30" />
+                    <col className="accumul8-col--flex-30" />
                     <col className="accumul8-col--flex-40" />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
@@ -2058,7 +2068,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={{ width: 'var(--accumul8-col-reconciled-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
-                  <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Due</th><th>Account</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {ledgerRows.map((tx) => (
                       (() => {
@@ -2090,6 +2100,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           )}
                         </td>
                         <td>
+                          <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</button>
+                        </td>
+                        <td>
                           {activeLedgerRowId === tx.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.description ?? tx.description} onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
                           ) : (
@@ -2102,7 +2115,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               {isOpeningBalanceTransaction(tx) && (
                                 <span className="accumul8-opening-balance-pin">Pinned</span>
                               )}
-                              <span>{tx.account_name ? `${tx.description} (${tx.account_name})` : tx.description}</span>
+                              <span>{getLedgerDescriptionLabel(tx, ledgerDraftById[tx.id])}</span>
                             </button>
                           )}
                         </td>
@@ -2154,7 +2167,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     ))}
                     {ledgerRows.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
+                        <td colSpan={10} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -2376,7 +2389,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                 disabled={busy}
                               />
                             ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.description, '-')}</button>
+                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{getLedgerDescriptionLabel(tx, ledgerDraftById[tx.id])}</button>
                             )}
                           </td>
                           <td>
@@ -3170,7 +3183,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       {selectedEntityTransactions.map((tx) => (
                         <tr key={tx.id} className={Number(tx.amount || 0) < 0 ? 'is-outflow' : 'is-inflow'}>
                           <td>{formatInlineDate(tx.transaction_date || tx.due_date)}</td>
-                          <td>{formatInlineText(tx.description, '-')}</td>
+                          <td>{getLedgerDescriptionLabel(tx)}</td>
                           <td>{formatInlineText(tx.memo, '-')}</td>
                           <td>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</td>
                           <td className="text-end">{Number(tx.amount || 0).toFixed(2)}</td>

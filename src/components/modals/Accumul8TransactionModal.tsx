@@ -256,7 +256,7 @@ export function Accumul8TransactionModal({
                 </select>
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-debtor">Balance Person</label>
+                <label className="form-label" htmlFor="accumul8-transaction-debtor">IOU Person</label>
                 <select
                   id="accumul8-transaction-debtor"
                   className="form-select"
@@ -267,7 +267,7 @@ export function Accumul8TransactionModal({
                     is_budget_planner: e.target.value ? 0 : prev.is_budget_planner,
                   }))}
                 >
-                  <option value="">Balance Person</option>
+                  <option value="">IOU Person</option>
                   {entities
                     .filter((entity) => Number(entity.is_balance_person || 0) === 1)
                     .map((entity) => (

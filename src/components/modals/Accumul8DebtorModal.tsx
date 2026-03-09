@@ -52,7 +52,7 @@ export function Accumul8DebtorModal({
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">{editing ? 'Edit Balance Person' : 'Add Balance Person'}</h5>
+            <h5 className="modal-title">{editing ? 'Edit IOU Person' : 'Add IOU Person'}</h5>
             <ModalCloseIconButton />
           </div>
           <form
@@ -121,8 +121,8 @@ export function Accumul8DebtorModal({
                 type="submit"
                 className="btn btn-success"
                 disabled={busy || !form.debtor_name.trim()}
-                aria-label={editing ? 'Save balance person changes' : 'Add balance person'}
-                title={editing ? 'Save balance person changes' : 'Add balance person'}
+                aria-label={editing ? 'Save IOU person changes' : 'Add IOU person'}
+                title={editing ? 'Save IOU person changes' : 'Add IOU person'}
               >
                 <span aria-hidden="true">{editing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
               </button>

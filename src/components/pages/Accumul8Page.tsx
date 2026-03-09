@@ -789,7 +789,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
     { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
     { key: 'credits', index: 3, fallback: 112, header: 'Credits' },
-    { key: 'net', index: 4, fallback: 136, header: 'Net Balance' },
+    { key: 'net', index: 4, fallback: 136, header: 'Net IOU' },
     { key: 'activity', index: 5, fallback: 132, header: 'Last Activity' },
     { key: 'actions', index: 6, fallback: 188, header: 'Actions' },
   ], [debtorsTableRef, debtorRows, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
@@ -1236,7 +1236,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       entity.entity_kind,
       entity.aliases.map((alias) => alias.alias_name).join(' '),
       Number(entity.is_active || 0) === 1 ? 'active' : 'paused',
-      Number(entity.is_balance_person || 0) === 1 ? 'balance person' : '',
+      Number(entity.is_balance_person || 0) === 1 ? 'iou person' : '',
       formatEntityRoles(entity),
     ]))
   ), [contactsSearchQuery, entitiesSorted]);
@@ -1391,7 +1391,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
     { key: 'person', index: 1, fallback: 132, header: 'Person' },
     { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
-    { key: 'running', index: 5, fallback: 168, header: 'Running Balance' },
+    { key: 'running', index: 5, fallback: 168, header: 'Running IOU' },
     { key: 'actions', index: 6, fallback: 132, header: 'Actions' },
   ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
@@ -1757,7 +1757,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="accumul8-tabs accumul8-tabs--header">
                 <div className="accumul8-tabs accumul8-tabs--header-buttons">
                   {[
-                    ['debtors', 'Balances'],
+                    ['debtors', 'IOU'],
                     ['spreadsheet', 'Budget'],
                     ['ledger', 'Ledger'],
                     ['pay_bills', 'Pay Bills'],
@@ -2068,15 +2068,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           {tab === 'debtors' && (
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Personal Balances</h3>
+                <h3 className="mb-0">Personal IOUs</h3>
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
                     className="form-control form-control-sm"
                     value={listSearchQueryByTab.debtors}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: e.target.value }))}
-                    placeholder="Filter balance fields"
-                    aria-label="Filter personal balance fields"
+                    placeholder="Filter IOU fields"
+                    aria-label="Filter personal IOU fields"
                   />
                 </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateDebtorModal} disabled={busy}>Add Person</button>
@@ -2096,7 +2096,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={{ width: 'var(--accumul8-col-activity-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
-                  <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net Balance</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net IOU</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {debtorRows.map((debtor) => (
                       <tr ref={(node) => setInlineRowRef(`debtor-${debtor.id}`, node)} key={debtor.id} className={['accumul8-list-item', activeDebtorRowId === debtor.id ? 'is-editing' : '', debtorDraftById[debtor.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
@@ -2164,7 +2164,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     ))}
                     {debtorRows.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="text-center text-muted py-4">No personal balances matched the current filter.</td>
+                        <td colSpan={7} className="text-center text-muted py-4">No personal IOUs matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -2172,7 +2172,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
               <div className="accumul8-panel mt-3">
                 <div className="d-flex justify-content-between align-items-center gap-2 mb-2 flex-wrap">
-                  <h4 className="h6 mb-0">Balance Ledger</h4>
+                  <h4 className="h6 mb-0">IOU Ledger</h4>
                   <div className="d-flex gap-2">
                     <select className="form-select form-select-sm" value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)}>
                       <option value="">All People</option>
@@ -2206,7 +2206,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       <col style={{ width: 'var(--accumul8-col-running-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                     </colgroup>
-                    <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running Balance</th><th className="text-end">Actions</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running IOU</th><th className="text-end">Actions</th></tr></thead>
                     <tbody>
                       {selectedDebtorEntries.map((tx) => (
                         <tr

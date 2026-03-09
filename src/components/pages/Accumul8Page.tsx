@@ -565,6 +565,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setSelectedBankAccountId('');
     }
   }, [selectedBankAccountId, visibleAccounts]);
+  const scopedAccounts = React.useMemo(() => {
+    const bankAccountId = Number(selectedBankAccountId || 0);
+    if (bankAccountId > 0) {
+      return visibleAccounts.filter((account) => account.id === bankAccountId);
+    }
+    return visibleAccounts;
+  }, [selectedBankAccountId, visibleAccounts]);
   const filteredTransactions = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
@@ -711,8 +718,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     ]))
   ), [filteredPayBillRows, payBillsSearchQuery, todayDate]);
   const currentVisibleBalance = React.useMemo(() => (
-    roundCurrency(visibleAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
-  ), [visibleAccounts]);
+    roundCurrency(scopedAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
+  ), [scopedAccounts]);
   const defaultProjectedTransactions = React.useMemo(() => (
     filteredTransactions.filter((tx) => {
       const effectiveDate = String(tx.due_date || tx.transaction_date || '');
@@ -2069,7 +2076,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 selectedMonth={budgetMonth}
                 recurringPayments={budgetPlannerRecurringPayments}
                 entities={contactEntities}
-                accounts={visibleAccounts}
+                accounts={scopedAccounts}
                 onSelectedMonthChange={setBudgetMonth}
                 onUpdateRecurring={updateRecurring}
                 onDeleteRecurring={handleDeleteRecurring}

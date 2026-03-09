@@ -16,6 +16,7 @@ import {
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
   Accumul8EntityAlias,
+  Accumul8EntityAliasUpsertRequest,
   Accumul8EntityUpsertRequest,
   Accumul8NotificationRule,
   Accumul8NotificationRuleUpsertRequest,
@@ -123,9 +124,9 @@ export function useAccumul8(
       'Entity updated',
     );
   }, [scopedActionUrl, withReload]);
-  const createEntityAlias = React.useCallback(async (entityId: number, aliasName: string) => {
+  const createEntityAlias = React.useCallback(async (payload: Accumul8EntityAliasUpsertRequest) => {
     await withReload(
-      () => ApiClient.post(scopedActionUrl('create_entity_alias'), { entity_id: entityId, alias_name: aliasName }),
+      () => ApiClient.post(scopedActionUrl('create_entity_alias'), payload),
       'Alias saved',
     );
   }, [scopedActionUrl, withReload]);

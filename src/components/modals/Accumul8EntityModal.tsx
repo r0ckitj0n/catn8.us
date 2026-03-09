@@ -1,6 +1,7 @@
 import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
-import { Accumul8ContactType, Accumul8EntityUpsertRequest } from '../../types/accumul8';
+import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
+import { Accumul8ContactType, Accumul8Entity, Accumul8EntityAliasDraft, Accumul8EntityUpsertRequest } from '../../types/accumul8';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8ContactModal.css';
@@ -14,7 +15,13 @@ interface Accumul8EntityModalProps {
   busy: boolean;
   editing: boolean;
   initialForm: Accumul8EntityUpsertRequest;
+  entity: Accumul8Entity | null;
+  entities: Accumul8Entity[];
+  aliasDraft: Accumul8EntityAliasDraft;
   onClose: () => void;
+  onAliasDraftChange: (draft: Accumul8EntityAliasDraft) => void;
+  onAddAlias: () => Promise<void>;
+  onDeleteAlias: (aliasId: number) => Promise<void>;
   onSave: (form: Accumul8EntityUpsertRequest) => Promise<void>;
 }
 
@@ -23,7 +30,13 @@ export function Accumul8EntityModal({
   busy,
   editing,
   initialForm,
+  entity,
+  entities,
+  aliasDraft,
   onClose,
+  onAliasDraftChange,
+  onAddAlias,
+  onDeleteAlias,
   onSave,
 }: Accumul8EntityModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
@@ -237,6 +250,20 @@ export function Accumul8EntityModal({
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                 />
               </div>
+              {editing && entity ? (
+                <div className="col-12">
+                  <label className="form-label">Alias List</label>
+                  <Accumul8EntityAliasEditor
+                    entity={entity}
+                    entities={entities}
+                    draft={aliasDraft}
+                    busy={busy}
+                    onDraftChange={onAliasDraftChange}
+                    onAddAlias={onAddAlias}
+                    onRemoveAlias={onDeleteAlias}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="d-flex justify-content-end gap-2">
               <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>

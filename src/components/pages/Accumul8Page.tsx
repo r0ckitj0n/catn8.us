@@ -5,6 +5,7 @@ import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
+import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
@@ -26,6 +27,7 @@ import {
   Accumul8Transaction,
   Accumul8Debtor,
   Accumul8Entity,
+  Accumul8EntityAliasDraft,
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import './Accumul8Page.css';
@@ -134,6 +136,10 @@ const DEFAULT_ENTITY_FORM: EntityFormState = {
   zip: '',
   notes: '',
   is_active: 1,
+};
+const DEFAULT_ENTITY_ALIAS_DRAFT: Accumul8EntityAliasDraft = {
+  alias_name: '',
+  merge_entity_id: null,
 };
 function createDefaultDebtorForm(): DebtorFormState {
   return { debtor_name: '', contact_id: '', notes: '', is_active: 1 };
@@ -375,7 +381,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [payBillDraftById, setPayBillDraftById] = React.useState<Record<number, LedgerInlineDraft>>({});
   const [debtorDraftById, setDebtorDraftById] = React.useState<Record<number, DebtorInlineDraft>>({});
   const [entityDraftById, setEntityDraftById] = React.useState<Record<number, EntityInlineDraft>>({});
-  const [entityAliasDraftById, setEntityAliasDraftById] = React.useState<Record<number, string>>({});
+  const [entityAliasDraftById, setEntityAliasDraftById] = React.useState<Record<number, Accumul8EntityAliasDraft>>({});
   const [recurringDraftById, setRecurringDraftById] = React.useState<Record<number, RecurringInlineDraft>>({});
   const [contactModalOpen, setContactModalOpen] = React.useState(false);
   const [entityModalOpen, setEntityModalOpen] = React.useState(false);
@@ -402,6 +408,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const entitiesTableRef = React.useRef<HTMLTableElement | null>(null);
   const recurringTableRef = React.useRef<HTMLTableElement | null>(null);
   const syncTableRef = React.useRef<HTMLTableElement | null>(null);
+  const editingEntity = React.useMemo(() => (
+    editingEntityId !== null ? (entities.find((entity) => entity.id === editingEntityId) || null) : null
+  ), [editingEntityId, entities]);
   const scopedActionUrl = React.useCallback((action: string) => {
     const params = new URLSearchParams({ action });
     const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
@@ -685,6 +694,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     const entity = entities.find((v) => v.id === id);
     if (!entity) return;
     setEditingEntityId(entity.id);
+    setEntityAliasDraftById((prev) => ({
+      ...prev,
+      [entity.id]: DEFAULT_ENTITY_ALIAS_DRAFT,
+    }));
     setEntityForm({
       display_name: entity.display_name || '',
       entity_kind: normalizeEntityKind(entity.entity_kind, entity.is_vendor),
@@ -708,9 +721,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEntityModalOpen(true);
   }, []);
   const closeEntityModal = React.useCallback(() => {
+    setEntityAliasDraftById((prev) => {
+      if (editingEntityId === null || !prev[editingEntityId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[editingEntityId];
+      return next;
+    });
     setEntityModalOpen(false);
     resetEntityForm();
-  }, [resetEntityForm]);
+  }, [editingEntityId, resetEntityForm]);
   const openCreateContactModal = React.useCallback(() => {
     resetContactForm();
     setContactModalOpen(true);
@@ -1188,14 +1209,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setActiveEntityRowId((current) => (current === entity.id ? null : current));
   }, [entityDraftById, updateEntity]);
   const saveEntityAlias = React.useCallback(async (entity: Accumul8Entity) => {
-    const aliasName = String(entityAliasDraftById[entity.id] || '').trim();
+    const draft = entityAliasDraftById[entity.id] || DEFAULT_ENTITY_ALIAS_DRAFT;
+    const aliasName = String(draft.alias_name || '').trim();
     if (!aliasName) {
       return;
     }
-    await createEntityAlias(entity.id, aliasName);
+    await createEntityAlias({
+      entity_id: entity.id,
+      alias_name: aliasName,
+      merge_entity_id: draft.merge_entity_id,
+    });
     setEntityAliasDraftById((prev) => {
       const next = { ...prev };
-      delete next[entity.id];
+      next[entity.id] = DEFAULT_ENTITY_ALIAS_DRAFT;
       return next;
     });
   }, [createEntityAlias, entityAliasDraftById]);
@@ -1581,7 +1607,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'spreadsheet' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--entity-manager">
               <Accumul8SpreadsheetView
                 busy={busy}
                 selectedMonth={budgetMonth}
@@ -1974,12 +2000,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'contacts' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--entity-manager">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Entity Manager</h3>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
               </div>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
+              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list accumul8-scroll-area--entity-manager">
                 <table
                   ref={entitiesTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head"
@@ -2030,28 +2056,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <div className="accumul8-inline-stack">
                               <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={entityDraft?.display_name ?? entity.display_name} onChange={(e) => setEntityRowDraft(entity, { display_name: e.target.value })} disabled={busy} />
                               <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.notes ?? entity.notes ?? ''} onChange={(e) => setEntityRowDraft(entity, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
-                              <div className="accumul8-entity-aliases">
-                                <div className="accumul8-entity-aliases-list">
-                                  {entity.aliases.map((alias) => (
-                                    <span key={alias.id} className="accumul8-entity-alias-chip">
-                                      <span>{alias.alias_name}</span>
-                                      <button type="button" className="accumul8-entity-alias-remove" onClick={() => void removeEntityAlias(alias.id)} disabled={busy} aria-label={`Remove alias ${alias.alias_name}`}>x</button>
-                                    </span>
-                                  ))}
-                                </div>
-                                <div className="accumul8-entity-alias-add">
-                                  <input
-                                    className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted"
-                                    value={entityAliasDraftById[entity.id] ?? ''}
-                                    onChange={(e) => setEntityAliasDraftById((prev) => ({ ...prev, [entity.id]: e.target.value }))}
-                                    disabled={busy}
-                                    placeholder="Add alias"
-                                  />
-                                  <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => void saveEntityAlias(entity)} disabled={busy || !String(entityAliasDraftById[entity.id] || '').trim()}>
-                                    +
-                                  </button>
-                                </div>
-                              </div>
+                              <Accumul8EntityAliasEditor
+                                entity={entity}
+                                entities={entities}
+                                draft={entityAliasDraftById[entity.id] || DEFAULT_ENTITY_ALIAS_DRAFT}
+                                busy={busy}
+                                onDraftChange={(draft) => setEntityAliasDraftById((prev) => ({ ...prev, [entity.id]: draft }))}
+                                onAddAlias={() => saveEntityAlias(entity)}
+                                onRemoveAlias={removeEntityAlias}
+                              />
                             </div>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
@@ -2462,8 +2475,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             open={entityModalOpen}
             busy={busy}
             initialForm={entityForm}
+            entity={editingEntity}
+            entities={entities}
+            aliasDraft={editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT}
             editing={editingEntityId !== null}
             onClose={closeEntityModal}
+            onAliasDraftChange={(draft) => {
+              if (!editingEntity) return;
+              setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+            }}
+            onAddAlias={async () => {
+              if (!editingEntity) return;
+              await saveEntityAlias(editingEntity);
+            }}
+            onDeleteAlias={removeEntityAlias}
             onSave={submitEntityForm}
         />
           <Accumul8ContactModal

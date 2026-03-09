@@ -553,6 +553,10 @@
   box-shadow: var(--accumul8-deco-shadow);
 }
 
+.accumul8-panel--entity-manager {
+  overflow: visible;
+}
+
 .accumul8-panel::before,
 .accumul8-month-panel::before,
 .accumul8-help-modal::before {
@@ -1220,42 +1224,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.accumul8-entity-aliases {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.accumul8-entity-aliases-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-}
-
-.accumul8-entity-alias-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.28rem;
-  padding: 0.12rem 0.42rem;
-  border: 1px solid rgba(212, 175, 55, 0.28);
-  background: rgba(13, 21, 29, 0.7);
-  color: var(--accumul8-deco-paper);
-  font-size: 0.67rem;
-}
-
-.accumul8-entity-alias-remove {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  line-height: 1;
-}
-
-.accumul8-entity-alias-add {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.3rem;
-}
-
 .accumul8-entity-alias-summary {
   margin-top: 0.18rem;
   white-space: normal;
@@ -1432,6 +1400,11 @@
 .accumul8-scroll-area {
   overflow: auto;
   scrollbar-color: rgba(212, 175, 55, 0.56) rgba(15, 20, 24, 0.86);
+}
+
+.accumul8-scroll-area--entity-manager {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .accumul8-scroll-area::-webkit-scrollbar {

@@ -291,6 +291,11 @@ export interface Accumul8EntityAlias {
   alias_name: string;
 }
 
+export interface Accumul8EntityAliasDraft {
+  alias_name: string;
+  merge_entity_id: number | null;
+}
+
 export interface Accumul8EntityUpsertRequest {
   display_name: string;
   entity_kind?: string;
@@ -308,6 +313,12 @@ export interface Accumul8EntityUpsertRequest {
   zip?: string;
   notes?: string;
   is_active?: number;
+}
+
+export interface Accumul8EntityAliasUpsertRequest {
+  entity_id: number;
+  alias_name: string;
+  merge_entity_id?: number | null;
 }
 
 export interface Accumul8DebtorUpsertRequest {

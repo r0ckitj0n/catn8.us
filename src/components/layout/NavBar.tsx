@@ -62,10 +62,10 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       ? [{ key: 'photo_m8', label: 'PHOTO M8', href: '/photo-m8' }]
       : []),
     ...(canUseAccumul8
-      ? [{ key: 'accumul8', label: 'ACCUMUL8', href: 'accumul8.php' }]
+      ? [{ key: 'accumul8', label: 'ACCUMUL8', href: '/accumul8/' }]
       : []),
     ...(canUseValid8
-      ? [{ key: 'valid8', label: 'VALID8', href: 'VALID8/' }]
+      ? [{ key: 'valid8', label: 'VALID8', href: '/valid8' }]
       : []),
     ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [

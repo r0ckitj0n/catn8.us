@@ -5,7 +5,7 @@ require_once __DIR__ . '/api/bootstrap.php';
 
 $uid = catn8_auth_user_id();
 if ($uid === null) {
-    header('Location: /');
+    header('Location: ' . catn8_login_redirect_url('/investig8'));
     exit;
 }
 

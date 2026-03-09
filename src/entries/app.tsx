@@ -89,6 +89,19 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   tetris: TetrisPage,
 };
 
+function getLoginRedirectTarget(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = new URLSearchParams(window.location.search).get('redirect') || '';
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) {
+    return null;
+  }
+
+  return raw;
+}
+
 function App({ page }: { page: AppPage }) {
   const [loginOpen, setLoginOpen] = React.useState(page === 'login');
   const [accountOpen, setAccountOpen] = React.useState(false);
@@ -224,6 +237,17 @@ function App({ page }: { page: AppPage }) {
   React.useEffect(() => {
     if (page === 'valid8' && viewerResolved && !viewer) {
       setLoginOpen(true);
+    }
+  }, [page, viewer, viewerResolved]);
+
+  React.useEffect(() => {
+    if (page !== 'login' || !viewerResolved || !viewer?.id) {
+      return;
+    }
+
+    const redirectTarget = getLoginRedirectTarget();
+    if (redirectTarget) {
+      window.location.replace(redirectTarget);
     }
   }, [page, viewer, viewerResolved]);
 

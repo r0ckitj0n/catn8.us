@@ -202,3 +202,38 @@ function catn8_rate_limit_require(string $key, int $maxRequests, int $windowSeco
         ], 429);
     }
 }
+
+function catn8_safe_internal_redirect_target(?string $path, string $fallback = '/'): string
+{
+    $candidate = trim((string)$path);
+    if ($candidate === '') {
+        return $fallback;
+    }
+
+    if ($candidate[0] !== '/' || str_starts_with($candidate, '//') || str_contains($candidate, '\\')) {
+        return $fallback;
+    }
+
+    $parts = parse_url($candidate);
+    if (!is_array($parts)) {
+        return $fallback;
+    }
+
+    if (isset($parts['scheme']) || isset($parts['host']) || isset($parts['user']) || isset($parts['pass'])) {
+        return $fallback;
+    }
+
+    $pathPart = (string)($parts['path'] ?? '/');
+    if ($pathPart === '' || $pathPart[0] !== '/') {
+        return $fallback;
+    }
+
+    $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+    $fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+    return $pathPart . $query . $fragment;
+}
+
+function catn8_login_redirect_url(string $targetPath): string
+{
+    return '/login?redirect=' . rawurlencode(catn8_safe_internal_redirect_target($targetPath));
+}

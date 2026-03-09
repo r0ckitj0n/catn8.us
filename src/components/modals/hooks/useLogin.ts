@@ -2,6 +2,19 @@ import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { IToast } from '../../../types/common';
 
+function getPostLoginRedirectTarget(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = new URLSearchParams(window.location.search).get('redirect') || '';
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) {
+    return null;
+  }
+
+  return raw;
+}
+
 export function useLogin(
   onClose: () => void,
   onLoggedIn: () => Promise<any>,
@@ -41,6 +54,11 @@ export function useLogin(
 
       setMessage('Logged in.');
       onToast({ tone: 'success', title: 'Login successful', message: 'You are now logged in.' });
+      const redirectTarget = getPostLoginRedirectTarget();
+      if (redirectTarget) {
+        window.location.assign(redirectTarget);
+        return;
+      }
       onClose();
     } catch (err: any) {
       const msg = err?.message || 'Login failed';

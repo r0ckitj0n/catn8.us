@@ -36,6 +36,53 @@ interface Accumul8PageProps extends AppShellPageProps {
 }
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
+const ENTITY_ENDEX_GROUPING_GUIDES = [
+  {
+    parentName: "McDonald's",
+    matchRule: 'Contains "mcdonald"',
+    examples: ['Mcdonald S F11591 Dawsonville', 'Mcdonald S F27153 Cumming'],
+  },
+  {
+    parentName: 'Home Depot',
+    matchRule: 'Contains "home depot"',
+    examples: ['The Home Depot', 'Withdrawal From Home Depot Online Pmt', 'Home Depot Card'],
+  },
+  {
+    parentName: 'Amazon',
+    matchRule: 'Contains "amazon"',
+    examples: ['Chase / JPMCB (Amazon)', '360 Checking Card Adjustment Signature (credit) Amazon...'],
+  },
+  {
+    parentName: 'Walmart',
+    matchRule: 'Contains "walmart"',
+    examples: ['360 Checking Card Adjustment Signature (credit) Walmart Sc'],
+  },
+  {
+    parentName: 'ATT',
+    matchRule: 'Contains "att"',
+    examples: ['Withdrawal From Att Payment'],
+  },
+  {
+    parentName: 'Achieve',
+    matchRule: 'Contains "achieve"',
+    examples: ['Withdrawal From Achieve Pl 13r Payment', 'Ach'],
+  },
+  {
+    parentName: 'Amicalola EMC',
+    matchRule: 'Contains "amicalola"',
+    examples: ['Withdrawal From Amicalola Emc Payment'],
+  },
+  {
+    parentName: 'Juniper (Barclays)',
+    matchRule: 'Contains "juniper"',
+    examples: ['Juniper'],
+  },
+  {
+    parentName: 'ChatGPT',
+    matchRule: 'Contains "chatgpt" or "openai"',
+    examples: ['Openai Chatgpt Credit'],
+  },
+] as const;
 const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   unspecified: 'Unspecified',
   autopay: 'Auto debit / autopay',
@@ -2399,6 +2446,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                    onChange={(event) => setEntityEndexQuery(event.target.value)}
 	                    placeholder="Search parents or aliases"
 	                  />
+	                </div>
+	              </div>
+	              <div className="accumul8-entity-endex-guide mb-3">
+	                <div className="accumul8-entity-endex-guide-head">
+	                  <h4>Grouping Guide</h4>
+	                  <span className="small text-muted">Use these parent names when new statement imports create messy merchant variants.</span>
+	                </div>
+	                <div className="accumul8-entity-endex-guide-grid">
+	                  {ENTITY_ENDEX_GROUPING_GUIDES.map((guide) => (
+	                    <div key={guide.parentName} className="accumul8-entity-endex-guide-card">
+	                      <strong>{guide.parentName}</strong>
+	                      <div className="accumul8-entity-endex-guide-rule">{guide.matchRule}</div>
+	                      <div className="accumul8-entity-endex-guide-examples">
+	                        {guide.examples.map((example) => (
+	                          <span key={example} className="accumul8-entity-endex-chip">{example}</span>
+	                        ))}
+	                      </div>
+	                    </div>
+	                  ))}
 	                </div>
 	              </div>
 	              <div className="accumul8-entity-endex-grid">

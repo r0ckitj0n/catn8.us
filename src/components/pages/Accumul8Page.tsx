@@ -34,7 +34,7 @@ import './Accumul8Page.css';
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring' | 'notifications' | 'sync';
+type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   unspecified: 'Unspecified',
@@ -405,6 +405,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
+  const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -1027,6 +1028,54 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       .filter((entity) => !linkedAliasEntityIds.has(entity.id))
       .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
   ), [entitiesWithResolvedAliases, linkedAliasEntityIds]);
+  const linkedAliasEntitiesByParentId = React.useMemo(() => {
+    const next: Record<number, Accumul8Entity[]> = {};
+    entitiesWithResolvedAliases.forEach((parentEntity) => {
+      parentEntity.aliases.forEach((alias) => {
+        const aliasKey = normalizeEntityAliasKey(alias.alias_name);
+        if (!aliasKey) {
+          return;
+        }
+        entitiesWithResolvedAliases.forEach((candidate) => {
+          if (candidate.id === parentEntity.id) {
+            return;
+          }
+          if (normalizeEntityAliasKey(candidate.display_name) !== aliasKey) {
+            return;
+          }
+          if (!next[parentEntity.id]) {
+            next[parentEntity.id] = [];
+          }
+          if (!next[parentEntity.id].some((row) => row.id === candidate.id)) {
+            next[parentEntity.id].push(candidate);
+          }
+        });
+      });
+    });
+    Object.values(next).forEach((rows) => rows.sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id)));
+    return next;
+  }, [entitiesWithResolvedAliases]);
+  const entityEndexParents = React.useMemo(() => {
+    const query = String(entityEndexQuery || '').trim().toLowerCase();
+    return entitiesSorted.filter((entity) => {
+      const importedBudgetParent = String(entity.notes || '').includes('Imported from Budget.xlsx');
+      const aliases = entity.aliases || [];
+      const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
+      if (!importedBudgetParent && aliases.length === 0 && linkedChildren.length === 0) {
+        return false;
+      }
+      if (query === '') {
+        return true;
+      }
+      const haystack = [
+        entity.display_name,
+        entity.notes,
+        ...aliases.map((alias) => alias.alias_name),
+        ...linkedChildren.map((child) => child.display_name),
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [entitiesSorted, entityEndexQuery, linkedAliasEntitiesByParentId]);
   const entityTransactionsById = React.useMemo(() => {
     const grouped: Record<number, Accumul8Transaction[]> = {};
     for (const tx of transactions) {
@@ -1519,6 +1568,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <div className="accumul8-settings-modal-actions">
                           {[
                             ['contacts', 'Entities'],
+                            ['entity_endex', 'Entity Endex'],
                             ['notifications', 'Notifications'],
                             ['recurring', 'Recurring'],
                             ['sync', 'Sync'],
@@ -2334,9 +2384,73 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </table>
               </div>
             </div>
-          )}
-          {tab === 'recurring' && (
-            <div className="accumul8-panel">
+	          )}
+	          {tab === 'entity_endex' && (
+	            <div className="accumul8-panel accumul8-panel--entity-endex">
+	              <div className="accumul8-panel-toolbar mb-3">
+	                <div>
+	                  <h3 className="mb-0">Entity Endex</h3>
+	                  <p className="small text-muted mb-0">Search parent entities, inspect aliases, and jump straight into cleanup.</p>
+	                </div>
+	                <div className="accumul8-entity-endex-search">
+	                  <input
+	                    className="form-control form-control-sm"
+	                    value={entityEndexQuery}
+	                    onChange={(event) => setEntityEndexQuery(event.target.value)}
+	                    placeholder="Search parents or aliases"
+	                  />
+	                </div>
+	              </div>
+	              <div className="accumul8-entity-endex-grid">
+	                {entityEndexParents.map((entity) => {
+	                  const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
+	                  const summary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
+	                  return (
+	                    <article key={entity.id} className="accumul8-entity-endex-card">
+	                      <div className="accumul8-entity-endex-card-head">
+	                        <div>
+	                          <h4>{entity.display_name}</h4>
+	                          <div className="accumul8-entity-endex-meta">
+	                            {String(entity.notes || '').includes('Imported from Budget.xlsx') ? 'Budget parent' : 'Alias parent'}
+	                            {summary.count > 0 ? ` · ${summary.count} tx` : ''}
+	                            {summary.lastDate ? ` · ${formatInlineDate(summary.lastDate)}` : ''}
+	                          </div>
+	                        </div>
+	                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditEntity(entity.id)} disabled={busy}>Edit</button>
+	                      </div>
+	                      <div className="accumul8-entity-endex-section">
+	                        <span className="accumul8-entity-endex-label">Aliases</span>
+	                        <div className="accumul8-entity-endex-chip-row">
+	                          {entity.aliases.length > 0 ? entity.aliases.map((alias) => (
+	                            <span key={alias.id} className="accumul8-entity-endex-chip">{alias.alias_name}</span>
+	                          )) : <span className="small text-muted">No aliases yet.</span>}
+	                        </div>
+	                      </div>
+	                      <div className="accumul8-entity-endex-section">
+	                        <span className="accumul8-entity-endex-label">Hidden Linked Records</span>
+	                        <div className="accumul8-entity-endex-linked-list">
+	                          {linkedChildren.length > 0 ? linkedChildren.map((child) => {
+	                            const childSummary = entityTransactionSummaryById[child.id] || { count: 0, lastAmount: null, lastDate: '' };
+	                            return (
+	                              <button key={child.id} type="button" className="accumul8-entity-endex-linked-item" onClick={() => beginEditEntity(child.id)} disabled={busy}>
+	                                <span>{child.display_name}</span>
+	                                <span className="small text-muted">{childSummary.count} tx</span>
+	                              </button>
+	                            );
+	                          }) : <span className="small text-muted">No hidden linked records.</span>}
+	                        </div>
+	                      </div>
+	                    </article>
+	                  );
+	                })}
+	                {entityEndexParents.length === 0 ? (
+	                  <div className="text-muted">No parent entities matched the current search.</div>
+	                ) : null}
+	              </div>
+	            </div>
+	          )}
+	          {tab === 'recurring' && (
+	            <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Recurring Payments</h3>
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Payment</button>

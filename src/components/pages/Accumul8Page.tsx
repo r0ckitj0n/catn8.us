@@ -401,10 +401,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
+  const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
   const flashSaveButtonTimeoutRef = React.useRef<number | null>(null);
   const ledgerTableRef = React.useRef<HTMLTableElement | null>(null);
@@ -1303,6 +1305,38 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       }
     };
   }, []);
+  React.useLayoutEffect(() => {
+    if (!settingsMenuOpen || typeof window === 'undefined' || !settingsButtonRef.current) {
+      return undefined;
+    }
+
+    const updateMenuPosition = () => {
+      const buttonRect = settingsButtonRef.current?.getBoundingClientRect();
+      if (!buttonRect) {
+        return;
+      }
+      const menuWidth = Math.min(320, Math.max(220, Math.round(buttonRect.width + 48)));
+      const viewportPadding = 12;
+      const nextLeft = Math.min(
+        Math.max(viewportPadding, buttonRect.left),
+        Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding),
+      );
+
+      setSettingsMenuPosition({
+        top: Math.round(buttonRect.bottom + 8),
+        left: Math.round(nextLeft),
+        width: menuWidth,
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [settingsMenuOpen]);
   React.useEffect(() => {
     if (!settingsMenuOpen || typeof document === 'undefined') {
       return undefined;
@@ -1433,6 +1467,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   ))}
                   <div className="accumul8-settings-menu-anchor" ref={settingsMenuRef}>
                     <button
+                      ref={settingsButtonRef}
                       type="button"
                       className={`btn ${settingsMenuOpen ? 'btn-primary' : 'btn-outline-primary'}`}
                       aria-haspopup="dialog"
@@ -1446,6 +1481,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         className="accumul8-settings-modal"
                         role="dialog"
                         aria-label="Accumul8 settings sections"
+                        style={{
+                          top: `${settingsMenuPosition.top}px`,
+                          left: `${settingsMenuPosition.left}px`,
+                          width: `${settingsMenuPosition.width}px`,
+                        }}
                       >
                         <div className="accumul8-settings-modal-actions">
                           {[

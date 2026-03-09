@@ -470,11 +470,8 @@
 }
 
 .accumul8-settings-modal {
-  position: absolute;
-  top: calc(100% + 0.55rem);
-  right: 0;
+  position: fixed;
   z-index: 6200;
-  width: min(320px, calc(100vw - 2rem));
   padding: 0.9rem;
   border: 3px solid var(--accumul8-deco-line-strong);
   background:
@@ -486,7 +483,7 @@
 .accumul8-settings-modal::after {
   content: '';
   position: absolute;
-  right: 1rem;
+  left: 1.4rem;
   bottom: 100%;
   width: 14px;
   height: 14px;

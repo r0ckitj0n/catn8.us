@@ -227,7 +227,7 @@
     radial-gradient(circle at top center, rgba(212, 175, 55, 0.16), transparent 38%);
   box-shadow: var(--accumul8-deco-shadow);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .accumul8-page-title-row::before {
@@ -462,6 +462,7 @@
 
 .accumul8-settings-menu-anchor {
   position: relative;
+  z-index: 5;
 }
 
 .accumul8-tabs--header-buttons .btn {

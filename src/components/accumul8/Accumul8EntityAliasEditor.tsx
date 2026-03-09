@@ -89,22 +89,6 @@ export function Accumul8EntityAliasEditor({
     });
   }, [draft, onDraftChange, pendingAliasNames]);
 
-  React.useEffect(() => {
-    if (typeof document === 'undefined') {
-      return undefined;
-    }
-    const handlePointerDown = (event: MouseEvent) => {
-      const targetNode = event.target as Node;
-      if (!wrapperRef.current?.contains(targetNode) && !portalRef.current?.contains(targetNode)) {
-        setIsFocused(false);
-      }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-    };
-  }, []);
-
   const showSuggestions = isFocused && suggestions.length > 0;
 
   React.useEffect(() => {
@@ -138,7 +122,22 @@ export function Accumul8EntityAliasEditor({
   }, [showSuggestions]);
 
   return (
-    <div className="accumul8-entity-aliases" ref={wrapperRef}>
+    <div
+      className="accumul8-entity-aliases"
+      ref={wrapperRef}
+      onBlurCapture={() => {
+        window.setTimeout(() => {
+          if (typeof document === 'undefined') {
+            return;
+          }
+          const activeNode = document.activeElement;
+          if (activeNode instanceof Node && (wrapperRef.current?.contains(activeNode) || portalRef.current?.contains(activeNode))) {
+            return;
+          }
+          setIsFocused(false);
+        }, 0);
+      }}
+    >
       <div className="accumul8-entity-aliases-list">
         {entity.aliases.map((alias) => (
           <span key={alias.id} className="accumul8-entity-alias-chip">
@@ -170,6 +169,10 @@ export function Accumul8EntityAliasEditor({
             onFocus={() => setIsFocused(true)}
             onChange={(event) => onDraftChange({ ...draft, alias_name: event.target.value, merge_entity_id: null })}
             onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setIsFocused(false);
+                return;
+              }
               if (event.key === 'Enter') {
                 event.preventDefault();
                 queueAliasName(draft.alias_name);

@@ -31,6 +31,7 @@ export function Accumul8EntityAliasEditor({
   const [isFocused, setIsFocused] = React.useState(false);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
   const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties | null>(null);
   const aliasKeys = React.useMemo(() => {
     const keys = new Set<string>();
@@ -68,11 +69,15 @@ export function Accumul8EntityAliasEditor({
     if (!trimmed || !aliasKey || aliasKeys.has(aliasKey) || pendingAliasKeys.has(aliasKey)) {
       return;
     }
+    setIsFocused(true);
     onDraftChange({
       ...draft,
       alias_name: '',
       merge_entity_id: null,
       pending_alias_names: [...pendingAliasNames, trimmed],
+    });
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
     });
   }, [aliasKeys, draft, onDraftChange, pendingAliasKeys, pendingAliasNames]);
 
@@ -89,7 +94,8 @@ export function Accumul8EntityAliasEditor({
       return undefined;
     }
     const handlePointerDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
+      const targetNode = event.target as Node;
+      if (!wrapperRef.current?.contains(targetNode) && !portalRef.current?.contains(targetNode)) {
         setIsFocused(false);
       }
     };
@@ -187,6 +193,7 @@ export function Accumul8EntityAliasEditor({
       {pendingAliasNames.length > 0 ? <div className="accumul8-entity-alias-merge-note">Queued aliases: {pendingAliasNames.length}</div> : null}
       {showSuggestions && portalStyle && typeof document !== 'undefined' ? createPortal(
         <div
+          ref={portalRef}
           className="accumul8-entity-alias-suggestions accumul8-entity-alias-suggestions--portal"
           role="listbox"
           aria-label={`Alias suggestions for ${entity.display_name}`}
@@ -200,10 +207,12 @@ export function Accumul8EntityAliasEditor({
                 'accumul8-entity-alias-suggestion',
                 draft.merge_entity_id === suggestion.entity_id ? 'is-selected' : '',
               ].join(' ')}
-              onMouseDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               onClick={() => {
                 queueAliasName(suggestion.alias_name);
-                setIsFocused(false);
               }}
               disabled={busy}
             >

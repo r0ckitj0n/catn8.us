@@ -15,6 +15,7 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
 import { openPlaidLink } from '../../core/plaidLink';
+import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   Accumul8PlaidCreateLinkTokenResponse,
   Accumul8PlaidExchangeResponse,
@@ -74,6 +75,7 @@ type DebtorFormState = {
 type LedgerFormState = {
   transaction_date: string;
   due_date: string;
+  paid_date: string;
   entry_type: Accumul8EntryType;
   description: string;
   memo: string;
@@ -86,7 +88,7 @@ type LedgerFormState = {
   account_id: string;
   balance_entity_id: string;
 };
-type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'balance_entity_id' | 'balance_entity_name'>>;
+type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'balance_entity_id' | 'balance_entity_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes'>>;
@@ -158,6 +160,7 @@ function createDefaultLedgerForm(defaults?: { accountId?: string; balanceEntityI
   return {
     transaction_date: new Date().toISOString().slice(0, 10),
     due_date: '',
+    paid_date: '',
     entry_type: 'manual',
     description: '',
     memo: '',
@@ -619,6 +622,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       .sort((a, b) => {
         const aDate = String(a.due_date || a.transaction_date || '');
         const bDate = String(b.due_date || b.transaction_date || '');
+        const aPastDue = aDate < todayDate;
+        const bPastDue = bDate < todayDate;
+        if (aPastDue !== bPastDue) {
+          return aPastDue ? -1 : 1;
+        }
         const dateCompare = aDate.localeCompare(bDate);
         if (dateCompare !== 0) {
           return dateCompare;
@@ -627,7 +635,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       });
   }, [filteredTransactions]);
   const payBillsDateRange = React.useMemo(() => {
-    const startDate = todayDate;
+    const startDate = '';
     if (payBillsDateFilter === 'custom') {
       return {
         startDate: customPayBillsStartDate || '',
@@ -657,6 +665,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       if (!effectiveDate) {
         return false;
       }
+      if (effectiveDate < todayDate) {
+        return true;
+      }
       if (payBillsDateRange.startDate && effectiveDate < payBillsDateRange.startDate) {
         return false;
       }
@@ -671,6 +682,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     filteredPayBillRows.filter((tx) => matchesSearchQuery(payBillsSearchQuery, [
       tx.due_date,
       tx.transaction_date,
+      tx.paid_date,
       tx.description,
       tx.memo,
       tx.account_name,
@@ -877,6 +889,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setLedgerForm({
       transaction_date: tx.transaction_date || new Date().toISOString().slice(0, 10),
       due_date: tx.due_date || '',
+      paid_date: tx.paid_date || '',
       entry_type: (tx.entry_type || 'manual') as Accumul8EntryType,
       description: tx.description || '',
       memo: tx.memo || '',
@@ -1101,6 +1114,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const submitTransactionModal = React.useCallback(async (form: {
     transaction_date: string;
     due_date?: string;
+    paid_date?: string;
     entry_type: Accumul8EntryType;
     description: string;
     memo?: string;
@@ -1490,6 +1504,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     await updateTransaction(tx.id, {
       transaction_date: draft.transaction_date ?? tx.transaction_date,
       due_date: draft.due_date ?? tx.due_date,
+      paid_date: draft.paid_date ?? tx.paid_date,
       entry_type: tx.entry_type,
       description: draft.description ?? tx.description,
       memo: draft.memo ?? tx.memo,
@@ -1517,6 +1532,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     await updateTransaction(tx.id, {
       transaction_date: draft.transaction_date ?? tx.transaction_date,
       due_date: draft.due_date ?? tx.due_date,
+      paid_date: draft.paid_date ?? tx.paid_date,
       entry_type: tx.entry_type,
       description: draft.description ?? tx.description,
       memo: draft.memo ?? tx.memo,
@@ -1973,6 +1989,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {ledgerRows.map((tx) => (
+                      (() => {
+                        const txEditPolicy = getAccumul8TransactionEditPolicy(tx);
+                        return (
                       <tr
                         key={tx.id}
                         ref={(node) => setInlineRowRef(`ledger-${tx.id}`, node)}
@@ -1986,21 +2005,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       >
                         <td>
                           {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.transaction_date ?? tx.transaction_date} onChange={(e) => setLedgerRowDraft(tx, { transaction_date: e.target.value })} disabled={busy} />
+                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.transaction_date ?? tx.transaction_date} onChange={(e) => setLedgerRowDraft(tx, { transaction_date: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineDate(tx.transaction_date)}</button>
                           )}
                         </td>
                         <td>
                           {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.due_date ?? tx.due_date ?? ''} onChange={(e) => setLedgerRowDraft(tx, { due_date: e.target.value })} disabled={busy} />
+                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.due_date ?? tx.due_date ?? ''} onChange={(e) => setLedgerRowDraft(tx, { due_date: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineDate(tx.due_date)}</button>
                           )}
                         </td>
                         <td>
                           {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.description ?? tx.description} onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })} disabled={busy} />
+                            <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.description ?? tx.description} onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
                           ) : (
                             <button
                               type="button"
@@ -2024,7 +2043,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                         <td className="text-end">
                           {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="number" step="0.01" value={ledgerDraftById[tx.id]?.amount ?? tx.amount} onChange={(e) => setLedgerRowDraft(tx, { amount: Number(e.target.value) })} disabled={busy} />
+                            <input className="form-control form-control-sm accumul8-month-table-input" type="number" step="0.01" value={ledgerDraftById[tx.id]?.amount ?? tx.amount} onChange={(e) => setLedgerRowDraft(tx, { amount: Number(e.target.value) })} disabled={busy || !txEditPolicy.canEditCoreFields} />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.amount.toFixed(2)}</button>
                           )}
@@ -2036,7 +2055,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             type="checkbox"
                             checked={Number(ledgerDraftById[tx.id]?.is_paid ?? tx.is_paid) === 1}
                             onChange={(e) => setLedgerRowDraft(tx, { is_paid: e.target.checked ? 1 : 0 })}
-                            disabled={busy}
+                            disabled={busy || !txEditPolicy.canEditPaidState}
                             aria-label={`Mark ${tx.description} as paid`}
                           />
                         </td>
@@ -2054,10 +2073,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
                             <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy || !ledgerDraftById[tx.id]} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditTransaction(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy} aria-label={`Delete ${tx.description}`}><i className="bi bi-trash"></i></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
                           </div>
                         </td>
                       </tr>
+                        );
+                      })()
                     ))}
                     {ledgerRows.length === 0 && (
                       <tr>
@@ -2401,6 +2422,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {payBillsRows.map((billTx) => (
+                      (() => {
+                        const billEditPolicy = getAccumul8TransactionEditPolicy(billTx);
+                        return (
                       <tr ref={(node) => setInlineRowRef(`paybill-${billTx.id}`, node)} key={billTx.id} className={['accumul8-list-item', activePayBillRowId === billTx.id ? 'is-editing' : '', payBillDraftById[billTx.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
                           {activePayBillRowId === billTx.id ? (
@@ -2409,7 +2433,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               type="date"
                               value={payBillDraftById[billTx.id]?.due_date ?? billTx.due_date ?? billTx.transaction_date}
                               onChange={(e) => setPayBillRowDraft(billTx, { due_date: e.target.value })}
-                              disabled={busy}
+                              disabled={busy || !billEditPolicy.canEditCoreFields}
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineDate(billTx.due_date || billTx.transaction_date)}</button>
@@ -2420,12 +2444,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <input
                               className="form-control form-control-sm accumul8-month-table-input"
                               type="date"
-                              value={payBillDraftById[billTx.id]?.transaction_date ?? billTx.transaction_date}
-                              onChange={(e) => setPayBillRowDraft(billTx, { transaction_date: e.target.value })}
-                              disabled={busy}
+                              value={payBillDraftById[billTx.id]?.paid_date ?? billTx.paid_date ?? ''}
+                              onChange={(e) => setPayBillRowDraft(billTx, { paid_date: e.target.value })}
+                              disabled={busy || !billEditPolicy.canEditPaidState}
                             />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineDate(billTx.transaction_date)}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineDate(billTx.paid_date)}</button>
                           )}
                         </td>
                         <td>
@@ -2434,7 +2458,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               className="form-control form-control-sm accumul8-month-table-input"
                               value={payBillDraftById[billTx.id]?.description ?? billTx.description}
                               onChange={(e) => setPayBillRowDraft(billTx, { description: e.target.value })}
-                              disabled={busy}
+                              disabled={busy || !billEditPolicy.canEditCoreFields}
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineText(billTx.description, '-')}</button>
@@ -2448,7 +2472,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               step="0.01"
                               value={payBillDraftById[billTx.id]?.amount ?? billTx.amount}
                               onChange={(e) => setPayBillRowDraft(billTx, { amount: Number(e.target.value) })}
-                              disabled={busy}
+                              disabled={busy || !billEditPolicy.canEditCoreFields}
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{Number(billTx.amount || 0).toFixed(2)}</button>
@@ -2460,7 +2484,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               className="form-select form-select-sm accumul8-month-table-select"
                               value={String(payBillDraftById[billTx.id]?.is_paid ?? billTx.is_paid)}
                               onChange={(e) => setPayBillRowDraft(billTx, { is_paid: Number(e.target.value) })}
-                              disabled={busy}
+                              disabled={busy || !billEditPolicy.canEditPaidState}
                             >
                               <option value="0">Upcoming</option>
                               <option value="1">Paid</option>
@@ -2472,10 +2496,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         <td className="text-end">
                           <div className="accumul8-row-actions">
                             <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `paybill-${billTx.id}` ? ' is-flashing' : ''}`} onClick={() => void savePayBillRow(billTx)} disabled={busy || !payBillDraftById[billTx.id]} aria-label={`Save ${billTx.description}`} title={`Save ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this bill item?')) { void deleteTransaction(billTx.id); } }} disabled={busy} aria-label={`Delete ${billTx.description}`}><i className="bi bi-trash"></i></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this bill item?')) { void deleteTransaction(billTx.id); } }} disabled={busy || !billEditPolicy.canDelete} aria-label={`Delete ${billTx.description}`} title={billEditPolicy.canDelete ? `Delete ${billTx.description}` : `${billEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
                           </div>
                         </td>
                       </tr>
+                        );
+                      })()
                     ))}
                     {payBillsRows.length === 0 && (
                       <tr>

@@ -1706,6 +1706,7 @@ function accumul8_tables_ensure(): void
         contact_id INT NULL,
         transaction_date DATE NOT NULL,
         due_date DATE NULL,
+        paid_date DATE NULL,
         entry_type VARCHAR(24) NOT NULL DEFAULT 'manual',
         description VARCHAR(255) NOT NULL,
         memo TEXT NULL,
@@ -1726,6 +1727,7 @@ function accumul8_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_tx_owner_date (owner_user_id, transaction_date),
         KEY idx_accumul8_tx_due (due_date),
+        KEY idx_accumul8_tx_paid_date (paid_date),
         KEY idx_accumul8_tx_paid (is_paid),
         UNIQUE KEY uniq_accumul8_external (owner_user_id, source_kind, external_id),
         CONSTRAINT fk_accumul8_tx_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -1875,6 +1877,7 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_budget_planner', 'TINYINT(1) NOT NULL DEFAULT 0');
 
         accumul8_table_add_column_if_missing('accumul8_transactions', 'due_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_transactions', 'paid_date', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'entry_type', "VARCHAR(24) NOT NULL DEFAULT 'manual'");
         accumul8_table_add_column_if_missing('accumul8_transactions', 'entity_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'balance_entity_id', 'INT NULL');
@@ -1886,6 +1889,34 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_transactions', 'recurring_payment_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'source_kind', "VARCHAR(24) NOT NULL DEFAULT 'manual'");
         accumul8_table_add_column_if_missing('accumul8_transactions', 'source_ref', 'VARCHAR(191) NULL');
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_paid_date')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_paid_date (paid_date)');
+        }
+
+        if (accumul8_table_has_column('accumul8_transactions', 'paid_date')
+            && accumul8_table_has_column('accumul8_transactions', 'recurring_payment_id')
+            && accumul8_table_has_column('accumul8_recurring_payments', 'payment_method')) {
+            Database::execute(
+                "UPDATE accumul8_transactions t
+                 INNER JOIN accumul8_recurring_payments rp
+                   ON rp.id = t.recurring_payment_id
+                  AND rp.owner_user_id = t.owner_user_id
+                 SET t.paid_date = COALESCE(t.due_date, t.transaction_date)
+                 WHERE t.paid_date IS NULL
+                   AND t.source_kind = 'recurring'
+                   AND rp.payment_method = 'autopay'"
+            );
+        }
+
+        if (accumul8_table_has_column('accumul8_transactions', 'paid_date')) {
+            Database::execute(
+                "UPDATE accumul8_transactions
+                 SET paid_date = transaction_date
+                 WHERE paid_date IS NULL
+                   AND is_paid = 1
+                   AND source_kind IN ('plaid', 'statement_upload')"
+            );
+        }
         accumul8_table_add_column_if_missing('accumul8_transactions', 'external_id', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'pending_status', 'TINYINT(1) NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'created_by_user_id', 'INT NOT NULL DEFAULT 0');
@@ -2400,6 +2431,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $limit = max(1, min(10000, $limit));
     $hasDebtor = accumul8_has_debtor_support();
     $dueDateSelect = accumul8_optional_select('accumul8_transactions', 'due_date', 't.due_date', 'NULL AS due_date');
+    $paidDateSelect = accumul8_optional_select('accumul8_transactions', 'paid_date', 't.paid_date', 'NULL AS paid_date');
     $entryTypeSelect = accumul8_optional_select('accumul8_transactions', 'entry_type', 't.entry_type', "'manual' AS entry_type");
     $memoSelect = accumul8_optional_select('accumul8_transactions', 'memo', 't.memo', "'' AS memo");
     $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 't.rta_amount', '0.00 AS rta_amount');
@@ -2415,7 +2447,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
     $debtorJoin = $hasDebtor ? 'LEFT JOIN accumul8_debtors d ON d.id = t.debtor_id AND d.owner_user_id = t.owner_user_id' : '';
     $bankingOrganizationIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
     $rows = Database::queryAll(
-        'SELECT t.id, t.account_id, ' . $bankingOrganizationIdSelect . ', ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, ' . $balanceEntityIdSelect . ', COALESCE(be.display_name, "") AS balance_entity_name, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
+        'SELECT t.id, t.account_id, ' . $bankingOrganizationIdSelect . ', ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, ' . $balanceEntityIdSelect . ', COALESCE(be.display_name, "") AS balance_entity_name, t.contact_id, ' . $debtorSelect . ', t.transaction_date, ' . $dueDateSelect . ', ' . $paidDateSelect . ', ' . $entryTypeSelect . ', t.description, ' . $memoSelect . ',
                 t.amount, ' . $rtaSelect . ', t.running_balance, t.is_paid, ' . $isReconciledSelect . ', ' . $isBudgetPlannerSelect . ', ' . $sourceKindSelect . ', ' . $sourceRefSelect . ', ' . $pendingStatusSelect . ',
                 c.contact_name, a.account_name, COALESCE(ag.group_name, "") AS banking_organization_name' . $debtorNameSelect . '
          FROM accumul8_transactions t
@@ -2444,6 +2476,7 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
             'transaction_date' => (string)($r['transaction_date'] ?? ''),
             'due_date' => (string)($r['due_date'] ?? ''),
+            'paid_date' => (string)($r['paid_date'] ?? ''),
             'entry_type' => (string)($r['entry_type'] ?? ''),
             'description' => (string)($r['description'] ?? ''),
             'memo' => (string)($r['memo'] ?? ''),
@@ -2601,6 +2634,92 @@ function accumul8_list_statement_uploads(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_get_transaction_row(int $viewerId, int $id): ?array
+{
+    return Database::queryOne(
+        'SELECT *
+         FROM accumul8_transactions
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    ) ?: null;
+}
+
+function accumul8_transaction_source_kind($value): string
+{
+    $normalized = strtolower(trim((string)$value));
+    return $normalized !== '' ? $normalized : 'manual';
+}
+
+function accumul8_transaction_source_label(string $sourceKind): string
+{
+    if ($sourceKind === 'statement_upload' || $sourceKind === 'statement_pdf') {
+        return 'bank statement';
+    }
+    if ($sourceKind === 'plaid') {
+        return 'bank sync';
+    }
+    if ($sourceKind === 'recurring') {
+        return 'scheduled payment';
+    }
+    return 'manual entry';
+}
+
+function accumul8_transaction_edit_policy(array $transaction): array
+{
+    $sourceKind = accumul8_transaction_source_kind($transaction['source_kind'] ?? '');
+    $isImported = in_array($sourceKind, ['statement_upload', 'statement_pdf', 'plaid'], true);
+
+    if ($isImported) {
+        return [
+            'source_kind' => $sourceKind,
+            'source_label' => accumul8_transaction_source_label($sourceKind),
+            'can_edit_core_fields' => false,
+            'can_edit_paid_state' => false,
+            'can_edit_budget_planner' => false,
+            'can_delete' => false,
+        ];
+    }
+
+    return [
+        'source_kind' => $sourceKind,
+        'source_label' => accumul8_transaction_source_label($sourceKind),
+        'can_edit_core_fields' => true,
+        'can_edit_paid_state' => true,
+        'can_edit_budget_planner' => true,
+        'can_delete' => true,
+    ];
+}
+
+function accumul8_find_duplicate_statement_upload(int $viewerId, string $fileSha256): ?array
+{
+    if ($fileSha256 === '' || !accumul8_table_exists('accumul8_statement_uploads')) {
+        return null;
+    }
+
+    $row = Database::queryOne(
+        'SELECT id, original_filename, created_at, period_start, period_end
+         FROM accumul8_statement_uploads
+         WHERE owner_user_id = ?
+           AND file_sha256 = ?
+         ORDER BY id DESC
+         LIMIT 1',
+        [$viewerId, $fileSha256]
+    );
+
+    if (!$row) {
+        return null;
+    }
+
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'original_filename' => (string)($row['original_filename'] ?? ''),
+        'created_at' => (string)($row['created_at'] ?? ''),
+        'period_start' => isset($row['period_start']) ? (string)$row['period_start'] : '',
+        'period_end' => isset($row['period_end']) ? (string)$row['period_end'] : '',
+    ];
+}
+
 function accumul8_statement_reconciliation_payload(array $parsed, array $importedRows, int $duplicateCount): array
 {
     $opening = isset($parsed['opening_balance']) && is_numeric($parsed['opening_balance']) ? accumul8_normalize_amount($parsed['opening_balance']) : null;
@@ -2730,6 +2849,12 @@ function accumul8_statement_process_upload(int $viewerId, int $actorUserId, int 
                     $actorUserId,
                 ]
             );
+            Database::execute(
+                'UPDATE accumul8_transactions
+                 SET paid_date = transaction_date
+                 WHERE id = ? AND owner_user_id = ?',
+                [(int)Database::lastInsertId(), $viewerId]
+            );
             $txRows[] = [
                 'transaction_date' => $txDate,
                 'description' => $description,
@@ -2828,7 +2953,9 @@ function accumul8_due_bills(int $viewerId): array
            AND amount < 0
            AND is_paid = 0
            " . $kindClause . "
-         ORDER BY COALESCE(due_date, transaction_date) ASC, id ASC",
+         ORDER BY CASE WHEN COALESCE(due_date, transaction_date) < CURDATE() THEN 0 ELSE 1 END ASC,
+                  COALESCE(due_date, transaction_date) ASC,
+                  id ASC",
         [$viewerId]
     );
 
@@ -2953,7 +3080,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
 {
     $effectiveToday = $today ?: date('Y-m-d');
     $dueRows = Database::queryAll(
-        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner
+        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'payment_method', "'unspecified' AS payment_method") . '
          FROM accumul8_recurring_payments
          WHERE owner_user_id = ?
            AND is_active = 1
@@ -2971,6 +3098,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
         $baseAmount = (float)($row['amount'] ?? 0);
         $amount = $direction === 'outflow' ? -abs($baseAmount) : abs($baseAmount);
         $frequency = (string)($row['frequency'] ?? 'monthly');
+        $paymentMethod = (string)($row['payment_method'] ?? 'unspecified');
         $intervalCount = (int)($row['interval_count'] ?? 1);
         $isBudgetPlanner = (int)($row['is_budget_planner'] ?? 1) === 1 ? 1 : 0;
         $entityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
@@ -2996,8 +3124,8 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
             Database::execute(
                 'INSERT INTO accumul8_transactions
                     (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
-                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?)',
+                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?, ?)',
                 [
                     $viewerId,
                     isset($row['account_id']) ? (int)$row['account_id'] : null,
@@ -3011,6 +3139,7 @@ function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorU
                     $isBudgetPlanner,
                     $rpId,
                     'recurring',
+                    $paymentMethod === 'autopay' ? $nextDue : null,
                     $actorUserId,
                 ]
             );
@@ -4037,6 +4166,7 @@ if ($action === 'create_transaction') {
 
     $transactionDate = accumul8_require_valid_date('transaction_date', $body['transaction_date'] ?? date('Y-m-d'));
     $dueDate = accumul8_normalize_date($body['due_date'] ?? null);
+    $paidDate = accumul8_normalize_date($body['paid_date'] ?? null);
     $entryType = accumul8_validate_enum('entry_type', $body['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
     $description = accumul8_normalize_text($body['description'] ?? '', 255);
     $memo = accumul8_normalize_text($body['memo'] ?? '', 5000);
@@ -4086,8 +4216,8 @@ if ($action === 'create_transaction') {
         Database::execute(
             'INSERT INTO accumul8_transactions
                 (owner_user_id, account_id, entity_id, balance_entity_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
-                 is_paid, is_reconciled, is_budget_planner, source_kind, created_by_user_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 is_paid, is_reconciled, is_budget_planner, source_kind, paid_date, created_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $viewerId,
                 $accountIdOrNull,
@@ -4106,6 +4236,7 @@ if ($action === 'create_transaction') {
                 $isReconciled,
                 $isBudgetPlanner,
                 'manual',
+                $paidDate,
                 $actorUserId,
             ]
         );
@@ -4113,8 +4244,8 @@ if ($action === 'create_transaction') {
         Database::execute(
             'INSERT INTO accumul8_transactions
                 (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
-                 is_paid, is_reconciled, is_budget_planner, source_kind, created_by_user_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 is_paid, is_reconciled, is_budget_planner, source_kind, paid_date, created_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $viewerId,
                 $accountIdOrNull,
@@ -4131,6 +4262,7 @@ if ($action === 'create_transaction') {
                 $isReconciled,
                 $isBudgetPlanner,
                 'manual',
+                $paidDate,
                 $actorUserId,
             ]
         );
@@ -4146,8 +4278,17 @@ if ($action === 'update_transaction') {
     $body = catn8_read_json_body();
 
     $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $existingTx = accumul8_get_transaction_row($viewerId, $id);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
+    }
+    $editPolicy = accumul8_transaction_edit_policy($existingTx);
     $transactionDate = accumul8_require_valid_date('transaction_date', $body['transaction_date'] ?? date('Y-m-d'));
     $dueDate = accumul8_normalize_date($body['due_date'] ?? null);
+    $paidDate = accumul8_normalize_date($body['paid_date'] ?? null);
     $entryType = accumul8_validate_enum('entry_type', $body['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
     $description = accumul8_normalize_text($body['description'] ?? '', 255);
     $memo = accumul8_normalize_text($body['memo'] ?? '', 5000);
@@ -4189,18 +4330,50 @@ if ($action === 'update_transaction') {
         $isBudgetPlanner = 0;
     }
 
-    if ($id <= 0) {
-        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
-    }
     if ($description === '') {
         catn8_json_response(['success' => false, 'error' => 'description is required'], 400);
+    }
+
+    $existingTransactionDate = accumul8_normalize_date($existingTx['transaction_date'] ?? null);
+    $existingDueDate = accumul8_normalize_date($existingTx['due_date'] ?? null);
+    $existingPaidDate = accumul8_normalize_date($existingTx['paid_date'] ?? null);
+    $existingEntryType = accumul8_validate_enum('entry_type', $existingTx['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
+    $existingDescription = accumul8_normalize_text($existingTx['description'] ?? '', 255);
+    $existingAmount = accumul8_normalize_amount($existingTx['amount'] ?? 0);
+    $existingRtaAmount = accumul8_normalize_amount($existingTx['rta_amount'] ?? 0);
+    $existingAccountId = isset($existingTx['account_id']) ? (int)$existingTx['account_id'] : 0;
+    $existingIsPaid = accumul8_normalize_bool($existingTx['is_paid'] ?? 0);
+    $existingIsBudgetPlanner = accumul8_normalize_bool($existingTx['is_budget_planner'] ?? 0);
+
+    if (!$editPolicy['can_edit_core_fields']) {
+        $coreChanged = $transactionDate !== $existingTransactionDate
+            || $dueDate !== $existingDueDate
+            || $entryType !== $existingEntryType
+            || $description !== $existingDescription
+            || abs($amount - $existingAmount) > 0.01
+            || abs($rtaAmount - $existingRtaAmount) > 0.01
+            || (int)($accountIdOrNull ?? 0) !== $existingAccountId;
+        if ($coreChanged) {
+            catn8_json_response(['success' => false, 'error' => 'Core fields for this ' . $editPolicy['source_label'] . ' transaction are read-only'], 403);
+        }
+    }
+
+    if (!$editPolicy['can_edit_paid_state']) {
+        $paidStateChanged = $isPaid !== $existingIsPaid || $paidDate !== $existingPaidDate;
+        if ($paidStateChanged) {
+            catn8_json_response(['success' => false, 'error' => 'Paid state for this ' . $editPolicy['source_label'] . ' transaction is read-only'], 403);
+        }
+    }
+
+    if (!$editPolicy['can_edit_budget_planner'] && $isBudgetPlanner !== $existingIsBudgetPlanner) {
+        catn8_json_response(['success' => false, 'error' => 'Budget planner state for this ' . $editPolicy['source_label'] . ' transaction is read-only'], 403);
     }
 
     if ($hasDebtor) {
         Database::execute(
             'UPDATE accumul8_transactions
              SET account_id = ?, entity_id = ?, balance_entity_id = ?, contact_id = ?, debtor_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
-                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?
+                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?, paid_date = ?
              WHERE id = ? AND owner_user_id = ?',
             [
                 $accountIdOrNull,
@@ -4218,6 +4391,7 @@ if ($action === 'update_transaction') {
                 $isPaid,
                 $isReconciled,
                 $isBudgetPlanner,
+                $paidDate,
                 $id,
                 $viewerId,
             ]
@@ -4226,7 +4400,7 @@ if ($action === 'update_transaction') {
         Database::execute(
             'UPDATE accumul8_transactions
              SET account_id = ?, entity_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
-                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?
+                 memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?, paid_date = ?
              WHERE id = ? AND owner_user_id = ?',
             [
                 $accountIdOrNull,
@@ -4242,6 +4416,7 @@ if ($action === 'update_transaction') {
                 $isPaid,
                 $isReconciled,
                 $isBudgetPlanner,
+                $paidDate,
                 $id,
                 $viewerId,
             ]
@@ -4261,10 +4436,22 @@ if ($action === 'toggle_transaction_paid') {
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
+    $existingTx = accumul8_get_transaction_row($viewerId, $id);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
+    }
+    $editPolicy = accumul8_transaction_edit_policy($existingTx);
+    if (!$editPolicy['can_edit_paid_state']) {
+        catn8_json_response(['success' => false, 'error' => 'Paid state for this ' . $editPolicy['source_label'] . ' transaction is read-only'], 403);
+    }
 
     Database::execute(
         'UPDATE accumul8_transactions
-         SET is_paid = CASE WHEN is_paid = 1 THEN 0 ELSE 1 END
+         SET is_paid = CASE WHEN is_paid = 1 THEN 0 ELSE 1 END,
+             paid_date = CASE
+                 WHEN is_paid = 1 THEN NULL
+                 ELSE COALESCE(paid_date, due_date, transaction_date)
+             END
          WHERE id = ? AND owner_user_id = ?',
         [$id, $viewerId]
     );
@@ -4279,6 +4466,10 @@ if ($action === 'toggle_transaction_reconciled') {
 
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $existingTx = accumul8_get_transaction_row($viewerId, $id);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
     }
 
     Database::execute(
@@ -4297,6 +4488,14 @@ if ($action === 'toggle_transaction_budget_planner') {
     $id = (int)($body['id'] ?? 0);
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $existingTx = accumul8_get_transaction_row($viewerId, $id);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
+    }
+    $editPolicy = accumul8_transaction_edit_policy($existingTx);
+    if (!$editPolicy['can_edit_budget_planner']) {
+        catn8_json_response(['success' => false, 'error' => 'Budget planner state for this ' . $editPolicy['source_label'] . ' transaction is read-only'], 403);
     }
 
     Database::execute(
@@ -4319,6 +4518,14 @@ if ($action === 'delete_transaction') {
     $id = (int)($body['id'] ?? 0);
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $existingTx = accumul8_get_transaction_row($viewerId, $id);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
+    }
+    $editPolicy = accumul8_transaction_edit_policy($existingTx);
+    if (!$editPolicy['can_delete']) {
+        catn8_json_response(['success' => false, 'error' => ucfirst($editPolicy['source_label']) . ' transactions cannot be deleted here'], 403);
     }
 
     Database::execute('DELETE FROM accumul8_transactions WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
@@ -4611,6 +4818,17 @@ if ($action === 'upload_statement') {
     if (!is_string($bytes) || $bytes === '') {
         catn8_json_response(['success' => false, 'error' => 'Failed to read uploaded statement'], 500);
     }
+    $fileSha256 = hash('sha256', $bytes);
+
+    $duplicateUpload = accumul8_find_duplicate_statement_upload($viewerId, $fileSha256);
+    if ($duplicateUpload !== null) {
+        catn8_json_response([
+            'success' => false,
+            'error' => 'Upload canceled because this statement was already uploaded.',
+            'duplicate' => true,
+            'existing_upload' => $duplicateUpload,
+        ], 409);
+    }
 
     $selectedAccountId = isset($_POST['account_id']) && $_POST['account_id'] !== ''
         ? accumul8_owned_id_or_null('accounts', $viewerId, (int)$_POST['account_id'])
@@ -4629,7 +4847,7 @@ if ($action === 'upload_statement') {
             $originalName !== '' ? $originalName : ('statement.' . $extension),
             $mimeType !== '' ? $mimeType : 'application/octet-stream',
             $sizeBytes,
-            hash('sha256', $bytes),
+            $fileSha256,
             $bytes,
         ]
     );
@@ -4829,8 +5047,8 @@ if ($action === 'plaid_sync_transactions') {
             Database::execute(
                 'INSERT INTO accumul8_transactions
                     (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
-                     is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                     is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [
                     $viewerId,
                     null,
@@ -4846,6 +5064,7 @@ if ($action === 'plaid_sync_transactions') {
                     (string)($connection['plaid_item_id'] ?? ''),
                     $externalId,
                     $pending,
+                    $date,
                     $actorUserId,
                 ]
             );

@@ -165,15 +165,6 @@ export function Accumul8StatementModal({
                 </div>
               </div>
             </form>
-
-            <div className="accumul8-statement-history-head">
-              <div>
-                <h6 className="mb-1">Previous uploads</h6>
-                <div className="small text-muted">Each upload keeps the original statement, reconciliation notes, and any suspicious-spend flags.</div>
-              </div>
-              <div className="small text-muted">Owner #{ownerUserId}</div>
-            </div>
-
             <div className="accumul8-statement-history-list">
               {statementUploads.length === 0 ? (
                 <div className="accumul8-statement-history-empty">No statements uploaded yet.</div>

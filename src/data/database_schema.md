@@ -194,6 +194,7 @@ Business term: Banking Organizations
 - `debtor_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_debtors.id)
 - `transaction_date` (DATE)
 - `due_date` (DATE, NULLABLE)
+- `paid_date` (DATE, NULLABLE)
 - `entry_type` (VARCHAR(24))
 - `description` (VARCHAR(255))
 - `memo` (TEXT, NULLABLE)

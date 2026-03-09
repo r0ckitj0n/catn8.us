@@ -8,12 +8,14 @@ import {
   Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../../types/accumul8';
+import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
 interface Accumul8TransactionModalFormState {
   transaction_date: string;
   due_date: string;
+  paid_date: string;
   entry_type: Accumul8EntryType;
   description: string;
   memo: string;
@@ -114,6 +116,7 @@ export function Accumul8TransactionModal({
     () => resolveStatementLink(transaction, statementUploads, ownerUserId),
     [ownerUserId, statementUploads, transaction],
   );
+  const editPolicy = React.useMemo(() => getAccumul8TransactionEditPolicy(transaction), [transaction]);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -144,6 +147,7 @@ export function Accumul8TransactionModal({
               void onSave({
                 transaction_date: String(form.transaction_date || ''),
                 due_date: String(form.due_date || ''),
+                paid_date: String(form.paid_date || ''),
                 entry_type: (form.entry_type || 'manual') as Accumul8EntryType,
                 description: String(form.description || '').trim(),
                 memo: String(form.memo || '').trim(),
@@ -166,6 +170,11 @@ export function Accumul8TransactionModal({
                 </a>
               </div>
             ) : null}
+            {editing && editPolicy.isImported ? (
+              <div className="small text-muted">
+                Source: {editPolicy.sourceLabel}. Bank-imported fields stay read-only here; you can still adjust entity assignment, notes, and reconciliation.
+              </div>
+            ) : null}
             <div className="row g-3">
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-transaction-date">Transaction Date</label>
@@ -176,6 +185,7 @@ export function Accumul8TransactionModal({
                   value={form.transaction_date}
                   onChange={(e) => setForm((prev) => ({ ...prev, transaction_date: e.target.value }))}
                   required
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 />
               </div>
               <div className="col-md-4">
@@ -186,6 +196,7 @@ export function Accumul8TransactionModal({
                   type="date"
                   value={form.due_date}
                   onChange={(e) => setForm((prev) => ({ ...prev, due_date: e.target.value }))}
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 />
               </div>
               <div className="col-md-4">
@@ -195,6 +206,7 @@ export function Accumul8TransactionModal({
                   className="form-select"
                   value={form.entry_type}
                   onChange={(e) => setForm((prev) => ({ ...prev, entry_type: e.target.value as Accumul8EntryType }))}
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 >
                   <option value="manual">Manual</option>
                   <option value="auto">Auto</option>
@@ -202,6 +214,17 @@ export function Accumul8TransactionModal({
                   <option value="deposit">Deposit</option>
                   <option value="bill">Bill</option>
                 </select>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label" htmlFor="accumul8-transaction-paid-date">Paid Date</label>
+                <input
+                  id="accumul8-transaction-paid-date"
+                  className="form-control"
+                  type="date"
+                  value={form.paid_date}
+                  onChange={(e) => setForm((prev) => ({ ...prev, paid_date: e.target.value }))}
+                  disabled={busy || !editPolicy.canEditPaidState}
+                />
               </div>
               <div className="col-md-8">
                 <label className="form-label" htmlFor="accumul8-transaction-description">Description</label>
@@ -211,6 +234,7 @@ export function Accumul8TransactionModal({
                   value={form.description}
                   onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                   required
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 />
               </div>
               <div className="col-md-4">
@@ -223,6 +247,7 @@ export function Accumul8TransactionModal({
                   value={form.amount}
                   onChange={(e) => setForm((prev) => ({ ...prev, amount: Number(e.target.value) }))}
                   required
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 />
               </div>
               <div className="col-md-4">
@@ -248,6 +273,7 @@ export function Accumul8TransactionModal({
                   className="form-select"
                   value={form.account_id}
                   onChange={(e) => setForm((prev) => ({ ...prev, account_id: e.target.value }))}
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 >
                   <option value="">Account</option>
                   {accounts.map((account) => (
@@ -284,6 +310,7 @@ export function Accumul8TransactionModal({
                   step="0.01"
                   value={form.rta_amount}
                   onChange={(e) => setForm((prev) => ({ ...prev, rta_amount: Number(e.target.value) }))}
+                  disabled={busy || !editPolicy.canEditCoreFields}
                 />
               </div>
               <div className="col-md-4">
@@ -293,7 +320,7 @@ export function Accumul8TransactionModal({
                   className="form-select"
                   value={String(form.is_budget_planner)}
                   onChange={(e) => setForm((prev) => ({ ...prev, is_budget_planner: Number(e.target.value) }))}
-                  disabled={Boolean(form.balance_entity_id)}
+                  disabled={busy || Boolean(form.balance_entity_id) || !editPolicy.canEditBudgetPlanner}
                 >
                   <option value="1">In Budget Planner</option>
                   <option value="0">Exclude From Planner</option>
@@ -306,6 +333,7 @@ export function Accumul8TransactionModal({
                   className="form-select"
                   value={String(form.is_paid)}
                   onChange={(e) => setForm((prev) => ({ ...prev, is_paid: Number(e.target.value) }))}
+                  disabled={busy || !editPolicy.canEditPaidState}
                 >
                   <option value="0">No</option>
                   <option value="1">Yes</option>
@@ -331,6 +359,7 @@ export function Accumul8TransactionModal({
                   rows={3}
                   value={form.memo}
                   onChange={(e) => setForm((prev) => ({ ...prev, memo: e.target.value }))}
+                  disabled={busy}
                 />
               </div>
             </div>

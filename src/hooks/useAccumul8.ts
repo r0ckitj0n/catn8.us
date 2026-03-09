@@ -327,11 +327,34 @@ export function useAccumul8(
     }
   }, [handleError, load, onToast, scopedActionUrl]);
   const uploadStatement = React.useCallback(async (formData: FormData) => {
-    await withReload(
-      () => ApiClient.postFormData(scopedActionUrl('upload_statement'), formData),
-      'Statement uploaded and processed',
-    );
-  }, [scopedActionUrl, withReload]);
+    setBusy(true);
+    try {
+      await ApiClient.postFormData(scopedActionUrl('upload_statement'), formData);
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement uploaded and processed' });
+      }
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 409 && Number(error?.payload?.duplicate ? 1 : 0) === 1) {
+        const statementFile = formData.get('statement_file');
+        const fallbackName = statementFile instanceof File ? statementFile.name : '';
+        const existingName = String(error?.payload?.existing_upload?.original_filename || fallbackName);
+        if (onToast) {
+          onToast({
+            tone: 'warning',
+            message: existingName
+              ? `Upload canceled because "${existingName}" is a duplicate statement.`
+              : 'Upload canceled because this statement was already uploaded.',
+          });
+        }
+        return;
+      }
+      handleError(error, 'Failed to upload statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),

@@ -136,6 +136,7 @@ export interface Accumul8Transaction {
   debtor_id: number | null;
   transaction_date: string;
   due_date: string;
+  paid_date: string;
   entry_type: Accumul8EntryType;
   description: string;
   memo: string;
@@ -172,6 +173,7 @@ export interface Accumul8BankingOrganizationUpsertRequest {
 export interface Accumul8TransactionUpsertRequest {
   transaction_date: string;
   due_date?: string;
+  paid_date?: string;
   entry_type: Accumul8EntryType;
   description: string;
   memo?: string;
@@ -270,6 +272,7 @@ export interface Accumul8BillItem {
   id: number;
   transaction_date: string;
   due_date: string;
+  paid_date: string;
   description: string;
   amount: number;
   is_paid: number;

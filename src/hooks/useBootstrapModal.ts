@@ -2,14 +2,24 @@ import React, { useRef } from 'react';
 import { createBootstrapModal, isBootstrapModalReady, IBootstrapModal } from '../core/bootstrapModal';
 import { captureScrollBeforeModalOpen, restoreScrollAfterModalClose } from '../utils/modalUtils';
 
-export function useBootstrapModal(onClose?: () => void) {
+interface UseBootstrapModalOptions {
+  centerDialog?: boolean;
+}
+
+export function useBootstrapModal(onClose?: () => void, options?: UseBootstrapModalOptions) {
   const modalRef = useRef<HTMLDivElement>(null);
   const modalApiRef = useRef<IBootstrapModal | null>(null);
   const [bootstrapTick, setBootstrapTick] = React.useState(0);
+  const centerDialog = options?.centerDialog ?? true;
 
   React.useEffect(() => {
     const el = modalRef.current;
     if (!el) return;
+
+    const dialog = el.querySelector<HTMLElement>('.modal-dialog');
+    if (dialog) {
+      dialog.classList.toggle('modal-dialog-centered', centerDialog);
+    }
 
     if (!isBootstrapModalReady()) {
       const t = window.setTimeout(() => setBootstrapTick((v) => v + 1), 50);
@@ -32,7 +42,7 @@ export function useBootstrapModal(onClose?: () => void) {
       el.removeEventListener('show.bs.modal', onShow);
       el.removeEventListener('hidden.bs.modal', onHidden);
     };
-  }, [onClose, bootstrapTick]);
+  }, [centerDialog, onClose, bootstrapTick]);
 
   return { modalRef, modalApiRef };
 }

@@ -263,7 +263,12 @@ start_php_server() {
   log "${BLUE}Starting concurrent PHP server on port $PHP_PORT...${NC}"
   export CATN8_PHP_PORT="$PHP_PORT"
   
-  python3 -c '
+  local launcher_prefix=()
+  if command -v setsid >/dev/null 2>&1; then
+    launcher_prefix=(setsid)
+  fi
+
+  "${launcher_prefix[@]}" nohup python3 -c '
 import http.server
 import socketserver
 import subprocess
@@ -449,7 +454,7 @@ with DualStackServer(("::", PORT), ConcurrentPHPHandler) as httpd:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
-' > logs/http_server.log 2>&1 &
+' > logs/http_server.log 2>&1 < /dev/null &
   
   HTTP_SERVER_PID=$!
   log "${BLUE}Waiting up to ${HTTP_START_TIMEOUT}s for HTTP server to respond...${NC}"

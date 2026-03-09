@@ -291,6 +291,12 @@ export interface Accumul8EntityAlias {
   alias_name: string;
 }
 
+export interface Accumul8EntityEndexGuide {
+  parent_name: string;
+  match_rule: string;
+  examples: string[];
+}
+
 export interface Accumul8EntityAliasDraft {
   alias_name: string;
   merge_entity_id: number | null;
@@ -352,6 +358,7 @@ export interface Accumul8BootstrapResponse {
   accessible_account_owners: Accumul8AccessibleOwner[];
   entities: Accumul8Entity[];
   entity_aliases: Accumul8EntityAlias[];
+  entity_endex_guides: Accumul8EntityEndexGuide[];
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];

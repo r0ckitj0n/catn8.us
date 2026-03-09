@@ -16,6 +16,7 @@ import {
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
   Accumul8EntityAlias,
+  Accumul8EntityEndexGuide,
   Accumul8EntityAliasUpsertRequest,
   Accumul8EntityUpsertRequest,
   Accumul8NotificationRule,
@@ -36,6 +37,7 @@ export function useAccumul8(
   const [summary, setSummary] = React.useState({ net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
   const [entities, setEntities] = React.useState<Accumul8Entity[]>([]);
   const [entityAliases, setEntityAliases] = React.useState<Accumul8EntityAlias[]>([]);
+  const [entityEndexGuides, setEntityEndexGuides] = React.useState<Accumul8EntityEndexGuide[]>([]);
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
@@ -70,6 +72,7 @@ export function useAccumul8(
       setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
       setEntities(Array.isArray(res?.entities) ? res.entities : []);
       setEntityAliases(Array.isArray(res?.entity_aliases) ? res.entity_aliases : []);
+      setEntityEndexGuides(Array.isArray(res?.entity_endex_guides) ? res.entity_endex_guides : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -349,6 +352,7 @@ export function useAccumul8(
     accessibleAccountOwners,
     entities,
     entityAliases,
+    entityEndexGuides,
     contacts,
     recurringPayments,
     transactions,

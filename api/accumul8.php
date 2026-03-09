@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/emailer.php';
+require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
 
 catn8_session_start();
 catn8_groups_seed_core();
@@ -181,97 +182,6 @@ function accumul8_contact_type_flags(string $contactType): array
     return ['is_payee' => 0, 'is_payer' => 0];
 }
 
-function accumul8_canonical_entity_name(string $value): string
-{
-    $name = accumul8_normalize_text($value, 191);
-    if ($name === '') {
-        return '';
-    }
-
-    $replacements = [
-        '/\bamzn\.?\s*com\/?(?:bill|bil)\b/i',
-        '/\(\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*\)/i',
-        '/\b(?:debit|credit)\s*-\s*[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
-        '/\b(?:debit|credit)\b/i',
-        '/\b[$-]?\d[\d,]*(?:\.\d{2})?\s*$/i',
-        '/\b(?:x{3,}|\*{3,})[a-z0-9-]*\b/i',
-        '/\b(?:acct|account|checking|savings|card)\s+(?:ending\s+in\s+)?(?:x{2,}|\*{2,})?[a-z0-9-]{2,}\b/i',
-        '/\b(?:pl\s*[a-z0-9]{1,6}\s+payment|payment)\b/i',
-        '/\b(?:cumming(?:\s+ga)?|dawsonville(?:\s+ga)?|alpharetta(?:\s+ga)?|atlanta(?:\s+ga)?|suwanee(?:\s+ga)?|buford(?:\s+ga)?)\b/i',
-        '/\b(?:wa|ga|al|fl|nc|sc|tn|va|md)\b$/i',
-    ];
-    foreach ($replacements as $pattern) {
-        $next = preg_replace($pattern, ' ', $name);
-        if (is_string($next)) {
-            $name = $next;
-        }
-    }
-
-    $prefixPatterns = [
-        '/^(?:debit card purchase|digital card purchase|card purchase|purchase)\s*-\s*/i',
-        '/^(?:withdrawal|deposit|payment|transfer)\s+(?:to|from)\s+/i',
-        '/^(?:direct\s+(?:from|to)|online transfer\s+(?:from|to)|ach\s+(?:credit|debit|payment|transfer))\s*[-:]?\s*/i',
-    ];
-    foreach ($prefixPatterns as $pattern) {
-        $next = preg_replace($pattern, '', $name, 1);
-        if (is_string($next)) {
-            $name = $next;
-        }
-    }
-
-    $cleanupPatterns = [
-        '/\b(?:debit|credit)\b\s*$/i',
-        '/^[\s\-:;,]+/u',
-        '/[\s\-:;,]+$/u',
-        '/\s+/u',
-    ];
-    foreach ($cleanupPatterns as $pattern) {
-        $next = preg_replace($pattern, $pattern === '/\s+/u' ? ' ' : '', $name);
-        if (is_string($next)) {
-            $name = $next;
-        }
-    }
-
-    $name = trim($name);
-    $joinedInitials = preg_replace('/\b([a-z])[\.\s]+([a-z])\b/i', '$1$2', $name);
-    if (is_string($joinedInitials) && trim($joinedInitials) !== '') {
-        $name = trim($joinedInitials);
-    }
-    if ($name === '') {
-        return accumul8_normalize_text($value, 191);
-    }
-    return accumul8_normalize_text($name, 191);
-}
-
-function accumul8_entity_match_key(string $value): string
-{
-    $canonical = accumul8_canonical_entity_name($value);
-    if ($canonical === '') {
-        return '';
-    }
-    $key = preg_replace('/[^a-z0-9]+/i', '', strtolower($canonical));
-    return is_string($key) ? $key : '';
-}
-
-function accumul8_entity_alias_name(string $value): string
-{
-    $canonical = accumul8_canonical_entity_name($value);
-    $matchKey = accumul8_entity_match_key($canonical);
-    if ($matchKey === '') {
-        return $canonical;
-    }
-    if (preg_match('/^a[ze]pharmacyllc/', $matchKey) === 1) {
-        return 'AZ Pharmacy LLC';
-    }
-    if (preg_match('/^acehardwarehammonds/', $matchKey) === 1) {
-        return 'Ace Hardware Hammonds';
-    }
-    if (preg_match('/^achieve/', $matchKey) === 1) {
-        return 'Achieve';
-    }
-    return $canonical;
-}
-
 function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?int
 {
     $normalizedKey = accumul8_entity_match_key(accumul8_entity_alias_name($displayName));
@@ -319,9 +229,9 @@ function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $alia
         return ['id' => null, 'status' => 'invalid'];
     }
 
-    $normalizedAlias = accumul8_entity_alias_name($aliasName);
-    $aliasKey = accumul8_entity_match_key($normalizedAlias);
-    if ($normalizedAlias === '' || $aliasKey === '') {
+    $displayAlias = accumul8_entity_alias_display_name($aliasName);
+    $aliasKey = accumul8_entity_match_key(accumul8_entity_alias_name($aliasName));
+    if ($displayAlias === '' || $aliasKey === '') {
         return ['id' => null, 'status' => 'invalid'];
     }
 
@@ -336,7 +246,7 @@ function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $alia
         return ['id' => null, 'status' => 'missing_entity'];
     }
 
-    if ($aliasKey === accumul8_entity_match_key((string)($entity['display_name'] ?? ''))) {
+    if (accumul8_entity_match_key($displayAlias) === accumul8_entity_match_key((string)($entity['display_name'] ?? ''))) {
         return ['id' => null, 'status' => 'matches_display_name'];
     }
 
@@ -362,7 +272,7 @@ function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $alia
             'UPDATE accumul8_entity_aliases
              SET alias_name = ?
              WHERE id = ? AND owner_user_id = ?',
-            [$normalizedAlias, $existingId, $viewerId]
+            [$displayAlias, $existingId, $viewerId]
         );
         return ['id' => $existingId, 'status' => 'updated', 'entity_id' => $entityId];
     }
@@ -370,7 +280,7 @@ function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $alia
     Database::execute(
         'INSERT INTO accumul8_entity_aliases (owner_user_id, entity_id, alias_name, alias_key)
          VALUES (?, ?, ?, ?)',
-        [$viewerId, $entityId, $normalizedAlias, $aliasKey]
+        [$viewerId, $entityId, $displayAlias, $aliasKey]
     );
     return ['id' => (int)Database::lastInsertId(), 'status' => 'created', 'entity_id' => $entityId];
 }
@@ -2570,6 +2480,7 @@ if ($action === 'bootstrap') {
         'accessible_account_owners' => $accessibleOwners,
         'entities' => $entities,
         'entity_aliases' => $entityAliases,
+        'entity_endex_guides' => accumul8_entity_endex_guides(),
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,

@@ -61,7 +61,11 @@ else
   # Ensure logs directory exists
   mkdir -p logs
   # Start the monitor daemon in the background
-  ./scripts/server_monitor.sh daemon > logs/monitor.log 2>&1 &
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup ./scripts/server_monitor.sh daemon > logs/monitor.log 2>&1 < /dev/null &
+  else
+    nohup ./scripts/server_monitor.sh daemon > logs/monitor.log 2>&1 < /dev/null &
+  fi
   DAEMON_PID=$!
   sleep 2
   
@@ -91,4 +95,3 @@ echo -e "\n${YELLOW}To restart the servers, run:${NC}"
 echo -e "  ./scripts/server_monitor.sh restart"
 echo -e "\n${YELLOW}To check monitor status, run:${NC}"
 echo -e "  ps aux | grep 'scripts/server_monitor.sh daemon' | grep -v grep"
-

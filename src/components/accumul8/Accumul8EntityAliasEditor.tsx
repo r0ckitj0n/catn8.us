@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Accumul8Entity, Accumul8EntityAliasDraft } from '../../types/accumul8';
 import './Accumul8EntityAliasEditor.css';
 
@@ -29,6 +30,8 @@ export function Accumul8EntityAliasEditor({
 }: Accumul8EntityAliasEditorProps) {
   const [isFocused, setIsFocused] = React.useState(false);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties | null>(null);
   const aliasKeys = React.useMemo(() => {
     const keys = new Set<string>();
     keys.add(normalizeKey(entity.display_name));
@@ -48,17 +51,7 @@ export function Accumul8EntityAliasEditor({
       }))
       .filter((candidate) => candidate.alias_name !== '' && !aliasKeys.has(candidate.alias_key))
       .filter((candidate) => (query === '' ? true : candidate.alias_name.toLowerCase().includes(query)))
-      .sort((a, b) => {
-        const aLower = a.alias_name.toLowerCase();
-        const bLower = b.alias_name.toLowerCase();
-        const aStarts = query !== '' && aLower.startsWith(query) ? 0 : 1;
-        const bStarts = query !== '' && bLower.startsWith(query) ? 0 : 1;
-        if (aStarts !== bStarts) {
-          return aStarts - bStarts;
-        }
-        return aLower.localeCompare(bLower);
-      })
-      .slice(0, 8);
+      .sort((a, b) => a.alias_name.localeCompare(b.alias_name));
   }, [aliasKeys, draft.alias_name, entities, entity.id]);
 
   React.useEffect(() => {
@@ -78,6 +71,36 @@ export function Accumul8EntityAliasEditor({
 
   const showSuggestions = isFocused && suggestions.length > 0;
 
+  React.useEffect(() => {
+    if (!showSuggestions || typeof window === 'undefined') {
+      setPortalStyle(null);
+      return undefined;
+    }
+
+    const updatePortalPosition = () => {
+      const input = inputRef.current;
+      if (!input) {
+        setPortalStyle(null);
+        return;
+      }
+      const rect = input.getBoundingClientRect();
+      setPortalStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    updatePortalPosition();
+    window.addEventListener('resize', updatePortalPosition);
+    window.addEventListener('scroll', updatePortalPosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePortalPosition);
+      window.removeEventListener('scroll', updatePortalPosition, true);
+    };
+  }, [showSuggestions]);
+
   return (
     <div className="accumul8-entity-aliases" ref={wrapperRef}>
       <div className="accumul8-entity-aliases-list">
@@ -91,6 +114,7 @@ export function Accumul8EntityAliasEditor({
       <div className="accumul8-entity-alias-add">
         <div className="accumul8-entity-alias-input-wrap">
           <input
+            ref={inputRef}
             className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted"
             value={draft.alias_name}
             onFocus={() => setIsFocused(true)}
@@ -105,28 +129,6 @@ export function Accumul8EntityAliasEditor({
             placeholder={placeholder}
             autoComplete="off"
           />
-          {showSuggestions ? (
-            <div className="accumul8-entity-alias-suggestions" role="listbox" aria-label={`Alias suggestions for ${entity.display_name}`}>
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion.entity_id}
-                  type="button"
-                  className={[
-                    'accumul8-entity-alias-suggestion',
-                    draft.merge_entity_id === suggestion.entity_id ? 'is-selected' : '',
-                  ].join(' ')}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    onDraftChange({ alias_name: suggestion.alias_name, merge_entity_id: suggestion.entity_id });
-                    setIsFocused(false);
-                  }}
-                  disabled={busy}
-                >
-                  {suggestion.alias_name}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
         <button
           type="button"
@@ -138,6 +140,34 @@ export function Accumul8EntityAliasEditor({
           +
         </button>
       </div>
+      {showSuggestions && portalStyle && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="accumul8-entity-alias-suggestions accumul8-entity-alias-suggestions--portal"
+          role="listbox"
+          aria-label={`Alias suggestions for ${entity.display_name}`}
+          style={portalStyle}
+        >
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.entity_id}
+              type="button"
+              className={[
+                'accumul8-entity-alias-suggestion',
+                draft.merge_entity_id === suggestion.entity_id ? 'is-selected' : '',
+              ].join(' ')}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onDraftChange({ alias_name: suggestion.alias_name, merge_entity_id: suggestion.entity_id });
+                setIsFocused(false);
+              }}
+              disabled={busy}
+            >
+              {suggestion.alias_name}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }

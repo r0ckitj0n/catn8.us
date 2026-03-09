@@ -553,10 +553,6 @@
   box-shadow: var(--accumul8-deco-shadow);
 }
 
-.accumul8-panel--entity-manager {
-  overflow: visible;
-}
-
 .accumul8-panel::before,
 .accumul8-month-panel::before,
 .accumul8-help-modal::before {
@@ -1402,10 +1398,6 @@
   scrollbar-color: rgba(212, 175, 55, 0.56) rgba(15, 20, 24, 0.86);
 }
 
-.accumul8-scroll-area--entity-manager {
-  overflow-x: auto;
-  overflow-y: visible;
-}
 
 .accumul8-scroll-area::-webkit-scrollbar {
   width: 11px;

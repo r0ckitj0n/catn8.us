@@ -1607,7 +1607,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'spreadsheet' && (
-            <div className="accumul8-panel accumul8-panel--entity-manager">
+            <div className="accumul8-panel">
               <Accumul8SpreadsheetView
                 busy={busy}
                 selectedMonth={budgetMonth}
@@ -2005,7 +2005,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <h3 className="mb-0">Entity Manager</h3>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
               </div>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list accumul8-scroll-area--entity-manager">
+              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
                 <table
                   ref={entitiesTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head"

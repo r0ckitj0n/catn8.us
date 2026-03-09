@@ -3387,8 +3387,28 @@ if ($action === 'create_entity_alias') {
         accumul8_merge_entities($viewerId, $entityId, $mergeEntityId);
     }
 
-    $aliasId = accumul8_upsert_entity_alias($viewerId, $entityId, $aliasName);
-    catn8_json_response(['success' => true, 'id' => $aliasId, 'merged_entity_id' => $mergeEntityId > 0 ? $mergeEntityId : null]);
+    $result = accumul8_assign_entity_alias($viewerId, $entityId, $aliasName, false);
+    $status = (string)($result['status'] ?? '');
+    if ($status === 'conflict') {
+        catn8_json_response(['success' => false, 'error' => 'Alias already belongs to another entity'], 409);
+    }
+    if ($status === 'matches_display_name') {
+        catn8_json_response(['success' => false, 'error' => 'Alias matches the entity name after normalization'], 409);
+    }
+    if ($status === 'invalid') {
+        catn8_json_response(['success' => false, 'error' => 'Alias name is required'], 400);
+    }
+    if ($status === 'missing_entity') {
+        catn8_json_response(['success' => false, 'error' => 'Entity not found'], 404);
+    }
+
+    $aliasId = isset($result['id']) ? (int)$result['id'] : 0;
+    catn8_json_response([
+        'success' => true,
+        'id' => $aliasId > 0 ? $aliasId : null,
+        'status' => $status,
+        'merged_entity_id' => $mergeEntityId > 0 ? $mergeEntityId : null,
+    ]);
 }
 
 if ($action === 'delete_entity_alias') {

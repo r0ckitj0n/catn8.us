@@ -292,32 +292,44 @@ function sync_write_scoped_dump(PDO $pdo, array $tables, string $outPath, string
         $colList = '(' . implode(', ', array_map('sync_q', $cols)) . ')';
 
         $offset = 0;
-        $batch = 1000;
-        while ($offset < $total) {
-            $rows = $pdo->query('SELECT * FROM ' . sync_q($table) . ' LIMIT ' . (int) $batch . ' OFFSET ' . (int) $offset)->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            if (empty($rows)) {
-                break;
+        $batch = 250;
+        $bufferedAttr = null;
+        if (class_exists('Pdo\\Mysql') && defined('Pdo\\Mysql::ATTR_USE_BUFFERED_QUERY')) {
+            $bufferedAttr = constant('Pdo\\Mysql::ATTR_USE_BUFFERED_QUERY');
+        } elseif (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+            $bufferedAttr = constant('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY');
+        }
+        $prevBuffered = null;
+        try {
+            if ($bufferedAttr !== null) {
+                $prevBuffered = $pdo->getAttribute($bufferedAttr);
+                $pdo->setAttribute($bufferedAttr, false);
             }
+            while ($offset < $total) {
+                $stmt = $pdo->prepare('SELECT * FROM ' . sync_q($table) . ' LIMIT :limit OFFSET :offset');
+                $stmt->bindValue(':limit', $batch, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
 
-            $valuesSets = [];
-            foreach ($rows as $row) {
-                $vals = [];
-                foreach ($cols as $colName) {
-                    $vals[] = sync_sql_value($pdo, $row[$colName] ?? null);
+                $rowCount = 0;
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $rowCount++;
+                    $vals = [];
+                    foreach ($cols as $colName) {
+                        $vals[] = sync_sql_value($pdo, $row[$colName] ?? null);
+                    }
+                    fwrite($fh, 'INSERT INTO ' . sync_q($table) . ' ' . $colList . ' VALUES (' . implode(', ', $vals) . ");\n");
                 }
-                $valuesSets[] = '(' . implode(', ', $vals) . ')';
-
-                if (count($valuesSets) >= 200) {
-                    fwrite($fh, 'INSERT INTO ' . sync_q($table) . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valuesSets) . ";\n");
-                    $valuesSets = [];
+                $stmt->closeCursor();
+                if ($rowCount === 0) {
+                    break;
                 }
+                $offset += $rowCount;
             }
-
-            if (!empty($valuesSets)) {
-                fwrite($fh, 'INSERT INTO ' . sync_q($table) . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valuesSets) . ";\n");
+        } finally {
+            if ($bufferedAttr !== null && $prevBuffered !== null) {
+                $pdo->setAttribute($bufferedAttr, (bool) $prevBuffered);
             }
-
-            $offset += $batch;
         }
 
         fwrite($fh, "\n");

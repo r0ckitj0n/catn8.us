@@ -985,11 +985,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [resetLedgerForm]);
   const collectEntityAliasNames = React.useCallback((entityId: number, entityDisplayName: string) => {
     const draft = entityAliasDraftById[entityId] || DEFAULT_ENTITY_ALIAS_DRAFT;
-    return Array.from(new Set([
+    const entity = entities.find((item) => item.id === entityId) || null;
+    const blockedKeys = new Set<string>([
+      normalizeEntityAliasKey(entityDisplayName),
+      ...((entity?.aliases || []).map((alias) => normalizeEntityAliasKey(alias.alias_name))),
+    ]);
+    const seenKeys = new Set<string>();
+    const names: string[] = [];
+    const candidates = [
       ...((draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean)),
       String(draft.alias_name || '').trim(),
-    ])).filter((value) => value !== '' && value !== String(entityDisplayName || '').trim());
-  }, [entityAliasDraftById]);
+    ];
+
+    candidates.forEach((value) => {
+      const aliasKey = normalizeEntityAliasKey(value);
+      if (!value || !aliasKey || blockedKeys.has(aliasKey) || seenKeys.has(aliasKey)) {
+        return;
+      }
+      seenKeys.add(aliasKey);
+      names.push(value);
+    });
+
+    return names;
+  }, [entities, entityAliasDraftById]);
   const persistEntityAliases = React.useCallback(async (entityId: number, entityDisplayName: string, aliasNames?: string[]) => {
     const namesToSave = aliasNames || collectEntityAliasNames(entityId, entityDisplayName);
     if (namesToSave.length === 0) {

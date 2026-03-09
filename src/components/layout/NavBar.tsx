@@ -10,10 +10,9 @@ interface NavBarProps {
   onLoginClick: () => void;
   onLogout: () => void;
   onAccountClick: () => void;
-  mysteryTitle?: string;
 }
 
-export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAccountClick, mysteryTitle }: NavBarProps) {
+export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAccountClick }: NavBarProps) {
   const isAuthed = Boolean(viewer && viewer.id);
   const isAdministrator = (
     Boolean(isAdmin)
@@ -124,13 +123,6 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
                 )}
               </li>
             ))}
-            {isAuthed && mysteryTitle ? (
-              <li className="nav-item">
-                <span className="nav-link text-muted opacity-75 catn8-nav-mystery-title">
-                  {mysteryTitle}
-                </span>
-              </li>
-            ) : null}
           </ul>
           <ul className="navbar-nav catn8-nav-account ms-auto">
             <li className="nav-item">

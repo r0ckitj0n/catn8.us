@@ -67,6 +67,19 @@ body.catn8-global-ui .catn8-card {
   box-shadow: var(--catn8-shadow-xl);
 }
 
+body.catn8-global-ui .modal-content {
+  color: var(--catn8-color-ink-base);
+}
+
+body.catn8-global-ui .modal-content .form-label {
+  color: var(--catn8-color-ink-strong);
+}
+
+body.catn8-global-ui .modal-content .form-label.text-muted,
+body.catn8-global-ui .modal-content .small.text-muted.form-label {
+  color: var(--catn8-color-ink-muted) !important;
+}
+
 body.catn8-global-ui a {
   text-underline-offset: 2px;
   transition: color var(--catn8-global-transition-ms) ease;

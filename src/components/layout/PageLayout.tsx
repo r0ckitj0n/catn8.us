@@ -43,8 +43,7 @@ export function PageLayout({ page, title, children, viewer, isAdmin = false, onL
           isAdmin={isAdmin}
           onLoginClick={onLoginClick || (() => {})} 
           onLogout={onLogout || (() => {})} 
-          onAccountClick={onAccountClick || (() => {})} 
-          mysteryTitle={mysteryTitle}
+          onAccountClick={onAccountClick || (() => {})}
         />
       )}
       {children}

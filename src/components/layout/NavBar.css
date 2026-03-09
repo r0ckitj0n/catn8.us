@@ -91,19 +91,6 @@
   font-weight: 700;
 }
 
-.catn8-nav-mystery-title {
-  margin-right: 0.5rem;
-  flex: 0 1 16rem;
-  min-width: 0;
-}
-
-@media (min-width: 992px) {
-  .catn8-nav-mystery-title {
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-    padding-right: 1rem;
-  }
-}
-
 @media (max-width: 991.98px) {
   .navbar > .container {
     flex-wrap: wrap;

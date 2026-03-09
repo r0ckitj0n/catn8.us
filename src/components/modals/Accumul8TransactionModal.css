@@ -1,0 +1,139 @@
+.accumul8-transaction-modal {
+  z-index: 6260 !important;
+}
+
+.accumul8-transaction-modal .modal-dialog {
+  width: min(74vw, 1180px);
+  max-width: min(74vw, 1180px);
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.accumul8-transaction-modal.fade .modal-dialog {
+  transform: translateY(18px) scale(0.96);
+}
+
+.accumul8-transaction-modal.show .modal-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.accumul8-transaction-modal .modal-content {
+  max-height: 82vh;
+  overflow: hidden;
+  border: 3px solid rgba(212, 175, 55, 0.72);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(245, 236, 208, 0.985), rgba(225, 208, 165, 0.985)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.06) 0,
+      rgba(212, 175, 55, 0.06) 3px,
+      transparent 3px,
+      transparent 18px
+    );
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.42);
+  color: #241d12;
+  position: relative;
+}
+
+.accumul8-transaction-modal .modal-content::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  pointer-events: none;
+}
+
+.accumul8-transaction-modal .modal-header {
+  border-bottom: 2px solid rgba(124, 92, 25, 0.3);
+  background: linear-gradient(180deg, rgba(29, 25, 18, 0.96), rgba(19, 15, 10, 0.98));
+  color: #f5f0da;
+}
+
+.accumul8-transaction-modal .modal-title {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accumul8-transaction-modal .modal-body {
+  overflow-y: auto;
+  color: #241d12;
+}
+
+.accumul8-transaction-modal .form-label {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(67, 49, 14, 0.88);
+}
+
+.accumul8-transaction-modal .form-control,
+.accumul8-transaction-modal .form-select,
+.accumul8-transaction-modal textarea,
+.accumul8-transaction-modal .btn {
+  border-radius: 0;
+}
+
+.accumul8-transaction-modal .form-control,
+.accumul8-transaction-modal .form-select,
+.accumul8-transaction-modal textarea {
+  background: linear-gradient(180deg, rgba(252, 246, 231, 0.98), rgba(235, 223, 190, 0.98));
+  border: 2px solid rgba(124, 92, 25, 0.45);
+  color: #241d12;
+  box-shadow: none;
+}
+
+.accumul8-transaction-modal .form-control:focus,
+.accumul8-transaction-modal .form-select:focus,
+.accumul8-transaction-modal textarea:focus {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 1px rgba(25, 18, 8, 0.84), 0 0 0 3px rgba(212, 175, 55, 0.18);
+}
+
+.accumul8-transaction-modal .btn {
+  font-family: 'Lexend Exa', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-width: 2px;
+}
+
+.accumul8-transaction-modal .btn-primary,
+.accumul8-transaction-modal .btn-success {
+  color: #1d170d;
+  background: linear-gradient(180deg, #e1c86d, #d4af37);
+  border-color: #f1dc96;
+}
+
+.accumul8-transaction-modal .btn-outline-primary,
+.accumul8-transaction-modal .btn-outline-secondary {
+  background: rgba(20, 17, 11, 0.82);
+  color: #f2ead0;
+  border-color: rgba(121, 98, 48, 0.64);
+}
+
+body.accumul8-transaction-modal-open .modal-backdrop.show {
+  z-index: 6250 !important;
+  background:
+    radial-gradient(circle at top center, rgba(212, 175, 55, 0.12), transparent 30%),
+    rgba(9, 13, 18, 0.84);
+  backdrop-filter: blur(3px);
+}
+
+@media (max-width: 991.98px) {
+  .accumul8-transaction-modal .modal-dialog {
+    width: min(calc(100vw - 2rem), 74vw);
+    max-width: min(calc(100vw - 2rem), 74vw);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .accumul8-transaction-modal .modal-dialog {
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .accumul8-transaction-modal .modal-content {
+    max-height: 82vh;
+  }
+}

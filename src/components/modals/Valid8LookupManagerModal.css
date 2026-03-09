@@ -25,10 +25,16 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  color: var(--catn8-color-ink-base);
 }
 
 .valid8-lookup-modal-body {
   overflow: auto;
+}
+
+.valid8-lookup-modal-content .form-label,
+.valid8-lookup-edit-content .form-label {
+  color: var(--catn8-color-ink-strong);
 }
 
 .valid8-lookup-actions-column {

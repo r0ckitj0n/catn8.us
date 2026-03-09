@@ -11,6 +11,7 @@ import {
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import './Accumul8TransactionModal.css';
 
 interface Accumul8TransactionModalFormState {
   transaction_date: string;
@@ -133,7 +134,7 @@ export function Accumul8TransactionModal({
   }, [modalApiRef, open]);
 
   return (
-    <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+    <div className="modal fade accumul8-transaction-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">

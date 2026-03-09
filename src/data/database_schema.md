@@ -116,7 +116,7 @@ Business term: Banking Organizations
 - `contact_type` (VARCHAR(16), enum-like: `payee`/`payer`/`repayment`; legacy `both` values may still exist and are normalized in-app)
 - `is_payee` (TINYINT(1), DEFAULT 0)
 - `is_payer` (TINYINT(1), DEFAULT 0)
-- `is_vendor` (TINYINT(1), DEFAULT 0)
+- `is_vendor` (TINYINT(1), DEFAULT 0, internal mirror of the entity `business` checkbox)
 - `is_balance_person` (TINYINT(1), DEFAULT 0)
 - `default_amount` (DECIMAL(10,2))
 - `email` (VARCHAR(191), NULLABLE)

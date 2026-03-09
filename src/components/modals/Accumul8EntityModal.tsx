@@ -5,8 +5,8 @@ import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8ContactModal.css';
 
-function normalizeBusinessKind(value: string | undefined): 'business' | 'contact' {
-  return String(value || '').trim().toLowerCase() === 'business' ? 'business' : 'contact';
+function isBusinessSelected(form: Accumul8EntityUpsertRequest): boolean {
+  return String(form.entity_kind || '').trim().toLowerCase() === 'business' || Number(form.is_vendor || 0) === 1;
 }
 
 interface Accumul8EntityModalProps {
@@ -79,14 +79,14 @@ export function Accumul8EntityModal({
             onSubmit={(event) => {
               event.preventDefault();
               const contactType = (form.contact_type || 'payee') as Accumul8ContactType;
-              const isBusiness = normalizeBusinessKind(form.entity_kind) === 'business';
+              const isBusiness = isBusinessSelected(form);
               void onSave({
                 display_name: String(form.display_name || '').trim(),
                 entity_kind: isBusiness ? 'business' : 'contact',
                 contact_type: contactType,
                 is_payee: contactType === 'payee' ? 1 : 0,
                 is_payer: contactType === 'payer' ? 1 : 0,
-                is_vendor: Number(form.is_vendor || 0),
+                is_vendor: isBusiness ? 1 : 0,
                 is_balance_person: contactType === 'repayment' ? 1 : 0,
                 default_amount: Number(form.default_amount || 0),
                 email: String(form.email || '').trim(),
@@ -151,10 +151,14 @@ export function Accumul8EntityModal({
                   <input
                     className="form-check-input m-0"
                     type="checkbox"
-                    checked={normalizeBusinessKind(form.entity_kind) === 'business'}
-                    onChange={(e) => setForm((prev) => ({ ...prev, entity_kind: e.target.checked ? 'business' : 'contact' }))}
+                    checked={isBusinessSelected(form)}
+                    onChange={(e) => setForm((prev) => ({
+                      ...prev,
+                      entity_kind: e.target.checked ? 'business' : 'contact',
+                      is_vendor: e.target.checked ? 1 : 0,
+                    }))}
                   />
-                  <span>{normalizeBusinessKind(form.entity_kind) === 'business' ? 'Yes' : 'No'}</span>
+                  <span>{isBusinessSelected(form) ? 'Yes' : 'No'}</span>
                 </label>
               </div>
               <div className="col-md-4">
@@ -167,14 +171,6 @@ export function Accumul8EntityModal({
                   value={form.default_amount ?? 0}
                   onChange={(e) => setForm((prev) => ({ ...prev, default_amount: Number(e.target.value) }))}
                 />
-              </div>
-              <div className="col-12">
-                <div className="d-flex flex-wrap gap-3">
-                  <label className="form-check-label d-flex align-items-center gap-2">
-                    <input className="form-check-input m-0" type="checkbox" checked={Number(form.is_vendor || 0) === 1} onChange={(e) => setForm((prev) => ({ ...prev, is_vendor: e.target.checked ? 1 : 0 }))} />
-                    <span>Show as vendor</span>
-                  </label>
-                </div>
               </div>
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-entity-email">Email</label>

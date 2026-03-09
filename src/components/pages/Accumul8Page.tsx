@@ -200,8 +200,8 @@ function normalizeEntityContactType(entity: Pick<Accumul8Entity, 'contact_type' 
   return 'payee';
 }
 
-function normalizeEntityKind(value: string | null | undefined): 'business' | 'contact' {
-  return String(value || '').trim().toLowerCase() === 'business' ? 'business' : 'contact';
+function normalizeEntityKind(value: string | null | undefined, isVendor = 0): 'business' | 'contact' {
+  return String(value || '').trim().toLowerCase() === 'business' || Number(isVendor || 0) === 1 ? 'business' : 'contact';
 }
 
 function formatEntityTypeLabel(contactType: Accumul8ContactType): string {
@@ -214,11 +214,8 @@ function formatEntityTypeLabel(contactType: Accumul8ContactType): string {
 function formatEntityRoles(entity: Pick<Accumul8Entity, 'contact_type' | 'entity_kind' | 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person'>): string {
   const roles: string[] = [];
   roles.push(formatEntityTypeLabel(normalizeEntityContactType(entity)));
-  if (normalizeEntityKind(entity.entity_kind) === 'business') {
+  if (normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business') {
     roles.push('Business');
-  }
-  if (Number(entity.is_vendor || 0) === 1) {
-    roles.push('Vendor');
   }
   return roles.join(' • ') || 'Unassigned';
 }
@@ -690,9 +687,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingEntityId(entity.id);
     setEntityForm({
       display_name: entity.display_name || '',
-      entity_kind: normalizeEntityKind(entity.entity_kind),
+      entity_kind: normalizeEntityKind(entity.entity_kind, entity.is_vendor),
       contact_type: normalizeEntityContactType(entity),
-      is_vendor: Number(entity.is_vendor || 0),
+      is_vendor: normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business' ? 1 : 0,
       default_amount: Number(entity.default_amount || 0),
       email: entity.email || '',
       phone_number: entity.phone_number || '',
@@ -758,7 +755,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       contact_type: form.contact_type,
       is_payee: form.contact_type === 'payee' ? 1 : 0,
       is_payer: form.contact_type === 'payer' ? 1 : 0,
-      is_vendor: Number(form.is_vendor || 0),
+      is_vendor: (form.entity_kind || 'business') === 'business' ? 1 : 0,
       is_balance_person: form.contact_type === 'repayment' ? 1 : 0,
       default_amount: Number(form.default_amount || 0),
       email: form.email || '',
@@ -1167,11 +1164,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     await updateEntity(entity.id, {
       display_name: draft.display_name ?? entity.display_name,
-      entity_kind: draft.entity_kind ?? normalizeEntityKind(entity.entity_kind),
+      entity_kind: draft.entity_kind ?? normalizeEntityKind(entity.entity_kind, entity.is_vendor),
       contact_type: draft.contact_type ?? normalizeEntityContactType(entity),
       is_payee: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payee' ? 1 : 0,
       is_payer: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payer' ? 1 : 0,
-      is_vendor: Number(draft.is_vendor ?? entity.is_vendor ?? 0),
+      is_vendor: (draft.entity_kind ?? normalizeEntityKind(entity.entity_kind, entity.is_vendor)) === 'business' ? 1 : 0,
       is_balance_person: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'repayment' ? 1 : 0,
       default_amount: Number(draft.default_amount ?? entity.default_amount ?? 0),
       email: draft.email ?? entity.email ?? '',
@@ -1446,7 +1443,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="accumul8-toolbar-summary" aria-label="Entity summary">
                     <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
                     <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
-                    <div className="accumul8-summary-card"><span>Vendors</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_vendor || 0) === 1).length}</strong></div>
+                    <div className="accumul8-summary-card"><span>Businesses</span><strong>{entitiesSorted.filter((entity) => normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business').length}</strong></div>
                     <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
                   </div>
                 )}
@@ -2085,20 +2082,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                 <label className="accumul8-inline-check">
                                   <input
                                     type="checkbox"
-                                    checked={normalizeEntityKind(entityDraft?.entity_kind ?? entity.entity_kind) === 'business'}
-                                    onChange={(e) => setEntityRowDraft(entity, { entity_kind: e.target.checked ? 'business' : 'contact' })}
+                                    checked={normalizeEntityKind(entityDraft?.entity_kind ?? entity.entity_kind, entityDraft?.is_vendor ?? entity.is_vendor) === 'business'}
+                                    onChange={(e) => setEntityRowDraft(entity, {
+                                      entity_kind: e.target.checked ? 'business' : 'contact',
+                                      is_vendor: e.target.checked ? 1 : 0,
+                                    })}
                                     disabled={busy}
                                   />
                                   <span>Business</span>
-                                </label>
-                                <label className="accumul8-inline-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={Number(entityDraft?.is_vendor ?? entity.is_vendor ?? 0) === 1}
-                                    onChange={(e) => setEntityRowDraft(entity, { is_vendor: e.target.checked ? 1 : 0 })}
-                                    disabled={busy}
-                                  />
-                                  <span>Vendor</span>
                                 </label>
                               </div>
                             </div>

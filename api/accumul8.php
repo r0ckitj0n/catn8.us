@@ -162,6 +162,13 @@ function accumul8_normalize_entity_kind_value($value, string $default = 'busines
     return $default;
 }
 
+function accumul8_entity_kind_from_vendor_state($entityKind, $isVendor): string
+{
+    return accumul8_normalize_bool($isVendor) === 1
+        ? 'business'
+        : accumul8_normalize_entity_kind_value($entityKind, 'contact');
+}
+
 function accumul8_contact_type_flags(string $contactType): array
 {
     $normalized = accumul8_normalize_contact_type_value($contactType);
@@ -384,7 +391,8 @@ function accumul8_upsert_entity(int $viewerId, array $payload, ?int $existingEnt
     $flags = accumul8_contact_type_flags($contactType);
     $isPayee = accumul8_normalize_bool($payload['is_payee'] ?? $flags['is_payee']);
     $isPayer = accumul8_normalize_bool($payload['is_payer'] ?? $flags['is_payer']);
-    $isVendor = accumul8_normalize_bool($payload['is_vendor'] ?? 0);
+    $isVendor = accumul8_normalize_bool($payload['is_vendor'] ?? ($entityKind === 'business' ? 1 : 0));
+    $entityKind = accumul8_entity_kind_from_vendor_state($entityKind, $isVendor);
     $isBalancePerson = accumul8_normalize_bool($payload['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
     $legacyContactId = isset($payload['legacy_contact_id']) && (int)$payload['legacy_contact_id'] > 0 ? (int)$payload['legacy_contact_id'] : null;
     $legacyDebtorId = isset($payload['legacy_debtor_id']) && (int)$payload['legacy_debtor_id'] > 0 ? (int)$payload['legacy_debtor_id'] : null;
@@ -1578,7 +1586,7 @@ function accumul8_list_entities(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'owner_user_id' => (int)($r['owner_user_id'] ?? 0),
             'display_name' => (string)($r['display_name'] ?? ''),
-            'entity_kind' => accumul8_normalize_entity_kind_value((string)($r['entity_kind'] ?? 'business')),
+            'entity_kind' => accumul8_entity_kind_from_vendor_state((string)($r['entity_kind'] ?? 'business'), (int)($r['is_vendor'] ?? 0)),
             'contact_type' => accumul8_normalize_contact_type_value(
                 (int)($r['is_balance_person'] ?? 0) === 1 ? 'repayment' : (string)($r['contact_type'] ?? 'payee')
             ),
@@ -2463,8 +2471,10 @@ if ($action === 'create_entity') {
     $contactType = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
     $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType === 'payee' ? 1 : 0));
     $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType === 'payer' ? 1 : 0));
-    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
     $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
+    $normalizedEntityKind = accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business'));
+    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? ($normalizedEntityKind === 'business' ? 1 : 0));
+    $normalizedEntityKind = accumul8_entity_kind_from_vendor_state($normalizedEntityKind, $isVendor);
 
     if ($displayName === '') {
         catn8_json_response(['success' => false, 'error' => 'display_name is required'], 400);
@@ -2472,7 +2482,7 @@ if ($action === 'create_entity') {
 
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $displayName,
-        'entity_kind' => accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business')),
+        'entity_kind' => $normalizedEntityKind,
         'contact_type' => $contactType,
         'is_payee' => $isPayee,
         'is_payer' => $isPayer,
@@ -2546,8 +2556,10 @@ if ($action === 'update_entity') {
     $contactType = accumul8_normalize_contact_type_value($body['contact_type'] ?? 'payee');
     $isPayee = accumul8_normalize_bool($body['is_payee'] ?? ($contactType === 'payee' ? 1 : 0));
     $isPayer = accumul8_normalize_bool($body['is_payer'] ?? ($contactType === 'payer' ? 1 : 0));
-    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? 0);
     $isBalancePerson = accumul8_normalize_bool($body['is_balance_person'] ?? ($contactType === 'repayment' ? 1 : 0));
+    $normalizedEntityKind = accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business'));
+    $isVendor = accumul8_normalize_bool($body['is_vendor'] ?? ($normalizedEntityKind === 'business' ? 1 : 0));
+    $normalizedEntityKind = accumul8_entity_kind_from_vendor_state($normalizedEntityKind, $isVendor);
 
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
@@ -2569,7 +2581,7 @@ if ($action === 'update_entity') {
 
     $entityId = accumul8_upsert_entity($viewerId, [
         'display_name' => $displayName,
-        'entity_kind' => accumul8_normalize_entity_kind_value($body['entity_kind'] ?? ($isBalancePerson ? 'contact' : 'business')),
+        'entity_kind' => $normalizedEntityKind,
         'contact_type' => $contactType,
         'is_payee' => $isPayee,
         'is_payer' => $isPayer,

@@ -676,6 +676,17 @@ function accumul8_import_external_id(array $tx): string
     ]));
 }
 
+function accumul8_import_opening_external_id(array $account, string $date, float $openingBalance, string $sourceFile): string
+{
+    return sha1(implode('|', [
+        'opening-balance',
+        $sourceFile,
+        (string)$account['account_number'],
+        $date,
+        number_format($openingBalance, 2, '.', ''),
+    ]));
+}
+
 function accumul8_import_statement_files(string $dir): array
 {
     $patterns = [
@@ -716,7 +727,11 @@ $report = [
     'transactions_inserted' => 0,
     'transactions_skipped_existing' => 0,
     'contacts_created_or_matched' => 0,
+    'opening_balances_discovered' => 0,
+    'opening_balances_inserted' => 0,
+    'opening_balances_skipped_existing' => 0,
 ];
+$openingBalancesByAccountNumber = [];
 
 foreach ($files as $file) {
     $parsed = accumul8_import_statement_data($file);
@@ -724,6 +739,40 @@ foreach ($files as $file) {
         $groupId = accumul8_import_ensure_group($ownerUserId, (string)$account['group_name'], (string)$account['institution'], $apply, $groupCache);
         accumul8_import_ensure_account($ownerUserId, $account, $groupId, $apply, $accountCache);
         $report['accounts_discovered']++;
+    }
+    foreach ($parsed['accounts'] as $account) {
+        $accountNumber = (string)($account['account_number'] ?? '');
+        if ($accountNumber === '') {
+            continue;
+        }
+        $accountTransactions = array_values(array_filter(
+            $parsed['transactions'],
+            static fn(array $tx): bool => (string)($tx['account_number'] ?? '') === $accountNumber
+        ));
+        if (!$accountTransactions) {
+            continue;
+        }
+        usort($accountTransactions, static function (array $left, array $right): int {
+            $dateCmp = strcmp((string)($left['date'] ?? ''), (string)($right['date'] ?? ''));
+            if ($dateCmp !== 0) {
+                return $dateCmp;
+            }
+            return strcmp((string)($left['description'] ?? ''), (string)($right['description'] ?? ''));
+        });
+        $firstTx = $accountTransactions[0];
+        $openingDate = date('Y-m-d', strtotime(((string)$firstTx['date']) . ' -1 day'));
+        $openingBalance = round((float)($firstTx['balance'] ?? 0) - (float)($firstTx['amount'] ?? 0), 2);
+        if (
+            !isset($openingBalancesByAccountNumber[$accountNumber])
+            || strcmp($openingDate, (string)$openingBalancesByAccountNumber[$accountNumber]['date']) < 0
+        ) {
+            $openingBalancesByAccountNumber[$accountNumber] = [
+                'account' => $account,
+                'date' => $openingDate,
+                'amount' => $openingBalance,
+                'source_file' => basename($file),
+            ];
+        }
     }
     foreach ($parsed['transactions'] as $tx) {
         $report['transactions_discovered']++;
@@ -780,6 +829,64 @@ foreach ($files as $file) {
         );
         $report['transactions_inserted']++;
     }
+}
+
+foreach ($openingBalancesByAccountNumber as $openingData) {
+    $report['opening_balances_discovered']++;
+    $account = (array)($openingData['account'] ?? []);
+    $externalId = accumul8_import_opening_external_id(
+        $account,
+        (string)$openingData['date'],
+        (float)$openingData['amount'],
+        (string)$openingData['source_file']
+    );
+    $existing = Database::queryOne(
+        'SELECT id FROM accumul8_transactions WHERE owner_user_id = ? AND source_kind = ? AND external_id = ? LIMIT 1',
+        [$ownerUserId, ACCUMUL8_STATEMENT_SOURCE_KIND, $externalId]
+    );
+    if ($existing) {
+        $report['opening_balances_skipped_existing']++;
+        continue;
+    }
+    if (!$apply) {
+        continue;
+    }
+    $accountId = accumul8_import_ensure_account(
+        $ownerUserId,
+        [
+            'account_number' => $account['account_number'],
+            'mask_last4' => substr((string)$account['account_number'], -4),
+            'account_name' => $account['account_name'],
+            'account_type' => $account['account_type'],
+            'institution' => $account['institution'],
+        ],
+        accumul8_import_ensure_group($ownerUserId, (string)$account['group_name'], (string)$account['institution'], $apply, $groupCache),
+        $apply,
+        $accountCache
+    );
+    Database::execute(
+        'INSERT INTO accumul8_transactions
+            (owner_user_id, account_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+             running_balance, is_paid, is_reconciled, is_recurring_instance, recurring_payment_id, source_kind, source_ref, external_id,
+             pending_status, created_by_user_id)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 0.00, ?, 1, 1, 0, NULL, ?, ?, ?, 0, ?)',
+        [
+            $ownerUserId,
+            $accountId,
+            (string)$openingData['date'],
+            (string)$openingData['date'],
+            (float)$openingData['amount'] >= 0 ? 'deposit' : 'manual',
+            'Opening Balance',
+            'Imported from statement opening balance',
+            round((float)$openingData['amount'], 2),
+            round((float)$openingData['amount'], 2),
+            ACCUMUL8_STATEMENT_SOURCE_KIND,
+            (string)$openingData['source_file'],
+            $externalId,
+            $ownerUserId,
+        ]
+    );
+    $report['opening_balances_inserted']++;
 }
 
 if ($apply) {

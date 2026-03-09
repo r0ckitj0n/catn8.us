@@ -36,6 +36,12 @@ interface Accumul8PageProps extends AppShellPageProps {
 }
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
+type Accumul8HeaderSummary = {
+  currentBalance: number;
+  projectedBalance: number;
+  unpaidBills: number;
+  upcomingWindfalls: number;
+};
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 const ENTITY_ENDEX_GROUPING_GUIDES = [
   {
@@ -244,6 +250,16 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
   return String(value || '').trim() || fallback;
 }
 
+function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean {
+  const normalizedDescription = String(transaction.description || '').trim().toLowerCase();
+  const normalizedMemo = String(transaction.memo || '').trim().toLowerCase();
+  return (
+    transaction.source_kind === 'statement_pdf'
+    && normalizedDescription === 'opening balance'
+    && (normalizedMemo === '' || normalizedMemo.includes('opening balance'))
+  );
+}
+
 function normalizeSearchQuery(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -313,6 +329,17 @@ function addUtcDays(baseDate: string, days: number): string {
   }
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
+}
+
+function roundCurrency(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function formatCurrencyAmount(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
 }
 
 type MeasuredTableColumn = {
@@ -683,22 +710,89 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(tx.is_paid || 0) === 1 ? 'paid' : ((tx.due_date || tx.transaction_date) < todayDate ? 'past due' : 'upcoming'),
     ]))
   ), [filteredPayBillRows, payBillsSearchQuery, todayDate]);
-  const filteredSummary = React.useMemo(() => {
-    const next = { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 };
-    filteredTransactions.forEach((tx) => {
-      const amount = Number(tx.amount || 0);
-      next.net_amount += amount;
-      if (amount > 0) {
-        next.inflow_total += amount;
-      } else if (amount < 0) {
-        next.outflow_total += amount;
-        if (!Number(tx.is_paid || 0)) {
-          next.unpaid_outflow_total += amount;
-        }
+  const currentVisibleBalance = React.useMemo(() => (
+    roundCurrency(visibleAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
+  ), [visibleAccounts]);
+  const defaultProjectedTransactions = React.useMemo(() => (
+    filteredTransactions.filter((tx) => {
+      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      if (!effectiveDate || effectiveDate < todayDate) {
+        return false;
+      }
+      return Number(tx.is_paid || 0) === 0;
+    })
+  ), [filteredTransactions, todayDate]);
+  const payBillsProjectedTransactions = React.useMemo(() => (
+    filteredTransactions.filter((tx) => {
+      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      if (!effectiveDate) {
+        return false;
+      }
+      if (payBillsDateRange.startDate && effectiveDate < payBillsDateRange.startDate) {
+        return false;
+      }
+      if (payBillsDateRange.endDate && effectiveDate > payBillsDateRange.endDate) {
+        return false;
+      }
+      return Number(tx.is_paid || 0) === 0;
+    })
+  ), [filteredTransactions, payBillsDateRange]);
+  const budgetPlannerSummaryPayments = React.useMemo(() => (
+    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1)
+  ), [filteredRecurringPayments]);
+  const spreadsheetProjectedSummary = React.useMemo(() => {
+    const monthRows = budgetPlannerSummaryPayments.filter((payment) => String(payment.next_due_date || '').slice(0, 7) === budgetMonth);
+    let projectedDelta = 0;
+    let unpaidBills = 0;
+    let upcomingWindfalls = 0;
+    monthRows.forEach((payment) => {
+      const amount = Number(payment.amount || 0);
+      const normalizedAmount = String(payment.direction || 'outflow') === 'inflow' ? Math.abs(amount) : -Math.abs(amount);
+      projectedDelta += normalizedAmount;
+      if (normalizedAmount < 0) {
+        unpaidBills += Math.abs(normalizedAmount);
+      } else if (normalizedAmount > 0) {
+        upcomingWindfalls += normalizedAmount;
       }
     });
-    return next;
-  }, [filteredTransactions]);
+    return {
+      projectedDelta: roundCurrency(projectedDelta),
+      unpaidBills: roundCurrency(unpaidBills),
+      upcomingWindfalls: roundCurrency(upcomingWindfalls),
+    };
+  }, [budgetMonth, budgetPlannerSummaryPayments]);
+  const headerSummary = React.useMemo<Accumul8HeaderSummary>(() => {
+    if (tab === 'spreadsheet') {
+      return {
+        currentBalance: currentVisibleBalance,
+        projectedBalance: roundCurrency(currentVisibleBalance + spreadsheetProjectedSummary.projectedDelta),
+        unpaidBills: spreadsheetProjectedSummary.unpaidBills,
+        upcomingWindfalls: spreadsheetProjectedSummary.upcomingWindfalls,
+      };
+    }
+
+    const projectedTransactions = tab === 'pay_bills' ? payBillsProjectedTransactions : defaultProjectedTransactions;
+    let projectedDelta = 0;
+    let unpaidBills = 0;
+    let upcomingWindfalls = 0;
+
+    projectedTransactions.forEach((tx) => {
+      const amount = Number(tx.amount || 0);
+      projectedDelta += amount;
+      if (amount < 0) {
+        unpaidBills += Math.abs(amount);
+      } else if (amount > 0) {
+        upcomingWindfalls += amount;
+      }
+    });
+
+    return {
+      currentBalance: currentVisibleBalance,
+      projectedBalance: roundCurrency(currentVisibleBalance + projectedDelta),
+      unpaidBills: roundCurrency(unpaidBills),
+      upcomingWindfalls: roundCurrency(upcomingWindfalls),
+    };
+  }, [currentVisibleBalance, defaultProjectedTransactions, payBillsProjectedTransactions, spreadsheetProjectedSummary, tab]);
   const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
   const debtorRows = React.useMemo(() => (
     debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
@@ -1739,21 +1833,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                 </div>
                 <div className="accumul8-summary-grid">
-                  <div className="accumul8-summary-card"><span>Net</span><strong>${filteredSummary.net_amount.toFixed(2)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Inflow</span><strong>${filteredSummary.inflow_total.toFixed(2)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Outflow</span><strong>${filteredSummary.outflow_total.toFixed(2)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>${filteredSummary.unpaid_outflow_total.toFixed(2)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Current Balance</span><strong>{formatCurrencyAmount(headerSummary.currentBalance)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Projected Balance</span><strong>{formatCurrencyAmount(headerSummary.projectedBalance)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong></div>
+                  <div className="accumul8-summary-card"><span>Upcoming Windfalls</span><strong>{formatCurrencyAmount(headerSummary.upcomingWindfalls)}</strong></div>
                 </div>
               </div>
               <div className="accumul8-header-brand-logo" aria-hidden="true">
                 <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="" />
               </div>
             </div>
-              <div className="accumul8-page-toolbar mb-3">
+            <div className="accumul8-page-toolbar mb-3">
               <div className="accumul8-page-filters">
                 <div className="accumul8-toolbar-field">
-                  <div className="accumul8-filter-label-row">
-                    <label htmlFor="accumul8-group-filter" className="form-label small text-muted mb-1">Banking Organization</label>
+                  <div className="accumul8-filter-control-row">
                     <button
                       type="button"
                       className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
@@ -1763,22 +1856,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     >
                       <i className="bi bi-gear"></i>
                     </button>
+                    <select
+                      id="accumul8-group-filter"
+                      className="form-select form-select-sm"
+                      aria-label="Banking Organization"
+                      value={selectedBankingOrganizationId}
+                      onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
+                    >
+                      <option value="">All Banking Organizations</option>
+                      {bankingOrganizations.map((organization) => (
+                        <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    id="accumul8-group-filter"
-                    className="form-select form-select-sm"
-                    value={selectedBankingOrganizationId}
-                    onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
-                  >
-                    <option value="">All Banking Organizations</option>
-                    {bankingOrganizations.map((organization) => (
-                      <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
-                    ))}
-                  </select>
                 </div>
                 <div className="accumul8-toolbar-field">
-                  <div className="accumul8-filter-label-row">
-                    <label htmlFor="accumul8-bank-filter" className="form-label small text-muted mb-1">Bank account</label>
+                  <div className="accumul8-filter-control-row">
                     <button
                       type="button"
                       className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
@@ -1788,18 +1881,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     >
                       <i className="bi bi-gear"></i>
                     </button>
+                    <select
+                      id="accumul8-bank-filter"
+                      className="form-select form-select-sm"
+                      aria-label="Bank account"
+                      value={selectedBankAccountId}
+                      onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                    >
+                      <option value="">All bank accounts</option>
+                      {visibleAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>{account.account_name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    id="accumul8-bank-filter"
-                    className="form-select form-select-sm"
-                    value={selectedBankAccountId}
-                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
-                  >
-                    <option value="">All bank accounts</option>
-                    {visibleAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>{account.account_name}</option>
-                    ))}
-                  </select>
                 </div>
                 {tab === 'contacts' && (
                   <div className="accumul8-toolbar-summary" aria-label="Entity summary">
@@ -1809,30 +1903,30 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
                   </div>
                 )}
-                <div className="accumul8-owner-selector">
-                  <label htmlFor="accumul8-owner-select" className="form-label mb-0 small text-muted">Viewing owner</label>
-                  <select
-                    id="accumul8-owner-select"
-                    className="form-select form-select-sm"
-                    value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
-                    onChange={(e) => {
-                      const next = Number(e.target.value || 0);
-                      if (!Number.isFinite(next) || next <= 0) return;
-                      setSelectedOwnerUserId(next);
-                      if (typeof window !== 'undefined') {
-                        window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
-                      }
-                    }}
-                    disabled={busy || accessibleAccountOwners.length <= 1}
-                  >
-                    {accessibleAccountOwners.map((owner) => (
-                      <option key={owner.owner_user_id} value={owner.owner_user_id}>
-                        {owner.username}
-                        {owner.is_self ? ' (You)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+              <div className="accumul8-owner-selector">
+                <select
+                  id="accumul8-owner-select"
+                  className="form-select form-select-sm"
+                  aria-label="Viewing owner"
+                  value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
+                  onChange={(e) => {
+                    const next = Number(e.target.value || 0);
+                    if (!Number.isFinite(next) || next <= 0) return;
+                    setSelectedOwnerUserId(next);
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+                    }
+                  }}
+                  disabled={busy || accessibleAccountOwners.length <= 1}
+                >
+                  {accessibleAccountOwners.map((owner) => (
+                    <option key={owner.owner_user_id} value={owner.owner_user_id}>
+                      {owner.username}
+                      {owner.is_self ? ' (You)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -1878,6 +1972,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         className={[
                           'accumul8-list-item',
                           tx.amount < 0 ? 'is-outflow' : 'is-inflow',
+                          isOpeningBalanceTransaction(tx) ? 'is-opening-balance' : '',
                           activeLedgerRowId === tx.id ? 'is-editing' : '',
                           ledgerDraftById[tx.id] ? 'has-draft' : '',
                         ].filter(Boolean).join(' ')}
@@ -1900,7 +1995,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {activeLedgerRowId === tx.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.description ?? tx.description} onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.account_name ? `${tx.description} (${tx.account_name})` : tx.description}</button>
+                            <button
+                              type="button"
+                              className={`accumul8-inline-cell-trigger${isOpeningBalanceTransaction(tx) ? ' accumul8-inline-cell-trigger--ledger-description' : ''}`}
+                              onClick={() => activateLedgerRow(tx.id)}
+                              disabled={busy}
+                            >
+                              {isOpeningBalanceTransaction(tx) && (
+                                <span className="accumul8-opening-balance-pin">Pinned</span>
+                              )}
+                              <span>{tx.account_name ? `${tx.description} (${tx.account_name})` : tx.description}</span>
+                            </button>
                           )}
                         </td>
                         <td>

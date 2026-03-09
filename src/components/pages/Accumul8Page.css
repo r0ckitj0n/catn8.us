@@ -304,6 +304,7 @@
 .accumul8-owner-selector {
   min-width: 240px;
   flex: 0 1 240px;
+  margin-left: auto;
 }
 
 .accumul8-page-toolbar {
@@ -312,7 +313,7 @@
   justify-content: space-between;
   gap: 1rem;
   width: 100%;
-  padding: 1rem 1.15rem 1.15rem;
+  padding: 1rem 1.15rem 0;
   border: 2px solid rgba(212, 175, 55, 0.34);
   border-top: 0;
   background: linear-gradient(180deg, rgba(16, 23, 30, 0.88), rgba(10, 16, 21, 0.94));
@@ -513,16 +514,21 @@
   justify-content: center;
 }
 
-.accumul8-filter-label-row {
+.accumul8-filter-control-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
+}
+
+.accumul8-filter-control-row .form-select {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .accumul8-filter-gear {
   width: 2.2rem;
   height: 2.2rem;
+  flex: 0 0 2.2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -883,6 +889,19 @@
 .accumul8-list-item.has-draft:not(.is-editing) td,
 .accumul8-list-item.has-draft:not(.is-editing) {
   background: linear-gradient(180deg, rgba(81, 64, 24, 0.42), rgba(39, 29, 9, 0.34)) !important;
+}
+
+.accumul8-ledger-table tbody tr.is-opening-balance td {
+  background:
+    linear-gradient(180deg, rgba(71, 58, 25, 0.94), rgba(39, 30, 11, 0.97)) !important;
+  border-top-color: rgba(255, 224, 137, 0.5);
+  border-bottom-color: rgba(255, 224, 137, 0.28);
+  box-shadow: inset 3px 0 0 rgba(255, 222, 122, 0.82);
+}
+
+.accumul8-ledger-table tbody tr.is-opening-balance:nth-child(even) td {
+  background:
+    linear-gradient(180deg, rgba(79, 64, 28, 0.96), rgba(43, 32, 12, 0.99)) !important;
 }
 
 .accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) td,
@@ -1295,6 +1314,32 @@
 
 .accumul8-inline-cell-trigger--numeric {
   text-align: right;
+}
+
+.accumul8-inline-cell-trigger--ledger-description {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.accumul8-opening-balance-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0.12rem 0.42rem;
+  border: 1px solid rgba(255, 227, 143, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 231, 163, 0.16);
+  color: #fff0b6;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .accumul8-inline-cell-meta {
@@ -1792,6 +1837,7 @@
   .accumul8-owner-selector {
     min-width: 0;
     width: 100%;
+    margin-left: 0;
   }
 }
 

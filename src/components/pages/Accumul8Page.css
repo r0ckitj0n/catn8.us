@@ -874,6 +874,8 @@
   max-width: none !important;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-left: 0.63rem;
+  padding-right: 0.63rem;
 }
 
 .accumul8-table--measured th {
@@ -1090,16 +1092,6 @@
 .accumul8-table--pay-bills th:nth-child(5),
 .accumul8-table--pay-bills td:nth-child(5) {
   min-width: 6.5rem;
-}
-
-.accumul8-table--pay-bills th:nth-child(4),
-.accumul8-table--pay-bills td:nth-child(4) {
-  padding-right: 0.9rem;
-}
-
-.accumul8-table--pay-bills th:nth-child(5),
-.accumul8-table--pay-bills td:nth-child(5) {
-  padding-left: 0.9rem;
 }
 
 .accumul8-table--entities th:nth-child(1),

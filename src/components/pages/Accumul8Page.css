@@ -585,10 +585,19 @@
   flex: 1 1 22rem;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
   min-width: 0;
 }
 
+.accumul8-panel-toolbar-search .form-select {
+  flex: 0 1 19rem;
+  min-width: 12rem;
+  max-width: 19rem;
+}
+
 .accumul8-panel-toolbar-search .form-control {
+  flex: 1 1 18rem;
   width: min(100%, 26rem);
 }
 
@@ -1839,10 +1848,14 @@
   .accumul8-panel-toolbar-search {
     width: 100%;
     justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
   }
 
+  .accumul8-panel-toolbar-search .form-select,
   .accumul8-panel-toolbar-search .form-control {
     width: 100%;
+    max-width: none;
   }
 
   .accumul8-spreadsheet-grid {

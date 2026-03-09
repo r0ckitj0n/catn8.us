@@ -39,6 +39,17 @@ interface Accumul8PageProps extends AppShellPageProps {
 }
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
+type LedgerFilterPreset =
+  | 'all'
+  | 'hide_upcoming_recurring'
+  | 'hide_reconciled'
+  | 'hide_paid'
+  | 'hide_pending_bank'
+  | 'show_late_payments'
+  | 'show_paid_not_reconciled'
+  | 'show_reconciled_not_paid'
+  | 'show_unpaid_only'
+  | 'show_upcoming_unpaid';
 type Accumul8HeaderSummary = {
   currentBalance: number;
   projectedBalance: number;
@@ -53,6 +64,18 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
 };
 const ACCUMUL8_EDIT_BUTTON_EMOJI = '✏️';
 const ACCUMUL8_VIEW_BUTTON_EMOJI = '👁️';
+const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
+  { value: 'all', label: 'All transactions' },
+  { value: 'hide_upcoming_recurring', label: 'Hide upcoming recurring payments' },
+  { value: 'hide_reconciled', label: 'Hide reconciled transactions' },
+  { value: 'hide_paid', label: 'Hide paid transactions' },
+  { value: 'hide_pending_bank', label: 'Hide pending bank transactions' },
+  { value: 'show_late_payments', label: 'Show late payments' },
+  { value: 'show_paid_not_reconciled', label: 'Show paid, not reconciled' },
+  { value: 'show_reconciled_not_paid', label: 'Show reconciled, not paid' },
+  { value: 'show_unpaid_only', label: 'Show unpaid only' },
+  { value: 'show_upcoming_unpaid', label: 'Show upcoming unpaid' },
+];
 type RecurringFormState = {
   title: string;
   direction: Accumul8Direction;
@@ -465,6 +488,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     contacts: '',
     recurring: '',
   });
+  const [ledgerFilterPreset, setLedgerFilterPreset] = React.useState<LedgerFilterPreset>('all');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -551,9 +575,44 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return true;
     });
   }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
+  const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const ledgerSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.ledger), [listSearchQueryByTab.ledger]);
+  const ledgerRowsBase = React.useMemo(() => (
+    filteredTransactions.filter((tx) => {
+      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      const isPaid = Number(tx.is_paid || 0) === 1;
+      const isReconciled = Number(tx.is_reconciled || 0) === 1;
+      const isPendingBank = Number(tx.pending_status || 0) === 1;
+      const isUpcomingRecurring = String(tx.source_kind || '') === 'recurring' && effectiveDate >= todayDate && !isPaid;
+      const isLate = !isPaid && Boolean(effectiveDate) && effectiveDate < todayDate;
+      const isUpcomingUnpaid = !isPaid && Boolean(effectiveDate) && effectiveDate >= todayDate;
+      switch (ledgerFilterPreset) {
+        case 'hide_upcoming_recurring':
+          return !isUpcomingRecurring;
+        case 'hide_reconciled':
+          return !isReconciled;
+        case 'hide_paid':
+          return !isPaid;
+        case 'hide_pending_bank':
+          return !isPendingBank;
+        case 'show_late_payments':
+          return isLate;
+        case 'show_paid_not_reconciled':
+          return isPaid && !isReconciled;
+        case 'show_reconciled_not_paid':
+          return isReconciled && !isPaid;
+        case 'show_unpaid_only':
+          return !isPaid;
+        case 'show_upcoming_unpaid':
+          return isUpcomingUnpaid;
+        case 'all':
+        default:
+          return true;
+      }
+    })
+  ), [filteredTransactions, ledgerFilterPreset, todayDate]);
   const ledgerRows = React.useMemo(() => (
-    filteredTransactions.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
+    ledgerRowsBase.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
       tx.transaction_date,
       tx.due_date,
       tx.description,
@@ -569,7 +628,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(tx.is_paid || 0) === 1 ? 'paid' : 'unpaid',
       Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
     ]))
-  ), [filteredTransactions, ledgerSearchQuery]);
+  ), [ledgerRowsBase, ledgerSearchQuery]);
   const filteredRecurringPayments = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
@@ -599,7 +658,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(item.is_active || 0) === 1 ? 'active' : 'paused',
     ]))
   ), [filteredRecurringPayments, recurringSearchQuery]);
-  const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const payBillRows = React.useMemo(() => {
     return filteredTransactions
       .filter((tx) => {
@@ -1479,11 +1537,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }));
   }, []);
   const setPayBillRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
+    const normalizedPatch: LedgerInlineDraft = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(patch, 'paid_date')) {
+      normalizedPatch.is_paid = String(patch.paid_date || '').trim() ? 1 : 0;
+    }
     setPayBillDraftById((prev) => ({
       ...prev,
       [tx.id]: {
         ...prev[tx.id],
-        ...patch,
+        ...normalizedPatch,
       },
     }));
   }, []);
@@ -1956,15 +2018,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           {tab === 'ledger' && (
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Ledger (Checkbook Style)</h3>
+                <h3 className="mb-0">Ledger</h3>
                 <div className="accumul8-panel-toolbar-search">
+                  <select
+                    className="form-select form-select-sm"
+                    value={ledgerFilterPreset}
+                    onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
+                    aria-label="Ledger quick filter"
+                  >
+                    {LEDGER_FILTER_PRESET_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     className="form-control form-control-sm"
                     value={listSearchQueryByTab.ledger}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
-                    placeholder="Filter ledger fields"
-                    aria-label="Filter ledger fields"
+                    placeholder="Search visible ledger rows"
+                    aria-label="Search visible ledger rows"
                   />
                 </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>

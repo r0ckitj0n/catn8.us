@@ -2008,7 +2008,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
                 <table
                   ref={entitiesTableRef}
-                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head"
+                  className={[
+                    'table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head',
+                    activeEntityRowId !== null ? 'has-active-inline-edit' : '',
+                  ].filter(Boolean).join(' ')}
                   style={buildMeasuredTableStyle(entitiesColumnWidths)}
                 >
                   <colgroup>

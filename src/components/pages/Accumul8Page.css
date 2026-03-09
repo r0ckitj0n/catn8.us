@@ -882,6 +882,24 @@
   background: linear-gradient(180deg, rgba(81, 64, 24, 0.42), rgba(39, 29, 9, 0.34)) !important;
 }
 
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) td,
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) {
+  background:
+    linear-gradient(180deg, rgba(31, 26, 17, 0.96), rgba(17, 14, 10, 0.98)) !important;
+  color: rgba(243, 230, 190, 0.5) !important;
+}
+
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) .text-muted,
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) .small.text-muted,
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) .accumul8-inline-cell-meta {
+  color: rgba(188, 174, 134, 0.45) !important;
+}
+
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) .accumul8-inline-cell-trigger,
+.accumul8-table--entities.has-active-inline-edit tbody tr:not(.is-editing) .accumul8-row-actions {
+  opacity: 0.52;
+}
+
 .accumul8-sticky-head thead th {
   position: sticky;
   top: 0;

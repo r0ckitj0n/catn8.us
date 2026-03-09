@@ -35,6 +35,7 @@ interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
+type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 const ENTITY_ENDEX_GROUPING_GUIDES = [
   {
@@ -241,6 +242,17 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
     return Number.isFinite(value) ? String(value) : fallback;
   }
   return String(value || '').trim() || fallback;
+}
+
+function normalizeSearchQuery(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function matchesSearchQuery(query: string, fields: Array<string | number | null | undefined>): boolean {
+  if (!query) {
+    return true;
+  }
+  return fields.some((field) => String(field || '').toLowerCase().includes(query));
 }
 
 function normalizeEntityAliasKey(value: string | null | undefined): string {
@@ -453,6 +465,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
+  const [listSearchQueryByTab, setListSearchQueryByTab] = React.useState<Record<SearchableListTabKey, string>>({
+    ledger: '',
+    debtors: '',
+    pay_bills: '',
+    contacts: '',
+    recurring: '',
+  });
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -532,6 +551,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return true;
     });
   }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
+  const ledgerSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.ledger), [listSearchQueryByTab.ledger]);
+  const ledgerRows = React.useMemo(() => (
+    filteredTransactions.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
+      tx.transaction_date,
+      tx.due_date,
+      tx.description,
+      tx.memo,
+      tx.account_name,
+      tx.contact_name,
+      tx.entity_name,
+      tx.balance_entity_name,
+      tx.entry_type,
+      tx.source_kind,
+      tx.amount,
+      tx.running_balance,
+      Number(tx.is_paid || 0) === 1 ? 'paid' : 'unpaid',
+      Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
+    ]))
+  ), [filteredTransactions, ledgerSearchQuery]);
   const filteredRecurringPayments = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
@@ -545,6 +583,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return true;
     });
   }, [recurringPayments, selectedBankingOrganizationId, selectedBankAccountId]);
+  const recurringSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.recurring), [listSearchQueryByTab.recurring]);
+  const recurringRows = React.useMemo(() => (
+    filteredRecurringPayments.filter((item) => matchesSearchQuery(recurringSearchQuery, [
+      item.title,
+      item.notes,
+      item.next_due_date,
+      item.frequency,
+      item.payment_method,
+      item.direction,
+      item.entity_name,
+      item.account_name,
+      item.amount,
+      Number(item.is_budget_planner || 0) === 1 ? 'shown' : 'hidden',
+      Number(item.is_active || 0) === 1 ? 'active' : 'paused',
+    ]))
+  ), [filteredRecurringPayments, recurringSearchQuery]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const payBillRows = React.useMemo(() => {
     return filteredTransactions
@@ -615,6 +669,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return true;
     })
   ), [payBillRows, payBillsDateRange]);
+  const payBillsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.pay_bills), [listSearchQueryByTab.pay_bills]);
+  const payBillsRows = React.useMemo(() => (
+    filteredPayBillRows.filter((tx) => matchesSearchQuery(payBillsSearchQuery, [
+      tx.due_date,
+      tx.transaction_date,
+      tx.description,
+      tx.memo,
+      tx.account_name,
+      tx.contact_name,
+      tx.entity_name,
+      tx.amount,
+      Number(tx.is_paid || 0) === 1 ? 'paid' : ((tx.due_date || tx.transaction_date) < todayDate ? 'past due' : 'upcoming'),
+    ]))
+  ), [filteredPayBillRows, payBillsSearchQuery, todayDate]);
   const filteredSummary = React.useMemo(() => {
     const next = { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 };
     filteredTransactions.forEach((tx) => {
@@ -631,6 +699,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [filteredTransactions]);
+  const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
+  const debtorRows = React.useMemo(() => (
+    debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
+      debtor.debtor_name,
+      debtor.contact_name,
+      debtor.entity_name,
+      debtor.notes,
+      debtor.last_activity_date,
+      debtor.total_loaned,
+      debtor.total_repaid,
+      debtor.outstanding_balance,
+      Number(debtor.is_active || 0) === 1 ? 'active' : 'paused',
+    ]))
+  ), [debtors, debtorsSearchQuery]);
   const ledgerColumnWidths = useMeasuredTableColumnWidths(ledgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
     { key: 'due', index: 1, fallback: 96, header: 'Due' },
@@ -639,21 +721,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'paid', index: 6, fallback: 88, header: 'Paid' },
     { key: 'reconciled', index: 7, fallback: 160, header: 'Reconciled' },
     { key: 'actions', index: 8, fallback: 132, header: 'Actions' },
-  ], [ledgerTableRef, filteredTransactions, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
+  ], [ledgerTableRef, ledgerRows, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
     { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
     { key: 'credits', index: 3, fallback: 112, header: 'Credits' },
     { key: 'net', index: 4, fallback: 136, header: 'Net Balance' },
     { key: 'activity', index: 5, fallback: 132, header: 'Last Activity' },
     { key: 'actions', index: 6, fallback: 188, header: 'Actions' },
-  ], [debtorsTableRef, debtors, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
+  ], [debtorsTableRef, debtorRows, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
   const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
     { key: 'due', index: 0, fallback: 120, header: 'Due Date' },
     { key: 'paidDate', index: 1, fallback: 120, header: 'Paid Date' },
     { key: 'amount', index: 3, fallback: 112, header: 'Amount' },
     { key: 'status', index: 4, fallback: 116, header: 'Status' },
     { key: 'actions', index: 5, fallback: 132, header: 'Actions' },
-  ], [payBillsTableRef, filteredPayBillRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
+  ], [payBillsTableRef, payBillsRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
   const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
     { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
     { key: 'amount', index: 2, fallback: 112, header: 'Amount' },
@@ -662,7 +744,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'planner', index: 5, fallback: 108, header: 'Planner' },
     { key: 'status', index: 6, fallback: 104, header: 'Status' },
     { key: 'actions', index: 7, fallback: 132, header: 'Actions' },
-  ], [recurringTableRef, filteredRecurringPayments, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
+  ], [recurringTableRef, recurringRows, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
     { key: 'status', index: 1, fallback: 96, header: 'Status' },
     { key: 'lastSync', index: 2, fallback: 156, header: 'Last Sync' },
@@ -1075,6 +1157,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       .filter((entity) => !linkedAliasEntityIds.has(entity.id))
       .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
   ), [entitiesWithResolvedAliases, linkedAliasEntityIds]);
+  const contactsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.contacts), [listSearchQueryByTab.contacts]);
+  const entityRows = React.useMemo(() => (
+    entitiesSorted.filter((entity) => matchesSearchQuery(contactsSearchQuery, [
+      entity.display_name,
+      entity.notes,
+      entity.phone_number,
+      entity.email,
+      entity.street_address,
+      entity.city,
+      entity.state,
+      entity.zip,
+      entity.contact_type,
+      entity.entity_kind,
+      entity.aliases.map((alias) => alias.alias_name).join(' '),
+      Number(entity.is_active || 0) === 1 ? 'active' : 'paused',
+      Number(entity.is_balance_person || 0) === 1 ? 'balance person' : '',
+      formatEntityRoles(entity),
+    ]))
+  ), [contactsSearchQuery, entitiesSorted]);
   const linkedAliasEntitiesByParentId = React.useMemo(() => {
     const next: Record<number, Accumul8Entity[]> = {};
     entitiesWithResolvedAliases.forEach((parentEntity) => {
@@ -1212,7 +1313,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'lastTransaction', index: 3, fallback: 172, header: 'Last Transaction' },
     { key: 'status', index: 4, fallback: 96, header: 'Status' },
     { key: 'actions', index: 5, fallback: 168, header: 'Actions' },
-  ], [entitiesTableRef, entitiesSorted, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
+  ], [entitiesTableRef, entityRows, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
     { key: 'person', index: 1, fallback: 132, header: 'Person' },
@@ -1739,6 +1840,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Ledger (Checkbook Style)</h3>
+                <div className="accumul8-panel-toolbar-search">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={listSearchQueryByTab.ledger}
+                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
+                    placeholder="Filter ledger fields"
+                    aria-label="Filter ledger fields"
+                  />
+                </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
@@ -1760,7 +1871,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </colgroup>
                   <thead><tr><th>Date</th><th>Due</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {filteredTransactions.map((tx) => (
+                    {ledgerRows.map((tx) => (
                       <tr
                         key={tx.id}
                         ref={(node) => setInlineRowRef(`ledger-${tx.id}`, node)}
@@ -1836,6 +1947,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
+                    {ledgerRows.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1859,6 +1975,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Personal Balances</h3>
+                <div className="accumul8-panel-toolbar-search">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={listSearchQueryByTab.debtors}
+                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: e.target.value }))}
+                    placeholder="Filter balance fields"
+                    aria-label="Filter personal balance fields"
+                  />
+                </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateDebtorModal} disabled={busy}>Add Person</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--bills">
@@ -1878,7 +2004,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </colgroup>
                   <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net Balance</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {debtors.map((debtor) => (
+                    {debtorRows.map((debtor) => (
                       <tr ref={(node) => setInlineRowRef(`debtor-${debtor.id}`, node)} key={debtor.id} className={['accumul8-list-item', activeDebtorRowId === debtor.id ? 'is-editing' : '', debtorDraftById[debtor.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
                           {activeDebtorRowId === debtor.id ? (
@@ -1942,6 +2068,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
+                    {debtorRows.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="text-center text-muted py-4">No personal balances matched the current filter.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2088,6 +2219,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Pay Bills Queue</h3>
+                <div className="accumul8-panel-toolbar-search">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={listSearchQueryByTab.pay_bills}
+                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: e.target.value }))}
+                    placeholder="Filter bill fields"
+                    aria-label="Filter pay bills queue fields"
+                  />
+                </div>
                 <div className="d-flex flex-wrap align-items-end gap-2">
                   <div className="accumul8-toolbar-field">
                     <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-range">Date Range</label>
@@ -2147,7 +2288,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </colgroup>
                   <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {filteredPayBillRows.map((billTx) => (
+                    {payBillsRows.map((billTx) => (
                       <tr ref={(node) => setInlineRowRef(`paybill-${billTx.id}`, node)} key={billTx.id} className={['accumul8-list-item', activePayBillRowId === billTx.id ? 'is-editing' : '', payBillDraftById[billTx.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
                           {activePayBillRowId === billTx.id ? (
@@ -2224,9 +2365,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
-                    {filteredPayBillRows.length === 0 && (
+                    {payBillsRows.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">No unpaid upcoming or past-due bills.</td>
+                        <td colSpan={6} className="text-center text-muted py-4">No unpaid upcoming or past-due bills matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -2238,6 +2379,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel accumul8-panel--entity-manager">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Entity Manager</h3>
+                <div className="accumul8-panel-toolbar-search">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={listSearchQueryByTab.contacts}
+                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: e.target.value }))}
+                    placeholder="Filter entity fields"
+                    aria-label="Filter entity fields"
+                  />
+                </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
@@ -2268,7 +2419,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </tr>
                   </thead>
                   <tbody>
-                    {entitiesSorted.map((entity) => {
+                    {entityRows.map((entity) => {
                       const entityDraft = entityDraftById[entity.id];
                       const entitySummary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
                       const entityContactSummary = formatEntityContactSummary({
@@ -2422,9 +2573,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     )})}
-                    {entitiesSorted.length === 0 && (
+                    {entityRows.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">No entities yet.</td>
+                        <td colSpan={6} className="text-center text-muted py-4">No entities matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -2515,10 +2666,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	              </div>
 	            </div>
 	          )}
-	          {tab === 'recurring' && (
-	            <div className="accumul8-panel">
+          {tab === 'recurring' && (
+            <div className="accumul8-panel">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Recurring Payments</h3>
+                <div className="accumul8-panel-toolbar-search">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={listSearchQueryByTab.recurring}
+                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: e.target.value }))}
+                    placeholder="Filter recurring fields"
+                    aria-label="Filter recurring payment fields"
+                  />
+                </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Payment</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
@@ -2539,7 +2700,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </colgroup>
                   <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
-                    {filteredRecurringPayments.map((rp) => {
+                    {recurringRows.map((rp) => {
                       const recurringDraft = recurringDraftById[rp.id];
                       return (
                       <tr ref={(node) => setInlineRowRef(`recurring-${rp.id}`, node)} key={rp.id} className={['accumul8-list-item', activeRecurringRowId === rp.id ? 'is-editing' : '', recurringDraft ? 'has-draft' : ''].filter(Boolean).join(' ')}>
@@ -2622,6 +2783,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     )})}
+                    {recurringRows.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-center text-muted py-4">No recurring payments matched the current filter.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

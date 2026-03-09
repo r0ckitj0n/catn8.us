@@ -560,6 +560,21 @@
   gap: 0.75rem;
 }
 
+.accumul8-panel-toolbar > :first-child {
+  flex: 0 1 auto;
+}
+
+.accumul8-panel-toolbar-search {
+  flex: 1 1 22rem;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.accumul8-panel-toolbar-search .form-control {
+  width: min(100%, 26rem);
+}
+
 .accumul8-inline-editor-row td {
   background: rgba(232, 214, 161, 0.12);
 }
@@ -1742,6 +1757,15 @@
   .accumul8-panel-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .accumul8-panel-toolbar-search {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .accumul8-panel-toolbar-search .form-control {
+    width: 100%;
   }
 
   .accumul8-spreadsheet-grid {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8Account, Accumul8StatementKind, Accumul8StatementUpload } from '../../types/accumul8';
+import { Accumul8ModalHelp } from './Accumul8ModalHelp';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import './Accumul8StatementModal.css';
 
@@ -99,20 +100,28 @@ export function Accumul8StatementModal({
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Bank Statements</h5>
-            <ModalCloseIconButton />
+            <div className="accumul8-statement-modal-header-actions">
+              <Accumul8ModalHelp
+                buttonLabel="Statement upload help"
+                buttonTitle="Statement upload help"
+                modalTitle="Statement Upload Help"
+                parentOpen={open}
+              >
+                <div className="accumul8-statement-hero">
+                  <div className="accumul8-statement-hero-card">
+                    <strong>Upload and reconcile</strong>
+                    <p className="mb-0">Drop in statements for bank accounts, cards, loans, or mortgages. OCR extracts the text, the configured site AI normalizes it, Accumul8 imports the transactions, and suspicious outliers are flagged against roughly two years of history.</p>
+                  </div>
+                  <div className="accumul8-statement-hero-card">
+                    <strong>Best results</strong>
+                    <p className="mb-0">Select a target account when you know it. If you leave it blank, the importer tries to infer the account from the statement metadata and still records reconciliation notes when it needs review.</p>
+                  </div>
+                </div>
+              </Accumul8ModalHelp>
+              <ModalCloseIconButton />
+            </div>
           </div>
           <div className="modal-body">
-            <div className="accumul8-statement-hero">
-              <div className="accumul8-statement-hero-card">
-                <strong>Upload and reconcile</strong>
-                <p className="mb-0">Drop in statements for bank accounts, cards, loans, or mortgages. OCR extracts the text, the configured site AI normalizes it, Accumul8 imports the transactions, and suspicious outliers are flagged against roughly two years of history.</p>
-              </div>
-              <div className="accumul8-statement-hero-card">
-                <strong>Best results</strong>
-                <p className="mb-0">Select a target account when you know it. If you leave it blank, the importer tries to infer the account from the statement metadata and still records reconciliation notes when it needs review.</p>
-              </div>
-            </div>
-
             <form className="row g-3 mb-4" onSubmit={handleSubmit}>
               <div className="col-md-3">
                 <label className="form-label" htmlFor="accumul8-statement-kind">Statement type</label>

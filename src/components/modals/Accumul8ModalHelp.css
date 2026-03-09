@@ -1,0 +1,31 @@
+.accumul8-modal-help-popup {
+  z-index: 6270 !important;
+}
+
+.accumul8-modal-help-popup .modal-dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  max-width: min(38rem, calc(100vw - 2rem));
+}
+
+.accumul8-modal-help-popup .modal-content {
+  border: 2px solid rgba(124, 92, 25, 0.45);
+  background: linear-gradient(180deg, rgba(252, 246, 231, 0.98), rgba(232, 219, 183, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.36);
+  color: #241d12;
+}
+
+.accumul8-modal-help-popup .modal-header {
+  border-bottom: 2px solid rgba(124, 92, 25, 0.28);
+  background: linear-gradient(180deg, rgba(29, 25, 18, 0.96), rgba(19, 15, 10, 0.98));
+  color: #f5f0da;
+}
+
+.accumul8-modal-help-popup .modal-title {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accumul8-modal-help-popup .modal-body {
+  padding: 1rem;
+}

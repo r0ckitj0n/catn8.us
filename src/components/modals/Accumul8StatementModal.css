@@ -19,6 +19,12 @@
   gap: 1rem;
 }
 
+.accumul8-statement-modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .accumul8-statement-hero {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

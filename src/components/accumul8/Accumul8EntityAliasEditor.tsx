@@ -40,6 +40,14 @@ export function Accumul8EntityAliasEditor({
     });
     return keys;
   }, [entity]);
+  const pendingAliasNames = React.useMemo(
+    () => (draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean),
+    [draft.pending_alias_names],
+  );
+  const pendingAliasKeys = React.useMemo(
+    () => new Set(pendingAliasNames.map((value) => normalizeKey(value))),
+    [pendingAliasNames],
+  );
   const suggestions = React.useMemo(() => {
     const query = String(draft.alias_name || '').trim().toLowerCase();
     return entities
@@ -49,10 +57,32 @@ export function Accumul8EntityAliasEditor({
         alias_name: String(candidate.display_name || '').trim(),
         alias_key: normalizeKey(candidate.display_name),
       }))
-      .filter((candidate) => candidate.alias_name !== '' && !aliasKeys.has(candidate.alias_key))
+      .filter((candidate) => candidate.alias_name !== '' && !aliasKeys.has(candidate.alias_key) && !pendingAliasKeys.has(candidate.alias_key))
       .filter((candidate) => (query === '' ? true : candidate.alias_name.toLowerCase().includes(query)))
       .sort((a, b) => a.alias_name.localeCompare(b.alias_name));
-  }, [aliasKeys, draft.alias_name, entities, entity.id]);
+  }, [aliasKeys, draft.alias_name, entities, entity.id, pendingAliasKeys]);
+
+  const queueAliasName = React.useCallback((aliasName: string) => {
+    const trimmed = String(aliasName || '').trim();
+    const aliasKey = normalizeKey(trimmed);
+    if (!trimmed || !aliasKey || aliasKeys.has(aliasKey) || pendingAliasKeys.has(aliasKey)) {
+      return;
+    }
+    onDraftChange({
+      ...draft,
+      alias_name: '',
+      merge_entity_id: null,
+      pending_alias_names: [...pendingAliasNames, trimmed],
+    });
+  }, [aliasKeys, draft, onDraftChange, pendingAliasKeys, pendingAliasNames]);
+
+  const removePendingAlias = React.useCallback((aliasName: string) => {
+    const trimmed = String(aliasName || '').trim();
+    onDraftChange({
+      ...draft,
+      pending_alias_names: pendingAliasNames.filter((value) => value !== trimmed),
+    });
+  }, [draft, onDraftChange, pendingAliasNames]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {
@@ -110,6 +140,20 @@ export function Accumul8EntityAliasEditor({
             <button type="button" className="accumul8-entity-alias-remove" onClick={() => void onRemoveAlias(alias.id)} disabled={busy} aria-label={`Remove alias ${alias.alias_name}`}>x</button>
           </span>
         ))}
+        {pendingAliasNames.map((aliasName) => (
+          <span key={`pending-${aliasName}`} className="accumul8-entity-alias-chip accumul8-entity-alias-chip--pending">
+            <span>{aliasName}</span>
+            <button
+              type="button"
+              className="accumul8-entity-alias-remove"
+              onClick={() => removePendingAlias(aliasName)}
+              disabled={busy}
+              aria-label={`Remove pending alias ${aliasName}`}
+            >
+              x
+            </button>
+          </span>
+        ))}
       </div>
       <div className="accumul8-entity-alias-add">
         <div className="accumul8-entity-alias-input-wrap">
@@ -118,11 +162,11 @@ export function Accumul8EntityAliasEditor({
             className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted"
             value={draft.alias_name}
             onFocus={() => setIsFocused(true)}
-            onChange={(event) => onDraftChange({ alias_name: event.target.value, merge_entity_id: null })}
+            onChange={(event) => onDraftChange({ ...draft, alias_name: event.target.value, merge_entity_id: null })}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault();
-                void onAddAlias();
+                queueAliasName(draft.alias_name);
               }
             }}
             disabled={busy}
@@ -134,12 +178,13 @@ export function Accumul8EntityAliasEditor({
           type="button"
           className="btn btn-sm btn-outline-primary accumul8-icon-action"
           onClick={() => void onAddAlias()}
-          disabled={busy || !String(draft.alias_name || '').trim()}
-          title={draft.merge_entity_id ? 'Merge the selected name into this entity and save it as an alias' : 'Save alias'}
+          disabled={busy || (pendingAliasNames.length === 0 && !String(draft.alias_name || '').trim())}
+          title="Save queued aliases"
         >
-          +
+          <span aria-hidden="true">💾</span>
         </button>
       </div>
+      {pendingAliasNames.length > 0 ? <div className="accumul8-entity-alias-merge-note">Queued aliases: {pendingAliasNames.length}</div> : null}
       {showSuggestions && portalStyle && typeof document !== 'undefined' ? createPortal(
         <div
           className="accumul8-entity-alias-suggestions accumul8-entity-alias-suggestions--portal"
@@ -157,7 +202,7 @@ export function Accumul8EntityAliasEditor({
               ].join(' ')}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                onDraftChange({ alias_name: suggestion.alias_name, merge_entity_id: suggestion.entity_id });
+                queueAliasName(suggestion.alias_name);
                 setIsFocused(false);
               }}
               disabled={busy}

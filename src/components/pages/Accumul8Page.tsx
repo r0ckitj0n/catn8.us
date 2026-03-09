@@ -140,6 +140,7 @@ const DEFAULT_ENTITY_FORM: EntityFormState = {
 const DEFAULT_ENTITY_ALIAS_DRAFT: Accumul8EntityAliasDraft = {
   alias_name: '',
   merge_entity_id: null,
+  pending_alias_names: [],
 };
 function createDefaultDebtorForm(): DebtorFormState {
   return { debtor_name: '', contact_id: '', notes: '', is_active: 1 };
@@ -193,6 +194,10 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
     return Number.isFinite(value) ? String(value) : fallback;
   }
   return String(value || '').trim() || fallback;
+}
+
+function normalizeEntityAliasKey(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function normalizeEntityContactType(entity: Pick<Accumul8Entity, 'contact_type' | 'is_payee' | 'is_payer' | 'is_balance_person'>): Accumul8ContactType {
@@ -936,9 +941,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const budgetRowsSorted = React.useMemo(() => (
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);
+  const linkedAliasEntityIds = React.useMemo(() => {
+    const hiddenIds = new Set<number>();
+    const entityIdsByNameKey = new Map<string, number[]>();
+
+    entities.forEach((entity) => {
+      const nameKey = normalizeEntityAliasKey(entity.display_name);
+      if (!nameKey) {
+        return;
+      }
+      const bucket = entityIdsByNameKey.get(nameKey) || [];
+      bucket.push(entity.id);
+      entityIdsByNameKey.set(nameKey, bucket);
+    });
+
+    entities.forEach((entity) => {
+      entity.aliases.forEach((alias) => {
+        const aliasKey = normalizeEntityAliasKey(alias.alias_name);
+        if (!aliasKey) {
+          return;
+        }
+        (entityIdsByNameKey.get(aliasKey) || []).forEach((matchedEntityId) => {
+          if (matchedEntityId !== entity.id) {
+            hiddenIds.add(matchedEntityId);
+          }
+        });
+      });
+    });
+
+    return hiddenIds;
+  }, [entities]);
   const entitiesSorted = React.useMemo(() => (
-    [...entities].sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
-  ), [entities]);
+    [...entities]
+      .filter((entity) => !linkedAliasEntityIds.has(entity.id))
+      .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
+  ), [entities, linkedAliasEntityIds]);
   const entityTransactionsById = React.useMemo(() => {
     const grouped: Record<number, Accumul8Transaction[]> = {};
     for (const tx of transactions) {
@@ -1210,15 +1247,20 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [entityDraftById, updateEntity]);
   const saveEntityAlias = React.useCallback(async (entity: Accumul8Entity) => {
     const draft = entityAliasDraftById[entity.id] || DEFAULT_ENTITY_ALIAS_DRAFT;
-    const aliasName = String(draft.alias_name || '').trim();
-    if (!aliasName) {
+    const aliasNames = Array.from(new Set([
+      ...((draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean)),
+      String(draft.alias_name || '').trim(),
+    ])).filter((value) => value !== '' && value !== String(entity.display_name || '').trim());
+    if (aliasNames.length === 0) {
       return;
     }
-    await createEntityAlias({
-      entity_id: entity.id,
-      alias_name: aliasName,
-      merge_entity_id: draft.merge_entity_id,
-    });
+    for (const aliasName of aliasNames) {
+      await createEntityAlias({
+        entity_id: entity.id,
+        alias_name: aliasName,
+        merge_entity_id: null,
+      });
+    }
     setEntityAliasDraftById((prev) => {
       const next = { ...prev };
       next[entity.id] = DEFAULT_ENTITY_ALIAS_DRAFT;

@@ -20,6 +20,11 @@
   font-size: 0.67rem;
 }
 
+.accumul8-entity-alias-chip--pending {
+  border-color: rgba(212, 175, 55, 0.62);
+  background: rgba(212, 175, 55, 0.14);
+}
+
 .accumul8-entity-alias-remove {
   border: 0;
   background: transparent;
@@ -36,6 +41,17 @@
 
 .accumul8-entity-alias-input-wrap {
   position: relative;
+}
+
+.accumul8-entity-alias-merge-note {
+  font-size: 0.7rem;
+  color: var(--accumul8-deco-muted);
+  line-height: 1.3;
+}
+
+.accumul8-entity-alias-merge-note strong {
+  color: var(--accumul8-deco-paper);
+  font-weight: 600;
 }
 
 .accumul8-entity-alias-suggestions {

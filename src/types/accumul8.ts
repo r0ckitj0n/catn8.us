@@ -294,6 +294,7 @@ export interface Accumul8EntityAlias {
 export interface Accumul8EntityAliasDraft {
   alias_name: string;
   merge_entity_id: number | null;
+  pending_alias_names: string[];
 }
 
 export interface Accumul8EntityUpsertRequest {

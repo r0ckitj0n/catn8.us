@@ -86,6 +86,7 @@ $appPhpRoutes = [
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
     '/frogger' => '/frogger-game.php',
+    '/pacman' => '/pacman-game.php',
     '/asteroids' => '/asteroids-game.php',
     '/tetris' => '/tetris-game.php',
     '/verify' => '/verify.php',

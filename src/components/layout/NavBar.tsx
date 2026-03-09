@@ -142,7 +142,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
               <li className="nav-item">
                 <a
                   className="nav-link"
-                  href="account.php"
+                  href="/account.php"
                   onClick={(e) => {
                     if (typeof onAccountClick === 'function') {
                       e.preventDefault();
@@ -193,7 +193,7 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
               <li className="nav-item">
                 <a
                   className="nav-link"
-                  href="logout.php"
+                  href="/logout.php"
                   onClick={(e) => {
                     if (typeof onLogout === 'function') {
                       e.preventDefault();

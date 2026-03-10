@@ -71,6 +71,8 @@ Business term: Banking Organizations
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)
 - `group_name` (VARCHAR(191)) - Banking Organization name
 - `institution_name` (VARCHAR(191))
+- `login_url` (VARCHAR(2048), DEFAULT `''`) - Launch URL for the organization site
+- `icon_path` (VARCHAR(512), DEFAULT `''`) - Site-relative icon asset path
 - `notes` (TEXT, NULLABLE)
 - `is_active` (TINYINT(1), DEFAULT 1)
 - `created_at` (TIMESTAMP)

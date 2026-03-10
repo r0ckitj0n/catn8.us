@@ -235,6 +235,8 @@ export interface Accumul8BankingOrganization {
   id: number;
   banking_organization_name: string;
   institution_name: string;
+  login_url: string;
+  icon_path: string;
   notes: string;
   is_active: number;
 }
@@ -242,6 +244,8 @@ export interface Accumul8BankingOrganization {
 export interface Accumul8BankingOrganizationUpsertRequest {
   banking_organization_name: string;
   institution_name?: string;
+  login_url?: string;
+  icon_path?: string;
   notes?: string;
   is_active?: number;
 }

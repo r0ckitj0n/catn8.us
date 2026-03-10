@@ -490,6 +490,8 @@ function accumul8_import_ensure_schema(): void
         owner_user_id INT NOT NULL,
         group_name VARCHAR(191) NOT NULL,
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        login_url VARCHAR(2048) NOT NULL DEFAULT '',
+        icon_path VARCHAR(512) NOT NULL DEFAULT '',
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -500,6 +502,18 @@ function accumul8_import_ensure_schema(): void
     $column = Database::queryOne(
         "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_accounts' AND COLUMN_NAME = 'account_group_id' LIMIT 1"
     );
+    $loginColumn = Database::queryOne(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_account_groups' AND COLUMN_NAME = 'login_url' LIMIT 1"
+    );
+    if (!$loginColumn) {
+        Database::execute("ALTER TABLE accumul8_account_groups ADD COLUMN login_url VARCHAR(2048) NOT NULL DEFAULT ''");
+    }
+    $iconColumn = Database::queryOne(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_account_groups' AND COLUMN_NAME = 'icon_path' LIMIT 1"
+    );
+    if (!$iconColumn) {
+        Database::execute("ALTER TABLE accumul8_account_groups ADD COLUMN icon_path VARCHAR(512) NOT NULL DEFAULT ''");
+    }
     if (!$column) {
         Database::execute('ALTER TABLE accumul8_accounts ADD COLUMN account_group_id INT NULL');
     }
@@ -623,9 +637,9 @@ function accumul8_import_ensure_group(int $ownerUserId, string $groupName, strin
         return null;
     }
     Database::execute(
-        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, notes, is_active)
-         VALUES (?, ?, ?, ?, 1)',
-        [$ownerUserId, $groupName, $institutionName, null]
+        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, login_url, icon_path, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 1)',
+        [$ownerUserId, $groupName, $institutionName, '', '', null]
     );
     $cache[$key] = (int)Database::lastInsertId();
     return $cache[$key];

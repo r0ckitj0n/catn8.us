@@ -250,6 +250,10 @@ function getActiveFilterClass(baseClassName: string, isActive: boolean): string 
   return isActive ? `${baseClassName} accumul8-filter-control--active` : baseClassName;
 }
 
+function isLaunchableHttpUrl(value: string | null | undefined): boolean {
+  return /^https?:\/\//i.test(String(value || '').trim());
+}
+
 function getLedgerDescriptionLabel(
   transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
   draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
@@ -558,6 +562,56 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
+  const launchableBankingOrganizations = React.useMemo(() => {
+    const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
+    if (!selectedBankingOrganizationId) {
+      return filtered;
+    }
+    return [...filtered].sort((a, b) => {
+      const aSelected = String(a.id) === selectedBankingOrganizationId ? 1 : 0;
+      const bSelected = String(b.id) === selectedBankingOrganizationId ? 1 : 0;
+      return bSelected - aSelected || a.banking_organization_name.localeCompare(b.banking_organization_name) || a.id - b.id;
+    });
+  }, [bankingOrganizations, selectedBankingOrganizationId]);
+  const openBankingOrganizationPopup = React.useCallback((loginUrl: string, organizationName: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const targetUrl = String(loginUrl || '').trim();
+    if (!isLaunchableHttpUrl(targetUrl)) {
+      onToast?.({ tone: 'warning', message: `No valid login URL configured for ${organizationName}.` });
+      return;
+    }
+    const screenWidth = Math.max(window.screen.availWidth || window.innerWidth || 1440, 1024);
+    const screenHeight = Math.max(window.screen.availHeight || window.innerHeight || 900, 720);
+    const popupWidth = Math.max(Math.floor(screenWidth / 2), 720);
+    const popupHeight = Math.max(screenHeight - 80, 640);
+    const popupLeft = Math.max((window.screenX || 0) + screenWidth - popupWidth, 0);
+    const popupTop = Math.max(window.screenY || 0, 0);
+    const popupName = `accumul8-bank-${organizationName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'login'}`;
+    const popupFeatures = [
+      `width=${popupWidth}`,
+      `height=${popupHeight}`,
+      `left=${popupLeft}`,
+      `top=${popupTop}`,
+      'popup=yes',
+      'noopener=yes',
+      'noreferrer=yes',
+      'menubar=no',
+      'toolbar=no',
+      'location=no',
+      'status=no',
+      'personalbar=no',
+      'resizable=yes',
+      'scrollbars=yes',
+    ].join(',');
+    const popupWindow = window.open(targetUrl, popupName, popupFeatures);
+    if (!popupWindow) {
+      onToast?.({ tone: 'warning', message: `Popup blocked while opening ${organizationName}. Allow popups for catn8.us and try again.` });
+      return;
+    }
+    popupWindow.focus();
+  }, [onToast]);
   const [listSearchQueryByTab, setListSearchQueryByTab] = React.useState<Record<SearchableListTabKey, string>>({
     ledger: '',
     debtors: '',
@@ -2139,6 +2193,31 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
                           ))}
                         </select>
+                        {launchableBankingOrganizations.length ? (
+                          <div className="accumul8-bank-launcher-group" aria-label="Banking organization quick links">
+                            {launchableBankingOrganizations.map((organization) => (
+                              <button
+                                key={organization.id}
+                                type="button"
+                                className={`btn btn-outline-secondary btn-sm accumul8-bank-launcher${selectedBankingOrganizationId === String(organization.id) ? ' accumul8-bank-launcher--selected' : ''}`}
+                                onClick={() => openBankingOrganizationPopup(organization.login_url, organization.banking_organization_name)}
+                                aria-label={`Open ${organization.banking_organization_name}`}
+                                title={`Open ${organization.banking_organization_name}`}
+                              >
+                                {organization.icon_path ? (
+                                  <img
+                                    className="accumul8-bank-launcher-icon"
+                                    src={organization.icon_path}
+                                    alt=""
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <span className="accumul8-bank-launcher-emoji" aria-hidden="true">🏦</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="accumul8-toolbar-field">

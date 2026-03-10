@@ -2646,6 +2646,8 @@ function accumul8_tables_ensure(): void
         owner_user_id INT NOT NULL,
         group_name VARCHAR(191) NOT NULL,
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        login_url VARCHAR(2048) NOT NULL DEFAULT '',
+        icon_path VARCHAR(512) NOT NULL DEFAULT '',
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2937,12 +2939,29 @@ function accumul8_tables_ensure(): void
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
         $hadBudgetPlannerColumn = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'login_url', "VARCHAR(2048) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'icon_path', "VARCHAR(512) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'account_group_id', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'account_type', "VARCHAR(40) NOT NULL DEFAULT 'checking'");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'institution_name', "VARCHAR(191) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'available_balance', "DECIMAL(10,2) NOT NULL DEFAULT 0.00");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+        Database::execute(
+            "UPDATE accumul8_account_groups
+             SET login_url = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' THEN 'https://digitalomni.navyfederal.org/sign-in/?NFCUSIGNOFF=2'
+                    WHEN group_name = 'Capital One 360' THEN 'https://verified.capitalone.com/auth/signin?Product=ENTERPRISE&goto_url=https:%2F%2Fmyaccounts.capitalone.com%2F%23%2Fwelcome#/welcome'
+                    ELSE login_url
+                 END,
+                 icon_path = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' THEN '/images/bank-organizations/navy-federal-credit-union-1024.png'
+                    WHEN group_name = 'Capital One 360' THEN '/images/bank-organizations/capital-one-360-1024.png'
+                    ELSE icon_path
+                 END
+             WHERE (COALESCE(login_url, '') = '' OR COALESCE(icon_path, '') = '')
+               AND group_name IN ('Navy Federal Credit Union', 'Capital One 360')"
+        );
         if (!accumul8_table_has_index('accumul8_accounts', 'idx_accumul8_accounts_group')) {
             Database::execute('ALTER TABLE accumul8_accounts ADD INDEX idx_accumul8_accounts_group (account_group_id)');
         }
@@ -3171,19 +3190,23 @@ function accumul8_list_banking_organizations(int $viewerId): array
         return [];
     }
 
+    $loginUrlSelect = accumul8_optional_select('accumul8_account_groups', 'login_url', 'login_url', "'' AS login_url");
+    $iconPathSelect = accumul8_optional_select('accumul8_account_groups', 'icon_path', 'icon_path', "'' AS icon_path");
     $rows = Database::queryAll(
-        'SELECT id, group_name, institution_name, COALESCE(notes, "") AS notes, is_active
+        'SELECT id, group_name, institution_name, ' . $loginUrlSelect . ', ' . $iconPathSelect . ', COALESCE(notes, "") AS notes, is_active
          FROM accumul8_account_groups
          WHERE owner_user_id = ?
          ORDER BY is_active DESC, group_name ASC, id ASC',
         [$viewerId]
     );
 
-    return array_map(static function (array $r) use ($aliasesByEntityId): array {
+    return array_map(static function (array $r): array {
         return [
             'id' => (int)($r['id'] ?? 0),
             'banking_organization_name' => (string)($r['group_name'] ?? ''),
             'institution_name' => (string)($r['institution_name'] ?? ''),
+            'login_url' => (string)($r['login_url'] ?? ''),
+            'icon_path' => (string)($r['icon_path'] ?? ''),
             'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
         ];
@@ -5369,17 +5392,25 @@ if ($action === 'create_banking_organization') {
 
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $loginUrl = trim((string)($body['login_url'] ?? ''));
+    $iconPath = accumul8_normalize_text($body['icon_path'] ?? '', 512);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
 
     if ($groupName === '') {
         catn8_json_response(['success' => false, 'error' => 'banking_organization_name is required'], 400);
     }
+    if ($loginUrl !== '' && !filter_var($loginUrl, FILTER_VALIDATE_URL)) {
+        catn8_json_response(['success' => false, 'error' => 'login_url must be a valid URL'], 400);
+    }
+    if ($iconPath !== '' && !preg_match('#^/(?:[A-Za-z0-9._/-]+)$#', $iconPath)) {
+        catn8_json_response(['success' => false, 'error' => 'icon_path must be a site-relative asset path'], 400);
+    }
 
     Database::execute(
-        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, notes, is_active)
-         VALUES (?, ?, ?, ?, ?)',
-        [$viewerId, $groupName, $institutionName, $notes === '' ? null : $notes, $isActive]
+        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, login_url, icon_path, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$viewerId, $groupName, $institutionName, $loginUrl, $iconPath, $notes === '' ? null : $notes, $isActive]
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
@@ -5392,6 +5423,8 @@ if ($action === 'update_banking_organization') {
     $id = (int)($body['id'] ?? 0);
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $loginUrl = trim((string)($body['login_url'] ?? ''));
+    $iconPath = accumul8_normalize_text($body['icon_path'] ?? '', 512);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
 
@@ -5401,14 +5434,20 @@ if ($action === 'update_banking_organization') {
     if ($groupName === '') {
         catn8_json_response(['success' => false, 'error' => 'banking_organization_name is required'], 400);
     }
+    if ($loginUrl !== '' && !filter_var($loginUrl, FILTER_VALIDATE_URL)) {
+        catn8_json_response(['success' => false, 'error' => 'login_url must be a valid URL'], 400);
+    }
+    if ($iconPath !== '' && !preg_match('#^/(?:[A-Za-z0-9._/-]+)$#', $iconPath)) {
+        catn8_json_response(['success' => false, 'error' => 'icon_path must be a site-relative asset path'], 400);
+    }
 
     accumul8_require_owned_id('account_groups', $viewerId, $id);
 
     Database::execute(
         'UPDATE accumul8_account_groups
-         SET group_name = ?, institution_name = ?, notes = ?, is_active = ?
+         SET group_name = ?, institution_name = ?, login_url = ?, icon_path = ?, notes = ?, is_active = ?
          WHERE id = ? AND owner_user_id = ?',
-        [$groupName, $institutionName, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
+        [$groupName, $institutionName, $loginUrl, $iconPath, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
 
     catn8_json_response(['success' => true]);

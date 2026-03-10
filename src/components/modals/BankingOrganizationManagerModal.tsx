@@ -29,6 +29,8 @@ interface BankingOrganizationManagerModalProps {
 const DEFAULT_BANKING_ORGANIZATION_FORM: Accumul8BankingOrganizationUpsertRequest = {
   banking_organization_name: '',
   institution_name: '',
+  login_url: '',
+  icon_path: '',
   notes: '',
   is_active: 1,
 };
@@ -142,6 +144,8 @@ export function BankingOrganizationManagerModal({
                     const payload: Accumul8BankingOrganizationUpsertRequest = {
                       banking_organization_name: String(bankingOrganizationForm.banking_organization_name || '').trim(),
                       institution_name: String(bankingOrganizationForm.institution_name || '').trim(),
+                      login_url: String(bankingOrganizationForm.login_url || '').trim(),
+                      icon_path: String(bankingOrganizationForm.icon_path || '').trim(),
                       notes: String(bankingOrganizationForm.notes || '').trim(),
                       is_active: Number(bankingOrganizationForm.is_active || 0) ? 1 : 0,
                     };
@@ -187,6 +191,27 @@ export function BankingOrganizationManagerModal({
                     <label className="form-label invisible">Save</label>
                     <button type="submit" className="btn btn-success" disabled={busy}>{editingBankingOrganizationId ? 'Update' : 'Add'}</button>
                   </div>
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="accumul8-banking-organization-login-url">Login URL</label>
+                    <input
+                      id="accumul8-banking-organization-login-url"
+                      className="form-control"
+                      type="url"
+                      placeholder="https://example.com/sign-in"
+                      value={bankingOrganizationForm.login_url || ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, login_url: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="accumul8-banking-organization-icon-path">Icon asset path</label>
+                    <input
+                      id="accumul8-banking-organization-icon-path"
+                      className="form-control"
+                      placeholder="/images/bank-organizations/example-1024.png"
+                      value={bankingOrganizationForm.icon_path || ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, icon_path: e.target.value }))}
+                    />
+                  </div>
                   <div className="col-12">
                     <label className="form-label" htmlFor="accumul8-banking-organization-notes">Notes</label>
                     <textarea
@@ -209,6 +234,7 @@ export function BankingOrganizationManagerModal({
                       <tr>
                         <th>Name</th>
                         <th>Institution</th>
+                        <th>Launch</th>
                         <th>Status</th>
                         <th>Notes</th>
                         <th className="text-end catn8-actions-column">Actions</th>
@@ -219,6 +245,10 @@ export function BankingOrganizationManagerModal({
                         <tr key={bankingOrganization.id}>
                           <td>{bankingOrganization.banking_organization_name}</td>
                           <td>{bankingOrganization.institution_name || '-'}</td>
+                          <td>
+                            <div>{bankingOrganization.login_url || '-'}</div>
+                            <div className="small text-muted">{bankingOrganization.icon_path || 'No icon asset'}</div>
+                          </td>
                           <td>{bankingOrganization.is_active ? 'Active' : 'Inactive'}</td>
                           <td>{bankingOrganization.notes || '-'}</td>
                           <td className="text-end catn8-actions-column">
@@ -231,6 +261,8 @@ export function BankingOrganizationManagerModal({
                                   setBankingOrganizationForm({
                                     banking_organization_name: bankingOrganization.banking_organization_name || '',
                                     institution_name: bankingOrganization.institution_name || '',
+                                    login_url: bankingOrganization.login_url || '',
+                                    icon_path: bankingOrganization.icon_path || '',
                                     notes: bankingOrganization.notes || '',
                                     is_active: Number(bankingOrganization.is_active || 0),
                                   });
@@ -253,7 +285,7 @@ export function BankingOrganizationManagerModal({
                       ))}
                       {visibleBankingOrganizations.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="text-muted">No banking organizations created yet.</td>
+                          <td colSpan={6} className="text-muted">No banking organizations created yet.</td>
                         </tr>
                       ) : null}
                     </tbody>

@@ -565,6 +565,43 @@
   min-width: 0;
 }
 
+.accumul8-bank-launcher-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.accumul8-bank-launcher {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  padding: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.accumul8-bank-launcher--selected {
+  border-color: var(--accumul8-accent-strong);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.32);
+}
+
+.accumul8-bank-launcher-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.accumul8-bank-launcher-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .accumul8-filter-gear {
   width: 2rem;
   height: 2rem;

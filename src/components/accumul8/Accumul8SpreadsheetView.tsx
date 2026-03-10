@@ -12,7 +12,11 @@ import {
   buildSpreadsheetMonthOptions,
   shiftMonthValue,
 } from '../../utils/accumul8Spreadsheet';
-import { ACCUMUL8_SAVE_BUTTON_EMOJI } from './accumul8Ui';
+import {
+  ACCUMUL8_EDIT_BUTTON_EMOJI,
+  ACCUMUL8_SAVE_BUTTON_EMOJI,
+  ACCUMUL8_VIEW_BUTTON_EMOJI,
+} from './accumul8Ui';
 
 interface Accumul8SpreadsheetViewProps {
   busy: boolean;
@@ -23,6 +27,7 @@ interface Accumul8SpreadsheetViewProps {
   onSelectedMonthChange: (monthValue: string) => void;
   onUpdateRecurring: (id: number, form: Accumul8RecurringUpsertRequest) => Promise<void>;
   onDeleteRecurring: (id: number, description: string) => void;
+  onOpenRecurring: (id: number) => void;
 }
 
 interface EditableSpreadsheetRow extends Accumul8SpreadsheetMonthRow {
@@ -99,6 +104,7 @@ export function Accumul8SpreadsheetView({
   onSelectedMonthChange,
   onUpdateRecurring,
   onDeleteRecurring,
+  onOpenRecurring,
 }: Accumul8SpreadsheetViewProps) {
   const [activeRowKey, setActiveRowKey] = React.useState<string | null>(null);
   const [budgetFilterQuery, setBudgetFilterQuery] = React.useState('');
@@ -636,12 +642,22 @@ export function Accumul8SpreadsheetView({
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-primary accumul8-icon-action"
-                              onClick={() => void saveRow(row)}
-                              disabled={busy || !draftRowByKey[row.rowKey]}
-                              aria-label={`Save ${row.title || 'row'}`}
-                              title={`Save ${row.title || 'row'}`}
+                              onClick={() => onOpenRecurring(row.recurring_id)}
+                              disabled={busy}
+                              aria-label={`View ${row.title || 'row'}`}
+                              title={`View ${row.title || 'row'}`}
                             >
-                              <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                              <span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
+                              onClick={() => activateRow(row.rowKey)}
+                              disabled={busy}
+                              aria-label={`Edit ${row.title || 'row'}`}
+                              title={`Edit ${row.title || 'row'}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span>
                             </button>
                             <button
                               type="button"
@@ -652,6 +668,18 @@ export function Accumul8SpreadsheetView({
                             >
                               <i className="bi bi-trash"></i>
                             </button>
+                            {draftRowByKey[row.rowKey] ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary accumul8-icon-action"
+                                onClick={() => void saveRow(row)}
+                                disabled={busy}
+                                aria-label={`Save ${row.title || 'row'}`}
+                                title={`Save ${row.title || 'row'}`}
+                              >
+                                <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

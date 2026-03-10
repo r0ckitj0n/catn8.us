@@ -170,7 +170,7 @@ function accumul8_openai_statement_pdf_model(string $configuredModel): string
     return 'gpt-4o-mini';
 }
 
-function accumul8_openai_responses_json(string $model, array $input, string $baseUrl = '', float $temperature = 0.0, int $maxOutputTokens = 4096): array
+function accumul8_openai_responses_json(string $model, array $input, string $baseUrl = '', float $temperature = 0.0, int $maxOutputTokens = 4096, ?array $textConfig = null, int $timeoutSeconds = 90): array
 {
     $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
     if (!is_string($apiKey) || trim($apiKey) === '') {
@@ -182,6 +182,18 @@ function accumul8_openai_responses_json(string $model, array $input, string $bas
         $root .= '/v1';
     }
 
+    $payload = [
+        'model' => $model !== '' ? $model : 'gpt-4o-mini',
+        'input' => $input,
+        'temperature' => $temperature,
+        'max_output_tokens' => $maxOutputTokens,
+        'text' => $textConfig ?: [
+            'format' => [
+                'type' => 'json_object',
+            ],
+        ],
+    ];
+
     $resp = catn8_http_json_with_status(
         'POST',
         $root . '/responses',
@@ -189,19 +201,9 @@ function accumul8_openai_responses_json(string $model, array $input, string $bas
             'Authorization' => 'Bearer ' . trim((string)$apiKey),
             'Content-Type' => 'application/json',
         ],
-        [
-            'model' => $model !== '' ? $model : 'gpt-4o-mini',
-            'input' => $input,
-            'temperature' => $temperature,
-            'max_output_tokens' => $maxOutputTokens,
-            'text' => [
-                'format' => [
-                    'type' => 'json_object',
-                ],
-            ],
-        ],
+        $payload,
         10,
-        90
+        $timeoutSeconds
     );
 
     $status = (int)($resp['status'] ?? 0);
@@ -209,6 +211,9 @@ function accumul8_openai_responses_json(string $model, array $input, string $bas
     if ($status < 200 || $status >= 300) {
         $error = accumul8_openai_response_error_message($json);
         throw new RuntimeException('HTTP ' . $status . ($error !== '' ? ': ' . $error : ''));
+    }
+    if (is_array($json) && isset($json['refusal']) && is_string($json['refusal']) && trim($json['refusal']) !== '') {
+        throw new RuntimeException('OpenAI refused the statement extraction request');
     }
 
     $content = accumul8_openai_response_output_text($json);
@@ -221,6 +226,100 @@ function accumul8_openai_responses_json(string $model, array $input, string $bas
     return [
         'content' => $content,
         'json' => $decoded,
+    ];
+}
+
+function accumul8_statement_openai_response_format(): array
+{
+    return [
+        'format' => [
+            'type' => 'json_schema',
+            'name' => 'accumul8_statement_extract',
+            'strict' => true,
+            'schema' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'required' => [
+                    'statement_kind',
+                    'institution_name',
+                    'account_name_hint',
+                    'account_last4',
+                    'period_start',
+                    'period_end',
+                    'opening_balance',
+                    'closing_balance',
+                    'transactions',
+                    'reconciliation_notes',
+                    'account_match_hints',
+                ],
+                'properties' => [
+                    'statement_kind' => [
+                        'type' => 'string',
+                        'enum' => ['bank_account', 'credit_card', 'loan', 'mortgage', 'other'],
+                    ],
+                    'institution_name' => ['type' => 'string'],
+                    'account_name_hint' => ['type' => 'string'],
+                    'account_last4' => ['type' => 'string'],
+                    'period_start' => ['type' => 'string'],
+                    'period_end' => ['type' => 'string'],
+                    'opening_balance' => [
+                        'anyOf' => [
+                            ['type' => 'number'],
+                            ['type' => 'null'],
+                        ],
+                    ],
+                    'closing_balance' => [
+                        'anyOf' => [
+                            ['type' => 'number'],
+                            ['type' => 'null'],
+                        ],
+                    ],
+                    'transactions' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'required' => [
+                                'transaction_date',
+                                'posted_date',
+                                'description',
+                                'memo',
+                                'amount',
+                                'running_balance',
+                                'page_number',
+                            ],
+                            'properties' => [
+                                'transaction_date' => ['type' => 'string'],
+                                'posted_date' => ['type' => 'string'],
+                                'description' => ['type' => 'string'],
+                                'memo' => ['type' => 'string'],
+                                'amount' => ['type' => 'number'],
+                                'running_balance' => [
+                                    'anyOf' => [
+                                        ['type' => 'number'],
+                                        ['type' => 'null'],
+                                    ],
+                                ],
+                                'page_number' => [
+                                    'anyOf' => [
+                                        ['type' => 'integer'],
+                                        ['type' => 'null'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'reconciliation_notes' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                    'account_match_hints' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ],
     ];
 }
 
@@ -742,7 +841,10 @@ function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $ac
                 ],
             ]],
             $baseUrl,
-            $temperature
+            $temperature,
+            4096,
+            accumul8_statement_openai_response_format(),
+            180
         );
         return [
             'provider' => $provider,
@@ -849,7 +951,9 @@ TXT;
                 ],
             ]],
             $baseUrl,
-            $temperature
+            $temperature,
+            4096,
+            accumul8_statement_openai_response_format()
         );
         $content = (string)($result['content'] ?? '');
     }

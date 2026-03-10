@@ -10,6 +10,7 @@ import {
 } from '../../types/accumul8';
 import { Accumul8ModalHelp } from './Accumul8ModalHelp';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { WebpImage } from '../common/WebpImage';
 import { Accumul8StatementHistoryCard, Accumul8StatementSearchResultCard } from './Accumul8StatementHistoryCard';
 import { Accumul8StatementNewAccountDraft, Accumul8StatementPlanCard } from './Accumul8StatementPlanCard';
 import { createStatementNewAccountDraft, formatStatementDateRange, formatStatementFileSize } from './accumul8StatementUtils';
@@ -169,6 +170,19 @@ export function Accumul8StatementModal({
     <div className="modal fade accumul8-contact-modal accumul8-statement-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
       <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
         <div className="modal-content">
+          {busy ? (
+            <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label="Statement scan in progress">
+              <div className="accumul8-statement-busy-card">
+                <WebpImage
+                  className="accumul8-statement-busy-logo"
+                  src="/images/catn8_logo.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <div className="accumul8-statement-busy-text">Scanning statement...</div>
+              </div>
+            </div>
+          ) : null}
           <div className="modal-header">
             <h5 className="modal-title">Bank Statements</h5>
             <div className="accumul8-statement-modal-header-actions">

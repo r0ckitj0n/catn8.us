@@ -36,11 +36,7 @@
 }
 
 .accumul8-transaction-modal .modal-content::before {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  border: 1px solid rgba(212, 175, 55, 0.5);
-  pointer-events: none;
+  content: none;
 }
 
 .accumul8-transaction-modal .modal-header {

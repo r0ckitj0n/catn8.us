@@ -10,6 +10,7 @@ import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
+import { WebpImage } from '../common/WebpImage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
@@ -2030,6 +2031,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                 </div>
               </div>
+              <a
+                className="accumul8-header-brand-logo"
+                href="https://catn8.us"
+                aria-label="Go to catn8.us"
+              >
+                <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="catn8.us Logo" />
+              </a>
             </div>
           </div>
           <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>

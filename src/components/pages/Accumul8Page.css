@@ -244,7 +244,7 @@
 
 .accumul8-page-title-row {
   display: grid;
-  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr);
+  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr) clamp(86px, 10vw, 132px);
   align-items: start;
   column-gap: 0.9rem;
   row-gap: 0.75rem;
@@ -433,30 +433,14 @@
 .accumul8-panel::before,
 .accumul8-month-panel::before,
 .accumul8-help-modal::before {
-  content: '';
-  position: absolute;
-  inset: 6px;
-  border: 1px solid rgba(212, 175, 55, 0.42);
-  pointer-events: none;
+  content: none;
 }
 
 .accumul8-summary-card::after,
 .accumul8-panel::after,
 .accumul8-month-panel::after,
 .accumul8-help-modal::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  background:
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top left / 14px 3px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top left / 3px 14px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top right / 14px 3px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) top right / 3px 14px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom left / 14px 3px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom left / 3px 14px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom right / 14px 3px no-repeat,
-    linear-gradient(rgba(212, 175, 55, 0.88), rgba(212, 175, 55, 0.88)) bottom right / 3px 14px no-repeat;
-  pointer-events: none;
+  content: none;
 }
 
 .accumul8-summary-card span {
@@ -471,6 +455,29 @@
   font-family: 'Bodoni Moda', Georgia, serif;
   font-size: 1.08rem;
   color: #1a1308;
+}
+
+.accumul8-header-brand-logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-width: 0;
+  align-self: center;
+  text-decoration: none;
+}
+
+.accumul8-header-brand-logo:focus-visible {
+  outline: 2px solid rgba(243, 216, 125, 0.9);
+  outline-offset: 4px;
+}
+
+.accumul8-header-brand-logo-image {
+  display: block;
+  width: auto;
+  height: clamp(60px, 7vw, 96px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.2));
 }
 
 .accumul8-tabs {
@@ -528,11 +535,7 @@
 }
 
 .accumul8-settings-modal::before {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  border: 1px solid rgba(212, 175, 55, 0.42);
-  pointer-events: none;
+  content: none;
 }
 
 .accumul8-settings-modal-actions {
@@ -586,18 +589,6 @@
 .accumul8-panel--viewport-fill {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.accumul8-panel::before,
-.accumul8-month-panel::before,
-.accumul8-help-modal::before {
-  inset: 10px;
-}
-
-.accumul8-panel::after,
-.accumul8-month-panel::after,
-.accumul8-help-modal::after {
-  inset: 8px;
 }
 
 .accumul8-panel-toolbar {
@@ -1946,6 +1937,10 @@
   .accumul8-tabs--header {
     align-items: stretch;
     width: 100%;
+  }
+
+  .accumul8-header-brand-logo {
+    justify-content: center;
   }
 
   .accumul8-page-filters {

@@ -49,6 +49,11 @@
   color: var(--catn8-glass-muted);
 }
 
+.catn8-dictionary-logo {
+  width: min(150px, 100%);
+  height: auto;
+}
+
 .catn8-hero-image {
   width: 100%;
   height: auto;

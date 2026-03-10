@@ -381,6 +381,10 @@
   min-width: 0;
 }
 
+.accumul8-toolbar-field--compact {
+  flex: 0 0 auto;
+}
+
 .accumul8-page-header + .accumul8-panel {
   margin-top: 0;
 }
@@ -608,6 +612,17 @@
   align-items: center;
   gap: 0.55rem;
   min-width: 0;
+}
+
+.accumul8-panel-toolbar-range {
+  justify-self: start;
+  min-width: 0;
+}
+
+.accumul8-panel-toolbar-range-select {
+  width: 16rem;
+  min-width: 10rem;
+  max-width: 16rem;
 }
 
 .accumul8-panel-toolbar-search .form-select {

@@ -47,6 +47,7 @@ interface Accumul8PageProps extends AppShellPageProps {
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
+  | 'planning'
   | 'all'
   | 'hide_upcoming_recurring'
   | 'hide_reconciled'
@@ -70,6 +71,7 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   manual: 'Manual payment',
 };
 const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
+  { value: 'planning', label: 'Planning' },
   { value: 'all', label: 'All transactions' },
   { value: 'hide_upcoming_recurring', label: 'Hide upcoming recurring payments' },
   { value: 'hide_reconciled', label: 'Hide reconciled transactions' },
@@ -135,7 +137,7 @@ type EntityFormState = {
   notes: string;
   is_active: number;
 };
-type PayBillsDateFilter = '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
+type DateRangeFilter = 'all_dates' | '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
 const DEFAULT_CONTACT_FORM = {
   contact_name: '',
   contact_type: 'payee' as Accumul8ContactType,
@@ -181,6 +183,14 @@ const DEFAULT_ENTITY_ALIAS_DRAFT: Accumul8EntityAliasDraft = {
   merge_entity_id: null,
   pending_alias_names: [],
 };
+const DATE_RANGE_FILTER_OPTIONS: Array<{ value: Exclude<DateRangeFilter, 'all_dates'>; label: string }> = [
+  { value: '7_days', label: '7 Days' },
+  { value: '30_days', label: '30 Days' },
+  { value: '60_days', label: '60 Days' },
+  { value: '90_days', label: '90 Days' },
+  { value: 'eoy', label: 'EOY' },
+  { value: 'custom', label: 'Custom' },
+];
 function createDefaultDebtorForm(): DebtorFormState {
   return { debtor_name: '', contact_id: '', notes: '', is_active: 1 };
 }
@@ -353,6 +363,28 @@ function addUtcDays(baseDate: string, days: number): string {
   return parsed.toISOString().slice(0, 10);
 }
 
+function endOfUtcMonth(baseDate: string): string {
+  const parsed = new Date(`${baseDate}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return baseDate;
+  }
+  parsed.setUTCMonth(parsed.getUTCMonth() + 1, 0);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function isDateInRange(value: string, range: { startDate: string; endDate: string }): boolean {
+  if (!value) {
+    return false;
+  }
+  if (range.startDate && value < range.startDate) {
+    return false;
+  }
+  if (range.endDate && value > range.endDate) {
+    return false;
+  }
+  return true;
+}
+
 function roundCurrency(value: number): number {
   return Number(value.toFixed(2));
 }
@@ -480,7 +512,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [ledgerForm, setLedgerForm] = React.useState<LedgerFormState>(createDefaultLedgerForm);
   const [budgetForm, setBudgetForm] = React.useState<{ category_name: string; monthly_budget: number; match_pattern: string; row_order: number; is_active: number }>({ category_name: '', monthly_budget: 0, match_pattern: '', row_order: 0, is_active: 1 });
   const [budgetMonth, setBudgetMonth] = React.useState<string>(new Date().toISOString().slice(0, 7));
-  const [payBillsDateFilter, setPayBillsDateFilter] = React.useState<PayBillsDateFilter>('30_days');
+  const [ledgerDateFilter, setLedgerDateFilter] = React.useState<DateRangeFilter>('all_dates');
+  const [customLedgerStartDate, setCustomLedgerStartDate] = React.useState<string>('');
+  const [customLedgerEndDate, setCustomLedgerEndDate] = React.useState<string>('');
+  const [payBillsDateFilter, setPayBillsDateFilter] = React.useState<DateRangeFilter>('30_days');
   const [customPayBillsStartDate, setCustomPayBillsStartDate] = React.useState<string>('');
   const [customPayBillsEndDate, setCustomPayBillsEndDate] = React.useState<string>('');
   const [notificationForm, setNotificationForm] = React.useState({ rule_name: '', trigger_type: 'upcoming_due', days_before_due: 3, target_scope: 'group' as 'group' | 'custom', custom_user_ids: '', email_subject_template: '', email_body_template: '' });
@@ -530,7 +565,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     contacts: '',
     recurring: '',
   });
-  const [ledgerFilterPreset, setLedgerFilterPreset] = React.useState<LedgerFilterPreset>('all');
+  const [ledgerFilterPreset, setLedgerFilterPreset] = React.useState<LedgerFilterPreset>('planning');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -618,6 +653,34 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
   }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const planningMonthEndDate = React.useMemo(() => endOfUtcMonth(todayDate), [todayDate]);
+  const ledgerDateRange = React.useMemo(() => {
+    if (ledgerDateFilter === 'all_dates') {
+      return { startDate: '', endDate: '' };
+    }
+    if (ledgerDateFilter === 'custom') {
+      return {
+        startDate: customLedgerStartDate || '',
+        endDate: customLedgerEndDate || '',
+      };
+    }
+    if (ledgerDateFilter === '7_days') {
+      return { startDate: '', endDate: addUtcDays(todayDate, 7) };
+    }
+    if (ledgerDateFilter === '30_days') {
+      return { startDate: '', endDate: addUtcDays(todayDate, 30) };
+    }
+    if (ledgerDateFilter === '60_days') {
+      return { startDate: '', endDate: addUtcDays(todayDate, 60) };
+    }
+    if (ledgerDateFilter === '90_days') {
+      return { startDate: '', endDate: addUtcDays(todayDate, 90) };
+    }
+    return {
+      startDate: '',
+      endDate: `${todayDate.slice(0, 4)}-12-31`,
+    };
+  }, [customLedgerEndDate, customLedgerStartDate, ledgerDateFilter, todayDate]);
   const ledgerSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.ledger), [listSearchQueryByTab.ledger]);
   const ledgerRowsBase = React.useMemo(() => (
     filteredTransactions.filter((tx) => {
@@ -626,9 +689,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       const isReconciled = Number(tx.is_reconciled || 0) === 1;
       const isPendingBank = Number(tx.pending_status || 0) === 1;
       const isUpcomingRecurring = String(tx.source_kind || '') === 'recurring' && effectiveDate >= todayDate && !isPaid;
+      const isRecurringBeyondCurrentMonth = String(tx.source_kind || '') === 'recurring' && effectiveDate > planningMonthEndDate && !isPaid;
       const isLate = !isPaid && Boolean(effectiveDate) && effectiveDate < todayDate;
       const isUpcomingUnpaid = !isPaid && Boolean(effectiveDate) && effectiveDate >= todayDate;
+      if (!isDateInRange(effectiveDate, ledgerDateRange)) {
+        return false;
+      }
       switch (ledgerFilterPreset) {
+        case 'planning':
+          return !isRecurringBeyondCurrentMonth;
         case 'hide_upcoming_recurring':
           return !isUpcomingRecurring;
         case 'hide_reconciled':
@@ -652,7 +721,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           return true;
       }
     })
-  ), [filteredTransactions, ledgerFilterPreset, todayDate]);
+  ), [filteredTransactions, ledgerDateRange, ledgerFilterPreset, planningMonthEndDate, todayDate]);
   const ledgerRows = React.useMemo(() => (
     ledgerRowsBase.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
       tx.transaction_date,
@@ -736,6 +805,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [filteredTransactions]);
   const payBillsDateRange = React.useMemo(() => {
     const startDate = '';
+    if (payBillsDateFilter === 'all_dates') {
+      return { startDate, endDate: '' };
+    }
     if (payBillsDateFilter === 'custom') {
       return {
         startDate: customPayBillsStartDate || '',
@@ -927,6 +999,60 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'lastSync', index: 2, fallback: 156, header: 'Last Sync' },
     { key: 'actions', index: 3, fallback: 88, header: 'Actions' },
   ], [syncTableRef, bankConnections, busy]);
+  const renderDateRangeControls = React.useCallback((
+    prefix: 'ledger' | 'pay-bills',
+    filter: DateRangeFilter,
+    setFilter: (value: DateRangeFilter) => void,
+    customStartDate: string,
+    setCustomStartDate: (value: string) => void,
+    customEndDate: string,
+    setCustomEndDate: (value: string) => void,
+    includeAllDates = false,
+  ) => (
+    <div className="accumul8-panel-toolbar-range d-flex flex-wrap align-items-end gap-2">
+      <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
+        <label className="visually-hidden" htmlFor={`accumul8-${prefix}-range`}>Date Range</label>
+        <select
+          id={`accumul8-${prefix}-range`}
+          className={getActiveFilterClass('form-select form-select-sm accumul8-panel-toolbar-range-select', includeAllDates ? filter !== 'all_dates' : filter !== '30_days')}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as DateRangeFilter)}
+          aria-label="Date range"
+        >
+          {includeAllDates ? <option value="all_dates">All Dates</option> : null}
+          {DATE_RANGE_FILTER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+      {filter === 'custom' && (
+        <>
+          <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
+            <label className="visually-hidden" htmlFor={`accumul8-${prefix}-start`}>Start date</label>
+            <input
+              id={`accumul8-${prefix}-start`}
+              className={getActiveFilterClass('form-control form-control-sm', customStartDate.trim() !== '')}
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              aria-label="Start date"
+            />
+          </div>
+          <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
+            <label className="visually-hidden" htmlFor={`accumul8-${prefix}-end`}>End date</label>
+            <input
+              id={`accumul8-${prefix}-end`}
+              className={getActiveFilterClass('form-control form-control-sm', customEndDate.trim() !== '')}
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              aria-label="End date"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  ), []);
   const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
     setSyncHelpToken(String(opts?.token || ''));
     setSyncHelpError(String(opts?.error || ''));
@@ -2071,9 +2197,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar">
                 <h3 className="mb-0">Ledger</h3>
+                {renderDateRangeControls(
+                  'ledger',
+                  ledgerDateFilter,
+                  setLedgerDateFilter,
+                  customLedgerStartDate,
+                  setCustomLedgerStartDate,
+                  customLedgerEndDate,
+                  setCustomLedgerEndDate,
+                  true,
+                )}
                 <div className="accumul8-panel-toolbar-search">
                   <select
-                    className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'all')}
+                    className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'planning')}
                     value={ledgerFilterPreset}
                     onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
                     aria-label="Ledger quick filter"
@@ -2484,7 +2620,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           {tab === 'pay_bills' && (
             <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Pay Bills Queue</h3>
+                <h3 className="mb-0">Pay Bills</h3>
+                {renderDateRangeControls(
+                  'pay-bills',
+                  payBillsDateFilter,
+                  setPayBillsDateFilter,
+                  customPayBillsStartDate,
+                  setCustomPayBillsStartDate,
+                  customPayBillsEndDate,
+                  setCustomPayBillsEndDate,
+                )}
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
@@ -2492,50 +2637,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     value={listSearchQueryByTab.pay_bills}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: e.target.value }))}
                     placeholder="Filter bill fields"
-                    aria-label="Filter pay bills queue fields"
+                    aria-label="Filter pay bills fields"
                   />
-                </div>
-                <div className="d-flex flex-wrap align-items-end gap-2">
-                  <div className="accumul8-toolbar-field">
-                    <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-range">Date Range</label>
-                    <select
-                      id="accumul8-pay-bills-range"
-                      className={getActiveFilterClass('form-select form-select-sm', payBillsDateFilter !== '30_days')}
-                      value={payBillsDateFilter}
-                      onChange={(e) => setPayBillsDateFilter(e.target.value as PayBillsDateFilter)}
-                    >
-                      <option value="7_days">7 Days</option>
-                      <option value="30_days">30 Days</option>
-                      <option value="60_days">60 Days</option>
-                      <option value="90_days">90 Days</option>
-                      <option value="eoy">EOY</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                  </div>
-                  {payBillsDateFilter === 'custom' && (
-                    <>
-                      <div className="accumul8-toolbar-field">
-                        <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-start">Start</label>
-                        <input
-                          id="accumul8-pay-bills-start"
-                          className={getActiveFilterClass('form-control form-control-sm', customPayBillsStartDate.trim() !== '')}
-                          type="date"
-                          value={customPayBillsStartDate}
-                          onChange={(e) => setCustomPayBillsStartDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="accumul8-toolbar-field">
-                        <label className="form-label form-label-sm mb-1" htmlFor="accumul8-pay-bills-end">End</label>
-                        <input
-                          id="accumul8-pay-bills-end"
-                          className={getActiveFilterClass('form-control form-control-sm', customPayBillsEndDate.trim() !== '')}
-                          type="date"
-                          value={customPayBillsEndDate}
-                          onChange={(e) => setCustomPayBillsEndDate(e.target.value)}
-                        />
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">

@@ -243,8 +243,9 @@
 }
 
 .accumul8-page-title-row {
+  --accumul8-header-side-width: clamp(148px, 14vw, 196px);
   display: grid;
-  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr) clamp(86px, 10vw, 132px);
+  grid-template-columns: var(--accumul8-header-side-width) minmax(0, 1fr) var(--accumul8-header-side-width);
   align-items: start;
   column-gap: 0.9rem;
   row-gap: 0.75rem;
@@ -306,9 +307,9 @@
 .accumul8-title-mark {
   display: flex;
   align-items: center;
-  width: 100%;
+  width: var(--accumul8-header-side-width);
   max-width: 100%;
-  min-width: 168px;
+  min-width: 0;
   margin-top: 0;
   min-height: clamp(78px, 9vw, 132px);
   align-self: flex-start;
@@ -316,14 +317,16 @@
 
 .accumul8-title-mark-picture {
   display: flex;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   min-height: inherit;
   align-items: center;
 }
 
 .accumul8-title-mark-image {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
   max-height: clamp(78px, 9vw, 132px);
   object-fit: contain;
@@ -465,7 +468,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: 100%;
+  width: var(--accumul8-header-side-width);
+  max-width: 100%;
   min-width: 0;
   align-self: center;
   text-decoration: none;

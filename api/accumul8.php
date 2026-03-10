@@ -100,6 +100,54 @@ function accumul8_validate_enum(string $fieldName, $value, array $allowed, strin
     return $v;
 }
 
+function accumul8_normalize_optional_url($value, int $maxLen = 2048): string
+{
+    $url = trim((string)$value);
+    if ($url === '') {
+        return '';
+    }
+    if (strlen($url) > $maxLen) {
+        $url = substr($url, 0, $maxLen);
+    }
+    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid URL'], 400);
+    }
+    return $url;
+}
+
+function accumul8_normalize_optional_email($value, int $maxLen = 191): string
+{
+    $email = accumul8_normalize_text($value, $maxLen);
+    if ($email === '') {
+        return '';
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid email'], 400);
+    }
+    return $email;
+}
+
+function accumul8_normalize_optional_day_of_month($value, string $fieldName): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    $day = (int)$value;
+    if ($day < 1 || $day > 31) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid ' . $fieldName], 400);
+    }
+    return $day;
+}
+
+function accumul8_normalize_decimal_value($value, string $fieldName): float
+{
+    $amount = accumul8_normalize_amount($value);
+    if (!is_finite($amount)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid ' . $fieldName], 400);
+    }
+    return $amount;
+}
+
 function accumul8_extract_json_from_text(string $content): string
 {
     $content = trim($content);
@@ -2646,7 +2694,13 @@ function accumul8_tables_ensure(): void
         owner_user_id INT NOT NULL,
         group_name VARCHAR(191) NOT NULL,
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        website_url VARCHAR(2048) NOT NULL DEFAULT '',
         login_url VARCHAR(2048) NOT NULL DEFAULT '',
+        support_url VARCHAR(2048) NOT NULL DEFAULT '',
+        support_phone VARCHAR(32) NOT NULL DEFAULT '',
+        support_email VARCHAR(191) NOT NULL DEFAULT '',
+        routing_number VARCHAR(32) NOT NULL DEFAULT '',
+        mailing_address VARCHAR(255) NOT NULL DEFAULT '',
         icon_path VARCHAR(512) NOT NULL DEFAULT '',
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -2662,9 +2716,23 @@ function accumul8_tables_ensure(): void
         owner_user_id INT NOT NULL,
         account_group_id INT NULL,
         account_name VARCHAR(191) NOT NULL,
+        account_nickname VARCHAR(191) NOT NULL DEFAULT '',
         account_type VARCHAR(40) NOT NULL DEFAULT 'checking',
+        account_subtype VARCHAR(64) NOT NULL DEFAULT '',
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        account_number_mask VARCHAR(32) NOT NULL DEFAULT '',
         mask_last4 VARCHAR(8) NOT NULL DEFAULT '',
+        routing_number VARCHAR(32) NOT NULL DEFAULT '',
+        currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+        statement_day_of_month TINYINT UNSIGNED NULL,
+        payment_due_day_of_month TINYINT UNSIGNED NULL,
+        autopay_enabled TINYINT(1) NOT NULL DEFAULT 0,
+        credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        interest_rate DECIMAL(7,4) NOT NULL DEFAULT 0.0000,
+        minimum_payment DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        opened_on DATE NULL,
+        closed_on DATE NULL,
+        notes TEXT NULL,
         current_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         available_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -2939,28 +3007,71 @@ function accumul8_tables_ensure(): void
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
         $hadBudgetPlannerColumn = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'website_url', "VARCHAR(2048) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_account_groups', 'login_url', "VARCHAR(2048) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'support_url', "VARCHAR(2048) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'support_phone', "VARCHAR(32) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'support_email', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'routing_number', "VARCHAR(32) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'mailing_address', "VARCHAR(255) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_account_groups', 'icon_path', "VARCHAR(512) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'account_group_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'account_nickname', "VARCHAR(191) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'account_type', "VARCHAR(40) NOT NULL DEFAULT 'checking'");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'account_subtype', "VARCHAR(64) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'institution_name', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'account_number_mask', "VARCHAR(32) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'routing_number', "VARCHAR(32) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'currency_code', "VARCHAR(3) NOT NULL DEFAULT 'USD'");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'statement_day_of_month', 'TINYINT UNSIGNED NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'payment_due_day_of_month', 'TINYINT UNSIGNED NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'autopay_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'credit_limit', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'interest_rate', 'DECIMAL(7,4) NOT NULL DEFAULT 0.0000');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'minimum_payment', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'opened_on', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'closed_on', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'notes', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'available_balance', "DECIMAL(10,2) NOT NULL DEFAULT 0.00");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
         Database::execute(
             "UPDATE accumul8_account_groups
-             SET login_url = CASE
+             SET website_url = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' AND COALESCE(website_url, '') = '' THEN 'https://www.navyfederal.org/'
+                    WHEN group_name = 'Capital One 360' AND COALESCE(website_url, '') = '' THEN 'https://www.capitalone.com/bank/'
+                    ELSE website_url
+                 END,
+                 login_url = CASE
                     WHEN group_name = 'Navy Federal Credit Union' THEN 'https://digitalomni.navyfederal.org/sign-in/?NFCUSIGNOFF=2'
                     WHEN group_name = 'Capital One 360' THEN 'https://verified.capitalone.com/auth/signin?Product=ENTERPRISE&goto_url=https:%2F%2Fmyaccounts.capitalone.com%2F%23%2Fwelcome#/welcome'
                     ELSE login_url
+                 END,
+                 support_url = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' AND COALESCE(support_url, '') = '' THEN 'https://www.navyfederal.org/contact-us/phone-numbers.html'
+                    WHEN group_name = 'Capital One 360' AND COALESCE(support_url, '') = '' THEN 'https://www.capitalone.com/bank/customer-service/'
+                    ELSE support_url
+                 END,
+                 support_phone = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' AND COALESCE(support_phone, '') = '' THEN '1-888-842-6328'
+                    WHEN group_name = 'Capital One 360' AND COALESCE(support_phone, '') = '' THEN '800-655-2265'
+                    ELSE support_phone
+                 END,
+                 routing_number = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' AND COALESCE(routing_number, '') = '' THEN '256074974'
+                    ELSE routing_number
+                 END,
+                 mailing_address = CASE
+                    WHEN group_name = 'Navy Federal Credit Union' AND COALESCE(mailing_address, '') = '' THEN '820 Follin Lane SE, Vienna, VA 22180'
+                    WHEN group_name = 'Capital One 360' AND COALESCE(mailing_address, '') = '' THEN 'Capital One Bank, Attn: Bank by Mail, PO BOX 85123, Richmond VA 23285'
+                    ELSE mailing_address
                  END,
                  icon_path = CASE
                     WHEN group_name = 'Navy Federal Credit Union' THEN '/images/bank-organizations/navy-federal-credit-union-1024.png'
                     WHEN group_name = 'Capital One 360' THEN '/images/bank-organizations/capital-one-360-1024.png'
                     ELSE icon_path
                  END
-             WHERE (COALESCE(login_url, '') = '' OR COALESCE(icon_path, '') = '')
-               AND group_name IN ('Navy Federal Credit Union', 'Capital One 360')"
+             WHERE group_name IN ('Navy Federal Credit Union', 'Capital One 360')"
         );
         if (!accumul8_table_has_index('accumul8_accounts', 'idx_accumul8_accounts_group')) {
             Database::execute('ALTER TABLE accumul8_accounts ADD INDEX idx_accumul8_accounts_group (account_group_id)');
@@ -3190,10 +3301,16 @@ function accumul8_list_banking_organizations(int $viewerId): array
         return [];
     }
 
+    $websiteUrlSelect = accumul8_optional_select('accumul8_account_groups', 'website_url', 'website_url', "'' AS website_url");
     $loginUrlSelect = accumul8_optional_select('accumul8_account_groups', 'login_url', 'login_url', "'' AS login_url");
+    $supportUrlSelect = accumul8_optional_select('accumul8_account_groups', 'support_url', 'support_url', "'' AS support_url");
+    $supportPhoneSelect = accumul8_optional_select('accumul8_account_groups', 'support_phone', 'support_phone', "'' AS support_phone");
+    $supportEmailSelect = accumul8_optional_select('accumul8_account_groups', 'support_email', 'support_email', "'' AS support_email");
+    $routingNumberSelect = accumul8_optional_select('accumul8_account_groups', 'routing_number', 'routing_number', "'' AS routing_number");
+    $mailingAddressSelect = accumul8_optional_select('accumul8_account_groups', 'mailing_address', 'mailing_address', "'' AS mailing_address");
     $iconPathSelect = accumul8_optional_select('accumul8_account_groups', 'icon_path', 'icon_path', "'' AS icon_path");
     $rows = Database::queryAll(
-        'SELECT id, group_name, institution_name, ' . $loginUrlSelect . ', ' . $iconPathSelect . ', COALESCE(notes, "") AS notes, is_active
+        'SELECT id, group_name, institution_name, ' . $websiteUrlSelect . ', ' . $loginUrlSelect . ', ' . $supportUrlSelect . ', ' . $supportPhoneSelect . ', ' . $supportEmailSelect . ', ' . $routingNumberSelect . ', ' . $mailingAddressSelect . ', ' . $iconPathSelect . ', COALESCE(notes, "") AS notes, is_active
          FROM accumul8_account_groups
          WHERE owner_user_id = ?
          ORDER BY is_active DESC, group_name ASC, id ASC',
@@ -3205,7 +3322,13 @@ function accumul8_list_banking_organizations(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'banking_organization_name' => (string)($r['group_name'] ?? ''),
             'institution_name' => (string)($r['institution_name'] ?? ''),
+            'website_url' => (string)($r['website_url'] ?? ''),
             'login_url' => (string)($r['login_url'] ?? ''),
+            'support_url' => (string)($r['support_url'] ?? ''),
+            'support_phone' => (string)($r['support_phone'] ?? ''),
+            'support_email' => (string)($r['support_email'] ?? ''),
+            'routing_number' => (string)($r['routing_number'] ?? ''),
+            'mailing_address' => (string)($r['mailing_address'] ?? ''),
             'icon_path' => (string)($r['icon_path'] ?? ''),
             'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
@@ -3401,14 +3524,28 @@ function accumul8_list_recurring(int $viewerId): array
 function accumul8_list_accounts(int $viewerId): array
 {
     $bankingOrganizationIdSelect = accumul8_optional_select('accumul8_accounts', 'account_group_id', 'a.account_group_id', 'NULL AS account_group_id');
+    $accountNicknameSelect = accumul8_optional_select('accumul8_accounts', 'account_nickname', 'a.account_nickname', "'' AS account_nickname");
     $accountTypeSelect = accumul8_optional_select('accumul8_accounts', 'account_type', 'a.account_type', "'checking' AS account_type");
+    $accountSubtypeSelect = accumul8_optional_select('accumul8_accounts', 'account_subtype', 'a.account_subtype', "'' AS account_subtype");
     $institutionNameSelect = accumul8_optional_select('accumul8_accounts', 'institution_name', 'a.institution_name', "'' AS institution_name");
+    $accountNumberMaskSelect = accumul8_optional_select('accumul8_accounts', 'account_number_mask', 'a.account_number_mask', "'' AS account_number_mask");
     $maskLast4Select = accumul8_optional_select('accumul8_accounts', 'mask_last4', 'a.mask_last4', "'' AS mask_last4");
+    $routingNumberSelect = accumul8_optional_select('accumul8_accounts', 'routing_number', 'a.routing_number', "'' AS routing_number");
+    $currencyCodeSelect = accumul8_optional_select('accumul8_accounts', 'currency_code', 'a.currency_code', "'USD' AS currency_code");
+    $statementDaySelect = accumul8_optional_select('accumul8_accounts', 'statement_day_of_month', 'a.statement_day_of_month', 'NULL AS statement_day_of_month');
+    $paymentDueDaySelect = accumul8_optional_select('accumul8_accounts', 'payment_due_day_of_month', 'a.payment_due_day_of_month', 'NULL AS payment_due_day_of_month');
+    $autopayEnabledSelect = accumul8_optional_select('accumul8_accounts', 'autopay_enabled', 'a.autopay_enabled', '0 AS autopay_enabled');
+    $creditLimitSelect = accumul8_optional_select('accumul8_accounts', 'credit_limit', 'a.credit_limit', '0.00 AS credit_limit');
+    $interestRateSelect = accumul8_optional_select('accumul8_accounts', 'interest_rate', 'a.interest_rate', '0.0000 AS interest_rate');
+    $minimumPaymentSelect = accumul8_optional_select('accumul8_accounts', 'minimum_payment', 'a.minimum_payment', '0.00 AS minimum_payment');
+    $openedOnSelect = accumul8_optional_select('accumul8_accounts', 'opened_on', 'a.opened_on', 'NULL AS opened_on');
+    $closedOnSelect = accumul8_optional_select('accumul8_accounts', 'closed_on', 'a.closed_on', 'NULL AS closed_on');
+    $notesSelect = accumul8_optional_select('accumul8_accounts', 'notes', 'a.notes', "'' AS notes");
     $availableBalanceSelect = accumul8_optional_select('accumul8_accounts', 'available_balance', 'a.available_balance', 'a.current_balance AS available_balance');
     $isActiveSelect = accumul8_optional_select('accumul8_accounts', 'is_active', 'a.is_active', '1 AS is_active');
 
     $rows = Database::queryAll(
-        'SELECT a.id, ' . $bankingOrganizationIdSelect . ', a.account_name, ' . $accountTypeSelect . ', ' . $institutionNameSelect . ', ' . $maskLast4Select . ',
+        'SELECT a.id, ' . $bankingOrganizationIdSelect . ', a.account_name, ' . $accountNicknameSelect . ', ' . $accountTypeSelect . ', ' . $accountSubtypeSelect . ', ' . $institutionNameSelect . ', ' . $accountNumberMaskSelect . ', ' . $maskLast4Select . ', ' . $routingNumberSelect . ', ' . $currencyCodeSelect . ', ' . $statementDaySelect . ', ' . $paymentDueDaySelect . ', ' . $autopayEnabledSelect . ', ' . $creditLimitSelect . ', ' . $interestRateSelect . ', ' . $minimumPaymentSelect . ', ' . $openedOnSelect . ', ' . $closedOnSelect . ', ' . $notesSelect . ',
                 a.current_balance, ' . $availableBalanceSelect . ', ' . $isActiveSelect . ', COALESCE(ag.group_name, "") AS banking_organization_name
          FROM accumul8_accounts a
          LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = a.owner_user_id
@@ -3422,10 +3559,24 @@ function accumul8_list_accounts(int $viewerId): array
             'id' => (int)($r['id'] ?? 0),
             'banking_organization_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
             'account_name' => (string)($r['account_name'] ?? ''),
+            'account_nickname' => (string)($r['account_nickname'] ?? ''),
             'banking_organization_name' => (string)($r['banking_organization_name'] ?? ''),
             'account_type' => (string)($r['account_type'] ?? 'checking'),
+            'account_subtype' => (string)($r['account_subtype'] ?? ''),
             'institution_name' => (string)($r['institution_name'] ?? ''),
+            'account_number_mask' => (string)($r['account_number_mask'] ?? ''),
             'mask_last4' => (string)($r['mask_last4'] ?? ''),
+            'routing_number' => (string)($r['routing_number'] ?? ''),
+            'currency_code' => (string)($r['currency_code'] ?? 'USD'),
+            'statement_day_of_month' => isset($r['statement_day_of_month']) ? (int)$r['statement_day_of_month'] : null,
+            'payment_due_day_of_month' => isset($r['payment_due_day_of_month']) ? (int)$r['payment_due_day_of_month'] : null,
+            'autopay_enabled' => (int)($r['autopay_enabled'] ?? 0),
+            'credit_limit' => (float)($r['credit_limit'] ?? 0),
+            'interest_rate' => (float)($r['interest_rate'] ?? 0),
+            'minimum_payment' => (float)($r['minimum_payment'] ?? 0),
+            'opened_on' => isset($r['opened_on']) && $r['opened_on'] !== null ? (string)$r['opened_on'] : '',
+            'closed_on' => isset($r['closed_on']) && $r['closed_on'] !== null ? (string)$r['closed_on'] : '',
+            'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'current_balance' => (float)($r['current_balance'] ?? 0),
             'available_balance' => (float)($r['available_balance'] ?? 0),
             'is_active' => (int)($r['is_active'] ?? 0),
@@ -5392,7 +5543,13 @@ if ($action === 'create_banking_organization') {
 
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
-    $loginUrl = trim((string)($body['login_url'] ?? ''));
+    $websiteUrl = accumul8_normalize_optional_url($body['website_url'] ?? '', 2048);
+    $loginUrl = accumul8_normalize_optional_url($body['login_url'] ?? '', 2048);
+    $supportUrl = accumul8_normalize_optional_url($body['support_url'] ?? '', 2048);
+    $supportPhone = accumul8_normalize_text($body['support_phone'] ?? '', 32);
+    $supportEmail = accumul8_normalize_optional_email($body['support_email'] ?? '', 191);
+    $routingNumber = accumul8_normalize_text($body['routing_number'] ?? '', 32);
+    $mailingAddress = accumul8_normalize_text($body['mailing_address'] ?? '', 255);
     $iconPath = accumul8_normalize_text($body['icon_path'] ?? '', 512);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
@@ -5400,17 +5557,14 @@ if ($action === 'create_banking_organization') {
     if ($groupName === '') {
         catn8_json_response(['success' => false, 'error' => 'banking_organization_name is required'], 400);
     }
-    if ($loginUrl !== '' && !filter_var($loginUrl, FILTER_VALIDATE_URL)) {
-        catn8_json_response(['success' => false, 'error' => 'login_url must be a valid URL'], 400);
-    }
     if ($iconPath !== '' && !preg_match('#^/(?:[A-Za-z0-9._/-]+)$#', $iconPath)) {
         catn8_json_response(['success' => false, 'error' => 'icon_path must be a site-relative asset path'], 400);
     }
 
     Database::execute(
-        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, login_url, icon_path, notes, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$viewerId, $groupName, $institutionName, $loginUrl, $iconPath, $notes === '' ? null : $notes, $isActive]
+        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, website_url, login_url, support_url, support_phone, support_email, routing_number, mailing_address, icon_path, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$viewerId, $groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive]
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
@@ -5423,7 +5577,13 @@ if ($action === 'update_banking_organization') {
     $id = (int)($body['id'] ?? 0);
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
-    $loginUrl = trim((string)($body['login_url'] ?? ''));
+    $websiteUrl = accumul8_normalize_optional_url($body['website_url'] ?? '', 2048);
+    $loginUrl = accumul8_normalize_optional_url($body['login_url'] ?? '', 2048);
+    $supportUrl = accumul8_normalize_optional_url($body['support_url'] ?? '', 2048);
+    $supportPhone = accumul8_normalize_text($body['support_phone'] ?? '', 32);
+    $supportEmail = accumul8_normalize_optional_email($body['support_email'] ?? '', 191);
+    $routingNumber = accumul8_normalize_text($body['routing_number'] ?? '', 32);
+    $mailingAddress = accumul8_normalize_text($body['mailing_address'] ?? '', 255);
     $iconPath = accumul8_normalize_text($body['icon_path'] ?? '', 512);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
@@ -5434,9 +5594,6 @@ if ($action === 'update_banking_organization') {
     if ($groupName === '') {
         catn8_json_response(['success' => false, 'error' => 'banking_organization_name is required'], 400);
     }
-    if ($loginUrl !== '' && !filter_var($loginUrl, FILTER_VALIDATE_URL)) {
-        catn8_json_response(['success' => false, 'error' => 'login_url must be a valid URL'], 400);
-    }
     if ($iconPath !== '' && !preg_match('#^/(?:[A-Za-z0-9._/-]+)$#', $iconPath)) {
         catn8_json_response(['success' => false, 'error' => 'icon_path must be a site-relative asset path'], 400);
     }
@@ -5445,9 +5602,9 @@ if ($action === 'update_banking_organization') {
 
     Database::execute(
         'UPDATE accumul8_account_groups
-         SET group_name = ?, institution_name = ?, login_url = ?, icon_path = ?, notes = ?, is_active = ?
+         SET group_name = ?, institution_name = ?, website_url = ?, login_url = ?, support_url = ?, support_phone = ?, support_email = ?, routing_number = ?, mailing_address = ?, icon_path = ?, notes = ?, is_active = ?
          WHERE id = ? AND owner_user_id = ?',
-        [$groupName, $institutionName, $loginUrl, $iconPath, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
+        [$groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
 
     catn8_json_response(['success' => true]);
@@ -5478,20 +5635,37 @@ if ($action === 'create_account') {
     $accountName = accumul8_normalize_text($body['account_name'] ?? '', 191);
     $accountGroupId = isset($body['banking_organization_id']) ? (int)$body['banking_organization_id'] : 0;
     $accountGroupIdOrNull = $accountGroupId > 0 ? accumul8_require_owned_id('account_groups', $viewerId, $accountGroupId) : null;
+    $accountNickname = accumul8_normalize_text($body['account_nickname'] ?? '', 191);
     $accountType = accumul8_validate_account_type($body['account_type'] ?? 'checking');
+    $accountSubtype = accumul8_normalize_text($body['account_subtype'] ?? '', 64);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $accountNumberMask = accumul8_normalize_text($body['account_number_mask'] ?? '', 32);
     $maskLast4 = accumul8_normalize_text($body['mask_last4'] ?? '', 8);
+    $routingNumber = accumul8_normalize_text($body['routing_number'] ?? '', 32);
+    $currencyCode = strtoupper(accumul8_normalize_text($body['currency_code'] ?? 'USD', 3));
+    $statementDayOfMonth = accumul8_normalize_optional_day_of_month($body['statement_day_of_month'] ?? null, 'statement_day_of_month');
+    $paymentDueDayOfMonth = accumul8_normalize_optional_day_of_month($body['payment_due_day_of_month'] ?? null, 'payment_due_day_of_month');
+    $autopayEnabled = accumul8_normalize_bool($body['autopay_enabled'] ?? 0);
+    $creditLimit = accumul8_normalize_decimal_value($body['credit_limit'] ?? 0, 'credit_limit');
+    $interestRate = accumul8_normalize_decimal_value($body['interest_rate'] ?? 0, 'interest_rate');
+    $minimumPayment = accumul8_normalize_decimal_value($body['minimum_payment'] ?? 0, 'minimum_payment');
+    $openedOn = accumul8_normalize_date($body['opened_on'] ?? null);
+    $closedOn = accumul8_normalize_date($body['closed_on'] ?? null);
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
 
     if ($accountName === '') {
         catn8_json_response(['success' => false, 'error' => 'account_name is required'], 400);
     }
+    if ($currencyCode === '' || !preg_match('/^[A-Z]{3}$/', $currencyCode)) {
+        catn8_json_response(['success' => false, 'error' => 'currency_code must be a 3-letter code'], 400);
+    }
 
     Database::execute(
         'INSERT INTO accumul8_accounts
-            (owner_user_id, account_group_id, account_name, account_type, institution_name, mask_last4, current_balance, available_balance, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, 0.00, 0.00, ?)',
-        [$viewerId, $accountGroupIdOrNull, $accountName, $accountType, $institutionName, $maskLast4, $isActive]
+            (owner_user_id, account_group_id, account_name, account_nickname, account_type, account_subtype, institution_name, account_number_mask, mask_last4, routing_number, currency_code, statement_day_of_month, payment_due_day_of_month, autopay_enabled, credit_limit, interest_rate, minimum_payment, opened_on, closed_on, notes, current_balance, available_balance, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?)',
+        [$viewerId, $accountGroupIdOrNull, $accountName, $accountNickname, $accountType, $accountSubtype, $institutionName, $accountNumberMask, $maskLast4, $routingNumber, $currencyCode, $statementDayOfMonth, $paymentDueDayOfMonth, $autopayEnabled, $creditLimit, $interestRate, $minimumPayment, $openedOn, $closedOn, $notes === '' ? null : $notes, $isActive]
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
@@ -5505,9 +5679,23 @@ if ($action === 'update_account') {
     $accountName = accumul8_normalize_text($body['account_name'] ?? '', 191);
     $accountGroupId = isset($body['banking_organization_id']) ? (int)$body['banking_organization_id'] : 0;
     $accountGroupIdOrNull = $accountGroupId > 0 ? accumul8_require_owned_id('account_groups', $viewerId, $accountGroupId) : null;
+    $accountNickname = accumul8_normalize_text($body['account_nickname'] ?? '', 191);
     $accountType = accumul8_validate_account_type($body['account_type'] ?? 'checking');
+    $accountSubtype = accumul8_normalize_text($body['account_subtype'] ?? '', 64);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $accountNumberMask = accumul8_normalize_text($body['account_number_mask'] ?? '', 32);
     $maskLast4 = accumul8_normalize_text($body['mask_last4'] ?? '', 8);
+    $routingNumber = accumul8_normalize_text($body['routing_number'] ?? '', 32);
+    $currencyCode = strtoupper(accumul8_normalize_text($body['currency_code'] ?? 'USD', 3));
+    $statementDayOfMonth = accumul8_normalize_optional_day_of_month($body['statement_day_of_month'] ?? null, 'statement_day_of_month');
+    $paymentDueDayOfMonth = accumul8_normalize_optional_day_of_month($body['payment_due_day_of_month'] ?? null, 'payment_due_day_of_month');
+    $autopayEnabled = accumul8_normalize_bool($body['autopay_enabled'] ?? 0);
+    $creditLimit = accumul8_normalize_decimal_value($body['credit_limit'] ?? 0, 'credit_limit');
+    $interestRate = accumul8_normalize_decimal_value($body['interest_rate'] ?? 0, 'interest_rate');
+    $minimumPayment = accumul8_normalize_decimal_value($body['minimum_payment'] ?? 0, 'minimum_payment');
+    $openedOn = accumul8_normalize_date($body['opened_on'] ?? null);
+    $closedOn = accumul8_normalize_date($body['closed_on'] ?? null);
+    $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
 
     if ($id <= 0) {
@@ -5516,14 +5704,17 @@ if ($action === 'update_account') {
     if ($accountName === '') {
         catn8_json_response(['success' => false, 'error' => 'account_name is required'], 400);
     }
+    if ($currencyCode === '' || !preg_match('/^[A-Z]{3}$/', $currencyCode)) {
+        catn8_json_response(['success' => false, 'error' => 'currency_code must be a 3-letter code'], 400);
+    }
 
     accumul8_require_owned_id('accounts', $viewerId, $id);
 
     Database::execute(
         'UPDATE accumul8_accounts
-         SET account_group_id = ?, account_name = ?, account_type = ?, institution_name = ?, mask_last4 = ?, is_active = ?
+         SET account_group_id = ?, account_name = ?, account_nickname = ?, account_type = ?, account_subtype = ?, institution_name = ?, account_number_mask = ?, mask_last4 = ?, routing_number = ?, currency_code = ?, statement_day_of_month = ?, payment_due_day_of_month = ?, autopay_enabled = ?, credit_limit = ?, interest_rate = ?, minimum_payment = ?, opened_on = ?, closed_on = ?, notes = ?, is_active = ?
          WHERE id = ? AND owner_user_id = ?',
-        [$accountGroupIdOrNull, $accountName, $accountType, $institutionName, $maskLast4, $isActive, $id, $viewerId]
+        [$accountGroupIdOrNull, $accountName, $accountNickname, $accountType, $accountSubtype, $institutionName, $accountNumberMask, $maskLast4, $routingNumber, $currencyCode, $statementDayOfMonth, $paymentDueDayOfMonth, $autopayEnabled, $creditLimit, $interestRate, $minimumPayment, $openedOn, $closedOn, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
 
     catn8_json_response(['success' => true]);

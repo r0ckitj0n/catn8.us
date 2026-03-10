@@ -490,7 +490,13 @@ function accumul8_import_ensure_schema(): void
         owner_user_id INT NOT NULL,
         group_name VARCHAR(191) NOT NULL,
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        website_url VARCHAR(2048) NOT NULL DEFAULT '',
         login_url VARCHAR(2048) NOT NULL DEFAULT '',
+        support_url VARCHAR(2048) NOT NULL DEFAULT '',
+        support_phone VARCHAR(32) NOT NULL DEFAULT '',
+        support_email VARCHAR(191) NOT NULL DEFAULT '',
+        routing_number VARCHAR(32) NOT NULL DEFAULT '',
+        mailing_address VARCHAR(255) NOT NULL DEFAULT '',
         icon_path VARCHAR(512) NOT NULL DEFAULT '',
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -499,9 +505,57 @@ function accumul8_import_ensure_schema(): void
         UNIQUE KEY uniq_accumul8_account_group_owner_name (owner_user_id, group_name),
         KEY idx_accumul8_account_groups_owner (owner_user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        account_group_id INT NULL,
+        account_name VARCHAR(191) NOT NULL,
+        account_nickname VARCHAR(191) NOT NULL DEFAULT '',
+        account_type VARCHAR(40) NOT NULL DEFAULT 'checking',
+        account_subtype VARCHAR(64) NOT NULL DEFAULT '',
+        institution_name VARCHAR(191) NOT NULL DEFAULT '',
+        account_number_mask VARCHAR(32) NOT NULL DEFAULT '',
+        mask_last4 VARCHAR(8) NOT NULL DEFAULT '',
+        routing_number VARCHAR(32) NOT NULL DEFAULT '',
+        currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+        statement_day_of_month TINYINT UNSIGNED NULL,
+        payment_due_day_of_month TINYINT UNSIGNED NULL,
+        autopay_enabled TINYINT(1) NOT NULL DEFAULT 0,
+        credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        interest_rate DECIMAL(7,4) NOT NULL DEFAULT 0.0000,
+        minimum_payment DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        opened_on DATE NULL,
+        closed_on DATE NULL,
+        notes TEXT NULL,
+        current_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        available_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_accumul8_accounts_owner (owner_user_id),
+        KEY idx_accumul8_accounts_group (account_group_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $column = Database::queryOne(
         "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_accounts' AND COLUMN_NAME = 'account_group_id' LIMIT 1"
     );
+    foreach ([
+        ['website_url', "VARCHAR(2048) NOT NULL DEFAULT ''"],
+        ['login_url', "VARCHAR(2048) NOT NULL DEFAULT ''"],
+        ['support_url', "VARCHAR(2048) NOT NULL DEFAULT ''"],
+        ['support_phone', "VARCHAR(32) NOT NULL DEFAULT ''"],
+        ['support_email', "VARCHAR(191) NOT NULL DEFAULT ''"],
+        ['routing_number', "VARCHAR(32) NOT NULL DEFAULT ''"],
+        ['mailing_address', "VARCHAR(255) NOT NULL DEFAULT ''"],
+        ['icon_path', "VARCHAR(512) NOT NULL DEFAULT ''"],
+    ] as [$columnName, $definition]) {
+        $columnExists = Database::queryOne(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_account_groups' AND COLUMN_NAME = ? LIMIT 1",
+            [$columnName]
+        );
+        if (!$columnExists) {
+            Database::execute("ALTER TABLE accumul8_account_groups ADD COLUMN {$columnName} {$definition}");
+        }
+    }
     $loginColumn = Database::queryOne(
         "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_account_groups' AND COLUMN_NAME = 'login_url' LIMIT 1"
     );
@@ -516,6 +570,35 @@ function accumul8_import_ensure_schema(): void
     }
     if (!$column) {
         Database::execute('ALTER TABLE accumul8_accounts ADD COLUMN account_group_id INT NULL');
+    }
+    foreach ([
+        ['account_nickname', "VARCHAR(191) NOT NULL DEFAULT ''"],
+        ['account_type', "VARCHAR(40) NOT NULL DEFAULT 'checking'"],
+        ['account_subtype', "VARCHAR(64) NOT NULL DEFAULT ''"],
+        ['institution_name', "VARCHAR(191) NOT NULL DEFAULT ''"],
+        ['account_number_mask', "VARCHAR(32) NOT NULL DEFAULT ''"],
+        ['mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''"],
+        ['routing_number', "VARCHAR(32) NOT NULL DEFAULT ''"],
+        ['currency_code', "VARCHAR(3) NOT NULL DEFAULT 'USD'"],
+        ['statement_day_of_month', 'TINYINT UNSIGNED NULL'],
+        ['payment_due_day_of_month', 'TINYINT UNSIGNED NULL'],
+        ['autopay_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['credit_limit', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00'],
+        ['interest_rate', 'DECIMAL(7,4) NOT NULL DEFAULT 0.0000'],
+        ['minimum_payment', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00'],
+        ['opened_on', 'DATE NULL'],
+        ['closed_on', 'DATE NULL'],
+        ['notes', 'TEXT NULL'],
+        ['available_balance', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00'],
+        ['is_active', 'TINYINT(1) NOT NULL DEFAULT 1'],
+    ] as [$columnName, $definition]) {
+        $columnExists = Database::queryOne(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_accounts' AND COLUMN_NAME = ? LIMIT 1",
+            [$columnName]
+        );
+        if (!$columnExists) {
+            Database::execute("ALTER TABLE accumul8_accounts ADD COLUMN {$columnName} {$definition}");
+        }
     }
     $index = Database::queryOne(
         "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accumul8_accounts' AND INDEX_NAME = 'idx_accumul8_accounts_group' LIMIT 1"

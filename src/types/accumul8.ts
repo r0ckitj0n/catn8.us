@@ -235,7 +235,13 @@ export interface Accumul8BankingOrganization {
   id: number;
   banking_organization_name: string;
   institution_name: string;
+  website_url: string;
   login_url: string;
+  support_url: string;
+  support_phone: string;
+  support_email: string;
+  routing_number: string;
+  mailing_address: string;
   icon_path: string;
   notes: string;
   is_active: number;
@@ -244,7 +250,13 @@ export interface Accumul8BankingOrganization {
 export interface Accumul8BankingOrganizationUpsertRequest {
   banking_organization_name: string;
   institution_name?: string;
+  website_url?: string;
   login_url?: string;
+  support_url?: string;
+  support_phone?: string;
+  support_email?: string;
+  routing_number?: string;
+  mailing_address?: string;
   icon_path?: string;
   notes?: string;
   is_active?: number;
@@ -273,10 +285,24 @@ export interface Accumul8Account {
   id: number;
   banking_organization_id: number | null;
   account_name: string;
+  account_nickname: string;
   banking_organization_name: string;
   account_type: string;
+  account_subtype: string;
   institution_name: string;
+  account_number_mask: string;
   mask_last4: string;
+  routing_number: string;
+  currency_code: string;
+  statement_day_of_month: number | null;
+  payment_due_day_of_month: number | null;
+  autopay_enabled: number;
+  credit_limit: number;
+  interest_rate: number;
+  minimum_payment: number;
+  opened_on: string;
+  closed_on: string;
+  notes: string;
   current_balance: number;
   available_balance: number;
   is_active: number;
@@ -285,9 +311,23 @@ export interface Accumul8Account {
 export interface Accumul8AccountUpsertRequest {
   banking_organization_id?: number | null;
   account_name: string;
+  account_nickname?: string;
   account_type?: string;
+  account_subtype?: string;
   institution_name?: string;
+  account_number_mask?: string;
   mask_last4?: string;
+  routing_number?: string;
+  currency_code?: string;
+  statement_day_of_month?: number | null;
+  payment_due_day_of_month?: number | null;
+  autopay_enabled?: number;
+  credit_limit?: number;
+  interest_rate?: number;
+  minimum_payment?: number;
+  opened_on?: string | null;
+  closed_on?: string | null;
+  notes?: string;
   is_active?: number;
 }
 

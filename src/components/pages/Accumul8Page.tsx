@@ -11,6 +11,7 @@ import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
+  ACCUMUL8_MOVE_BUTTON_EMOJI,
   ACCUMUL8_SAVE_BUTTON_EMOJI,
   ACCUMUL8_STATEMENT_BUTTON_EMOJI,
   ACCUMUL8_VIEW_BUTTON_EMOJI,
@@ -28,6 +29,7 @@ import {
   Accumul8PlaidCreateLinkTokenResponse,
   Accumul8PlaidExchangeResponse,
   Accumul8PlaidSyncResponse,
+  Accumul8Account,
   Accumul8ContactType,
   Accumul8Direction,
   Accumul8EntryType,
@@ -243,6 +245,13 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
     return Number.isFinite(value) ? String(value) : fallback;
   }
   return String(value || '').trim() || fallback;
+}
+
+function formatAccountOptionLabel(account: Pick<Accumul8Account, 'account_name' | 'account_nickname' | 'banking_organization_name' | 'mask_last4'>): string {
+  const primaryName = formatInlineText(account.account_nickname || account.account_name, 'Unnamed account');
+  const bankingName = formatInlineText(account.banking_organization_name, '');
+  const maskLast4 = formatInlineText(account.mask_last4, '');
+  return [primaryName, bankingName, maskLast4 ? `••••${maskLast4}` : ''].filter(Boolean).join(' • ');
 }
 
 function getActiveFilterClass(baseClassName: string, isActive: boolean): string {
@@ -494,6 +503,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     createTransaction,
     updateTransaction,
     deleteTransaction,
+    moveTransactionsToAccount,
     createBudgetRow,
     updateBudgetRow,
     deleteBudgetRow,
@@ -518,6 +528,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [ledgerDateFilter, setLedgerDateFilter] = React.useState<DateRangeFilter>('all_dates');
   const [customLedgerStartDate, setCustomLedgerStartDate] = React.useState<string>('');
   const [customLedgerEndDate, setCustomLedgerEndDate] = React.useState<string>('');
+  const [ledgerMoveMode, setLedgerMoveMode] = React.useState(false);
+  const [selectedLedgerMoveIds, setSelectedLedgerMoveIds] = React.useState<number[]>([]);
+  const [ledgerMoveModalOpen, setLedgerMoveModalOpen] = React.useState(false);
+  const [ledgerMoveTargetAccountId, setLedgerMoveTargetAccountId] = React.useState<string>('');
   const [payBillsDateFilter, setPayBillsDateFilter] = React.useState<DateRangeFilter>('30_days');
   const [customPayBillsStartDate, setCustomPayBillsStartDate] = React.useState<string>('');
   const [customPayBillsEndDate, setCustomPayBillsEndDate] = React.useState<string>('');
@@ -789,6 +803,80 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
     ]))
   ), [ledgerRowsBase, ledgerSearchQuery]);
+  const ledgerMoveSelectedTransactions = React.useMemo(() => (
+    transactions.filter((tx) => selectedLedgerMoveIds.includes(tx.id))
+  ), [selectedLedgerMoveIds, transactions]);
+  const ledgerMoveAccountOptions = React.useMemo(() => (
+    accounts
+      .filter((account) => Number(account.is_active || 0) === 1)
+      .slice()
+      .sort((a, b) => formatAccountOptionLabel(a).localeCompare(formatAccountOptionLabel(b)))
+  ), [accounts]);
+  const ledgerMoveEligibleAccountOptions = React.useMemo(() => (
+    ledgerMoveAccountOptions.filter((account) => (
+      ledgerMoveSelectedTransactions.some((tx) => Number(tx.account_id || 0) !== account.id)
+    ))
+  ), [ledgerMoveAccountOptions, ledgerMoveSelectedTransactions]);
+  const resetLedgerMoveState = React.useCallback(() => {
+    setLedgerMoveMode(false);
+    setSelectedLedgerMoveIds([]);
+    setLedgerMoveModalOpen(false);
+    setLedgerMoveTargetAccountId('');
+  }, []);
+  const toggleLedgerMoveSelection = React.useCallback((transactionId: number, checked: boolean) => {
+    setSelectedLedgerMoveIds((prev) => {
+      if (checked) {
+        return prev.includes(transactionId) ? prev : [...prev, transactionId];
+      }
+      return prev.filter((id) => id !== transactionId);
+    });
+  }, []);
+  const openLedgerMoveModal = React.useCallback(() => {
+    if (selectedLedgerMoveIds.length === 0) {
+      resetLedgerMoveState();
+      return;
+    }
+    setLedgerMoveTargetAccountId((current) => {
+      if (current && ledgerMoveEligibleAccountOptions.some((account) => String(account.id) === current)) {
+        return current;
+      }
+      return ledgerMoveEligibleAccountOptions[0] ? String(ledgerMoveEligibleAccountOptions[0].id) : '';
+    });
+    setLedgerMoveModalOpen(true);
+  }, [ledgerMoveEligibleAccountOptions, resetLedgerMoveState, selectedLedgerMoveIds.length]);
+  const handleLedgerMoveButtonClick = React.useCallback(() => {
+    if (!ledgerMoveMode) {
+      setLedgerMoveMode(true);
+      setLedgerMoveModalOpen(false);
+      return;
+    }
+    openLedgerMoveModal();
+  }, [ledgerMoveMode, openLedgerMoveModal]);
+  const submitLedgerMove = React.useCallback(async () => {
+    const destinationAccountId = Number(ledgerMoveTargetAccountId || 0);
+    if (selectedLedgerMoveIds.length === 0 || destinationAccountId <= 0) {
+      return;
+    }
+    await moveTransactionsToAccount({
+      transaction_ids: selectedLedgerMoveIds,
+      account_id: destinationAccountId,
+    });
+    resetLedgerMoveState();
+  }, [ledgerMoveTargetAccountId, moveTransactionsToAccount, resetLedgerMoveState, selectedLedgerMoveIds]);
+  React.useEffect(() => {
+    setSelectedLedgerMoveIds((prev) => prev.filter((id) => ledgerRows.some((tx) => tx.id === id)));
+  }, [ledgerRows]);
+  React.useEffect(() => {
+    if (!ledgerMoveMode) {
+      setLedgerMoveModalOpen(false);
+      setLedgerMoveTargetAccountId('');
+    }
+  }, [ledgerMoveMode]);
+  React.useEffect(() => {
+    if (tab !== 'ledger' && ledgerMoveMode) {
+      resetLedgerMoveState();
+    }
+  }, [ledgerMoveMode, resetLedgerMoveState, tab]);
   const filteredRecurringPayments = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     const bankAccountId = Number(selectedBankAccountId || 0);
@@ -2283,6 +2371,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar accumul8-panel-toolbar--ledger">
                 <h3 className="mb-0">Ledger</h3>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${ledgerMoveMode ? 'btn-warning' : 'btn-outline-secondary'} accumul8-ledger-move-button`}
+                  onClick={handleLedgerMoveButtonClick}
+                  disabled={busy || ledgerRows.length === 0}
+                  aria-label={ledgerMoveMode ? 'Move selected ledger rows to another account' : 'Select ledger rows to move'}
+                  title={ledgerMoveMode
+                    ? (selectedLedgerMoveIds.length > 0 ? 'Choose a destination account for selected ledger rows' : 'Exit move mode')
+                    : 'Select ledger rows to move'}
+                >
+                  <span aria-hidden="true">{ACCUMUL8_MOVE_BUTTON_EMOJI}</span>
+                  <span>{ledgerMoveMode ? `Move${selectedLedgerMoveIds.length > 0 ? ` (${selectedLedgerMoveIds.length})` : ''}` : 'Move'}</span>
+                </button>
                 <div className="accumul8-panel-toolbar-controls accumul8-panel-toolbar-controls--ledger">
                   {renderDateRangeControls(
                     'ledger',
@@ -2324,6 +2425,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   style={buildMeasuredTableStyle(ledgerColumnWidths)}
                 >
                   <colgroup>
+                    <col style={{ width: '3rem' }} />
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
                     <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.3)' }} />
@@ -2335,7 +2437,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={{ width: 'var(--accumul8-col-reconciled-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
-                  <thead><tr><th>Date</th><th>Due</th><th>Account</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th className="text-center accumul8-ledger-selection-heading">{ledgerMoveMode ? 'Move' : ''}</th><th>Date</th><th>Due</th><th>Account</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {ledgerRows.map((tx) => (
                       (() => {
@@ -2353,6 +2455,18 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           ledgerDraftById[tx.id] ? 'has-draft' : '',
                         ].filter(Boolean).join(' ')}
                       >
+                        <td className="text-center accumul8-ledger-selection-cell">
+                          {ledgerMoveMode ? (
+                            <input
+                              className="form-check-input accumul8-ledger-checkbox"
+                              type="checkbox"
+                              checked={selectedLedgerMoveIds.includes(tx.id)}
+                              onChange={(e) => toggleLedgerMoveSelection(tx.id, e.target.checked)}
+                              disabled={busy}
+                              aria-label={`Select ${tx.description} to move`}
+                            />
+                          ) : null}
+                        </td>
                         <td>
                           {activeLedgerRowId === tx.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.transaction_date ?? tx.transaction_date} onChange={(e) => setLedgerRowDraft(tx, { transaction_date: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
@@ -2439,7 +2553,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     ))}
                     {ledgerRows.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
+                        <td colSpan={11} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -3383,6 +3497,60 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           </div>
+          {ledgerMoveModalOpen && (
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Move ledger rows to another account" onClick={() => setLedgerMoveModalOpen(false)}>
+              <div className="accumul8-help-modal accumul8-ledger-move-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="accumul8-settings-modal-header">
+                  <div>
+                    <h2 className="accumul8-settings-modal-title mb-0">Move Ledger Rows</h2>
+                    <div className="small text-muted">
+                      {selectedLedgerMoveIds.length} selected transaction{selectedLedgerMoveIds.length === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setLedgerMoveModalOpen(false)}>Close</button>
+                </div>
+                <div className="accumul8-ledger-move-modal__body">
+                  <label className="form-label" htmlFor="accumul8-ledger-move-account">Destination account</label>
+                  <select
+                    id="accumul8-ledger-move-account"
+                    className="form-select"
+                    value={ledgerMoveTargetAccountId}
+                    onChange={(e) => setLedgerMoveTargetAccountId(e.target.value)}
+                    disabled={busy}
+                  >
+                    <option value="">Choose an account</option>
+                    {ledgerMoveEligibleAccountOptions.map((account) => (
+                      <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
+                    ))}
+                  </select>
+                  <div className="small text-muted">
+                    This updates the selected ledger rows only. Running balances will be recalculated after the move.
+                  </div>
+                  {ledgerMoveEligibleAccountOptions.length === 0 ? (
+                    <div className="alert alert-warning py-2 mb-0">No other active accounts are available for these selected rows.</div>
+                  ) : null}
+                  {ledgerMoveSelectedTransactions.length > 0 ? (
+                    <div className="accumul8-ledger-move-modal__preview">
+                      {ledgerMoveSelectedTransactions.slice(0, 5).map((tx) => (
+                        <div key={tx.id} className="accumul8-ledger-move-modal__preview-row">
+                          <span>{formatInlineDate(tx.transaction_date || tx.due_date)}</span>
+                          <span>{getLedgerDescriptionLabel(tx)}</span>
+                          <span>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</span>
+                        </div>
+                      ))}
+                      {ledgerMoveSelectedTransactions.length > 5 ? (
+                        <div className="small text-muted">+{ledgerMoveSelectedTransactions.length - 5} more selected rows</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="accumul8-settings-modal-actions">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setLedgerMoveModalOpen(false)} disabled={busy}>Cancel</button>
+                  <button type="button" className="btn btn-warning" onClick={() => void submitLedgerMove()} disabled={busy || !ledgerMoveTargetAccountId}>Move Transactions</button>
+                </div>
+              </div>
+            </div>
+          )}
           {syncHelpOpen && (
             <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Plaid setup guide">
               <div className="accumul8-help-modal">

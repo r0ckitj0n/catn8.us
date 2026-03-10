@@ -281,6 +281,11 @@ export interface Accumul8TransactionUpsertRequest {
   debtor_id?: number | null;
 }
 
+export interface Accumul8TransactionMoveRequest {
+  transaction_ids: number[];
+  account_id: number;
+}
+
 export interface Accumul8Account {
   id: number;
   banking_organization_id: number | null;

@@ -6527,6 +6527,73 @@ if ($action === 'delete_transaction') {
     catn8_json_response(['success' => true]);
 }
 
+if ($action === 'move_transactions_to_account') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $destinationAccountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
+    if ($destinationAccountId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'A destination account is required'], 400);
+    }
+    $destinationAccountId = accumul8_require_owned_id('accounts', $viewerId, $destinationAccountId);
+
+    $transactionIdsRaw = $body['transaction_ids'] ?? null;
+    if (!is_array($transactionIdsRaw)) {
+        catn8_json_response(['success' => false, 'error' => 'transaction_ids must be an array'], 400);
+    }
+
+    $transactionIds = [];
+    foreach ($transactionIdsRaw as $value) {
+        $id = (int)$value;
+        if ($id > 0) {
+            $transactionIds[] = $id;
+        }
+    }
+    $transactionIds = array_values(array_unique($transactionIds));
+    if ($transactionIds === []) {
+        catn8_json_response(['success' => false, 'error' => 'Select at least one ledger row to move'], 400);
+    }
+
+    $placeholders = implode(',', array_fill(0, count($transactionIds), '?'));
+    $rows = Database::queryAll(
+        'SELECT id, account_id
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND id IN (' . $placeholders . ')',
+        array_merge([$viewerId], $transactionIds)
+    );
+
+    if (count($rows) !== count($transactionIds)) {
+        catn8_json_response(['success' => false, 'error' => 'One or more selected transactions were not found'], 404);
+    }
+
+    $movedCount = 0;
+    foreach ($rows as $row) {
+        $transactionId = (int)($row['id'] ?? 0);
+        $currentAccountId = isset($row['account_id']) ? (int)$row['account_id'] : 0;
+        if ($transactionId <= 0 || $currentAccountId === $destinationAccountId) {
+            continue;
+        }
+        Database::execute(
+            'UPDATE accumul8_transactions
+             SET account_id = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [$destinationAccountId, $transactionId, $viewerId]
+        );
+        $movedCount++;
+    }
+
+    if ($movedCount > 0) {
+        accumul8_recompute_running_balance($viewerId);
+    }
+
+    catn8_json_response([
+        'success' => true,
+        'moved_count' => $movedCount,
+        'account_id' => $destinationAccountId,
+    ]);
+}
+
 if ($action === 'create_notification_rule') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();

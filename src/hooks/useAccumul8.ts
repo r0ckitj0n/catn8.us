@@ -27,6 +27,7 @@ import {
   Accumul8StatementImportResult,
   Accumul8StatementSearchResult,
   Accumul8Transaction,
+  Accumul8TransactionMoveRequest,
   Accumul8TransactionUpsertRequest,
 } from '../types/accumul8';
 export function useAccumul8(
@@ -256,6 +257,12 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('delete_transaction'), { id }),
       'Transaction deleted',
+    );
+  }, [scopedActionUrl, withReload]);
+  const moveTransactionsToAccount = React.useCallback(async (payload: Accumul8TransactionMoveRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('move_transactions_to_account'), payload),
+      'Transactions moved',
     );
   }, [scopedActionUrl, withReload]);
   const toggleTransactionPaid = React.useCallback(async (id: number) => {
@@ -489,6 +496,7 @@ export function useAccumul8(
     createTransaction,
     updateTransaction,
     deleteTransaction,
+    moveTransactionsToAccount,
     toggleTransactionPaid,
     toggleTransactionReconciled,
     toggleTransactionBudgetPlanner,

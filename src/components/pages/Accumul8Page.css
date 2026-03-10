@@ -696,7 +696,7 @@
 }
 
 .accumul8-panel-toolbar--ledger {
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr) auto;
 }
 
 .accumul8-panel-toolbar > :first-child {
@@ -775,6 +775,57 @@
 
 .accumul8-panel-toolbar--ledger > .btn {
   justify-self: end;
+  white-space: nowrap;
+}
+
+.accumul8-ledger-move-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
+}
+
+.accumul8-ledger-selection-heading,
+.accumul8-ledger-selection-cell {
+  width: 3rem;
+  min-width: 3rem;
+}
+
+.accumul8-ledger-selection-heading {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.accumul8-ledger-move-modal {
+  width: min(100%, 42rem);
+}
+
+.accumul8-ledger-move-modal__body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.accumul8-ledger-move-modal__preview {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.accumul8-ledger-move-modal__preview-row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  font-size: 0.92rem;
+}
+
+.accumul8-ledger-move-modal__preview-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -2268,6 +2319,10 @@
     align-items: stretch;
   }
 
+  .accumul8-panel-toolbar--ledger {
+    grid-template-columns: 1fr;
+  }
+
   .accumul8-spreadsheet .accumul8-panel-toolbar {
     grid-template-columns: 1fr;
     align-items: stretch;
@@ -2334,6 +2389,11 @@
     min-width: 0;
     width: 100%;
     margin-left: 0;
+  }
+
+  .accumul8-ledger-move-modal__preview-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 }
 

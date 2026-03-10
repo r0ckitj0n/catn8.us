@@ -371,12 +371,18 @@
 }
 
 .accumul8-page-filters {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 0.55rem;
   flex: 1 1 auto;
   min-width: 0;
-  flex-wrap: wrap;
+}
+
+.accumul8-filter-stack {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
 .accumul8-toolbar-field {
@@ -568,7 +574,7 @@
 
 .accumul8-filter-control-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.45rem;
 }
 
@@ -579,16 +585,30 @@
 
 #accumul8-group-filter,
 #accumul8-bank-filter {
-  flex: 0 1 50%;
-  max-width: 50%;
+  flex: 0 0 clamp(16rem, 36vw, 23rem);
+  width: clamp(16rem, 36vw, 23rem);
+  max-width: 100%;
+}
+
+.accumul8-bank-launcher-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: clamp(10rem, 18vw, 13rem);
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgba(212, 175, 55, 0.24);
+  background: linear-gradient(180deg, rgba(16, 23, 30, 0.88), rgba(10, 16, 21, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 248, 232, 0.04);
 }
 
 .accumul8-bank-launcher-group {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 0.25rem;
-  flex: 0 0 auto;
-  align-self: flex-start;
+  flex: 0 1 auto;
+  align-self: center;
 }
 
 .accumul8-bank-launcher {
@@ -601,10 +621,9 @@
   border-radius: 0;
   overflow: hidden;
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  background:
-    linear-gradient(180deg, rgba(245, 235, 201, 0.98), rgba(226, 211, 168, 0.98));
+  background: linear-gradient(rgba(247, 239, 214, 0.98), rgba(230, 219, 188, 0.98));
   box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.65);
   line-height: 0;
 }
@@ -2077,13 +2096,27 @@
   }
 
   .accumul8-page-filters {
-    align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .accumul8-filter-stack {
     width: 100%;
   }
 
   .accumul8-toolbar-field {
     flex-basis: auto;
+  }
+
+  #accumul8-group-filter,
+  #accumul8-bank-filter {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .accumul8-bank-launcher-panel {
+    min-width: 0;
+    min-height: 0;
   }
 
   .accumul8-toolbar-summary {

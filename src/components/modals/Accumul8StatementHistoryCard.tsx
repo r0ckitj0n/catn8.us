@@ -6,11 +6,22 @@ interface Accumul8StatementHistoryCardProps {
   ownerUserId: number;
   upload: Accumul8StatementUpload;
   onRescan: () => void;
+  onReview?: () => void;
+  isReviewable?: boolean;
   formatDateRange: (upload: Accumul8StatementUpload) => string;
   formatFileSize: (bytes: number) => string;
 }
 
-export function Accumul8StatementHistoryCard({ busy, ownerUserId, upload, onRescan, formatDateRange, formatFileSize }: Accumul8StatementHistoryCardProps) {
+export function Accumul8StatementHistoryCard({
+  busy,
+  ownerUserId,
+  upload,
+  onRescan,
+  onReview,
+  isReviewable = false,
+  formatDateRange,
+  formatFileSize,
+}: Accumul8StatementHistoryCardProps) {
   return (
     <article className="accumul8-statement-history-card">
       <div className="accumul8-statement-history-card-head">
@@ -19,6 +30,9 @@ export function Accumul8StatementHistoryCard({ busy, ownerUserId, upload, onResc
           <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), upload.account_name || 'Unmatched account', formatDateRange(upload), formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
         </div>
         <div className="accumul8-statement-card-actions">
+          {isReviewable && onReview ? (
+            <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={onReview}>Review plan</button>
+          ) : null}
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
           <a className="btn btn-sm btn-outline-primary" href={`/api/accumul8.php?action=download_statement_upload&id=${upload.id}&owner_user_id=${ownerUserId}`} target="_blank" rel="noreferrer">View</a>
         </div>

@@ -102,6 +102,17 @@
   gap: 0.85rem;
 }
 
+.accumul8-statement-review-section {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.accumul8-statement-review-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .accumul8-statement-history-head {
   display: flex;
   justify-content: space-between;
@@ -243,6 +254,10 @@
   .accumul8-statement-search,
   .accumul8-statement-new-account-grid {
     grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .accumul8-statement-review-selector {
     display: grid;
   }
 }

@@ -58,6 +58,7 @@ export function Accumul8StatementModal({
   const [selectedAccountById, setSelectedAccountById] = React.useState<Record<number, string>>({});
   const [newAccountById, setNewAccountById] = React.useState<Record<number, Accumul8StatementNewAccountDraft>>({});
   const [latestImportResult, setLatestImportResult] = React.useState<{ uploadId: number; filename: string; result: Accumul8StatementImportResult | null } | null>(null);
+  const [selectedReviewUploadId, setSelectedReviewUploadId] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -73,6 +74,7 @@ export function Accumul8StatementModal({
       setSearchQuery('');
       setSearchResults([]);
       setLatestImportResult(null);
+      setSelectedReviewUploadId(null);
     }
   }, [open]);
 
@@ -120,6 +122,20 @@ export function Accumul8StatementModal({
     () => statementUploads.filter((upload) => upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
     [statementUploads],
   );
+  const activeReviewUpload = React.useMemo(
+    () => pendingUploads.find((upload) => upload.id === selectedReviewUploadId) || pendingUploads[0] || null,
+    [pendingUploads, selectedReviewUploadId],
+  );
+
+  React.useEffect(() => {
+    if (pendingUploads.length === 0) {
+      setSelectedReviewUploadId(null);
+      return;
+    }
+    if (!pendingUploads.some((upload) => upload.id === selectedReviewUploadId)) {
+      setSelectedReviewUploadId(pendingUploads[0].id);
+    }
+  }, [pendingUploads, selectedReviewUploadId]);
 
   const handleSubmit = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -165,6 +181,15 @@ export function Accumul8StatementModal({
       result: response.import_result,
     });
   }, [accountModeById, newAccountById, onConfirmImport, selectedAccountById]);
+
+  const openReview = React.useCallback((uploadId: number) => {
+    setSelectedReviewUploadId(uploadId);
+    if (typeof document !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`accumul8-statement-review-${uploadId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, []);
 
   return (
     <div className="modal fade accumul8-contact-modal accumul8-statement-modal" tabIndex={-1} aria-hidden="true" ref={modalRef}>
@@ -262,9 +287,35 @@ export function Accumul8StatementModal({
               </section>
             ) : null}
 
-            {pendingUploads.length > 0 ? (
-              <section className="accumul8-statement-history-list">
-                {pendingUploads.map((upload) => {
+            {activeReviewUpload ? (
+              <section id={`accumul8-statement-review-${activeReviewUpload.id}`} className="accumul8-statement-review-section">
+                <div className="accumul8-statement-history-head">
+                  <div>
+                    <strong>Review and approve import</strong>
+                    <div className="small text-muted">
+                      {pendingUploads.length > 1
+                        ? `${pendingUploads.length} statements are waiting for review. Choose one below, then approve when the target account looks right.`
+                        : 'This scan is waiting for your approval before anything new is posted to the ledger.'}
+                    </div>
+                  </div>
+                </div>
+                {pendingUploads.length > 1 ? (
+                  <div className="accumul8-statement-review-selector">
+                    {pendingUploads.map((upload) => (
+                      <button
+                        key={`review-selector-${upload.id}`}
+                        type="button"
+                        className={`btn btn-sm ${activeReviewUpload.id === upload.id ? 'btn-primary' : 'btn-outline-primary'}`}
+                        onClick={() => openReview(upload.id)}
+                        disabled={busy}
+                      >
+                        {upload.original_filename}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {(() => {
+                  const upload = activeReviewUpload;
                   const mode = accountModeById[upload.id] || 'existing';
                   const selectedUploadAccount = selectedAccountById[upload.id] || '';
                   const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
@@ -287,7 +338,7 @@ export function Accumul8StatementModal({
                       formatFileSize={formatStatementFileSize}
                     />
                   );
-                })}
+                })()}
               </section>
             ) : null}
 
@@ -301,6 +352,8 @@ export function Accumul8StatementModal({
                   ownerUserId={ownerUserId}
                   upload={upload}
                   onRescan={() => void onRescan(upload.id, upload.account_id)}
+                  onReview={upload.plan ? () => openReview(upload.id) : undefined}
+                  isReviewable={Boolean(upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed'))}
                   formatDateRange={formatStatementDateRange}
                   formatFileSize={formatStatementFileSize}
                 />

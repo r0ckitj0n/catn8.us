@@ -22,6 +22,7 @@ import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
 import { openPlaidLink } from '../../core/plaidLink';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
+import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   Accumul8PlaidCreateLinkTokenResponse,
@@ -47,7 +48,6 @@ interface Accumul8PageProps extends AppShellPageProps {
 type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
-  | 'planning'
   | 'all'
   | 'hide_upcoming_recurring'
   | 'hide_reconciled'
@@ -71,7 +71,6 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   manual: 'Manual payment',
 };
 const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
-  { value: 'planning', label: 'Planning' },
   { value: 'all', label: 'All transactions' },
   { value: 'hide_upcoming_recurring', label: 'Hide upcoming recurring payments' },
   { value: 'hide_reconciled', label: 'Hide reconciled transactions' },
@@ -619,7 +618,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     contacts: '',
     recurring: '',
   });
-  const [ledgerFilterPreset, setLedgerFilterPreset] = React.useState<LedgerFilterPreset>('planning');
+  const [ledgerFilterPreset, setLedgerFilterPreset] = React.useState<LedgerFilterPreset>('all');
   const [flashingSaveButtonKey, setFlashingSaveButtonKey] = React.useState<string>('');
   const settingsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const settingsButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -707,7 +706,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
   }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const planningMonthEndDate = React.useMemo(() => endOfUtcMonth(todayDate), [todayDate]);
   const ledgerDateRange = React.useMemo(() => {
     if (ledgerDateFilter === 'all_dates') {
       return { startDate: '', endDate: '' };
@@ -743,15 +741,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       const isReconciled = Number(tx.is_reconciled || 0) === 1;
       const isPendingBank = Number(tx.pending_status || 0) === 1;
       const isUpcomingRecurring = String(tx.source_kind || '') === 'recurring' && effectiveDate >= todayDate && !isPaid;
-      const isRecurringBeyondCurrentMonth = String(tx.source_kind || '') === 'recurring' && effectiveDate > planningMonthEndDate && !isPaid;
       const isLate = !isPaid && Boolean(effectiveDate) && effectiveDate < todayDate;
       const isUpcomingUnpaid = !isPaid && Boolean(effectiveDate) && effectiveDate >= todayDate;
       if (!isDateInRange(effectiveDate, ledgerDateRange)) {
         return false;
       }
       switch (ledgerFilterPreset) {
-        case 'planning':
-          return !isRecurringBeyondCurrentMonth;
         case 'hide_upcoming_recurring':
           return !isUpcomingRecurring;
         case 'hide_reconciled':
@@ -775,7 +770,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           return true;
       }
     })
-  ), [filteredTransactions, ledgerDateRange, ledgerFilterPreset, planningMonthEndDate, todayDate]);
+  ), [filteredTransactions, ledgerDateRange, ledgerFilterPreset, todayDate]);
   const ledgerRows = React.useMemo(() => (
     ledgerRowsBase.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
       tx.transaction_date,
@@ -2195,27 +2190,34 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </select>
                         {launchableBankingOrganizations.length ? (
                           <div className="accumul8-bank-launcher-group" aria-label="Banking organization quick links">
-                            {launchableBankingOrganizations.map((organization) => (
-                              <button
-                                key={organization.id}
-                                type="button"
-                                className={`btn btn-outline-secondary btn-sm accumul8-bank-launcher${selectedBankingOrganizationId === String(organization.id) ? ' accumul8-bank-launcher--selected' : ''}`}
-                                onClick={() => openBankingOrganizationPopup(organization.login_url, organization.banking_organization_name)}
-                                aria-label={`Open ${organization.banking_organization_name}`}
-                                title={`Open ${organization.banking_organization_name}`}
-                              >
-                                {organization.icon_path ? (
-                                  <img
-                                    className="accumul8-bank-launcher-icon"
-                                    src={organization.icon_path}
-                                    alt=""
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <span className="accumul8-bank-launcher-emoji" aria-hidden="true">🏦</span>
-                                )}
-                              </button>
-                            ))}
+                            {launchableBankingOrganizations.map((organization) => {
+                              const organizationIconPath = resolveAccumul8BankingOrganizationIconPath(
+                                organization.banking_organization_name,
+                                organization.icon_path,
+                              );
+
+                              return (
+                                <button
+                                  key={organization.id}
+                                  type="button"
+                                  className={`btn btn-outline-secondary btn-sm accumul8-bank-launcher${selectedBankingOrganizationId === String(organization.id) ? ' accumul8-bank-launcher--selected' : ''}`}
+                                  onClick={() => openBankingOrganizationPopup(organization.login_url, organization.banking_organization_name)}
+                                  aria-label={`Open ${organization.banking_organization_name}`}
+                                  title={`Open ${organization.banking_organization_name}`}
+                                >
+                                  {organizationIconPath ? (
+                                    <img
+                                      className="accumul8-bank-launcher-icon"
+                                      src={organizationIconPath}
+                                      alt=""
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <span className="accumul8-bank-launcher-emoji" aria-hidden="true">🏦</span>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         ) : null}
                       </div>
@@ -2289,7 +2291,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   )}
                   <div className="accumul8-panel-toolbar-search">
                     <select
-                      className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'planning')}
+                      className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'all')}
                       value={ledgerFilterPreset}
                       onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
                       aria-label="Ledger quick filter"

@@ -595,9 +595,9 @@
 }
 
 .accumul8-bank-launcher-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
   display: block;
 }
 

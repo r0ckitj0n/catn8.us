@@ -434,7 +434,7 @@ export function Accumul8SpreadsheetView({
               aria-label={`${panel.monthLabel} spreadsheet panel`}
             >
               <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
-                <table className="table table-sm accumul8-sticky-head accumul8-month-table">
+                <table className="table table-sm accumul8-sticky-head accumul8-month-table accumul8-spreadsheet-table">
                   <colgroup>
                     <col className="accumul8-month-table-col accumul8-month-table-col--type" />
                     <col className="accumul8-month-table-col accumul8-month-table-col--due" />

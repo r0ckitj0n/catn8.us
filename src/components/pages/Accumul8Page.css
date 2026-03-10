@@ -844,7 +844,7 @@
   min-width: 9.5rem;
   text-align: center;
   font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 500;
   color: var(--accumul8-deco-paper);
   letter-spacing: 0.12em;
@@ -1256,6 +1256,81 @@
   width: calc(7% + 50px);
 }
 
+.accumul8-spreadsheet-table {
+  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.accumul8-spreadsheet-table th,
+.accumul8-spreadsheet-table td {
+  padding-left: 0.38rem;
+  padding-right: 0.38rem;
+}
+
+.accumul8-spreadsheet-table thead th {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--type {
+  width: 7%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--due {
+  width: 7%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--vendor {
+  width: 15%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--account {
+  width: 10%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--method {
+  width: 8%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--frequency {
+  width: 8%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--amount {
+  width: 8%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--rta {
+  width: 6%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--balance {
+  width: 12%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--notes {
+  width: 10%;
+}
+
+.accumul8-spreadsheet-table .accumul8-month-table-col--actions {
+  width: 9%;
+}
+
+.accumul8-spreadsheet-table td.is-compact-actions {
+  padding-right: 0.25rem;
+}
+
+.accumul8-spreadsheet-table .accumul8-row-actions {
+  gap: 0.16rem;
+}
+
+.accumul8-spreadsheet-table .accumul8-icon-action {
+  min-width: 1.68rem;
+  min-height: 1.68rem;
+  padding: 0.14rem 0.22rem;
+}
+
 .accumul8-table--debtors th:nth-child(1),
 .accumul8-table--debtors td:nth-child(1),
 .accumul8-table--debtors th:nth-child(2),
@@ -1586,6 +1661,19 @@
 .accumul8-month-table td:nth-child(8) .accumul8-inline-cell-trigger,
 .accumul8-month-table td:nth-child(9) .accumul8-inline-cell-trigger {
   white-space: nowrap;
+}
+
+.accumul8-spreadsheet-table tbody td {
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger,
+.accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger:disabled,
+.accumul8-spreadsheet-table tbody .accumul8-month-table-input,
+.accumul8-spreadsheet-table tbody .accumul8-month-table-select {
+  font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .accumul8-inline-cell-trigger:focus-visible {

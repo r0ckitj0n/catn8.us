@@ -348,7 +348,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('category')}>Category{sortIndicator('category')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('is_active')}>Active{sortIndicator('is_active')}</button></th>
                           <th scope="col"><button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => toggleSort('updated_at')}>Updated{sortIndicator('updated_at')}</button></th>
-                          <th scope="col" className="text-end valid8-actions-column">Actions</th>
+                          <th scope="col" className="text-end valid8-actions-column catn8-actions-column">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -432,7 +432,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
                                 </label>
                               </td>
                               <td className="small text-muted">{formatDate(entry.updated_at)}</td>
-                              <td className="text-end valid8-actions-column">
+                              <td className="text-end valid8-actions-column catn8-actions-column">
                                 <div className="d-inline-flex gap-2 valid8-row-actions">
                                   <label
                                     className={`btn btn-sm catn8-action-icon-btn valid8-attachment-trigger ${hasAttachments ? 'valid8-attachment-trigger--has-attachment' : 'valid8-attachment-trigger--empty'}`}

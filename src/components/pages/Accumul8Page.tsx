@@ -969,21 +969,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'balance', index: 6, fallback: 136, header: 'Balance' },
     { key: 'paid', index: 7, fallback: 88, header: 'Paid' },
     { key: 'reconciled', index: 8, fallback: 160, header: 'Reconciled' },
-    { key: 'actions', index: 9, fallback: 132, header: 'Actions' },
+    { key: 'actions', index: 9, fallback: 182, header: 'Actions' },
   ], [ledgerTableRef, ledgerRows, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
     { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
     { key: 'credits', index: 3, fallback: 112, header: 'Credits' },
     { key: 'net', index: 4, fallback: 136, header: 'Net IOU' },
     { key: 'activity', index: 5, fallback: 132, header: 'Last Activity' },
-    { key: 'actions', index: 6, fallback: 188, header: 'Actions' },
+    { key: 'actions', index: 6, fallback: 238, header: 'Actions' },
   ], [debtorsTableRef, debtorRows, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
   const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
     { key: 'due', index: 0, fallback: 120, header: 'Due Date' },
     { key: 'paidDate', index: 1, fallback: 120, header: 'Paid Date' },
     { key: 'amount', index: 3, fallback: 112, header: 'Amount' },
     { key: 'status', index: 4, fallback: 116, header: 'Status' },
-    { key: 'actions', index: 5, fallback: 132, header: 'Actions' },
+    { key: 'actions', index: 5, fallback: 182, header: 'Actions' },
   ], [payBillsTableRef, payBillsRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
   const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
     { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
@@ -992,12 +992,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'paymentMethod', index: 4, fallback: 172, header: 'Payment Method' },
     { key: 'planner', index: 5, fallback: 108, header: 'Planner' },
     { key: 'status', index: 6, fallback: 104, header: 'Status' },
-    { key: 'actions', index: 7, fallback: 132, header: 'Actions' },
+    { key: 'actions', index: 7, fallback: 182, header: 'Actions' },
   ], [recurringTableRef, recurringRows, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
     { key: 'status', index: 1, fallback: 96, header: 'Status' },
     { key: 'lastSync', index: 2, fallback: 156, header: 'Last Sync' },
-    { key: 'actions', index: 3, fallback: 88, header: 'Actions' },
+    { key: 'actions', index: 3, fallback: 138, header: 'Actions' },
   ], [syncTableRef, bankConnections, busy]);
   const renderDateRangeControls = React.useCallback((
     prefix: 'ledger' | 'pay-bills',
@@ -1644,14 +1644,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'roles', index: 1, fallback: 120, header: 'Roles' },
     { key: 'lastTransaction', index: 3, fallback: 172, header: 'Last Transaction' },
     { key: 'status', index: 4, fallback: 96, header: 'Status' },
-    { key: 'actions', index: 5, fallback: 168, header: 'Actions' },
+    { key: 'actions', index: 5, fallback: 218, header: 'Actions' },
   ], [entitiesTableRef, entityRows, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
   const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
     { key: 'date', index: 0, fallback: 96, header: 'Date' },
     { key: 'person', index: 1, fallback: 132, header: 'Person' },
     { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
     { key: 'running', index: 5, fallback: 168, header: 'Running IOU' },
-    { key: 'actions', index: 6, fallback: 132, header: 'Actions' },
+    { key: 'actions', index: 6, fallback: 182, header: 'Actions' },
   ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
     if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {
@@ -2195,37 +2195,39 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>
           {tab === 'ledger' && (
             <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar">
+              <div className="accumul8-panel-toolbar accumul8-panel-toolbar--ledger">
                 <h3 className="mb-0">Ledger</h3>
-                {renderDateRangeControls(
-                  'ledger',
-                  ledgerDateFilter,
-                  setLedgerDateFilter,
-                  customLedgerStartDate,
-                  setCustomLedgerStartDate,
-                  customLedgerEndDate,
-                  setCustomLedgerEndDate,
-                  true,
-                )}
-                <div className="accumul8-panel-toolbar-search">
-                  <select
-                    className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'planning')}
-                    value={ledgerFilterPreset}
-                    onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
-                    aria-label="Ledger quick filter"
-                  >
-                    {LEDGER_FILTER_PRESET_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.ledger.trim() !== '')}
-                    value={listSearchQueryByTab.ledger}
-                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
-                    placeholder="Search visible ledger rows"
-                    aria-label="Search visible ledger rows"
-                  />
+                <div className="accumul8-panel-toolbar-controls accumul8-panel-toolbar-controls--ledger">
+                  {renderDateRangeControls(
+                    'ledger',
+                    ledgerDateFilter,
+                    setLedgerDateFilter,
+                    customLedgerStartDate,
+                    setCustomLedgerStartDate,
+                    customLedgerEndDate,
+                    setCustomLedgerEndDate,
+                    true,
+                  )}
+                  <div className="accumul8-panel-toolbar-search">
+                    <select
+                      className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'planning')}
+                      value={ledgerFilterPreset}
+                      onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
+                      aria-label="Ledger quick filter"
+                    >
+                      {LEDGER_FILTER_PRESET_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.ledger.trim() !== '')}
+                      value={listSearchQueryByTab.ledger}
+                      onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
+                      placeholder="Search visible ledger rows"
+                      aria-label="Search visible ledger rows"
+                    />
+                  </div>
                 </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
               </div>

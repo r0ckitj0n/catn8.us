@@ -211,7 +211,7 @@ export function BankingOrganizationManagerModal({
                         <th>Institution</th>
                         <th>Status</th>
                         <th>Notes</th>
-                        <th className="text-end">Actions</th>
+                        <th className="text-end catn8-actions-column">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -221,7 +221,7 @@ export function BankingOrganizationManagerModal({
                           <td>{bankingOrganization.institution_name || '-'}</td>
                           <td>{bankingOrganization.is_active ? 'Active' : 'Inactive'}</td>
                           <td>{bankingOrganization.notes || '-'}</td>
-                          <td className="text-end">
+                          <td className="text-end catn8-actions-column">
                             <div className="d-inline-flex gap-2">
                               <button
                                 type="button"
@@ -366,7 +366,7 @@ export function BankingOrganizationManagerModal({
                         <th>Institution</th>
                         <th>Type</th>
                         <th>Status</th>
-                        <th className="text-end">Actions</th>
+                        <th className="text-end catn8-actions-column">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -380,7 +380,7 @@ export function BankingOrganizationManagerModal({
                           <td>{account.institution_name || '-'}</td>
                           <td>{account.account_type || '-'}</td>
                           <td>{account.is_active ? 'Active' : 'Inactive'}</td>
-                          <td className="text-end">
+                          <td className="text-end catn8-actions-column">
                             <div className="d-inline-flex gap-2">
                               <button
                                 type="button"

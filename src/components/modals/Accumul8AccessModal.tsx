@@ -169,7 +169,7 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                     <th>Can Access Owner</th>
                     <th>Granted By</th>
                     <th>Updated</th>
-                    <th className="text-end">Actions</th>
+                    <th className="text-end catn8-actions-column">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -180,7 +180,7 @@ export function Accumul8AccessModal({ open, onClose, onToast }: Accumul8AccessMo
                       <td>{grant.owner_username} <span className="text-muted">(#{grant.owner_user_id})</span></td>
                       <td>{grant.granted_by_username || '-'}</td>
                       <td>{grant.updated_at || grant.created_at || '-'}</td>
-                      <td className="text-end">
+                      <td className="text-end catn8-actions-column">
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"

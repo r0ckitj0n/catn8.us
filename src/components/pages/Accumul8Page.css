@@ -602,8 +602,23 @@
   gap: 0.6rem;
 }
 
+.accumul8-panel-toolbar--ledger {
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+}
+
 .accumul8-panel-toolbar > :first-child {
   min-width: 0;
+}
+
+.accumul8-panel-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.accumul8-panel-toolbar-controls--ledger {
+  flex-wrap: nowrap;
 }
 
 .accumul8-panel-toolbar-search {
@@ -617,6 +632,14 @@
 .accumul8-panel-toolbar-range {
   justify-self: start;
   min-width: 0;
+}
+
+.accumul8-panel-toolbar-controls--ledger .accumul8-panel-toolbar-range {
+  flex: 0 0 auto;
+}
+
+.accumul8-panel-toolbar-controls--ledger .accumul8-panel-toolbar-search {
+  flex: 1 1 auto;
 }
 
 .accumul8-panel-toolbar-range-select {
@@ -634,6 +657,11 @@
 .accumul8-panel-toolbar-search .form-control {
   flex: 1 1 15rem;
   width: min(100%, 22rem);
+}
+
+.accumul8-panel-toolbar--ledger > .btn {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .catn8-page[data-page="accumul8"] .form-control.accumul8-filter-control--active,
@@ -1132,7 +1160,7 @@
 }
 
 .accumul8-month-table-col--actions {
-  width: 7%;
+  width: calc(7% + 50px);
 }
 
 .accumul8-table--debtors th:nth-child(1),
@@ -2040,8 +2068,19 @@
     flex-direction: column;
   }
 
+  .accumul8-panel-toolbar-controls {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .accumul8-panel-toolbar-search .form-select,
   .accumul8-panel-toolbar-search .form-control {
+    width: 100%;
+    max-width: none;
+  }
+
+  .accumul8-panel-toolbar-range-select {
     width: 100%;
     max-width: none;
   }

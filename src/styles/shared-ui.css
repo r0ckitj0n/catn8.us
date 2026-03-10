@@ -175,3 +175,8 @@ button.catn8-catalog-card {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.catn8-actions-column {
+  min-width: 11rem;
+  white-space: nowrap;
+}

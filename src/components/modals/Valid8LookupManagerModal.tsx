@@ -174,7 +174,7 @@ export function Valid8LookupManagerModal({
                     <th>{itemLabel}</th>
                     <th>Active</th>
                     <th>Updated</th>
-                    <th className="text-end valid8-lookup-actions-column">Actions</th>
+                    <th className="text-end valid8-lookup-actions-column catn8-actions-column">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,7 +193,7 @@ export function Valid8LookupManagerModal({
                           />
                         </td>
                         <td>{item.updated_at || item.created_at || '-'}</td>
-                        <td className="text-end valid8-lookup-actions-column">
+                        <td className="text-end valid8-lookup-actions-column catn8-actions-column">
                           <div className="d-inline-flex gap-2 valid8-lookup-row-actions">
                             <StandardIconButton
                               iconKey="edit"

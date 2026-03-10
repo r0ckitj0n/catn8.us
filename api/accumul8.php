@@ -170,6 +170,19 @@ function accumul8_openai_statement_pdf_model(string $configuredModel): string
     return 'gpt-4o-mini';
 }
 
+function accumul8_statement_cleanup_rendered_pages(array $pages): void
+{
+    foreach ($pages as $page) {
+        if (!is_array($page)) {
+            continue;
+        }
+        $path = (string)($page['path'] ?? '');
+        if ($path !== '' && is_file($path)) {
+            @unlink($path);
+        }
+    }
+}
+
 function accumul8_openai_responses_json(string $model, array $input, string $baseUrl = '', float $temperature = 0.0, int $maxOutputTokens = 4096, ?array $textConfig = null, int $timeoutSeconds = 90): array
 {
     $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
@@ -678,8 +691,9 @@ TXT;
 function accumul8_ai_generate_statement_json_from_images(array $images, array $accountCatalog): array
 {
     $cfg = catn8_settings_ai_get_config();
-    $provider = accumul8_statement_effective_provider((string)($cfg['provider'] ?? 'openai'), ['google_ai_studio']);
+    $provider = accumul8_statement_effective_provider((string)($cfg['provider'] ?? 'openai'), ['openai', 'google_ai_studio']);
     $model = trim((string)($cfg['model'] ?? ''));
+    $baseUrl = trim((string)($cfg['base_url'] ?? ''));
     $temperature = (float)($cfg['temperature'] ?? 0.1);
     $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     $systemPrompt = accumul8_statement_ai_json_schema_prompt('image');
@@ -706,6 +720,46 @@ function accumul8_ai_generate_statement_json_from_images(array $images, array $a
     }
     if ($imageParts === []) {
         throw new RuntimeException('No statement page images were available for AI scanning');
+    }
+
+    if ($provider === 'openai') {
+        $visionModel = accumul8_openai_statement_pdf_model($model);
+        $content = [[
+            'type' => 'input_text',
+            'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from these page images. Preserve page numbers.",
+        ]];
+        foreach ($imageParts as $imagePart) {
+            $content[] = [
+                'type' => 'input_text',
+                'text' => 'Statement page ' . (int)$imagePart['page_number'],
+            ];
+            $content[] = [
+                'type' => 'input_image',
+                'image_url' => 'data:' . (string)$imagePart['mime_type'] . ';base64,' . (string)$imagePart['base64'],
+            ];
+        }
+        $result = accumul8_openai_responses_json(
+            $visionModel,
+            [[
+                'role' => 'system',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $systemPrompt],
+                ],
+            ], [
+                'role' => 'user',
+                'content' => $content,
+            ]],
+            $baseUrl,
+            $temperature,
+            4096,
+            accumul8_statement_openai_response_format(),
+            120
+        );
+        return [
+            'provider' => $provider,
+            'model' => $visionModel,
+            'json' => $result['json'],
+        ];
     }
 
     if ($provider === 'google_ai_studio') {
@@ -3958,19 +4012,51 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
         $ai = null;
 
         if (str_contains($mimeType, 'pdf')) {
-            try {
-                $ai = accumul8_ai_generate_statement_json_from_pdf($tmpPath, $accountCatalog);
-                $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI PDF scan completed', 120000);
-                $extract['method'] = 'ai_pdf';
-            } catch (Throwable $pdfAiError) {
-                $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-                $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
-                $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
-                if ($text !== '') {
+            $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+            $scanErrors = [];
+
+            if ($text !== '') {
+                try {
                     $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
-                } else {
-                    throw new RuntimeException('Could not extract readable text from the statement, and direct PDF AI scanning failed: ' . accumul8_normalize_text($pdfAiError->getMessage(), 400));
+                } catch (Throwable $textAiError) {
+                    $scanErrors[] = 'Text extraction path failed: ' . accumul8_normalize_text($textAiError->getMessage(), 250);
                 }
+            }
+
+            if ($ai === null) {
+                $renderedPages = accumul8_statement_render_pdf_pages_to_png($tmpPath);
+                try {
+                    if ($renderedPages !== []) {
+                        $ai = accumul8_ai_generate_statement_json_from_images($renderedPages, $accountCatalog);
+                        $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI image scan completed', 120000);
+                        $extract['method'] = 'ai_pdf_images';
+                        $pageCatalog = [];
+                    }
+                } catch (Throwable $imageAiError) {
+                    $scanErrors[] = 'Rendered page AI scanning failed: ' . accumul8_normalize_text($imageAiError->getMessage(), 250);
+                } finally {
+                    accumul8_statement_cleanup_rendered_pages($renderedPages);
+                }
+            }
+
+            if ($ai === null) {
+                try {
+                    $ai = accumul8_ai_generate_statement_json_from_pdf($tmpPath, $accountCatalog);
+                    $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI PDF scan completed', 120000);
+                    $extract['method'] = 'ai_pdf';
+                    $pageCatalog = [];
+                } catch (Throwable $pdfAiError) {
+                    $scanErrors[] = 'Direct PDF AI scanning failed: ' . accumul8_normalize_text($pdfAiError->getMessage(), 250);
+                }
+            }
+
+            if ($ai === null) {
+                if ($text !== '') {
+                    throw new RuntimeException('Could not generate a valid statement scan from the extracted PDF text or direct PDF AI scan: ' . implode(' | ', $scanErrors));
+                }
+                throw new RuntimeException('Could not extract readable text from the statement, and direct PDF AI scanning failed: ' . implode(' | ', $scanErrors));
             }
         } elseif (str_starts_with($mimeType, 'image/')) {
             try {

@@ -683,10 +683,32 @@
   min-width: 220px;
 }
 
+.accumul8-spreadsheet .accumul8-panel-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.accumul8-spreadsheet-toolbar-copy {
+  min-width: 0;
+}
+
+.accumul8-spreadsheet-filter {
+  display: flex;
+  justify-content: center;
+}
+
+.accumul8-spreadsheet-filter .form-control {
+  max-width: 100%;
+  text-align: center;
+}
+
 .accumul8-spreadsheet-nav {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  justify-self: end;
 }
 
 .accumul8-spreadsheet-nav-label {
@@ -703,7 +725,7 @@
 .accumul8-spreadsheet-grid {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
   min-height: 0;
@@ -716,7 +738,7 @@
   background:
     linear-gradient(180deg, rgba(18, 26, 33, 0.97), rgba(10, 16, 22, 0.98)),
     linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 56%);
-  padding: 1rem;
+  padding: 1.2rem;
   box-shadow: var(--accumul8-deco-shadow);
   position: relative;
   overflow: hidden;
@@ -777,6 +799,7 @@
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.6rem;
   margin-bottom: 0.75rem;
+  padding-inline: 0.15rem;
 }
 
 .accumul8-month-summary div {
@@ -819,6 +842,7 @@
   max-height: none;
   min-height: 0;
   overflow-x: auto;
+  padding-inline: 0.15rem;
 }
 
 .accumul8-table,
@@ -830,7 +854,16 @@
 }
 
 .accumul8-month-table {
-  font-size: 0.69rem;
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 0.8rem;
+}
+
+.accumul8-month-table th,
+.accumul8-month-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .accumul8-table {
@@ -929,6 +962,8 @@
 .accumul8-month-table tbody td {
   background: linear-gradient(180deg, rgba(17, 22, 28, 0.94), rgba(11, 15, 20, 0.96)) !important;
   color: #f3e6be;
+  font-size: 0.8rem;
+  line-height: 1.24;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -1016,37 +1051,33 @@
   border-bottom: 0;
 }
 
+.accumul8-month-table thead th {
+  font-size: 0.84rem;
+  letter-spacing: 0.11em;
+}
+
 .accumul8-month-table th:nth-child(3),
-.accumul8-month-table td:nth-child(3) {
-  min-width: 10rem;
-  max-width: 16rem;
+.accumul8-month-table td:nth-child(3),
+.accumul8-month-table th:nth-child(4),
+.accumul8-month-table td:nth-child(4),
+.accumul8-month-table th:nth-child(5),
+.accumul8-month-table td:nth-child(5),
+.accumul8-month-table th:nth-child(6),
+.accumul8-month-table td:nth-child(6),
+.accumul8-month-table th:nth-child(10),
+.accumul8-month-table td:nth-child(10) {
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
 .accumul8-month-table th:nth-child(1),
 .accumul8-month-table td:nth-child(1) {
-  min-width: 5.75rem;
+  min-width: 0;
 }
 
 .accumul8-month-table th:nth-child(2),
 .accumul8-month-table td:nth-child(2) {
-  min-width: 5.5rem;
-}
-
-.accumul8-month-table th:nth-child(4),
-.accumul8-month-table td:nth-child(4) {
-  min-width: 9rem;
-}
-
-.accumul8-month-table th:nth-child(5),
-.accumul8-month-table td:nth-child(5) {
-  min-width: 8.5rem;
-}
-
-.accumul8-month-table th:nth-child(6),
-.accumul8-month-table td:nth-child(6) {
-  min-width: 7rem;
+  min-width: 0;
 }
 
 .accumul8-month-table th:nth-child(7),
@@ -1055,20 +1086,50 @@
 .accumul8-month-table td:nth-child(8),
 .accumul8-month-table th:nth-child(9),
 .accumul8-month-table td:nth-child(9) {
-  min-width: 7rem;
-}
-
-.accumul8-month-table th:nth-child(10),
-.accumul8-month-table td:nth-child(10) {
-  min-width: 9rem;
-  max-width: 14rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .accumul8-month-table th:nth-child(11),
 .accumul8-month-table td:nth-child(11) {
-  min-width: 8rem;
+  min-width: 0;
+}
+
+.accumul8-month-table-col--type {
+  width: 10%;
+}
+
+.accumul8-month-table-col--due {
+  width: 9%;
+}
+
+.accumul8-month-table-col--vendor {
+  width: 18%;
+}
+
+.accumul8-month-table-col--account {
+  width: 12%;
+}
+
+.accumul8-month-table-col--method {
+  width: 12%;
+}
+
+.accumul8-month-table-col--frequency {
+  width: 11%;
+}
+
+.accumul8-month-table-col--amount,
+.accumul8-month-table-col--rta,
+.accumul8-month-table-col--balance {
+  width: 9%;
+}
+
+.accumul8-month-table-col--notes {
+  width: 12%;
+}
+
+.accumul8-month-table-col--actions {
+  width: 7%;
 }
 
 .accumul8-table--debtors th:nth-child(1),
@@ -1374,11 +1435,33 @@
 }
 
 .accumul8-month-table .accumul8-inline-cell-trigger,
+.accumul8-month-table .accumul8-inline-cell-trigger:disabled {
+  font-size: 0.8rem;
+  line-height: 1.24;
+}
+
+.accumul8-month-table .accumul8-inline-cell-trigger,
 .accumul8-month-table .accumul8-inline-cell-trigger:disabled,
 .accumul8-table .accumul8-inline-cell-trigger,
 .accumul8-table .accumul8-inline-cell-trigger:disabled {
   color: inherit;
   opacity: 1;
+}
+
+.accumul8-month-table td:nth-child(3) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(4) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(5) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(6) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(10) .accumul8-inline-cell-trigger {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.accumul8-month-table td:nth-child(2) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(7) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(8) .accumul8-inline-cell-trigger,
+.accumul8-month-table td:nth-child(9) .accumul8-inline-cell-trigger {
+  white-space: nowrap;
 }
 
 .accumul8-inline-cell-trigger:focus-visible {
@@ -1907,6 +1990,15 @@
   .accumul8-panel-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .accumul8-spreadsheet .accumul8-panel-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .accumul8-spreadsheet-filter {
+    justify-content: stretch;
   }
 
   .accumul8-panel-toolbar-search {

@@ -101,6 +101,7 @@ export function Accumul8SpreadsheetView({
   onDeleteRecurring,
 }: Accumul8SpreadsheetViewProps) {
   const [activeRowKey, setActiveRowKey] = React.useState<string | null>(null);
+  const [budgetFilterQuery, setBudgetFilterQuery] = React.useState('');
   const [rowRtaByKey, setRowRtaByKey] = React.useState<Record<string, number>>({});
   const [draftRowByKey, setDraftRowByKey] = React.useState<Record<string, EditableSpreadsheetRow>>({});
   const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
@@ -115,10 +116,7 @@ export function Accumul8SpreadsheetView({
   );
 
   const visibleMonths = React.useMemo(
-    () => [
-      selectedMonth,
-      shiftMonthValue(selectedMonth, 1),
-    ],
+    () => [selectedMonth],
     [selectedMonth],
   );
 
@@ -224,6 +222,33 @@ export function Accumul8SpreadsheetView({
       }));
     },
     [balanceBaseByScope, draftRowByKey, monthPanels, projectionRows, rowRtaByKey, todayDateValue],
+  );
+  const normalizedBudgetFilterQuery = React.useMemo(
+    () => budgetFilterQuery.trim().toLowerCase(),
+    [budgetFilterQuery],
+  );
+  const filteredMonthPanels = React.useMemo(
+    () => monthPanelsWithProjection.map((panel) => ({
+      ...panel,
+      rows: normalizedBudgetFilterQuery === ''
+        ? panel.rows
+        : panel.rows.filter((row) => [
+          row.direction === 'inflow' ? 'inflow' : 'outflow',
+          formatDateLabel(row.due_date),
+          row.due_date,
+          row.vendor_input,
+          row.title,
+          row.account_name,
+          row.banking_organization_name,
+          paymentMethodLabels[row.payment_method] || row.payment_method,
+          row.frequency,
+          formatCurrency(Number(row.amount || 0)),
+          Number(row.rta || 0).toFixed(2),
+          Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '',
+          row.notes,
+        ].some((value) => String(value || '').toLowerCase().includes(normalizedBudgetFilterQuery))),
+    })),
+    [monthPanelsWithProjection, normalizedBudgetFilterQuery, paymentMethodLabels],
   );
 
   const handleMonthShift = React.useCallback((offset: number) => {
@@ -345,9 +370,20 @@ export function Accumul8SpreadsheetView({
   return (
     <div className="accumul8-spreadsheet">
       <div className="accumul8-panel-toolbar mb-3">
-        <div>
+        <div className="accumul8-spreadsheet-toolbar-copy">
           <h3 className="mb-1">Budget Planner</h3>
           <p className="small text-muted mb-0">Step month by month through your budget-planner records and test quick adjustments inline.</p>
+        </div>
+        <div className="accumul8-spreadsheet-filter">
+          <input
+            type="text"
+            className="form-control"
+            value={budgetFilterQuery}
+            onChange={(event) => setBudgetFilterQuery(event.target.value)}
+            placeholder="Filter budget list"
+            aria-label="Filter budget list"
+            disabled={busy}
+          />
         </div>
         <div className="accumul8-spreadsheet-nav">
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(-1)} disabled={busy} aria-label="Previous month">
@@ -363,18 +399,17 @@ export function Accumul8SpreadsheetView({
       </div>
 
       <div className="accumul8-spreadsheet-grid">
-        {monthPanelsWithProjection.map((panel, panelIndex) => {
-          const isCenter = panelIndex === 1;
+        {filteredMonthPanels.map((panel) => {
           const summary = panel.summary;
           return (
             <section
               key={panel.monthValue}
-              className={`accumul8-month-panel ${isCenter ? 'is-center' : ''}`}
+              className="accumul8-month-panel is-center"
               aria-label={`${panel.monthLabel} spreadsheet panel`}
             >
               <header className="accumul8-month-panel-header">
                 <div>
-                  <p className="accumul8-month-panel-kicker mb-1">{isCenter ? 'Selected month' : 'Adjacent month'}</p>
+                  <p className="accumul8-month-panel-kicker mb-1">Selected month</p>
                   <h4 className="mb-0">{panel.monthLabel}</h4>
                 </div>
                 <div className="accumul8-month-stats">
@@ -399,6 +434,19 @@ export function Accumul8SpreadsheetView({
 
               <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
                 <table className="table table-sm accumul8-sticky-head accumul8-month-table">
+                  <colgroup>
+                    <col className="accumul8-month-table-col accumul8-month-table-col--type" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--due" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--vendor" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--account" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--method" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--frequency" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--amount" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--rta" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--balance" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--notes" />
+                    <col className="accumul8-month-table-col accumul8-month-table-col--actions" />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Type</th>
@@ -614,7 +662,11 @@ export function Accumul8SpreadsheetView({
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={11} className="text-center text-muted py-4">No budget-planner recurring payments in this month yet.</td>
+                        <td colSpan={11} className="text-center text-muted py-4">
+                          {normalizedBudgetFilterQuery === ''
+                            ? 'No budget-planner recurring payments in this month yet.'
+                            : 'No budget items match the current filter.'}
+                        </td>
                       </tr>
                     )}
                   </tbody>

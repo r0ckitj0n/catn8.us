@@ -491,18 +491,35 @@ set sftp:auto-confirm yes
 set ssl:verify-certificate no
 set cmd:fail-exit yes
 ${LFTP_NET_SETTINGS}
+debug 3 -o logs/lftp_root_index.log
 open sftp://$USER:$PASS@$HOST
+lcd $(pwd)
+cd $REMOTE_PATH
 put dist/index.html -o index.html
 bye
 EOL
     if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
       echo -e "${YELLOW}DRY-RUN: Skipping root index fallback upload${NC}"
-    elif lftp -f upload_root_index.txt; then
-      echo -e "${GREEN}✅ Root index fallback uploaded${NC}"
     else
-      echo -e "${RED}❌ Root index fallback upload failed.${NC}"
-      rm -f upload_root_index.txt
-      exit 1
+      mkdir -p logs
+      ROOT_INDEX_ATTEMPT=1
+      ROOT_INDEX_UPLOADED=0
+      while [ "$ROOT_INDEX_ATTEMPT" -le 3 ]; do
+        if lftp -f upload_root_index.txt; then
+          ROOT_INDEX_UPLOADED=1
+          break
+        fi
+        echo -e "${YELLOW}⚠️ Root index fallback upload attempt ${ROOT_INDEX_ATTEMPT}/3 failed; retrying...${NC}"
+        sleep 2
+        ROOT_INDEX_ATTEMPT=$((ROOT_INDEX_ATTEMPT + 1))
+      done
+      if [ "$ROOT_INDEX_UPLOADED" = "1" ]; then
+        echo -e "${GREEN}✅ Root index fallback uploaded${NC}"
+      else
+        echo -e "${RED}❌ Root index fallback upload failed.${NC}"
+        rm -f upload_root_index.txt
+        exit 1
+      fi
     fi
     rm -f upload_root_index.txt
   fi

@@ -2165,7 +2165,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
                 <div className="accumul8-page-toolbar accumul8-page-toolbar--embedded">
                   <div className="accumul8-page-filters">
-                    <div className="accumul8-toolbar-field">
+                    <div className="accumul8-toolbar-field accumul8-toolbar-field--banking-org">
                       <div className="accumul8-filter-control-row">
                         <button
                           type="button"
@@ -2222,7 +2222,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         ) : null}
                       </div>
                     </div>
-                    <div className="accumul8-toolbar-field">
+                    <div className="accumul8-toolbar-field accumul8-toolbar-field--bank-account">
                       <div className="accumul8-filter-control-row">
                         <button
                           type="button"

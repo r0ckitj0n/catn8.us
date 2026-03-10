@@ -4263,7 +4263,7 @@ function accumul8_transaction_edit_policy(array $transaction): array
             'can_edit_core_fields' => false,
             'can_edit_paid_state' => false,
             'can_edit_budget_planner' => false,
-            'can_delete' => false,
+            'can_delete' => in_array($sourceKind, ['statement_upload', 'statement_pdf'], true),
         ];
     }
 
@@ -4512,7 +4512,7 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
                  period_start = ?, period_end = ?, opening_balance = ?, closing_balance = ?,
                  imported_transaction_count = ?, duplicate_transaction_count = ?, suspicious_item_count = ?,
                  reconciliation_status = ?, reconciliation_note = ?, suspicious_items_json = ?, processing_notes_json = ?, transaction_locator_json = ?, page_catalog_json = ?, parsed_payload_json = ?,
-                 catalog_summary = ?, catalog_keywords_json = ?, import_result_json = NULL, last_error = NULL, last_scanned_at = NOW()
+                 catalog_summary = ?, catalog_keywords_json = ?, import_result_json = NULL, last_error = NULL, processed_at = NULL, last_scanned_at = NOW()
              WHERE id = ? AND owner_user_id = ?',
             [
                 $accountId,

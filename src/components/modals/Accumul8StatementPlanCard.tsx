@@ -44,6 +44,11 @@ export function Accumul8StatementPlanCard({
 }: Accumul8StatementPlanCardProps) {
   const plan = upload.plan;
   const canImport = accountMode === 'existing' ? selectedAccountId !== '' : newAccount.account_name.trim() !== '';
+  const [activePanel, setActivePanel] = React.useState<'importable' | 'duplicates' | 'invalid' | 'totals' | null>(null);
+  const importActionLabel = upload.imported_transaction_count > 0 ? 'Import Missing Records' : 'Approve and Import';
+  const togglePanel = React.useCallback((panel: 'importable' | 'duplicates' | 'invalid' | 'totals') => {
+    setActivePanel((current) => (current === panel ? null : panel));
+  }, []);
 
   return (
     <article className="accumul8-statement-history-card">
@@ -54,15 +59,48 @@ export function Accumul8StatementPlanCard({
         </div>
         <div className="accumul8-statement-card-actions">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
-          <button type="button" className="btn btn-sm btn-success" disabled={busy || !canImport} onClick={onConfirm}>Approve and Import</button>
+          <button type="button" className="btn btn-sm btn-success" disabled={busy || !canImport} onClick={onConfirm}>{importActionLabel}</button>
         </div>
       </div>
       <div className="accumul8-statement-chip-row">
         <span className={`accumul8-statement-chip is-${upload.status}`}>{upload.status}</span>
-        <span className="accumul8-statement-chip">{plan?.estimated_duplicate_count || 0} estimated duplicates</span>
-        <span className="accumul8-statement-chip">{plan?.inflow_total.toFixed(2) || '0.00'} inflow</span>
-        <span className="accumul8-statement-chip">{plan?.outflow_total.toFixed(2) || '0.00'} outflow</span>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'importable' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('importable')}>{plan?.importable_transaction_count || 0} importable rows</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'duplicates' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('duplicates')}>{plan?.estimated_duplicate_count || 0} estimated duplicates</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'invalid' ? ' is-active' : ''}${(plan?.invalid_transaction_count || 0) > 0 ? ' is-warning' : ''}`} disabled={busy} onClick={() => togglePanel('invalid')}>{plan?.invalid_transaction_count || 0} invalid rows</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'totals' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('totals')}>{plan?.inflow_total.toFixed(2) || '0.00'} inflow · {plan?.outflow_total.toFixed(2) || '0.00'} outflow</button>
       </div>
+      {activePanel === 'importable' ? (
+        <div className="accumul8-statement-detail-panel">
+          <strong>Importable rows</strong>
+          <div className="small text-muted">
+            Approving this plan will attempt to post {plan?.importable_transaction_count || 0} parsed rows. If this statement was imported before, only the still-missing rows will post and anything already in the ledger will stay skipped as a duplicate.
+          </div>
+        </div>
+      ) : null}
+      {activePanel === 'duplicates' ? (
+        <div className="accumul8-statement-detail-panel">
+          <strong>Estimated duplicates</strong>
+          <div className="small text-muted">
+            The scan thinks about {plan?.estimated_duplicate_count || 0} rows may already exist in the ledger for the selected account. Use {importActionLabel.toLowerCase()} when you want to add anything new without re-posting those matches.
+          </div>
+        </div>
+      ) : null}
+      {activePanel === 'invalid' ? (
+        <div className="accumul8-statement-detail-panel">
+          <strong>Invalid rows</strong>
+          <div className="small text-muted">
+            {plan?.invalid_transaction_count || 0} parsed rows are missing enough information to post safely. Re-scan after improving OCR or confirm only when you are comfortable leaving those rows out.
+          </div>
+        </div>
+      ) : null}
+      {activePanel === 'totals' ? (
+        <div className="accumul8-statement-detail-panel">
+          <strong>Statement totals</strong>
+          <div className="small text-muted">
+            This plan detected {plan?.inflow_total.toFixed(2) || '0.00'} of inflow and {plan?.outflow_total.toFixed(2) || '0.00'} of outflow across the parsed rows between {plan?.first_transaction_date || 'unknown start'} and {plan?.last_transaction_date || 'unknown end'}.
+          </div>
+        </div>
+      ) : null}
       <div className="accumul8-statement-plan-grid">
         <div>
           <div className="small text-muted">AI plan</div>

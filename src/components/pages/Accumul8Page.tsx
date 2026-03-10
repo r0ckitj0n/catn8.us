@@ -3700,12 +3700,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             accounts={accounts}
             bankingOrganizations={bankingOrganizations}
             statementUploads={statementUploads}
+            transactions={transactions}
             ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
             onClose={() => setStatementModalOpen(false)}
             onUpload={uploadStatement}
             onRescan={rescanStatementUpload}
             onConfirmImport={confirmStatementImport}
             onSearch={searchStatementUploads}
+            onOpenTransaction={beginViewTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
           />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}

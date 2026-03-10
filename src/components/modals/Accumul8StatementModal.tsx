@@ -7,6 +7,7 @@ import {
   Accumul8StatementKind,
   Accumul8StatementSearchResult,
   Accumul8StatementUpload,
+  Accumul8Transaction,
 } from '../../types/accumul8';
 import { Accumul8ModalHelp } from './Accumul8ModalHelp';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
@@ -21,6 +22,7 @@ interface Accumul8StatementModalProps {
   accounts: Accumul8Account[];
   bankingOrganizations: Accumul8BankingOrganization[];
   statementUploads: Accumul8StatementUpload[];
+  transactions: Accumul8Transaction[];
   ownerUserId: number;
   onClose: () => void;
   onUpload: (formData: FormData) => Promise<Accumul8StatementUpload | undefined>;
@@ -31,6 +33,8 @@ interface Accumul8StatementModalProps {
     create_account?: Accumul8StatementNewAccountDraft | null;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; import_result: Accumul8StatementImportResult | null }>;
   onSearch: (query: string) => Promise<Accumul8StatementSearchResult[]>;
+  onOpenTransaction: (id: number) => void;
+  onDeleteTransaction: (id: number, description: string) => void;
 }
 const DEFAULT_KIND: Accumul8StatementKind = 'bank_account';
 
@@ -40,12 +44,15 @@ export function Accumul8StatementModal({
   accounts,
   bankingOrganizations,
   statementUploads,
+  transactions,
   ownerUserId,
   onClose,
   onUpload,
   onRescan,
   onConfirmImport,
   onSearch,
+  onOpenTransaction,
+  onDeleteTransaction,
 }: Accumul8StatementModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind>(DEFAULT_KIND);
@@ -118,8 +125,15 @@ export function Accumul8StatementModal({
     () => [...accounts].sort((a, b) => `${a.banking_organization_name} ${a.account_name}`.localeCompare(`${b.banking_organization_name} ${b.account_name}`)),
     [accounts],
   );
+  const transactionsById = React.useMemo(
+    () => transactions.reduce<Record<number, Accumul8Transaction>>((acc, tx) => {
+      acc[tx.id] = tx;
+      return acc;
+    }, {}),
+    [transactions],
+  );
   const isAwaitingImportApproval = React.useCallback(
-    (upload: Accumul8StatementUpload) => Boolean(upload.plan && !upload.processed_at && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
+    (upload: Accumul8StatementUpload) => Boolean(upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
     [],
   );
   const pendingUploads = React.useMemo(
@@ -355,8 +369,11 @@ export function Accumul8StatementModal({
                   busy={busy}
                   ownerUserId={ownerUserId}
                   upload={upload}
+                  transactionsById={transactionsById}
                   onRescan={() => void onRescan(upload.id, upload.account_id)}
                   onReview={upload.plan ? () => openReview(upload.id) : undefined}
+                  onOpenTransaction={onOpenTransaction}
+                  onDeleteTransaction={onDeleteTransaction}
                   isReviewable={isAwaitingImportApproval(upload)}
                   formatDateRange={formatStatementDateRange}
                   formatFileSize={formatStatementFileSize}

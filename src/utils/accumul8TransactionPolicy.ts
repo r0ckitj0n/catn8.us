@@ -35,6 +35,7 @@ export function getAccumul8TransactionEditPolicy(
   const isImported = sourceKind === 'statement_upload' || sourceKind === 'statement_pdf' || sourceKind === 'plaid';
 
   if (isImported) {
+    const canDeleteImported = sourceKind === 'statement_upload' || sourceKind === 'statement_pdf';
     return {
       sourceKind,
       sourceLabel: getAccumul8TransactionSourceLabel(sourceKind),
@@ -42,7 +43,7 @@ export function getAccumul8TransactionEditPolicy(
       canEditCoreFields: false,
       canEditPaidState: false,
       canEditBudgetPlanner: false,
-      canDelete: false,
+      canDelete: canDeleteImported,
     };
   }
 

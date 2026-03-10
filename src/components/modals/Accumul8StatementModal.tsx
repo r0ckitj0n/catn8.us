@@ -118,9 +118,13 @@ export function Accumul8StatementModal({
     () => [...accounts].sort((a, b) => `${a.banking_organization_name} ${a.account_name}`.localeCompare(`${b.banking_organization_name} ${b.account_name}`)),
     [accounts],
   );
+  const isAwaitingImportApproval = React.useCallback(
+    (upload: Accumul8StatementUpload) => Boolean(upload.plan && !upload.processed_at && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
+    [],
+  );
   const pendingUploads = React.useMemo(
-    () => statementUploads.filter((upload) => upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
-    [statementUploads],
+    () => statementUploads.filter((upload) => isAwaitingImportApproval(upload)),
+    [isAwaitingImportApproval, statementUploads],
   );
   const activeReviewUpload = React.useMemo(
     () => pendingUploads.find((upload) => upload.id === selectedReviewUploadId) || pendingUploads[0] || null,
@@ -353,7 +357,7 @@ export function Accumul8StatementModal({
                   upload={upload}
                   onRescan={() => void onRescan(upload.id, upload.account_id)}
                   onReview={upload.plan ? () => openReview(upload.id) : undefined}
-                  isReviewable={Boolean(upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed'))}
+                  isReviewable={isAwaitingImportApproval(upload)}
                   formatDateRange={formatStatementDateRange}
                   formatFileSize={formatStatementFileSize}
                 />

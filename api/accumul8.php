@@ -435,7 +435,53 @@ function accumul8_statement_ai_result_is_suspicious(array $parsed, string $sourc
         return true;
     }
 
+    if ($transactionCount === 0 && accumul8_statement_text_looks_garbled($sourceText)) {
+        return true;
+    }
+
     return false;
+}
+
+function accumul8_statement_text_looks_garbled(string $text): bool
+{
+    $text = trim($text);
+    if ($text === '') {
+        return false;
+    }
+
+    $sample = function_exists('mb_substr') ? (string)mb_substr($text, 0, 4000, 'UTF-8') : substr($text, 0, 4000);
+    $sampleLength = function_exists('mb_strlen') ? (int)mb_strlen($sample, 'UTF-8') : strlen($sample);
+    if ($sampleLength < 200) {
+        return false;
+    }
+
+    preg_match_all('/[A-Za-z0-9\s\.,:\;\-\+\(\)\/&$%]/u', $sample, $asciiMatches);
+    preg_match_all('/[^\x00-\x7F]/u', $sample, $nonAsciiMatches);
+
+    $asciiCount = is_array($asciiMatches[0] ?? null) ? count($asciiMatches[0]) : 0;
+    $nonAsciiCount = is_array($nonAsciiMatches[0] ?? null) ? count($nonAsciiMatches[0]) : 0;
+    $asciiRatio = $sampleLength > 0 ? ($asciiCount / $sampleLength) : 0.0;
+    $nonAsciiRatio = $sampleLength > 0 ? ($nonAsciiCount / $sampleLength) : 0.0;
+
+    $keywordHits = 0;
+    foreach ([
+        'statement',
+        'account',
+        'balance',
+        'payment',
+        'credit',
+        'debit',
+        'transaction',
+        'date',
+        'amount',
+        'total',
+    ] as $keyword) {
+        if (stripos($sample, $keyword) !== false) {
+            $keywordHits++;
+        }
+    }
+
+    return $asciiRatio < 0.72 && $nonAsciiRatio > 0.12 && $keywordHits < 2;
 }
 
 function accumul8_statement_find_binary(string $name, array $candidates): ?string
@@ -815,7 +861,7 @@ function accumul8_statement_extract_text_from_file(string $tmpPath, string $mime
         $pageCatalog = accumul8_statement_extract_pdf_page_catalog($tmpPath);
         $text = accumul8_statement_extract_pdf_text_from_path($tmpPath);
         $method = 'pdftotext';
-        if ($text === '') {
+        if ($text === '' || accumul8_statement_text_looks_garbled($text)) {
             $ocr = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
             $text = (string)($ocr['text'] ?? '');
             $pageCatalog = is_array($ocr['page_catalog'] ?? null) ? $ocr['page_catalog'] : $pageCatalog;

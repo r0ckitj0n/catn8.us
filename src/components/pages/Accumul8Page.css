@@ -706,7 +706,7 @@
 
 .accumul8-spreadsheet .accumul8-panel-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+  grid-template-columns: auto minmax(240px, 360px) minmax(300px, 1fr);
   align-items: center;
   gap: 1rem;
 }
@@ -722,6 +722,7 @@
 .accumul8-spreadsheet-filter {
   display: flex;
   justify-content: center;
+  min-width: 0;
 }
 
 .accumul8-spreadsheet-filter .form-control {
@@ -806,7 +807,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.6rem;
-  grid-column: 1 / -1;
+  justify-self: end;
+  width: 100%;
   padding-inline: 0.15rem;
 }
 
@@ -2017,6 +2019,10 @@
 
   .accumul8-spreadsheet-filter {
     justify-content: stretch;
+  }
+
+  .accumul8-month-summary {
+    justify-self: stretch;
   }
 
   .accumul8-panel-toolbar-search {

@@ -254,6 +254,8 @@ export function Accumul8SpreadsheetView({
   const handleMonthShift = React.useCallback((offset: number) => {
     onSelectedMonthChange(shiftMonthValue(selectedMonth, offset));
   }, [onSelectedMonthChange, selectedMonth]);
+  const selectedPanel = filteredMonthPanels[0] || null;
+  const selectedSummary = selectedPanel?.summary || null;
 
   const handleRowRtaChange = React.useCallback((rowKey: string, rawValue: string) => {
     const parsed = rawValue === '' ? 0 : Number(rawValue);
@@ -370,9 +372,23 @@ export function Accumul8SpreadsheetView({
   return (
     <div className="accumul8-spreadsheet">
       <div className="accumul8-panel-toolbar mb-3">
-        <div className="accumul8-spreadsheet-toolbar-copy">
-          <h3 className="mb-1">Budget Planner</h3>
-          <p className="small text-muted mb-0">Step month by month through your budget-planner records and test quick adjustments inline.</p>
+        <div className="accumul8-spreadsheet-toolbar-controls">
+          <div className="accumul8-spreadsheet-nav">
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(-1)} disabled={busy} aria-label="Previous month">
+              <i className="bi bi-chevron-left"></i>
+            </button>
+            <div className="accumul8-spreadsheet-nav-label">
+              {monthOptions.find((option) => option.value === selectedMonth)?.label || selectedMonth}
+            </div>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(1)} disabled={busy} aria-label="Next month">
+              <i className="bi bi-chevron-right"></i>
+            </button>
+          </div>
+          {selectedSummary ? (
+            <div className="accumul8-month-stats">
+              <span>{selectedSummary.recurringCount} recurring</span>
+            </div>
+          ) : null}
         </div>
         <div className="accumul8-spreadsheet-filter">
           <input
@@ -385,53 +401,32 @@ export function Accumul8SpreadsheetView({
             disabled={busy}
           />
         </div>
-        <div className="accumul8-spreadsheet-nav">
-          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(-1)} disabled={busy} aria-label="Previous month">
-            <i className="bi bi-chevron-left"></i>
-          </button>
-          <div className="accumul8-spreadsheet-nav-label">
-            {monthOptions.find((option) => option.value === selectedMonth)?.label || selectedMonth}
+        {selectedSummary ? (
+          <div className="accumul8-month-summary">
+            <div>
+              <span>Inflow</span>
+              <strong>{formatCurrency(selectedSummary.inflow)}</strong>
+            </div>
+            <div>
+              <span>Outflow</span>
+              <strong>{formatCurrency(selectedSummary.outflow)}</strong>
+            </div>
+            <div>
+              <span>Net</span>
+              <strong>{formatCurrency(selectedSummary.net)}</strong>
+            </div>
           </div>
-          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(1)} disabled={busy} aria-label="Next month">
-            <i className="bi bi-chevron-right"></i>
-          </button>
-        </div>
+        ) : null}
       </div>
 
       <div className="accumul8-spreadsheet-grid">
         {filteredMonthPanels.map((panel) => {
-          const summary = panel.summary;
           return (
             <section
               key={panel.monthValue}
               className="accumul8-month-panel is-center"
               aria-label={`${panel.monthLabel} spreadsheet panel`}
             >
-              <header className="accumul8-month-panel-header">
-                <div>
-                  <p className="accumul8-month-panel-kicker mb-1">Selected month</p>
-                  <h4 className="mb-0">{panel.monthLabel}</h4>
-                </div>
-                <div className="accumul8-month-stats">
-                  <span>{summary.recurringCount} recurring</span>
-                </div>
-              </header>
-
-              <div className="accumul8-month-summary">
-                <div>
-                  <span>Inflow</span>
-                  <strong>{formatCurrency(summary.inflow)}</strong>
-                </div>
-                <div>
-                  <span>Outflow</span>
-                  <strong>{formatCurrency(summary.outflow)}</strong>
-                </div>
-                <div>
-                  <span>Net</span>
-                  <strong>{formatCurrency(summary.net)}</strong>
-                </div>
-              </div>
-
               <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
                 <table className="table table-sm accumul8-sticky-head accumul8-month-table">
                   <colgroup>

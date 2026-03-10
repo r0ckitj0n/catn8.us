@@ -706,12 +706,16 @@
 
 .accumul8-spreadsheet .accumul8-panel-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+  align-items: center;
   gap: 1rem;
 }
 
-.accumul8-spreadsheet-toolbar-copy {
+.accumul8-spreadsheet-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
   min-width: 0;
 }
 
@@ -729,7 +733,6 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  justify-self: end;
 }
 
 .accumul8-spreadsheet-nav-label {
@@ -772,22 +775,6 @@
   box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.22), var(--accumul8-deco-shadow);
 }
 
-.accumul8-month-panel-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: flex-start;
-  margin-bottom: 0.75rem;
-}
-
-.accumul8-month-panel-kicker {
-  font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.62rem;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--accumul8-deco-muted);
-}
-
 .accumul8-month-panel h4,
 .accumul8-month-panel h5,
 .accumul8-month-panel strong,
@@ -819,7 +806,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.6rem;
-  margin-bottom: 0.75rem;
+  grid-column: 1 / -1;
   padding-inline: 0.15rem;
 }
 
@@ -2022,6 +2009,10 @@
   .accumul8-spreadsheet .accumul8-panel-toolbar {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .accumul8-spreadsheet-toolbar-controls {
+    justify-content: space-between;
   }
 
   .accumul8-spreadsheet-filter {

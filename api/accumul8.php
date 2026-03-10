@@ -120,6 +120,110 @@ function accumul8_extract_json_from_text(string $content): string
     return '';
 }
 
+function accumul8_openai_response_error_message(?array $json): string
+{
+    if (!is_array($json)) {
+        return '';
+    }
+    $error = $json['error'] ?? null;
+    if (is_string($error) && trim($error) !== '') {
+        return trim($error);
+    }
+    if (is_array($error) && isset($error['message']) && is_string($error['message']) && trim($error['message']) !== '') {
+        return trim((string)$error['message']);
+    }
+    return '';
+}
+
+function accumul8_openai_response_output_text(?array $json): string
+{
+    if (!is_array($json)) {
+        return '';
+    }
+    $content = trim((string)($json['output_text'] ?? ''));
+    if ($content !== '') {
+        return $content;
+    }
+    foreach (($json['output'] ?? []) as $outputItem) {
+        if (!is_array($outputItem)) {
+            continue;
+        }
+        foreach (($outputItem['content'] ?? []) as $contentItem) {
+            if (!is_array($contentItem)) {
+                continue;
+            }
+            $text = trim((string)($contentItem['text'] ?? ''));
+            if ($text !== '') {
+                return $text;
+            }
+        }
+    }
+    return '';
+}
+
+function accumul8_openai_statement_pdf_model(string $configuredModel): string
+{
+    $configuredModel = strtolower(trim($configuredModel));
+    if ($configuredModel !== '' && (str_starts_with($configuredModel, 'gpt-4o') || str_starts_with($configuredModel, 'o1'))) {
+        return $configuredModel;
+    }
+    return 'gpt-4o-mini';
+}
+
+function accumul8_openai_responses_json(string $model, array $input, string $baseUrl = '', float $temperature = 0.0, int $maxOutputTokens = 4096): array
+{
+    $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
+    if (!is_string($apiKey) || trim($apiKey) === '') {
+        throw new RuntimeException('Missing AI API key (openai)');
+    }
+
+    $root = $baseUrl !== '' ? rtrim(catn8_validate_external_base_url($baseUrl), '/') : 'https://api.openai.com';
+    if (!preg_match('#/v\d+$#', $root)) {
+        $root .= '/v1';
+    }
+
+    $resp = catn8_http_json_with_status(
+        'POST',
+        $root . '/responses',
+        [
+            'Authorization' => 'Bearer ' . trim((string)$apiKey),
+            'Content-Type' => 'application/json',
+        ],
+        [
+            'model' => $model !== '' ? $model : 'gpt-4o-mini',
+            'input' => $input,
+            'temperature' => $temperature,
+            'max_output_tokens' => $maxOutputTokens,
+            'text' => [
+                'format' => [
+                    'type' => 'json_object',
+                ],
+            ],
+        ],
+        10,
+        90
+    );
+
+    $status = (int)($resp['status'] ?? 0);
+    $json = is_array($resp['json'] ?? null) ? $resp['json'] : null;
+    if ($status < 200 || $status >= 300) {
+        $error = accumul8_openai_response_error_message($json);
+        throw new RuntimeException('HTTP ' . $status . ($error !== '' ? ': ' . $error : ''));
+    }
+
+    $content = accumul8_openai_response_output_text($json);
+    $jsonText = accumul8_extract_json_from_text($content);
+    $decoded = json_decode($jsonText, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('OpenAI returned invalid statement JSON');
+    }
+
+    return [
+        'content' => $content,
+        'json' => $decoded,
+    ];
+}
+
 function accumul8_statement_normalize_kind($value): string
 {
     return accumul8_validate_enum('statement_kind', $value, ['bank_account', 'credit_card', 'loan', 'mortgage', 'other'], 'bank_account');
@@ -615,66 +719,35 @@ function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $ac
     }
 
     if ($provider === 'openai') {
-        $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
-        if (!is_string($apiKey) || trim($apiKey) === '') {
-            throw new RuntimeException('Missing AI API key (openai)');
-        }
-        $root = $baseUrl !== '' ? rtrim(catn8_validate_external_base_url($baseUrl), '/') : 'https://api.openai.com';
-        if (!preg_match('#/v\d+$#', $root)) {
-            $root .= '/v1';
-        }
-        $resp = catn8_http_json_with_status(
-            'POST',
-            $root . '/responses',
-            [
-                'Authorization' => 'Bearer ' . trim((string)$apiKey),
-                'Content-Type' => 'application/json',
-            ],
-            [
-                'model' => $model !== '' ? $model : 'gpt-4o-mini',
-                'input' => [[
-                    'role' => 'system',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => $systemPrompt],
+        $pdfModel = accumul8_openai_statement_pdf_model($model);
+        $result = accumul8_openai_responses_json(
+            $pdfModel,
+            [[
+                'role' => 'system',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $systemPrompt],
+                ],
+            ], [
+                'role' => 'user',
+                'content' => [
+                    [
+                        'type' => 'input_text',
+                        'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
                     ],
-                ], [
-                    'role' => 'user',
-                    'content' => [
-                        [
-                            'type' => 'input_text',
-                            'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
-                        ],
-                        [
-                            'type' => 'input_file',
-                            'filename' => 'statement.pdf',
-                            'file_data' => 'data:application/pdf;base64,' . base64_encode($bytes),
-                        ],
+                    [
+                        'type' => 'input_file',
+                        'filename' => 'statement.pdf',
+                        'file_data' => 'data:application/pdf;base64,' . base64_encode($bytes),
                     ],
-                ]],
-                'temperature' => $temperature,
-            ],
-            10,
-            90
+                ],
+            ]],
+            $baseUrl,
+            $temperature
         );
-        $content = (string)($resp['json']['output_text'] ?? '');
-        if ($content === '' && is_array($resp['json']['output'] ?? null)) {
-            foreach ((array)$resp['json']['output'] as $outputItem) {
-                foreach ((array)($outputItem['content'] ?? []) as $contentItem) {
-                    if (($contentItem['type'] ?? '') === 'output_text' && is_string($contentItem['text'] ?? null)) {
-                        $content .= (string)$contentItem['text'];
-                    }
-                }
-            }
-        }
-        $jsonText = accumul8_extract_json_from_text($content);
-        $decoded = json_decode($jsonText, true);
-        if (!is_array($decoded)) {
-            throw new RuntimeException('OpenAI PDF scan returned invalid statement JSON');
-        }
         return [
             'provider' => $provider,
-            'model' => $model,
-            'json' => $decoded,
+            'model' => $pdfModel,
+            'json' => $result['json'],
         ];
     }
 
@@ -762,26 +835,23 @@ TXT;
         ], 10, 45);
         $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
     } else {
-        $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
-        if (!is_string($apiKey) || trim($apiKey) === '') {
-            throw new RuntimeException('Missing AI API key (openai)');
-        }
-        $factory = OpenAI::factory()->withApiKey(trim((string)$apiKey));
-        if ($baseUrl !== '') {
-            $factory = $factory->withBaseUri(catn8_validate_external_base_url($baseUrl));
-        }
-        $client = $factory->make();
-        $resp = $client->chat()->create([
-            'model' => ($model !== '' ? $model : 'gpt-4o-mini'),
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $userPrompt],
-            ],
-            'temperature' => $temperature,
-            'max_tokens' => 4096,
-            'response_format' => ['type' => 'json_object'],
-        ]);
-        $content = (string)($resp->choices[0]->message->content ?? '');
+        $result = accumul8_openai_responses_json(
+            $model !== '' ? $model : 'gpt-4o-mini',
+            [[
+                'role' => 'system',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $systemPrompt],
+                ],
+            ], [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $userPrompt],
+                ],
+            ]],
+            $baseUrl,
+            $temperature
+        );
+        $content = (string)($result['content'] ?? '');
     }
 
     $jsonText = accumul8_extract_json_from_text((string)$content);

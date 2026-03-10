@@ -50,8 +50,6 @@ function catn8_http_json_with_status(string $method, string $url, array $headers
     $raw = curl_exec($ch);
     $err = curl_error($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
     if (!is_string($raw)) {
         throw new RuntimeException('HTTP request failed: ' . ($err !== '' ? $err : 'unknown error'));
     }

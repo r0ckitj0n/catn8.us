@@ -1,5 +1,5 @@
 import React from 'react';
-import { AI_PROVIDER_CHOICES, aiGetModelChoices, aiGetProviderRequirements } from '../../../utils/aiUtils';
+import { AI_PROVIDER_CHOICES, aiGetModelChoices, aiGetProviderDefaults, aiGetProviderRequirements } from '../../../utils/aiUtils';
 
 interface GeneralAIProviderSectionProps {
   config: any;
@@ -23,6 +23,30 @@ export function GeneralAIProviderSection({
   modelChoicesSource
 }: GeneralAIProviderSectionProps) {
   const providerRequirements = aiGetProviderRequirements(providerKey);
+  const normalizedModelChoices = React.useMemo(() => {
+    const seen = new Set<string>();
+    const currentModel = String(config.model || '').trim();
+    const next: Array<{ value: string; label: string }> = [];
+
+    if (currentModel !== '' && !modelChoices.some((choice) => String(choice?.value || '').trim() === currentModel)) {
+      next.push({ value: currentModel, label: `${currentModel} (current)` });
+      seen.add(currentModel);
+    }
+
+    modelChoices.forEach((choice) => {
+      const value = String(choice?.value || '').trim();
+      if (value === '' || seen.has(value)) {
+        return;
+      }
+      next.push({
+        value,
+        label: String(choice?.label || value).trim() || value,
+      });
+      seen.add(value);
+    });
+
+    return next;
+  }, [config.model, modelChoices]);
 
   return (
     <div className="border rounded p-3 mb-3">
@@ -41,12 +65,13 @@ export function GeneralAIProviderSection({
               const nextProvider = e.target.value;
               const choices = aiGetModelChoices(nextProvider);
               const nextModel = choices.length ? String(choices[0].value || '') : '';
+              const providerDefaults = aiGetProviderDefaults(nextProvider);
               setConfig((c: any) => ({
                 ...c,
                 provider: nextProvider,
                 model: nextModel,
-                base_url: '',
-                location: '',
+                base_url: String(providerDefaults.base_url || ''),
+                location: String(providerDefaults.location || ''),
                 provider_config: {},
               }));
             }}
@@ -69,22 +94,22 @@ export function GeneralAIProviderSection({
               {isRefreshingModels ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
-          <datalist id="ai-model-options">
-            {modelChoices.map((m) => (
-              <option key={m.value} value={m.value} />
-            ))}
-          </datalist>
-          <input
+          <select
             id="ai-model"
-            className="form-control"
+            className="form-select"
             value={String(config.model || '')}
             onChange={(e) => setConfig((c: any) => ({ ...c, model: e.target.value }))}
-            disabled={busy}
-            list="ai-model-options"
-            placeholder={modelChoices.length ? String(modelChoices[0].value || '') : 'Enter model id…'}
-          />
+            disabled={busy || normalizedModelChoices.length === 0}
+          >
+            {normalizedModelChoices.length === 0 ? (
+              <option value="">No models available</option>
+            ) : null}
+            {normalizedModelChoices.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
           <div className="form-text">
-            Source: {modelChoicesSource === 'live' ? 'Live provider list' : 'Built-in catalog'}. Pick a preset or type an exact model id.
+            Source: {modelChoicesSource === 'live' ? 'Live provider list' : 'Built-in catalog'}.
           </div>
         </div>
 
@@ -102,7 +127,7 @@ export function GeneralAIProviderSection({
         ) : null}
 
         <div className="col-12">
-          {(providerKey === 'openai' || providerKey === 'together_ai' || providerKey === 'fireworks_ai') && (
+          {(providerKey === 'openai' || providerKey === 'together_ai' || providerKey === 'fireworks_ai' || providerKey === 'huggingface') && (
             <>
               <label className="form-label" htmlFor="ai-base-url">Base URL{providerKey === 'openai' ? ' (optional)' : ''}</label>
               <input
@@ -111,12 +136,20 @@ export function GeneralAIProviderSection({
                 value={config.base_url}
                 onChange={(e) => setConfig((c: any) => ({ ...c, base_url: e.target.value }))}
                 disabled={busy}
-                placeholder={providerKey === 'openai' ? 'Leave blank for OpenAI defaults' : 'Provider base URL'}
+                placeholder={
+                  providerKey === 'openai'
+                    ? 'Leave blank for OpenAI defaults'
+                    : providerKey === 'huggingface'
+                      ? 'Router or inference endpoint base URL'
+                      : 'Provider base URL'
+                }
               />
               <div className="form-text">
                 {providerKey === 'openai'
                   ? 'Only needed for a compatible proxy or self-hosted gateway.'
-                  : 'Use the provider default unless you have a custom endpoint.'}
+                  : providerKey === 'huggingface'
+                    ? 'Required when using a Hugging Face-compatible chat endpoint or router.'
+                    : 'Use the provider default unless you have a custom endpoint.'}
               </div>
             </>
           )}

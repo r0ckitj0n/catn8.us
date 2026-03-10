@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/storageUtils';
 import { formatTestResult, normalizeText } from '../../../utils/textUtils';
@@ -63,6 +63,32 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
     return JSON.stringify({ cfg, secrets });
   }, [config, secretsByProvider]);
 
+  const canAttemptLiveModelRefresh = useCallback(() => {
+    const savedSecrets = hasSecrets[providerKey] && typeof hasSecrets[providerKey] === 'object'
+      ? hasSecrets[providerKey]
+      : {};
+    const draftSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
+      ? secretsByProvider[providerKey]
+      : {};
+    const hasApiKey = Number((savedSecrets as any).api_key || 0) === 1 || String((draftSecrets as any).api_key || '').trim() !== '';
+    const hasServiceAccount = Number((savedSecrets as any).service_account_json || 0) === 1 || String((draftSecrets as any).service_account_json || '').trim() !== '';
+    const hasAwsAccessKey = Number((savedSecrets as any).aws_access_key_id || 0) === 1 || String((draftSecrets as any).aws_access_key_id || '').trim() !== '';
+    const hasAwsSecretKey = Number((savedSecrets as any).aws_secret_access_key || 0) === 1 || String((draftSecrets as any).aws_secret_access_key || '').trim() !== '';
+
+    if (providerKey === 'google_vertex_ai') {
+      return hasServiceAccount && String(config.location || '').trim() !== '';
+    }
+    if (providerKey === 'aws_bedrock') {
+      return hasAwsAccessKey && hasAwsSecretKey && String((config.provider_config as any)?.aws_region || '').trim() !== '';
+    }
+    if (providerKey === 'azure_openai') {
+      return hasApiKey
+        && String((config.provider_config as any)?.azure_endpoint || '').trim() !== ''
+        && String((config.provider_config as any)?.azure_api_version || '').trim() !== '';
+    }
+    return hasApiKey;
+  }, [config.location, config.provider_config, hasSecrets, providerKey, secretsByProvider]);
+
   React.useEffect(() => {
     if (!open) return;
     setBusy(true);
@@ -94,23 +120,6 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
       .catch((e) => setError(e?.message || 'Failed to load AI configuration'))
       .finally(() => setBusy(false));
   }, [open]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    if (!config || typeof config !== 'object') return;
-    if (!config.provider) return;
-    const choices = modelChoices.length ? modelChoices : aiGetModelChoices(config.provider);
-    if (!choices.length) return;
-    const current = String(config.model || '').trim();
-    if (current !== '') return;
-    setConfig((c) => ({ ...c, model: String(choices[0].value || '') }));
-  }, [open, config.provider, config.model, modelChoices]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    setModelChoices(aiGetModelChoices(config.provider));
-    setModelChoicesSource('catalog');
-  }, [open, config.provider]);
 
   React.useEffect(() => {
     if (!error) return;
@@ -151,7 +160,7 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
     }
   };
 
-  const refreshModelChoices = async () => {
+  const refreshModelChoices = useCallback(async () => {
     if (busy || isRefreshingModels) return;
     setIsRefreshingModels(true);
     setError('');
@@ -190,7 +199,40 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
     } finally {
       setIsRefreshingModels(false);
     }
-  };
+  }, [
+    busy,
+    config.base_url,
+    config.location,
+    config.model,
+    config.provider,
+    config.provider_config,
+    isRefreshingModels,
+    providerKey,
+    secretsByProvider,
+  ]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!config || typeof config !== 'object') return;
+    if (!config.provider) return;
+    const choices = modelChoices.length ? modelChoices : aiGetModelChoices(config.provider);
+    if (!choices.length) return;
+    const current = String(config.model || '').trim();
+    if (current !== '') return;
+    setConfig((c) => ({ ...c, model: String(choices[0].value || '') }));
+  }, [open, config.provider, config.model, modelChoices]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setModelChoices(aiGetModelChoices(config.provider));
+    setModelChoicesSource('catalog');
+  }, [open, config.provider]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!canAttemptLiveModelRefresh()) return;
+    void refreshModelChoices();
+  }, [open, providerKey, canAttemptLiveModelRefresh, refreshModelChoices]);
 
   const save = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();

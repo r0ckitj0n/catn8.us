@@ -52,18 +52,40 @@ export const AI_PROVIDER_REQUIREMENTS: Record<string, { summary: string; require
   huggingface: {
     summary: 'Inference API for hosted open models.',
     required: ['API token', 'Model'],
+    optional: ['Base URL'],
   },
+};
+
+export const AI_PROVIDER_DEFAULTS: Record<string, { base_url?: string; location?: string }> = {
+  openai: {},
+  anthropic: {},
+  google_ai_studio: {},
+  google_vertex_ai: {
+    location: 'global',
+  },
+  azure_openai: {},
+  aws_bedrock: {},
+  together_ai: {
+    base_url: 'https://api.together.xyz',
+  },
+  fireworks_ai: {
+    base_url: 'https://api.fireworks.ai/inference',
+  },
+  huggingface: {},
 };
 
 export const AI_MODEL_CHOICES_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
   openai: [
     { value: 'gpt-5.2', label: 'gpt-5.2' },
     { value: 'gpt-5.2-mini', label: 'gpt-5.2-mini' },
-    { value: 'gpt-5.2-chat-latest', label: 'gpt-5.2-chat-latest' },
     { value: 'gpt-5', label: 'gpt-5' },
     { value: 'gpt-5-mini', label: 'gpt-5-mini' },
     { value: 'gpt-4.1', label: 'gpt-4.1' },
     { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'o4-mini', label: 'o4-mini' },
+    { value: 'o3', label: 'o3' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
@@ -119,4 +141,9 @@ export function aiGetModelChoices(provider: string) {
 export function aiGetProviderRequirements(provider: string) {
   const key = normalizeText(provider);
   return AI_PROVIDER_REQUIREMENTS[key] || null;
+}
+
+export function aiGetProviderDefaults(provider: string) {
+  const key = normalizeText(provider);
+  return AI_PROVIDER_DEFAULTS[key] || {};
 }

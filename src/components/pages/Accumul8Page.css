@@ -594,7 +594,7 @@
 .accumul8-panel {
   display: flex;
   flex-direction: column;
-  margin-top: 0.75rem;
+  margin-top: 0;
   border: 3px solid var(--accumul8-deco-line-strong);
   background:
     linear-gradient(180deg, rgba(17, 24, 31, 0.97), rgba(10, 16, 22, 0.98)),

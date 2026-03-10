@@ -2043,7 +2043,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>
           {tab === 'ledger' && (
             <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar mb-3">
+              <div className="accumul8-panel-toolbar">
                 <h3 className="mb-0">Ledger</h3>
                 <div className="accumul8-panel-toolbar-search">
                   <select

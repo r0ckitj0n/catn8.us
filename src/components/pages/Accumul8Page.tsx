@@ -1867,78 +1867,168 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <img className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" />
                 </picture>
               </h1>
-              <div className="accumul8-tabs accumul8-tabs--header">
-                <div className="accumul8-tabs accumul8-tabs--header-buttons">
-                  {[
-                    ['debtors', 'IOU'],
-                    ['spreadsheet', 'Budget'],
-                    ['ledger', 'Ledger'],
-                    ['pay_bills', 'Pay Bills'],
-                  ].map(([key, label]) => (
-                    <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
-                  ))}
-                  <div className="accumul8-settings-menu-anchor" ref={settingsMenuRef}>
-                    <button
-                      ref={settingsButtonRef}
-                      type="button"
-                      className={`btn ${settingsMenuOpen ? 'btn-primary' : 'btn-outline-primary'}`}
-                      aria-haspopup="dialog"
-                      aria-expanded={settingsMenuOpen}
-                      onClick={() => setSettingsMenuOpen((current) => !current)}
-                    >
-                      Settings
-                    </button>
-                    {settingsMenuOpen ? (
-                      <div
-                        className="accumul8-settings-modal"
-                        role="dialog"
-                        aria-label="Accumul8 settings sections"
-                        style={{
-                          top: `${settingsMenuPosition.top}px`,
-                          left: `${settingsMenuPosition.left}px`,
-                          width: `${settingsMenuPosition.width}px`,
-                        }}
-                      >
-                        <div className="accumul8-settings-modal-actions">
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary"
-                            onClick={() => {
-                              setStatementModalOpen(true);
-                              setSettingsMenuOpen(false);
+              <div className="accumul8-header-control-deck">
+                <div className="accumul8-header-primary-row">
+                  <div className="accumul8-tabs accumul8-tabs--header">
+                    <div className="accumul8-tabs accumul8-tabs--header-buttons">
+                      {[
+                        ['debtors', 'IOU'],
+                        ['spreadsheet', 'Budget'],
+                        ['ledger', 'Ledger'],
+                        ['pay_bills', 'Pay Bills'],
+                      ].map(([key, label]) => (
+                        <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
+                      ))}
+                      <div className="accumul8-settings-menu-anchor" ref={settingsMenuRef}>
+                        <button
+                          ref={settingsButtonRef}
+                          type="button"
+                          className={`btn ${settingsMenuOpen ? 'btn-primary' : 'btn-outline-primary'}`}
+                          aria-haspopup="dialog"
+                          aria-expanded={settingsMenuOpen}
+                          onClick={() => setSettingsMenuOpen((current) => !current)}
+                        >
+                          Settings
+                        </button>
+                        {settingsMenuOpen ? (
+                          <div
+                            className="accumul8-settings-modal"
+                            role="dialog"
+                            aria-label="Accumul8 settings sections"
+                            style={{
+                              top: `${settingsMenuPosition.top}px`,
+                              left: `${settingsMenuPosition.left}px`,
+                              width: `${settingsMenuPosition.width}px`,
                             }}
                           >
-                            Bank Statements
-                          </button>
-                          {[
-                            ['contacts', 'Entities'],
-                            ['entity_endex', 'Entity Endex'],
-                            ['notifications', 'Notifications'],
-                            ['recurring', 'Recurring'],
-                            ['sync', 'Sync'],
-                          ].map(([key, label]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
-                              onClick={() => {
-                                setTab(key as TabKey);
-                                setSettingsMenuOpen(false);
-                              }}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
+                            <div className="accumul8-settings-modal-actions">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary"
+                                onClick={() => {
+                                  setStatementModalOpen(true);
+                                  setSettingsMenuOpen(false);
+                                }}
+                              >
+                                Bank Statements
+                              </button>
+                              {[
+                                ['contacts', 'Entities'],
+                                ['entity_endex', 'Entity Endex'],
+                                ['notifications', 'Notifications'],
+                                ['recurring', 'Recurring'],
+                                ['sync', 'Sync'],
+                              ].map(([key, label]) => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
+                                  onClick={() => {
+                                    setTab(key as TabKey);
+                                    setSettingsMenuOpen(false);
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </div>
+                  </div>
+                  <div className="accumul8-owner-selector">
+                    <select
+                      id="accumul8-owner-select"
+                      className="form-select form-select-sm"
+                      aria-label="Viewing owner"
+                      value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
+                      onChange={(e) => {
+                        const next = Number(e.target.value || 0);
+                        if (!Number.isFinite(next) || next <= 0) return;
+                        setSelectedOwnerUserId(next);
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+                        }
+                      }}
+                      disabled={busy || accessibleAccountOwners.length <= 1}
+                    >
+                      {accessibleAccountOwners.map((owner) => (
+                        <option key={owner.owner_user_id} value={owner.owner_user_id}>
+                          {owner.username}
+                          {owner.is_self ? ' (You)' : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
-                <div className="accumul8-summary-grid">
-                  <div className="accumul8-summary-card"><span>Current Balance</span><strong>{formatCurrencyAmount(headerSummary.currentBalance)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Projected Balance</span><strong>{formatCurrencyAmount(headerSummary.projectedBalance)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong></div>
-                  <div className="accumul8-summary-card"><span>Upcoming Windfalls</span><strong>{formatCurrencyAmount(headerSummary.upcomingWindfalls)}</strong></div>
+                <div className="accumul8-page-toolbar accumul8-page-toolbar--embedded">
+                  <div className="accumul8-page-filters">
+                    <div className="accumul8-toolbar-field">
+                      <div className="accumul8-filter-control-row">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                          onClick={() => setBankingOrganizationManagerOpen(true)}
+                          aria-label="Manage banking organizations"
+                          title="Manage banking organizations"
+                        >
+                          <i className="bi bi-gear"></i>
+                        </button>
+                        <select
+                          id="accumul8-group-filter"
+                          className={getActiveFilterClass('form-select form-select-sm', selectedBankingOrganizationId !== '')}
+                          aria-label="Banking Organization"
+                          value={selectedBankingOrganizationId}
+                          onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
+                        >
+                          <option value="">All Banking Organizations</option>
+                          {bankingOrganizations.map((organization) => (
+                            <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="accumul8-toolbar-field">
+                      <div className="accumul8-filter-control-row">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
+                          onClick={() => setAccountManagerOpen(true)}
+                          aria-label="Manage bank accounts"
+                          title="Manage bank accounts"
+                        >
+                          <i className="bi bi-gear"></i>
+                        </button>
+                        <select
+                          id="accumul8-bank-filter"
+                          className={getActiveFilterClass('form-select form-select-sm', selectedBankAccountId !== '')}
+                          aria-label="Bank account"
+                          value={selectedBankAccountId}
+                          onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                        >
+                          <option value="">All bank accounts</option>
+                          {visibleAccounts.map((account) => (
+                            <option key={account.id} value={account.id}>{account.account_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {tab === 'contacts' && (
+                      <div className="accumul8-toolbar-summary" aria-label="Entity summary">
+                        <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
+                        <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
+                        <div className="accumul8-summary-card"><span>Businesses</span><strong>{entitiesSorted.filter((entity) => normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business').length}</strong></div>
+                        <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="accumul8-summary-grid">
+                    <div className="accumul8-summary-card"><span>Current Balance</span><strong>{formatCurrencyAmount(headerSummary.currentBalance)}</strong></div>
+                    <div className="accumul8-summary-card"><span>Projected Balance</span><strong>{formatCurrencyAmount(headerSummary.projectedBalance)}</strong></div>
+                    <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong></div>
+                    <div className="accumul8-summary-card"><span>Upcoming Windfalls</span><strong>{formatCurrencyAmount(headerSummary.upcomingWindfalls)}</strong></div>
+                  </div>
                 </div>
               </div>
               <a
@@ -1948,92 +2038,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               >
                 <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="catn8.us Logo" />
               </a>
-            </div>
-            <div className="accumul8-page-toolbar">
-              <div className="accumul8-page-filters">
-                <div className="accumul8-toolbar-field">
-                  <div className="accumul8-filter-control-row">
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                      onClick={() => setBankingOrganizationManagerOpen(true)}
-                      aria-label="Manage banking organizations"
-                      title="Manage banking organizations"
-                    >
-                      <i className="bi bi-gear"></i>
-                    </button>
-                    <select
-                      id="accumul8-group-filter"
-                      className={getActiveFilterClass('form-select form-select-sm', selectedBankingOrganizationId !== '')}
-                      aria-label="Banking Organization"
-                      value={selectedBankingOrganizationId}
-                      onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
-                    >
-                      <option value="">All Banking Organizations</option>
-                      {bankingOrganizations.map((organization) => (
-                        <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="accumul8-toolbar-field">
-                  <div className="accumul8-filter-control-row">
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                      onClick={() => setAccountManagerOpen(true)}
-                      aria-label="Manage bank accounts"
-                      title="Manage bank accounts"
-                    >
-                      <i className="bi bi-gear"></i>
-                    </button>
-                    <select
-                      id="accumul8-bank-filter"
-                      className={getActiveFilterClass('form-select form-select-sm', selectedBankAccountId !== '')}
-                      aria-label="Bank account"
-                      value={selectedBankAccountId}
-                      onChange={(e) => setSelectedBankAccountId(e.target.value)}
-                    >
-                      <option value="">All bank accounts</option>
-                      {visibleAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>{account.account_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {tab === 'contacts' && (
-                  <div className="accumul8-toolbar-summary" aria-label="Entity summary">
-                    <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
-                    <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
-                    <div className="accumul8-summary-card"><span>Businesses</span><strong>{entitiesSorted.filter((entity) => normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business').length}</strong></div>
-                    <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
-                  </div>
-                )}
-              </div>
-              <div className="accumul8-owner-selector">
-                <select
-                  id="accumul8-owner-select"
-                  className="form-select form-select-sm"
-                  aria-label="Viewing owner"
-                  value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
-                  onChange={(e) => {
-                    const next = Number(e.target.value || 0);
-                    if (!Number.isFinite(next) || next <= 0) return;
-                    setSelectedOwnerUserId(next);
-                    if (typeof window !== 'undefined') {
-                      window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
-                    }
-                  }}
-                  disabled={busy || accessibleAccountOwners.length <= 1}
-                >
-                  {accessibleAccountOwners.map((owner) => (
-                    <option key={owner.owner_user_id} value={owner.owner_user_id}>
-                      {owner.username}
-                      {owner.is_self ? ' (You)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
           <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>

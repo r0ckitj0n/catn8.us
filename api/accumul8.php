@@ -170,6 +170,11 @@ function accumul8_openai_statement_pdf_model(string $configuredModel): string
     return 'gpt-4o-mini';
 }
 
+function accumul8_statement_openai_max_output_tokens(): int
+{
+    return 20000;
+}
+
 function accumul8_statement_cleanup_rendered_pages(array $pages): void
 {
     foreach ($pages as $page) {
@@ -341,6 +346,50 @@ function accumul8_statement_normalize_kind($value): string
     return accumul8_validate_enum('statement_kind', $value, ['bank_account', 'credit_card', 'loan', 'mortgage', 'other'], 'bank_account');
 }
 
+function accumul8_statement_filename_month_hint(string $filename): string
+{
+    if (preg_match('/\b(20\d{2})(\d{2})\d{2}\b/', $filename, $matches)) {
+        return ($matches[1] ?? '') . '-' . ($matches[2] ?? '');
+    }
+    if (preg_match('/\b(20\d{2})-(\d{2})-\d{2}\b/', $filename, $matches)) {
+        return ($matches[1] ?? '') . '-' . ($matches[2] ?? '');
+    }
+    return '';
+}
+
+function accumul8_statement_ai_result_is_suspicious(array $parsed, string $sourceText, string $filename): bool
+{
+    $sourceTextLower = strtolower($sourceText);
+    $statementKind = strtolower(trim((string)($parsed['statement_kind'] ?? '')));
+    $institutionName = strtolower(trim((string)($parsed['institution_name'] ?? '')));
+    $accountNameHint = strtolower(trim((string)($parsed['account_name_hint'] ?? '')));
+    $transactionCount = is_array($parsed['transactions'] ?? null) ? count($parsed['transactions']) : 0;
+
+    $fileMonthHint = accumul8_statement_filename_month_hint($filename);
+    $periodStart = accumul8_normalize_date((string)($parsed['period_start'] ?? ''));
+    if ($fileMonthHint !== '' && $periodStart !== null && substr($periodStart, 0, 7) !== $fileMonthHint) {
+        return true;
+    }
+
+    if ($transactionCount > 0 && strlen($sourceText) >= 8000 && $transactionCount < 10) {
+        return true;
+    }
+
+    if ($statementKind === 'credit_card' && (str_contains($sourceTextLower, 'checking') || str_contains($sourceTextLower, 'savings'))) {
+        return true;
+    }
+
+    if (($institutionName === '' || $institutionName === 'credit card') && str_contains($sourceTextLower, 'capital one 360')) {
+        return true;
+    }
+
+    if (($accountNameHint === '' || $accountNameHint === 'unknown') && str_contains($sourceTextLower, 'checking')) {
+        return true;
+    }
+
+    return false;
+}
+
 function accumul8_statement_find_binary(string $name, array $candidates): ?string
 {
     foreach ($candidates as $candidate) {
@@ -443,28 +492,159 @@ function accumul8_statement_extract_pdf_page_catalog(string $pdfPath): array
 
 function accumul8_statement_extract_pdf_text_from_path(string $pdfPath): string
 {
-    if ($pdfPath === '' || !is_file($pdfPath) || !function_exists('shell_exec')) {
+    if ($pdfPath === '' || !is_file($pdfPath)) {
         return '';
     }
-    $bin = accumul8_statement_find_binary('pdftotext', [
-        '/usr/bin/pdftotext',
-        '/usr/local/bin/pdftotext',
-        '/opt/homebrew/bin/pdftotext',
-    ]);
-    if ($bin === null) {
+    if (function_exists('shell_exec')) {
+        $bin = accumul8_statement_find_binary('pdftotext', [
+            '/usr/bin/pdftotext',
+            '/usr/local/bin/pdftotext',
+            '/opt/homebrew/bin/pdftotext',
+        ]);
+        if ($bin !== null) {
+            $tmpOut = tempnam(sys_get_temp_dir(), 'accumul8_pdf_txt_');
+            if (is_string($tmpOut) && $tmpOut !== '') {
+                $cmd = escapeshellarg($bin) . ' -enc UTF-8 -layout -q ' . escapeshellarg($pdfPath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
+                shell_exec($cmd);
+                $txt = is_file($tmpOut) ? (string)file_get_contents($tmpOut) : '';
+                if (is_file($tmpOut)) {
+                    @unlink($tmpOut);
+                }
+                $normalized = accumul8_statement_text_from_bytes($txt);
+                if ($normalized !== '') {
+                    return $normalized;
+                }
+            }
+        }
+    }
+    return accumul8_statement_extract_pdf_text_with_php_parser($pdfPath);
+}
+
+function accumul8_statement_pdf_decode_literal_string(string $value): string
+{
+    $length = strlen($value);
+    $result = '';
+    for ($i = 0; $i < $length; $i++) {
+        $char = $value[$i];
+        if ($char !== '\\') {
+            $result .= $char;
+            continue;
+        }
+        $i++;
+        if ($i >= $length) {
+            break;
+        }
+        $next = $value[$i];
+        if ($next >= '0' && $next <= '7') {
+            $octal = $next;
+            for ($j = 0; $j < 2 && ($i + 1) < $length; $j++) {
+                $peek = $value[$i + 1];
+                if ($peek < '0' || $peek > '7') {
+                    break;
+                }
+                $octal .= $peek;
+                $i++;
+            }
+            $result .= chr(octdec($octal));
+            continue;
+        }
+        if ($next === 'n') {
+            $result .= "\n";
+        } elseif ($next === 'r') {
+            $result .= "\r";
+        } elseif ($next === 't') {
+            $result .= "\t";
+        } elseif ($next === 'b') {
+            $result .= "\x08";
+        } elseif ($next === 'f') {
+            $result .= "\x0C";
+        } elseif ($next === '(' || $next === ')' || $next === '\\') {
+            $result .= $next;
+        } elseif ($next === "\n" || $next === "\r") {
+            if ($next === "\r" && ($i + 1) < $length && $value[$i + 1] === "\n") {
+                $i++;
+            }
+        } else {
+            $result .= $next;
+        }
+    }
+    return $result;
+}
+
+function accumul8_statement_pdf_decode_text_fragment(string $value): string
+{
+    if ($value === '') {
         return '';
     }
-    $tmpOut = tempnam(sys_get_temp_dir(), 'accumul8_pdf_txt_');
-    if (!is_string($tmpOut) || $tmpOut === '') {
+    if (substr_count($value, "\0") > 0 && function_exists('mb_convert_encoding')) {
+        $decoded = @mb_convert_encoding($value, 'UTF-8', 'UTF-16BE');
+        if (is_string($decoded) && trim($decoded) !== '') {
+            return $decoded;
+        }
+    }
+    if (!preg_match('//u', $value) && function_exists('mb_convert_encoding')) {
+        $decoded = @mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+        if (is_string($decoded) && $decoded !== '') {
+            return $decoded;
+        }
+    }
+    return $value;
+}
+
+function accumul8_statement_extract_pdf_text_with_php_parser(string $pdfPath): string
+{
+    $bytes = (string)file_get_contents($pdfPath);
+    if ($bytes === '') {
         return '';
     }
-    $cmd = escapeshellarg($bin) . ' -enc UTF-8 -layout -q ' . escapeshellarg($pdfPath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
-    shell_exec($cmd);
-    $txt = is_file($tmpOut) ? (string)file_get_contents($tmpOut) : '';
-    if (is_file($tmpOut)) {
-        @unlink($tmpOut);
+
+    preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $bytes, $streamMatches);
+    $chunks = [];
+    foreach (($streamMatches[1] ?? []) as $streamData) {
+        if (!is_string($streamData) || $streamData === '') {
+            continue;
+        }
+
+        $decodedStream = null;
+        foreach ([
+            static fn(string $s) => function_exists('zlib_decode') ? @zlib_decode($s) : false,
+            static fn(string $s) => @gzuncompress($s),
+            static fn(string $s) => @gzinflate($s),
+        ] as $decoder) {
+            $candidate = $decoder($streamData);
+            if (is_string($candidate) && $candidate !== '') {
+                $decodedStream = $candidate;
+                break;
+            }
+        }
+        if (!is_string($decodedStream) || $decodedStream === '') {
+            continue;
+        }
+        if (strpos($decodedStream, 'BT') === false || (strpos($decodedStream, 'Tj') === false && strpos($decodedStream, 'TJ') === false && strpos($decodedStream, "'") === false && strpos($decodedStream, '"') === false)) {
+            continue;
+        }
+
+        preg_match_all('/\[((?:\\\\.|[^\]])*)\]\s*TJ|\(((?:\\\\.|[^\\\\)])*)\)\s*Tj|\(((?:\\\\.|[^\\\\)])*)\)\s*\'|\(((?:\\\\.|[^\\\\)])*)\)\s*"/s', $decodedStream, $textMatches, PREG_SET_ORDER);
+        foreach ($textMatches as $match) {
+            if (!empty($match[1])) {
+                preg_match_all('/\(((?:\\\\.|[^\\\\)])*)\)/s', (string)$match[1], $arrayParts);
+                foreach (($arrayParts[1] ?? []) as $arrayPart) {
+                    $decoded = accumul8_statement_pdf_decode_text_fragment(accumul8_statement_pdf_decode_literal_string((string)$arrayPart));
+                    if ($decoded !== '') {
+                        $chunks[] = $decoded;
+                    }
+                }
+                continue;
+            }
+            $literal = (string)($match[2] ?? $match[3] ?? $match[4] ?? '');
+            $decoded = accumul8_statement_pdf_decode_text_fragment(accumul8_statement_pdf_decode_literal_string($literal));
+            if ($decoded !== '') {
+                $chunks[] = $decoded;
+            }
+        }
     }
-    return accumul8_statement_text_from_bytes($txt);
+
+    return accumul8_statement_text_from_bytes(implode("\n", $chunks));
 }
 
 function accumul8_statement_extract_image_text_with_tesseract(string $imagePath): string
@@ -751,7 +931,7 @@ function accumul8_ai_generate_statement_json_from_images(array $images, array $a
             ]],
             $baseUrl,
             $temperature,
-            4096,
+            accumul8_statement_openai_max_output_tokens(),
             accumul8_statement_openai_response_format(),
             120
         );
@@ -896,7 +1076,7 @@ function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $ac
             ]],
             $baseUrl,
             $temperature,
-            4096,
+            accumul8_statement_openai_max_output_tokens(),
             accumul8_statement_openai_response_format(),
             180
         );
@@ -991,8 +1171,9 @@ TXT;
         ], 10, 45);
         $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
     } else {
+        $statementModel = accumul8_openai_statement_pdf_model($model);
         $result = accumul8_openai_responses_json(
-            $model !== '' ? $model : 'gpt-4o-mini',
+            $statementModel,
             [[
                 'role' => 'system',
                 'content' => [
@@ -1006,10 +1187,11 @@ TXT;
             ]],
             $baseUrl,
             $temperature,
-            4096,
+            accumul8_statement_openai_max_output_tokens(),
             accumul8_statement_openai_response_format()
         );
         $content = (string)($result['content'] ?? '');
+        $model = $statementModel;
     }
 
     $jsonText = accumul8_extract_json_from_text((string)$content);
@@ -4020,6 +4202,11 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
             if ($text !== '') {
                 try {
                     $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+                    $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
+                    if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
+                        $scanErrors[] = 'Text extraction path produced a suspicious statement parse';
+                        $ai = null;
+                    }
                 } catch (Throwable $textAiError) {
                     $scanErrors[] = 'Text extraction path failed: ' . accumul8_normalize_text($textAiError->getMessage(), 250);
                 }

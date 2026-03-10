@@ -445,6 +445,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     sendNotification,
     syncBankConnection,
     uploadStatement,
+    rescanStatementUpload,
+    confirmStatementImport,
+    searchStatementUploads,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [entityForm, setEntityForm] = React.useState<EntityFormState>(DEFAULT_ENTITY_FORM);
@@ -3271,10 +3274,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             open={statementModalOpen}
             busy={busy}
             accounts={accounts}
+            bankingOrganizations={bankingOrganizations}
             statementUploads={statementUploads}
             ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
             onClose={() => setStatementModalOpen(false)}
             onUpload={uploadStatement}
+            onRescan={rescanStatementUpload}
+            onConfirmImport={confirmStatementImport}
+            onSearch={searchStatementUploads}
           />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}

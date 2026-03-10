@@ -23,6 +23,74 @@ export interface Accumul8StatementTransactionLocator {
   page_number: number | null;
 }
 
+export interface Accumul8StatementPageCatalogEntry {
+  page_number: number;
+  text_excerpt: string;
+}
+
+export interface Accumul8StatementPlanSuggestedAccount {
+  account_name: string;
+  account_type: string;
+  institution_name: string;
+  mask_last4: string;
+}
+
+export interface Accumul8StatementPlan {
+  suggested_account_id: number | null;
+  suggested_account_label: string;
+  account_match_score: number;
+  account_match_reason: string;
+  requires_account_confirmation: number;
+  statement_kind: Accumul8StatementKind;
+  institution_name: string;
+  account_name_hint: string;
+  account_last4: string;
+  period_start: string | null;
+  period_end: string | null;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  transaction_count: number;
+  importable_transaction_count: number;
+  invalid_transaction_count: number;
+  estimated_duplicate_count: number;
+  inflow_total: number;
+  outflow_total: number;
+  first_transaction_date: string;
+  last_transaction_date: string;
+  suggested_new_account: Accumul8StatementPlanSuggestedAccount;
+}
+
+export interface Accumul8StatementImportResultRow {
+  transaction_date?: string;
+  description?: string;
+  amount?: number;
+  reason?: string;
+  existing_transaction_id?: number;
+  id?: number;
+}
+
+export interface Accumul8StatementImportResult {
+  imported_count: number;
+  duplicate_count: number;
+  failed_count: number;
+  successful_rows: Accumul8StatementImportResultRow[];
+  duplicate_rows: Accumul8StatementImportResultRow[];
+  failed_rows: Accumul8StatementImportResultRow[];
+}
+
+export interface Accumul8StatementSearchResult {
+  upload_id: number;
+  original_filename: string;
+  status: string;
+  account_name: string;
+  institution_name: string;
+  period_start: string;
+  period_end: string;
+  matched_page_number: number | null;
+  snippet: string;
+  score: number;
+}
+
 export interface Accumul8StatementUpload {
   id: number;
   account_id: number | null;
@@ -51,7 +119,13 @@ export interface Accumul8StatementUpload {
   suspicious_items: Accumul8StatementAlert[];
   processing_notes: string[];
   transaction_locators: Accumul8StatementTransactionLocator[];
+  page_catalog: Accumul8StatementPageCatalogEntry[];
+  catalog_summary: string;
+  catalog_keywords: string[];
+  plan: Accumul8StatementPlan | null;
+  import_result: Accumul8StatementImportResult | null;
   last_error: string;
+  last_scanned_at: string;
   processed_at: string;
   created_at: string;
 }
@@ -148,6 +222,8 @@ export interface Accumul8Transaction {
   is_budget_planner: number;
   source_kind: string;
   source_ref: string;
+  statement_upload_id: number | null;
+  statement_page_number: number | null;
   pending_status: number;
   contact_name: string;
   account_name: string;

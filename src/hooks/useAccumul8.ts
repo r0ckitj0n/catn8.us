@@ -24,6 +24,8 @@ import {
   Accumul8RecurringPayment,
   Accumul8RecurringUpsertRequest,
   Accumul8StatementUpload,
+  Accumul8StatementImportResult,
+  Accumul8StatementSearchResult,
   Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../types/accumul8';
@@ -329,11 +331,12 @@ export function useAccumul8(
   const uploadStatement = React.useCallback(async (formData: FormData) => {
     setBusy(true);
     try {
-      await ApiClient.postFormData(scopedActionUrl('upload_statement'), formData);
+      const res = await ApiClient.postFormData<{ success: boolean; upload: Accumul8StatementUpload }>(scopedActionUrl('upload_statement'), formData);
       await load();
       if (onToast) {
-        onToast({ tone: 'success', message: 'Statement uploaded and processed' });
+        onToast({ tone: 'success', message: 'Statement scanned. Review the import plan before approving.' });
       }
+      return res?.upload;
     } catch (error: any) {
       if (Number(error?.status || 0) === 409 && Number(error?.payload?.duplicate ? 1 : 0) === 1) {
         const statementFile = formData.get('statement_file');
@@ -355,6 +358,69 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const rescanStatementUpload = React.useCallback(async (id: number, accountId?: number | null) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload }>(scopedActionUrl('rescan_statement_upload'), {
+        id,
+        account_id: accountId || null,
+      });
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement rescanned. Review the refreshed import plan.' });
+      }
+      return res?.upload;
+    } catch (error: any) {
+      handleError(error, 'Failed to rescan statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const confirmStatementImport = React.useCallback(async (payload: {
+    id: number;
+    account_id?: number | null;
+    create_account?: {
+      banking_organization_name?: string;
+      account_name: string;
+      account_type?: string;
+      institution_name?: string;
+      mask_last4?: string;
+    } | null;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload; import_result: Accumul8StatementImportResult | null }>(
+        scopedActionUrl('confirm_statement_import'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement import finished. Review imported, skipped, and failed rows below.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to import statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const searchStatementUploads = React.useCallback(async (query: string) => {
+    const normalized = String(query || '').trim();
+    if (!normalized) {
+      return [] as Accumul8StatementSearchResult[];
+    }
+    try {
+      const res = await ApiClient.get<{ success: boolean; results: Accumul8StatementSearchResult[] }>(
+        `${scopedActionUrl('search_statement_uploads')}&q=${encodeURIComponent(normalized)}`,
+      );
+      return Array.isArray(res?.results) ? res.results : [];
+    } catch (error: any) {
+      handleError(error, 'Failed to search bank statements');
+      throw error;
+    }
+  }, [handleError, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -436,5 +502,8 @@ export function useAccumul8(
     sendNotification,
     syncBankConnection,
     uploadStatement,
+    rescanStatementUpload,
+    confirmStatementImport,
+    searchStatementUploads,
   };
 }

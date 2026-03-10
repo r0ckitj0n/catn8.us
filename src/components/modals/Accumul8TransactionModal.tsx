@@ -48,6 +48,70 @@ function normalizeLocatorText(value: string): string {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 }
 
+function parseStatementUploadId(sourceRef: string): number | null {
+  const match = String(sourceRef || '').trim().match(/^statement_upload:(\d+)$/i);
+  if (!match) {
+    return null;
+  }
+  const uploadId = Number(match[1]);
+  return Number.isInteger(uploadId) && uploadId > 0 ? uploadId : null;
+}
+
+function scoreStatementLocatorMatch(
+  transaction: Accumul8Transaction,
+  locator: Accumul8StatementUpload['transaction_locators'][number],
+): number {
+  const transactionDate = String(transaction.transaction_date || '');
+  const locatorDate = String(locator.transaction_date || '');
+  const transactionAmount = Number(transaction.amount || 0);
+  const locatorAmount = Number(locator.amount || 0);
+  const transactionDescription = normalizeLocatorText(transaction.description);
+  const locatorDescription = normalizeLocatorText(locator.description);
+
+  let score = 0;
+  if (transactionDate !== '' && transactionDate === locatorDate) {
+    score += 6;
+  }
+  if (Math.abs(transactionAmount - locatorAmount) <= 0.01) {
+    score += 6;
+  }
+  if (transactionDescription !== '' && transactionDescription === locatorDescription) {
+    score += 8;
+  } else if (
+    transactionDescription !== ''
+    && locatorDescription !== ''
+    && (transactionDescription.includes(locatorDescription) || locatorDescription.includes(transactionDescription))
+  ) {
+    score += 4;
+  }
+  return score;
+}
+
+function resolveStatementPageNumber(
+  transaction: Accumul8Transaction,
+  upload: Accumul8StatementUpload | null,
+): number | null {
+  if (!upload || !Array.isArray(upload.transaction_locators) || upload.transaction_locators.length === 0) {
+    return null;
+  }
+
+  let bestPageNumber: number | null = null;
+  let bestScore = 0;
+  for (const locator of upload.transaction_locators) {
+    const pageNumber = Number(locator.page_number || 0);
+    if (!Number.isInteger(pageNumber) || pageNumber <= 0) {
+      continue;
+    }
+    const score = scoreStatementLocatorMatch(transaction, locator);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPageNumber = pageNumber;
+    }
+  }
+
+  return bestScore >= 12 ? bestPageNumber : null;
+}
+
 function resolveStatementLink(
   transaction: Accumul8Transaction | null,
   statementUploads: Accumul8StatementUpload[],
@@ -63,9 +127,11 @@ function resolveStatementLink(
     return null;
   }
 
-  const directUploadIdMatch = sourceRef.match(/^statement_upload:(\d+)$/);
-  let candidates = directUploadIdMatch
-    ? statementUploads.filter((upload) => upload.id === Number(directUploadIdMatch[1]))
+  const directUploadId = Number(transaction.statement_upload_id || 0) > 0
+    ? Number(transaction.statement_upload_id)
+    : parseStatementUploadId(sourceRef);
+  let candidates = directUploadId !== null
+    ? statementUploads.filter((upload) => upload.id === directUploadId)
     : statementUploads.filter((upload) => upload.original_filename === sourceRef);
 
   if (Number(transaction.account_id || 0) > 0) {
@@ -75,23 +141,26 @@ function resolveStatementLink(
     }
   }
 
-  const normalizedDescription = normalizeLocatorText(transaction.description);
-  const amount = Number(transaction.amount || 0);
-  for (const upload of candidates) {
-    const matchedLocator = upload.transaction_locators.find((locator) => {
-      if (String(locator.transaction_date || '') !== String(transaction.transaction_date || '')) {
-        return false;
-      }
-      if (Math.abs(Number(locator.amount || 0) - amount) > 0.01) {
-        return false;
-      }
-      return normalizeLocatorText(locator.description) === normalizedDescription;
-    });
-    const pageNumber = Number(matchedLocator?.page_number || 0);
-    const pageSuffix = pageNumber > 0 ? `#page=${pageNumber}` : '';
+  if (candidates.length > 0) {
+    const upload = candidates[0];
+    const pageNumber = Number(transaction.statement_page_number || 0) > 0
+      ? Number(transaction.statement_page_number)
+      : resolveStatementPageNumber(transaction, upload);
+    const pageSuffix = pageNumber ? `#page=${pageNumber}` : '';
     return {
       href: `/api/accumul8.php?action=download_statement_upload&id=${upload.id}&owner_user_id=${ownerUserId}${pageSuffix}`,
-      label: pageNumber > 0 ? `Open statement page ${pageNumber}` : 'Open statement PDF',
+      label: pageNumber ? `Open statement page ${pageNumber}` : 'Open statement PDF',
+    };
+  }
+
+  if (directUploadId !== null) {
+    const pageNumber = Number(transaction.statement_page_number || 0) > 0
+      ? Number(transaction.statement_page_number)
+      : null;
+    const pageSuffix = pageNumber ? `#page=${pageNumber}` : '';
+    return {
+      href: `/api/accumul8.php?action=download_statement_upload&id=${directUploadId}&owner_user_id=${ownerUserId}${pageSuffix}`,
+      label: pageNumber ? `Open statement page ${pageNumber}` : 'Open statement PDF',
     };
   }
 

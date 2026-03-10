@@ -51,6 +51,17 @@
   gap: 1rem;
 }
 
+.accumul8-statement-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.accumul8-statement-search-results {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .accumul8-statement-history-head {
   display: flex;
   justify-content: space-between;
@@ -79,6 +90,12 @@
   gap: 1rem;
   align-items: flex-start;
   margin-bottom: 0.65rem;
+}
+
+.accumul8-statement-card-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .accumul8-statement-chip-row {
@@ -114,6 +131,23 @@
 .accumul8-statement-note {
   margin-bottom: 0.45rem;
   color: #241d12;
+}
+
+.accumul8-statement-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.accumul8-statement-mode-toggle {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.accumul8-statement-new-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .accumul8-statement-alert-list {
@@ -155,7 +189,10 @@
   .accumul8-statement-hero,
   .accumul8-statement-history-head,
   .accumul8-statement-upload-actions,
-  .accumul8-statement-history-card-head {
+  .accumul8-statement-history-card-head,
+  .accumul8-statement-plan-grid,
+  .accumul8-statement-search,
+  .accumul8-statement-new-account-grid {
     grid-template-columns: 1fr;
     display: grid;
   }

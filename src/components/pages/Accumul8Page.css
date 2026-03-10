@@ -17,6 +17,11 @@
 }
 
 .catn8-page[data-page="accumul8"] {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
   color: var(--accumul8-deco-cream);
   background:
     linear-gradient(180deg, rgba(9, 15, 21, 0.86), rgba(11, 17, 23, 0.96)),
@@ -71,6 +76,12 @@
 .catn8-page[data-page="accumul8"] > * {
   position: relative;
   z-index: 1;
+}
+
+.catn8-page[data-page="accumul8"] > .section {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .catn8-page[data-page="accumul8"] .section-title,
@@ -205,17 +216,30 @@
 }
 
 .accumul8-page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding-bottom: 2rem;
 }
 
 .accumul8-page-header {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 0;
   position: relative;
   z-index: 20;
   isolation: isolate;
   margin-bottom: 0 !important;
+}
+
+.accumul8-tab-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .accumul8-page-title-row {
@@ -546,6 +570,8 @@
 }
 
 .accumul8-panel {
+  display: flex;
+  flex-direction: column;
   margin-top: 1rem;
   border: 3px solid var(--accumul8-deco-line-strong);
   background:
@@ -556,6 +582,11 @@
   z-index: 1;
   overflow: hidden;
   box-shadow: var(--accumul8-deco-shadow);
+}
+
+.accumul8-panel--viewport-fill {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .accumul8-panel::before,
@@ -642,8 +673,10 @@
 
 .accumul8-spreadsheet {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 1rem;
+  min-height: 0;
 }
 
 .accumul8-spreadsheet-selector {
@@ -669,12 +702,16 @@
 
 .accumul8-spreadsheet-grid {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .accumul8-month-panel {
+  display: flex;
+  flex-direction: column;
   border: 3px solid rgba(212, 175, 55, 0.54);
   background:
     linear-gradient(180deg, rgba(18, 26, 33, 0.97), rgba(10, 16, 22, 0.98)),
@@ -684,6 +721,7 @@
   position: relative;
   overflow: hidden;
   color: var(--accumul8-deco-cream);
+  min-height: 0;
 }
 
 .accumul8-month-panel.is-center {
@@ -777,7 +815,9 @@
 }
 
 .accumul8-scroll-area--spreadsheet {
-  max-height: min(62vh, 760px);
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
   overflow-x: auto;
 }
 
@@ -1398,9 +1438,13 @@
 }
 
 .accumul8-entity-endex-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
+  padding-right: 0.15rem;
 }
 
 .accumul8-entity-endex-guide {
@@ -1674,12 +1718,16 @@
 .accumul8-scroll-area--bills,
 .accumul8-scroll-area--recurring,
 .accumul8-scroll-area--sync {
-  max-height: min(52vh, 560px);
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
 }
 
 .accumul8-scroll-area--list,
 .accumul8-scroll-area--cards {
-  max-height: min(48vh, 520px);
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
 }
 
 .accumul8-scroll-area .table {

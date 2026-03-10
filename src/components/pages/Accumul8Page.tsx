@@ -2029,8 +2029,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               </div>
             </div>
           </div>
+          <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>
           {tab === 'ledger' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Ledger</h3>
                 <div className="accumul8-panel-toolbar-search">
@@ -2064,7 +2065,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-account-width)' }} />
+                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.3)' }} />
                     <col className="accumul8-col--flex-45" />
                     <col className="accumul8-col--flex-55" />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
@@ -2181,7 +2182,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'spreadsheet' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <Accumul8SpreadsheetView
                 busy={busy}
                 selectedMonth={budgetMonth}
@@ -2439,7 +2440,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'pay_bills' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Pay Bills Queue</h3>
                 <div className="accumul8-panel-toolbar-search">
@@ -2611,7 +2612,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'contacts' && (
-            <div className="accumul8-panel accumul8-panel--entity-manager">
+            <div className="accumul8-panel accumul8-panel--entity-manager accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Entity Manager</h3>
                 <div className="accumul8-panel-toolbar-search">
@@ -2819,7 +2820,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
 	          )}
 	          {tab === 'entity_endex' && (
-	            <div className="accumul8-panel accumul8-panel--entity-endex">
+	            <div className="accumul8-panel accumul8-panel--entity-endex accumul8-panel--viewport-fill">
 	              <div className="accumul8-panel-toolbar mb-3">
 	                <div>
 	                  <h3 className="mb-0">Entity Endex</h3>
@@ -2914,7 +2915,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	            </div>
 	          )}
           {tab === 'recurring' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
                 <h3 className="mb-0">Recurring Payments</h3>
                 <div className="accumul8-panel-toolbar-search">
@@ -3041,7 +3042,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'notifications' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar">
                 <div>
                   <h3 className="mb-1">Notification Rules</h3>
@@ -3103,7 +3104,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'sync' && (
-            <div className="accumul8-panel">
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
               <h3>Bank Sync Groundwork</h3>
               <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
               <div className="d-flex gap-2 flex-wrap mb-3">
@@ -3139,6 +3140,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <p className="small text-muted mb-0">Target institutions include Capital One, Navy Federal Credit Union, Barclays, Fifth Third, and Truist via the Plaid institution network.</p>
             </div>
           )}
+          </div>
           {syncHelpOpen && (
             <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Plaid setup guide">
               <div className="accumul8-help-modal">

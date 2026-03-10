@@ -325,6 +325,45 @@ function accumul8_statement_extract_pdf_text_with_ocr_fallback(string $pdfPath):
     ];
 }
 
+function accumul8_statement_render_pdf_pages_to_png(string $pdfPath, int $maxPages = 6): array
+{
+    if ($pdfPath === '' || !is_file($pdfPath) || !function_exists('shell_exec')) {
+        return [];
+    }
+    $pdftoppm = accumul8_statement_find_binary('pdftoppm', [
+        '/usr/bin/pdftoppm',
+        '/usr/local/bin/pdftoppm',
+        '/opt/homebrew/bin/pdftoppm',
+    ]);
+    if ($pdftoppm === null) {
+        return [];
+    }
+    $base = tempnam(sys_get_temp_dir(), 'accumul8_pdf_ai_');
+    if (!is_string($base) || $base === '') {
+        return [];
+    }
+    @unlink($base);
+    $cmd = escapeshellarg($pdftoppm) . ' -png ' . escapeshellarg($pdfPath) . ' ' . escapeshellarg($base) . ' 2>/dev/null';
+    shell_exec($cmd);
+    $pages = glob($base . '-*.png') ?: [];
+    natsort($pages);
+    $result = [];
+    $pageNumber = 1;
+    foreach ($pages as $pngPath) {
+        if ($pageNumber > $maxPages) {
+            @unlink($pngPath);
+            $pageNumber++;
+            continue;
+        }
+        $result[] = [
+            'page_number' => $pageNumber,
+            'path' => $pngPath,
+        ];
+        $pageNumber++;
+    }
+    return $result;
+}
+
 function accumul8_statement_extract_text_from_file(string $tmpPath, string $mimeType): array
 {
     $mime = strtolower($mimeType);
@@ -370,6 +409,186 @@ function accumul8_statement_page_catalog_prompt(array $pageCatalog, int $maxLen 
         $used += $segmentLen + 2;
     }
     return implode("\n\n", $segments);
+}
+
+function accumul8_statement_ai_json_schema_prompt(string $mode): string
+{
+    $sourcePhrase = $mode === 'pdf'
+        ? 'from the attached bank statement PDF'
+        : 'from statement page images';
+    return <<<TXT
+You extract financial statement data into strict JSON {$sourcePhrase}.
+Amounts must be signed exactly how they affect the account balance.
+Return one JSON object only.
+Use this schema:
+{
+  "statement_kind": "bank_account|credit_card|loan|mortgage|other",
+  "institution_name": "",
+  "account_name_hint": "",
+  "account_last4": "",
+  "period_start": "YYYY-MM-DD or empty",
+  "period_end": "YYYY-MM-DD or empty",
+  "opening_balance": number|null,
+  "closing_balance": number|null,
+  "transactions": [
+    {
+      "transaction_date": "YYYY-MM-DD",
+      "posted_date": "YYYY-MM-DD or empty",
+      "description": "",
+      "memo": "",
+      "amount": number,
+      "running_balance": number|null,
+      "page_number": number|null
+    }
+  ],
+  "reconciliation_notes": [""],
+  "account_match_hints": [""]
+}
+TXT;
+}
+
+function accumul8_ai_generate_statement_json_from_images(array $images, array $accountCatalog): array
+{
+    $cfg = catn8_settings_ai_get_config();
+    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $model = trim((string)($cfg['model'] ?? ''));
+    $temperature = (float)($cfg['temperature'] ?? 0.1);
+    $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $systemPrompt = accumul8_statement_ai_json_schema_prompt('image');
+
+    $imageParts = [];
+    foreach ($images as $image) {
+        if (!is_array($image)) {
+            continue;
+        }
+        $path = (string)($image['path'] ?? '');
+        $pageNumber = (int)($image['page_number'] ?? 0);
+        if ($path === '' || !is_file($path)) {
+            continue;
+        }
+        $bytes = (string)file_get_contents($path);
+        if ($bytes === '') {
+            continue;
+        }
+        $imageParts[] = [
+            'page_number' => $pageNumber,
+            'mime_type' => 'image/png',
+            'base64' => base64_encode($bytes),
+        ];
+    }
+    if ($imageParts === []) {
+        throw new RuntimeException('No statement page images were available for AI scanning');
+    }
+
+    if ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+        $parts = [[
+            'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from these page images. Preserve page numbers.",
+        ]];
+        foreach ($imageParts as $imagePart) {
+            $parts[] = ['text' => 'Statement page ' . (int)$imagePart['page_number']];
+            $parts[] = [
+                'inline_data' => [
+                    'mime_type' => (string)$imagePart['mime_type'],
+                    'data' => (string)$imagePart['base64'],
+                ],
+            ];
+        }
+        $resp = catn8_http_json_with_status(
+            'POST',
+            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent',
+            ['x-goog-api-key' => trim((string)$apiKey)],
+            [
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => $parts,
+                ]],
+                'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                'generationConfig' => ['temperature' => $temperature],
+            ],
+            10,
+            60
+        );
+        $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        $jsonText = accumul8_extract_json_from_text($content);
+        $decoded = json_decode($jsonText, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('AI image scan returned invalid statement JSON');
+        }
+        return [
+            'provider' => $provider,
+            'model' => $model,
+            'json' => $decoded,
+        ];
+    }
+
+    throw new RuntimeException('AI image scanning fallback is only configured for Google AI Studio right now');
+}
+
+function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $accountCatalog): array
+{
+    $cfg = catn8_settings_ai_get_config();
+    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $model = trim((string)($cfg['model'] ?? ''));
+    $temperature = (float)($cfg['temperature'] ?? 0.1);
+    $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $systemPrompt = accumul8_statement_ai_json_schema_prompt('pdf');
+
+    if ($provider !== 'google_ai_studio') {
+        throw new RuntimeException('Direct PDF AI scanning is only configured for Google AI Studio right now');
+    }
+
+    if ($pdfPath === '' || !is_file($pdfPath)) {
+        throw new RuntimeException('Statement PDF was not available for AI scanning');
+    }
+    $bytes = (string)file_get_contents($pdfPath);
+    if ($bytes === '') {
+        throw new RuntimeException('Statement PDF could not be read for AI scanning');
+    }
+
+    $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+    if (!is_string($apiKey) || trim($apiKey) === '') {
+        throw new RuntimeException('Missing AI API key (google_ai_studio)');
+    }
+
+    $parts = [[
+        'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
+    ], [
+        'inline_data' => [
+            'mime_type' => 'application/pdf',
+            'data' => base64_encode($bytes),
+        ],
+    ]];
+
+    $resp = catn8_http_json_with_status(
+        'POST',
+        'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent',
+        ['x-goog-api-key' => trim((string)$apiKey)],
+        [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => $parts,
+            ]],
+            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            'generationConfig' => ['temperature' => $temperature],
+        ],
+        10,
+        60
+    );
+    $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+    $jsonText = accumul8_extract_json_from_text($content);
+    $decoded = json_decode($jsonText, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('AI PDF scan returned invalid statement JSON');
+    }
+    return [
+        'provider' => $provider,
+        'model' => $model,
+        'json' => $decoded,
+    ];
 }
 
 function accumul8_ai_generate_statement_json(string $text, array $accountCatalog, array $pageCatalog = []): array
@@ -3467,14 +3686,52 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
     }
     file_put_contents($tmpPath, (string)($upload['file_blob'] ?? ''));
     try {
-        $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-        $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
-        $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
-        if ($text === '') {
-            throw new RuntimeException('Could not extract readable text from the statement');
-        }
+        $accountCatalog = accumul8_statement_account_catalog($viewerId);
+        $mimeType = strtolower((string)($upload['mime_type'] ?? 'application/pdf'));
+        $extract = ['text' => '', 'method' => '', 'page_catalog' => []];
+        $text = '';
+        $pageCatalog = [];
+        $ai = null;
 
-        $ai = accumul8_ai_generate_statement_json($text, accumul8_statement_account_catalog($viewerId), $pageCatalog);
+        if (str_contains($mimeType, 'pdf')) {
+            try {
+                $ai = accumul8_ai_generate_statement_json_from_pdf($tmpPath, $accountCatalog);
+                $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI PDF scan completed', 120000);
+                $extract['method'] = 'ai_pdf';
+            } catch (Throwable $pdfAiError) {
+                $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+                $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+                $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+                if ($text !== '') {
+                    $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+                } else {
+                    throw new RuntimeException('Could not extract readable text from the statement, and direct PDF AI scanning failed: ' . accumul8_normalize_text($pdfAiError->getMessage(), 400));
+                }
+            }
+        } elseif (str_starts_with($mimeType, 'image/')) {
+            try {
+                $ai = accumul8_ai_generate_statement_json_from_images([['page_number' => 1, 'path' => $tmpPath]], $accountCatalog);
+                $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI image scan completed', 120000);
+                $extract['method'] = 'ai_image';
+            } catch (Throwable $imageAiError) {
+                $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+                $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+                $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+                if ($text !== '') {
+                    $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+                } else {
+                    throw new RuntimeException('Could not extract readable text from the statement, and direct image AI scanning failed: ' . accumul8_normalize_text($imageAiError->getMessage(), 400));
+                }
+            }
+        } else {
+            $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+            if ($text === '') {
+                throw new RuntimeException('Could not extract readable text from the statement, and direct AI scanning is unavailable for this file type');
+            }
+            $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+        }
         $parsed = is_array($ai['json'] ?? null) ? $ai['json'] : [];
         $match = accumul8_statement_match_account($viewerId, $parsed, $selectedAccountId);
         $accountId = isset($match['account_id']) && (int)$match['account_id'] > 0 ? (int)$match['account_id'] : null;

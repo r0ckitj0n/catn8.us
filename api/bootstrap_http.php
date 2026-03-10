@@ -27,13 +27,17 @@ function catn8_http_json_with_status(string $method, string $url, array $headers
     }
 
     $flatHeaders = ['Accept: application/json'];
+    $hasContentTypeHeader = false;
     foreach ($headers as $k => $v) {
         $key = trim((string)$k);
         $val = trim((string)$v);
         if ($key === '') continue;
+        if (strcasecmp($key, 'Content-Type') === 0) {
+            $hasContentTypeHeader = true;
+        }
         $flatHeaders[] = $key . ': ' . $val;
     }
-    if ($payload !== null) {
+    if ($payload !== null && !$hasContentTypeHeader) {
         $flatHeaders[] = 'Content-Type: application/json';
     }
 

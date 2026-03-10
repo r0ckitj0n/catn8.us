@@ -23,6 +23,22 @@ if ($action === '') {
     $fail('database_maintenance', 400, 'Missing action');
 }
 
+$readJsonBody = static function () use ($fail): array {
+    $ct = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
+    if ($ct !== '' && strpos($ct, 'application/json') !== 0) {
+        $fail('database_maintenance', 415, 'Unsupported content type. Expected application/json');
+    }
+    $raw = file_get_contents('php://input');
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        $fail('database_maintenance', 400, 'Invalid JSON body');
+    }
+    return $decoded;
+};
+
 $rootDir = dirname(__DIR__);
 $backupsDir = $rootDir . '/backups';
 $uploadsDir = __DIR__ . '/uploads';
@@ -348,6 +364,74 @@ if ($action === 'inspect_accumul8') {
         ]);
     } catch (Throwable $e) {
         $fail('database_maintenance.inspect_accumul8', 500, (string)$e->getMessage());
+    }
+}
+
+if ($action === 'accumul8_rescan_statements') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+        $fail('database_maintenance.accumul8_rescan_statements', 405, 'Method not allowed');
+    }
+
+    $body = $readJsonBody();
+    $ownerUserId = isset($body['owner_user_id']) ? (int)$body['owner_user_id'] : null;
+    if ($ownerUserId !== null && $ownerUserId <= 0) {
+        $fail('database_maintenance.accumul8_rescan_statements', 400, 'Invalid owner_user_id');
+    }
+
+    $limit = isset($body['limit']) ? (int)$body['limit'] : 25;
+    if ($limit <= 0 || $limit > 500) {
+        $fail('database_maintenance.accumul8_rescan_statements', 400, 'limit must be between 1 and 500');
+    }
+
+    $options = [
+        'dry_run' => !empty($body['dry_run']),
+        'force' => !empty($body['force']),
+        'limit' => $limit,
+        'only_missing_successful_scan' => array_key_exists('only_missing_successful_scan', $body)
+            ? (bool)$body['only_missing_successful_scan']
+            : true,
+        'include_missing_catalog' => array_key_exists('include_missing_catalog', $body)
+            ? (bool)$body['include_missing_catalog']
+            : true,
+    ];
+
+    if (!$options['force'] && !$options['only_missing_successful_scan'] && !$options['include_missing_catalog']) {
+        $fail('database_maintenance.accumul8_rescan_statements', 400, 'Select at least one candidate filter or enable force');
+    }
+
+    try {
+        if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
+            define('CATN8_ACCUMUL8_LIBRARY_ONLY', true);
+        }
+        require_once __DIR__ . '/accumul8.php';
+
+        $result = accumul8_statement_batch_rescan($ownerUserId, $options);
+        catn8_diagnostics_log_event(
+            'database_maintenance.accumul8_rescan_statements',
+            true,
+            200,
+            $options['dry_run'] ? 'Accumul8 statement rescan dry run completed' : 'Accumul8 statement rescan completed',
+            [
+                'owner_user_id' => $ownerUserId,
+                'limit' => $limit,
+                'dry_run' => $options['dry_run'],
+                'force' => $options['force'],
+                'candidate_count' => (int)($result['candidate_count'] ?? 0),
+                'success_count' => (int)($result['success_count'] ?? 0),
+                'failure_count' => (int)($result['failure_count'] ?? 0),
+            ]
+        );
+
+        catn8_json_response([
+            'success' => true,
+            'message' => $options['dry_run'] ? 'Accumul8 statement dry run completed' : 'Accumul8 statement rescan completed',
+            'result' => $result,
+        ]);
+    } catch (Throwable $e) {
+        $fail('database_maintenance.accumul8_rescan_statements', 500, (string)$e->getMessage(), [
+            'owner_user_id' => $ownerUserId,
+            'limit' => $limit,
+        ]);
     }
 }
 

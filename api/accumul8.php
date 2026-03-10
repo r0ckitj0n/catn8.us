@@ -8,9 +8,13 @@ require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
-catn8_session_start();
-catn8_groups_seed_core();
-$actorUserId = catn8_require_group_or_admin('accumul8-users');
+if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
+    catn8_session_start();
+    catn8_groups_seed_core();
+    $actorUserId = catn8_require_group_or_admin('accumul8-users');
+} else {
+    $actorUserId = 0;
+}
 
 function accumul8_normalize_text($value, int $maxLen = 191): string
 {
@@ -4387,6 +4391,249 @@ function accumul8_statement_reload_view(int $viewerId, int $uploadId): array
     throw new RuntimeException('Statement upload could not be reloaded');
 }
 
+function accumul8_statement_decode_json_field($value, array $fallback)
+{
+    $decoded = json_decode((string)$value, true);
+    return is_array($decoded) ? $decoded : $fallback;
+}
+
+function accumul8_statement_upload_has_parsed_payload(array $upload): bool
+{
+    $parsed = accumul8_statement_decode_json_field($upload['parsed_payload_json'] ?? '{}', []);
+    if ($parsed === []) {
+        return false;
+    }
+    if (!empty($parsed['transactions']) && is_array($parsed['transactions'])) {
+        return true;
+    }
+    foreach (['institution_name', 'account_name_hint', 'account_last4', 'period_start', 'period_end'] as $field) {
+        if (accumul8_normalize_text((string)($parsed[$field] ?? ''), 191) !== '') {
+            return true;
+        }
+    }
+    foreach (['opening_balance', 'closing_balance'] as $field) {
+        if (isset($parsed[$field]) && is_numeric($parsed[$field])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function accumul8_statement_upload_has_page_catalog(array $upload): bool
+{
+    $catalog = accumul8_statement_decode_json_field($upload['page_catalog_json'] ?? '[]', []);
+    return $catalog !== [];
+}
+
+function accumul8_statement_upload_has_transaction_locators(array $upload): bool
+{
+    $locators = accumul8_statement_decode_json_field($upload['transaction_locator_json'] ?? '[]', []);
+    return $locators !== [];
+}
+
+function accumul8_statement_upload_has_catalog_keywords(array $upload): bool
+{
+    $keywords = accumul8_statement_decode_json_field($upload['catalog_keywords_json'] ?? '[]', []);
+    return $keywords !== [];
+}
+
+function accumul8_statement_scan_is_successful(array $upload): bool
+{
+    $status = accumul8_normalize_text((string)($upload['status'] ?? ''), 24);
+    if (!in_array($status, ['scanned', 'needs_review', 'processed'], true)) {
+        return false;
+    }
+    if (trim((string)($upload['last_scanned_at'] ?? '')) === '') {
+        return false;
+    }
+    if (accumul8_normalize_text((string)($upload['last_error'] ?? ''), 1000) !== '') {
+        return false;
+    }
+    return accumul8_statement_upload_has_parsed_payload($upload);
+}
+
+function accumul8_statement_upload_needs_catalog_refresh(array $upload): bool
+{
+    if (!accumul8_statement_upload_has_page_catalog($upload)) {
+        return true;
+    }
+    if (!accumul8_statement_upload_has_transaction_locators($upload)) {
+        return true;
+    }
+    if (accumul8_normalize_text((string)($upload['catalog_summary'] ?? ''), 255) === '') {
+        return true;
+    }
+    return !accumul8_statement_upload_has_catalog_keywords($upload);
+}
+
+function accumul8_statement_upload_rescan_reasons(array $upload, bool $onlyMissingSuccessfulScan, bool $includeMissingCatalog, bool $force): array
+{
+    if ($force) {
+        return ['forced'];
+    }
+
+    $reasons = [];
+    if ($onlyMissingSuccessfulScan && !accumul8_statement_scan_is_successful($upload)) {
+        $reasons[] = 'missing_successful_scan';
+    }
+    if ($includeMissingCatalog && accumul8_statement_upload_needs_catalog_refresh($upload)) {
+        $reasons[] = 'missing_catalog_data';
+    }
+
+    return array_values(array_unique($reasons));
+}
+
+function accumul8_statement_list_rescan_candidates(?int $ownerUserId = null, array $options = []): array
+{
+    if (!accumul8_table_exists('accumul8_statement_uploads')) {
+        return [];
+    }
+
+    $limit = isset($options['limit']) ? (int)$options['limit'] : 25;
+    if ($limit <= 0) {
+        $limit = 25;
+    }
+    $limit = max(1, min($limit, 500));
+    $onlyMissingSuccessfulScan = array_key_exists('only_missing_successful_scan', $options) ? (bool)$options['only_missing_successful_scan'] : true;
+    $includeMissingCatalog = array_key_exists('include_missing_catalog', $options) ? (bool)$options['include_missing_catalog'] : true;
+    $force = !empty($options['force']);
+
+    $sql = 'SELECT id, owner_user_id, account_id, status, original_filename, mime_type, created_at, last_scanned_at, processed_at,
+                   COALESCE(last_error, "") AS last_error,
+                   COALESCE(parsed_payload_json, "{}") AS parsed_payload_json,
+                   COALESCE(transaction_locator_json, "[]") AS transaction_locator_json,
+                   COALESCE(page_catalog_json, "[]") AS page_catalog_json,
+                   COALESCE(catalog_summary, "") AS catalog_summary,
+                   COALESCE(catalog_keywords_json, "[]") AS catalog_keywords_json
+            FROM accumul8_statement_uploads';
+    $params = [];
+    if ($ownerUserId !== null && $ownerUserId > 0) {
+        $sql .= ' WHERE owner_user_id = ?';
+        $params[] = $ownerUserId;
+    }
+    $sql .= ' ORDER BY
+                CASE WHEN last_scanned_at IS NULL THEN 0 ELSE 1 END ASC,
+                COALESCE(last_scanned_at, created_at) ASC,
+                id ASC';
+
+    $rows = Database::queryAll($sql, $params);
+    $candidates = [];
+    foreach ($rows as $row) {
+        $reasons = accumul8_statement_upload_rescan_reasons($row, $onlyMissingSuccessfulScan, $includeMissingCatalog, $force);
+        if ($reasons === []) {
+            continue;
+        }
+        $candidates[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+            'status' => (string)($row['status'] ?? 'uploaded'),
+            'original_filename' => (string)($row['original_filename'] ?? ''),
+            'mime_type' => (string)($row['mime_type'] ?? ''),
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'last_scanned_at' => (string)($row['last_scanned_at'] ?? ''),
+            'processed_at' => (string)($row['processed_at'] ?? ''),
+            'last_error' => (string)($row['last_error'] ?? ''),
+            'needs_catalog_refresh' => accumul8_statement_upload_needs_catalog_refresh($row),
+            'has_successful_scan' => accumul8_statement_scan_is_successful($row),
+            'reasons' => $reasons,
+        ];
+        if (count($candidates) >= $limit) {
+            break;
+        }
+    }
+
+    return $candidates;
+}
+
+function accumul8_statement_batch_rescan(?int $ownerUserId = null, array $options = []): array
+{
+    $limit = isset($options['limit']) ? (int)$options['limit'] : 25;
+    if ($limit <= 0) {
+        $limit = 25;
+    }
+    $limit = max(1, min($limit, 500));
+    $dryRun = !empty($options['dry_run']);
+    $onlyMissingSuccessfulScan = array_key_exists('only_missing_successful_scan', $options) ? (bool)$options['only_missing_successful_scan'] : true;
+    $includeMissingCatalog = array_key_exists('include_missing_catalog', $options) ? (bool)$options['include_missing_catalog'] : true;
+    $force = !empty($options['force']);
+
+    $candidates = accumul8_statement_list_rescan_candidates($ownerUserId, [
+        'limit' => $limit,
+        'only_missing_successful_scan' => $onlyMissingSuccessfulScan,
+        'include_missing_catalog' => $includeMissingCatalog,
+        'force' => $force,
+    ]);
+
+    $result = [
+        'owner_user_id' => $ownerUserId,
+        'dry_run' => $dryRun,
+        'limit' => $limit,
+        'only_missing_successful_scan' => $onlyMissingSuccessfulScan,
+        'include_missing_catalog' => $includeMissingCatalog,
+        'force' => $force,
+        'candidate_count' => count($candidates),
+        'scanned_count' => 0,
+        'success_count' => 0,
+        'failure_count' => 0,
+        'skipped_count' => 0,
+        'results' => [],
+    ];
+
+    if ($dryRun) {
+        foreach ($candidates as $candidate) {
+            $result['results'][] = [
+                'id' => $candidate['id'],
+                'owner_user_id' => $candidate['owner_user_id'],
+                'status' => $candidate['status'],
+                'original_filename' => $candidate['original_filename'],
+                'reasons' => $candidate['reasons'],
+                'needs_catalog_refresh' => $candidate['needs_catalog_refresh'],
+                'has_successful_scan' => $candidate['has_successful_scan'],
+                'last_error' => $candidate['last_error'],
+                'last_scanned_at' => $candidate['last_scanned_at'],
+            ];
+        }
+        $result['skipped_count'] = count($candidates);
+        return $result;
+    }
+
+    foreach ($candidates as $candidate) {
+        $result['scanned_count']++;
+        try {
+            $upload = accumul8_statement_scan_upload(
+                (int)$candidate['owner_user_id'],
+                (int)$candidate['id'],
+                isset($candidate['account_id']) && (int)$candidate['account_id'] > 0 ? (int)$candidate['account_id'] : null,
+                true
+            );
+            $result['success_count']++;
+            $result['results'][] = [
+                'id' => (int)$candidate['id'],
+                'owner_user_id' => (int)$candidate['owner_user_id'],
+                'status' => (string)($upload['status'] ?? ''),
+                'original_filename' => (string)($candidate['original_filename'] ?? ''),
+                'reasons' => $candidate['reasons'],
+                'last_scanned_at' => (string)($upload['last_scanned_at'] ?? ''),
+                'catalog_page_count' => is_array($upload['page_catalog'] ?? null) ? count($upload['page_catalog']) : 0,
+                'locator_count' => is_array($upload['transaction_locators'] ?? null) ? count($upload['transaction_locators']) : 0,
+            ];
+        } catch (Throwable $e) {
+            $result['failure_count']++;
+            $result['results'][] = [
+                'id' => (int)$candidate['id'],
+                'owner_user_id' => (int)$candidate['owner_user_id'],
+                'status' => 'failed',
+                'original_filename' => (string)($candidate['original_filename'] ?? ''),
+                'reasons' => $candidate['reasons'],
+                'error' => accumul8_normalize_text($e->getMessage(), 1000),
+            ];
+        }
+    }
+
+    return $result;
+}
+
 function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $selectedAccountId = null, bool $markForReview = false): array
 {
     $upload = Database::queryOne(
@@ -5299,6 +5546,9 @@ try {
     accumul8_tables_ensure();
 } catch (Throwable $e) {
     error_log('accumul8 schema ensure failed: ' . $e->getMessage());
+}
+if (defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
+    return;
 }
 $scopeOwnerUserId = accumul8_resolve_scope_owner_user_id($actorUserId);
 try {

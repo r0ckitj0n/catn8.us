@@ -2,8 +2,8 @@ import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8ContactType, Accumul8Entity, Accumul8EntityAliasDraft, Accumul8EntityUpsertRequest } from '../../types/accumul8';
-import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { StandardIconButton } from '../common/StandardIconButton';
 import './Accumul8ContactModal.css';
 
 function isBusinessSelected(form: Accumul8EntityUpsertRequest): boolean {
@@ -48,6 +48,57 @@ export function Accumul8EntityModal({
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8EntityUpsertRequest>(initialForm);
   const bodyRef = React.useRef<HTMLFormElement>(null);
+  const buildPayload = React.useCallback((): Accumul8EntityUpsertRequest => {
+    const contactType = (form.contact_type || 'payee') as Accumul8ContactType;
+    const isBusiness = isBusinessSelected(form);
+    return {
+      display_name: String(form.display_name || '').trim(),
+      entity_kind: isBusiness ? 'business' : 'contact',
+      contact_type: contactType,
+      is_payee: contactType === 'payee' ? 1 : 0,
+      is_payer: contactType === 'payer' ? 1 : 0,
+      is_vendor: isBusiness ? 1 : 0,
+      is_balance_person: contactType === 'repayment' ? 1 : 0,
+      default_amount: Number(form.default_amount || 0),
+      email: String(form.email || '').trim(),
+      phone_number: String(form.phone_number || '').trim(),
+      street_address: String(form.street_address || '').trim(),
+      city: String(form.city || '').trim(),
+      state: String(form.state || '').trim(),
+      zip: String(form.zip || '').trim(),
+      notes: String(form.notes || '').trim(),
+      is_active: Number(form.is_active || 0),
+    };
+  }, [form]);
+  const isDirty = React.useMemo(
+    () => JSON.stringify(buildPayload()) !== JSON.stringify((() => {
+      const contactType = (initialForm.contact_type || 'payee') as Accumul8ContactType;
+      const isBusiness = isBusinessSelected(initialForm);
+      return {
+        display_name: String(initialForm.display_name || '').trim(),
+        entity_kind: isBusiness ? 'business' : 'contact',
+        contact_type: contactType,
+        is_payee: contactType === 'payee' ? 1 : 0,
+        is_payer: contactType === 'payer' ? 1 : 0,
+        is_vendor: isBusiness ? 1 : 0,
+        is_balance_person: contactType === 'repayment' ? 1 : 0,
+        default_amount: Number(initialForm.default_amount || 0),
+        email: String(initialForm.email || '').trim(),
+        phone_number: String(initialForm.phone_number || '').trim(),
+        street_address: String(initialForm.street_address || '').trim(),
+        city: String(initialForm.city || '').trim(),
+        state: String(initialForm.state || '').trim(),
+        zip: String(initialForm.zip || '').trim(),
+        notes: String(initialForm.notes || '').trim(),
+        is_active: Number(initialForm.is_active || 0),
+      };
+    })()),
+    [buildPayload, initialForm],
+  );
+  const handleSave = React.useCallback(() => {
+    if (busy || !isDirty || !String(form.display_name || '').trim()) return;
+    void onSave(buildPayload());
+  }, [buildPayload, busy, form.display_name, isDirty, onSave]);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -89,7 +140,17 @@ export function Accumul8EntityModal({
         >
           <div className="modal-header">
             <h5 className="modal-title">{editing ? 'Edit Entity' : 'Add Entity'}</h5>
-            <ModalCloseIconButton />
+            <div className="d-flex align-items-center gap-2">
+              <StandardIconButton
+                iconKey="save"
+                ariaLabel={editing ? 'Save entity changes' : 'Add entity'}
+                title={isDirty ? (editing ? 'Save entity changes' : 'Add entity') : 'No changes to save'}
+                className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                onClick={handleSave}
+                disabled={busy || !isDirty || !String(form.display_name || '').trim()}
+              />
+              <ModalCloseIconButton />
+            </div>
           </div>
           <form
             ref={bodyRef}
@@ -97,26 +158,7 @@ export function Accumul8EntityModal({
             tabIndex={-1}
             onSubmit={(event) => {
               event.preventDefault();
-              const contactType = (form.contact_type || 'payee') as Accumul8ContactType;
-              const isBusiness = isBusinessSelected(form);
-              void onSave({
-                display_name: String(form.display_name || '').trim(),
-                entity_kind: isBusiness ? 'business' : 'contact',
-                contact_type: contactType,
-                is_payee: contactType === 'payee' ? 1 : 0,
-                is_payer: contactType === 'payer' ? 1 : 0,
-                is_vendor: isBusiness ? 1 : 0,
-                is_balance_person: contactType === 'repayment' ? 1 : 0,
-                default_amount: Number(form.default_amount || 0),
-                email: String(form.email || '').trim(),
-                phone_number: String(form.phone_number || '').trim(),
-                street_address: String(form.street_address || '').trim(),
-                city: String(form.city || '').trim(),
-                state: String(form.state || '').trim(),
-                zip: String(form.zip || '').trim(),
-                notes: String(form.notes || '').trim(),
-                is_active: Number(form.is_active || 0),
-              });
+              handleSave();
             }}
           >
             {editing && entity ? (
@@ -293,12 +335,6 @@ export function Accumul8EntityModal({
                   />
                 </div>
               ) : null}
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button type="submit" className="btn btn-success" disabled={busy || !String(form.display_name || '').trim()}>
-                <span aria-hidden="true">{editing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
-              </button>
             </div>
           </form>
         </div>

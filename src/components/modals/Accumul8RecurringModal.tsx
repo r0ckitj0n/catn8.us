@@ -8,8 +8,8 @@ import {
   Accumul8PaymentMethod,
   Accumul8RecurringUpsertRequest,
 } from '../../types/accumul8';
-import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { StandardIconButton } from '../common/StandardIconButton';
 import './Accumul8RecurringModal.css';
 
 interface Accumul8RecurringModalFormState {
@@ -48,6 +48,40 @@ export function Accumul8RecurringModal({
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8RecurringModalFormState>(initialForm);
 
+  const buildPayload = React.useCallback((): Accumul8RecurringUpsertRequest => ({
+    title: String(form.title || '').trim(),
+    direction: (form.direction || 'outflow') as Accumul8Direction,
+    amount: Number(form.amount || 0),
+    frequency: (form.frequency || 'monthly') as Accumul8Frequency,
+    payment_method: (form.payment_method || 'unspecified') as Accumul8PaymentMethod,
+    interval_count: Math.max(1, Number(form.interval_count || 1)),
+    next_due_date: String(form.next_due_date || ''),
+    entity_id: form.entity_id ? Number(form.entity_id) : null,
+    account_id: form.account_id ? Number(form.account_id) : null,
+    is_budget_planner: Number(form.is_budget_planner || 0),
+    notes: String(form.notes || '').trim(),
+  }), [form]);
+  const isDirty = React.useMemo(
+    () => JSON.stringify(buildPayload()) !== JSON.stringify({
+      title: String(initialForm.title || '').trim(),
+      direction: (initialForm.direction || 'outflow') as Accumul8Direction,
+      amount: Number(initialForm.amount || 0),
+      frequency: (initialForm.frequency || 'monthly') as Accumul8Frequency,
+      payment_method: (initialForm.payment_method || 'unspecified') as Accumul8PaymentMethod,
+      interval_count: Math.max(1, Number(initialForm.interval_count || 1)),
+      next_due_date: String(initialForm.next_due_date || ''),
+      entity_id: initialForm.entity_id ? Number(initialForm.entity_id) : null,
+      account_id: initialForm.account_id ? Number(initialForm.account_id) : null,
+      is_budget_planner: Number(initialForm.is_budget_planner || 0),
+      notes: String(initialForm.notes || '').trim(),
+    }),
+    [buildPayload, initialForm],
+  );
+  const handleSave = React.useCallback(() => {
+    if (busy || !isDirty || !form.title.trim() || !form.next_due_date) return;
+    void onSave(buildPayload());
+  }, [buildPayload, busy, form.next_due_date, form.title, isDirty, onSave]);
+
   React.useEffect(() => {
     setForm(initialForm);
   }, [initialForm]);
@@ -76,25 +110,23 @@ export function Accumul8RecurringModal({
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Edit Recurring Payment</h5>
-            <ModalCloseIconButton />
+            <div className="d-flex align-items-center gap-2">
+              <StandardIconButton
+                iconKey="save"
+                ariaLabel="Save recurring payment changes"
+                title={isDirty ? 'Save recurring payment changes' : 'No changes to save'}
+                className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                onClick={handleSave}
+                disabled={busy || !isDirty || !form.title.trim() || !form.next_due_date}
+              />
+              <ModalCloseIconButton />
+            </div>
           </div>
           <form
             className="modal-body d-grid gap-3"
             onSubmit={(event) => {
               event.preventDefault();
-              void onSave({
-                title: String(form.title || '').trim(),
-                direction: (form.direction || 'outflow') as Accumul8Direction,
-                amount: Number(form.amount || 0),
-                frequency: (form.frequency || 'monthly') as Accumul8Frequency,
-                payment_method: (form.payment_method || 'unspecified') as Accumul8PaymentMethod,
-                interval_count: Math.max(1, Number(form.interval_count || 1)),
-                next_due_date: String(form.next_due_date || ''),
-                entity_id: form.entity_id ? Number(form.entity_id) : null,
-                account_id: form.account_id ? Number(form.account_id) : null,
-                is_budget_planner: Number(form.is_budget_planner || 0),
-                notes: String(form.notes || '').trim(),
-              });
+              handleSave();
             }}
           >
             <div className="row g-3">
@@ -232,18 +264,6 @@ export function Accumul8RecurringModal({
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                 />
               </div>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button
-                type="submit"
-                className="btn btn-success"
-                disabled={busy || !form.title.trim() || !form.next_due_date}
-                aria-label="Save recurring payment changes"
-                title="Save recurring payment changes"
-              >
-                <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
-              </button>
             </div>
           </form>
         </div>

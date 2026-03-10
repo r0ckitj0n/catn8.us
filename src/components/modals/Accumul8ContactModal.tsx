@@ -1,8 +1,8 @@
 import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8ContactType, Accumul8ContactUpsertRequest } from '../../types/accumul8';
-import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { StandardIconButton } from '../common/StandardIconButton';
 import './Accumul8ContactModal.css';
 
 interface Accumul8ContactModalProps {
@@ -24,6 +24,38 @@ export function Accumul8ContactModal({
 }: Accumul8ContactModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8ContactUpsertRequest>(initialForm);
+
+  const buildPayload = React.useCallback((): Accumul8ContactUpsertRequest => ({
+    contact_name: String(form.contact_name || '').trim(),
+    contact_type: (form.contact_type || 'payee') as Accumul8ContactType,
+    default_amount: Number(form.default_amount || 0),
+    email: String(form.email || '').trim(),
+    phone_number: String(form.phone_number || '').trim(),
+    street_address: String(form.street_address || '').trim(),
+    city: String(form.city || '').trim(),
+    state: String(form.state || '').trim(),
+    zip: String(form.zip || '').trim(),
+    notes: String(form.notes || '').trim(),
+  }), [form]);
+  const isDirty = React.useMemo(
+    () => JSON.stringify(buildPayload()) !== JSON.stringify({
+      contact_name: String(initialForm.contact_name || '').trim(),
+      contact_type: (initialForm.contact_type || 'payee') as Accumul8ContactType,
+      default_amount: Number(initialForm.default_amount || 0),
+      email: String(initialForm.email || '').trim(),
+      phone_number: String(initialForm.phone_number || '').trim(),
+      street_address: String(initialForm.street_address || '').trim(),
+      city: String(initialForm.city || '').trim(),
+      state: String(initialForm.state || '').trim(),
+      zip: String(initialForm.zip || '').trim(),
+      notes: String(initialForm.notes || '').trim(),
+    }),
+    [buildPayload, initialForm],
+  );
+  const handleSave = React.useCallback(() => {
+    if (busy || !isDirty) return;
+    void onSave(buildPayload());
+  }, [buildPayload, busy, isDirty, onSave]);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -53,24 +85,23 @@ export function Accumul8ContactModal({
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{editing ? 'Edit Contact Type' : 'Add Contact Type'}</h5>
-            <ModalCloseIconButton />
+            <div className="d-flex align-items-center gap-2">
+              <StandardIconButton
+                iconKey="save"
+                ariaLabel={editing ? 'Save contact type changes' : 'Add contact type'}
+                title={isDirty ? (editing ? 'Save contact type changes' : 'Add contact type') : 'No changes to save'}
+                className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                onClick={handleSave}
+                disabled={busy || !isDirty}
+              />
+              <ModalCloseIconButton />
+            </div>
           </div>
           <form
             className="modal-body d-grid gap-3"
             onSubmit={(event) => {
               event.preventDefault();
-              void onSave({
-                contact_name: String(form.contact_name || '').trim(),
-                contact_type: (form.contact_type || 'payee') as Accumul8ContactType,
-                default_amount: Number(form.default_amount || 0),
-                email: String(form.email || '').trim(),
-                phone_number: String(form.phone_number || '').trim(),
-                street_address: String(form.street_address || '').trim(),
-                city: String(form.city || '').trim(),
-                state: String(form.state || '').trim(),
-                zip: String(form.zip || '').trim(),
-                notes: String(form.notes || '').trim(),
-              });
+              handleSave();
             }}
           >
             <div className="row g-3">
@@ -173,18 +204,6 @@ export function Accumul8ContactModal({
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                 />
               </div>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-              <button
-                type="submit"
-                className="btn btn-success"
-                disabled={busy}
-                aria-label={editing ? 'Save contact type changes' : 'Add contact type'}
-                title={editing ? 'Save contact type changes' : 'Add contact type'}
-              >
-                <span aria-hidden="true">{editing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
-              </button>
             </div>
           </form>
         </div>

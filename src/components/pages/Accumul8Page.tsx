@@ -16,6 +16,7 @@ import {
   ACCUMUL8_VIEW_BUTTON_EMOJI,
 } from '../accumul8/accumul8Ui';
 import { WebpImage } from '../common/WebpImage';
+import { StandardIconButton } from '../common/StandardIconButton';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
@@ -3223,7 +3224,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       {selectedEntityTransactions.length} linked transaction{selectedEntityTransactions.length === 1 ? '' : 's'}
                     </div>
                   </div>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityHistoryEntityId(null)}>Close</button>
+                  <div className="d-flex align-items-center gap-2">
+                    <StandardIconButton
+                      iconKey="edit"
+                      ariaLabel={`Edit ${selectedEntityHistory.display_name}`}
+                      title={`Edit ${selectedEntityHistory.display_name}`}
+                      className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                      onClick={() => {
+                        setEntityHistoryEntityId(null);
+                        beginEditEntity(selectedEntityHistory.id);
+                      }}
+                    />
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityHistoryEntityId(null)}>Close</button>
+                  </div>
                 </div>
                 <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--cards">
                   <table className="table table-sm accumul8-table accumul8-entity-history-table">
@@ -3319,6 +3332,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             statementUploads={statementUploads}
             ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
             onClose={closeTransactionModal}
+            onEdit={transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined}
             onSave={submitTransactionModal}
           />
           <Accumul8StatementModal

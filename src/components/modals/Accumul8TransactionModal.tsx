@@ -10,8 +10,8 @@ import {
 } from '../../types/accumul8';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
-import { ACCUMUL8_SAVE_BUTTON_EMOJI } from '../accumul8/accumul8Ui';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
+import { StandardIconButton } from '../common/StandardIconButton';
 import './Accumul8TransactionModal.css';
 
 interface Accumul8TransactionModalFormState {
@@ -42,6 +42,7 @@ interface Accumul8TransactionModalProps {
   statementUploads: Accumul8StatementUpload[];
   ownerUserId: number;
   onClose: () => void;
+  onEdit?: () => void;
   onSave: (form: Accumul8TransactionUpsertRequest) => Promise<void>;
 }
 
@@ -56,6 +57,7 @@ export function Accumul8TransactionModal({
   statementUploads,
   ownerUserId,
   onClose,
+  onEdit,
   onSave,
 }: Accumul8TransactionModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
@@ -67,6 +69,45 @@ export function Accumul8TransactionModal({
     [ownerUserId, statementUploads, transaction],
   );
   const editPolicy = React.useMemo(() => getAccumul8TransactionEditPolicy(transaction), [transaction]);
+  const buildPayload = React.useCallback((): Accumul8TransactionUpsertRequest => ({
+    transaction_date: String(form.transaction_date || ''),
+    due_date: String(form.due_date || ''),
+    paid_date: String(form.paid_date || ''),
+    entry_type: (form.entry_type || 'manual') as Accumul8EntryType,
+    description: String(form.description || '').trim(),
+    memo: String(form.memo || '').trim(),
+    amount: Number(form.amount || 0),
+    rta_amount: Number(form.rta_amount || 0),
+    is_paid: Number(form.is_paid || 0),
+    is_reconciled: Number(form.is_reconciled || 0),
+    is_budget_planner: Number(form.is_budget_planner || 0),
+    entity_id: form.entity_id ? Number(form.entity_id) : null,
+    account_id: form.account_id ? Number(form.account_id) : null,
+    balance_entity_id: form.balance_entity_id ? Number(form.balance_entity_id) : null,
+  }), [form]);
+  const isDirty = React.useMemo(
+    () => JSON.stringify(buildPayload()) !== JSON.stringify({
+      transaction_date: String(initialForm.transaction_date || ''),
+      due_date: String(initialForm.due_date || ''),
+      paid_date: String(initialForm.paid_date || ''),
+      entry_type: (initialForm.entry_type || 'manual') as Accumul8EntryType,
+      description: String(initialForm.description || '').trim(),
+      memo: String(initialForm.memo || '').trim(),
+      amount: Number(initialForm.amount || 0),
+      rta_amount: Number(initialForm.rta_amount || 0),
+      is_paid: Number(initialForm.is_paid || 0),
+      is_reconciled: Number(initialForm.is_reconciled || 0),
+      is_budget_planner: Number(initialForm.is_budget_planner || 0),
+      entity_id: initialForm.entity_id ? Number(initialForm.entity_id) : null,
+      account_id: initialForm.account_id ? Number(initialForm.account_id) : null,
+      balance_entity_id: initialForm.balance_entity_id ? Number(initialForm.balance_entity_id) : null,
+    }),
+    [buildPayload, initialForm],
+  );
+  const handleSave = React.useCallback(() => {
+    if (isReadOnly || busy || !isDirty || !form.transaction_date || !form.description.trim()) return;
+    void onSave(buildPayload());
+  }, [buildPayload, busy, form.description, form.transaction_date, isDirty, isReadOnly, onSave]);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -88,31 +129,34 @@ export function Accumul8TransactionModal({
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{isEditing ? 'Edit Ledger Entry' : isReadOnly ? 'View Ledger Entry' : 'Add Ledger Entry'}</h5>
-            <ModalCloseIconButton />
+            <div className="d-flex align-items-center gap-2">
+              {!isReadOnly ? (
+                <StandardIconButton
+                  iconKey="save"
+                  ariaLabel={isEditing ? 'Save ledger entry changes' : 'Add ledger entry'}
+                  title={isDirty ? (isEditing ? 'Save ledger entry changes' : 'Add ledger entry') : 'No changes to save'}
+                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                  onClick={handleSave}
+                  disabled={busy || !isDirty || !form.transaction_date || !form.description.trim()}
+                />
+              ) : null}
+              {isReadOnly && onEdit ? (
+                <StandardIconButton
+                  iconKey="edit"
+                  ariaLabel="Edit ledger entry"
+                  title="Edit ledger entry"
+                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
+                  onClick={onEdit}
+                />
+              ) : null}
+              <ModalCloseIconButton />
+            </div>
           </div>
           <form
             className="modal-body d-grid gap-3"
             onSubmit={(event) => {
-              if (isReadOnly) {
-                return;
-              }
               event.preventDefault();
-              void onSave({
-                transaction_date: String(form.transaction_date || ''),
-                due_date: String(form.due_date || ''),
-                paid_date: String(form.paid_date || ''),
-                entry_type: (form.entry_type || 'manual') as Accumul8EntryType,
-                description: String(form.description || '').trim(),
-                memo: String(form.memo || '').trim(),
-                amount: Number(form.amount || 0),
-                rta_amount: Number(form.rta_amount || 0),
-                is_paid: Number(form.is_paid || 0),
-                is_reconciled: Number(form.is_reconciled || 0),
-                is_budget_planner: Number(form.is_budget_planner || 0),
-                entity_id: form.entity_id ? Number(form.entity_id) : null,
-                account_id: form.account_id ? Number(form.account_id) : null,
-                balance_entity_id: form.balance_entity_id ? Number(form.balance_entity_id) : null,
-              });
+              handleSave();
             }}
           >
             {(isEditing || isReadOnly) && statementLink ? (
@@ -318,20 +362,6 @@ export function Accumul8TransactionModal({
                   disabled={busy || isReadOnly}
                 />
               </div>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>{isReadOnly ? 'Close' : 'Cancel'}</button>
-              {!isReadOnly ? (
-                <button
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={busy || !form.transaction_date || !form.description.trim()}
-                  aria-label={isEditing ? 'Save ledger entry changes' : 'Add ledger entry'}
-                  title={isEditing ? 'Save ledger entry changes' : 'Add ledger entry'}
-                >
-                  <span aria-hidden="true">{isEditing ? ACCUMUL8_SAVE_BUTTON_EMOJI : '➕'}</span>
-                </button>
-              ) : null}
             </div>
           </form>
         </div>

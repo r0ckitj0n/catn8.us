@@ -245,140 +245,146 @@ export function Accumul8StatementModal({
             </div>
           </div>
           <div className="modal-body">
-            <form className="row g-3 mb-2" onSubmit={handleSubmit}>
-              <div className="col-md-3">
-                <label className="form-label" htmlFor="accumul8-statement-kind">Statement type</label>
-                <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind)} disabled={busy}>
-                  <option value="bank_account">Bank account</option>
-                  <option value="credit_card">Credit card</option>
-                  <option value="loan">Car loan / installment</option>
-                  <option value="mortgage">Mortgage</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="col-md-5">
-                <label className="form-label" htmlFor="accumul8-statement-account">Preferred account</label>
-                <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
-                  <option value="">Let AI propose an account</option>
-                  {sortedAccounts.map((uploadAccount) => (
-                    <option key={uploadAccount.id} value={String(uploadAccount.id)}>
-                      {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-statement-files">Statement files</label>
-                <input id="accumul8-statement-files" className="form-control" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
-              </div>
-              <div className="col-12">
-                <div className="accumul8-statement-upload-actions">
-                  <div className="small text-muted">
-                    {files.length > 0 ? `${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}` : 'Choose one or more statements to scan into an import plan.'}
+            <div className="accumul8-statement-layout">
+              <div className="accumul8-statement-controls-column">
+                <form className="row g-3 mb-2" onSubmit={handleSubmit}>
+                  <div className="col-md-12">
+                    <label className="form-label" htmlFor="accumul8-statement-kind">Statement type</label>
+                    <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind)} disabled={busy}>
+                      <option value="bank_account">Bank account</option>
+                      <option value="credit_card">Credit card</option>
+                      <option value="loan">Car loan / installment</option>
+                      <option value="mortgage">Mortgage</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
-                  <button type="submit" className="btn btn-success" disabled={busy || files.length === 0}>Scan Statements</button>
-                </div>
-              </div>
-            </form>
-
-            <form className="accumul8-statement-search" onSubmit={handleSearch}>
-              <input className="form-control" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search scanned statement contents, payees, memo text, or dates" disabled={busy || searchBusy} />
-              <button type="submit" className="btn btn-outline-primary" disabled={busy || searchBusy || searchQuery.trim() === ''}>Search</button>
-            </form>
-            {searchResults.length > 0 ? (
-              <div className="accumul8-statement-search-results">
-                {searchResults.map((result) => <Accumul8StatementSearchResultCard key={result.upload_id} ownerUserId={ownerUserId} result={result} />)}
-              </div>
-            ) : null}
-
-            {latestImportResult ? (
-              <section className="accumul8-statement-history-card">
-                <strong>Latest import result</strong>
-                <div className="small text-muted mb-2">{latestImportResult.filename}</div>
-                <div className="accumul8-statement-chip-row">
-                  <span className="accumul8-statement-chip is-processed">{latestImportResult.result?.imported_count || 0} imported</span>
-                  <span className="accumul8-statement-chip">{latestImportResult.result?.duplicate_count || 0} duplicates skipped</span>
-                  <span className={`accumul8-statement-chip${(latestImportResult.result?.failed_count || 0) > 0 ? ' is-warning' : ''}`}>{latestImportResult.result?.failed_count || 0} failed</span>
-                </div>
-                {latestImportResult.result?.successful_rows?.length ? <div className="small text-muted">Imported: {latestImportResult.result.successful_rows.map((row) => `${row.transaction_date || ''} ${row.description || ''}`.trim()).slice(0, 5).join(' | ')}</div> : null}
-                {latestImportResult.result?.failed_rows?.length ? <div className="accumul8-statement-error">Failed: {latestImportResult.result.failed_rows.map((row) => row.reason || 'Unknown error').slice(0, 3).join(' | ')}</div> : null}
-              </section>
-            ) : null}
-
-            {activeReviewUpload ? (
-              <section id={`accumul8-statement-review-${activeReviewUpload.id}`} className="accumul8-statement-review-section">
-                <div className="accumul8-statement-history-head">
-                  <div>
-                    <strong>Review and approve import</strong>
-                    <div className="small text-muted">
-                      {pendingUploads.length > 1
-                        ? `${pendingUploads.length} statements are waiting for review. Choose one below, then approve when the target account looks right.`
-                        : 'This scan is waiting for your approval before anything new is posted to the ledger.'}
+                  <div className="col-md-12">
+                    <label className="form-label" htmlFor="accumul8-statement-account">Preferred account</label>
+                    <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
+                      <option value="">Let AI propose an account</option>
+                      {sortedAccounts.map((uploadAccount) => (
+                        <option key={uploadAccount.id} value={String(uploadAccount.id)}>
+                          {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label" htmlFor="accumul8-statement-files">Statement files</label>
+                    <input id="accumul8-statement-files" className="form-control" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+                  </div>
+                  <div className="col-12">
+                    <div className="accumul8-statement-upload-actions">
+                      <div className="small text-muted">
+                        {files.length > 0 ? `${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}` : 'Choose one or more statements to scan into an import plan.'}
+                      </div>
+                      <button type="submit" className="btn btn-success" disabled={busy || files.length === 0}>Scan Statements</button>
                     </div>
                   </div>
-                </div>
-                {pendingUploads.length > 1 ? (
-                  <div className="accumul8-statement-review-selector">
-                    {pendingUploads.map((upload) => (
-                      <button
-                        key={`review-selector-${upload.id}`}
-                        type="button"
-                        className={`btn btn-sm ${activeReviewUpload.id === upload.id ? 'btn-primary' : 'btn-outline-primary'}`}
-                        onClick={() => openReview(upload.id)}
-                        disabled={busy}
-                      >
-                        {upload.original_filename}
-                      </button>
-                    ))}
+                </form>
+
+                <form className="accumul8-statement-search" onSubmit={handleSearch}>
+                  <input className="form-control" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search scanned statement contents, payees, memo text, or dates" disabled={busy || searchBusy} />
+                  <button type="submit" className="btn btn-outline-primary" disabled={busy || searchBusy || searchQuery.trim() === ''}>Search</button>
+                </form>
+                {searchResults.length > 0 ? (
+                  <div className="accumul8-statement-search-results">
+                    {searchResults.map((result) => <Accumul8StatementSearchResultCard key={result.upload_id} ownerUserId={ownerUserId} result={result} />)}
                   </div>
                 ) : null}
-                {(() => {
-                  const upload = activeReviewUpload;
-                  const mode = accountModeById[upload.id] || 'existing';
-                  const selectedUploadAccount = selectedAccountById[upload.id] || '';
-                  const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
-                  return (
-                    <Accumul8StatementPlanCard
-                      key={`plan-${upload.id}`}
+
+                {latestImportResult ? (
+                  <section className="accumul8-statement-history-card">
+                    <strong>Latest import result</strong>
+                    <div className="small text-muted mb-2">{latestImportResult.filename}</div>
+                    <div className="accumul8-statement-chip-row">
+                      <span className="accumul8-statement-chip is-processed">{latestImportResult.result?.imported_count || 0} imported</span>
+                      <span className="accumul8-statement-chip">{latestImportResult.result?.duplicate_count || 0} duplicates skipped</span>
+                      <span className={`accumul8-statement-chip${(latestImportResult.result?.failed_count || 0) > 0 ? ' is-warning' : ''}`}>{latestImportResult.result?.failed_count || 0} failed</span>
+                    </div>
+                    {latestImportResult.result?.successful_rows?.length ? <div className="small text-muted">Imported: {latestImportResult.result.successful_rows.map((row) => `${row.transaction_date || ''} ${row.description || ''}`.trim()).slice(0, 5).join(' | ')}</div> : null}
+                    {latestImportResult.result?.failed_rows?.length ? <div className="accumul8-statement-error">Failed: {latestImportResult.result.failed_rows.map((row) => row.reason || 'Unknown error').slice(0, 3).join(' | ')}</div> : null}
+                  </section>
+                ) : null}
+
+                {activeReviewUpload ? (
+                  <section id={`accumul8-statement-review-${activeReviewUpload.id}`} className="accumul8-statement-review-section">
+                    <div className="accumul8-statement-history-head">
+                      <div>
+                        <strong>Review and approve import</strong>
+                        <div className="small text-muted">
+                          {pendingUploads.length > 1
+                            ? `${pendingUploads.length} statements are waiting for review. Choose one below, then approve when the target account looks right.`
+                            : 'This scan is waiting for your approval before anything new is posted to the ledger.'}
+                        </div>
+                      </div>
+                    </div>
+                    {pendingUploads.length > 1 ? (
+                      <div className="accumul8-statement-review-selector">
+                        {pendingUploads.map((upload) => (
+                          <button
+                            key={`review-selector-${upload.id}`}
+                            type="button"
+                            className={`btn btn-sm ${activeReviewUpload.id === upload.id ? 'btn-primary' : 'btn-outline-primary'}`}
+                            onClick={() => openReview(upload.id)}
+                            disabled={busy}
+                          >
+                            {upload.original_filename}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {(() => {
+                      const upload = activeReviewUpload;
+                      const mode = accountModeById[upload.id] || 'existing';
+                      const selectedUploadAccount = selectedAccountById[upload.id] || '';
+                      const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
+                      return (
+                        <Accumul8StatementPlanCard
+                          key={`plan-${upload.id}`}
+                          busy={busy}
+                          upload={upload}
+                          sortedAccounts={sortedAccounts}
+                          bankingOrganizations={bankingOrganizations}
+                          accountMode={mode}
+                          selectedAccountId={selectedUploadAccount}
+                          newAccount={newAccount}
+                          onModeChange={(nextMode) => setAccountModeById((prev) => ({ ...prev, [upload.id]: nextMode }))}
+                          onSelectedAccountChange={(nextAccountId) => setSelectedAccountById((prev) => ({ ...prev, [upload.id]: nextAccountId }))}
+                          onNewAccountChange={(draft) => setNewAccountById((prev) => ({ ...prev, [upload.id]: draft }))}
+                          onRescan={() => void onRescan(upload.id, selectedUploadAccount ? Number(selectedUploadAccount) : null)}
+                          onConfirm={() => void handleConfirmImport(upload)}
+                          formatDateRange={formatStatementDateRange}
+                          formatFileSize={formatStatementFileSize}
+                        />
+                      );
+                    })()}
+                  </section>
+                ) : null}
+              </div>
+
+              <div className="accumul8-statement-list-column">
+                <div className="accumul8-statement-history-list">
+                  {statementUploads.length === 0 ? (
+                    <div className="accumul8-statement-history-empty">No statements uploaded yet.</div>
+                  ) : statementUploads.map((upload) => (
+                    <Accumul8StatementHistoryCard
+                      key={upload.id}
                       busy={busy}
+                      ownerUserId={ownerUserId}
                       upload={upload}
-                      sortedAccounts={sortedAccounts}
-                      bankingOrganizations={bankingOrganizations}
-                      accountMode={mode}
-                      selectedAccountId={selectedUploadAccount}
-                      newAccount={newAccount}
-                      onModeChange={(nextMode) => setAccountModeById((prev) => ({ ...prev, [upload.id]: nextMode }))}
-                      onSelectedAccountChange={(nextAccountId) => setSelectedAccountById((prev) => ({ ...prev, [upload.id]: nextAccountId }))}
-                      onNewAccountChange={(draft) => setNewAccountById((prev) => ({ ...prev, [upload.id]: draft }))}
-                      onRescan={() => void onRescan(upload.id, selectedUploadAccount ? Number(selectedUploadAccount) : null)}
-                      onConfirm={() => void handleConfirmImport(upload)}
+                      transactionsById={transactionsById}
+                      onRescan={() => void onRescan(upload.id, upload.account_id)}
+                      onReview={upload.plan ? () => openReview(upload.id) : undefined}
+                      onOpenTransaction={onOpenTransaction}
+                      onDeleteTransaction={onDeleteTransaction}
+                      isReviewable={isAwaitingImportApproval(upload)}
                       formatDateRange={formatStatementDateRange}
                       formatFileSize={formatStatementFileSize}
                     />
-                  );
-                })()}
-              </section>
-            ) : null}
-
-            <div className="accumul8-statement-history-list">
-              {statementUploads.length === 0 ? (
-                <div className="accumul8-statement-history-empty">No statements uploaded yet.</div>
-              ) : statementUploads.map((upload) => (
-                <Accumul8StatementHistoryCard
-                  key={upload.id}
-                  busy={busy}
-                  ownerUserId={ownerUserId}
-                  upload={upload}
-                  transactionsById={transactionsById}
-                  onRescan={() => void onRescan(upload.id, upload.account_id)}
-                  onReview={upload.plan ? () => openReview(upload.id) : undefined}
-                  onOpenTransaction={onOpenTransaction}
-                  onDeleteTransaction={onDeleteTransaction}
-                  isReviewable={isAwaitingImportApproval(upload)}
-                  formatDateRange={formatStatementDateRange}
-                  formatFileSize={formatStatementFileSize}
-                />
-              ))}
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

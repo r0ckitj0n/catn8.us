@@ -57,6 +57,27 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.accumul8-statement-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.38fr);
+  gap: 1rem;
+  min-height: 0;
+  align-items: start;
+}
+
+.accumul8-statement-controls-column {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.accumul8-statement-list-column {
+  min-height: 0;
+  max-height: 100%;
 }
 
 .accumul8-statement-modal-header-actions {
@@ -126,6 +147,7 @@
   overflow-y: auto;
   min-height: 0;
   padding-right: 0.2rem;
+  max-height: 100%;
 }
 
 .accumul8-statement-history-empty {
@@ -306,6 +328,19 @@
 
   .accumul8-statement-modal .modal-content {
     max-height: calc(100vh - 1.5rem);
+  }
+
+  .accumul8-statement-modal .modal-body {
+    overflow: auto;
+  }
+
+  .accumul8-statement-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .accumul8-statement-list-column,
+  .accumul8-statement-history-list {
+    max-height: none;
   }
 
   .accumul8-statement-hero,

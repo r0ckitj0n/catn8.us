@@ -465,6 +465,12 @@
   width: 100%;
   min-width: 0;
   align-self: center;
+  text-decoration: none;
+}
+
+.accumul8-header-brand-logo:focus-visible {
+  outline: 2px solid rgba(243, 216, 125, 0.9);
+  outline-offset: 4px;
 }
 
 .accumul8-header-brand-logo-image {

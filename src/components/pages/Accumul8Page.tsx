@@ -1941,9 +1941,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="accumul8-summary-card"><span>Upcoming Windfalls</span><strong>{formatCurrencyAmount(headerSummary.upcomingWindfalls)}</strong></div>
                 </div>
               </div>
-              <div className="accumul8-header-brand-logo" aria-hidden="true">
-                <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="" />
-              </div>
+              <a
+                className="accumul8-header-brand-logo"
+                href="https://catn8.us"
+                aria-label="Go to catn8.us"
+              >
+                <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="catn8.us Logo" />
+              </a>
             </div>
             <div className="accumul8-page-toolbar">
               <div className="accumul8-page-filters">

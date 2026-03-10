@@ -244,7 +244,7 @@
 
 .accumul8-page-title-row {
   display: grid;
-  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr) clamp(86px, 10vw, 132px);
+  grid-template-columns: clamp(168px, 18vw, 260px) minmax(0, 1fr);
   align-items: start;
   column-gap: 0.9rem;
   row-gap: 0.75rem;
@@ -473,29 +473,6 @@
   color: #1a1308;
 }
 
-.accumul8-header-brand-logo {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  width: 100%;
-  min-width: 0;
-  align-self: center;
-  text-decoration: none;
-}
-
-.accumul8-header-brand-logo:focus-visible {
-  outline: 2px solid rgba(243, 216, 125, 0.9);
-  outline-offset: 4px;
-}
-
-.accumul8-header-brand-logo-image {
-  display: block;
-  width: auto;
-  height: clamp(60px, 7vw, 96px);
-  object-fit: contain;
-  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.2));
-}
-
 .accumul8-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -599,7 +576,7 @@
   background:
     linear-gradient(180deg, rgba(17, 24, 31, 0.97), rgba(10, 16, 22, 0.98)),
     linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 56%);
-  padding: 0.85rem;
+  padding: 0;
   position: relative;
   z-index: 1;
   overflow: hidden;
@@ -1971,10 +1948,6 @@
     width: 100%;
   }
 
-  .accumul8-header-brand-logo {
-    justify-content: center;
-  }
-
   .accumul8-page-filters {
     align-items: stretch;
     flex-direction: column;
@@ -2069,7 +2042,6 @@
 @media (max-width: 767px) {
   .accumul8-page-title-row,
   .accumul8-page-toolbar,
-  .accumul8-panel,
   .accumul8-month-panel,
   .accumul8-help-modal {
     padding-inline: 0.85rem;

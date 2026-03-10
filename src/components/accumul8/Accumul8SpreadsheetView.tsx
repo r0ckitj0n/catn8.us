@@ -371,7 +371,7 @@ export function Accumul8SpreadsheetView({
 
   return (
     <div className="accumul8-spreadsheet">
-      <div className="accumul8-panel-toolbar mb-3">
+      <div className="accumul8-panel-toolbar">
         <div className="accumul8-spreadsheet-toolbar-controls">
           <div className="accumul8-spreadsheet-nav">
             <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(-1)} disabled={busy} aria-label="Previous month">

@@ -28,16 +28,13 @@ export function HomePage({ viewer, onLoginClick, onLogout, onAccountClick, myste
 
                 <div className="catn8-dictionary-entry mt-3">
                   <div className="row align-items-center g-3">
-                    <div className="col-md-8">
+                    <div className="col-12">
                       <h3 className="catn8-dictionary-word">catenate</h3>
                       <div className="catn8-dictionary-pron">/ˈkatnˌāt/</div>
                       <div className="catn8-dictionary-pos">
                         <strong>verb</strong> (used with object)
                       </div>
                       <div>1. to link together; form into a chain</div>
-                    </div>
-                    <div className="col-md-4 text-center">
-                      <WebpImage className="catn8-dictionary-logo" src="/images/catn8_logo.png" alt="catn8.us Logo" />
                     </div>
                   </div>
                 </div>

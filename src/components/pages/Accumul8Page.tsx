@@ -2478,7 +2478,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={openCreateDebtorModal} disabled={busy}>Add Person</button>
               </div>
-              <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--bills">
+              <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--debtors-list">
                 <table
                   ref={debtorsTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--debtors accumul8-sticky-head"
@@ -2559,14 +2559,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <div className="accumul8-panel mt-3">
                 <div className="d-flex justify-content-between align-items-center gap-2 mb-2 flex-wrap">
                   <h4 className="h6 mb-0">IOU Ledger</h4>
-                  <div className="d-flex gap-2">
-                    <select className="form-select form-select-sm" value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)}>
+                  <div className="d-flex gap-2 accumul8-iou-ledger-controls">
+                    <select className="form-select form-select-sm accumul8-iou-ledger-controls__select" value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)}>
                       <option value="">All People</option>
                       {debtors.map((debtor) => <option key={debtor.id} value={debtor.id}>{debtor.debtor_name}</option>)}
                     </select>
                     <button
                       type="button"
-                      className="btn btn-sm btn-outline-primary"
+                      className="btn btn-sm btn-outline-primary accumul8-iou-ledger-controls__button"
                       onClick={() => {
                         const selectedDebtor = debtors.find((debtor) => String(debtor.id) === selectedDebtorId) || null;
                         openCreateTransactionModal({ balanceEntityId: selectedDebtor?.entity_id ? String(selectedDebtor.entity_id) : '' });

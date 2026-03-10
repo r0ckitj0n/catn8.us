@@ -722,6 +722,27 @@
   min-width: 0;
 }
 
+.accumul8-iou-ledger-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.accumul8-iou-ledger-controls__select,
+.accumul8-iou-ledger-controls__button {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: max-content;
+}
+
+.accumul8-iou-ledger-controls__select {
+  min-width: 0;
+  padding-right: 2.25rem;
+}
+
+.accumul8-iou-ledger-controls__button {
+  white-space: nowrap;
+}
+
 .accumul8-panel-toolbar-range {
   justify-self: start;
   min-width: 0;
@@ -2038,6 +2059,14 @@
   flex: 1 1 auto;
   max-height: none;
   min-height: 0;
+}
+
+.accumul8-scroll-area--debtors-list {
+  flex: 0 0 auto;
+  max-height: none;
+  min-height: fit-content;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .accumul8-scroll-area .table {

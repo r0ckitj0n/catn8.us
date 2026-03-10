@@ -136,8 +136,10 @@ export function AIConfigurationModal({ open, onClose, onToast, initialTab = 'gen
                     temperature={generalState.config.temperature}
                     setTemperature={(v) => generalState.setConfig(prev => ({ ...prev, temperature: v }))}
                     busy={generalState.busy}
+                    isDirty={generalState.isDirty}
                     lastAiProviderTest={generalState.lastAiProviderTest}
                     testAiProvider={generalState.testAiProvider}
+                    save={() => generalState.save()}
                   />
 
                   <GeneralAISecretsSection

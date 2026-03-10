@@ -84,8 +84,10 @@ export function AIConfigModal({ open, onClose, onToast }: AIConfigModalProps) {
                   temperature={state.config.temperature}
                   setTemperature={(v) => state.setConfig(prev => ({ ...prev, temperature: v }))}
                   busy={state.busy}
+                  isDirty={state.isDirty}
                   lastAiProviderTest={state.lastAiProviderTest}
                   testAiProvider={state.testAiProvider}
+                  save={() => state.save()}
                 />
 
                 <GeneralAISecretsSection 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { AiLooseObject } from '../../../types/common';
+import { aiGetProviderRequirements } from '../../../utils/aiUtils';
 
 interface GeneralAISecretsSectionProps {
   providerKey: string;
@@ -18,9 +19,15 @@ export function GeneralAISecretsSection({
 }: GeneralAISecretsSectionProps) {
   const providerHas = hasSecrets[providerKey] || {};
   const providerSecrets = secretsByProvider[providerKey] || {};
+  const providerRequirements = aiGetProviderRequirements(providerKey);
 
   return (
     <>
+      <div className="col-12 mb-2">
+        <div className="small text-muted">
+          {providerRequirements?.summary || 'Save stores the current provider settings and secrets even if a test fails.'}
+        </div>
+      </div>
       {(providerKey === 'openai' || providerKey === 'anthropic' || providerKey === 'google_ai_studio' || 
         providerKey === 'azure_openai' || providerKey === 'together_ai' || 
         providerKey === 'fireworks_ai' || providerKey === 'huggingface') && (
@@ -42,6 +49,9 @@ export function GeneralAISecretsSection({
             placeholder={providerHas.api_key ? 'Enter to replace existing token' : 'Enter token'}
             autoComplete="off"
           />
+          <div className="form-text">
+            Required for this provider. Testing uses saved settings; use Save to persist any new key first.
+          </div>
         </div>
       )}
 
@@ -64,6 +74,7 @@ export function GeneralAISecretsSection({
             disabled={busy}
             spellCheck={false}
           />
+          <div className="form-text">Required. Paste the full service account JSON payload.</div>
         </div>
       )}
 
@@ -86,6 +97,7 @@ export function GeneralAISecretsSection({
               disabled={busy}
               autoComplete="off"
             />
+            <div className="form-text">Required.</div>
           </div>
           <div className="col-md-6 mb-3">
             <label className="form-label" htmlFor="ai-aws-secret-access-key">
@@ -104,6 +116,7 @@ export function GeneralAISecretsSection({
               disabled={busy}
               autoComplete="off"
             />
+            <div className="form-text">Required.</div>
           </div>
           <div className="col-12 mb-3">
             <label className="form-label" htmlFor="ai-aws-session-token">
@@ -122,6 +135,7 @@ export function GeneralAISecretsSection({
               disabled={busy}
               autoComplete="off"
             />
+            <div className="form-text">Optional. Only set this when you are using temporary AWS credentials.</div>
           </div>
         </>
       )}

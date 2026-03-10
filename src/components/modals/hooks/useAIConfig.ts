@@ -39,7 +39,7 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
 
   const [config, setConfig] = useState<AIConfigState>({
     provider: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.2-mini',
     base_url: '',
     location: '',
     temperature: 0.2,
@@ -78,7 +78,7 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
         const providerConfig = (cfg && typeof cfg === 'object' && cfg.provider_config && typeof cfg.provider_config === 'object' && !Array.isArray(cfg.provider_config)) ? cfg.provider_config : {};
         const nextConfig = {
           provider: String(cfg.provider || 'openai'),
-          model: String(cfg.model || 'gpt-4o-mini'),
+          model: String(cfg.model || 'gpt-5.2-mini'),
           base_url: String(cfg.base_url || ''),
           location: String(cfg.location || ''),
           temperature: Number.isFinite(Number(cfg.temperature)) ? Number(cfg.temperature) : 0.2,
@@ -223,7 +223,7 @@ export function useAIConfig(open: boolean, onToast?: (toast: IToast) => void) {
       const nextProviderConfig = (nextCfg && typeof nextCfg === 'object' && nextCfg.provider_config && typeof nextCfg.provider_config === 'object' && !Array.isArray(nextCfg.provider_config)) ? nextCfg.provider_config : {};
       const nextConfigState = {
         provider: String(nextCfg.provider || payload.provider || 'openai'),
-        model: String(nextCfg.model || payload.model || 'gpt-4o-mini'),
+        model: String(nextCfg.model || payload.model || 'gpt-5.2-mini'),
         base_url: String(nextCfg.base_url || payload.base_url || ''),
         location: String(nextCfg.location || payload.location || ''),
         temperature: Number.isFinite(Number(nextCfg.temperature)) ? Number(nextCfg.temperature) : Number(payload.temperature),

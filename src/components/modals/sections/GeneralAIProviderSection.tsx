@@ -1,5 +1,5 @@
 import React from 'react';
-import { AI_PROVIDER_CHOICES, aiGetModelChoices } from '../../../utils/aiUtils';
+import { AI_PROVIDER_CHOICES, aiGetModelChoices, aiGetProviderRequirements } from '../../../utils/aiUtils';
 
 interface GeneralAIProviderSectionProps {
   config: any;
@@ -22,9 +22,14 @@ export function GeneralAIProviderSection({
   isRefreshingModels,
   modelChoicesSource
 }: GeneralAIProviderSectionProps) {
+  const providerRequirements = aiGetProviderRequirements(providerKey);
+
   return (
     <div className="border rounded p-3 mb-3">
       <div className="fw-semibold mb-2">General AI Provider</div>
+      <div className="alert alert-primary py-2 small mb-3" role="note">
+        Use <strong>General AI</strong> for bank statement scanning, document extraction, categorization, and search. Voice and Image settings are separate.
+      </div>
       <div className="row g-3">
         <div className="col-md-6">
           <label className="form-label" htmlFor="ai-provider">Provider</label>
@@ -83,6 +88,19 @@ export function GeneralAIProviderSection({
           </div>
         </div>
 
+        {providerRequirements ? (
+          <div className="col-12">
+            <div className="bg-light border rounded p-3 small">
+              <div className="fw-semibold mb-1">What this provider needs</div>
+              <div className="text-muted mb-2">{providerRequirements.summary}</div>
+              <div><strong>Required:</strong> {providerRequirements.required.join(', ')}</div>
+              {providerRequirements.optional?.length ? (
+                <div className="mt-1"><strong>Optional:</strong> {providerRequirements.optional.join(', ')}</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div className="col-12">
           {(providerKey === 'openai' || providerKey === 'together_ai' || providerKey === 'fireworks_ai') && (
             <>
@@ -93,8 +111,13 @@ export function GeneralAIProviderSection({
                 value={config.base_url}
                 onChange={(e) => setConfig((c: any) => ({ ...c, base_url: e.target.value }))}
                 disabled={busy}
-                placeholder=""
+                placeholder={providerKey === 'openai' ? 'Leave blank for OpenAI defaults' : 'Provider base URL'}
               />
+              <div className="form-text">
+                {providerKey === 'openai'
+                  ? 'Only needed for a compatible proxy or self-hosted gateway.'
+                  : 'Use the provider default unless you have a custom endpoint.'}
+              </div>
             </>
           )}
         </div>
@@ -111,6 +134,7 @@ export function GeneralAIProviderSection({
               disabled={busy}
               placeholder="global"
             />
+            <div className="form-text">Required for Vertex AI routing.</div>
           </div>
         )}
 
@@ -131,6 +155,7 @@ export function GeneralAIProviderSection({
                 disabled={busy}
                 placeholder="https://{resource}.openai.azure.com"
               />
+              <div className="form-text">Required. Use the Azure OpenAI resource endpoint.</div>
             </div>
             <div className="col-md-6">
               <label className="form-label" htmlFor="ai-azure-deployment">Deployment</label>
@@ -145,6 +170,7 @@ export function GeneralAIProviderSection({
                   }))
                 }
                 disabled={busy}
+                placeholder="Your Azure deployment name"
               />
             </div>
             <div className="col-md-6">
@@ -160,6 +186,7 @@ export function GeneralAIProviderSection({
                   }))
                 }
                 disabled={busy}
+                placeholder="2024-10-21"
               />
             </div>
           </>
@@ -181,6 +208,7 @@ export function GeneralAIProviderSection({
               disabled={busy}
               placeholder="us-east-1"
             />
+            <div className="form-text">Required. Must match the region where the Bedrock model is enabled.</div>
           </div>
         )}
       </div>

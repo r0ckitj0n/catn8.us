@@ -411,6 +411,31 @@ function accumul8_statement_page_catalog_prompt(array $pageCatalog, int $maxLen 
     return implode("\n\n", $segments);
 }
 
+function accumul8_statement_provider_has_api_key(string $provider): bool
+{
+    $provider = strtolower(trim($provider));
+    if ($provider === '') {
+        return false;
+    }
+    $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+    return is_string($apiKey) && trim($apiKey) !== '';
+}
+
+function accumul8_statement_effective_provider(string $preferredProvider, array $supportedProviders): string
+{
+    $preferredProvider = strtolower(trim($preferredProvider));
+    $supportedProviders = array_values(array_unique(array_map(static fn($provider): string => strtolower(trim((string)$provider)), $supportedProviders)));
+    if ($preferredProvider !== '' && in_array($preferredProvider, $supportedProviders, true) && accumul8_statement_provider_has_api_key($preferredProvider)) {
+        return $preferredProvider;
+    }
+    foreach ($supportedProviders as $provider) {
+        if ($provider !== '' && accumul8_statement_provider_has_api_key($provider)) {
+            return $provider;
+        }
+    }
+    return $preferredProvider;
+}
+
 function accumul8_statement_ai_json_schema_prompt(string $mode): string
 {
     $sourcePhrase = $mode === 'pdf'
@@ -450,7 +475,7 @@ TXT;
 function accumul8_ai_generate_statement_json_from_images(array $images, array $accountCatalog): array
 {
     $cfg = catn8_settings_ai_get_config();
-    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $provider = accumul8_statement_effective_provider((string)($cfg['provider'] ?? 'openai'), ['google_ai_studio']);
     $model = trim((string)($cfg['model'] ?? ''));
     $temperature = (float)($cfg['temperature'] ?? 0.1);
     $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -525,21 +550,18 @@ function accumul8_ai_generate_statement_json_from_images(array $images, array $a
         ];
     }
 
-    throw new RuntimeException('AI image scanning fallback is only configured for Google AI Studio right now');
+    throw new RuntimeException('AI image scanning fallback is not configured for provider "' . $provider . '"');
 }
 
 function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $accountCatalog): array
 {
     $cfg = catn8_settings_ai_get_config();
-    $provider = strtolower(trim((string)($cfg['provider'] ?? 'openai')));
+    $provider = accumul8_statement_effective_provider((string)($cfg['provider'] ?? 'openai'), ['openai', 'google_ai_studio']);
     $model = trim((string)($cfg['model'] ?? ''));
+    $baseUrl = trim((string)($cfg['base_url'] ?? ''));
     $temperature = (float)($cfg['temperature'] ?? 0.1);
     $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     $systemPrompt = accumul8_statement_ai_json_schema_prompt('pdf');
-
-    if ($provider !== 'google_ai_studio') {
-        throw new RuntimeException('Direct PDF AI scanning is only configured for Google AI Studio right now');
-    }
 
     if ($pdfPath === '' || !is_file($pdfPath)) {
         throw new RuntimeException('Statement PDF was not available for AI scanning');
@@ -549,46 +571,114 @@ function accumul8_ai_generate_statement_json_from_pdf(string $pdfPath, array $ac
         throw new RuntimeException('Statement PDF could not be read for AI scanning');
     }
 
-    $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
-    if (!is_string($apiKey) || trim($apiKey) === '') {
-        throw new RuntimeException('Missing AI API key (google_ai_studio)');
+    if ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+
+        $parts = [[
+            'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
+        ], [
+            'inline_data' => [
+                'mime_type' => 'application/pdf',
+                'data' => base64_encode($bytes),
+            ],
+        ]];
+
+        $resp = catn8_http_json_with_status(
+            'POST',
+            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent',
+            ['x-goog-api-key' => trim((string)$apiKey)],
+            [
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => $parts,
+                ]],
+                'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                'generationConfig' => ['temperature' => $temperature],
+            ],
+            10,
+            60
+        );
+        $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        $jsonText = accumul8_extract_json_from_text($content);
+        $decoded = json_decode($jsonText, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('AI PDF scan returned invalid statement JSON');
+        }
+        return [
+            'provider' => $provider,
+            'model' => $model,
+            'json' => $decoded,
+        ];
     }
 
-    $parts = [[
-        'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
-    ], [
-        'inline_data' => [
-            'mime_type' => 'application/pdf',
-            'data' => base64_encode($bytes),
-        ],
-    ]];
-
-    $resp = catn8_http_json_with_status(
-        'POST',
-        'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent',
-        ['x-goog-api-key' => trim((string)$apiKey)],
-        [
-            'contents' => [[
-                'role' => 'user',
-                'parts' => $parts,
-            ]],
-            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
-            'generationConfig' => ['temperature' => $temperature],
-        ],
-        10,
-        60
-    );
-    $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
-    $jsonText = accumul8_extract_json_from_text($content);
-    $decoded = json_decode($jsonText, true);
-    if (!is_array($decoded)) {
-        throw new RuntimeException('AI PDF scan returned invalid statement JSON');
+    if ($provider === 'openai') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (openai)');
+        }
+        $root = $baseUrl !== '' ? rtrim(catn8_validate_external_base_url($baseUrl), '/') : 'https://api.openai.com';
+        if (!preg_match('#/v\d+$#', $root)) {
+            $root .= '/v1';
+        }
+        $resp = catn8_http_json_with_status(
+            'POST',
+            $root . '/responses',
+            [
+                'Authorization' => 'Bearer ' . trim((string)$apiKey),
+                'Content-Type' => 'application/json',
+            ],
+            [
+                'model' => $model !== '' ? $model : 'gpt-4o-mini',
+                'input' => [[
+                    'role' => 'system',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $systemPrompt],
+                    ],
+                ], [
+                    'role' => 'user',
+                    'content' => [
+                        [
+                            'type' => 'input_text',
+                            'text' => "Known accounts JSON:\n" . $accountsJson . "\n\nExtract the statement JSON from this PDF. Preserve page numbers when you can identify them.",
+                        ],
+                        [
+                            'type' => 'input_file',
+                            'filename' => 'statement.pdf',
+                            'file_data' => 'data:application/pdf;base64,' . base64_encode($bytes),
+                        ],
+                    ],
+                ]],
+                'temperature' => $temperature,
+            ],
+            10,
+            90
+        );
+        $content = (string)($resp['json']['output_text'] ?? '');
+        if ($content === '' && is_array($resp['json']['output'] ?? null)) {
+            foreach ((array)$resp['json']['output'] as $outputItem) {
+                foreach ((array)($outputItem['content'] ?? []) as $contentItem) {
+                    if (($contentItem['type'] ?? '') === 'output_text' && is_string($contentItem['text'] ?? null)) {
+                        $content .= (string)$contentItem['text'];
+                    }
+                }
+            }
+        }
+        $jsonText = accumul8_extract_json_from_text($content);
+        $decoded = json_decode($jsonText, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('OpenAI PDF scan returned invalid statement JSON');
+        }
+        return [
+            'provider' => $provider,
+            'model' => $model,
+            'json' => $decoded,
+        ];
     }
-    return [
-        'provider' => $provider,
-        'model' => $model,
-        'json' => $decoded,
-    ];
+
+    throw new RuntimeException('Direct PDF AI scanning is not configured for provider "' . $provider . '"');
 }
 
 function accumul8_ai_generate_statement_json(string $text, array $accountCatalog, array $pageCatalog = []): array

@@ -561,22 +561,18 @@ export function Accumul8StatementsPanel({
           <button type="button" className={`accumul8-statement-summary-card${activeSection === 'inbox' ? ' is-active' : ''}`} onClick={() => setActiveSection('inbox')}>
             <span className="accumul8-statement-summary-label">Inbox</span>
             <strong>{overview.review}</strong>
-            <span className="small text-muted">Statements waiting on review/import</span>
           </button>
           <button type="button" className={`accumul8-statement-summary-card${activeSection === 'library' ? ' is-active' : ''}`} onClick={() => setActiveSection('library')}>
             <span className="accumul8-statement-summary-label">Library</span>
             <strong>{statementUploads.length}</strong>
-            <span className="small text-muted">Scanned statements in the archive</span>
           </button>
           <button type="button" className={`accumul8-statement-summary-card${activeSection === 'search' ? ' is-active' : ''}`} onClick={() => setActiveSection('search')}>
             <span className="accumul8-statement-summary-label">Search</span>
             <strong>{searchResults.length}</strong>
-            <span className="small text-muted">Current content matches</span>
           </button>
           <div className="accumul8-statement-summary-card">
             <span className="accumul8-statement-summary-label">Signals</span>
             <strong>{overview.failed + overview.suspicious}</strong>
-            <span className="small text-muted">{overview.failed} failed rows · {overview.suspicious} suspicious flags</span>
           </div>
         </section>
         <div className="accumul8-statement-modal-header-actions">
@@ -598,38 +594,38 @@ export function Accumul8StatementsPanel({
         <div className="accumul8-statement-shell">
           <section className={`accumul8-statement-top-grid${latestImportResult ? '' : ' is-single-column'}`}>
             <div className="accumul8-statement-upload-card">
-              <div className="accumul8-statement-section-head">
-                <div className="accumul8-statement-action-row">
-                  <label htmlFor="accumul8-statement-files" className={`btn btn-success btn-sm${busy ? ' disabled' : ''}`}>Upload Statements</label>
-                  <button type="submit" className="btn btn-success btn-sm" disabled={busy || files.length === 0} form="accumul8-statement-upload-form">Scan Statements</button>
+              <div className="accumul8-statement-upload-toolbar">
+                <div className="accumul8-statement-section-head">
+                  <div className="accumul8-statement-action-row">
+                    <label htmlFor="accumul8-statement-files" className={`btn btn-success btn-sm${busy ? ' disabled' : ''}`}>Upload Statements</label>
+                    <button type="submit" className="btn btn-success btn-sm" disabled={busy || files.length === 0} form="accumul8-statement-upload-form">Scan Statements</button>
+                  </div>
                 </div>
+                <form id="accumul8-statement-upload-form" className="accumul8-statement-upload-form" onSubmit={handleSubmit}>
+                  <div className="accumul8-statement-upload-fields">
+                    <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind | '')} disabled={busy}>
+                      <option value="">Statement type</option>
+                      <option value="bank_account">Bank account</option>
+                      <option value="credit_card">Credit card</option>
+                      <option value="loan">Car loan / installment</option>
+                      <option value="mortgage">Mortgage</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
+                      <option value="">Preferred account</option>
+                      {sortedAccounts.map((uploadAccount) => (
+                        <option key={uploadAccount.id} value={String(uploadAccount.id)}>
+                          {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+                </form>
               </div>
-              <form id="accumul8-statement-upload-form" className="row g-2" onSubmit={handleSubmit}>
-                <div className="col-md-6">
-                  <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind | '')} disabled={busy}>
-                    <option value="">Statement type</option>
-                    <option value="bank_account">Bank account</option>
-                    <option value="credit_card">Credit card</option>
-                    <option value="loan">Car loan / installment</option>
-                    <option value="mortgage">Mortgage</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="col-md-6">
-                  <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
-                    <option value="">Preferred account</option>
-                    {sortedAccounts.map((uploadAccount) => (
-                      <option key={uploadAccount.id} value={String(uploadAccount.id)}>
-                        {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
-                <div className="col-12">
-                  {files.length > 0 ? <div className="small text-muted">{`${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}`}</div> : null}
-                </div>
-              </form>
+              {files.length > 0 ? (
+                <div className="small text-muted">{`${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}`}</div>
+              ) : null}
             </div>
 
             {latestImportResult ? (

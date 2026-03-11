@@ -1159,6 +1159,7 @@ if ($action === 'accumul8_rescan_statements') {
         'include_missing_catalog' => array_key_exists('include_missing_catalog', $body)
             ? (bool)$body['include_missing_catalog']
             : true,
+        'exclude_ids' => is_array($body['exclude_ids'] ?? null) ? $body['exclude_ids'] : [],
     ];
 
     if (!$options['force'] && !$options['only_missing_successful_scan'] && !$options['include_missing_catalog']) {

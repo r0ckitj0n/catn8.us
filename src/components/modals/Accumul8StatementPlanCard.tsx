@@ -1,5 +1,6 @@
 import React from 'react';
 import { Accumul8Account, Accumul8BankingOrganization, Accumul8StatementUpload } from '../../types/accumul8';
+import { StatementHistoryPanel } from './Accumul8StatementHistoryCard';
 
 export interface Accumul8StatementNewAccountDraft {
   banking_organization_name: string;
@@ -22,6 +23,7 @@ interface Accumul8StatementPlanCardProps {
   onNewAccountChange: (draft: Accumul8StatementNewAccountDraft) => void;
   onRescan: () => void;
   onConfirm: () => void;
+  onOpenWorkspace?: (panel: Exclude<StatementHistoryPanel, 'status' | null>) => void;
   formatDateRange: (upload: Accumul8StatementUpload) => string;
   formatFileSize: (bytes: number) => string;
 }
@@ -39,6 +41,7 @@ export function Accumul8StatementPlanCard({
   onNewAccountChange,
   onRescan,
   onConfirm,
+  onOpenWorkspace,
   formatDateRange,
   formatFileSize,
 }: Accumul8StatementPlanCardProps) {
@@ -63,10 +66,10 @@ export function Accumul8StatementPlanCard({
         </div>
       </div>
       <div className="accumul8-statement-chip-row">
-        <span className={`accumul8-statement-chip is-${upload.status}`}>{upload.status}</span>
-        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'importable' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('importable')}>{plan?.importable_transaction_count || 0} importable rows</button>
-        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'duplicates' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('duplicates')}>{plan?.estimated_duplicate_count || 0} estimated duplicates</button>
-        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'invalid' ? ' is-active' : ''}${(plan?.invalid_transaction_count || 0) > 0 ? ' is-warning' : ''}`} disabled={busy} onClick={() => togglePanel('invalid')}>{plan?.invalid_transaction_count || 0} invalid rows</button>
+        <button type="button" className="accumul8-statement-chip accumul8-statement-chip-button is-warning" disabled={busy} onClick={() => onOpenWorkspace ? onOpenWorkspace('review') : undefined}>needs review</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'importable' ? ' is-active' : ''}`} disabled={busy} onClick={() => onOpenWorkspace ? onOpenWorkspace('review') : togglePanel('importable')}>{plan?.importable_transaction_count || 0} importable rows</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'duplicates' ? ' is-active' : ''}`} disabled={busy} onClick={() => onOpenWorkspace ? onOpenWorkspace('duplicates') : togglePanel('duplicates')}>{plan?.estimated_duplicate_count || 0} estimated duplicates</button>
+        <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'invalid' ? ' is-active' : ''}${(plan?.invalid_transaction_count || 0) > 0 ? ' is-warning' : ''}`} disabled={busy} onClick={() => onOpenWorkspace ? onOpenWorkspace('failed') : togglePanel('invalid')}>{plan?.invalid_transaction_count || 0} invalid rows</button>
         <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${activePanel === 'totals' ? ' is-active' : ''}`} disabled={busy} onClick={() => togglePanel('totals')}>{plan?.inflow_total.toFixed(2) || '0.00'} inflow · {plan?.outflow_total.toFixed(2) || '0.00'} outflow</button>
       </div>
       {activePanel === 'importable' ? (

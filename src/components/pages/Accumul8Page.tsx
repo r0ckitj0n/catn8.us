@@ -516,6 +516,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     uploadStatement,
     rescanStatementUpload,
     confirmStatementImport,
+    importStatementReviewRow,
+    linkStatementReviewRow,
     searchStatementUploads,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
@@ -3706,6 +3708,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             onUpload={uploadStatement}
             onRescan={rescanStatementUpload}
             onConfirmImport={confirmStatementImport}
+            onImportReviewRow={importStatementReviewRow}
+            onLinkReviewRow={linkStatementReviewRow}
             onSearch={searchStatementUploads}
             onOpenTransaction={beginViewTransaction}
             onDeleteTransaction={handleDeleteTransaction}

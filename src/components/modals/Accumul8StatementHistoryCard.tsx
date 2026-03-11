@@ -2,17 +2,25 @@ import React from 'react';
 import { Accumul8StatementImportResultRow, Accumul8StatementSearchResult, Accumul8StatementTransactionLocator, Accumul8StatementUpload, Accumul8Transaction } from '../../types/accumul8';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 
-type StatementHistoryPanel = 'status' | 'reconciliation' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | null;
+export type StatementHistoryPanel = 'status' | 'review' | 'reconciliation' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | null;
 
 interface Accumul8StatementHistoryCardProps {
   busy: boolean;
   ownerUserId: number;
   upload: Accumul8StatementUpload;
+  counts?: {
+    review: number;
+    imported: number;
+    duplicates: number;
+    failed: number;
+    suspicious: number;
+  };
   transactionsById: Record<number, Accumul8Transaction>;
   onRescan: () => void;
   onReview?: () => void;
   onOpenTransaction?: (id: number) => void;
   onDeleteTransaction?: (id: number, description: string) => void;
+  onOpenWorkspace?: (panel: Exclude<StatementHistoryPanel, 'status' | null>) => void;
   isReviewable?: boolean;
   formatDateRange: (upload: Accumul8StatementUpload) => string;
   formatFileSize: (bytes: number) => string;
@@ -142,11 +150,13 @@ export function Accumul8StatementHistoryCard({
   busy,
   ownerUserId,
   upload,
+  counts,
   transactionsById,
   onRescan,
   onReview,
   onOpenTransaction,
   onDeleteTransaction,
+  onOpenWorkspace,
   isReviewable = false,
   formatDateRange,
   formatFileSize,
@@ -156,9 +166,13 @@ export function Accumul8StatementHistoryCard({
   const duplicateRows = upload.import_result?.duplicate_rows || [];
   const failedRows = upload.import_result?.failed_rows || [];
 
-  const togglePanel = React.useCallback((panel: Exclude<StatementHistoryPanel, null>) => {
+  const openPanel = React.useCallback((panel: Exclude<StatementHistoryPanel, null>) => {
+    if (panel !== 'status' && onOpenWorkspace) {
+      onOpenWorkspace(panel as Exclude<StatementHistoryPanel, 'status' | null>);
+      return;
+    }
     setActivePanel((current) => (current === panel ? null : panel));
-  }, []);
+  }, [onOpenWorkspace]);
 
   const renderPanel = () => {
     if (activePanel === 'status') {
@@ -294,12 +308,17 @@ export function Accumul8StatementHistoryCard({
         </div>
       </div>
       <div className="accumul8-statement-chip-row">
-        <StatementDetailChip active={activePanel === 'status'} toneClass={`is-${upload.status}`} label={upload.status} onClick={() => togglePanel('status')} disabled={busy} />
-        <StatementDetailChip active={activePanel === 'reconciliation'} toneClass={`is-${upload.reconciliation_status}`} label={upload.reconciliation_status} onClick={() => togglePanel('reconciliation')} disabled={busy} />
-        <StatementDetailChip active={activePanel === 'imported'} toneClass={upload.imported_transaction_count > 0 ? 'is-processed' : ''} label={`${upload.imported_transaction_count} imported`} onClick={() => togglePanel('imported')} disabled={busy} />
-        <StatementDetailChip active={activePanel === 'duplicates'} label={`${upload.duplicate_transaction_count} duplicates skipped`} onClick={() => togglePanel('duplicates')} disabled={busy} />
-        <StatementDetailChip active={activePanel === 'failed'} toneClass={((upload.import_result?.failed_count || 0) > 0 || upload.last_error) ? 'is-warning' : ''} label={`${upload.import_result?.failed_count || 0} failed`} onClick={() => togglePanel('failed')} disabled={busy} />
-        <StatementDetailChip active={activePanel === 'suspicious'} toneClass={upload.suspicious_item_count > 0 ? 'is-warning' : ''} label={`${upload.suspicious_item_count} suspicious`} onClick={() => togglePanel('suspicious')} disabled={busy} />
+        <StatementDetailChip active={activePanel === 'status'} toneClass={`is-${upload.status}`} label={upload.status} onClick={() => openPanel('status')} disabled={busy} />
+        {upload.reconciliation_status !== upload.status ? (
+          <StatementDetailChip active={activePanel === 'reconciliation'} toneClass={`is-${upload.reconciliation_status}`} label={upload.reconciliation_status} onClick={() => openPanel('reconciliation')} disabled={busy} />
+        ) : null}
+        {isReviewable ? (
+          <StatementDetailChip active={false} toneClass="is-warning" label={`${counts?.review ?? 0} needs review`} onClick={() => openPanel('review')} disabled={busy} />
+        ) : null}
+        <StatementDetailChip active={activePanel === 'imported'} toneClass={(counts?.imported || 0) > 0 ? 'is-processed' : ''} label={`${counts?.imported ?? upload.imported_transaction_count} imported`} onClick={() => openPanel('imported')} disabled={busy} />
+        <StatementDetailChip active={activePanel === 'duplicates'} label={`${counts?.duplicates ?? upload.duplicate_transaction_count} duplicates skipped`} onClick={() => openPanel('duplicates')} disabled={busy} />
+        <StatementDetailChip active={activePanel === 'failed'} toneClass={(((counts?.failed ?? upload.import_result?.failed_count ?? 0) > 0) || upload.last_error) ? 'is-warning' : ''} label={`${counts?.failed ?? upload.import_result?.failed_count ?? 0} failed`} onClick={() => openPanel('failed')} disabled={busy} />
+        <StatementDetailChip active={activePanel === 'suspicious'} toneClass={(counts?.suspicious ?? upload.suspicious_item_count) > 0 ? 'is-warning' : ''} label={`${counts?.suspicious ?? upload.suspicious_item_count} suspicious`} onClick={() => openPanel('suspicious')} disabled={busy} />
       </div>
       {renderPanel()}
       {upload.catalog_summary ? <div className="accumul8-statement-note">{upload.catalog_summary}</div> : null}

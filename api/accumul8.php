@@ -3974,6 +3974,7 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
     if (!is_array($pageCatalog)) {
         $pageCatalog = [];
     }
+    $reviewRows = is_array($parsedPayload) ? accumul8_statement_review_rows($parsedPayload, is_array($locators) ? $locators : []) : [];
     $plan = is_array($parsedPayload) && $parsedPayload !== []
         ? accumul8_statement_build_plan($viewerId, $row, $parsedPayload)
         : null;
@@ -4006,6 +4007,7 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
         'suspicious_items' => is_array($suspicious) ? $suspicious : [],
         'processing_notes' => is_array($notes) ? $notes : [],
         'transaction_locators' => is_array($locators) ? $locators : [],
+        'review_rows' => $reviewRows,
         'page_catalog' => $pageCatalog,
         'catalog_summary' => (string)($row['catalog_summary'] ?? ''),
         'catalog_keywords' => is_array($catalogKeywords) ? $catalogKeywords : [],
@@ -4381,6 +4383,203 @@ function accumul8_statement_transaction_locators(array $parsed): array
     return $locators;
 }
 
+function accumul8_statement_review_rows(array $parsed, array $transactionLocators = []): array
+{
+    $rows = [];
+    foreach ((array)($parsed['transactions'] ?? []) as $index => $tx) {
+        if (!is_array($tx)) {
+            $rows[] = [
+                'row_index' => (int)$index,
+                'reason' => 'Transaction entry was not valid JSON',
+            ];
+            continue;
+        }
+
+        $txDate = accumul8_normalize_date($tx['transaction_date'] ?? $tx['posted_date'] ?? '');
+        $description = accumul8_normalize_text((string)($tx['description'] ?? ''), 255);
+        $memo = accumul8_normalize_text((string)($tx['memo'] ?? ''), 2000);
+        $amount = isset($tx['amount']) && is_numeric($tx['amount']) ? accumul8_normalize_amount($tx['amount']) : null;
+        $runningBalance = isset($tx['running_balance']) && is_numeric($tx['running_balance'])
+            ? accumul8_normalize_amount($tx['running_balance'])
+            : null;
+        $pageNumber = isset($tx['page_number']) && is_numeric($tx['page_number']) ? (int)$tx['page_number'] : null;
+        $reason = null;
+        if ($txDate === null || $description === '' || $amount === null) {
+            $reason = 'Missing date, description, or amount';
+        }
+
+        if ($pageNumber === null && $transactionLocators !== []) {
+            foreach ($transactionLocators as $locator) {
+                if (!is_array($locator)) {
+                    continue;
+                }
+                if ((string)($locator['transaction_date'] ?? '') !== (string)$txDate) {
+                    continue;
+                }
+                if (accumul8_normalize_text((string)($locator['description'] ?? ''), 255) !== $description) {
+                    continue;
+                }
+                if (!isset($locator['amount']) || abs(accumul8_normalize_amount($locator['amount']) - (float)($amount ?? 0)) > 0.01) {
+                    continue;
+                }
+                $pageNumber = isset($locator['page_number']) && is_numeric($locator['page_number']) ? (int)$locator['page_number'] : null;
+                if ($runningBalance === null && isset($locator['running_balance']) && is_numeric($locator['running_balance'])) {
+                    $runningBalance = accumul8_normalize_amount($locator['running_balance']);
+                }
+                break;
+            }
+        }
+
+        $rows[] = [
+            'row_index' => (int)$index,
+            'transaction_date' => $txDate,
+            'description' => $description,
+            'memo' => $memo,
+            'amount' => $amount,
+            'running_balance' => $runningBalance,
+            'page_number' => $pageNumber !== null && $pageNumber > 0 ? $pageNumber : null,
+            'reason' => $reason,
+        ];
+    }
+
+    return $rows;
+}
+
+function accumul8_statement_resolve_review_row(int $viewerId, int $uploadId, int $rowIndex, array $options = []): array
+{
+    $upload = Database::queryOne(
+        'SELECT *
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$upload) {
+        throw new RuntimeException('Statement upload not found');
+    }
+
+    $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
+    if (!is_array($parsed) || $parsed === []) {
+        throw new RuntimeException('Statement scan did not produce a reviewable payload');
+    }
+
+    $locators = accumul8_statement_transaction_locators($parsed);
+    $reviewRows = accumul8_statement_review_rows($parsed, $locators);
+    $row = null;
+    foreach ($reviewRows as $candidate) {
+        if ((int)($candidate['row_index'] ?? -1) === $rowIndex) {
+            $row = $candidate;
+            break;
+        }
+    }
+    if (!is_array($row)) {
+        throw new RuntimeException('Statement row not found');
+    }
+
+    $transactionDate = isset($options['transaction_date']) && $options['transaction_date'] !== ''
+        ? accumul8_normalize_date((string)$options['transaction_date'])
+        : (isset($row['transaction_date']) ? accumul8_normalize_date((string)$row['transaction_date']) : null);
+    $description = isset($options['description'])
+        ? accumul8_normalize_text((string)$options['description'], 255)
+        : accumul8_normalize_text((string)($row['description'] ?? ''), 255);
+    $memo = isset($options['memo'])
+        ? accumul8_normalize_text((string)$options['memo'], 2000)
+        : accumul8_normalize_text((string)($row['memo'] ?? ''), 2000);
+    $amount = array_key_exists('amount', $options) && $options['amount'] !== null && $options['amount'] !== ''
+        ? (is_numeric($options['amount']) ? accumul8_normalize_amount($options['amount']) : null)
+        : (isset($row['amount']) && is_numeric($row['amount']) ? accumul8_normalize_amount($row['amount']) : null);
+
+    if ($transactionDate === null || $description === '' || $amount === null) {
+        throw new RuntimeException('Missing date, description, or amount');
+    }
+
+    return [
+        'upload' => $upload,
+        'parsed' => $parsed,
+        'row' => $row,
+        'transaction_date' => $transactionDate,
+        'description' => $description,
+        'memo' => $memo,
+        'amount' => $amount,
+        'running_balance' => isset($row['running_balance']) && is_numeric($row['running_balance']) ? accumul8_normalize_amount($row['running_balance']) : null,
+    ];
+}
+
+function accumul8_statement_resolve_target_account_id(int $viewerId, array $upload, array $parsed, array $options = []): int
+{
+    if (isset($options['create_account']) && is_array($options['create_account'])) {
+        return accumul8_statement_create_account_from_plan($viewerId, (array)$options['create_account']);
+    }
+    if (isset($options['account_id']) && (int)$options['account_id'] > 0) {
+        return accumul8_require_owned_id('accounts', $viewerId, (int)$options['account_id']);
+    }
+
+    $match = accumul8_statement_match_account($viewerId, $parsed, isset($upload['account_id']) ? (int)$upload['account_id'] : null);
+    $accountId = isset($match['account_id']) ? (int)$match['account_id'] : null;
+    if ($accountId === null || $accountId <= 0) {
+        throw new RuntimeException('Select an existing bank account or create a new one before importing');
+    }
+    return $accountId;
+}
+
+function accumul8_statement_insert_transaction_row(int $viewerId, int $actorUserId, int $uploadId, int $accountId, array $resolvedRow): int
+{
+    $duplicate = Database::queryOne(
+        'SELECT id
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND COALESCE(account_id, 0) = ?
+           AND transaction_date = ?
+           AND ROUND(amount, 2) = ?
+           AND description = ?
+         LIMIT 1',
+        [$viewerId, $accountId, $resolvedRow['transaction_date'], $resolvedRow['amount'], $resolvedRow['description']]
+    );
+    if ($duplicate) {
+        throw new RuntimeException('A matching ledger transaction already exists');
+    }
+
+    $entityId = accumul8_statement_resolve_entity_id($viewerId, $resolvedRow['description']);
+    $externalKey = hash('sha256', implode('|', [
+        $viewerId,
+        $uploadId,
+        $accountId,
+        $resolvedRow['transaction_date'],
+        $resolvedRow['description'],
+        number_format((float)$resolvedRow['amount'], 2, '.', ''),
+    ]));
+
+    Database::execute(
+        'INSERT INTO accumul8_transactions
+         (owner_user_id, account_id, entity_id, balance_entity_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount, running_balance, is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, source_ref, external_id, pending_status, created_by_user_id)
+         VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, 0.00, ?, 1, 1, 0, 0, NULL, ?, ?, ?, 0, ?)',
+        [
+            $viewerId,
+            $accountId,
+            $entityId,
+            $resolvedRow['transaction_date'],
+            $resolvedRow['transaction_date'],
+            (float)$resolvedRow['amount'] < 0 ? 'bill' : 'deposit',
+            $resolvedRow['description'],
+            $resolvedRow['memo'] !== '' ? $resolvedRow['memo'] : null,
+            $resolvedRow['amount'],
+            $resolvedRow['running_balance'] !== null ? $resolvedRow['running_balance'] : 0.00,
+            'statement_upload',
+            'statement_upload:' . $uploadId,
+            $externalKey,
+            $actorUserId,
+        ]
+    );
+    $insertedId = (int)Database::lastInsertId();
+    Database::execute(
+        'UPDATE accumul8_transactions
+         SET paid_date = transaction_date
+         WHERE id = ? AND owner_user_id = ?',
+        [$insertedId, $viewerId]
+    );
+    return $insertedId;
+}
+
 function accumul8_statement_reload_view(int $viewerId, int $uploadId): array
 {
     foreach (accumul8_list_statement_uploads($viewerId) as $row) {
@@ -4497,6 +4696,10 @@ function accumul8_statement_list_rescan_candidates(?int $ownerUserId = null, arr
     $onlyMissingSuccessfulScan = array_key_exists('only_missing_successful_scan', $options) ? (bool)$options['only_missing_successful_scan'] : true;
     $includeMissingCatalog = array_key_exists('include_missing_catalog', $options) ? (bool)$options['include_missing_catalog'] : true;
     $force = !empty($options['force']);
+    $excludeIds = array_values(array_unique(array_filter(
+        array_map(static fn($id): int => (int)$id, is_array($options['exclude_ids'] ?? null) ? $options['exclude_ids'] : []),
+        static fn(int $id): bool => $id > 0
+    )));
 
     $sql = 'SELECT id, owner_user_id, account_id, status, original_filename, mime_type, created_at, last_scanned_at, processed_at,
                    COALESCE(last_error, "") AS last_error,
@@ -4510,6 +4713,12 @@ function accumul8_statement_list_rescan_candidates(?int $ownerUserId = null, arr
     if ($ownerUserId !== null && $ownerUserId > 0) {
         $sql .= ' WHERE owner_user_id = ?';
         $params[] = $ownerUserId;
+    }
+    if ($excludeIds !== []) {
+        $placeholders = implode(', ', array_fill(0, count($excludeIds), '?'));
+        $sql .= $params === [] ? ' WHERE' : ' AND';
+        $sql .= ' id NOT IN (' . $placeholders . ')';
+        array_push($params, ...$excludeIds);
     }
     $sql .= ' ORDER BY
                 CASE WHEN last_scanned_at IS NULL THEN 0 ELSE 1 END ASC,
@@ -4557,12 +4766,17 @@ function accumul8_statement_batch_rescan(?int $ownerUserId = null, array $option
     $onlyMissingSuccessfulScan = array_key_exists('only_missing_successful_scan', $options) ? (bool)$options['only_missing_successful_scan'] : true;
     $includeMissingCatalog = array_key_exists('include_missing_catalog', $options) ? (bool)$options['include_missing_catalog'] : true;
     $force = !empty($options['force']);
+    $excludeIds = array_values(array_unique(array_filter(
+        array_map(static fn($id): int => (int)$id, is_array($options['exclude_ids'] ?? null) ? $options['exclude_ids'] : []),
+        static fn(int $id): bool => $id > 0
+    )));
 
     $candidates = accumul8_statement_list_rescan_candidates($ownerUserId, [
         'limit' => $limit,
         'only_missing_successful_scan' => $onlyMissingSuccessfulScan,
         'include_missing_catalog' => $includeMissingCatalog,
         'force' => $force,
+        'exclude_ids' => $excludeIds,
     ]);
 
     $result = [
@@ -4572,6 +4786,7 @@ function accumul8_statement_batch_rescan(?int $ownerUserId = null, array $option
         'only_missing_successful_scan' => $onlyMissingSuccessfulScan,
         'include_missing_catalog' => $includeMissingCatalog,
         'force' => $force,
+        'exclude_ids' => $excludeIds,
         'candidate_count' => count($candidates),
         'scanned_count' => 0,
         'success_count' => 0,
@@ -7211,6 +7426,77 @@ if ($action === 'confirm_statement_import') {
     try {
         $row = accumul8_statement_import_upload($viewerId, $actorUserId, $id, $options);
         catn8_json_response(['success' => true, 'upload' => $row, 'import_result' => $row['import_result'] ?? null]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'import_statement_review_row') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $uploadId = (int)($body['id'] ?? 0);
+    $rowIndex = (int)($body['row_index'] ?? -1);
+    if ($uploadId <= 0 || $rowIndex < 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid statement row'], 400);
+    }
+    $resolved = accumul8_statement_resolve_review_row($viewerId, $uploadId, $rowIndex, [
+        'transaction_date' => $body['transaction_date'] ?? null,
+        'description' => $body['description'] ?? null,
+        'memo' => $body['memo'] ?? null,
+        'amount' => $body['amount'] ?? null,
+    ]);
+    try {
+        $accountId = accumul8_statement_resolve_target_account_id($viewerId, $resolved['upload'], $resolved['parsed'], [
+            'account_id' => isset($body['account_id']) ? (int)$body['account_id'] : null,
+            'create_account' => isset($body['create_account']) && is_array($body['create_account']) ? $body['create_account'] : null,
+        ]);
+        $transactionId = accumul8_statement_insert_transaction_row($viewerId, $actorUserId, $uploadId, $accountId, $resolved);
+        accumul8_recompute_running_balance($viewerId);
+        $upload = accumul8_statement_reload_view($viewerId, $uploadId);
+        catn8_json_response([
+            'success' => true,
+            'transaction_id' => $transactionId,
+            'upload' => $upload,
+        ]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'link_statement_review_row') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $uploadId = (int)($body['id'] ?? 0);
+    $rowIndex = (int)($body['row_index'] ?? -1);
+    $transactionId = (int)($body['transaction_id'] ?? 0);
+    if ($uploadId <= 0 || $rowIndex < 0 || $transactionId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid statement row link'], 400);
+    }
+    $resolved = accumul8_statement_resolve_review_row($viewerId, $uploadId, $rowIndex);
+    $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+    if (!$existingTx) {
+        catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
+    }
+    try {
+        Database::execute(
+            'UPDATE accumul8_transactions
+             SET source_kind = ?, source_ref = ?
+             WHERE id = ? AND owner_user_id = ?',
+            ['statement_upload', 'statement_upload:' . $uploadId, $transactionId, $viewerId]
+        );
+        accumul8_recompute_running_balance($viewerId);
+        $upload = accumul8_statement_reload_view($viewerId, $uploadId);
+        catn8_json_response([
+            'success' => true,
+            'upload' => $upload,
+            'linked_transaction_id' => $transactionId,
+            'row' => [
+                'row_index' => $rowIndex,
+                'transaction_date' => $resolved['transaction_date'],
+                'description' => $resolved['description'],
+                'amount' => $resolved['amount'],
+            ],
+        ]);
     } catch (Throwable $e) {
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
     }

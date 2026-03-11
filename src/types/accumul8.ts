@@ -61,9 +61,13 @@ export interface Accumul8StatementPlan {
 }
 
 export interface Accumul8StatementImportResultRow {
+  row_index?: number;
   transaction_date?: string;
   description?: string;
   amount?: number;
+  memo?: string;
+  running_balance?: number | null;
+  page_number?: number | null;
   reason?: string;
   existing_transaction_id?: number;
   id?: number;
@@ -119,6 +123,7 @@ export interface Accumul8StatementUpload {
   suspicious_items: Accumul8StatementAlert[];
   processing_notes: string[];
   transaction_locators: Accumul8StatementTransactionLocator[];
+  review_rows: Accumul8StatementImportResultRow[];
   page_catalog: Accumul8StatementPageCatalogEntry[];
   catalog_summary: string;
   catalog_keywords: string[];

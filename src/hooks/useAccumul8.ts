@@ -413,6 +413,56 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const importStatementReviewRow = React.useCallback(async (payload: {
+    id: number;
+    row_index: number;
+    transaction_date?: string;
+    description?: string;
+    memo?: string;
+    amount?: number;
+    account_id?: number | null;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload; transaction_id: number }>(
+        scopedActionUrl('import_statement_review_row'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement row accepted into the ledger.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to accept statement row');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const linkStatementReviewRow = React.useCallback(async (payload: {
+    id: number;
+    row_index: number;
+    transaction_id: number;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload; linked_transaction_id: number }>(
+        scopedActionUrl('link_statement_review_row'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Ledger entry linked to statement row.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to link ledger entry to statement row');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const searchStatementUploads = React.useCallback(async (query: string) => {
     const normalized = String(query || '').trim();
     if (!normalized) {
@@ -512,6 +562,8 @@ export function useAccumul8(
     uploadStatement,
     rescanStatementUpload,
     confirmStatementImport,
+    importStatementReviewRow,
+    linkStatementReviewRow,
     searchStatementUploads,
   };
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Accumul8StatementUpload } from '../../types/accumul8';
+import { Accumul8StatementKind, Accumul8StatementUpload } from '../../types/accumul8';
 import { StatementHistoryPanel } from './Accumul8StatementHistoryCard';
 
 export interface Accumul8StatementNewAccountDraft {
@@ -14,6 +14,7 @@ interface Accumul8StatementPlanCardProps {
   busy: boolean;
   ownerUserId: number;
   upload: Accumul8StatementUpload;
+  onUpdateMetadata?: (payload: { id: number; statement_kind?: string; account_name_hint?: string; account_last4?: string }) => Promise<{ success: boolean; upload: Accumul8StatementUpload }>;
   onRescan: () => void;
   onDiscard: () => void;
   onConfirm: () => void;
@@ -36,6 +37,7 @@ export function Accumul8StatementPlanCard({
   busy,
   ownerUserId,
   upload,
+  onUpdateMetadata,
   onRescan,
   onDiscard,
   onConfirm,
@@ -49,11 +51,43 @@ export function Accumul8StatementPlanCard({
   const accountMatchReason = normalizeStatementHelperText(plan?.account_match_reason || '');
   const filteredProcessingNotes = upload.processing_notes.filter((note) => normalizeStatementHelperText(note) !== '');
   const [activePanel, setActivePanel] = React.useState<'importable' | 'duplicates' | 'invalid' | 'totals' | null>(null);
+  const [selectedKind, setSelectedKind] = React.useState<Accumul8StatementKind>(upload.statement_kind || 'bank_account');
+  const [selectedSection, setSelectedSection] = React.useState(() => {
+    const sections = plan?.account_section_options || [];
+    const current = sections.find((section) => section.account_name_hint === (plan?.account_name_hint || upload.account_name_hint) && section.account_last4 === (plan?.account_last4 || upload.account_mask_last4));
+    return current?.label || sections[0]?.label || '';
+  });
   const importActionLabel = upload.imported_transaction_count > 0 ? 'Import Missing Records' : 'Approve and Import';
   const togglePanel = React.useCallback((panel: 'importable' | 'duplicates' | 'invalid' | 'totals') => {
     setActivePanel((current) => (current === panel ? null : panel));
   }, []);
+  React.useEffect(() => {
+    setSelectedKind(upload.statement_kind || 'bank_account');
+    const sections = plan?.account_section_options || [];
+    const current = sections.find((section) => section.account_name_hint === (plan?.account_name_hint || upload.account_name_hint) && section.account_last4 === (plan?.account_last4 || upload.account_mask_last4));
+    setSelectedSection(current?.label || sections[0]?.label || '');
+  }, [plan?.account_last4, plan?.account_name_hint, plan?.account_section_options, upload.account_mask_last4, upload.account_name_hint, upload.statement_kind]);
   const statementHref = `/api/accumul8.php?action=download_statement_upload&id=${upload.id}&owner_user_id=${ownerUserId}`;
+  const handleKindChange = React.useCallback(async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value as Accumul8StatementKind;
+    setSelectedKind(value);
+    if (onUpdateMetadata) {
+      await onUpdateMetadata({ id: upload.id, statement_kind: value });
+    }
+  }, [onUpdateMetadata, upload.id]);
+  const handleSectionChange = React.useCallback(async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setSelectedSection(value);
+    const section = (plan?.account_section_options || []).find((option) => option.label === value);
+    if (!section || !onUpdateMetadata) {
+      return;
+    }
+    await onUpdateMetadata({
+      id: upload.id,
+      account_name_hint: section.account_name_hint,
+      account_last4: section.account_last4,
+    });
+  }, [onUpdateMetadata, plan?.account_section_options, upload.id]);
 
   return (
     <article className="accumul8-statement-history-card accumul8-statement-plan-card">
@@ -74,7 +108,20 @@ export function Accumul8StatementPlanCard({
           </div>
           <div>
             <div>{plan?.institution_name || upload.institution_name || 'Institution not detected'}</div>
-            <div>{plan?.account_name_hint || upload.account_name_hint || 'Account name not detected'}</div>
+            <div className="accumul8-statement-plan-inline-fields">
+              <select className="form-select form-select-sm" disabled={busy || !onUpdateMetadata} value={selectedKind} onChange={(event) => void handleKindChange(event)}>
+                <option value="bank_account">Bank Account</option>
+                <option value="credit_card">Credit Card</option>
+                <option value="loan">Loan</option>
+                <option value="mortgage">Mortgage</option>
+                <option value="other">Other</option>
+              </select>
+              <select className="form-select form-select-sm" disabled={busy || !onUpdateMetadata || (plan?.account_section_options || []).length <= 1} value={selectedSection} onChange={(event) => void handleSectionChange(event)}>
+                {((plan?.account_section_options || []).length > 0 ? plan?.account_section_options || [] : [{ label: plan?.account_name_hint || upload.account_name_hint || 'Account name not detected', account_name_hint: plan?.account_name_hint || upload.account_name_hint || '', account_last4: plan?.account_last4 || upload.account_mask_last4 || '' }]).map((option) => (
+                  <option key={`${option.label}-${option.account_last4}`} value={option.label}>{option.label || 'Account name not detected'}</option>
+                ))}
+              </select>
+            </div>
             {accountMatchReason ? <div className="small text-muted">{accountMatchReason}</div> : null}
           </div>
           <div className="accumul8-statement-card-actions">

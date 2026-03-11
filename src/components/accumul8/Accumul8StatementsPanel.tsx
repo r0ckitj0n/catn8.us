@@ -32,6 +32,7 @@ interface Accumul8StatementsPanelProps {
   ownerUserId: number;
   onUpload: (formData: FormData) => Promise<Accumul8StatementUpload | undefined>;
   onRescan: (id: number, accountId?: number | null) => Promise<Accumul8StatementUpload | undefined>;
+  onUpdateMetadata: (payload: { id: number; statement_kind?: string; account_name_hint?: string; account_last4?: string }) => Promise<{ success: boolean; upload: Accumul8StatementUpload }>;
   onArchiveStatement: (payload: { id: number; archived_from_section?: Accumul8StatementArchiveSection }) => Promise<Accumul8StatementArchiveResponse>;
   onRestoreStatement: (id: number) => Promise<Accumul8StatementRestoreResponse>;
   onDeleteArchivedStatement: (id: number) => Promise<{ success: boolean; id: number }>;
@@ -281,6 +282,7 @@ export function Accumul8StatementsPanel({
   ownerUserId,
   onUpload,
   onRescan,
+  onUpdateMetadata,
   onArchiveStatement,
   onRestoreStatement,
   onDeleteArchivedStatement,
@@ -832,6 +834,7 @@ export function Accumul8StatementsPanel({
                           busy={busy}
                           ownerUserId={ownerUserId}
                           upload={activeReviewUpload}
+                          onUpdateMetadata={onUpdateMetadata}
                           onRescan={() => void onRescan(activeReviewUpload.id, null)}
                           onDiscard={() => void archiveActiveReviewUpload(activeReviewUpload)}
                           onConfirm={() => void handleConfirmImport(activeReviewUpload)}

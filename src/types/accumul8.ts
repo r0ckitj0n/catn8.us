@@ -40,11 +40,18 @@ export interface Accumul8StatementPlanSuggestedAccount {
   mask_last4: string;
 }
 
+export interface Accumul8StatementAccountSectionOption {
+  account_name_hint: string;
+  account_last4: string;
+  label: string;
+}
+
 export interface Accumul8StatementPlan {
   suggested_account_id: number | null;
   suggested_account_label: string;
   account_match_score: number;
   account_match_reason: string;
+  account_section_options: Accumul8StatementAccountSectionOption[];
   requires_account_confirmation: number;
   statement_kind: Accumul8StatementKind;
   institution_name: string;

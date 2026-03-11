@@ -388,6 +388,11 @@
   align-content: start;
 }
 
+.accumul8-statement-plan-inline-fields {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .accumul8-statement-review-selector {
   display: flex;
   flex-wrap: wrap;

@@ -517,6 +517,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     syncBankConnection,
     uploadStatement,
     rescanStatementUpload,
+    updateStatementUploadMetadata,
     archiveStatementUpload,
     restoreStatementUpload,
     deleteArchivedStatementUpload,
@@ -3517,6 +3518,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
                 onUpload={uploadStatement}
                 onRescan={rescanStatementUpload}
+                onUpdateMetadata={updateStatementUploadMetadata}
                 onArchiveStatement={archiveStatementUpload}
                 onRestoreStatement={restoreStatementUpload}
                 onDeleteArchivedStatement={deleteArchivedStatementUpload}

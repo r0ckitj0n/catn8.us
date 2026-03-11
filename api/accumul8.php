@@ -344,6 +344,61 @@ function accumul8_statement_openai_response_format(): array
                             ['type' => 'null'],
                         ],
                     ],
+                    'account_sections' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'required' => [
+                                'account_name_hint',
+                                'account_last4',
+                                'transactions',
+                            ],
+                            'properties' => [
+                                'account_name_hint' => ['type' => 'string'],
+                                'account_last4' => ['type' => 'string'],
+                                'transactions' => [
+                                    'type' => 'array',
+                                    'items' => [
+                                        'type' => 'object',
+                                        'additionalProperties' => false,
+                                        'required' => [
+                                            'transaction_date',
+                                            'posted_date',
+                                            'description',
+                                            'memo',
+                                            'amount',
+                                            'running_balance',
+                                            'page_number',
+                                            'statement_account_name_hint',
+                                            'statement_account_last4',
+                                        ],
+                                        'properties' => [
+                                            'transaction_date' => ['type' => 'string'],
+                                            'posted_date' => ['type' => 'string'],
+                                            'description' => ['type' => 'string'],
+                                            'memo' => ['type' => 'string'],
+                                            'amount' => ['type' => 'number'],
+                                            'running_balance' => [
+                                                'anyOf' => [
+                                                    ['type' => 'number'],
+                                                    ['type' => 'null'],
+                                                ],
+                                            ],
+                                            'page_number' => [
+                                                'anyOf' => [
+                                                    ['type' => 'integer'],
+                                                    ['type' => 'null'],
+                                                ],
+                                            ],
+                                            'statement_account_name_hint' => ['type' => 'string'],
+                                            'statement_account_last4' => ['type' => 'string'],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
                     'transactions' => [
                         'type' => 'array',
                         'items' => [
@@ -416,10 +471,46 @@ function accumul8_statement_normalize_parsed_payload(array $parsed): array
     $transactions = [];
     $topLevelName = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191);
     $topLevelLast4 = accumul8_normalize_text((string)($parsed['account_last4'] ?? ''), 16);
+    $normalizedSections = [];
+
+    foreach ((array)($parsed['account_sections'] ?? []) as $section) {
+        if (!is_array($section)) {
+            continue;
+        }
+        $sectionName = accumul8_normalize_text((string)($section['account_name_hint'] ?? ''), 191);
+        $sectionLast4 = accumul8_normalize_text((string)($section['account_last4'] ?? ''), 16);
+        $sectionTransactions = [];
+        foreach ((array)($section['transactions'] ?? []) as $tx) {
+            if (!is_array($tx)) {
+                continue;
+            }
+            $rowName = accumul8_normalize_text((string)($tx['statement_account_name_hint'] ?? $sectionName ?: $topLevelName), 191);
+            $rowLast4 = accumul8_normalize_text((string)($tx['statement_account_last4'] ?? $sectionLast4 ?: $topLevelLast4), 16);
+            if ($topLevelName === '' && $rowName !== '') {
+                $topLevelName = $rowName;
+            }
+            if ($topLevelLast4 === '' && $rowLast4 !== '') {
+                $topLevelLast4 = $rowLast4;
+            }
+            $tx['statement_account_name_hint'] = $rowName;
+            $tx['statement_account_last4'] = $rowLast4;
+            $sectionTransactions[] = $tx;
+            $transactions[] = $tx;
+        }
+        if ($sectionTransactions !== []) {
+            $normalizedSections[] = [
+                'account_name_hint' => $sectionName !== '' ? $sectionName : ($sectionTransactions[0]['statement_account_name_hint'] ?? ''),
+                'account_last4' => $sectionLast4 !== '' ? $sectionLast4 : ($sectionTransactions[0]['statement_account_last4'] ?? ''),
+                'transactions' => $sectionTransactions,
+            ];
+        }
+    }
 
     foreach ((array)($parsed['transactions'] ?? []) as $tx) {
         if (!is_array($tx)) {
-            $transactions[] = $tx;
+            if ($normalizedSections === []) {
+                $transactions[] = $tx;
+            }
             continue;
         }
         $rowName = accumul8_normalize_text((string)($tx['statement_account_name_hint'] ?? $topLevelName), 191);
@@ -432,10 +523,13 @@ function accumul8_statement_normalize_parsed_payload(array $parsed): array
         }
         $tx['statement_account_name_hint'] = $rowName;
         $tx['statement_account_last4'] = $rowLast4;
-        $transactions[] = $tx;
+        if ($normalizedSections === []) {
+            $transactions[] = $tx;
+        }
     }
 
     $parsed['transactions'] = $transactions;
+    $parsed['account_sections'] = $normalizedSections;
     $parsed['account_name_hint'] = $topLevelName;
     $parsed['account_last4'] = $topLevelLast4;
     return $parsed;
@@ -481,6 +575,25 @@ function accumul8_statement_distinct_account_tags(array $parsed): array
         $labels[$key] = (string)($row['statement_account_label'] ?? '');
     }
     return array_values(array_filter($labels, static fn($value): bool => trim((string)$value) !== ''));
+}
+
+function accumul8_statement_distinct_account_sections(array $parsed): array
+{
+    $sections = [];
+    foreach (accumul8_statement_transaction_rows($parsed) as $row) {
+        $key = strtolower(trim((string)($row['statement_account_name_hint'] ?? ''))) . '|' . preg_replace('/\D+/', '', (string)($row['statement_account_last4'] ?? ''));
+        if ($key === '|') {
+            continue;
+        }
+        if (!isset($sections[$key])) {
+            $sections[$key] = [
+                'account_name_hint' => (string)($row['statement_account_name_hint'] ?? ''),
+                'account_last4' => (string)($row['statement_account_last4'] ?? ''),
+                'label' => (string)($row['statement_account_label'] ?? ''),
+            ];
+        }
+    }
+    return array_values($sections);
 }
 
 function accumul8_statement_filename_month_hint(string $filename): string
@@ -1028,6 +1141,7 @@ Return one JSON object only.
 If the document mentions multiple accounts, keep track of the active account section and tag every transaction row with the account section it belongs to.
 Ignore summary-only account references that do not own the listed transactions.
 Set account_name_hint and account_last4 to the first transaction-bearing account section in document order.
+When multiple accounts appear, populate account_sections and include every transaction under the correct section.
 Use this schema:
 {
   "statement_kind": "bank_account|credit_card|loan|mortgage|other",
@@ -1038,6 +1152,13 @@ Use this schema:
   "period_end": "YYYY-MM-DD or empty",
   "opening_balance": number|null,
   "closing_balance": number|null,
+  "account_sections": [
+    {
+      "account_name_hint": "",
+      "account_last4": "",
+      "transactions": []
+    }
+  ],
   "transactions": [
     {
       "transaction_date": "YYYY-MM-DD",
@@ -1297,6 +1418,7 @@ Return one JSON object only.
 If the OCR text mentions multiple accounts, keep track of the active account section and tag every transaction row with the account section it belongs to.
 Ignore teaser balances, related accounts, and cross-sell summaries that are not the source of the transactions.
 Set account_name_hint and account_last4 to the first transaction-bearing account section in document order.
+When multiple accounts appear, populate account_sections and include every transaction under the correct section.
 Use the provided page catalog to set each transaction's page_number when the page can be identified with reasonable confidence.
 If the page cannot be determined, return page_number as null.
 Use this schema:
@@ -1309,6 +1431,13 @@ Use this schema:
   "period_end": "YYYY-MM-DD or empty",
   "opening_balance": number|null,
   "closing_balance": number|null,
+  "account_sections": [
+    {
+      "account_name_hint": "",
+      "account_last4": "",
+      "transactions": []
+    }
+  ],
   "transactions": [
     {
       "transaction_date": "YYYY-MM-DD",
@@ -2600,6 +2729,7 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
     $selectedAccountId = isset($upload['account_id']) ? (int)$upload['account_id'] : null;
     $match = accumul8_statement_match_account($viewerId, $parsed, $selectedAccountId);
     $accountId = isset($match['account_id']) ? (int)$match['account_id'] : 0;
+    $accountSections = accumul8_statement_distinct_account_sections($parsed);
     $accountLabels = accumul8_statement_distinct_account_tags($parsed);
     $hasMultipleAccounts = count($accountLabels) > 1;
     $accountRow = null;
@@ -2675,6 +2805,13 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
             ])))),
         'account_match_score' => (int)($match['score'] ?? 0),
         'account_match_reason' => $accountMatchReason,
+        'account_section_options' => array_map(static function (array $section): array {
+            return [
+                'account_name_hint' => (string)($section['account_name_hint'] ?? ''),
+                'account_last4' => (string)($section['account_last4'] ?? ''),
+                'label' => (string)($section['label'] ?? ''),
+            ];
+        }, $accountSections),
         'requires_account_confirmation' => 0,
         'statement_kind' => accumul8_statement_normalize_kind($parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account'),
         'institution_name' => accumul8_normalize_text((string)($parsed['institution_name'] ?? ''), 191),
@@ -5406,6 +5543,59 @@ function accumul8_statement_resolve_row_account_id(int $viewerId, array $upload,
     return $accountId;
 }
 
+function accumul8_statement_update_metadata(int $viewerId, int $uploadId, array $payload): array
+{
+    $upload = Database::queryOne(
+        'SELECT * FROM accumul8_statement_uploads WHERE id = ? AND owner_user_id = ? LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$upload) {
+        throw new RuntimeException('Statement upload not found');
+    }
+
+    $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
+    $parsed = is_array($parsed) ? accumul8_statement_normalize_parsed_payload($parsed) : [];
+    $statementKind = array_key_exists('statement_kind', $payload)
+        ? accumul8_statement_normalize_kind((string)$payload['statement_kind'])
+        : accumul8_statement_normalize_kind((string)($upload['statement_kind'] ?? 'bank_account'));
+
+    $accountNameHint = array_key_exists('account_name_hint', $payload)
+        ? accumul8_normalize_text((string)$payload['account_name_hint'], 191)
+        : accumul8_normalize_text((string)($upload['account_name_hint'] ?? ''), 191);
+    $accountLast4 = array_key_exists('account_last4', $payload)
+        ? accumul8_normalize_text((string)$payload['account_last4'], 16)
+        : accumul8_normalize_text((string)($upload['account_mask_last4'] ?? ''), 16);
+
+    if ($parsed !== []) {
+        if ($accountNameHint !== '') {
+            $parsed['account_name_hint'] = $accountNameHint;
+        }
+        if ($accountLast4 !== '') {
+            $parsed['account_last4'] = $accountLast4;
+        }
+        $parsed['statement_kind'] = $statementKind;
+        $parsed = accumul8_statement_normalize_parsed_payload($parsed);
+        $accountNameHint = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? $accountNameHint), 191);
+        $accountLast4 = accumul8_normalize_text((string)($parsed['account_last4'] ?? $accountLast4), 16);
+    }
+
+    Database::execute(
+        'UPDATE accumul8_statement_uploads
+         SET statement_kind = ?, account_name_hint = ?, account_mask_last4 = ?, parsed_payload_json = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $statementKind,
+            $accountNameHint,
+            $accountLast4,
+            $parsed !== [] ? json_encode($parsed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : (string)($upload['parsed_payload_json'] ?? '{}'),
+            $uploadId,
+            $viewerId,
+        ]
+    );
+
+    return accumul8_statement_reload_view($viewerId, $uploadId);
+}
+
 function accumul8_statement_insert_transaction_row(int $viewerId, int $actorUserId, int $uploadId, int $accountId, array $resolvedRow): int
 {
     $duplicate = Database::queryOne(
@@ -5912,80 +6102,72 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
         $text = '';
         $pageCatalog = [];
         $ai = null;
+        $notes = [];
 
         if (str_contains($mimeType, 'pdf')) {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
             $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
-            $scanErrors = [];
-
-            if ($text !== '') {
-                try {
-                    $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
-                    $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
-                    if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
-                        $scanErrors[] = 'Text extraction path produced a suspicious statement parse';
-                        $ai = null;
+            if ($text === '') {
+                throw new RuntimeException('Could not extract readable text from the statement PDF. Backend OCR fallback did not produce usable text.');
+            }
+            try {
+                $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+                $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
+                if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
+                    if ((string)($extract['method'] ?? '') !== 'pdf_ocr') {
+                        $ocrExtract = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
+                        $ocrText = accumul8_statement_text_from_bytes((string)($ocrExtract['text'] ?? ''), 120000);
+                        $ocrPageCatalog = is_array($ocrExtract['page_catalog'] ?? null) ? $ocrExtract['page_catalog'] : [];
+                        if ($ocrText !== '') {
+                            $ocrAi = accumul8_ai_generate_statement_json($ocrText, $accountCatalog, $ocrPageCatalog);
+                            $ocrParsed = is_array($ocrAi['json'] ?? null) ? $ocrAi['json'] : [];
+                            if ($ocrParsed !== [] && !accumul8_statement_ai_result_is_suspicious($ocrParsed, $ocrText, (string)($upload['original_filename'] ?? ''))) {
+                                $extract = [
+                                    'text' => $ocrText,
+                                    'method' => 'pdf_ocr',
+                                    'page_catalog' => $ocrPageCatalog,
+                                ];
+                                $text = $ocrText;
+                                $pageCatalog = $ocrPageCatalog;
+                                $ai = $ocrAi;
+                                $parsedCandidate = $ocrParsed;
+                                $notes[] = 'The initial PDF text extraction looked suspicious, so the scan was retried with forced OCR.';
+                            } else {
+                                $notes[] = 'The statement parse still looked suspicious after forced OCR. Review the extracted rows carefully before importing.';
+                            }
+                        } else {
+                            $notes[] = 'The initial PDF text extraction looked suspicious, and forced OCR did not produce alternative text.';
+                        }
+                    } else {
+                        $notes[] = 'The OCR-based statement parse looked suspicious. Review the extracted rows carefully before importing.';
                     }
-                } catch (Throwable $textAiError) {
-                    $scanErrors[] = 'Text extraction path failed: ' . accumul8_normalize_text($textAiError->getMessage(), 250);
                 }
-            }
-
-            if ($ai === null) {
-                $renderedPages = accumul8_statement_render_pdf_pages_to_png($tmpPath);
-                try {
-                    if ($renderedPages !== []) {
-                        $ai = accumul8_ai_generate_statement_json_from_images($renderedPages, $accountCatalog);
-                        $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI image scan completed', 120000);
-                        $extract['method'] = 'ai_pdf_images';
-                        $pageCatalog = [];
-                    }
-                } catch (Throwable $imageAiError) {
-                    $scanErrors[] = 'Rendered page AI scanning failed: ' . accumul8_normalize_text($imageAiError->getMessage(), 250);
-                } finally {
-                    accumul8_statement_cleanup_rendered_pages($renderedPages);
-                }
-            }
-
-            if ($ai === null) {
-                try {
-                    $ai = accumul8_ai_generate_statement_json_from_pdf($tmpPath, $accountCatalog);
-                    $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI PDF scan completed', 120000);
-                    $extract['method'] = 'ai_pdf';
-                    $pageCatalog = [];
-                } catch (Throwable $pdfAiError) {
-                    $scanErrors[] = 'Direct PDF AI scanning failed: ' . accumul8_normalize_text($pdfAiError->getMessage(), 250);
-                }
-            }
-
-            if ($ai === null) {
-                if ($text !== '') {
-                    throw new RuntimeException('Could not generate a valid statement scan from the extracted PDF text or direct PDF AI scan: ' . implode(' | ', $scanErrors));
-                }
-                throw new RuntimeException('Could not extract readable text from the statement, and direct PDF AI scanning failed: ' . implode(' | ', $scanErrors));
+            } catch (Throwable $textAiError) {
+                throw new RuntimeException('Could not generate a valid statement scan from backend extracted text: ' . accumul8_normalize_text($textAiError->getMessage(), 400));
             }
         } elseif (str_starts_with($mimeType, 'image/')) {
+            $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+            if ($text === '') {
+                throw new RuntimeException('Could not extract readable text from the statement image. Backend OCR did not produce usable text.');
+            }
             try {
-                $ai = accumul8_ai_generate_statement_json_from_images([['page_number' => 1, 'path' => $tmpPath]], $accountCatalog);
-                $text = accumul8_statement_text_from_bytes(json_encode($ai['json'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'AI image scan completed', 120000);
-                $extract['method'] = 'ai_image';
-            } catch (Throwable $imageAiError) {
-                $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-                $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
-                $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
-                if ($text !== '') {
-                    $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
-                } else {
-                    throw new RuntimeException('Could not extract readable text from the statement, and direct image AI scanning failed: ' . accumul8_normalize_text($imageAiError->getMessage(), 400));
+                $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
+                $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
+                if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
+                    $notes[] = 'The OCR-based image parse looked suspicious. Review the extracted rows carefully before importing.';
                 }
+            } catch (Throwable $imageAiError) {
+                throw new RuntimeException('Could not generate a valid statement scan from backend OCR text: ' . accumul8_normalize_text($imageAiError->getMessage(), 400));
             }
         } else {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
             $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
             if ($text === '') {
-                throw new RuntimeException('Could not extract readable text from the statement, and direct AI scanning is unavailable for this file type');
+                throw new RuntimeException('Could not extract readable text from the statement file.');
             }
             $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
         }
@@ -5996,7 +6178,6 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
             $accountId = null;
         }
         $transactionLocators = accumul8_statement_transaction_locators($parsed);
-        $notes = [];
         foreach ((array)($parsed['account_match_hints'] ?? []) as $hint) {
             $hint = accumul8_normalize_text((string)$hint, 255);
             if ($hint !== '') {
@@ -8543,7 +8724,33 @@ if ($action === 'rescan_statement_upload') {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
     try {
+        if (isset($body['statement_kind']) || isset($body['account_name_hint']) || isset($body['account_last4'])) {
+            accumul8_statement_update_metadata($viewerId, $id, [
+                'statement_kind' => $body['statement_kind'] ?? null,
+                'account_name_hint' => $body['account_name_hint'] ?? null,
+                'account_last4' => $body['account_last4'] ?? null,
+            ]);
+        }
         $row = accumul8_statement_scan_upload($viewerId, $id, null, true);
+        catn8_json_response(['success' => true, 'upload' => $row]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'update_statement_upload_metadata') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    try {
+        $row = accumul8_statement_update_metadata($viewerId, $id, [
+            'statement_kind' => $body['statement_kind'] ?? null,
+            'account_name_hint' => $body['account_name_hint'] ?? null,
+            'account_last4' => $body['account_last4'] ?? null,
+        ]);
         catn8_json_response(['success' => true, 'upload' => $row]);
     } catch (Throwable $e) {
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);

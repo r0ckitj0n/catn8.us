@@ -393,6 +393,30 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const updateStatementUploadMetadata = React.useCallback(async (payload: {
+    id: number;
+    statement_kind?: string;
+    account_name_hint?: string;
+    account_last4?: string;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload }>(
+        scopedActionUrl('update_statement_upload_metadata'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement metadata updated.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to update statement metadata');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const archiveStatementUpload = React.useCallback(async (payload: Accumul8StatementArchiveRequest) => {
     setBusy(true);
     try {
@@ -680,6 +704,7 @@ export function useAccumul8(
     syncBankConnection,
     uploadStatement,
     rescanStatementUpload,
+    updateStatementUploadMetadata,
     archiveStatementUpload,
     restoreStatementUpload,
     deleteArchivedStatementUpload,

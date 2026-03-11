@@ -126,6 +126,9 @@
 
 .accumul8-statement-result-card {
   align-content: start;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .accumul8-statement-section-head {
@@ -133,6 +136,13 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.2rem;
+  align-items: center;
+}
+
+.accumul8-statement-action-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
   align-items: center;
 }
 
@@ -414,18 +424,6 @@
   gap: 0.4rem;
 }
 
-.accumul8-statement-file-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-height: 38px;
-}
-
-.accumul8-statement-file-picker-label {
-  color: #6a5227;
-  font-size: 0.92rem;
-}
-
 .accumul8-statement-file-input {
   position: absolute;
   width: 1px;
@@ -493,6 +491,10 @@
   color: #4b391a;
 }
 
+.accumul8-statements-page .accumul8-statement-action-row .btn {
+  min-width: 0;
+}
+
 @keyframes accumul8-statement-spin {
   from {
     transform: rotate(0deg);
@@ -541,8 +543,7 @@
     display: grid;
   }
 
-  .accumul8-statement-file-picker {
-    width: 100%;
-    justify-content: space-between;
+  .accumul8-statement-section-head {
+    justify-content: flex-start;
   }
 }

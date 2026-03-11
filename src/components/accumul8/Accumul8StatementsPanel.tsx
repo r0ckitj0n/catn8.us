@@ -599,14 +599,13 @@ export function Accumul8StatementsPanel({
           <section className={`accumul8-statement-top-grid${latestImportResult ? '' : ' is-single-column'}`}>
             <div className="accumul8-statement-upload-card">
               <div className="accumul8-statement-section-head">
-                <div>
-                  <strong>Scan new statements</strong>
-                  <div className="small text-muted">Upload files once, then work the review queue instead of searching through the full history.</div>
+                <div className="accumul8-statement-action-row">
+                  <label htmlFor="accumul8-statement-files" className={`btn btn-success btn-sm${busy ? ' disabled' : ''}`}>Upload Statements</label>
+                  <button type="submit" className="btn btn-success btn-sm" disabled={busy || files.length === 0} form="accumul8-statement-upload-form">Scan Statements</button>
                 </div>
-                <button type="submit" className="btn btn-success" disabled={busy || files.length === 0} form="accumul8-statement-upload-form">Scan Statements</button>
               </div>
               <form id="accumul8-statement-upload-form" className="row g-2" onSubmit={handleSubmit}>
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind | '')} disabled={busy}>
                     <option value="">Statement type</option>
                     <option value="bank_account">Bank account</option>
@@ -616,7 +615,7 @@ export function Accumul8StatementsPanel({
                     <option value="other">Other</option>
                   </select>
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
                     <option value="">Preferred account</option>
                     {sortedAccounts.map((uploadAccount) => (
@@ -626,13 +625,7 @@ export function Accumul8StatementsPanel({
                     ))}
                   </select>
                 </div>
-                <div className="col-md-4">
-                  <div className="accumul8-statement-file-picker">
-                    <label htmlFor="accumul8-statement-files" className={`btn btn-outline-secondary btn-sm${busy ? ' disabled' : ''}`}>Upload Statements</label>
-                    <span className="accumul8-statement-file-picker-label">{files.length > 0 ? `${files.length} file(s) selected` : 'Upload Statements'}</span>
-                    <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
-                  </div>
-                </div>
+                <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
                 <div className="col-12">
                   {files.length > 0 ? <div className="small text-muted">{`${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}`}</div> : null}
                 </div>

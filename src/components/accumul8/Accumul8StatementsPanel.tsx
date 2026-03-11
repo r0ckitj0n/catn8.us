@@ -255,7 +255,7 @@ export function Accumul8StatementsPanel({
   onOpenTransaction,
   onDeleteTransaction,
 }: Accumul8StatementsPanelProps) {
-  const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind>(DEFAULT_KIND);
+  const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind | ''>('');
   const [accountId, setAccountId] = React.useState('');
   const [files, setFiles] = React.useState<File[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -274,7 +274,7 @@ export function Accumul8StatementsPanel({
   const [dismissedRowKeysByUpload, setDismissedRowKeysByUpload] = React.useState<Record<number, string[]>>({});
 
   React.useEffect(() => {
-    setStatementKind(DEFAULT_KIND);
+    setStatementKind('');
     setAccountId('');
     setFiles([]);
     setSearchQuery('');
@@ -445,7 +445,7 @@ export function Accumul8StatementsPanel({
     setLatestImportResult(null);
     for (const file of files) {
       const formData = new FormData();
-      formData.append('statement_kind', statementKind);
+      formData.append('statement_kind', statementKind || DEFAULT_KIND);
       if (accountId) formData.append('account_id', accountId);
       formData.append('statement_file', file);
       await onUpload(formData);
@@ -556,32 +556,29 @@ export function Accumul8StatementsPanel({
         </div>
       ) : null}
       <div className="accumul8-statements-page-header">
-        <div className="accumul8-statements-page-header-main">
-          <h2 className="mb-1">Bank Statements</h2>
-          <p className="mb-0 small text-muted">Review the inbox, browse the statement library, and search statement contents without working inside a modal.</p>
-          <section className="accumul8-statement-summary-grid">
-            <button type="button" className={`accumul8-statement-summary-card${activeSection === 'inbox' ? ' is-active' : ''}`} onClick={() => setActiveSection('inbox')}>
-              <span className="accumul8-statement-summary-label">Inbox</span>
-              <strong>{overview.review}</strong>
-              <span className="small text-muted">Statements waiting on review/import</span>
-            </button>
-            <button type="button" className={`accumul8-statement-summary-card${activeSection === 'library' ? ' is-active' : ''}`} onClick={() => setActiveSection('library')}>
-              <span className="accumul8-statement-summary-label">Library</span>
-              <strong>{statementUploads.length}</strong>
-              <span className="small text-muted">Scanned statements in the archive</span>
-            </button>
-            <button type="button" className={`accumul8-statement-summary-card${activeSection === 'search' ? ' is-active' : ''}`} onClick={() => setActiveSection('search')}>
-              <span className="accumul8-statement-summary-label">Search</span>
-              <strong>{searchResults.length}</strong>
-              <span className="small text-muted">Current content matches</span>
-            </button>
-            <div className="accumul8-statement-summary-card">
-              <span className="accumul8-statement-summary-label">Signals</span>
-              <strong>{overview.failed + overview.suspicious}</strong>
-              <span className="small text-muted">{overview.failed} failed rows · {overview.suspicious} suspicious flags</span>
-            </div>
-          </section>
-        </div>
+        <h2 className="accumul8-statements-page-title mb-0">Bank Statements</h2>
+        <section className="accumul8-statement-summary-grid">
+          <button type="button" className={`accumul8-statement-summary-card${activeSection === 'inbox' ? ' is-active' : ''}`} onClick={() => setActiveSection('inbox')}>
+            <span className="accumul8-statement-summary-label">Inbox</span>
+            <strong>{overview.review}</strong>
+            <span className="small text-muted">Statements waiting on review/import</span>
+          </button>
+          <button type="button" className={`accumul8-statement-summary-card${activeSection === 'library' ? ' is-active' : ''}`} onClick={() => setActiveSection('library')}>
+            <span className="accumul8-statement-summary-label">Library</span>
+            <strong>{statementUploads.length}</strong>
+            <span className="small text-muted">Scanned statements in the archive</span>
+          </button>
+          <button type="button" className={`accumul8-statement-summary-card${activeSection === 'search' ? ' is-active' : ''}`} onClick={() => setActiveSection('search')}>
+            <span className="accumul8-statement-summary-label">Search</span>
+            <strong>{searchResults.length}</strong>
+            <span className="small text-muted">Current content matches</span>
+          </button>
+          <div className="accumul8-statement-summary-card">
+            <span className="accumul8-statement-summary-label">Signals</span>
+            <strong>{overview.failed + overview.suspicious}</strong>
+            <span className="small text-muted">{overview.failed} failed rows · {overview.suspicious} suspicious flags</span>
+          </div>
+        </section>
         <div className="accumul8-statement-modal-header-actions">
           <Accumul8ModalHelp buttonLabel="Statement upload help" buttonTitle="Statement upload help" modalTitle="Statement Upload Help" parentOpen>
             <div className="accumul8-statement-hero">
@@ -599,18 +596,19 @@ export function Accumul8StatementsPanel({
       </div>
       <div className="accumul8-statements-page-body">
         <div className="accumul8-statement-shell">
-          <section className="accumul8-statement-top-grid">
+          <section className={`accumul8-statement-top-grid${latestImportResult ? '' : ' is-single-column'}`}>
             <div className="accumul8-statement-upload-card">
               <div className="accumul8-statement-section-head">
                 <div>
                   <strong>Scan new statements</strong>
                   <div className="small text-muted">Upload files once, then work the review queue instead of searching through the full history.</div>
                 </div>
+                <button type="submit" className="btn btn-success" disabled={busy || files.length === 0} form="accumul8-statement-upload-form">Scan Statements</button>
               </div>
-              <form className="row g-2" onSubmit={handleSubmit}>
+              <form id="accumul8-statement-upload-form" className="row g-2" onSubmit={handleSubmit}>
                 <div className="col-md-4">
-                  <label className="form-label" htmlFor="accumul8-statement-kind">Statement type</label>
-                  <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind)} disabled={busy}>
+                  <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind | '')} disabled={busy}>
+                    <option value="">Statement type</option>
                     <option value="bank_account">Bank account</option>
                     <option value="credit_card">Credit card</option>
                     <option value="loan">Car loan / installment</option>
@@ -619,9 +617,8 @@ export function Accumul8StatementsPanel({
                   </select>
                 </div>
                 <div className="col-md-4">
-                  <label className="form-label" htmlFor="accumul8-statement-account">Preferred account</label>
                   <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
-                    <option value="">Let AI propose an account</option>
+                    <option value="">Preferred account</option>
                     {sortedAccounts.map((uploadAccount) => (
                       <option key={uploadAccount.id} value={String(uploadAccount.id)}>
                         {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
@@ -630,16 +627,14 @@ export function Accumul8StatementsPanel({
                   </select>
                 </div>
                 <div className="col-md-4">
-                  <label className="form-label" htmlFor="accumul8-statement-files">Statement files</label>
-                  <input id="accumul8-statement-files" className="form-control" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+                  <div className="accumul8-statement-file-picker">
+                    <label htmlFor="accumul8-statement-files" className={`btn btn-outline-secondary btn-sm${busy ? ' disabled' : ''}`}>Upload Statements</label>
+                    <span className="accumul8-statement-file-picker-label">{files.length > 0 ? `${files.length} file(s) selected` : 'Upload Statements'}</span>
+                    <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+                  </div>
                 </div>
                 <div className="col-12">
-                  <div className="accumul8-statement-upload-actions">
-                    <div className="small text-muted">
-                      {files.length > 0 ? `${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}` : 'Choose one or more statements to scan into an import plan.'}
-                    </div>
-                    <button type="submit" className="btn btn-success" disabled={busy || files.length === 0}>Scan Statements</button>
-                  </div>
+                  {files.length > 0 ? <div className="small text-muted">{`${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}`}</div> : null}
                 </div>
               </form>
             </div>
@@ -656,12 +651,7 @@ export function Accumul8StatementsPanel({
                 {latestImportResult.result?.successful_rows?.length ? <div className="small text-muted">Imported: {latestImportResult.result.successful_rows.map((row) => `${row.transaction_date || ''} ${row.description || ''}`.trim()).slice(0, 4).join(' | ')}</div> : null}
                 {latestImportResult.result?.failed_rows?.length ? <div className="accumul8-statement-error">Failed: {latestImportResult.result.failed_rows.map((row) => row.reason || 'Unknown error').slice(0, 3).join(' | ')}</div> : null}
               </section>
-            ) : (
-              <section className="accumul8-statement-history-card accumul8-statement-result-card">
-                <strong>How this works</strong>
-                <div className="small text-muted">Use Inbox for items that still need decisions. Use Library to browse older statements by filter and open one statement at a time instead of expanding a long list.</div>
-              </section>
-            )}
+            ) : null}
           </section>
 
           {activeSection === 'search' ? (

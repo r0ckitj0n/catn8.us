@@ -7,17 +7,16 @@
 }
 
 .accumul8-statements-page-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.85rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.accumul8-statements-page-header-main {
-  display: grid;
-  gap: 0.45rem;
-  flex: 1 1 auto;
-  min-width: 0;
+.accumul8-statements-page-title {
+  color: #fff7e1 !important;
+  white-space: nowrap;
+  text-shadow: none;
 }
 
 .accumul8-statements-page-body {
@@ -76,6 +75,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
+  align-items: stretch;
 }
 
 .accumul8-statement-summary-card,
@@ -120,6 +120,10 @@
   gap: 0.7rem;
 }
 
+.accumul8-statement-top-grid.is-single-column {
+  grid-template-columns: 1fr;
+}
+
 .accumul8-statement-result-card {
   align-content: start;
 }
@@ -127,8 +131,9 @@
 .accumul8-statement-section-head {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.45rem;
+  gap: 0.75rem;
+  margin-bottom: 0.2rem;
+  align-items: center;
 }
 
 .accumul8-statement-workspace-shell {
@@ -204,6 +209,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  justify-self: end;
 }
 
 .accumul8-statement-hero {
@@ -225,13 +231,6 @@
   margin-bottom: 0.3rem;
 }
 
-.accumul8-statement-upload-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
 .accumul8-statement-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -248,6 +247,9 @@
 .accumul8-statement-review-section {
   display: grid;
   gap: 0.65rem;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .accumul8-statement-workspace {
@@ -412,6 +414,30 @@
   gap: 0.4rem;
 }
 
+.accumul8-statement-file-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 38px;
+}
+
+.accumul8-statement-file-picker-label {
+  color: #6a5227;
+  font-size: 0.92rem;
+}
+
+.accumul8-statement-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .accumul8-statement-alert-list {
   display: grid;
   gap: 0.45rem;
@@ -433,6 +459,10 @@
 .accumul8-statement-error {
   color: #8b1e1e;
   margin-top: 0.55rem;
+}
+
+.catn8-page[data-page="accumul8"] .accumul8-statements-page-title {
+  color: #fff7e1 !important;
 }
 
 .accumul8-statements-page .text-muted,
@@ -475,7 +505,6 @@
 @media (max-width: 767.98px) {
   .accumul8-statements-page-header {
     grid-template-columns: 1fr;
-    display: grid;
   }
 
   .accumul8-statement-summary-grid,
@@ -493,7 +522,6 @@
 
   .accumul8-statement-hero,
   .accumul8-statement-history-head,
-  .accumul8-statement-upload-actions,
   .accumul8-statement-history-card-head,
   .accumul8-statement-detail-row,
   .accumul8-statement-plan-grid,
@@ -511,5 +539,10 @@
   .accumul8-statement-detail-actions {
     justify-content: flex-start;
     display: grid;
+  }
+
+  .accumul8-statement-file-picker {
+    width: 100%;
+    justify-content: space-between;
   }
 }

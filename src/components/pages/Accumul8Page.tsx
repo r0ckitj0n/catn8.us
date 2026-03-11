@@ -21,14 +21,14 @@ import { StandardIconButton } from '../common/StandardIconButton';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { ApiClient } from '../../core/ApiClient';
-import { openPlaidLink } from '../../core/plaidLink';
+import { openTellerConnect } from '../../core/tellerConnect';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
-  Accumul8PlaidCreateLinkTokenResponse,
-  Accumul8PlaidExchangeResponse,
-  Accumul8PlaidSyncResponse,
+  Accumul8TellerConnectTokenResponse,
+  Accumul8TellerEnrollmentResponse,
+  Accumul8TellerSyncResponse,
   Accumul8Account,
   Accumul8ContactType,
   Accumul8Direction,
@@ -926,7 +926,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         }
         const sourceKind = String(tx.source_kind || 'manual');
         const entryType = String(tx.entry_type || 'manual');
-        const matchesSource = sourceKind === 'recurring' || sourceKind === 'manual' || sourceKind === 'plaid';
+        const matchesSource = sourceKind === 'recurring' || sourceKind === 'manual' || sourceKind === 'plaid' || sourceKind === 'teller';
         const matchesEntryType = entryType === 'bill' || entryType === 'auto' || entryType === 'manual';
         if (!matchesSource && !matchesEntryType) {
           return false;
@@ -1541,53 +1541,54 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       email_body_template: rule.email_body_template || '',
     });
   }, [notificationRules]);
-  const runPlaidLink = React.useCallback(async () => {
+  const runTellerConnect = React.useCallback(async () => {
     if (!onToast) return;
     if (!syncProvider.configured) {
-      onToast({ tone: 'error', message: 'Plaid is not configured. Save credentials in Settings first.' });
+      onToast({ tone: 'error', message: 'Teller is not configured. Save credentials in Settings first.' });
       return;
     }
 
     try {
-      const tokenRes = await ApiClient.post<Accumul8PlaidCreateLinkTokenResponse>(scopedActionUrl('plaid_create_link_token'), { client_name: 'Accumul8' });
-      const token = String(tokenRes?.link_token || '');
-      if (!token) {
-        throw new Error('No link token returned');
+      const tokenRes = await ApiClient.post<Accumul8TellerConnectTokenResponse>(scopedActionUrl('teller_connect_token'), {});
+      const applicationId = String(tokenRes?.application_id || '');
+      const environment = String(tokenRes?.environment || syncProvider.env || 'sandbox') as 'sandbox' | 'development' | 'production';
+      if (!applicationId) {
+        throw new Error('No Teller application id returned');
       }
 
       setSyncHelpError('');
-      setSyncHelpToken(token);
+      setSyncHelpToken(applicationId);
 
-      const linkResult = await openPlaidLink(token);
+      const linkResult = await openTellerConnect(applicationId, environment);
 
       if (linkResult.outcome === 'cancelled') {
-        onToast({ tone: 'info', message: 'Plaid Link was closed before connecting an account.' });
+        onToast({ tone: 'info', message: 'Teller Connect was closed before connecting an account.' });
         return;
       }
 
-      const institutionId = String(linkResult.metadata?.institution?.institution_id || '');
-      const institutionName = String(linkResult.metadata?.institution?.name || '');
-      const exchangeRes = await ApiClient.post<Accumul8PlaidExchangeResponse>(scopedActionUrl('plaid_exchange_public_token'), {
-        public_token: String(linkResult.publicToken || ''),
-        institution_id: institutionId,
-        institution_name: institutionName,
+      const exchangeRes = await ApiClient.post<Accumul8TellerEnrollmentResponse>(scopedActionUrl('teller_enroll'), {
+        access_token: String(linkResult.payload?.accessToken || ''),
+        enrollment_id: String(linkResult.payload?.enrollment?.id || ''),
+        user_id: String(linkResult.payload?.user?.id || ''),
+        institution_id: String(linkResult.payload?.enrollment?.institution?.id || ''),
+        institution_name: String(linkResult.payload?.enrollment?.institution?.name || ''),
       });
       const connectionId = Number(exchangeRes?.connection_id || 0);
       if (connectionId <= 0) {
-        throw new Error('Plaid exchange did not return a valid connection id');
+        throw new Error('Teller enrollment did not return a valid connection id');
       }
-      const syncRes = await ApiClient.post<Accumul8PlaidSyncResponse>(scopedActionUrl('plaid_sync_transactions'), {
+      const syncRes = await ApiClient.post<Accumul8TellerSyncResponse>(scopedActionUrl('teller_sync_transactions'), {
         connection_id: connectionId,
       });
       const added = Number(syncRes?.added || 0);
-      onToast({ tone: 'success', message: `Plaid connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
+      onToast({ tone: 'success', message: `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
       await load();
     } catch (error: any) {
-      const message = String(error?.message || 'Failed to create Plaid link token');
+      const message = String(error?.message || 'Failed to start Teller Connect');
       openSyncHelp({ error: message });
       onToast({ tone: 'error', message });
     }
-  }, [load, onToast, openSyncHelp, scopedActionUrl, syncProvider.configured]);
+  }, [load, onToast, openSyncHelp, scopedActionUrl, syncProvider.configured, syncProvider.env]);
   const budgetRowsSorted = React.useMemo(() => (
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);
@@ -3473,7 +3474,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <h3>Bank Sync Groundwork</h3>
               <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
               <div className="d-flex gap-2 flex-wrap mb-3">
-                <button type="button" className="btn btn-outline-primary" onClick={() => void runPlaidLink()} disabled={busy || !syncProvider.configured}>Connect Bank via Plaid</button>
+                <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
               <h4 className="h6">Connected Institutions</h4>
@@ -3502,7 +3503,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </tbody>
                 </table>
               </div>
-              <p className="small text-muted mb-0">Target institutions include Capital One, Navy Federal Credit Union, Barclays, Fifth Third, and Truist via the Plaid institution network.</p>
+              <p className="small text-muted mb-0">Teller-supported institutions can be connected here and each remote account is mapped into a local Accumul8 account record for ongoing sync.</p>
             </div>
           )}
           {tab === 'statements' && (
@@ -3589,23 +3590,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {syncHelpOpen && (
-            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Plaid setup guide">
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Teller setup guide">
               <div className="accumul8-help-modal">
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h4 className="h6 mb-0">Plaid Sync Setup Guide</h4>
+                  <h4 className="h6 mb-0">Teller Sync Setup Guide</h4>
                   <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSyncHelpOpen(false)}>Close</button>
                 </div>
                 {syncHelpError ? <div className="alert alert-warning py-2"><strong>Current error:</strong> {syncHelpError}</div> : null}
-                {syncHelpToken ? <div className="alert alert-success py-2"><strong>Link token generated:</strong> <code>{syncHelpToken.slice(0, 40)}...</code></div> : null}
+                {syncHelpToken ? <div className="alert alert-success py-2"><strong>Teller application loaded:</strong> <code>{syncHelpToken.slice(0, 40)}...</code></div> : null}
                 <ol className="mb-2 ps-3">
-                  <li>Create/get your Plaid credentials in <a href="https://dashboard.plaid.com/team/keys" target="_blank" rel="noreferrer">Plaid Dashboard Keys</a>.</li>
-                  <li>Set `accumul8.plaid.client_id`, `accumul8.plaid.secret`, and optional `accumul8.plaid.env` in your server secret store.</li>
-                  <li>Click <strong>Connect Bank via Plaid</strong> in this tab.</li>
-                  <li>Complete Plaid Link and authorize your institution.</li>
+                  <li>Create your Teller application credentials in <a href="https://teller.io/dashboard" target="_blank" rel="noreferrer">Teller Dashboard</a>.</li>
+                  <li>Save your Teller Application ID, certificate PEM, private key PEM, and environment in Settings.</li>
+                  <li>Click <strong>Connect Bank via Teller</strong> in this tab.</li>
+                  <li>Complete Teller Connect and authorize your institution.</li>
                   <li>Accumul8 will automatically exchange token, save the connection, and sync transactions.</li>
                 </ol>
                 <div className="small">
-                  Quick references: <a href="https://plaid.com/docs/quickstart/" target="_blank" rel="noreferrer">Plaid Quickstart</a> | <a href="https://plaid.com/docs/api/items/#itempublic_tokenexchange" target="_blank" rel="noreferrer">Public Token Exchange API</a>
+                  Quick references: <a href="https://teller.io/docs/connect" target="_blank" rel="noreferrer">Teller Connect</a> | <a href="https://teller.io/docs/api" target="_blank" rel="noreferrer">Teller API</a>
                 </div>
               </div>
             </div>

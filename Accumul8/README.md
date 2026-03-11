@@ -14,4 +14,4 @@ Accumul8 is the catn8.us personal finance workspace.
 - Payees/Payers management
 - Recurring payments
 - Notifications (PHPMailer)
-- Bank sync groundwork (Plaid)
+- Bank sync groundwork (Teller)

@@ -19,7 +19,7 @@ export function getAccumul8TransactionSourceLabel(sourceKind: string | null | un
   if (normalized === 'statement_upload' || normalized === 'statement_pdf') {
     return 'Bank Statement';
   }
-  if (normalized === 'plaid') {
+  if (normalized === 'plaid' || normalized === 'teller') {
     return 'Bank Sync';
   }
   if (normalized === 'recurring') {
@@ -32,7 +32,7 @@ export function getAccumul8TransactionEditPolicy(
   transaction: Pick<Accumul8Transaction, 'source_kind'> | null | undefined,
 ): Accumul8TransactionEditPolicy {
   const sourceKind = normalizeAccumul8TransactionSourceKind(transaction?.source_kind);
-  const isImported = sourceKind === 'statement_upload' || sourceKind === 'statement_pdf' || sourceKind === 'plaid';
+  const isImported = sourceKind === 'statement_upload' || sourceKind === 'statement_pdf' || sourceKind === 'plaid' || sourceKind === 'teller';
 
   if (isImported) {
     const canDeleteImported = sourceKind === 'statement_upload' || sourceKind === 'statement_pdf';

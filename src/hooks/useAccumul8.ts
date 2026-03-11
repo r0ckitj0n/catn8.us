@@ -61,7 +61,7 @@ export function useAccumul8(
   const [statementUploads, setStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [archivedStatementUploads, setArchivedStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [statementAuditRuns, setStatementAuditRuns] = React.useState<Accumul8StatementAuditRun[]>([]);
-  const [syncProvider, setSyncProvider] = React.useState({ provider: 'plaid', env: 'sandbox', configured: 0 });
+  const [syncProvider, setSyncProvider] = React.useState({ provider: 'teller', env: 'sandbox', configured: 0 });
   const handleError = React.useCallback((error: any, fallback = 'Accumul8 request failed') => {
     const message = String(error?.message || fallback);
     if (onToast) {
@@ -99,7 +99,7 @@ export function useAccumul8(
       setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
       setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
       setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
-      setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
+      setSyncProvider(res?.sync_provider || { provider: 'teller', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
       setLoaded(true);
     } catch (error: any) {
@@ -333,7 +333,7 @@ export function useAccumul8(
   const syncBankConnection = React.useCallback(async (connectionId: number) => {
     setBusy(true);
     try {
-      const res = await ApiClient.post<any>(scopedActionUrl('plaid_sync_transactions'), { connection_id: connectionId });
+      const res = await ApiClient.post<any>(scopedActionUrl('teller_sync_transactions'), { connection_id: connectionId });
       if (onToast) {
         onToast({ tone: 'success', message: `Synced bank transactions (added ${Number(res?.added || 0)}).` });
       }

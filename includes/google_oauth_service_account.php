@@ -92,7 +92,6 @@ function catn8_google_service_account_access_token(string $serviceAccountJson, s
         $raw = curl_exec($ch);
         $err = curl_error($ch);
         $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if (is_string($raw)) {
             $resp = $raw;

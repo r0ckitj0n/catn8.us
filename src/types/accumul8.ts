@@ -224,6 +224,7 @@ export interface Accumul8StatementUpload {
   page_catalog: Accumul8StatementPageCatalogEntry[];
   catalog_summary: string;
   catalog_keywords: string[];
+  catalog_trace: Record<string, unknown> | null;
   plan: Accumul8StatementPlan | null;
   import_result: Accumul8StatementImportResult | null;
   reconciliation_runs: Accumul8StatementReconciliationRun[];
@@ -417,6 +418,10 @@ export interface Accumul8TransactionMoveRequest {
 export interface Accumul8Account {
   id: number;
   banking_organization_id: number | null;
+  bank_connection_id: number | null;
+  provider_name: string;
+  teller_account_id: string;
+  teller_enrollment_id: string;
   account_name: string;
   account_nickname: string;
   banking_organization_name: string;
@@ -537,7 +542,8 @@ export interface Accumul8BankConnection {
   provider_name: string;
   institution_id: string;
   institution_name: string;
-  plaid_item_id: string;
+  teller_enrollment_id: string;
+  teller_user_id: string;
   status: string;
   last_sync_at: string;
   last_error: string;
@@ -690,19 +696,19 @@ export interface Accumul8BootstrapResponse {
   summary: Accumul8Summary;
 }
 
-export interface Accumul8PlaidCreateLinkTokenResponse {
+export interface Accumul8TellerConnectTokenResponse {
   success: boolean;
-  link_token: string;
-  expiration: string;
+  application_id: string;
+  environment: string;
 }
 
-export interface Accumul8PlaidExchangeResponse {
+export interface Accumul8TellerEnrollmentResponse {
   success: boolean;
   connection_id: number;
-  item_id: string;
+  enrollment_id: string;
 }
 
-export interface Accumul8PlaidSyncResponse {
+export interface Accumul8TellerSyncResponse {
   success: boolean;
   added: number;
   modified: number;

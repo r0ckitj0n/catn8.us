@@ -12,7 +12,7 @@ import { BuildWizardSettingsModal } from '../modals/BuildWizardSettingsModal';
 import { StandardizedIconsModal } from '../modals/StandardizedIconsModal';
 import { SiteMaintenanceModal } from '../modals/SiteMaintenanceModal';
 import { ColoringPagesModal } from '../modals/ColoringPagesModal';
-import { PlaidConfigModal } from '../modals/PlaidConfigModal';
+import { TellerConfigModal } from '../modals/TellerConfigModal';
 import { Accumul8AccessModal } from '../modals/Accumul8AccessModal';
 import { Accumul8OcrConfigModal } from '../modals/Accumul8OcrConfigModal';
 import { IToast } from '../../types/common';
@@ -50,7 +50,7 @@ export function SettingsPage({
   const [iconsOpen, setIconsOpen] = React.useState(false);
   const [siteMaintenanceOpen, setSiteMaintenanceOpen] = React.useState(false);
   const [coloringPagesOpen, setColoringPagesOpen] = React.useState(false);
-  const [plaidConfigOpen, setPlaidConfigOpen] = React.useState(false);
+  const [tellerConfigOpen, setTellerConfigOpen] = React.useState(false);
   const [accumul8AccessOpen, setAccumul8AccessOpen] = React.useState(false);
   const [accumul8OcrOpen, setAccumul8OcrOpen] = React.useState(false);
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
@@ -150,8 +150,8 @@ export function SettingsPage({
                         </button>
                       ) : null}
                       {isAdmin ? (
-                        <button type="button" className="btn btn-primary" onClick={() => setPlaidConfigOpen(true)}>
-                          Plaid Configuration
+                        <button type="button" className="btn btn-primary" onClick={() => setTellerConfigOpen(true)}>
+                          Teller Configuration
                         </button>
                       ) : null}
                       {isAdmin ? (
@@ -203,7 +203,7 @@ export function SettingsPage({
       <StandardizedIconsModal open={iconsOpen} onClose={() => setIconsOpen(false)} onToast={onToast} />
       <SiteMaintenanceModal open={siteMaintenanceOpen} onClose={() => setSiteMaintenanceOpen(false)} onToast={onToast} />
       <ColoringPagesModal open={coloringPagesOpen} onClose={() => setColoringPagesOpen(false)} onToast={onToast} />
-      <PlaidConfigModal open={plaidConfigOpen} onClose={() => setPlaidConfigOpen(false)} onToast={onToast} />
+      <TellerConfigModal open={tellerConfigOpen} onClose={() => setTellerConfigOpen(false)} onToast={onToast} />
       <Accumul8AccessModal open={accumul8AccessOpen} onClose={() => setAccumul8AccessOpen(false)} onToast={onToast} />
       <Accumul8OcrConfigModal open={accumul8OcrOpen} onClose={() => setAccumul8OcrOpen(false)} onToast={onToast} />
     </>

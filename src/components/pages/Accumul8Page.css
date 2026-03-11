@@ -357,6 +357,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.75rem;
   width: 100%;
   margin-bottom: 0 !important;
@@ -372,7 +373,7 @@
 
 .accumul8-page-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, clamp(7.5rem, 14vw, 11rem));
   align-items: stretch;
   gap: 0.55rem;
   flex: 1 1 auto;
@@ -420,11 +421,11 @@
 
 .accumul8-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
   align-items: stretch;
   justify-content: stretch;
   gap: 0.55rem;
-  flex: 1 1 100%;
+  flex: 1 1 22rem;
   min-width: 0;
   width: 100%;
 }
@@ -586,14 +587,15 @@
 }
 
 .accumul8-filter-control-row .form-select {
-  flex: 1 1 auto;
+  flex: 0 1 var(--accumul8-filter-select-width, 18rem);
   min-width: 0;
 }
 
 #accumul8-group-filter,
 #accumul8-bank-filter {
-  flex: 0 0 clamp(16rem, 36vw, 23rem);
-  width: clamp(16rem, 36vw, 23rem);
+  --accumul8-filter-select-width: clamp(12.5rem, 20vw, 15.5rem);
+  flex: 0 1 var(--accumul8-filter-select-width);
+  width: var(--accumul8-filter-select-width);
   max-width: 100%;
 }
 
@@ -601,7 +603,9 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  min-width: clamp(10rem, 18vw, 13rem);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   align-self: stretch;
   padding: 0.35rem 0.5rem;
@@ -619,8 +623,11 @@
   flex-wrap: nowrap;
   gap: 0.25rem;
   flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 .accumul8-bank-launcher.btn.btn-outline-secondary {
@@ -641,6 +648,7 @@
   color: var(--accumul8-deco-ink) !important;
   box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.65);
   line-height: 0;
+  max-width: 100%;
 }
 
 .accumul8-bank-launcher--selected {
@@ -651,10 +659,10 @@
 }
 
 .accumul8-bank-launcher-icon {
-  width: auto;
+  width: min(100%, 6.25rem);
   height: 100%;
   max-height: calc(100% - 0.2rem);
-  max-width: 6.25rem;
+  max-width: 100%;
   object-fit: contain;
   object-position: center;
   display: block;

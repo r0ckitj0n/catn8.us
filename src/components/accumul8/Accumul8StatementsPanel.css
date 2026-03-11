@@ -366,7 +366,6 @@
   gap: 0.55rem;
 }
 
-.accumul8-statement-workspace-layout,
 .accumul8-statement-plan-layout {
   display: grid;
   grid-template-columns: 170px minmax(0, 1fr);
@@ -374,13 +373,19 @@
   align-items: start;
 }
 
-.accumul8-statement-workspace-layout {
-  grid-template-columns: minmax(0, 1fr) 170px;
+.accumul8-statement-plan-layout.has-right-column {
+  grid-template-columns: 170px minmax(0, 1fr) 170px;
 }
 
 .accumul8-statement-workspace-main,
 .accumul8-statement-plan-main {
   min-width: 0;
+}
+
+.accumul8-statement-plan-main {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
 }
 
 .accumul8-statement-review-selector {
@@ -678,7 +683,6 @@
   .accumul8-statement-history-card-head,
   .accumul8-statement-detail-row,
   .accumul8-statement-plan-layout,
-  .accumul8-statement-workspace-layout,
   .accumul8-statement-plan-grid,
   .accumul8-statement-search,
   .accumul8-statement-new-account-grid {
@@ -688,11 +692,6 @@
 
   .accumul8-statement-review-selector {
     display: grid;
-  }
-
-  .accumul8-statement-workspace-layout {
-    display: flex;
-    flex-direction: column-reverse;
   }
 
   .accumul8-statement-upload-toolbar,

@@ -851,6 +851,16 @@ export function Accumul8StatementModal({
                                   onDiscard={() => void archiveActiveReviewUpload(upload)}
                                   onConfirm={() => void handleConfirmImport(upload)}
                                   onOpenWorkspace={(panel) => openWorkspace(upload.id, panel)}
+                                  rightColumn={activeWorkspace ? (
+                                    <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-1${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-2${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
+                                      <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('reconciliation')}>reconciliation</button>
+                                    </div>
+                                  ) : null}
                                   formatDateRange={formatStatementDateRange}
                                   formatFileSize={formatStatementFileSize}
                                 />
@@ -858,17 +868,16 @@ export function Accumul8StatementModal({
                             })()}
                             {activeWorkspace ? (
                               <section className="accumul8-statement-workspace">
-                                <div className="accumul8-statement-workspace-layout">
-                                  <div className="accumul8-statement-workspace-main">
-                                    {selectedWorkspacePanel === 'reconciliation' ? (
-                                      <div className="accumul8-statement-detail-panel">
-                                        <strong>Reconciliation</strong>
-                                        <div className="small text-muted">{activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
-                                        {activeReviewUpload.processing_notes.length > 0 ? <div className="small text-muted">{activeReviewUpload.processing_notes.join(' ')}</div> : null}
-                                      </div>
-                                    ) : null}
-                                    {(selectedWorkspacePanel !== 'reconciliation') ? (
-                                      <div className="accumul8-statement-detail-panel">
+                                <div className="accumul8-statement-workspace-main">
+                                  {selectedWorkspacePanel === 'reconciliation' ? (
+                                    <div className="accumul8-statement-detail-panel">
+                                      <strong>Reconciliation</strong>
+                                      <div className="small text-muted">{activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+                                      {activeReviewUpload.processing_notes.length > 0 ? <div className="small text-muted">{activeReviewUpload.processing_notes.join(' ')}</div> : null}
+                                    </div>
+                                  ) : null}
+                                  {(selectedWorkspacePanel !== 'reconciliation') ? (
+                                    <div className="accumul8-statement-detail-panel">
                                         <strong>
                                           {selectedWorkspacePanel === 'review' ? 'Review queue'
                                             : selectedWorkspacePanel === 'imported' ? 'Imported rows'
@@ -924,17 +933,8 @@ export function Accumul8StatementModal({
                                                   : activeWorkspace.suspicious
                                           ).length === 0 ? <div className="small text-muted">No rows in this review set.</div> : null}
                                         </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                  <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-1${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-2${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
-                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('reconciliation')}>reconciliation</button>
-                                  </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                               </section>
                             ) : null}

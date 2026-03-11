@@ -114,7 +114,6 @@ export function Accumul8StatementPlanCard({
             <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), formatDateRange(upload), `${plan?.importable_transaction_count || 0} importable rows`, formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
           </div>
           <div>
-            <div>{plan?.institution_name || upload.institution_name || 'Institution not detected'}</div>
             <div className="accumul8-statement-plan-inline-fields">
               <select className="form-select form-select-sm" disabled={busy || !onUpdateMetadata} value={selectedKind} onChange={(event) => void handleKindChange(event)}>
                 <option value="bank_account">Bank Account</option>

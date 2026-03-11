@@ -609,6 +609,12 @@
 .accumul8-statement-chip-button--tone-5 { background: rgba(92, 48, 70, 0.94); }
 .accumul8-statement-chip-button--tone-6 { background: rgba(63, 60, 103, 0.94); }
 
+.accumul8-statement-chip-row--tabs .accumul8-statement-chip-button--tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .accumul8-statement-chip.is-processed,
 .accumul8-statement-chip.is-balanced {
   background: rgba(21, 80, 42, 0.92);

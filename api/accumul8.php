@@ -1821,14 +1821,6 @@ function accumul8_statement_profile_catalog(): array
             'multi_account_markers' => ['account summary', 'all accounts'],
             'supports_deterministic' => true,
         ],
-        'chase' => [
-            'slug' => 'chase',
-            'institution_name' => 'Chase',
-            'aliases' => ['chase', 'jpmcb', 'jp morgan chase', 'jpmorgan chase'],
-            'summary_markers' => ['account summary', 'activity summary', 'payment information'],
-            'multi_account_markers' => ['account summary'],
-            'supports_deterministic' => true,
-        ],
         'navy_federal' => [
             'slug' => 'navy_federal',
             'institution_name' => 'Navy Federal Credit Union',

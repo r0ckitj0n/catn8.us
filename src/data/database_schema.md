@@ -321,6 +321,22 @@ Business term: Banking Organizations
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_statement_reconciliation_logs
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `statement_upload_id` (BIGINT, FOREIGN KEY -> accumul8_statement_uploads.id)
+- `actor_user_id` (INT, user who ran the reconciliation)
+- `reconciliation_status` (VARCHAR(24), latest run outcome such as `balanced` or `needs_review`)
+- `transaction_count` (INT, valid statement rows checked in the run)
+- `already_reconciled_count` (INT)
+- `reconciled_now_count` (INT)
+- `linked_match_count` (INT)
+- `missing_match_count` (INT)
+- `invalid_row_count` (INT)
+- `summary_text` (TEXT, human-readable run summary shown in the UI)
+- `details_json` (LONGTEXT/JSON, per-row action log for the reconciliation run)
+- `created_at` (TIMESTAMP)
+
 ## VALID8 Tables
 
 ### vault_entries

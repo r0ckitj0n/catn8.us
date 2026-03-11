@@ -3058,6 +3058,26 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_statement_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_statement_reconciliation_logs (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        statement_upload_id BIGINT NOT NULL,
+        actor_user_id INT NOT NULL DEFAULT 0,
+        reconciliation_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+        transaction_count INT NOT NULL DEFAULT 0,
+        already_reconciled_count INT NOT NULL DEFAULT 0,
+        reconciled_now_count INT NOT NULL DEFAULT 0,
+        linked_match_count INT NOT NULL DEFAULT 0,
+        missing_match_count INT NOT NULL DEFAULT 0,
+        invalid_row_count INT NOT NULL DEFAULT 0,
+        summary_text TEXT NULL,
+        details_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_accumul8_statement_recon_owner (owner_user_id),
+        KEY idx_accumul8_statement_recon_upload (statement_upload_id),
+        CONSTRAINT fk_accumul8_statement_recon_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_statement_recon_upload FOREIGN KEY (statement_upload_id) REFERENCES accumul8_statement_uploads(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
@@ -3264,6 +3284,28 @@ function accumul8_tables_ensure(): void
         }
         if (!accumul8_table_has_foreign_key('accumul8_statement_uploads', 'fk_accumul8_statement_account')) {
             Database::execute('ALTER TABLE accumul8_statement_uploads ADD CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL');
+        }
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'actor_user_id', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'reconciliation_status', "VARCHAR(24) NOT NULL DEFAULT 'pending'");
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'transaction_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'already_reconciled_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'reconciled_now_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'linked_match_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'missing_match_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'invalid_row_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'summary_text', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'details_json', 'LONGTEXT NULL');
+        if (!accumul8_table_has_index('accumul8_statement_reconciliation_logs', 'idx_accumul8_statement_recon_owner')) {
+            Database::execute('ALTER TABLE accumul8_statement_reconciliation_logs ADD INDEX idx_accumul8_statement_recon_owner (owner_user_id)');
+        }
+        if (!accumul8_table_has_index('accumul8_statement_reconciliation_logs', 'idx_accumul8_statement_recon_upload')) {
+            Database::execute('ALTER TABLE accumul8_statement_reconciliation_logs ADD INDEX idx_accumul8_statement_recon_upload (statement_upload_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_statement_reconciliation_logs', 'fk_accumul8_statement_recon_owner')) {
+            Database::execute('ALTER TABLE accumul8_statement_reconciliation_logs ADD CONSTRAINT fk_accumul8_statement_recon_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_statement_reconciliation_logs', 'fk_accumul8_statement_recon_upload')) {
+            Database::execute('ALTER TABLE accumul8_statement_reconciliation_logs ADD CONSTRAINT fk_accumul8_statement_recon_upload FOREIGN KEY (statement_upload_id) REFERENCES accumul8_statement_uploads(id) ON DELETE CASCADE');
         }
 
         if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
@@ -3990,6 +4032,9 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
     $plan = is_array($parsedPayload) && $parsedPayload !== []
         ? accumul8_statement_build_plan($viewerId, $row, $parsedPayload)
         : null;
+    $reconciliationRuns = isset($row['reconciliation_runs']) && is_array($row['reconciliation_runs'])
+        ? $row['reconciliation_runs']
+        : [];
 
     return [
         'id' => (int)($row['id'] ?? 0),
@@ -4025,6 +4070,7 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
         'catalog_keywords' => is_array($catalogKeywords) ? $catalogKeywords : [],
         'plan' => $plan,
         'import_result' => is_array($importResult) ? $importResult : null,
+        'reconciliation_runs' => $reconciliationRuns,
         'last_error' => (string)($row['last_error'] ?? ''),
         'last_scanned_at' => (string)($row['last_scanned_at'] ?? ''),
         'processed_at' => (string)($row['processed_at'] ?? ''),
@@ -4034,6 +4080,64 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
         'archived_from_section' => (string)($row['archived_from_section'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
     ];
+}
+
+function accumul8_statement_serialize_reconciliation_log(array $row): array
+{
+    $details = json_decode((string)($row['details_json'] ?? '[]'), true);
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'reconciliation_status' => (string)($row['reconciliation_status'] ?? 'pending'),
+        'transaction_count' => (int)($row['transaction_count'] ?? 0),
+        'already_reconciled_count' => (int)($row['already_reconciled_count'] ?? 0),
+        'reconciled_now_count' => (int)($row['reconciled_now_count'] ?? 0),
+        'linked_match_count' => (int)($row['linked_match_count'] ?? 0),
+        'missing_match_count' => (int)($row['missing_match_count'] ?? 0),
+        'invalid_row_count' => (int)($row['invalid_row_count'] ?? 0),
+        'summary_text' => (string)($row['summary_text'] ?? ''),
+        'details' => is_array($details) ? $details : [],
+        'created_at' => (string)($row['created_at'] ?? ''),
+    ];
+}
+
+function accumul8_statement_reconciliation_logs_lookup(int $viewerId, array $uploadIds, int $limitPerUpload = 5): array
+{
+    if ($uploadIds === [] || !accumul8_table_exists('accumul8_statement_reconciliation_logs')) {
+        return [];
+    }
+
+    $uploadIds = array_values(array_unique(array_filter(array_map('intval', $uploadIds), static fn($id): bool => $id > 0)));
+    if ($uploadIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($uploadIds), '?'));
+    $rows = Database::queryAll(
+        'SELECT id, statement_upload_id, reconciliation_status, transaction_count, already_reconciled_count, reconciled_now_count,
+                linked_match_count, missing_match_count, invalid_row_count, summary_text, details_json, created_at
+         FROM accumul8_statement_reconciliation_logs
+         WHERE owner_user_id = ?
+           AND statement_upload_id IN (' . $placeholders . ')
+         ORDER BY created_at DESC, id DESC',
+        array_merge([$viewerId], $uploadIds)
+    );
+
+    $grouped = [];
+    foreach ($rows as $row) {
+        $uploadId = (int)($row['statement_upload_id'] ?? 0);
+        if ($uploadId <= 0) {
+            continue;
+        }
+        if (!isset($grouped[$uploadId])) {
+            $grouped[$uploadId] = [];
+        }
+        if (count($grouped[$uploadId]) >= $limitPerUpload) {
+            continue;
+        }
+        $grouped[$uploadId][] = accumul8_statement_serialize_reconciliation_log($row);
+    }
+
+    return $grouped;
 }
 
 function accumul8_list_statement_uploads(int $viewerId, bool $archived = false): array
@@ -4076,7 +4180,18 @@ function accumul8_list_statement_uploads(int $viewerId, bool $archived = false):
         [$viewerId, $archived ? 1 : 0]
     );
 
-    return array_map(static fn(array $row): array => accumul8_statement_upload_view_model($viewerId, $row), $rows);
+    $logLookup = accumul8_statement_reconciliation_logs_lookup(
+        $viewerId,
+        array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $rows)
+    );
+
+    return array_map(
+        static function (array $row) use ($viewerId, $logLookup): array {
+            $row['reconciliation_runs'] = $logLookup[(int)($row['id'] ?? 0)] ?? [];
+            return accumul8_statement_upload_view_model($viewerId, $row);
+        },
+        $rows
+    );
 }
 
 function accumul8_get_transaction_row(int $viewerId, int $id): ?array
@@ -4375,6 +4490,226 @@ function accumul8_statement_reconciliation_payload(array $parsed, array $importe
     ];
 }
 
+function accumul8_statement_find_best_transaction_match(int $viewerId, int $accountId, int $uploadId, array $row): ?array
+{
+    $matches = Database::queryAll(
+        'SELECT id, account_id, is_reconciled, COALESCE(source_kind, "") AS source_kind, COALESCE(source_ref, "") AS source_ref
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND COALESCE(account_id, 0) = ?
+           AND transaction_date = ?
+           AND ROUND(amount, 2) = ?
+           AND description = ?
+         ORDER BY
+           CASE WHEN COALESCE(source_ref, "") = ? THEN 0 ELSE 1 END,
+           CASE WHEN COALESCE(is_reconciled, 0) = 1 THEN 0 ELSE 1 END,
+           id ASC
+         LIMIT 5',
+        [
+            $viewerId,
+            $accountId,
+            $row['transaction_date'],
+            accumul8_normalize_amount($row['amount']),
+            $row['description'],
+            'statement_upload:' . $uploadId,
+        ]
+    );
+
+    return $matches[0] ?? null;
+}
+
+function accumul8_statement_build_reconciliation_summary(array $counts, array $baseReconciliation): string
+{
+    $parts = [];
+    $parts[] = 'Checked ' . (int)($counts['transaction_count'] ?? 0) . ' valid statement transaction(s).';
+    if (($counts['already_reconciled_count'] ?? 0) > 0) {
+        $parts[] = (int)$counts['already_reconciled_count'] . ' were already reconciled.';
+    }
+    if (($counts['reconciled_now_count'] ?? 0) > 0) {
+        $parts[] = 'Marked ' . (int)$counts['reconciled_now_count'] . ' unreconciled ledger match(es) as reconciled.';
+    }
+    if (($counts['linked_match_count'] ?? 0) > 0) {
+        $parts[] = 'Linked ' . (int)$counts['linked_match_count'] . ' existing ledger match(es) back to this statement.';
+    }
+    if (($counts['missing_match_count'] ?? 0) > 0) {
+        $parts[] = (int)$counts['missing_match_count'] . ' statement row(s) still have no exact ledger match.';
+    }
+    if (($counts['invalid_row_count'] ?? 0) > 0) {
+        $parts[] = (int)$counts['invalid_row_count'] . ' row(s) were invalid and could not be auto-reconciled.';
+    }
+    $note = accumul8_normalize_text((string)($baseReconciliation['note'] ?? ''), 1000);
+    if ($note !== '') {
+        $parts[] = $note;
+    }
+    return implode(' ', $parts);
+}
+
+function accumul8_statement_reconcile_upload(int $viewerId, int $actorUserId, int $uploadId, array $options = []): array
+{
+    $upload = Database::queryOne(
+        'SELECT *
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$upload) {
+        throw new RuntimeException('Statement upload not found');
+    }
+
+    $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
+    if (!is_array($parsed) || $parsed === []) {
+        accumul8_statement_scan_upload(
+            $viewerId,
+            $uploadId,
+            isset($options['account_id']) ? (int)$options['account_id'] : null,
+            true
+        );
+        $upload = Database::queryOne(
+            'SELECT *
+             FROM accumul8_statement_uploads
+             WHERE id = ? AND owner_user_id = ?
+             LIMIT 1',
+            [$uploadId, $viewerId]
+        );
+        $parsed = is_array($upload) ? json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true) : [];
+    }
+    if (!is_array($parsed) || $parsed === []) {
+        throw new RuntimeException('Statement scan did not produce a reconciliation plan');
+    }
+
+    $accountId = accumul8_statement_resolve_target_account_id($viewerId, $upload, $parsed, $options);
+    $reviewRows = accumul8_statement_review_rows($parsed, accumul8_statement_transaction_locators($parsed));
+    $matchedRows = [];
+    $actions = [];
+    $counts = [
+        'transaction_count' => 0,
+        'already_reconciled_count' => 0,
+        'reconciled_now_count' => 0,
+        'linked_match_count' => 0,
+        'missing_match_count' => 0,
+        'invalid_row_count' => 0,
+    ];
+
+    foreach ($reviewRows as $row) {
+        $action = [
+            'row_index' => (int)($row['row_index'] ?? -1),
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'amount' => isset($row['amount']) && is_numeric($row['amount']) ? accumul8_normalize_amount($row['amount']) : null,
+            'transaction_id' => null,
+            'result' => '',
+            'details' => '',
+        ];
+
+        if (!empty($row['reason'])) {
+            $counts['invalid_row_count']++;
+            $action['result'] = 'invalid';
+            $action['details'] = accumul8_normalize_text((string)$row['reason'], 255);
+            $actions[] = $action;
+            continue;
+        }
+
+        $counts['transaction_count']++;
+        $match = accumul8_statement_find_best_transaction_match($viewerId, $accountId, $uploadId, $row);
+        if (!$match) {
+            $counts['missing_match_count']++;
+            $action['result'] = 'missing_match';
+            $action['details'] = 'No exact ledger match was found for this statement row.';
+            $actions[] = $action;
+            continue;
+        }
+
+        $transactionId = (int)($match['id'] ?? 0);
+        $action['transaction_id'] = $transactionId > 0 ? $transactionId : null;
+        $updates = [];
+        $params = [];
+        $details = [];
+        if ((string)($match['source_kind'] ?? '') !== 'statement_upload' || (string)($match['source_ref'] ?? '') !== 'statement_upload:' . $uploadId) {
+            $updates[] = 'source_kind = ?';
+            $updates[] = 'source_ref = ?';
+            $params[] = 'statement_upload';
+            $params[] = 'statement_upload:' . $uploadId;
+            $counts['linked_match_count']++;
+            $details[] = 'linked to statement upload';
+        }
+        if ((int)($match['is_reconciled'] ?? 0) === 1) {
+            $counts['already_reconciled_count']++;
+            $details[] = 'already reconciled';
+        } else {
+            $updates[] = 'is_reconciled = 1';
+            $counts['reconciled_now_count']++;
+            $details[] = 'marked reconciled';
+        }
+        if ($updates !== []) {
+            $params[] = $transactionId;
+            $params[] = $viewerId;
+            Database::execute(
+                'UPDATE accumul8_transactions
+                 SET ' . implode(', ', $updates) . '
+                 WHERE id = ? AND owner_user_id = ?',
+                $params
+            );
+        }
+
+        $matchedRows[] = [
+            'id' => $transactionId,
+            'transaction_date' => $row['transaction_date'],
+            'description' => $row['description'],
+            'amount' => $row['amount'],
+            'running_balance' => $row['running_balance'] ?? null,
+        ];
+        $action['result'] = ((int)($match['is_reconciled'] ?? 0) === 1 && $updates === []) ? 'already_reconciled' : 'reconciled';
+        $action['details'] = implode('; ', $details);
+        $actions[] = $action;
+    }
+
+    $baseReconciliation = accumul8_statement_reconciliation_payload($parsed, $matchedRows, 0);
+    $finalStatus = (
+        $counts['missing_match_count'] === 0
+        && $counts['invalid_row_count'] === 0
+        && $baseReconciliation['status'] === 'balanced'
+    ) ? 'balanced' : 'needs_review';
+    $summary = accumul8_statement_build_reconciliation_summary($counts, $baseReconciliation);
+
+    Database::execute(
+        'INSERT INTO accumul8_statement_reconciliation_logs
+         (owner_user_id, statement_upload_id, actor_user_id, reconciliation_status, transaction_count, already_reconciled_count,
+          reconciled_now_count, linked_match_count, missing_match_count, invalid_row_count, summary_text, details_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $uploadId,
+            $actorUserId,
+            $finalStatus,
+            $counts['transaction_count'],
+            $counts['already_reconciled_count'],
+            $counts['reconciled_now_count'],
+            $counts['linked_match_count'],
+            $counts['missing_match_count'],
+            $counts['invalid_row_count'],
+            $summary,
+            json_encode($actions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ]
+    );
+
+    Database::execute(
+        'UPDATE accumul8_statement_uploads
+         SET account_id = ?, status = ?, reconciliation_status = ?, reconciliation_note = ?, last_error = NULL
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $accountId,
+            $finalStatus === 'balanced' ? 'processed' : 'needs_review',
+            $finalStatus,
+            $summary,
+            $uploadId,
+            $viewerId,
+        ]
+    );
+
+    return accumul8_statement_reload_view($viewerId, $uploadId);
+}
+
 function accumul8_statement_transaction_locators(array $parsed): array
 {
     $locators = [];
@@ -4640,6 +4975,7 @@ function accumul8_statement_reload_view(int $viewerId, int $uploadId): array
     if (!$row) {
         throw new RuntimeException('Statement upload could not be reloaded');
     }
+    $row['reconciliation_runs'] = accumul8_statement_reconciliation_logs_lookup($viewerId, [$uploadId])[$uploadId] ?? [];
     return accumul8_statement_upload_view_model($viewerId, $row);
 }
 
@@ -7658,6 +7994,28 @@ if ($action === 'confirm_statement_import') {
     try {
         $row = accumul8_statement_import_upload($viewerId, $actorUserId, $id, $options);
         catn8_json_response(['success' => true, 'upload' => $row, 'import_result' => $row['import_result'] ?? null]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'reconcile_statement_upload') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $options = [];
+    if (isset($body['account_id']) && (int)$body['account_id'] > 0) {
+        $options['account_id'] = accumul8_require_owned_id('accounts', $viewerId, (int)$body['account_id']);
+    }
+    if (isset($body['create_account']) && is_array($body['create_account'])) {
+        $options['create_account'] = $body['create_account'];
+    }
+    try {
+        $row = accumul8_statement_reconcile_upload($viewerId, $actorUserId, $id, $options);
+        catn8_json_response(['success' => true, 'upload' => $row, 'reconciliation_runs' => $row['reconciliation_runs'] ?? []]);
     } catch (Throwable $e) {
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
     }

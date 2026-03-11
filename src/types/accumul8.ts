@@ -83,6 +83,30 @@ export interface Accumul8StatementImportResult {
   failed_rows: Accumul8StatementImportResultRow[];
 }
 
+export interface Accumul8StatementReconciliationDetail {
+  row_index: number;
+  transaction_date: string;
+  description: string;
+  amount: number | null;
+  transaction_id: number | null;
+  result: string;
+  details: string;
+}
+
+export interface Accumul8StatementReconciliationRun {
+  id: number;
+  reconciliation_status: string;
+  transaction_count: number;
+  already_reconciled_count: number;
+  reconciled_now_count: number;
+  linked_match_count: number;
+  missing_match_count: number;
+  invalid_row_count: number;
+  summary_text: string;
+  details: Accumul8StatementReconciliationDetail[];
+  created_at: string;
+}
+
 export interface Accumul8StatementSearchResult {
   upload_id: number;
   original_filename: string;
@@ -130,6 +154,7 @@ export interface Accumul8StatementUpload {
   catalog_keywords: string[];
   plan: Accumul8StatementPlan | null;
   import_result: Accumul8StatementImportResult | null;
+  reconciliation_runs: Accumul8StatementReconciliationRun[];
   last_error: string;
   last_scanned_at: string;
   processed_at: string;

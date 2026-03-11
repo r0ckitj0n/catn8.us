@@ -520,6 +520,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     restoreStatementUpload,
     deleteArchivedStatementUpload,
     confirmStatementImport,
+    reconcileStatementUpload,
     importStatementReviewRow,
     linkStatementReviewRow,
     searchStatementUploads,
@@ -3517,6 +3518,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onRestoreStatement={restoreStatementUpload}
                 onDeleteArchivedStatement={deleteArchivedStatementUpload}
                 onConfirmImport={confirmStatementImport}
+                onReconcile={reconcileStatementUpload}
                 onImportReviewRow={importStatementReviewRow}
                 onLinkReviewRow={linkStatementReviewRow}
                 onSearch={searchStatementUploads}

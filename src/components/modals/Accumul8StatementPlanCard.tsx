@@ -12,6 +12,7 @@ export interface Accumul8StatementNewAccountDraft {
 
 interface Accumul8StatementPlanCardProps {
   busy: boolean;
+  ownerUserId: number;
   upload: Accumul8StatementUpload;
   sortedAccounts: Accumul8Account[];
   bankingOrganizations: Accumul8BankingOrganization[];
@@ -24,6 +25,7 @@ interface Accumul8StatementPlanCardProps {
   onRescan: () => void;
   onDiscard: () => void;
   onConfirm: () => void;
+  onReconcile?: () => void;
   onOpenWorkspace?: (panel: Exclude<StatementHistoryPanel, 'status' | null>) => void;
   rightColumn?: React.ReactNode;
   formatDateRange: (upload: Accumul8StatementUpload) => string;
@@ -40,6 +42,7 @@ function normalizeStatementHelperText(value: string): string {
 
 export function Accumul8StatementPlanCard({
   busy,
+  ownerUserId,
   upload,
   sortedAccounts,
   bankingOrganizations,
@@ -52,6 +55,7 @@ export function Accumul8StatementPlanCard({
   onRescan,
   onDiscard,
   onConfirm,
+  onReconcile,
   onOpenWorkspace,
   rightColumn,
   formatDateRange,
@@ -66,6 +70,7 @@ export function Accumul8StatementPlanCard({
   const togglePanel = React.useCallback((panel: 'importable' | 'duplicates' | 'invalid' | 'totals') => {
     setActivePanel((current) => (current === panel ? null : panel));
   }, []);
+  const statementHref = `/api/accumul8.php?action=download_statement_upload&id=${upload.id}&owner_user_id=${ownerUserId}`;
 
   return (
     <article className="accumul8-statement-history-card accumul8-statement-plan-card">
@@ -79,7 +84,9 @@ export function Accumul8StatementPlanCard({
         </div>
         <div className="accumul8-statement-plan-main">
           <div>
-            <strong>{upload.original_filename}</strong>
+            <strong>
+              <a href={statementHref} target="_blank" rel="noreferrer">{upload.original_filename}</a>
+            </strong>
             <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), formatDateRange(upload), `${plan?.importable_transaction_count || 0} importable rows`, formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
           </div>
           <div>
@@ -89,6 +96,7 @@ export function Accumul8StatementPlanCard({
           </div>
           <div className="accumul8-statement-card-actions">
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
+            {onReconcile ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !canImport} onClick={onReconcile}>Reconciliation</button> : null}
             <button type="button" className="btn btn-sm btn-success" disabled={busy || !canImport} onClick={onConfirm}>{importActionLabel}</button>
           </div>
           {activePanel === 'importable' ? (

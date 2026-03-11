@@ -38,6 +38,11 @@ interface Accumul8StatementsPanelProps {
     account_id?: number | null;
     create_account?: Accumul8StatementNewAccountDraft | null;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; import_result: Accumul8StatementImportResult | null }>;
+  onReconcile: (payload: {
+    id: number;
+    account_id?: number | null;
+    create_account?: Accumul8StatementNewAccountDraft | null;
+  }) => Promise<{ success: boolean; upload: Accumul8StatementUpload }>;
   onImportReviewRow: (payload: {
     id: number;
     row_index: number;
@@ -282,6 +287,7 @@ export function Accumul8StatementsPanel({
   onRestoreStatement,
   onDeleteArchivedStatement,
   onConfirmImport,
+  onReconcile,
   onImportReviewRow,
   onLinkReviewRow,
   onSearch,
@@ -551,6 +557,17 @@ export function Accumul8StatementsPanel({
       result: response.import_result,
     });
   }, [accountModeById, newAccountById, onConfirmImport, selectedAccountById]);
+  const handleReconcile = React.useCallback(async (upload: Accumul8StatementUpload) => {
+    const mode = accountModeById[upload.id] || 'existing';
+    const selectedAccountId = selectedAccountById[upload.id] || '';
+    const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
+    await onReconcile({
+      id: upload.id,
+      account_id: mode === 'existing' && selectedAccountId ? Number(selectedAccountId) : undefined,
+      create_account: mode === 'new' ? newAccount : undefined,
+    });
+    setSelectedWorkspacePanel('reconciliation');
+  }, [accountModeById, newAccountById, onReconcile, selectedAccountById]);
 
   const openReview = React.useCallback((uploadId: number) => {
     setActiveSection('inbox');
@@ -825,6 +842,7 @@ export function Accumul8StatementsPanel({
                             <Accumul8StatementPlanCard
                               key={`plan-${upload.id}`}
                               busy={busy}
+                              ownerUserId={ownerUserId}
                               upload={upload}
                               sortedAccounts={sortedAccounts}
                               bankingOrganizations={bankingOrganizations}
@@ -837,6 +855,7 @@ export function Accumul8StatementsPanel({
                               onRescan={() => void onRescan(upload.id, selectedUploadAccount ? Number(selectedUploadAccount) : null)}
                               onDiscard={() => void archiveActiveReviewUpload(upload)}
                               onConfirm={() => void handleConfirmImport(upload)}
+                              onReconcile={() => void handleReconcile(upload)}
                               onOpenWorkspace={(panel) => openWorkspace(upload.id, panel)}
                               rightColumn={activeWorkspace ? (
                                 <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
@@ -845,7 +864,7 @@ export function Accumul8StatementsPanel({
                                   <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
                                   <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
                                   <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('reconciliation')}>reconciliation</button>
+                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => void handleReconcile(upload)}>reconciliation</button>
                                 </div>
                               ) : null}
                               formatDateRange={formatStatementDateRange}
@@ -859,7 +878,38 @@ export function Accumul8StatementsPanel({
                               {selectedWorkspacePanel === 'reconciliation' ? (
                                 <div className="accumul8-statement-detail-panel">
                                   <strong>Reconciliation</strong>
-                                  <div className="small text-muted">{activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+                                  <div className="small text-muted">{activeReviewUpload.reconciliation_runs[0]?.summary_text || activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+                                  {activeReviewUpload.reconciliation_runs[0] ? (
+                                    <div className="small text-muted mt-2">
+                                      {[
+                                        `${activeReviewUpload.reconciliation_runs[0].already_reconciled_count} already reconciled`,
+                                        `${activeReviewUpload.reconciliation_runs[0].reconciled_now_count} reconciled now`,
+                                        `${activeReviewUpload.reconciliation_runs[0].linked_match_count} linked`,
+                                        `${activeReviewUpload.reconciliation_runs[0].missing_match_count} missing`,
+                                        `${activeReviewUpload.reconciliation_runs[0].invalid_row_count} invalid`,
+                                      ].join(' · ')}
+                                    </div>
+                                  ) : null}
+                                  {activeReviewUpload.reconciliation_runs[0]?.details.length ? (
+                                    <div className="accumul8-statement-detail-list mt-2">
+                                      {activeReviewUpload.reconciliation_runs[0].details.map((detail) => (
+                                        <div key={`reconciliation-${detail.row_index}-${detail.transaction_id || detail.description}`} className="accumul8-statement-detail-row">
+                                          <div className="accumul8-statement-detail-main">
+                                            <div className="accumul8-statement-detail-title">
+                                              <span>{detail.description || 'Statement row'}</span>
+                                              <span className="accumul8-statement-detail-amount">{Number(detail.amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            <div className="small text-muted">
+                                              {[detail.transaction_date || 'No date', detail.result || '', detail.details || ''].filter(Boolean).join(' · ')}
+                                            </div>
+                                          </div>
+                                          <div className="accumul8-statement-detail-actions">
+                                            {detail.transaction_id ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onOpenTransaction(detail.transaction_id || 0)}>Open ledger entry</button> : null}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                   {activeReviewUpload.processing_notes.length > 0 ? <div className="small text-muted">{activeReviewUpload.processing_notes.join(' ')}</div> : null}
                                 </div>
                               ) : null}
@@ -999,6 +1049,7 @@ export function Accumul8StatementsPanel({
                       }}
                       transactionsById={transactionsById}
                       onRescan={() => void onRescan(selectedLibraryUpload.id, selectedLibraryUpload.account_id)}
+                      onReconcile={() => void handleReconcile(selectedLibraryUpload)}
                       onReview={selectedLibraryUpload.plan ? () => openReview(selectedLibraryUpload.id) : undefined}
                       onOpenTransaction={onOpenTransaction}
                       onDeleteTransaction={onDeleteTransaction}
@@ -1061,6 +1112,7 @@ export function Accumul8StatementsPanel({
                         }}
                         transactionsById={transactionsById}
                         onRescan={() => void onRescan(selectedSignalUpload.id, selectedSignalUpload.account_id)}
+                        onReconcile={() => void handleReconcile(selectedSignalUpload)}
                         onReview={() => openWorkspace(
                           selectedSignalUpload.id,
                           (selectedSignalWorkspace?.failed.length || 0) > 0 ? 'failed' : 'suspicious',

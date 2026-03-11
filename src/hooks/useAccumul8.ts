@@ -476,6 +476,35 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const reconcileStatementUpload = React.useCallback(async (payload: {
+    id: number;
+    account_id?: number | null;
+    create_account?: {
+      banking_organization_name?: string;
+      account_name: string;
+      account_type?: string;
+      institution_name?: string;
+      mask_last4?: string;
+    } | null;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; upload: Accumul8StatementUpload }>(
+        scopedActionUrl('reconcile_statement_upload'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement reconciliation finished. Review the reconciliation panel for the action log.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to reconcile statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const importStatementReviewRow = React.useCallback(async (payload: {
     id: number;
     row_index: number;
@@ -629,6 +658,7 @@ export function useAccumul8(
     restoreStatementUpload,
     deleteArchivedStatementUpload,
     confirmStatementImport,
+    reconcileStatementUpload,
     importStatementReviewRow,
     linkStatementReviewRow,
     searchStatementUploads,

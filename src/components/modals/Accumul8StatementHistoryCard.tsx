@@ -17,6 +17,7 @@ interface Accumul8StatementHistoryCardProps {
   };
   transactionsById: Record<number, Accumul8Transaction>;
   onRescan: () => void;
+  onReconcile?: () => Promise<void> | void;
   onReview?: () => void;
   onOpenTransaction?: (id: number) => void;
   onDeleteTransaction?: (id: number, description: string) => void;
@@ -153,6 +154,7 @@ export function Accumul8StatementHistoryCard({
   counts,
   transactionsById,
   onRescan,
+  onReconcile,
   onReview,
   onOpenTransaction,
   onDeleteTransaction,
@@ -173,6 +175,22 @@ export function Accumul8StatementHistoryCard({
     }
     setActivePanel((current) => (current === panel ? null : panel));
   }, [onOpenWorkspace]);
+  const runReconciliation = React.useCallback(() => {
+    if (onReconcile) {
+      const maybePromise = onReconcile();
+      if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+        void (maybePromise as Promise<void>).then(() => {
+          if (!onOpenWorkspace) {
+            setActivePanel('reconciliation');
+          }
+        });
+      } else if (!onOpenWorkspace) {
+        setActivePanel('reconciliation');
+      }
+      return;
+    }
+    openPanel('reconciliation');
+  }, [onOpenWorkspace, onReconcile, openPanel]);
 
   const renderPanel = () => {
     if (activePanel === 'status') {
@@ -198,7 +216,38 @@ export function Accumul8StatementHistoryCard({
       return (
         <div className="accumul8-statement-detail-panel">
           <strong>Reconciliation</strong>
-          <div className="small text-muted">{upload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+          <div className="small text-muted">{upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+          {upload.reconciliation_runs[0] ? (
+            <div className="small text-muted mt-2">
+              {[
+                `${upload.reconciliation_runs[0].already_reconciled_count} already reconciled`,
+                `${upload.reconciliation_runs[0].reconciled_now_count} reconciled now`,
+                `${upload.reconciliation_runs[0].linked_match_count} linked`,
+                `${upload.reconciliation_runs[0].missing_match_count} missing`,
+                `${upload.reconciliation_runs[0].invalid_row_count} invalid`,
+              ].join(' · ')}
+            </div>
+          ) : null}
+          {upload.reconciliation_runs[0]?.details.length ? (
+            <div className="accumul8-statement-detail-list mt-2">
+              {upload.reconciliation_runs[0].details.map((detail) => (
+                <div key={`recon-${detail.row_index}-${detail.transaction_id || detail.description}`} className="accumul8-statement-detail-row">
+                  <div className="accumul8-statement-detail-main">
+                    <div className="accumul8-statement-detail-title">
+                      <span>{detail.description || 'Statement row'}</span>
+                      <span className="accumul8-statement-detail-amount">{formatAmount(detail.amount)}</span>
+                    </div>
+                    <div className="small text-muted">
+                      {[detail.transaction_date || 'No date', detail.result || '', detail.details || ''].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <div className="accumul8-statement-detail-actions">
+                    {detail.transaction_id && onOpenTransaction ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onOpenTransaction(detail.transaction_id || 0)}>Open ledger entry</button> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {upload.processing_notes.length > 0 ? (
             <div className="small text-muted mt-2">{upload.processing_notes.join(' ')}</div>
           ) : null}
@@ -304,13 +353,14 @@ export function Accumul8StatementHistoryCard({
             <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={onReview}>Review plan</button>
           ) : null}
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
+          {onReconcile ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={runReconciliation}>Reconciliation</button> : null}
           <a className="btn btn-sm btn-outline-primary" href={buildStatementHref(upload.id, ownerUserId)} target="_blank" rel="noreferrer">View</a>
         </div>
       </div>
       <div className="accumul8-statement-chip-row">
         <StatementDetailChip active={activePanel === 'status'} toneClass={`is-${upload.status}`} label={upload.status} onClick={() => openPanel('status')} disabled={busy} />
         {upload.reconciliation_status !== upload.status ? (
-          <StatementDetailChip active={activePanel === 'reconciliation'} toneClass={`is-${upload.reconciliation_status}`} label={upload.reconciliation_status} onClick={() => openPanel('reconciliation')} disabled={busy} />
+          <StatementDetailChip active={activePanel === 'reconciliation'} toneClass={`is-${upload.reconciliation_status}`} label={upload.reconciliation_status} onClick={runReconciliation} disabled={busy} />
         ) : null}
         {isReviewable ? (
           <StatementDetailChip active={false} toneClass="is-warning" label={`${counts?.review ?? 0} needs review`} onClick={() => openPanel('review')} disabled={busy} />
@@ -322,7 +372,7 @@ export function Accumul8StatementHistoryCard({
       </div>
       {renderPanel()}
       {upload.catalog_summary ? <div className="accumul8-statement-note">{upload.catalog_summary}</div> : null}
-      {!activePanel && upload.reconciliation_note ? <div className="small text-muted">{upload.reconciliation_note}</div> : null}
+      {!activePanel && (upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note) ? <div className="small text-muted">{upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note}</div> : null}
       {!activePanel && upload.processing_notes.length > 0 ? <div className="small text-muted">{upload.processing_notes.join(' ')}</div> : null}
       {!activePanel && upload.last_error ? <div className="accumul8-statement-error">{upload.last_error}</div> : null}
     </article>

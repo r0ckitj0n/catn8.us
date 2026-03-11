@@ -648,7 +648,6 @@ export function Accumul8StatementsPanel({
               <div className="accumul8-statement-section-head">
                 <div>
                   <strong>Statement search</strong>
-                  <div className="small text-muted">Search OCR text, payees, memo text, or dates across all scanned statements.</div>
                 </div>
               </div>
               <form className="accumul8-statement-search" onSubmit={handleSearch}>
@@ -668,7 +667,6 @@ export function Accumul8StatementsPanel({
               <div className="accumul8-statement-section-head">
                 <div>
                   <strong>Review inbox</strong>
-                  <div className="small text-muted">Work only the statements that still need action, then leave the full history in the library.</div>
                 </div>
               </div>
               {pendingUploads.length === 0 ? (
@@ -813,7 +811,6 @@ export function Accumul8StatementsPanel({
               <div className="accumul8-statement-section-head">
                 <div>
                   <strong>Statement library</strong>
-                  <div className="small text-muted">Filter the archive, select one statement, and inspect its details without expanding every card in the history.</div>
                 </div>
               </div>
               <div className="accumul8-statement-library-toolbar">

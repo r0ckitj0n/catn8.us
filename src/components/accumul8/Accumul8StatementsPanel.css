@@ -76,6 +76,11 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
   align-items: stretch;
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 247, 225, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(70, 50, 16, 0.32), rgba(39, 27, 8, 0.22));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .accumul8-statement-summary-card,
@@ -89,22 +94,42 @@
 .accumul8-statement-summary-card {
   appearance: none;
   text-align: left;
-  display: grid;
-  gap: 0.18rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   color: inherit;
   cursor: pointer;
   min-height: 0;
+  border: 1px solid rgba(115, 82, 25, 0.34);
+  border-radius: 14px 14px 10px 10px;
+  background: linear-gradient(180deg, rgba(225, 205, 157, 0.88), rgba(193, 164, 101, 0.82));
+  box-shadow: inset 0 -1px 0 rgba(92, 63, 13, 0.14);
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
 .accumul8-statement-summary-card.is-active {
-  border-color: rgba(102, 69, 20, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(87, 56, 12, 0.18);
+  border-color: rgba(255, 241, 202, 0.9);
+  background: linear-gradient(180deg, rgba(255, 250, 236, 0.98), rgba(244, 223, 168, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 10px 18px rgba(34, 21, 6, 0.16);
+  transform: translateY(-1px);
+}
+
+.accumul8-statement-summary-card:not(.is-active) {
+  color: rgba(51, 35, 16, 0.92);
+}
+
+.accumul8-statement-summary-card:hover {
+  border-color: rgba(119, 82, 20, 0.52);
 }
 
 .accumul8-statement-summary-card strong {
   font-size: 1.15rem;
   line-height: 1;
   color: #332310;
+  margin-left: auto;
 }
 
 .accumul8-statement-summary-label {

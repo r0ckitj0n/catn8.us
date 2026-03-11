@@ -966,30 +966,32 @@ export function Accumul8StatementsPanel({
 
           {activeSection === 'library' ? (
             <section className="accumul8-statement-panel accumul8-statement-workspace-shell">
-              <div className="accumul8-statement-section-head">
+              <div className="accumul8-statement-section-head accumul8-statement-section-head--library">
                 <div>
                   <strong>Statement library</strong>
                 </div>
-              </div>
-              <div className="accumul8-statement-library-toolbar">
-                <div className="accumul8-statement-chip-row">
-                  {(['all', 'review', 'processed', 'failed', 'suspicious'] as StatementLibraryFilter[]).map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      className={`accumul8-statement-chip accumul8-statement-chip-button${libraryFilter === filter ? ' is-active' : ''}${filter === 'failed' || filter === 'suspicious' ? ' is-warning' : filter === 'processed' ? ' is-processed' : ''}`}
-                      onClick={() => setLibraryFilter(filter)}
-                    >
-                      {filter === 'all' ? 'all statements' : filter}
-                    </button>
-                  ))}
+                <div className="accumul8-statement-library-toolbar">
+                  <div className="accumul8-statement-chip-row accumul8-statement-chip-row--tabs" role="tablist" aria-label="Statement library filters">
+                    {(['all', 'review', 'processed', 'failed', 'suspicious'] as StatementLibraryFilter[]).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        role="tab"
+                        aria-selected={libraryFilter === filter}
+                        className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tab${libraryFilter === filter ? ' is-active' : ''}${filter === 'failed' || filter === 'suspicious' ? ' is-warning' : filter === 'processed' ? ' is-processed' : ''}`}
+                        onClick={() => setLibraryFilter(filter)}
+                      >
+                        {filter === 'all' ? 'all statements' : filter}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="form-control"
+                    value={libraryQuery}
+                    onChange={(event) => setLibraryQuery(event.target.value)}
+                    placeholder="Filter by file name, account, institution, period, or status"
+                  />
                 </div>
-                <input
-                  className="form-control"
-                  value={libraryQuery}
-                  onChange={(event) => setLibraryQuery(event.target.value)}
-                  placeholder="Filter by file name, account, institution, period, or status"
-                />
               </div>
               <div className="accumul8-statement-workspace-grid">
                 <div className="accumul8-statement-picker-column">

@@ -33,6 +33,62 @@ export interface Accumul8StatementPageCatalogEntry {
   text_excerpt: string;
 }
 
+export interface Accumul8StatementCatalogVerificationSection {
+  statement_account_label: string;
+  statement_account_name_hint: string;
+  statement_account_last4: string;
+  transaction_count: number;
+  invalid_row_count: number;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  transaction_total: number;
+  expected_closing_balance: number | null;
+  closing_delta: number | null;
+  status: string;
+  note: string;
+}
+
+export interface Accumul8StatementCatalogVerification {
+  status: string;
+  summary: string;
+  authoritative: number;
+  verified_section_count: number;
+  warning_section_count: number;
+  failed_section_count: number;
+  sections: Accumul8StatementCatalogVerificationSection[];
+}
+
+export interface Accumul8StatementOcrRow {
+  row_index: number;
+  transaction_date: string | null;
+  description: string;
+  memo: string;
+  amount: number | null;
+  running_balance: number | null;
+  page_number: number | null;
+  reason: string;
+}
+
+export interface Accumul8StatementOcrSection {
+  statement_account_label: string;
+  statement_account_name_hint: string;
+  statement_account_last4: string;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  rows: Accumul8StatementOcrRow[];
+}
+
+export interface Accumul8StatementOcrDocument {
+  original_filename: string;
+  institution_name: string;
+  statement_kind: Accumul8StatementKind;
+  period_start: string | null;
+  period_end: string | null;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  sections: Accumul8StatementOcrSection[];
+}
+
 export interface Accumul8StatementPlanSuggestedAccount {
   account_name: string;
   account_type: string;
@@ -136,20 +192,41 @@ export interface Accumul8StatementAuditIssue {
   matched_account_ids?: number[];
 }
 
+export interface Accumul8StatementAuditAction {
+  row_index: number;
+  result: string;
+  details: string;
+  statement_account_label: string;
+  description: string;
+  transaction_date: string;
+  amount: number | null;
+  transaction_id?: number | null;
+  from_account_id?: number | null;
+  to_account_id?: number | null;
+}
+
+export interface Accumul8StatementAuditCounts {
+  valid_rows: number;
+  matched_rows: number;
+  wrong_account_rows: number;
+  missing_rows: number;
+  invalid_rows: number;
+  fixed_wrong_account_rows?: number;
+  imported_missing_rows?: number;
+  linked_rows?: number;
+  reconciled_rows?: number;
+}
+
 export interface Accumul8StatementAuditReportItem {
   upload_id: number;
   original_filename: string;
   status: string;
   summary: string;
-  counts: {
-    valid_rows: number;
-    matched_rows: number;
-    wrong_account_rows: number;
-    missing_rows: number;
-    invalid_rows: number;
-  };
+  counts: Accumul8StatementAuditCounts;
   account_sections: Accumul8StatementAuditSection[];
+  catalog_refresh_performed?: number;
   issues?: Accumul8StatementAuditIssue[];
+  actions?: Accumul8StatementAuditAction[];
 }
 
 export interface Accumul8StatementAuditRun {
@@ -163,6 +240,20 @@ export interface Accumul8StatementAuditRun {
   summary_text: string;
   report: Accumul8StatementAuditReportItem[];
   created_at: string;
+}
+
+export interface Accumul8StatementAuditRequest {
+  start_date?: string | null;
+  end_date?: string | null;
+  auto_catalog_missing?: boolean;
+  auto_fix_ledger?: boolean;
+  force_rescan?: boolean;
+}
+
+export interface Accumul8StatementAuditResponse {
+  success: boolean;
+  run: Accumul8StatementAuditRun;
+  runs: Accumul8StatementAuditRun[];
 }
 
 export interface Accumul8StatementReconciliationRun {
@@ -225,6 +316,8 @@ export interface Accumul8StatementUpload {
   catalog_summary: string;
   catalog_keywords: string[];
   catalog_trace: Record<string, unknown> | null;
+  catalog_verification: Accumul8StatementCatalogVerification | null;
+  ocr_statement: Accumul8StatementOcrDocument | null;
   plan: Accumul8StatementPlan | null;
   import_result: Accumul8StatementImportResult | null;
   reconciliation_runs: Accumul8StatementReconciliationRun[];

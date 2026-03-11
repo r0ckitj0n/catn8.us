@@ -1,6 +1,7 @@
 import React from 'react';
 import { Accumul8StatementKind, Accumul8StatementUpload } from '../../types/accumul8';
 import { StatementHistoryPanel } from './Accumul8StatementHistoryCard';
+import { Accumul8StatementOcrDialog } from './Accumul8StatementOcrDialog';
 
 export interface Accumul8StatementNewAccountDraft {
   banking_organization_name: string;
@@ -51,6 +52,7 @@ export function Accumul8StatementPlanCard({
   const accountMatchReason = normalizeStatementHelperText(plan?.account_match_reason || '');
   const filteredProcessingNotes = upload.processing_notes.filter((note) => normalizeStatementHelperText(note) !== '');
   const [activePanel, setActivePanel] = React.useState<'importable' | 'duplicates' | 'invalid' | 'totals' | null>(null);
+  const [ocrDialogOpen, setOcrDialogOpen] = React.useState(false);
   const [selectedKind, setSelectedKind] = React.useState<Accumul8StatementKind>(upload.statement_kind || 'bank_account');
   const [selectedSection, setSelectedSection] = React.useState(() => {
     const sections = plan?.account_section_options || [];
@@ -101,9 +103,14 @@ export function Accumul8StatementPlanCard({
         </div>
         <div className="accumul8-statement-plan-main">
           <div>
-            <strong>
-              <a href={statementHref} target="_blank" rel="noreferrer">{upload.original_filename}</a>
-            </strong>
+            <div className="accumul8-statement-file-row">
+              <strong>
+                <a href={statementHref} target="_blank" rel="noreferrer">{upload.original_filename}</a>
+              </strong>
+              {upload.ocr_statement ? (
+                <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => setOcrDialogOpen(true)}>OCR Statement</button>
+              ) : null}
+            </div>
             <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), formatDateRange(upload), `${plan?.importable_transaction_count || 0} importable rows`, formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
           </div>
           <div>
@@ -169,8 +176,10 @@ export function Accumul8StatementPlanCard({
         </div>
         {rightColumn ? <div className="accumul8-statement-plan-side">{rightColumn}</div> : null}
       </div>
+      {upload.catalog_verification?.summary ? <div className={`small text-muted accumul8-statement-catalog-check is-${upload.catalog_verification.status}`}>{upload.catalog_verification.summary}</div> : null}
       {filteredProcessingNotes.length > 0 ? <div className="small text-muted mt-2">{filteredProcessingNotes.join(' ')}</div> : null}
       {upload.last_error ? <div className="accumul8-statement-error">{upload.last_error}</div> : null}
+      <Accumul8StatementOcrDialog open={ocrDialogOpen} upload={upload} ownerUserId={ownerUserId} onClose={() => setOcrDialogOpen(false)} />
     </article>
   );
 }

@@ -4,6 +4,7 @@ import {
   Accumul8BankingOrganization,
   Accumul8StatementArchiveResponse,
   Accumul8StatementArchiveSection,
+  Accumul8StatementAuditRequest,
   Accumul8StatementAuditRun,
   Accumul8StatementImportResult,
   Accumul8StatementImportResultRow,
@@ -57,7 +58,7 @@ interface Accumul8StatementsPanelProps {
     transaction_id: number;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; linked_transaction_id: number }>;
   onSearch: (query: string) => Promise<Accumul8StatementSearchResult[]>;
-  onAuditStatements: (payload: { start_date?: string | null; end_date?: string | null }) => Promise<{ success: boolean; run: Accumul8StatementAuditRun }>;
+  onAuditStatements: (payload: Accumul8StatementAuditRequest) => Promise<{ success: boolean; run: Accumul8StatementAuditRun }>;
   onOpenTransaction: (id: number) => void;
   onDeleteTransaction: (id: number, description: string) => void;
 }
@@ -624,6 +625,9 @@ export function Accumul8StatementsPanel({
     const response = await onAuditStatements({
       start_date: startDate || null,
       end_date: endDate || null,
+      auto_catalog_missing: true,
+      auto_fix_ledger: true,
+      force_rescan: false,
     });
     window.alert(response.run.summary_text);
   }, [onAuditStatements]);
@@ -693,8 +697,8 @@ export function Accumul8StatementsPanel({
             className="btn btn-sm btn-outline-secondary"
             onClick={() => void handleAuditStatements()}
             disabled={busy}
-            title="Audit captured statements"
-            aria-label="Audit captured statements"
+            title="Catalog missing statements and reconcile the ledger"
+            aria-label="Catalog missing statements and reconcile the ledger"
           >
             🔎
           </button>

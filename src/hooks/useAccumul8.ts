@@ -29,6 +29,8 @@ import {
   Accumul8StatementRestoreResponse,
   Accumul8StatementDeleteArchivedResponse,
   Accumul8StatementAuditRun,
+  Accumul8StatementAuditRequest,
+  Accumul8StatementAuditResponse,
   Accumul8StatementImportResult,
   Accumul8StatementSearchResult,
   Accumul8Transaction,
@@ -597,19 +599,16 @@ export function useAccumul8(
       throw error;
     }
   }, [handleError, scopedActionUrl]);
-  const auditStatementUploads = React.useCallback(async (payload: {
-    start_date?: string | null;
-    end_date?: string | null;
-  }) => {
+  const auditStatementUploads = React.useCallback(async (payload: Accumul8StatementAuditRequest) => {
     setBusy(true);
     try {
-      const res = await ApiClient.post<{ success: boolean; run: Accumul8StatementAuditRun; runs: Accumul8StatementAuditRun[] }>(
+      const res = await ApiClient.post<Accumul8StatementAuditResponse>(
         scopedActionUrl('audit_statement_uploads'),
         payload,
       );
       await load();
       if (onToast) {
-        onToast({ tone: 'success', message: 'Statement audit finished. Review the audit report for discrepancies and totals.' });
+        onToast({ tone: 'success', message: 'Statement audit finished. Missing catalogs were refreshed and deterministic ledger fixes were applied where possible.' });
       }
       return res;
     } catch (error: any) {

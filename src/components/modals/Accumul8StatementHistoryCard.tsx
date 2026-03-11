@@ -1,6 +1,7 @@
 import React from 'react';
 import { Accumul8StatementImportResultRow, Accumul8StatementSearchResult, Accumul8StatementTransactionLocator, Accumul8StatementUpload, Accumul8Transaction } from '../../types/accumul8';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
+import { Accumul8StatementOcrDialog } from './Accumul8StatementOcrDialog';
 
 export type StatementHistoryPanel = 'status' | 'review' | 'reconciliation' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | null;
 
@@ -164,6 +165,7 @@ export function Accumul8StatementHistoryCard({
   formatFileSize,
 }: Accumul8StatementHistoryCardProps) {
   const [activePanel, setActivePanel] = React.useState<StatementHistoryPanel>(null);
+  const [ocrDialogOpen, setOcrDialogOpen] = React.useState(false);
   const importedRows = upload.import_result?.successful_rows || [];
   const duplicateRows = upload.import_result?.duplicate_rows || [];
   const failedRows = upload.import_result?.failed_rows || [];
@@ -345,7 +347,14 @@ export function Accumul8StatementHistoryCard({
     <article className="accumul8-statement-history-card">
       <div className="accumul8-statement-history-card-head">
         <div>
-          <strong>{upload.original_filename}</strong>
+          <div className="accumul8-statement-file-row">
+            <strong>
+              <a href={buildStatementHref(upload.id, ownerUserId)} target="_blank" rel="noreferrer">{upload.original_filename}</a>
+            </strong>
+            {upload.ocr_statement ? (
+              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => setOcrDialogOpen(true)}>OCR Statement</button>
+            ) : null}
+          </div>
           <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), upload.account_name || 'Unmatched account', formatDateRange(upload), formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
         </div>
         <div className="accumul8-statement-card-actions">
@@ -372,9 +381,11 @@ export function Accumul8StatementHistoryCard({
       </div>
       {renderPanel()}
       {upload.catalog_summary ? <div className="accumul8-statement-note">{upload.catalog_summary}</div> : null}
+      {!activePanel && upload.catalog_verification?.summary ? <div className={`small text-muted accumul8-statement-catalog-check is-${upload.catalog_verification.status}`}>{upload.catalog_verification.summary}</div> : null}
       {!activePanel && (upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note) ? <div className="small text-muted">{upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note}</div> : null}
       {!activePanel && upload.processing_notes.length > 0 ? <div className="small text-muted">{upload.processing_notes.join(' ')}</div> : null}
       {!activePanel && upload.last_error ? <div className="accumul8-statement-error">{upload.last_error}</div> : null}
+      <Accumul8StatementOcrDialog open={ocrDialogOpen} upload={upload} ownerUserId={ownerUserId} onClose={() => setOcrDialogOpen(false)} />
     </article>
   );
 }

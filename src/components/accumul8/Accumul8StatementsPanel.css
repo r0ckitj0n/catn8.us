@@ -547,6 +547,13 @@
   margin-bottom: 0.45rem;
 }
 
+.accumul8-statement-file-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .accumul8-statement-card-actions {
   display: inline-flex;
   flex-wrap: wrap;
@@ -616,6 +623,22 @@
 .accumul8-statement-note {
   margin-bottom: 0.45rem;
   color: #241d12;
+}
+
+.accumul8-statement-catalog-check {
+  margin-bottom: 0.45rem;
+}
+
+.accumul8-statement-catalog-check.is-failed {
+  color: #8b1e1e !important;
+}
+
+.accumul8-statement-catalog-check.is-warning {
+  color: #7b4f10 !important;
+}
+
+.accumul8-statement-catalog-check.is-verified {
+  color: #1f6133 !important;
 }
 
 .accumul8-statement-detail-panel {

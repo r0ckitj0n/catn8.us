@@ -1,0 +1,162 @@
+.accumul8-ocr-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  background: rgba(22, 15, 9, 0.72);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.accumul8-ocr-dialog {
+  width: min(1200px, 96vw);
+  max-height: min(92vh, 1080px);
+  overflow: auto;
+  border: 1px solid rgba(120, 88, 28, 0.35);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 26%),
+    linear-gradient(180deg, rgba(251, 247, 236, 0.98), rgba(232, 221, 193, 0.98));
+  box-shadow: 0 28px 54px rgba(0, 0, 0, 0.3);
+  color: #2c2214;
+}
+
+.accumul8-ocr-dialog__header,
+.accumul8-ocr-dialog__body {
+  padding: 1rem 1.1rem;
+}
+
+.accumul8-ocr-dialog__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(130, 101, 46, 0.2);
+}
+
+.accumul8-ocr-dialog__eyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7a5a28;
+  margin-bottom: 0.2rem;
+}
+
+.accumul8-ocr-dialog__actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.accumul8-ocr-dialog__verification {
+  margin: 0 1.1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(130, 101, 46, 0.2);
+}
+
+.accumul8-ocr-dialog__verification.is-verified {
+  background: rgba(210, 235, 204, 0.9);
+}
+
+.accumul8-ocr-dialog__verification.is-warning {
+  background: rgba(249, 236, 187, 0.92);
+}
+
+.accumul8-ocr-dialog__verification.is-failed {
+  background: rgba(246, 202, 192, 0.92);
+}
+
+.accumul8-ocr-dialog__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.accumul8-ocr-dialog__summary,
+.accumul8-ocr-dialog__balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.65rem;
+}
+
+.accumul8-ocr-dialog__summary > div,
+.accumul8-ocr-dialog__balances > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid rgba(130, 101, 46, 0.18);
+  background: rgba(255, 252, 244, 0.82);
+}
+
+.accumul8-ocr-dialog__summary span,
+.accumul8-ocr-dialog__balances span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7a5b2a;
+}
+
+.accumul8-ocr-dialog__section {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(130, 101, 46, 0.18);
+  background: rgba(255, 252, 244, 0.78);
+}
+
+.accumul8-ocr-dialog__section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.accumul8-ocr-dialog__chip {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(118, 88, 31, 0.22);
+  background: rgba(255, 248, 228, 0.9);
+}
+
+.accumul8-ocr-dialog__chip.is-verified {
+  background: rgba(210, 235, 204, 0.9);
+}
+
+.accumul8-ocr-dialog__chip.is-warning {
+  background: rgba(249, 236, 187, 0.92);
+}
+
+.accumul8-ocr-dialog__chip.is-failed {
+  background: rgba(246, 202, 192, 0.92);
+}
+
+.accumul8-ocr-dialog__table-wrap {
+  overflow: auto;
+}
+
+.accumul8-ocr-dialog__table {
+  margin-bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.accumul8-ocr-dialog__table th {
+  white-space: nowrap;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6d5225;
+}
+
+.accumul8-ocr-dialog__error {
+  margin-top: 0.2rem;
+  color: #8a2d19;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .accumul8-ocr-dialog__header {
+    flex-direction: column;
+  }
+}

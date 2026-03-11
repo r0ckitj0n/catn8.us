@@ -556,27 +556,9 @@ export function Accumul8StatementsPanel({
         </div>
       ) : null}
       <div className="accumul8-statements-page-header">
-        <div>
+        <div className="accumul8-statements-page-header-main">
           <h2 className="mb-1">Bank Statements</h2>
           <p className="mb-0 small text-muted">Review the inbox, browse the statement library, and search statement contents without working inside a modal.</p>
-        </div>
-        <div className="accumul8-statement-modal-header-actions">
-          <Accumul8ModalHelp buttonLabel="Statement upload help" buttonTitle="Statement upload help" modalTitle="Statement Upload Help" parentOpen>
-            <div className="accumul8-statement-hero">
-              <div className="accumul8-statement-hero-card">
-                <strong>Scan first, import second</strong>
-                <p className="mb-0">Each file is OCR scanned, cataloged, and converted into an AI import plan first. Nothing reaches the ledger until you approve the plan.</p>
-              </div>
-              <div className="accumul8-statement-hero-card">
-                <strong>Review and retry</strong>
-                <p className="mb-0">You can re-scan any saved statement, choose an existing account, create a new account for unmatched statements, and review imported, duplicate, and failed rows afterward.</p>
-              </div>
-            </div>
-          </Accumul8ModalHelp>
-        </div>
-      </div>
-      <div className="accumul8-statements-page-body">
-        <div className="accumul8-statement-shell">
           <section className="accumul8-statement-summary-grid">
             <button type="button" className={`accumul8-statement-summary-card${activeSection === 'inbox' ? ' is-active' : ''}`} onClick={() => setActiveSection('inbox')}>
               <span className="accumul8-statement-summary-label">Inbox</span>
@@ -599,7 +581,24 @@ export function Accumul8StatementsPanel({
               <span className="small text-muted">{overview.failed} failed rows · {overview.suspicious} suspicious flags</span>
             </div>
           </section>
-
+        </div>
+        <div className="accumul8-statement-modal-header-actions">
+          <Accumul8ModalHelp buttonLabel="Statement upload help" buttonTitle="Statement upload help" modalTitle="Statement Upload Help" parentOpen>
+            <div className="accumul8-statement-hero">
+              <div className="accumul8-statement-hero-card">
+                <strong>Scan first, import second</strong>
+                <p className="mb-0">Each file is OCR scanned, cataloged, and converted into an AI import plan first. Nothing reaches the ledger until you approve the plan.</p>
+              </div>
+              <div className="accumul8-statement-hero-card">
+                <strong>Review and retry</strong>
+                <p className="mb-0">You can re-scan any saved statement, choose an existing account, create a new account for unmatched statements, and review imported, duplicate, and failed rows afterward.</p>
+              </div>
+            </div>
+          </Accumul8ModalHelp>
+        </div>
+      </div>
+      <div className="accumul8-statements-page-body">
+        <div className="accumul8-statement-shell">
           <section className="accumul8-statement-top-grid">
             <div className="accumul8-statement-upload-card">
               <div className="accumul8-statement-section-head">
@@ -608,7 +607,7 @@ export function Accumul8StatementsPanel({
                   <div className="small text-muted">Upload files once, then work the review queue instead of searching through the full history.</div>
                 </div>
               </div>
-              <form className="row g-3" onSubmit={handleSubmit}>
+              <form className="row g-2" onSubmit={handleSubmit}>
                 <div className="col-md-4">
                   <label className="form-label" htmlFor="accumul8-statement-kind">Statement type</label>
                   <select id="accumul8-statement-kind" className="form-select" value={statementKind} onChange={(event) => setStatementKind(event.target.value as Accumul8StatementKind)} disabled={busy}>

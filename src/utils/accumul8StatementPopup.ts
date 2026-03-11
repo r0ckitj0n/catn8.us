@@ -293,20 +293,23 @@ export function openAccumul8StatementOcrPopup(
   upload: Accumul8StatementUpload,
   onBlocked?: () => void,
 ): void {
-  if (typeof window === 'undefined' || !upload.ocr_statement) {
+  if (typeof window === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined' || !upload.ocr_statement) {
     return;
   }
   const features = buildPopupFeatures('right');
   if (!features) {
     return;
   }
-  const popupWindow = window.open('', `accumul8-statement-ocr-${upload.id}`, features);
+  const html = buildOcrPopupHtml(upload);
+  const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  const popupWindow = window.open(blobUrl, `accumul8-statement-ocr-${upload.id}`, features);
   if (!popupWindow) {
+    URL.revokeObjectURL(blobUrl);
     onBlocked?.();
     return;
   }
-  popupWindow.document.open();
-  popupWindow.document.write(buildOcrPopupHtml(upload));
-  popupWindow.document.close();
   popupWindow.focus();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(blobUrl);
+  }, 60000);
 }

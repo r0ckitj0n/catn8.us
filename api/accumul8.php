@@ -2341,7 +2341,7 @@ function accumul8_statement_match_account(int $viewerId, array $statementJson, ?
         return [
             'account_id' => $forcedId,
             'score' => $forcedId !== null ? 100 : 0,
-            'reason' => $forcedId !== null ? 'User selected the import account.' : 'Selected account is unavailable.',
+            'reason' => $forcedId !== null ? '' : 'Selected account is unavailable.',
         ];
     }
 

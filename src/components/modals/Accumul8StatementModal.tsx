@@ -87,6 +87,8 @@ interface StatementPickerItemProps {
   failedCount: number;
   suspiciousCount: number;
   onClick: () => void;
+  onDiscard?: () => void;
+  discardDisabled?: boolean;
 }
 
 function rowKey(uploadId: number, rowIndex: number): string {
@@ -120,28 +122,47 @@ function StatementPickerItem({
   failedCount,
   suspiciousCount,
   onClick,
+  onDiscard,
+  discardDisabled = false,
 }: StatementPickerItemProps) {
   return (
-    <button
-      type="button"
-      className={`accumul8-statement-picker-item${active ? ' is-active' : ''}`}
-      onClick={onClick}
-      aria-pressed={active}
-    >
-      <div className="accumul8-statement-picker-item-head">
-        <strong>{upload.original_filename}</strong>
-        <span className={`accumul8-statement-chip is-${upload.status}`}>{upload.status}</span>
-      </div>
-      <div className="small text-muted">
-        {[upload.account_name || upload.account_name_hint || 'Unmatched account', formatStatementDateRange(upload)].filter(Boolean).join(' · ')}
-      </div>
-      <div className="accumul8-statement-picker-meta">
-        {reviewCount > 0 ? <span className="accumul8-statement-chip is-warning">{reviewCount} review</span> : null}
-        {upload.imported_transaction_count > 0 ? <span className="accumul8-statement-chip is-processed">{upload.imported_transaction_count} imported</span> : null}
-        {failedCount > 0 ? <span className="accumul8-statement-chip is-warning">{failedCount} failed</span> : null}
-        {suspiciousCount > 0 ? <span className="accumul8-statement-chip is-warning">{suspiciousCount} suspicious</span> : null}
-      </div>
-    </button>
+    <div className={`accumul8-statement-picker-shell${active ? ' is-active' : ''}`}>
+      <button
+        type="button"
+        className={`accumul8-statement-picker-item${active ? ' is-active' : ''}${active && onDiscard ? ' has-trash-action' : ''}`}
+        onClick={onClick}
+        aria-pressed={active}
+      >
+        <div className="accumul8-statement-picker-item-head">
+          <strong>{upload.original_filename}</strong>
+          <span className={`accumul8-statement-chip is-${upload.status}`}>{upload.status}</span>
+        </div>
+        <div className="small text-muted">
+          {[upload.account_name || upload.account_name_hint || 'Unmatched account', formatStatementDateRange(upload)].filter(Boolean).join(' · ')}
+        </div>
+        <div className="accumul8-statement-picker-meta">
+          {reviewCount > 0 ? <span className="accumul8-statement-chip is-warning">{reviewCount} review</span> : null}
+          {upload.imported_transaction_count > 0 ? <span className="accumul8-statement-chip is-processed">{upload.imported_transaction_count} imported</span> : null}
+          {failedCount > 0 ? <span className="accumul8-statement-chip is-warning">{failedCount} failed</span> : null}
+          {suspiciousCount > 0 ? <span className="accumul8-statement-chip is-warning">{suspiciousCount} suspicious</span> : null}
+        </div>
+      </button>
+      {active && onDiscard ? (
+        <button
+          type="button"
+          className="accumul8-statement-picker-trash"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDiscard();
+          }}
+          disabled={discardDisabled}
+          aria-label={`Discard ${upload.original_filename}`}
+          title="Discard"
+        >
+          🗑️
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -365,7 +386,11 @@ export function Accumul8StatementModal({
     [transactions],
   );
   const isAwaitingImportApproval = React.useCallback(
-    (upload: Accumul8StatementUpload) => Boolean(upload.plan && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed')),
+    (upload: Accumul8StatementUpload) => Boolean(
+      upload.plan
+      && !String(upload.processed_at || '').trim()
+      && (upload.status === 'scanned' || upload.status === 'needs_review' || upload.status === 'failed'),
+    ),
     [],
   );
   const pendingUploads = React.useMemo(
@@ -794,6 +819,8 @@ export function Accumul8StatementModal({
                                 failedCount={workspace?.failed.length || 0}
                                 suspiciousCount={workspace?.suspicious.length || 0}
                                 onClick={() => openReview(upload.id)}
+                                onDiscard={() => void archiveActiveReviewUpload(upload)}
+                                discardDisabled={busy}
                               />
                             );
                           })}
@@ -831,80 +858,84 @@ export function Accumul8StatementModal({
                             })()}
                             {activeWorkspace ? (
                               <section className="accumul8-statement-workspace">
-                                <div className="accumul8-statement-chip-row">
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('reconciliation')}>reconciliation</button>
+                                <div className="accumul8-statement-workspace-layout">
+                                  <div className="accumul8-statement-workspace-main">
+                                    {selectedWorkspacePanel === 'reconciliation' ? (
+                                      <div className="accumul8-statement-detail-panel">
+                                        <strong>Reconciliation</strong>
+                                        <div className="small text-muted">{activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
+                                        {activeReviewUpload.processing_notes.length > 0 ? <div className="small text-muted">{activeReviewUpload.processing_notes.join(' ')}</div> : null}
+                                      </div>
+                                    ) : null}
+                                    {(selectedWorkspacePanel !== 'reconciliation') ? (
+                                      <div className="accumul8-statement-detail-panel">
+                                        <strong>
+                                          {selectedWorkspacePanel === 'review' ? 'Review queue'
+                                            : selectedWorkspacePanel === 'imported' ? 'Imported rows'
+                                              : selectedWorkspacePanel === 'duplicates' ? 'Duplicate candidates'
+                                                : selectedWorkspacePanel === 'failed' ? 'Failed or invalid rows'
+                                                  : 'Suspicious rows'}
+                                        </strong>
+                                        <div className="accumul8-statement-detail-list">
+                                          {(selectedWorkspacePanel === 'review'
+                                            ? activeWorkspace.review
+                                            : selectedWorkspacePanel === 'imported'
+                                              ? activeWorkspace.imported
+                                              : selectedWorkspacePanel === 'duplicates'
+                                                ? activeWorkspace.duplicates
+                                                : selectedWorkspacePanel === 'failed'
+                                                  ? activeWorkspace.failed
+                                                  : activeWorkspace.suspicious
+                                          ).map((row) => {
+                                            const pageHref = row.page_number ? `/api/accumul8.php?action=download_statement_upload&id=${activeReviewUpload.id}&owner_user_id=${ownerUserId}#page=${row.page_number}` : '';
+                                            const targetId = row.linkedTransactionId || row.matchedTransactionId || null;
+                                            return (
+                                              <div key={row.row_key} className="accumul8-statement-detail-row">
+                                                <div className="accumul8-statement-detail-main">
+                                                  <div className="accumul8-statement-detail-title">
+                                                    <span>{row.description || 'Untitled transaction'}</span>
+                                                    <span className="accumul8-statement-detail-amount">{Number(row.amount || 0).toFixed(2)}</span>
+                                                  </div>
+                                                  <div className="small text-muted">
+                                                    {[row.transaction_date || 'No date', row.page_number ? `Page ${row.page_number}` : '', row.running_balance !== undefined && row.running_balance !== null ? `Balance ${Number(row.running_balance).toFixed(2)}` : ''].filter(Boolean).join(' · ')}
+                                                  </div>
+                                                  {row.reason ? <div className="accumul8-statement-error mt-1">{row.reason}</div> : null}
+                                                  {row.memo ? <div className="small text-muted mt-1">{row.memo}</div> : null}
+                                                </div>
+                                                <div className="accumul8-statement-detail-actions">
+                                                  {pageHref ? <a className="btn btn-sm btn-outline-secondary" href={pageHref} target="_blank" rel="noreferrer">Open statement page</a> : null}
+                                                  {targetId ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onOpenTransaction(targetId)}>Open ledger entry</button> : null}
+                                                  {selectedWorkspacePanel !== 'imported' && selectedWorkspacePanel !== 'suspicious' ? <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => void acceptWorkspaceRow(activeReviewUpload, row)}>Accept proposed transaction</button> : null}
+                                                  {selectedWorkspacePanel === 'duplicates' && row.matchedTransactionId ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => void linkWorkspaceRow(activeReviewUpload, row, row.matchedTransactionId)}>Link existing entry</button> : null}
+                                                  {selectedWorkspacePanel === 'imported' && row.linkedTransactionId ? <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => onDeleteTransaction(row.linkedTransactionId || 0, row.description || 'Imported transaction')}>Delete malformed import</button> : null}
+                                                  {selectedWorkspacePanel !== 'imported' && selectedWorkspacePanel !== 'suspicious' ? <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => dismissWorkspaceRow(activeReviewUpload.id, row.row_key)}>{selectedWorkspacePanel === 'duplicates' ? 'Keep skipped' : 'Dismiss from review'}</button> : null}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          {(selectedWorkspacePanel === 'review'
+                                            ? activeWorkspace.review
+                                            : selectedWorkspacePanel === 'imported'
+                                              ? activeWorkspace.imported
+                                              : selectedWorkspacePanel === 'duplicates'
+                                                ? activeWorkspace.duplicates
+                                                : selectedWorkspacePanel === 'failed'
+                                                  ? activeWorkspace.failed
+                                                  : activeWorkspace.suspicious
+                                          ).length === 0 ? <div className="small text-muted">No rows in this review set.</div> : null}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-1${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-2${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
+                                    <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('reconciliation')}>reconciliation</button>
+                                  </div>
                                 </div>
-                                {selectedWorkspacePanel === 'reconciliation' ? (
-                                  <div className="accumul8-statement-detail-panel">
-                                    <strong>Reconciliation</strong>
-                                    <div className="small text-muted">{activeReviewUpload.reconciliation_note || 'No reconciliation note is available yet.'}</div>
-                                    {activeReviewUpload.processing_notes.length > 0 ? <div className="small text-muted">{activeReviewUpload.processing_notes.join(' ')}</div> : null}
-                                  </div>
-                                ) : null}
-                                {(selectedWorkspacePanel !== 'reconciliation') ? (
-                                  <div className="accumul8-statement-detail-panel">
-                                    <strong>
-                                      {selectedWorkspacePanel === 'review' ? 'Review queue'
-                                        : selectedWorkspacePanel === 'imported' ? 'Imported rows'
-                                          : selectedWorkspacePanel === 'duplicates' ? 'Duplicate candidates'
-                                            : selectedWorkspacePanel === 'failed' ? 'Failed or invalid rows'
-                                              : 'Suspicious rows'}
-                                    </strong>
-                                    <div className="accumul8-statement-detail-list">
-                                      {(selectedWorkspacePanel === 'review'
-                                        ? activeWorkspace.review
-                                        : selectedWorkspacePanel === 'imported'
-                                          ? activeWorkspace.imported
-                                          : selectedWorkspacePanel === 'duplicates'
-                                            ? activeWorkspace.duplicates
-                                            : selectedWorkspacePanel === 'failed'
-                                              ? activeWorkspace.failed
-                                              : activeWorkspace.suspicious
-                                      ).map((row) => {
-                                        const pageHref = row.page_number ? `/api/accumul8.php?action=download_statement_upload&id=${activeReviewUpload.id}&owner_user_id=${ownerUserId}#page=${row.page_number}` : '';
-                                        const targetId = row.linkedTransactionId || row.matchedTransactionId || null;
-                                        return (
-                                          <div key={row.row_key} className="accumul8-statement-detail-row">
-                                            <div className="accumul8-statement-detail-main">
-                                              <div className="accumul8-statement-detail-title">
-                                                <span>{row.description || 'Untitled transaction'}</span>
-                                                <span className="accumul8-statement-detail-amount">{Number(row.amount || 0).toFixed(2)}</span>
-                                              </div>
-                                              <div className="small text-muted">
-                                                {[row.transaction_date || 'No date', row.page_number ? `Page ${row.page_number}` : '', row.running_balance !== undefined && row.running_balance !== null ? `Balance ${Number(row.running_balance).toFixed(2)}` : ''].filter(Boolean).join(' · ')}
-                                              </div>
-                                              {row.reason ? <div className="accumul8-statement-error mt-1">{row.reason}</div> : null}
-                                              {row.memo ? <div className="small text-muted mt-1">{row.memo}</div> : null}
-                                            </div>
-                                            <div className="accumul8-statement-detail-actions">
-                                              {pageHref ? <a className="btn btn-sm btn-outline-secondary" href={pageHref} target="_blank" rel="noreferrer">Open statement page</a> : null}
-                                              {targetId ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onOpenTransaction(targetId)}>Open ledger entry</button> : null}
-                                              {selectedWorkspacePanel !== 'imported' && selectedWorkspacePanel !== 'suspicious' ? <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => void acceptWorkspaceRow(activeReviewUpload, row)}>Accept proposed transaction</button> : null}
-                                              {selectedWorkspacePanel === 'duplicates' && row.matchedTransactionId ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => void linkWorkspaceRow(activeReviewUpload, row, row.matchedTransactionId)}>Link existing entry</button> : null}
-                                              {selectedWorkspacePanel === 'imported' && row.linkedTransactionId ? <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => onDeleteTransaction(row.linkedTransactionId || 0, row.description || 'Imported transaction')}>Delete malformed import</button> : null}
-                                              {selectedWorkspacePanel !== 'imported' && selectedWorkspacePanel !== 'suspicious' ? <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => dismissWorkspaceRow(activeReviewUpload.id, row.row_key)}>{selectedWorkspacePanel === 'duplicates' ? 'Keep skipped' : 'Dismiss from review'}</button> : null}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                      {(selectedWorkspacePanel === 'review'
-                                        ? activeWorkspace.review
-                                        : selectedWorkspacePanel === 'imported'
-                                          ? activeWorkspace.imported
-                                          : selectedWorkspacePanel === 'duplicates'
-                                            ? activeWorkspace.duplicates
-                                            : selectedWorkspacePanel === 'failed'
-                                              ? activeWorkspace.failed
-                                              : activeWorkspace.suspicious
-                                      ).length === 0 ? <div className="small text-muted">No rows in this review set.</div> : null}
-                                    </div>
-                                  </div>
-                                ) : null}
                               </section>
                             ) : null}
                           </section>

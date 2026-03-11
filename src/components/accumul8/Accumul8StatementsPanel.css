@@ -247,6 +247,10 @@
   padding-right: 0.25rem;
 }
 
+.accumul8-statement-picker-shell {
+  position: relative;
+}
+
 .accumul8-statement-picker-item {
   appearance: none;
   width: 100%;
@@ -260,10 +264,29 @@
   cursor: pointer;
 }
 
+.accumul8-statement-picker-item.has-trash-action {
+  padding-bottom: 2.8rem;
+}
+
 .accumul8-statement-picker-item.is-active {
   border-color: rgba(102, 69, 20, 0.72);
   box-shadow: inset 0 0 0 1px rgba(87, 56, 12, 0.18);
   background: rgba(255, 247, 225, 0.95);
+}
+
+.accumul8-statement-picker-trash {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.55rem;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(124, 92, 25, 0.42);
+  background: rgba(112, 51, 25, 0.95);
+  color: #fff4df;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
 }
 
 .accumul8-statement-picker-item-head {
@@ -343,6 +366,23 @@
   gap: 0.55rem;
 }
 
+.accumul8-statement-workspace-layout,
+.accumul8-statement-plan-layout {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.accumul8-statement-workspace-layout {
+  grid-template-columns: minmax(0, 1fr) 170px;
+}
+
+.accumul8-statement-workspace-main,
+.accumul8-statement-plan-main {
+  min-width: 0;
+}
+
 .accumul8-statement-review-selector {
   display: flex;
   flex-wrap: wrap;
@@ -393,9 +433,15 @@
   margin-bottom: 0.4rem;
 }
 
+.accumul8-statement-chip-stack {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .accumul8-statement-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0.18rem 0.48rem;
   border: 1px solid rgba(124, 92, 25, 0.42);
   background: rgba(20, 17, 11, 0.88);
@@ -407,6 +453,9 @@
 
 .accumul8-statement-chip-button {
   cursor: pointer;
+  width: 100%;
+  min-height: 2.6rem;
+  text-align: center;
 }
 
 .accumul8-statement-chip-button.is-active {
@@ -418,6 +467,13 @@
   opacity: 0.72;
   cursor: default;
 }
+
+.accumul8-statement-chip-button--tone-1 { background: rgba(73, 45, 18, 0.94); }
+.accumul8-statement-chip-button--tone-2 { background: rgba(45, 65, 92, 0.94); }
+.accumul8-statement-chip-button--tone-3 { background: rgba(54, 86, 58, 0.94); }
+.accumul8-statement-chip-button--tone-4 { background: rgba(102, 63, 26, 0.94); }
+.accumul8-statement-chip-button--tone-5 { background: rgba(92, 48, 70, 0.94); }
+.accumul8-statement-chip-button--tone-6 { background: rgba(63, 60, 103, 0.94); }
 
 .accumul8-statement-chip.is-processed,
 .accumul8-statement-chip.is-balanced {
@@ -621,6 +677,8 @@
   .accumul8-statement-history-head,
   .accumul8-statement-history-card-head,
   .accumul8-statement-detail-row,
+  .accumul8-statement-plan-layout,
+  .accumul8-statement-workspace-layout,
   .accumul8-statement-plan-grid,
   .accumul8-statement-search,
   .accumul8-statement-new-account-grid {
@@ -630,6 +688,11 @@
 
   .accumul8-statement-review-selector {
     display: grid;
+  }
+
+  .accumul8-statement-workspace-layout {
+    display: flex;
+    flex-direction: column-reverse;
   }
 
   .accumul8-statement-upload-toolbar,

@@ -23,6 +23,8 @@ const saveSvg = (
 export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const state = useTellerConfig(open, onToast);
+  const certificateInputRef = React.useRef<HTMLInputElement | null>(null);
+  const privateKeyInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -37,6 +39,33 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
     if (!ok) return;
     void state.removeCredential(field);
   };
+
+  const loadPemFile = React.useCallback(async (
+    file: File | null | undefined,
+    field: 'certificate' | 'private_key',
+    label: string,
+  ) => {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      state.setForm((prev) => ({ ...prev, [field]: text }));
+      onToast?.({ tone: 'success', message: `${label} loaded from ${file.name}.` });
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || `Failed to read ${label.toLowerCase()} file.` });
+    }
+  }, [onToast, state]);
+
+  const handlePemFileChange = React.useCallback((
+    event: React.ChangeEvent<HTMLInputElement>,
+    field: 'certificate' | 'private_key',
+    label: string,
+  ) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    void loadPemFile(file, field, label);
+    input.value = '';
+  }, [loadPemFile]);
 
   return (
     <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
@@ -104,7 +133,25 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                   />
                 </div>
                 <div className="col-12">
-                  <label className="form-label" htmlFor="teller-certificate">Certificate (PEM)</label>
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <label className="form-label mb-0" htmlFor="teller-certificate">Certificate (PEM)</label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm"
+                      disabled={state.busy}
+                      onClick={() => certificateInputRef.current?.click()}
+                    >
+                      Choose Certificate PEM
+                    </button>
+                  </div>
+                  <input
+                    ref={certificateInputRef}
+                    type="file"
+                    accept=".pem,.crt,.cer,.txt"
+                    className="d-none"
+                    tabIndex={-1}
+                    onChange={(event) => handlePemFileChange(event, 'certificate', 'Certificate PEM')}
+                  />
                   <textarea
                     id="teller-certificate"
                     className="form-control"
@@ -114,10 +161,28 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                     disabled={state.busy}
                     placeholder={state.status.has_certificate ? '-----BEGIN CERTIFICATE-----\n(set)\n-----END CERTIFICATE-----' : '-----BEGIN CERTIFICATE-----'}
                   />
-                  <div className="form-text">Leave blank to keep the existing certificate.</div>
+                  <div className="form-text">Paste the PEM contents or choose a local file. Leave blank to keep the existing certificate.</div>
                 </div>
                 <div className="col-12">
-                  <label className="form-label" htmlFor="teller-private-key">Private Key (PEM)</label>
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <label className="form-label mb-0" htmlFor="teller-private-key">Private Key (PEM)</label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm"
+                      disabled={state.busy}
+                      onClick={() => privateKeyInputRef.current?.click()}
+                    >
+                      Choose Private Key PEM
+                    </button>
+                  </div>
+                  <input
+                    ref={privateKeyInputRef}
+                    type="file"
+                    accept=".pem,.key,.txt"
+                    className="d-none"
+                    tabIndex={-1}
+                    onChange={(event) => handlePemFileChange(event, 'private_key', 'Private key PEM')}
+                  />
                   <textarea
                     id="teller-private-key"
                     className="form-control"
@@ -127,7 +192,7 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                     disabled={state.busy}
                     placeholder={state.status.has_private_key ? '-----BEGIN PRIVATE KEY-----\n(set)\n-----END PRIVATE KEY-----' : '-----BEGIN PRIVATE KEY-----'}
                   />
-                  <div className="form-text">Leave blank to keep the existing private key.</div>
+                  <div className="form-text">Paste the PEM contents or choose a local file. Leave blank to keep the existing private key.</div>
                 </div>
               </div>
 

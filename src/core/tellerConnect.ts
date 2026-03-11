@@ -22,6 +22,7 @@ interface TellerConnectGlobal {
   setup: (config: {
     applicationId: string;
     environment: 'sandbox' | 'development' | 'production';
+    products: string[];
     onSuccess: (payload: TellerConnectSuccessPayload) => void;
     onExit: () => void;
   }) => TellerConnectInstance;
@@ -35,6 +36,7 @@ declare global {
 
 const TELLER_CONNECT_SCRIPT_ID = 'catn8-teller-connect-sdk';
 const TELLER_CONNECT_SCRIPT_SRC = 'https://cdn.teller.io/connect/connect.js';
+const TELLER_CONNECT_PRODUCTS = ['transactions', 'balance'];
 
 export async function ensureTellerConnectLoaded(): Promise<void> {
   if (typeof window === 'undefined') {
@@ -62,7 +64,6 @@ export async function ensureTellerConnectLoaded(): Promise<void> {
     const script = document.createElement('script');
     script.id = TELLER_CONNECT_SCRIPT_ID;
     script.src = TELLER_CONNECT_SCRIPT_SRC;
-    script.async = true;
     script.onload = () => {
       if (window.TellerConnect && typeof window.TellerConnect.setup === 'function') resolve();
       else reject(new Error('Teller Connect script loaded but API was unavailable'));
@@ -93,6 +94,7 @@ export async function openTellerConnect(
     const connection = teller.setup({
       applicationId,
       environment,
+      products: TELLER_CONNECT_PRODUCTS,
       onSuccess: (payload) => {
         didSucceed = true;
         resolve({ outcome: 'linked', payload });

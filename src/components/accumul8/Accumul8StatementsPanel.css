@@ -375,11 +375,14 @@
   transform: none;
 }
 
-.accumul8-statement-chip-button--tab.is-processed {
+.accumul8-statement-chip-button--tab.is-processed,
+.accumul8-statement-chip-button--tab.is-balanced {
   background: linear-gradient(180deg, rgba(28, 93, 49, 0.94), rgba(19, 67, 35, 0.94));
 }
 
-.accumul8-statement-chip-button--tab.is-warning {
+.accumul8-statement-chip-button--tab.is-needs_review,
+.accumul8-statement-chip-button--tab.is-warning,
+.accumul8-statement-chip-button--tab.is-failed {
   background: linear-gradient(180deg, rgba(130, 59, 24, 0.94), rgba(92, 41, 16, 0.94));
 }
 
@@ -402,12 +405,15 @@
   color: #332310;
 }
 
-.accumul8-statement-chip-button--tab[aria-selected="true"].is-processed {
+.accumul8-statement-chip-button--tab[aria-selected="true"].is-processed,
+.accumul8-statement-chip-button--tab[aria-selected="true"].is-balanced {
   background: linear-gradient(180deg, rgba(229, 245, 231, 0.98), rgba(179, 220, 188, 0.98));
   color: #16331d;
 }
 
-.accumul8-statement-chip-button--tab[aria-selected="true"].is-warning {
+.accumul8-statement-chip-button--tab[aria-selected="true"].is-needs_review,
+.accumul8-statement-chip-button--tab[aria-selected="true"].is-warning,
+.accumul8-statement-chip-button--tab[aria-selected="true"].is-failed {
   background: linear-gradient(180deg, rgba(255, 238, 227, 0.98), rgba(245, 201, 171, 0.98));
   color: #572711;
 }

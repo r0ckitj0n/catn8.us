@@ -296,6 +296,7 @@ export function Accumul8StatementsPanel({
   onOpenTransaction,
   onDeleteTransaction,
 }: Accumul8StatementsPanelProps) {
+  const [auditBusy, setAuditBusy] = React.useState(false);
   const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind | ''>('');
   const [files, setFiles] = React.useState<File[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -622,14 +623,19 @@ export function Accumul8StatementsPanel({
     if (endDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
       return;
     }
-    const response = await onAuditStatements({
-      start_date: startDate || null,
-      end_date: endDate || null,
-      auto_catalog_missing: true,
-      auto_fix_ledger: true,
-      force_rescan: false,
-    });
-    window.alert(response.run.summary_text);
+    setAuditBusy(true);
+    try {
+      const response = await onAuditStatements({
+        start_date: startDate || null,
+        end_date: endDate || null,
+        auto_catalog_missing: true,
+        auto_fix_ledger: true,
+        force_rescan: false,
+      });
+      window.alert(response.run.summary_text);
+    } finally {
+      setAuditBusy(false);
+    }
   }, [onAuditStatements]);
   const restoreArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload, shouldFocus = false) => {
     const response = await onRestoreStatement(upload.id);
@@ -649,7 +655,7 @@ export function Accumul8StatementsPanel({
   return (
     <section className="accumul8-statements-page">
       {busy ? (
-        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label="Statement scan in progress">
+        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label={auditBusy ? 'Statement audit in progress' : 'Statement scan in progress'}>
           <div className="accumul8-statement-busy-card">
             <WebpImage
               className="accumul8-statement-busy-logo"
@@ -657,7 +663,7 @@ export function Accumul8StatementsPanel({
               alt=""
               aria-hidden="true"
             />
-            <div className="accumul8-statement-busy-text">Scanning statement...</div>
+            <div className="accumul8-statement-busy-text">{auditBusy ? 'Auditing statements and reconciling the ledger...' : 'Scanning statement...'}</div>
           </div>
         </div>
       ) : null}

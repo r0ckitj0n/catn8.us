@@ -67,10 +67,11 @@ function StatementDetailChip({
   return (
     <button
       type="button"
-      className={`accumul8-statement-chip accumul8-statement-chip-button${toneClass ? ` ${toneClass}` : ''}${active ? ' is-active' : ''}`}
+      role="tab"
+      aria-selected={active}
+      className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tab${toneClass ? ` ${toneClass}` : ''}${active ? ' is-active' : ''}`}
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={active}
     >
       {label}
     </button>
@@ -375,7 +376,7 @@ export function Accumul8StatementHistoryCard({
           <a className="btn btn-sm btn-outline-primary" href={statementHref} onClick={handleOpenStatement}>View</a>
         </div>
       </div>
-      <div className="accumul8-statement-chip-row">
+      <div className="accumul8-statement-chip-row accumul8-statement-chip-row--tabs" role="tablist" aria-label="Statement detail filters">
         <StatementDetailChip active={activePanel === 'status'} toneClass={`is-${upload.status}`} label={upload.status} onClick={() => openPanel('status')} disabled={busy} />
         {upload.reconciliation_status !== upload.status ? (
           <StatementDetailChip active={activePanel === 'reconciliation'} toneClass={`is-${upload.reconciliation_status}`} label={upload.reconciliation_status} onClick={runReconciliation} disabled={busy} />

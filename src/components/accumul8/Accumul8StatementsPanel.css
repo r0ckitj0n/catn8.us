@@ -4,8 +4,11 @@
   --accumul8-statement-surface-soft: #6a5227;
   position: relative;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7rem;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
   color: #2f2412;
 }
 
@@ -24,9 +27,11 @@
 
 .accumul8-statements-page-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.7rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .accumul8-statement-busy-overlay {
@@ -70,8 +75,11 @@
 
 .accumul8-statement-shell {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 auto;
   gap: 0.7rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .accumul8-statement-summary-grid {
@@ -222,21 +230,31 @@
 }
 
 .accumul8-statement-workspace-shell {
-  display: grid;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: 0.7rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .accumul8-statement-workspace-grid {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 0.75rem;
   min-height: 0;
+  overflow: hidden;
 }
 
 .accumul8-statement-picker-column,
 .accumul8-statement-detail-column {
   min-height: 0;
+}
+
+.accumul8-statement-detail-column {
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .accumul8-statement-picker-list {
@@ -343,14 +361,17 @@
 .accumul8-statement-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  flex: 0 0 auto;
   gap: 0.55rem;
 }
 
 .accumul8-statement-search-results {
   display: grid;
+  flex: 1 1 auto;
   gap: 0.65rem;
   min-height: 0;
   overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .accumul8-statement-review-section {
@@ -363,6 +384,7 @@
 
 .accumul8-statement-workspace {
   display: grid;
+  min-height: 0;
   gap: 0.55rem;
 }
 
@@ -508,6 +530,15 @@
   padding: 0.68rem 0.8rem;
   border: 1px solid rgba(124, 92, 25, 0.28);
   background: rgba(255, 251, 241, 0.62);
+}
+
+.accumul8-statement-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .accumul8-statement-detail-list {

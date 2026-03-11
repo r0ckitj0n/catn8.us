@@ -3045,11 +3045,16 @@ function accumul8_tables_ensure(): void
         last_error TEXT NULL,
         last_scanned_at DATETIME NULL,
         processed_at DATETIME NULL,
+        is_archived TINYINT(1) NOT NULL DEFAULT 0,
+        archived_at DATETIME NULL,
+        archived_from_status VARCHAR(24) NOT NULL DEFAULT '',
+        archived_from_section VARCHAR(24) NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_statement_owner (owner_user_id),
         KEY idx_accumul8_statement_account (account_id),
         KEY idx_accumul8_statement_status (status),
+        KEY idx_accumul8_statement_archived (is_archived),
         CONSTRAINT fk_accumul8_statement_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -3247,8 +3252,15 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'last_error', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'last_scanned_at', 'DATETIME NULL');
         accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'processed_at', 'DATETIME NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'is_archived', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'archived_at', 'DATETIME NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'archived_from_status', "VARCHAR(24) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_statement_uploads', 'archived_from_section', "VARCHAR(24) NOT NULL DEFAULT ''");
         if (!accumul8_table_has_index('accumul8_statement_uploads', 'idx_accumul8_statement_account')) {
             Database::execute('ALTER TABLE accumul8_statement_uploads ADD INDEX idx_accumul8_statement_account (account_id)');
+        }
+        if (!accumul8_table_has_index('accumul8_statement_uploads', 'idx_accumul8_statement_archived')) {
+            Database::execute('ALTER TABLE accumul8_statement_uploads ADD INDEX idx_accumul8_statement_archived (is_archived)');
         }
         if (!accumul8_table_has_foreign_key('accumul8_statement_uploads', 'fk_accumul8_statement_account')) {
             Database::execute('ALTER TABLE accumul8_statement_uploads ADD CONSTRAINT fk_accumul8_statement_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL');
@@ -4016,11 +4028,15 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
         'last_error' => (string)($row['last_error'] ?? ''),
         'last_scanned_at' => (string)($row['last_scanned_at'] ?? ''),
         'processed_at' => (string)($row['processed_at'] ?? ''),
+        'is_archived' => (int)($row['is_archived'] ?? 0),
+        'archived_at' => (string)($row['archived_at'] ?? ''),
+        'archived_from_status' => (string)($row['archived_from_status'] ?? ''),
+        'archived_from_section' => (string)($row['archived_from_section'] ?? ''),
         'created_at' => (string)($row['created_at'] ?? ''),
     ];
 }
 
-function accumul8_list_statement_uploads(int $viewerId): array
+function accumul8_list_statement_uploads(int $viewerId, bool $archived = false): array
 {
     if (!accumul8_table_exists('accumul8_statement_uploads')) {
         return [];
@@ -4041,6 +4057,9 @@ function accumul8_list_statement_uploads(int $viewerId): array
                 COALESCE(su.catalog_keywords_json, "[]") AS catalog_keywords_json,
                 COALESCE(su.import_result_json, "{}") AS import_result_json,
                 COALESCE(su.last_error, "") AS last_error, su.last_scanned_at, su.processed_at, su.created_at,
+                COALESCE(su.is_archived, 0) AS is_archived, su.archived_at,
+                COALESCE(su.archived_from_status, "") AS archived_from_status,
+                COALESCE(su.archived_from_section, "") AS archived_from_section,
                 COALESCE(a.account_name, "") AS account_name,
                 COALESCE(ag.group_name, "") AS banking_organization_name
          FROM accumul8_statement_uploads su
@@ -4051,9 +4070,10 @@ function accumul8_list_statement_uploads(int $viewerId): array
            ON ag.id = a.account_group_id
           AND ag.owner_user_id = a.owner_user_id
          WHERE su.owner_user_id = ?
+           AND COALESCE(su.is_archived, 0) = ?
          ORDER BY su.created_at DESC, su.id DESC
          LIMIT 200',
-        [$viewerId]
+        [$viewerId, $archived ? 1 : 0]
     );
 
     return array_map(static fn(array $row): array => accumul8_statement_upload_view_model($viewerId, $row), $rows);
@@ -4582,12 +4602,163 @@ function accumul8_statement_insert_transaction_row(int $viewerId, int $actorUser
 
 function accumul8_statement_reload_view(int $viewerId, int $uploadId): array
 {
-    foreach (accumul8_list_statement_uploads($viewerId) as $row) {
-        if ((int)($row['id'] ?? 0) === $uploadId) {
-            return $row;
-        }
+    if (!accumul8_table_exists('accumul8_statement_uploads')) {
+        throw new RuntimeException('Statement upload could not be reloaded');
     }
-    throw new RuntimeException('Statement upload could not be reloaded');
+    $row = Database::queryOne(
+        'SELECT su.id, su.account_id, su.statement_kind, su.status, su.original_filename, su.mime_type, su.file_size_bytes, su.extracted_method,
+                su.ai_provider, su.ai_model, su.institution_name, su.account_name_hint, su.account_mask_last4,
+                su.period_start, su.period_end, su.opening_balance, su.closing_balance,
+                su.imported_transaction_count, su.duplicate_transaction_count, su.suspicious_item_count,
+                su.reconciliation_status, COALESCE(su.reconciliation_note, "") AS reconciliation_note,
+                COALESCE(su.suspicious_items_json, "[]") AS suspicious_items_json,
+                COALESCE(su.processing_notes_json, "[]") AS processing_notes_json,
+                COALESCE(su.transaction_locator_json, "[]") AS transaction_locator_json,
+                COALESCE(su.page_catalog_json, "[]") AS page_catalog_json,
+                COALESCE(su.parsed_payload_json, "{}") AS parsed_payload_json,
+                COALESCE(su.catalog_summary, "") AS catalog_summary,
+                COALESCE(su.catalog_keywords_json, "[]") AS catalog_keywords_json,
+                COALESCE(su.import_result_json, "{}") AS import_result_json,
+                COALESCE(su.last_error, "") AS last_error, su.last_scanned_at, su.processed_at, su.created_at,
+                COALESCE(su.is_archived, 0) AS is_archived, su.archived_at,
+                COALESCE(su.archived_from_status, "") AS archived_from_status,
+                COALESCE(su.archived_from_section, "") AS archived_from_section,
+                COALESCE(a.account_name, "") AS account_name,
+                COALESCE(ag.group_name, "") AS banking_organization_name
+         FROM accumul8_statement_uploads su
+         LEFT JOIN accumul8_accounts a
+           ON a.id = su.account_id
+          AND a.owner_user_id = su.owner_user_id
+         LEFT JOIN accumul8_account_groups ag
+           ON ag.id = a.account_group_id
+          AND ag.owner_user_id = a.owner_user_id
+         WHERE su.id = ?
+           AND su.owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$row) {
+        throw new RuntimeException('Statement upload could not be reloaded');
+    }
+    return accumul8_statement_upload_view_model($viewerId, $row);
+}
+
+function accumul8_statement_archive_section($value): string
+{
+    $normalized = strtolower(trim((string)$value));
+    if (in_array($normalized, ['inbox', 'library', 'signals'], true)) {
+        return $normalized;
+    }
+    return 'library';
+}
+
+function accumul8_statement_archive_upload(int $viewerId, int $uploadId, string $archivedFromSection = 'inbox'): array
+{
+    $row = Database::queryOne(
+        'SELECT id, status, COALESCE(is_archived, 0) AS is_archived
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$row) {
+        throw new RuntimeException('Statement upload not found');
+    }
+    if ((int)($row['is_archived'] ?? 0) === 1) {
+        throw new RuntimeException('Statement is already archived');
+    }
+
+    Database::execute(
+        'UPDATE accumul8_statement_uploads
+         SET is_archived = 1,
+             archived_at = NOW(),
+             archived_from_status = ?,
+             archived_from_section = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            accumul8_normalize_text((string)($row['status'] ?? ''), 24),
+            accumul8_statement_archive_section($archivedFromSection),
+            $uploadId,
+            $viewerId,
+        ]
+    );
+
+    return accumul8_statement_reload_view($viewerId, $uploadId);
+}
+
+function accumul8_statement_restore_upload(int $viewerId, int $uploadId): array
+{
+    $row = Database::queryOne(
+        'SELECT id, status, COALESCE(is_archived, 0) AS is_archived,
+                COALESCE(archived_from_status, "") AS archived_from_status,
+                COALESCE(archived_from_section, "") AS archived_from_section
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$row) {
+        throw new RuntimeException('Statement upload not found');
+    }
+    if ((int)($row['is_archived'] ?? 0) !== 1) {
+        throw new RuntimeException('Statement is not archived');
+    }
+
+    $restoredStatus = accumul8_normalize_text((string)($row['archived_from_status'] ?? ''), 24);
+    if ($restoredStatus === '') {
+        $restoredStatus = accumul8_normalize_text((string)($row['status'] ?? ''), 24);
+    }
+    if ($restoredStatus === '') {
+        $restoredStatus = 'scanned';
+    }
+
+    Database::execute(
+        'UPDATE accumul8_statement_uploads
+         SET is_archived = 0,
+             archived_at = NULL,
+             status = ?,
+             archived_from_status = "",
+             archived_from_section = ""
+         WHERE id = ? AND owner_user_id = ?',
+        [$restoredStatus, $uploadId, $viewerId]
+    );
+
+    return accumul8_statement_reload_view($viewerId, $uploadId);
+}
+
+function accumul8_statement_delete_archived_upload(int $viewerId, int $uploadId): void
+{
+    $row = Database::queryOne(
+        'SELECT id, COALESCE(is_archived, 0) AS is_archived
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$row) {
+        throw new RuntimeException('Statement upload not found');
+    }
+    if ((int)($row['is_archived'] ?? 0) !== 1) {
+        throw new RuntimeException('Only archived statements can be deleted permanently');
+    }
+
+    $linkedRow = Database::queryOne(
+        'SELECT COUNT(*) AS linked_count
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND source_ref = ?',
+        [$viewerId, 'statement_upload:' . $uploadId]
+    );
+    $linkedCount = (int)($linkedRow['linked_count'] ?? 0);
+    if ($linkedCount > 0) {
+        throw new RuntimeException('Restore or unlink imported ledger rows before permanently deleting this statement');
+    }
+
+    Database::execute(
+        'DELETE FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?',
+        [$uploadId, $viewerId]
+    );
 }
 
 function accumul8_statement_decode_json_field($value, array $fallback)
@@ -4714,9 +4885,11 @@ function accumul8_statement_list_rescan_candidates(?int $ownerUserId = null, arr
         $sql .= ' WHERE owner_user_id = ?';
         $params[] = $ownerUserId;
     }
+    $sql .= $params === [] ? ' WHERE' : ' AND';
+    $sql .= ' COALESCE(is_archived, 0) = 0';
     if ($excludeIds !== []) {
         $placeholders = implode(', ', array_fill(0, count($excludeIds), '?'));
-        $sql .= $params === [] ? ' WHERE' : ' AND';
+        $sql .= ' AND';
         $sql .= ' id NOT IN (' . $placeholders . ')';
         array_push($params, ...$excludeIds);
     }
@@ -5252,8 +5425,9 @@ function accumul8_statement_search_uploads(int $viewerId, string $query): array
            ON a.id = su.account_id
           AND a.owner_user_id = su.owner_user_id
          WHERE su.owner_user_id = ?
-         ORDER BY su.created_at DESC, su.id DESC
-         LIMIT 200',
+          AND COALESCE(su.is_archived, 0) = 0
+        ORDER BY su.created_at DESC, su.id DESC
+        LIMIT 200',
         [$viewerId]
     );
 
@@ -5794,7 +5968,8 @@ if ($action === 'bootstrap') {
     $budgetRows = accumul8_bootstrap_section('budget_rows', static fn() => accumul8_list_budget_rows($viewerId), [], $warnings);
     $rules = accumul8_bootstrap_section('notification_rules', static fn() => accumul8_list_notification_rules($viewerId), [], $warnings);
     $connections = accumul8_bootstrap_section('bank_connections', static fn() => accumul8_list_bank_connections($viewerId), [], $warnings);
-    $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId), [], $warnings);
+    $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, false), [], $warnings);
+    $archivedStatementUploads = accumul8_bootstrap_section('archived_statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, true), [], $warnings);
     $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
     $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
         'net_amount' => 0.0,
@@ -5825,6 +6000,7 @@ if ($action === 'bootstrap') {
         'pay_bills' => $payBills,
         'bank_connections' => $connections,
         'statement_uploads' => $statementUploads,
+        'archived_statement_uploads' => $archivedStatementUploads,
         'sync_provider' => [
             'provider' => 'plaid',
             'env' => accumul8_plaid_env(),
@@ -7404,6 +7580,62 @@ if ($action === 'rescan_statement_upload') {
     try {
         $row = accumul8_statement_scan_upload($viewerId, $id, $accountId, true);
         catn8_json_response(['success' => true, 'upload' => $row]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'archive_statement_upload') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    try {
+        $row = accumul8_statement_archive_upload($viewerId, $id, accumul8_statement_archive_section($body['archived_from_section'] ?? 'inbox'));
+        catn8_json_response(['success' => true, 'upload' => $row]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'restore_statement_upload') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $archivedRow = Database::queryOne(
+        'SELECT COALESCE(archived_from_section, "") AS archived_from_section
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+    try {
+        $row = accumul8_statement_restore_upload($viewerId, $id);
+        catn8_json_response([
+            'success' => true,
+            'upload' => $row,
+            'restored_to_section' => accumul8_statement_archive_section($archivedRow['archived_from_section'] ?? 'library'),
+        ]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'delete_archived_statement_upload') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    try {
+        accumul8_statement_delete_archived_upload($viewerId, $id);
+        catn8_json_response(['success' => true, 'id' => $id]);
     } catch (Throwable $e) {
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
     }

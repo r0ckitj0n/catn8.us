@@ -2,14 +2,18 @@ import React from 'react';
 import {
   Accumul8Account,
   Accumul8BankingOrganization,
+  Accumul8StatementArchiveResponse,
+  Accumul8StatementArchiveSection,
   Accumul8StatementImportResult,
   Accumul8StatementImportResultRow,
   Accumul8StatementKind,
+  Accumul8StatementRestoreResponse,
   Accumul8StatementSearchResult,
   Accumul8StatementUpload,
   Accumul8Transaction,
 } from '../../types/accumul8';
 import { Accumul8ModalHelp } from '../modals/Accumul8ModalHelp';
+import { Accumul8StatementArchiveDialog } from '../modals/Accumul8StatementArchiveDialog';
 import { WebpImage } from '../common/WebpImage';
 import { Accumul8StatementHistoryCard, Accumul8StatementSearchResultCard, StatementHistoryPanel } from '../modals/Accumul8StatementHistoryCard';
 import { Accumul8StatementNewAccountDraft, Accumul8StatementPlanCard } from '../modals/Accumul8StatementPlanCard';
@@ -21,10 +25,14 @@ interface Accumul8StatementsPanelProps {
   accounts: Accumul8Account[];
   bankingOrganizations: Accumul8BankingOrganization[];
   statementUploads: Accumul8StatementUpload[];
+  archivedStatementUploads: Accumul8StatementUpload[];
   transactions: Accumul8Transaction[];
   ownerUserId: number;
   onUpload: (formData: FormData) => Promise<Accumul8StatementUpload | undefined>;
   onRescan: (id: number, accountId?: number | null) => Promise<Accumul8StatementUpload | undefined>;
+  onArchiveStatement: (payload: { id: number; archived_from_section?: Accumul8StatementArchiveSection }) => Promise<Accumul8StatementArchiveResponse>;
+  onRestoreStatement: (id: number) => Promise<Accumul8StatementRestoreResponse>;
+  onDeleteArchivedStatement: (id: number) => Promise<{ success: boolean; id: number }>;
   onConfirmImport: (payload: {
     id: number;
     account_id?: number | null;
@@ -244,10 +252,14 @@ export function Accumul8StatementsPanel({
   accounts,
   bankingOrganizations,
   statementUploads,
+  archivedStatementUploads,
   transactions,
   ownerUserId,
   onUpload,
   onRescan,
+  onArchiveStatement,
+  onRestoreStatement,
+  onDeleteArchivedStatement,
   onConfirmImport,
   onImportReviewRow,
   onLinkReviewRow,
@@ -270,6 +282,7 @@ export function Accumul8StatementsPanel({
   const [selectedWorkspacePanel, setSelectedWorkspacePanel] = React.useState<StatementWorkspacePanel>('review');
   const [selectedLibraryUploadId, setSelectedLibraryUploadId] = React.useState<number | null>(null);
   const [selectedSignalUploadId, setSelectedSignalUploadId] = React.useState<number | null>(null);
+  const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
   const [libraryFilter, setLibraryFilter] = React.useState<StatementLibraryFilter>('all');
   const [libraryQuery, setLibraryQuery] = React.useState('');
   const [dismissedRowKeysByUpload, setDismissedRowKeysByUpload] = React.useState<Record<number, string[]>>({});
@@ -286,6 +299,7 @@ export function Accumul8StatementsPanel({
     setSelectedWorkspacePanel('review');
     setSelectedLibraryUploadId(null);
     setSelectedSignalUploadId(null);
+    setArchiveDialogOpen(false);
     setLibraryFilter('all');
     setLibraryQuery('');
     setDismissedRowKeysByUpload({});
@@ -568,6 +582,51 @@ export function Accumul8StatementsPanel({
       transaction_id: transactionId,
     });
   }, [onLinkReviewRow]);
+  const focusRestoredUpload = React.useCallback((upload: Accumul8StatementUpload, section: Accumul8StatementArchiveSection) => {
+    if (section === 'signals') {
+      setActiveSection('signals');
+      setSelectedSignalUploadId(upload.id);
+      return;
+    }
+    if (section === 'inbox' && isAwaitingImportApproval(upload)) {
+      setActiveSection('inbox');
+      setSelectedReviewUploadId(upload.id);
+      setSelectedWorkspacePanel('review');
+      return;
+    }
+    if (isAwaitingImportApproval(upload)) {
+      setActiveSection('inbox');
+      setSelectedReviewUploadId(upload.id);
+      setSelectedWorkspacePanel('review');
+      return;
+    }
+    setActiveSection('library');
+    setSelectedLibraryUploadId(upload.id);
+  }, [isAwaitingImportApproval]);
+  const archiveActiveReviewUpload = React.useCallback(async (upload: Accumul8StatementUpload) => {
+    const confirmed = window.confirm(`Archive "${upload.original_filename}"?`);
+    if (!confirmed) {
+      return;
+    }
+    await onArchiveStatement({
+      id: upload.id,
+      archived_from_section: 'inbox',
+    });
+  }, [onArchiveStatement]);
+  const restoreArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload, shouldFocus = false) => {
+    const response = await onRestoreStatement(upload.id);
+    if (shouldFocus) {
+      setArchiveDialogOpen(false);
+      focusRestoredUpload(response.upload, response.restored_to_section);
+    }
+  }, [focusRestoredUpload, onRestoreStatement]);
+  const deleteArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload) => {
+    const confirmed = window.confirm(`Delete "${upload.original_filename}" permanently?`);
+    if (!confirmed) {
+      return;
+    }
+    await onDeleteArchivedStatement(upload.id);
+  }, [onDeleteArchivedStatement]);
 
   return (
     <section className="accumul8-statements-page">
@@ -605,6 +664,16 @@ export function Accumul8StatementsPanel({
           </button>
         </section>
         <div className="accumul8-statement-modal-header-actions">
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => setArchiveDialogOpen(true)}
+            disabled={busy}
+            title={`Archived statements (${archivedStatementUploads.length})`}
+            aria-label={`Open archived statements (${archivedStatementUploads.length})`}
+          >
+            🗃️
+          </button>
           <Accumul8ModalHelp buttonLabel="Statement upload help" buttonTitle="Statement upload help" modalTitle="Statement Upload Help" parentOpen>
             <div className="accumul8-statement-hero">
               <div className="accumul8-statement-hero-card">
@@ -739,6 +808,7 @@ export function Accumul8StatementsPanel({
                               onSelectedAccountChange={(nextAccountId) => setSelectedAccountById((prev) => ({ ...prev, [upload.id]: nextAccountId }))}
                               onNewAccountChange={(draft) => setNewAccountById((prev) => ({ ...prev, [upload.id]: draft }))}
                               onRescan={() => void onRescan(upload.id, selectedUploadAccount ? Number(selectedUploadAccount) : null)}
+                              onDiscard={() => void archiveActiveReviewUpload(upload)}
                               onConfirm={() => void handleConfirmImport(upload)}
                               onOpenWorkspace={(panel) => openWorkspace(upload.id, panel)}
                               formatDateRange={formatStatementDateRange}
@@ -980,6 +1050,16 @@ export function Accumul8StatementsPanel({
           ) : null}
         </div>
       </div>
+      <Accumul8StatementArchiveDialog
+        open={archiveDialogOpen}
+        busy={busy}
+        ownerUserId={ownerUserId}
+        uploads={archivedStatementUploads}
+        onClose={() => setArchiveDialogOpen(false)}
+        onRestore={(upload) => void restoreArchivedUpload(upload)}
+        onEdit={(upload) => void restoreArchivedUpload(upload, true)}
+        onDelete={(upload) => void deleteArchivedUpload(upload)}
+      />
     </section>
   );
 }

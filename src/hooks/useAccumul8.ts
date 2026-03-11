@@ -24,6 +24,10 @@ import {
   Accumul8RecurringPayment,
   Accumul8RecurringUpsertRequest,
   Accumul8StatementUpload,
+  Accumul8StatementArchiveRequest,
+  Accumul8StatementArchiveResponse,
+  Accumul8StatementRestoreResponse,
+  Accumul8StatementDeleteArchivedResponse,
   Accumul8StatementImportResult,
   Accumul8StatementSearchResult,
   Accumul8Transaction,
@@ -54,6 +58,7 @@ export function useAccumul8(
   const [budgetRows, setBudgetRows] = React.useState<Accumul8BudgetRow[]>([]);
   const [bankConnections, setBankConnections] = React.useState<any[]>([]);
   const [statementUploads, setStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
+  const [archivedStatementUploads, setArchivedStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'plaid', env: 'sandbox', configured: 0 });
   const handleError = React.useCallback((error: any, fallback = 'Accumul8 request failed') => {
     const message = String(error?.message || fallback);
@@ -90,6 +95,7 @@ export function useAccumul8(
       setBudgetRows(Array.isArray(res?.budget_rows) ? res.budget_rows : []);
       setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
       setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
+      setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
       setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
       setLoaded(true);
@@ -384,6 +390,63 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const archiveStatementUpload = React.useCallback(async (payload: Accumul8StatementArchiveRequest) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8StatementArchiveResponse>(
+        scopedActionUrl('archive_statement_upload'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement moved to the archive.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to archive statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const restoreStatementUpload = React.useCallback(async (id: number) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8StatementRestoreResponse>(
+        scopedActionUrl('restore_statement_upload'),
+        { id },
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement restored from the archive.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to restore statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const deleteArchivedStatementUpload = React.useCallback(async (id: number) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8StatementDeleteArchivedResponse>(
+        scopedActionUrl('delete_archived_statement_upload'),
+        { id },
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Archived statement deleted permanently.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to delete archived statement');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const confirmStatementImport = React.useCallback(async (payload: {
     id: number;
     account_id?: number | null;
@@ -520,6 +583,7 @@ export function useAccumul8(
     budgetRows,
     bankConnections,
     statementUploads,
+    archivedStatementUploads,
     syncProvider,
     load,
     createEntity,
@@ -561,6 +625,9 @@ export function useAccumul8(
     syncBankConnection,
     uploadStatement,
     rescanStatementUpload,
+    archiveStatementUpload,
+    restoreStatementUpload,
+    deleteArchivedStatementUpload,
     confirmStatementImport,
     importStatementReviewRow,
     linkStatementReviewRow,

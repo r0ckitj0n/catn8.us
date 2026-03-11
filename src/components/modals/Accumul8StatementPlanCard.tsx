@@ -22,6 +22,7 @@ interface Accumul8StatementPlanCardProps {
   onSelectedAccountChange: (accountId: string) => void;
   onNewAccountChange: (draft: Accumul8StatementNewAccountDraft) => void;
   onRescan: () => void;
+  onDiscard: () => void;
   onConfirm: () => void;
   onOpenWorkspace?: (panel: Exclude<StatementHistoryPanel, 'status' | null>) => void;
   formatDateRange: (upload: Accumul8StatementUpload) => string;
@@ -40,6 +41,7 @@ export function Accumul8StatementPlanCard({
   onSelectedAccountChange,
   onNewAccountChange,
   onRescan,
+  onDiscard,
   onConfirm,
   onOpenWorkspace,
   formatDateRange,
@@ -62,6 +64,7 @@ export function Accumul8StatementPlanCard({
         </div>
         <div className="accumul8-statement-card-actions">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
+          <button type="button" className="btn btn-sm btn-outline-warning" disabled={busy} onClick={onDiscard}>Discard</button>
           <button type="button" className="btn btn-sm btn-success" disabled={busy || !canImport} onClick={onConfirm}>{importActionLabel}</button>
         </div>
       </div>

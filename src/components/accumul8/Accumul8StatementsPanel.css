@@ -1,4 +1,7 @@
 .accumul8-statements-page {
+  --accumul8-statement-surface-ink: #2d2110;
+  --accumul8-statement-surface-muted: #5b4520;
+  --accumul8-statement-surface-soft: #6a5227;
   position: relative;
   display: grid;
   gap: 0.7rem;
@@ -89,6 +92,7 @@
   border: 2px solid rgba(124, 92, 25, 0.35);
   background: linear-gradient(180deg, rgba(252, 246, 231, 0.94), rgba(232, 219, 183, 0.96));
   padding: 0.72rem 0.85rem;
+  color: var(--accumul8-statement-surface-ink);
 }
 
 .accumul8-statement-summary-card {
@@ -304,6 +308,7 @@
   border: 2px solid rgba(124, 92, 25, 0.35);
   background: linear-gradient(180deg, rgba(252, 246, 231, 0.9), rgba(232, 219, 183, 0.94));
   padding: 0.72rem 0.85rem;
+  color: var(--accumul8-statement-surface-ink);
 }
 
 .accumul8-statement-hero-card strong,
@@ -534,32 +539,51 @@
   color: #fff7e1 !important;
 }
 
-.accumul8-statements-page .text-muted,
-.accumul8-statements-page .small.text-muted,
-.accumul8-statements-page .form-label,
-.accumul8-statements-page .form-label.small.text-muted,
-.accumul8-statements-page p,
-.accumul8-statements-page label {
-  color: #6a5227 !important;
+.accumul8-statements-page :is(
+  .accumul8-statement-summary-card,
+  .accumul8-statement-upload-card,
+  .accumul8-statement-panel,
+  .accumul8-statement-hero-card,
+  .accumul8-statement-history-card,
+  .accumul8-statement-detail-panel,
+  .accumul8-statement-detail-row,
+  .accumul8-statement-picker-item,
+  .accumul8-statement-history-empty
+) :is(.text-muted, .small, .small.text-muted, .form-label, .form-label.small.text-muted, p, label) {
+  color: var(--accumul8-statement-surface-soft) !important;
 }
 
 .accumul8-statements-page h2,
 .accumul8-statements-page strong,
 .accumul8-statements-page .accumul8-statement-detail-title,
 .accumul8-statements-page .accumul8-statement-picker-item-head strong {
-  color: #2d2110;
+  color: var(--accumul8-statement-surface-ink);
+}
+
+.accumul8-statements-page :is(
+  .accumul8-statement-summary-card,
+  .accumul8-statement-upload-card,
+  .accumul8-statement-panel,
+  .accumul8-statement-hero-card,
+  .accumul8-statement-history-card,
+  .accumul8-statement-detail-panel,
+  .accumul8-statement-detail-row,
+  .accumul8-statement-picker-item,
+  .accumul8-statement-history-empty
+) :is(strong, h2, h3, h4, .accumul8-statement-note, .accumul8-statement-history-empty) {
+  color: var(--accumul8-statement-surface-ink);
 }
 
 .accumul8-statements-page .form-control,
 .accumul8-statements-page .form-select {
-  color: #2d2110;
+  color: var(--accumul8-statement-surface-ink);
   background: rgba(255, 251, 241, 0.96);
 }
 
 .accumul8-statements-page .btn-outline-primary,
 .accumul8-statements-page .btn-outline-secondary,
 .accumul8-statements-page .btn-outline-danger {
-  color: #4b391a;
+  color: var(--accumul8-statement-surface-muted);
 }
 
 .accumul8-statements-page .accumul8-statement-action-row .btn {

@@ -479,6 +479,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     budgetRows,
     bankConnections,
     statementUploads,
+    archivedStatementUploads,
     syncProvider,
     load,
     createEntity,
@@ -515,6 +516,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     syncBankConnection,
     uploadStatement,
     rescanStatementUpload,
+    archiveStatementUpload,
+    restoreStatementUpload,
+    deleteArchivedStatementUpload,
     confirmStatementImport,
     importStatementReviewRow,
     linkStatementReviewRow,
@@ -3504,10 +3508,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 accounts={accounts}
                 bankingOrganizations={bankingOrganizations}
                 statementUploads={statementUploads}
+                archivedStatementUploads={archivedStatementUploads}
                 transactions={transactions}
                 ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
                 onUpload={uploadStatement}
                 onRescan={rescanStatementUpload}
+                onArchiveStatement={archiveStatementUpload}
+                onRestoreStatement={restoreStatementUpload}
+                onDeleteArchivedStatement={deleteArchivedStatementUpload}
                 onConfirmImport={confirmStatementImport}
                 onImportReviewRow={importStatementReviewRow}
                 onLinkReviewRow={linkStatementReviewRow}

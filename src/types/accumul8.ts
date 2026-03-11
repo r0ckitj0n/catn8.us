@@ -4,6 +4,7 @@ export type Accumul8Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
 export type Accumul8EntryType = 'manual' | 'auto' | 'transfer' | 'deposit' | 'bill';
 export type Accumul8PaymentMethod = 'unspecified' | 'autopay' | 'manual';
 export type Accumul8StatementKind = 'bank_account' | 'credit_card' | 'loan' | 'mortgage' | 'other';
+export type Accumul8StatementArchiveSection = 'inbox' | 'library' | 'signals';
 
 export interface Accumul8StatementAlert {
   severity: string;
@@ -132,7 +133,32 @@ export interface Accumul8StatementUpload {
   last_error: string;
   last_scanned_at: string;
   processed_at: string;
+  is_archived: number;
+  archived_at: string;
+  archived_from_status: string;
+  archived_from_section: Accumul8StatementArchiveSection | '';
   created_at: string;
+}
+
+export interface Accumul8StatementArchiveRequest {
+  id: number;
+  archived_from_section?: Accumul8StatementArchiveSection;
+}
+
+export interface Accumul8StatementArchiveResponse {
+  success: boolean;
+  upload: Accumul8StatementUpload;
+}
+
+export interface Accumul8StatementRestoreResponse {
+  success: boolean;
+  upload: Accumul8StatementUpload;
+  restored_to_section: Accumul8StatementArchiveSection;
+}
+
+export interface Accumul8StatementDeleteArchivedResponse {
+  success: boolean;
+  id: number;
 }
 
 export interface Accumul8Contact {
@@ -554,6 +580,7 @@ export interface Accumul8BootstrapResponse {
   pay_bills: Accumul8BillItem[];
   bank_connections: Accumul8BankConnection[];
   statement_uploads: Accumul8StatementUpload[];
+  archived_statement_uploads: Accumul8StatementUpload[];
   debtors: Accumul8Debtor[];
   debtor_ledger: Accumul8Transaction[];
   budget_rows: Accumul8BudgetRow[];

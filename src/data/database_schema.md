@@ -314,6 +314,10 @@ Business term: Banking Organizations
 - `last_error` (TEXT, NULLABLE)
 - `last_scanned_at` (DATETIME, NULLABLE)
 - `processed_at` (DATETIME, NULLABLE)
+- `is_archived` (TINYINT(1), archived statement flag)
+- `archived_at` (DATETIME, NULLABLE)
+- `archived_from_status` (VARCHAR(24), status the statement had before archiving)
+- `archived_from_section` (VARCHAR(24), UI section it was archived from, e.g. `inbox`/`library`/`signals`)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 

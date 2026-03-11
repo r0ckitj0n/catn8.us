@@ -1,5 +1,5 @@
 import React from 'react';
-import { Accumul8Account, Accumul8BankingOrganization, Accumul8StatementUpload } from '../../types/accumul8';
+import { Accumul8StatementUpload } from '../../types/accumul8';
 import { StatementHistoryPanel } from './Accumul8StatementHistoryCard';
 
 export interface Accumul8StatementNewAccountDraft {
@@ -14,14 +14,6 @@ interface Accumul8StatementPlanCardProps {
   busy: boolean;
   ownerUserId: number;
   upload: Accumul8StatementUpload;
-  sortedAccounts: Accumul8Account[];
-  bankingOrganizations: Accumul8BankingOrganization[];
-  accountMode: 'existing' | 'new';
-  selectedAccountId: string;
-  newAccount: Accumul8StatementNewAccountDraft;
-  onModeChange: (mode: 'existing' | 'new') => void;
-  onSelectedAccountChange: (accountId: string) => void;
-  onNewAccountChange: (draft: Accumul8StatementNewAccountDraft) => void;
   onRescan: () => void;
   onDiscard: () => void;
   onConfirm: () => void;
@@ -44,14 +36,6 @@ export function Accumul8StatementPlanCard({
   busy,
   ownerUserId,
   upload,
-  sortedAccounts,
-  bankingOrganizations,
-  accountMode,
-  selectedAccountId,
-  newAccount,
-  onModeChange,
-  onSelectedAccountChange,
-  onNewAccountChange,
   onRescan,
   onDiscard,
   onConfirm,
@@ -62,7 +46,6 @@ export function Accumul8StatementPlanCard({
   formatFileSize,
 }: Accumul8StatementPlanCardProps) {
   const plan = upload.plan;
-  const canImport = accountMode === 'existing' ? selectedAccountId !== '' : newAccount.account_name.trim() !== '';
   const accountMatchReason = normalizeStatementHelperText(plan?.account_match_reason || '');
   const filteredProcessingNotes = upload.processing_notes.filter((note) => normalizeStatementHelperText(note) !== '');
   const [activePanel, setActivePanel] = React.useState<'importable' | 'duplicates' | 'invalid' | 'totals' | null>(null);
@@ -96,8 +79,8 @@ export function Accumul8StatementPlanCard({
           </div>
           <div className="accumul8-statement-card-actions">
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
-            {onReconcile ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !canImport} onClick={onReconcile}>Reconciliation</button> : null}
-            <button type="button" className="btn btn-sm btn-success" disabled={busy || !canImport} onClick={onConfirm}>{importActionLabel}</button>
+            {onReconcile ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={onReconcile}>Reconciliation</button> : null}
+            <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={onConfirm}>{importActionLabel}</button>
           </div>
           {activePanel === 'importable' ? (
             <div className="accumul8-statement-detail-panel">
@@ -111,7 +94,7 @@ export function Accumul8StatementPlanCard({
             <div className="accumul8-statement-detail-panel">
               <strong>Estimated duplicates</strong>
               <div className="small text-muted">
-                The scan thinks about {plan?.estimated_duplicate_count || 0} rows may already exist in the ledger for the selected account. Use {importActionLabel.toLowerCase()} when you want to add anything new without re-posting those matches.
+                The scan thinks about {plan?.estimated_duplicate_count || 0} rows may already exist in the ledger for the detected target account. Use {importActionLabel.toLowerCase()} when you want to add anything new without re-posting those matches.
               </div>
             </div>
           ) : null}
@@ -131,33 +114,11 @@ export function Accumul8StatementPlanCard({
               </div>
             </div>
           ) : null}
-          <div>
-            <div className="accumul8-statement-mode-toggle">
-              <button type="button" className={`btn btn-sm ${accountMode === 'existing' ? 'btn-primary' : 'btn-outline-primary'}`} disabled={busy} onClick={() => onModeChange('existing')}>Existing</button>
-              <button type="button" className={`btn btn-sm ${accountMode === 'new' ? 'btn-primary' : 'btn-outline-primary'}`} disabled={busy} onClick={() => onModeChange('new')}>New account</button>
+          {plan?.suggested_account_label ? (
+            <div className="small text-muted">
+              Target account: {plan.suggested_account_label}
             </div>
-            {accountMode === 'existing' ? (
-              <select className="form-select form-select-sm mt-2" value={selectedAccountId} onChange={(event) => onSelectedAccountChange(event.target.value)} disabled={busy}>
-                <option value="">Choose account</option>
-                {sortedAccounts.map((account) => (
-                  <option key={`${upload.id}-${account.id}`} value={String(account.id)}>
-                    {[account.banking_organization_name, account.account_name, account.mask_last4 ? `••${account.mask_last4}` : ''].filter(Boolean).join(' · ')}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="accumul8-statement-new-account-grid mt-2">
-                <input className="form-control form-control-sm" list={`accumul8-statement-bank-orgs-${upload.id}`} placeholder="Banking organization" value={newAccount.banking_organization_name} onChange={(event) => onNewAccountChange({ ...newAccount, banking_organization_name: event.target.value })} disabled={busy} />
-                <datalist id={`accumul8-statement-bank-orgs-${upload.id}`}>
-                  {bankingOrganizations.map((bankingOrganization) => <option key={bankingOrganization.id} value={bankingOrganization.banking_organization_name} />)}
-                </datalist>
-                <input className="form-control form-control-sm" placeholder="Account name" value={newAccount.account_name} onChange={(event) => onNewAccountChange({ ...newAccount, account_name: event.target.value })} disabled={busy} />
-                <input className="form-control form-control-sm" placeholder="Account type" value={newAccount.account_type} onChange={(event) => onNewAccountChange({ ...newAccount, account_type: event.target.value })} disabled={busy} />
-                <input className="form-control form-control-sm" placeholder="Institution" value={newAccount.institution_name} onChange={(event) => onNewAccountChange({ ...newAccount, institution_name: event.target.value })} disabled={busy} />
-                <input className="form-control form-control-sm" placeholder="Last 4" maxLength={8} value={newAccount.mask_last4} onChange={(event) => onNewAccountChange({ ...newAccount, mask_last4: event.target.value })} disabled={busy} />
-              </div>
-            )}
-          </div>
+          ) : null}
         </div>
         {rightColumn ? <div className="accumul8-statement-plan-side">{rightColumn}</div> : null}
       </div>

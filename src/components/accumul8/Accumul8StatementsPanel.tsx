@@ -16,8 +16,8 @@ import { Accumul8ModalHelp } from '../modals/Accumul8ModalHelp';
 import { Accumul8StatementArchiveDialog } from '../modals/Accumul8StatementArchiveDialog';
 import { WebpImage } from '../common/WebpImage';
 import { Accumul8StatementHistoryCard, Accumul8StatementSearchResultCard, StatementHistoryPanel } from '../modals/Accumul8StatementHistoryCard';
-import { Accumul8StatementNewAccountDraft, Accumul8StatementPlanCard } from '../modals/Accumul8StatementPlanCard';
-import { createStatementNewAccountDraft, formatStatementDateRange, formatStatementFileSize } from '../modals/accumul8StatementUtils';
+import { Accumul8StatementPlanCard } from '../modals/Accumul8StatementPlanCard';
+import { formatStatementDateRange, formatStatementFileSize } from '../modals/accumul8StatementUtils';
 import './Accumul8StatementsPanel.css';
 
 interface Accumul8StatementsPanelProps {
@@ -35,13 +35,9 @@ interface Accumul8StatementsPanelProps {
   onDeleteArchivedStatement: (id: number) => Promise<{ success: boolean; id: number }>;
   onConfirmImport: (payload: {
     id: number;
-    account_id?: number | null;
-    create_account?: Accumul8StatementNewAccountDraft | null;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; import_result: Accumul8StatementImportResult | null }>;
   onReconcile: (payload: {
     id: number;
-    account_id?: number | null;
-    create_account?: Accumul8StatementNewAccountDraft | null;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload }>;
   onImportReviewRow: (payload: {
     id: number;
@@ -275,8 +271,6 @@ function buildWorkspace(
 
 export function Accumul8StatementsPanel({
   busy,
-  accounts,
-  bankingOrganizations,
   statementUploads,
   archivedStatementUploads,
   transactions,
@@ -295,14 +289,10 @@ export function Accumul8StatementsPanel({
   onDeleteTransaction,
 }: Accumul8StatementsPanelProps) {
   const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind | ''>('');
-  const [accountId, setAccountId] = React.useState('');
   const [files, setFiles] = React.useState<File[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchBusy, setSearchBusy] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<Accumul8StatementSearchResult[]>([]);
-  const [accountModeById, setAccountModeById] = React.useState<Record<number, 'existing' | 'new'>>({});
-  const [selectedAccountById, setSelectedAccountById] = React.useState<Record<number, string>>({});
-  const [newAccountById, setNewAccountById] = React.useState<Record<number, Accumul8StatementNewAccountDraft>>({});
   const [latestImportResult, setLatestImportResult] = React.useState<{ uploadId: number; filename: string; result: Accumul8StatementImportResult | null } | null>(null);
   const [selectedReviewUploadId, setSelectedReviewUploadId] = React.useState<number | null>(null);
   const [activeSection, setActiveSection] = React.useState<StatementModalSection>('inbox');
@@ -316,7 +306,6 @@ export function Accumul8StatementsPanel({
 
   React.useEffect(() => {
     setStatementKind('');
-    setAccountId('');
     setFiles([]);
     setSearchQuery('');
     setSearchResults([]);
@@ -332,40 +321,6 @@ export function Accumul8StatementsPanel({
     setDismissedRowKeysByUpload({});
   }, [ownerUserId]);
 
-  React.useEffect(() => {
-    setSelectedAccountById((prev) => {
-      const next = { ...prev };
-      statementUploads.forEach((upload) => {
-        if (!(upload.id in next)) {
-          next[upload.id] = upload.account_id ? String(upload.account_id) : (upload.plan?.suggested_account_id ? String(upload.plan.suggested_account_id) : '');
-        }
-      });
-      return next;
-    });
-    setAccountModeById((prev) => {
-      const next = { ...prev };
-      statementUploads.forEach((upload) => {
-        if (!(upload.id in next)) {
-          next[upload.id] = upload.plan?.suggested_account_id ? 'existing' : 'new';
-        }
-      });
-      return next;
-    });
-    setNewAccountById((prev) => {
-      const next = { ...prev };
-      statementUploads.forEach((upload) => {
-        if (!(upload.id in next)) {
-          next[upload.id] = createStatementNewAccountDraft(upload);
-        }
-      });
-      return next;
-    });
-  }, [statementUploads]);
-
-  const sortedAccounts = React.useMemo(
-    () => [...accounts].sort((a, b) => `${a.banking_organization_name} ${a.account_name}`.localeCompare(`${b.banking_organization_name} ${b.account_name}`)),
-    [accounts],
-  );
   const transactionsById = React.useMemo(
     () => transactions.reduce<Record<number, Accumul8Transaction>>((acc, tx) => {
       acc[tx.id] = tx;
@@ -391,16 +346,15 @@ export function Accumul8StatementsPanel({
   );
   const workspaceByUploadId = React.useMemo(
     () => statementUploads.reduce<Record<number, StatementWorkspaceData>>((acc, upload) => {
-      const selectedAccount = selectedAccountById[upload.id] || '';
       acc[upload.id] = buildWorkspace(
         upload,
         transactions,
-        selectedAccount ? Number(selectedAccount) : (upload.account_id || upload.plan?.suggested_account_id || null),
+        upload.account_id || upload.plan?.suggested_account_id || null,
         new Set<string>(dismissedRowKeysByUpload[upload.id] || []),
       );
       return acc;
     }, {}),
-    [dismissedRowKeysByUpload, selectedAccountById, statementUploads, transactions],
+    [dismissedRowKeysByUpload, statementUploads, transactions],
   );
   const activeReviewUpload = React.useMemo(
     () => pendingUploads.find((upload) => upload.id === selectedReviewUploadId) || pendingUploads[0] || null,
@@ -410,9 +364,8 @@ export function Accumul8StatementsPanel({
     if (!activeReviewUpload) {
       return null;
     }
-    const selectedAccount = selectedAccountById[activeReviewUpload.id] || '';
-    return selectedAccount ? Number(selectedAccount) : (activeReviewUpload.account_id || activeReviewUpload.plan?.suggested_account_id || null);
-  }, [activeReviewUpload, selectedAccountById]);
+    return activeReviewUpload.account_id || activeReviewUpload.plan?.suggested_account_id || null;
+  }, [activeReviewUpload]);
   const activeWorkspace = React.useMemo(
     () => (activeReviewUpload ? workspaceByUploadId[activeReviewUpload.id] || null : null),
     [activeReviewUpload, workspaceByUploadId],
@@ -520,12 +473,11 @@ export function Accumul8StatementsPanel({
     for (const file of files) {
       const formData = new FormData();
       formData.append('statement_kind', statementKind || DEFAULT_KIND);
-      if (accountId) formData.append('account_id', accountId);
       formData.append('statement_file', file);
       await onUpload(formData);
     }
     setFiles([]);
-  }, [accountId, files, onUpload, statementKind]);
+  }, [files, onUpload, statementKind]);
 
   const handleSearch = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -543,31 +495,21 @@ export function Accumul8StatementsPanel({
   }, [onSearch, searchQuery]);
 
   const handleConfirmImport = React.useCallback(async (upload: Accumul8StatementUpload) => {
-    const mode = accountModeById[upload.id] || 'existing';
-    const selectedAccount = selectedAccountById[upload.id] || '';
-    const createAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
     const response = await onConfirmImport({
       id: upload.id,
-      account_id: mode === 'existing' && selectedAccount ? Number(selectedAccount) : null,
-      create_account: mode === 'new' ? createAccount : null,
     });
     setLatestImportResult({
       uploadId: upload.id,
       filename: upload.original_filename,
       result: response.import_result,
     });
-  }, [accountModeById, newAccountById, onConfirmImport, selectedAccountById]);
+  }, [onConfirmImport]);
   const handleReconcile = React.useCallback(async (upload: Accumul8StatementUpload) => {
-    const mode = accountModeById[upload.id] || 'existing';
-    const selectedAccountId = selectedAccountById[upload.id] || '';
-    const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
     await onReconcile({
       id: upload.id,
-      account_id: mode === 'existing' && selectedAccountId ? Number(selectedAccountId) : undefined,
-      create_account: mode === 'new' ? newAccount : undefined,
     });
     setSelectedWorkspacePanel('reconciliation');
-  }, [accountModeById, newAccountById, onReconcile, selectedAccountById]);
+  }, [onReconcile]);
 
   const openReview = React.useCallback((uploadId: number) => {
     setActiveSection('inbox');
@@ -724,7 +666,7 @@ export function Accumul8StatementsPanel({
               </div>
               <div className="accumul8-statement-hero-card">
                 <strong>Review and retry</strong>
-                <p className="mb-0">You can re-scan any saved statement, choose an existing account, create a new account for unmatched statements, and review imported, duplicate, and failed rows afterward.</p>
+                <p className="mb-0">You can re-scan any saved statement, let AI target the right account automatically, and review imported, duplicate, and failed rows afterward.</p>
               </div>
             </div>
           </Accumul8ModalHelp>
@@ -750,14 +692,6 @@ export function Accumul8StatementsPanel({
                       <option value="loan">Car loan / installment</option>
                       <option value="mortgage">Mortgage</option>
                       <option value="other">Other</option>
-                    </select>
-                    <select id="accumul8-statement-account" className="form-select" value={accountId} onChange={(event) => setAccountId(event.target.value)} disabled={busy}>
-                      <option value="">Preferred account</option>
-                      {sortedAccounts.map((uploadAccount) => (
-                        <option key={uploadAccount.id} value={String(uploadAccount.id)}>
-                          {[uploadAccount.banking_organization_name, uploadAccount.account_name, uploadAccount.mask_last4 ? `••${uploadAccount.mask_last4}` : ''].filter(Boolean).join(' · ')}
-                        </option>
-                      ))}
                     </select>
                   </div>
                   <input id="accumul8-statement-files" className="accumul8-statement-file-input" type="file" accept=".pdf,image/*" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files || []))} />
@@ -833,45 +767,29 @@ export function Accumul8StatementsPanel({
                   <div className="accumul8-statement-detail-column">
                     {activeReviewUpload ? (
                       <section id={`accumul8-statement-review-${activeReviewUpload.id}`} className="accumul8-statement-review-section">
-                        {(() => {
-                          const upload = activeReviewUpload;
-                          const mode = accountModeById[upload.id] || 'existing';
-                          const selectedUploadAccount = selectedAccountById[upload.id] || '';
-                          const newAccount = newAccountById[upload.id] || createStatementNewAccountDraft(upload);
-                          return (
-                            <Accumul8StatementPlanCard
-                              key={`plan-${upload.id}`}
-                              busy={busy}
-                              ownerUserId={ownerUserId}
-                              upload={upload}
-                              sortedAccounts={sortedAccounts}
-                              bankingOrganizations={bankingOrganizations}
-                              accountMode={mode}
-                              selectedAccountId={selectedUploadAccount}
-                              newAccount={newAccount}
-                              onModeChange={(nextMode) => setAccountModeById((prev) => ({ ...prev, [upload.id]: nextMode }))}
-                              onSelectedAccountChange={(nextAccountId) => setSelectedAccountById((prev) => ({ ...prev, [upload.id]: nextAccountId }))}
-                              onNewAccountChange={(draft) => setNewAccountById((prev) => ({ ...prev, [upload.id]: draft }))}
-                              onRescan={() => void onRescan(upload.id, selectedUploadAccount ? Number(selectedUploadAccount) : null)}
-                              onDiscard={() => void archiveActiveReviewUpload(upload)}
-                              onConfirm={() => void handleConfirmImport(upload)}
-                              onReconcile={() => void handleReconcile(upload)}
-                              onOpenWorkspace={(panel) => openWorkspace(upload.id, panel)}
-                              rightColumn={activeWorkspace ? (
-                                <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-1${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-2${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
-                                  <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => void handleReconcile(upload)}>reconciliation</button>
-                                </div>
-                              ) : null}
-                              formatDateRange={formatStatementDateRange}
-                              formatFileSize={formatStatementFileSize}
-                            />
-                          );
-                        })()}
+                        <Accumul8StatementPlanCard
+                          key={`plan-${activeReviewUpload.id}`}
+                          busy={busy}
+                          ownerUserId={ownerUserId}
+                          upload={activeReviewUpload}
+                          onRescan={() => void onRescan(activeReviewUpload.id, null)}
+                          onDiscard={() => void archiveActiveReviewUpload(activeReviewUpload)}
+                          onConfirm={() => void handleConfirmImport(activeReviewUpload)}
+                          onReconcile={() => void handleReconcile(activeReviewUpload)}
+                          onOpenWorkspace={(panel) => openWorkspace(activeReviewUpload.id, panel)}
+                          rightColumn={activeWorkspace ? (
+                            <div className="accumul8-statement-chip-stack accumul8-statement-chip-stack--right">
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-1${selectedWorkspacePanel === 'review' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('review')}>needs review {activeWorkspace.review.length}</button>
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-2${selectedWorkspacePanel === 'imported' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('imported')}>imported {activeWorkspace.imported.length}</button>
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-3${selectedWorkspacePanel === 'duplicates' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('duplicates')}>duplicates {activeWorkspace.duplicates.length}</button>
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-4${selectedWorkspacePanel === 'failed' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('failed')}>failed {activeWorkspace.failed.length}</button>
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-5${selectedWorkspacePanel === 'suspicious' ? ' is-active' : ''}`} onClick={() => setSelectedWorkspacePanel('suspicious')}>suspicious {activeWorkspace.suspicious.length}</button>
+                              <button type="button" className={`accumul8-statement-chip accumul8-statement-chip-button accumul8-statement-chip-button--tone-6${selectedWorkspacePanel === 'reconciliation' ? ' is-active' : ''}`} onClick={() => void handleReconcile(activeReviewUpload)}>reconciliation</button>
+                            </div>
+                          ) : null}
+                          formatDateRange={formatStatementDateRange}
+                          formatFileSize={formatStatementFileSize}
+                        />
                         {activeWorkspace ? (
                           <section className="accumul8-statement-workspace">
                             <div className="accumul8-statement-workspace-main">
@@ -1048,7 +966,7 @@ export function Accumul8StatementsPanel({
                         suspicious: selectedLibraryWorkspace?.suspicious.length || 0,
                       }}
                       transactionsById={transactionsById}
-                      onRescan={() => void onRescan(selectedLibraryUpload.id, selectedLibraryUpload.account_id)}
+                      onRescan={() => void onRescan(selectedLibraryUpload.id, null)}
                       onReconcile={() => void handleReconcile(selectedLibraryUpload)}
                       onReview={selectedLibraryUpload.plan ? () => openReview(selectedLibraryUpload.id) : undefined}
                       onOpenTransaction={onOpenTransaction}
@@ -1111,7 +1029,7 @@ export function Accumul8StatementsPanel({
                           suspicious: selectedSignalWorkspace?.suspicious.length || 0,
                         }}
                         transactionsById={transactionsById}
-                        onRescan={() => void onRescan(selectedSignalUpload.id, selectedSignalUpload.account_id)}
+                        onRescan={() => void onRescan(selectedSignalUpload.id, null)}
                         onReconcile={() => void handleReconcile(selectedSignalUpload)}
                         onReview={() => openWorkspace(
                           selectedSignalUpload.id,

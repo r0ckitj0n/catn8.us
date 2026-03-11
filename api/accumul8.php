@@ -939,6 +939,9 @@ function accumul8_statement_ai_json_schema_prompt(string $mode): string
 You extract financial statement data into strict JSON {$sourcePhrase}.
 Amounts must be signed exactly how they affect the account balance.
 Return one JSON object only.
+If the document mentions multiple accounts, choose the single account whose transaction table you are extracting.
+Ignore summary-only account references that do not own the listed transactions.
+Set account_name_hint and account_last4 for the transaction-bearing account only.
 Use this schema:
 {
   "statement_kind": "bank_account|credit_card|loan|mortgage|other",
@@ -1203,6 +1206,9 @@ function accumul8_ai_generate_statement_json(string $text, array $accountCatalog
 You extract financial statement data into strict JSON.
 Amounts must be signed exactly how they affect the account balance.
 Return one JSON object only.
+If the OCR text mentions multiple accounts, extract the account that owns the detailed transaction rows.
+Ignore teaser balances, related accounts, and cross-sell summaries that are not the source of the transactions.
+Set account_name_hint and account_last4 for the transaction-bearing account only.
 Use the provided page catalog to set each transaction's page_number when the page can be identified with reasonable confidence.
 If the page cannot be determined, return page_number as null.
 Use this schema:
@@ -2386,6 +2392,26 @@ function accumul8_statement_match_account(int $viewerId, array $statementJson, ?
     ];
 }
 
+function accumul8_statement_suggested_new_account_payload(array $parsed, array $upload = []): array
+{
+    $institutionName = accumul8_normalize_text((string)($parsed['institution_name'] ?? $upload['institution_name'] ?? ''), 191);
+    $accountName = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? $upload['account_name_hint'] ?? 'Imported statement account'), 191);
+    $statementKind = accumul8_statement_normalize_kind($parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account');
+    $last4 = accumul8_normalize_text((string)($parsed['account_last4'] ?? $upload['account_mask_last4'] ?? ''), 8);
+    $organizationName = accumul8_normalize_text((string)($upload['banking_organization_name'] ?? ''), 191);
+    if ($organizationName === '') {
+        $organizationName = $institutionName;
+    }
+
+    return [
+        'banking_organization_name' => $organizationName,
+        'account_name' => $accountName !== '' ? $accountName : 'Imported statement account',
+        'account_type' => accumul8_validate_account_type($statementKind),
+        'institution_name' => $institutionName,
+        'mask_last4' => $last4,
+    ];
+}
+
 function accumul8_statement_catalog_payload(array $parsed, string $text): array
 {
     $keywords = [];
@@ -2523,12 +2549,11 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
         }
     }
 
-    $suggestedNewAccount = [
-        'account_name' => accumul8_normalize_text((string)($parsed['account_name_hint'] ?? 'Imported statement account'), 191),
-        'account_type' => accumul8_validate_account_type((string)($upload['statement_kind'] ?? 'checking')),
-        'institution_name' => accumul8_normalize_text((string)($parsed['institution_name'] ?? ''), 191),
-        'mask_last4' => accumul8_normalize_text((string)($parsed['account_last4'] ?? ''), 8),
-    ];
+    $suggestedNewAccount = accumul8_statement_suggested_new_account_payload($parsed, $upload);
+    $accountMatchReason = accumul8_normalize_text((string)($match['reason'] ?? ''), 255);
+    if ($accountId <= 0) {
+        $accountMatchReason = trim($accountMatchReason . ' A new account will be created automatically from the detected statement metadata during import.');
+    }
 
     return [
         'suggested_account_id' => $accountId > 0 ? $accountId : null,
@@ -2538,10 +2563,14 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
                 (string)($accountRow['account_name'] ?? ''),
                 (string)($accountRow['mask_last4'] ?? '') !== '' ? '••' . (string)$accountRow['mask_last4'] : '',
             ])))
-            : '',
+            : implode(' · ', array_values(array_filter([
+                (string)($suggestedNewAccount['banking_organization_name'] ?? ''),
+                (string)($suggestedNewAccount['account_name'] ?? ''),
+                (string)($suggestedNewAccount['mask_last4'] ?? '') !== '' ? '••' . (string)$suggestedNewAccount['mask_last4'] : '',
+            ]))),
         'account_match_score' => (int)($match['score'] ?? 0),
-        'account_match_reason' => accumul8_normalize_text((string)($match['reason'] ?? ''), 255),
-        'requires_account_confirmation' => $accountId <= 0 ? 1 : 0,
+        'account_match_reason' => $accountMatchReason,
+        'requires_account_confirmation' => 0,
         'statement_kind' => accumul8_statement_normalize_kind($parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account'),
         'institution_name' => accumul8_normalize_text((string)($parsed['institution_name'] ?? ''), 191),
         'account_name_hint' => accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191),
@@ -4871,10 +4900,13 @@ function accumul8_statement_resolve_target_account_id(int $viewerId, array $uplo
 
     $match = accumul8_statement_match_account($viewerId, $parsed, isset($upload['account_id']) ? (int)$upload['account_id'] : null);
     $accountId = isset($match['account_id']) ? (int)$match['account_id'] : null;
-    if ($accountId === null || $accountId <= 0) {
-        throw new RuntimeException('Select an existing bank account or create a new one before importing');
+    if ($accountId !== null && $accountId > 0) {
+        return $accountId;
     }
-    return $accountId;
+    return accumul8_statement_create_account_from_plan(
+        $viewerId,
+        accumul8_statement_suggested_new_account_payload($parsed, $upload)
+    );
 }
 
 function accumul8_statement_insert_transaction_row(int $viewerId, int $actorUserId, int $uploadId, int $accountId, array $resolvedRow): int
@@ -5557,6 +5589,79 @@ function accumul8_statement_find_or_create_account_group(int $viewerId, string $
     return (int)Database::lastInsertId();
 }
 
+function accumul8_statement_ocr_diagnostics(int $viewerId, ?int $uploadId = null, bool $forceOcr = false): array
+{
+    $diagnostics = [
+        'shell_exec_available' => function_exists('shell_exec'),
+        'binaries' => [
+            'pdfinfo' => accumul8_statement_find_binary('pdfinfo', ['/usr/bin/pdfinfo', '/usr/local/bin/pdfinfo', '/opt/homebrew/bin/pdfinfo']),
+            'pdftotext' => accumul8_statement_find_binary('pdftotext', ['/usr/bin/pdftotext', '/usr/local/bin/pdftotext', '/opt/homebrew/bin/pdftotext']),
+            'pdftoppm' => accumul8_statement_find_binary('pdftoppm', ['/usr/bin/pdftoppm', '/usr/local/bin/pdftoppm', '/opt/homebrew/bin/pdftoppm']),
+            'tesseract' => accumul8_statement_find_binary('tesseract', ['/usr/bin/tesseract', '/usr/local/bin/tesseract', '/opt/homebrew/bin/tesseract']),
+        ],
+        'test' => null,
+    ];
+
+    if ($uploadId === null || $uploadId <= 0) {
+        return $diagnostics;
+    }
+
+    $upload = Database::queryOne(
+        'SELECT id, owner_user_id, original_filename, mime_type, file_blob
+         FROM accumul8_statement_uploads
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$uploadId, $viewerId]
+    );
+    if (!$upload) {
+        throw new RuntimeException('Statement upload not found');
+    }
+
+    $tmpPath = tempnam(sys_get_temp_dir(), 'accumul8_stmt_diag_');
+    if (!is_string($tmpPath) || $tmpPath === '') {
+        throw new RuntimeException('Could not create temporary statement file');
+    }
+    file_put_contents($tmpPath, (string)($upload['file_blob'] ?? ''));
+
+    try {
+        $mimeType = strtolower((string)($upload['mime_type'] ?? 'application/pdf'));
+        $method = '';
+        $text = '';
+        $pageCatalog = [];
+
+        if ($forceOcr && str_contains($mimeType, 'pdf')) {
+            $extract = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
+            $method = 'pdf_ocr_forced';
+            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
+        } elseif ($forceOcr && str_starts_with($mimeType, 'image/')) {
+            $method = 'image_ocr_forced';
+            $text = accumul8_statement_extract_image_text_with_tesseract($tmpPath);
+            $pageCatalog = $text !== '' ? [['page_number' => 1, 'text_excerpt' => accumul8_statement_excerpt_text($text, 6000)]] : [];
+        } else {
+            $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
+            $method = (string)($extract['method'] ?? '');
+            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $pageCatalog = is_array($extract['page_catalog'] ?? null) ? (array)$extract['page_catalog'] : [];
+        }
+
+        $diagnostics['test'] = [
+            'upload_id' => (int)($upload['id'] ?? 0),
+            'original_filename' => (string)($upload['original_filename'] ?? ''),
+            'mime_type' => (string)($upload['mime_type'] ?? ''),
+            'force_ocr' => $forceOcr ? 1 : 0,
+            'method' => $method,
+            'text_length' => strlen($text),
+            'page_catalog_count' => count($pageCatalog),
+            'text_excerpt' => accumul8_statement_excerpt_text($text, 1200),
+        ];
+    } finally {
+        @unlink($tmpPath);
+    }
+
+    return $diagnostics;
+}
+
 function accumul8_statement_create_account_from_plan(int $viewerId, array $payload): int
 {
     $accountName = accumul8_normalize_text($payload['account_name'] ?? '', 191);
@@ -5567,6 +5672,24 @@ function accumul8_statement_create_account_from_plan(int $viewerId, array $paylo
     $institutionName = accumul8_normalize_text($payload['institution_name'] ?? '', 191);
     $maskLast4 = accumul8_normalize_text($payload['mask_last4'] ?? '', 8);
     $groupName = accumul8_normalize_text($payload['banking_organization_name'] ?? '', 191);
+    $existing = Database::queryOne(
+        'SELECT a.id
+         FROM accumul8_accounts a
+         LEFT JOIN accumul8_account_groups ag
+           ON ag.id = a.account_group_id
+          AND ag.owner_user_id = a.owner_user_id
+         WHERE a.owner_user_id = ?
+           AND a.account_name = ?
+           AND a.account_type = ?
+           AND COALESCE(a.institution_name, "") = ?
+           AND COALESCE(a.mask_last4, "") = ?
+           AND COALESCE(ag.group_name, "") = ?
+         LIMIT 1',
+        [$viewerId, $accountName, $accountType, $institutionName, $maskLast4, $groupName]
+    );
+    if ($existing) {
+        return (int)($existing['id'] ?? 0);
+    }
     $groupId = $groupName !== '' ? accumul8_statement_find_or_create_account_group($viewerId, $groupName, $institutionName) : null;
 
     Database::execute(
@@ -5593,7 +5716,7 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
 
     $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
     if (!is_array($parsed) || $parsed === []) {
-        accumul8_statement_scan_upload($viewerId, $uploadId, isset($options['account_id']) ? (int)$options['account_id'] : null, true);
+        accumul8_statement_scan_upload($viewerId, $uploadId, null, true);
         $upload = Database::queryOne(
             'SELECT *
              FROM accumul8_statement_uploads
@@ -5607,17 +5730,7 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
         throw new RuntimeException('Statement scan did not produce an importable plan');
     }
 
-    if (isset($options['create_account']) && is_array($options['create_account'])) {
-        $accountId = accumul8_statement_create_account_from_plan($viewerId, (array)$options['create_account']);
-    } elseif (isset($options['account_id']) && (int)$options['account_id'] > 0) {
-        $accountId = accumul8_require_owned_id('accounts', $viewerId, (int)$options['account_id']);
-    } else {
-        $match = accumul8_statement_match_account($viewerId, $parsed, isset($upload['account_id']) ? (int)$upload['account_id'] : null);
-        $accountId = isset($match['account_id']) ? (int)$match['account_id'] : null;
-    }
-    if ($accountId === null || $accountId <= 0) {
-        throw new RuntimeException('Select an existing bank account or create a new one before importing');
-    }
+    $accountId = accumul8_statement_resolve_target_account_id($viewerId, $upload, $parsed, $options);
 
     $txRows = [];
     $duplicateRows = [];
@@ -7868,9 +7981,6 @@ if ($action === 'upload_statement') {
         ], 409);
     }
 
-    $selectedAccountId = isset($_POST['account_id']) && $_POST['account_id'] !== ''
-        ? accumul8_owned_id_or_null('accounts', $viewerId, (int)$_POST['account_id'])
-        : null;
     $statementKind = accumul8_statement_normalize_kind((string)($_POST['statement_kind'] ?? 'bank_account'));
 
     Database::execute(
@@ -7879,7 +7989,7 @@ if ($action === 'upload_statement') {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
             $viewerId,
-            $selectedAccountId,
+            null,
             $statementKind,
             'processing',
             $originalName !== '' ? $originalName : ('statement.' . $extension),
@@ -7892,7 +8002,7 @@ if ($action === 'upload_statement') {
     $uploadId = (int)Database::lastInsertId();
 
     try {
-        $row = accumul8_statement_scan_upload($viewerId, $uploadId, $selectedAccountId, false);
+        $row = accumul8_statement_scan_upload($viewerId, $uploadId, null, false);
         catn8_json_response(['success' => true, 'upload' => $row]);
     } catch (Throwable $e) {
         catn8_json_response([
@@ -7910,12 +8020,20 @@ if ($action === 'rescan_statement_upload') {
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
-    $accountId = isset($body['account_id']) && (int)$body['account_id'] > 0
-        ? accumul8_require_owned_id('accounts', $viewerId, (int)$body['account_id'])
-        : null;
     try {
-        $row = accumul8_statement_scan_upload($viewerId, $id, $accountId, true);
+        $row = accumul8_statement_scan_upload($viewerId, $id, null, true);
         catn8_json_response(['success' => true, 'upload' => $row]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'statement_ocr_diagnostics') {
+    $uploadId = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
+    $forceOcr = isset($_REQUEST['force_ocr']) && (int)$_REQUEST['force_ocr'] === 1;
+    try {
+        $result = accumul8_statement_ocr_diagnostics($viewerId, $uploadId > 0 ? $uploadId : null, $forceOcr);
+        catn8_json_response(['success' => true] + $result);
     } catch (Throwable $e) {
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
     }

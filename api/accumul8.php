@@ -611,6 +611,7 @@ function accumul8_statement_filename_month_hint(string $filename): string
 function accumul8_statement_ai_result_is_suspicious(array $parsed, string $sourceText, string $filename): bool
 {
     $parsed = accumul8_statement_normalize_parsed_payload($parsed);
+    $sourceText = accumul8_statement_structured_text_from_bytes($sourceText, 120000);
     $sourceTextLower = strtolower($sourceText);
     $statementKind = strtolower(trim((string)($parsed['statement_kind'] ?? '')));
     $institutionName = strtolower(trim((string)($parsed['institution_name'] ?? '')));
@@ -624,6 +625,14 @@ function accumul8_statement_ai_result_is_suspicious(array $parsed, string $sourc
     }
 
     if ($transactionCount > 0 && strlen($sourceText) >= 8000 && $transactionCount < 10) {
+        return true;
+    }
+
+    if ($transactionCount > 0 && !accumul8_statement_text_has_transaction_signals($sourceText)) {
+        return true;
+    }
+
+    if ($transactionCount > 0 && accumul8_statement_transaction_rows_anchor_poorly($parsed, $sourceText)) {
         return true;
     }
 
@@ -713,30 +722,286 @@ function accumul8_statement_text_from_bytes(string $text, int $maxLen = 120000):
     return trim($text);
 }
 
+function accumul8_statement_structured_text_from_bytes(string $text, int $maxLen = 120000): string
+{
+    $text = str_replace("\0", ' ', $text);
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $text = preg_replace('/[^\P{C}\t\n]+/u', ' ', $text) ?? $text;
+    $lines = preg_split('/\n/u', $text) ?: [];
+    $normalizedLines = [];
+    $blankRun = 0;
+    foreach ($lines as $line) {
+        $line = preg_replace('/[ \t]+/u', ' ', trim((string)$line)) ?? trim((string)$line);
+        if ($line === '') {
+            $blankRun++;
+            if ($blankRun > 1) {
+                continue;
+            }
+            $normalizedLines[] = '';
+            continue;
+        }
+        $blankRun = 0;
+        $normalizedLines[] = $line;
+    }
+    $normalized = trim(implode("\n", $normalizedLines));
+    if ($maxLen > 0 && strlen($normalized) > $maxLen) {
+        $normalized = substr($normalized, 0, $maxLen);
+    }
+    return trim($normalized);
+}
+
+function accumul8_statement_structured_text_excerpt(string $text, int $maxLen = 4000): string
+{
+    return accumul8_statement_structured_text_from_bytes($text, $maxLen);
+}
+
 function accumul8_statement_excerpt_text(string $text, int $maxLen = 4000): string
 {
     return accumul8_statement_text_from_bytes($text, $maxLen);
 }
 
+function accumul8_statement_text_has_transaction_signals(string $text): bool
+{
+    $sample = accumul8_statement_structured_text_from_bytes($text, 30000);
+    if ($sample === '') {
+        return false;
+    }
+
+    $dateHits = preg_match_all('/\b(?:\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?|20\d{2}[\/\-]\d{2}[\/\-]\d{2}|[A-Z][a-z]{2,8}\s+\d{1,2},?\s+20\d{2})\b/u', $sample, $matches);
+    $amountHits = preg_match_all('/[-+]?\$?\d{1,3}(?:,\d{3})*\.\d{2}\b/u', $sample, $amountMatches);
+    $balanceHits = preg_match_all('/\b(?:balance|payment|deposit|withdrawal|purchase|debit|credit)\b/i', $sample, $keywordMatches);
+
+    return (int)$dateHits >= 4 && (int)$amountHits >= 4 && (int)$balanceHits >= 2;
+}
+
+function accumul8_statement_transaction_rows_anchor_poorly(array $parsed, string $sourceText): bool
+{
+    $sourceText = strtolower(accumul8_statement_structured_text_from_bytes($sourceText, 80000));
+    if ($sourceText === '') {
+        return true;
+    }
+
+    $rows = array_slice(accumul8_statement_transaction_rows($parsed), 0, 8);
+    if ($rows === []) {
+        return false;
+    }
+
+    $anchoredRows = 0;
+    foreach ($rows as $row) {
+        $desc = strtolower(trim((string)($row['description'] ?? '')));
+        $amount = $row['amount'] ?? null;
+        if ($desc === '' || !is_numeric($amount)) {
+            continue;
+        }
+        $tokens = array_values(array_filter(
+            preg_split('/[^a-z0-9]+/i', $desc) ?: [],
+            static fn($token): bool => strlen((string)$token) >= 4
+        ));
+        $amountValue = accumul8_normalize_amount($amount);
+        $amountVariants = array_values(array_unique(array_filter([
+            number_format(abs($amountValue), 2, '.', ''),
+            '$' . number_format(abs($amountValue), 2, '.', ''),
+            number_format(abs($amountValue), 2, '.', ''),
+        ])));
+        $hasToken = false;
+        foreach (array_slice($tokens, 0, 3) as $token) {
+            if (str_contains($sourceText, strtolower($token))) {
+                $hasToken = true;
+                break;
+            }
+        }
+        $hasAmount = false;
+        foreach ($amountVariants as $variant) {
+            if ($variant !== '' && str_contains($sourceText, strtolower($variant))) {
+                $hasAmount = true;
+                break;
+            }
+        }
+        if ($hasToken && $hasAmount) {
+            $anchoredRows++;
+        }
+    }
+
+    return $anchoredRows === 0;
+}
+
+function accumul8_statement_empty_parsed_payload(array $seed = []): array
+{
+    return [
+        'statement_kind' => accumul8_statement_normalize_kind($seed['statement_kind'] ?? 'bank_account'),
+        'institution_name' => accumul8_normalize_text((string)($seed['institution_name'] ?? ''), 191),
+        'account_name_hint' => accumul8_normalize_text((string)($seed['account_name_hint'] ?? ''), 191),
+        'account_last4' => accumul8_normalize_text((string)($seed['account_last4'] ?? ''), 16),
+        'period_start' => accumul8_normalize_date((string)($seed['period_start'] ?? '')) ?? '',
+        'period_end' => accumul8_normalize_date((string)($seed['period_end'] ?? '')) ?? '',
+        'opening_balance' => isset($seed['opening_balance']) && is_numeric($seed['opening_balance']) ? accumul8_normalize_amount($seed['opening_balance']) : null,
+        'closing_balance' => isset($seed['closing_balance']) && is_numeric($seed['closing_balance']) ? accumul8_normalize_amount($seed['closing_balance']) : null,
+        'account_sections' => [],
+        'transactions' => [],
+        'reconciliation_notes' => [],
+        'account_match_hints' => [],
+    ];
+}
+
 function accumul8_statement_pdf_page_count(string $pdfPath): int
 {
-    if ($pdfPath === '' || !is_file($pdfPath) || !function_exists('shell_exec')) {
+    if ($pdfPath === '' || !is_file($pdfPath)) {
         return 0;
     }
-    $bin = accumul8_statement_find_binary('pdfinfo', [
-        '/usr/bin/pdfinfo',
-        '/usr/local/bin/pdfinfo',
-        '/opt/homebrew/bin/pdfinfo',
-    ]);
-    if ($bin === null) {
+    if (function_exists('shell_exec')) {
+        $bin = accumul8_statement_find_binary('pdfinfo', [
+            '/usr/bin/pdfinfo',
+            '/usr/local/bin/pdfinfo',
+            '/opt/homebrew/bin/pdfinfo',
+        ]);
+        if ($bin !== null) {
+            $cmd = escapeshellarg($bin) . ' ' . escapeshellarg($pdfPath) . ' 2>/dev/null';
+            $out = (string)shell_exec($cmd);
+            if (preg_match('/^Pages:\s+(\d+)/mi', $out, $matches)) {
+                return max(0, (int)($matches[1] ?? 0));
+            }
+        }
+    }
+    $bytes = (string)@file_get_contents($pdfPath);
+    if ($bytes === '') {
         return 0;
     }
-    $cmd = escapeshellarg($bin) . ' ' . escapeshellarg($pdfPath) . ' 2>/dev/null';
-    $out = (string)shell_exec($cmd);
-    if (preg_match('/^Pages:\s+(\d+)/mi', $out, $matches)) {
-        return max(0, (int)($matches[1] ?? 0));
+    if (preg_match_all('/\/Type\s*\/Page\b/', $bytes, $matches) > 0) {
+        return count($matches[0]);
     }
     return 0;
+}
+
+function accumul8_statement_google_ocr_service_account_json(): string
+{
+    $dedicated = (string)secret_get(catn8_secret_key('accumul8.ocr.google.service_account_json'));
+    if (trim($dedicated) !== '') {
+        return $dedicated;
+    }
+    $primary = (string)secret_get(catn8_settings_ai_secret_key('google_vertex_ai', 'service_account_json'));
+    if (trim($primary) !== '') {
+        return $primary;
+    }
+    $secondary = (string)secret_get('CATN8_MYSTERY_GCP_SERVICE_ACCOUNT_JSON');
+    return trim($secondary) !== '' ? $secondary : '';
+}
+
+function accumul8_statement_google_vision_request(string $endpoint, array $payload): array
+{
+    $serviceAccountJson = accumul8_statement_google_ocr_service_account_json();
+    if ($serviceAccountJson === '') {
+        throw new RuntimeException('Google Cloud OCR is not configured. Add a Google service account JSON first.');
+    }
+
+    $token = catn8_google_service_account_access_token($serviceAccountJson, 'https://www.googleapis.com/auth/cloud-platform');
+    $resp = catn8_http_json_with_status(
+        'POST',
+        'https://vision.googleapis.com/v1/' . ltrim($endpoint, '/'),
+        [
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json',
+        ],
+        $payload,
+        10,
+        90
+    );
+    $status = (int)($resp['status'] ?? 0);
+    $json = is_array($resp['json'] ?? null) ? $resp['json'] : [];
+    if ($status < 200 || $status >= 300 || isset($json['error'])) {
+        $message = (string)($json['error']['message'] ?? '');
+        throw new RuntimeException('Google Cloud OCR error' . ($status > 0 ? ' (HTTP ' . $status . ')' : '') . ($message !== '' ? ': ' . $message : ''));
+    }
+    return $json;
+}
+
+function accumul8_statement_google_vision_extract_page_text(array $response): string
+{
+    $text = trim((string)($response['fullTextAnnotation']['text'] ?? ''));
+    if ($text !== '') {
+        return accumul8_statement_structured_text_from_bytes($text);
+    }
+    $text = trim((string)($response['textAnnotations'][0]['description'] ?? ''));
+    return $text !== '' ? accumul8_statement_structured_text_from_bytes($text) : '';
+}
+
+function accumul8_statement_extract_image_text_with_google_cloud(string $imagePath): array
+{
+    if ($imagePath === '' || !is_file($imagePath)) {
+        return ['text' => '', 'page_catalog' => []];
+    }
+    $bytes = (string)@file_get_contents($imagePath);
+    if ($bytes === '') {
+        return ['text' => '', 'page_catalog' => []];
+    }
+
+    $mimeType = mime_content_type($imagePath) ?: 'image/png';
+    $json = accumul8_statement_google_vision_request('images:annotate', [
+        'requests' => [[
+            'image' => ['content' => base64_encode($bytes)],
+            'features' => [['type' => 'DOCUMENT_TEXT_DETECTION']],
+            'imageContext' => ['languageHints' => ['en']],
+        ]],
+    ]);
+    $response = is_array($json['responses'][0] ?? null) ? $json['responses'][0] : [];
+    $text = accumul8_statement_google_vision_extract_page_text($response);
+
+    return [
+        'text' => $text,
+        'page_catalog' => $text !== '' ? [[
+            'page_number' => 1,
+            'text_excerpt' => accumul8_statement_structured_text_excerpt($text, 6000),
+            'mime_type' => $mimeType,
+        ]] : [],
+    ];
+}
+
+function accumul8_statement_extract_pdf_text_with_google_cloud(string $pdfPath): array
+{
+    if ($pdfPath === '' || !is_file($pdfPath)) {
+        return ['text' => '', 'page_catalog' => []];
+    }
+    $bytes = (string)@file_get_contents($pdfPath);
+    if ($bytes === '') {
+        return ['text' => '', 'page_catalog' => []];
+    }
+
+    $pageCount = max(1, accumul8_statement_pdf_page_count($pdfPath));
+    $pages = range(1, $pageCount);
+    $chunks = array_chunk($pages, 5);
+    $textChunks = [];
+    $pageCatalog = [];
+
+    foreach ($chunks as $pageChunk) {
+        $json = accumul8_statement_google_vision_request('files:annotate', [
+            'requests' => [[
+                'inputConfig' => [
+                    'mimeType' => 'application/pdf',
+                    'content' => base64_encode($bytes),
+                ],
+                'features' => [['type' => 'DOCUMENT_TEXT_DETECTION']],
+                'pages' => array_values(array_map('intval', $pageChunk)),
+            ]],
+        ]);
+        $fileResponse = is_array($json['responses'][0] ?? null) ? $json['responses'][0] : [];
+        $pageResponses = is_array($fileResponse['responses'] ?? null) ? $fileResponse['responses'] : [];
+        foreach ($pageChunk as $index => $pageNumber) {
+            $pageResponse = is_array($pageResponses[$index] ?? null) ? $pageResponses[$index] : [];
+            $pageText = accumul8_statement_google_vision_extract_page_text($pageResponse);
+            if ($pageText === '') {
+                continue;
+            }
+            $textChunks[] = $pageText;
+            $pageCatalog[] = [
+                'page_number' => (int)$pageNumber,
+                'text_excerpt' => accumul8_statement_structured_text_excerpt($pageText, 6000),
+            ];
+        }
+    }
+
+    return [
+        'text' => accumul8_statement_structured_text_from_bytes(implode("\n\n", $textChunks)),
+        'page_catalog' => $pageCatalog,
+    ];
 }
 
 function accumul8_statement_extract_pdf_page_catalog(string $pdfPath): array
@@ -775,7 +1040,7 @@ function accumul8_statement_extract_pdf_page_catalog(string $pdfPath): array
         if (is_file($tmpOut)) {
             @unlink($tmpOut);
         }
-        $pageText = accumul8_statement_excerpt_text($pageText, 6000);
+        $pageText = accumul8_statement_structured_text_excerpt($pageText, 6000);
         if ($pageText === '') {
             continue;
         }
@@ -808,7 +1073,7 @@ function accumul8_statement_extract_pdf_text_from_path(string $pdfPath): string
                 if (is_file($tmpOut)) {
                     @unlink($tmpOut);
                 }
-                $normalized = accumul8_statement_text_from_bytes($txt);
+                $normalized = accumul8_statement_structured_text_from_bytes($txt);
                 if ($normalized !== '') {
                     return $normalized;
                 }
@@ -942,7 +1207,7 @@ function accumul8_statement_extract_pdf_text_with_php_parser(string $pdfPath): s
         }
     }
 
-    return accumul8_statement_text_from_bytes(implode("\n", $chunks));
+    return accumul8_statement_structured_text_from_bytes(implode("\n", $chunks));
 }
 
 function accumul8_statement_extract_image_text_with_tesseract(string $imagePath): string
@@ -970,7 +1235,7 @@ function accumul8_statement_extract_image_text_with_tesseract(string $imagePath)
     if (is_file($txtPath)) {
         @unlink($txtPath);
     }
-    return accumul8_statement_text_from_bytes($txt);
+    return accumul8_statement_structured_text_from_bytes($txt);
 }
 
 function accumul8_statement_extract_pdf_text_with_ocr_fallback(string $pdfPath): array
@@ -1004,7 +1269,7 @@ function accumul8_statement_extract_pdf_text_with_ocr_fallback(string $pdfPath):
             $chunks[] = $chunk;
             $pageCatalog[] = [
                 'page_number' => $pageNumber,
-                'text_excerpt' => accumul8_statement_excerpt_text($chunk, 6000),
+                'text_excerpt' => accumul8_statement_structured_text_excerpt($chunk, 6000),
             ];
         }
         @unlink($pngPath);
@@ -1014,7 +1279,7 @@ function accumul8_statement_extract_pdf_text_with_ocr_fallback(string $pdfPath):
         $pageNumber++;
     }
     return [
-        'text' => accumul8_statement_text_from_bytes(implode("\n\n", $chunks)),
+        'text' => accumul8_statement_structured_text_from_bytes(implode("\n\n", $chunks)),
         'page_catalog' => $pageCatalog,
     ];
 }
@@ -1062,22 +1327,18 @@ function accumul8_statement_extract_text_from_file(string $tmpPath, string $mime
 {
     $mime = strtolower($mimeType);
     if (str_contains($mime, 'pdf')) {
-        $pageCatalog = accumul8_statement_extract_pdf_page_catalog($tmpPath);
-        $text = accumul8_statement_extract_pdf_text_from_path($tmpPath);
-        $method = 'pdftotext';
-        if ($text === '' || accumul8_statement_text_looks_garbled($text)) {
-            $ocr = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
-            $text = (string)($ocr['text'] ?? '');
-            $pageCatalog = is_array($ocr['page_catalog'] ?? null) ? $ocr['page_catalog'] : $pageCatalog;
-            $method = 'pdf_ocr';
-        }
-        return ['text' => $text, 'method' => $method, 'page_catalog' => $pageCatalog];
+        $ocr = accumul8_statement_extract_pdf_text_with_google_cloud($tmpPath);
+        return [
+            'text' => (string)($ocr['text'] ?? ''),
+            'method' => 'google_vision_pdf',
+            'page_catalog' => is_array($ocr['page_catalog'] ?? null) ? $ocr['page_catalog'] : [],
+        ];
     }
-    $text = accumul8_statement_extract_image_text_with_tesseract($tmpPath);
+    $ocr = accumul8_statement_extract_image_text_with_google_cloud($tmpPath);
     return [
-        'text' => $text,
-        'method' => 'image_ocr',
-        'page_catalog' => $text !== '' ? [['page_number' => 1, 'text_excerpt' => accumul8_statement_excerpt_text($text, 6000)]] : [],
+        'text' => (string)($ocr['text'] ?? ''),
+        'method' => 'google_vision_image',
+        'page_catalog' => is_array($ocr['page_catalog'] ?? null) ? $ocr['page_catalog'] : [],
     ];
 }
 
@@ -1090,7 +1351,7 @@ function accumul8_statement_page_catalog_prompt(array $pageCatalog, int $maxLen 
             continue;
         }
         $pageNumber = (int)($page['page_number'] ?? 0);
-        $text = accumul8_statement_excerpt_text((string)($page['text_excerpt'] ?? ''), 6000);
+        $text = accumul8_statement_structured_text_excerpt((string)($page['text_excerpt'] ?? ''), 6000);
         if ($pageNumber <= 0 || $text === '') {
             continue;
         }
@@ -1410,7 +1671,7 @@ function accumul8_ai_generate_statement_json(string $text, array $accountCatalog
     $location = trim((string)($cfg['location'] ?? 'us-central1'));
     $temperature = (float)($cfg['temperature'] ?? 0.1);
     $accountsJson = json_encode($accountCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    $truncatedText = accumul8_statement_text_from_bytes($text, 65000);
+    $truncatedText = accumul8_statement_structured_text_from_bytes($text, 65000);
 
     $systemPrompt = <<<TXT
 You extract financial statement data into strict JSON.
@@ -6104,21 +6365,23 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
         $pageCatalog = [];
         $ai = null;
         $notes = [];
+        $suspiciousParse = false;
 
         if (str_contains($mimeType, 'pdf')) {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $text = accumul8_statement_structured_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
             if ($text === '') {
-                throw new RuntimeException('Could not extract readable text from the statement PDF. Backend OCR fallback did not produce usable text.');
+                throw new RuntimeException('Could not extract readable text from the statement PDF. The backend OCR provider did not produce usable text.');
             }
             try {
                 $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
                 $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
                 if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
+                    $suspiciousParse = true;
                     if ((string)($extract['method'] ?? '') !== 'pdf_ocr') {
                         $ocrExtract = accumul8_statement_extract_pdf_text_with_ocr_fallback($tmpPath);
-                        $ocrText = accumul8_statement_text_from_bytes((string)($ocrExtract['text'] ?? ''), 120000);
+                        $ocrText = accumul8_statement_structured_text_from_bytes((string)($ocrExtract['text'] ?? ''), 120000);
                         $ocrPageCatalog = is_array($ocrExtract['page_catalog'] ?? null) ? $ocrExtract['page_catalog'] : [];
                         if ($ocrText !== '') {
                             $ocrAi = accumul8_ai_generate_statement_json($ocrText, $accountCatalog, $ocrPageCatalog);
@@ -6133,15 +6396,16 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
                                 $pageCatalog = $ocrPageCatalog;
                                 $ai = $ocrAi;
                                 $parsedCandidate = $ocrParsed;
+                                $suspiciousParse = false;
                                 $notes[] = 'The initial PDF text extraction looked suspicious, so the scan was retried with forced OCR.';
                             } else {
-                                $notes[] = 'The statement parse still looked suspicious after forced OCR. Review the extracted rows carefully before importing.';
+                                $notes[] = 'The statement parse still looked suspicious after forced OCR. Importable rows were withheld to avoid posting hallucinated transactions.';
                             }
                         } else {
-                            $notes[] = 'The initial PDF text extraction looked suspicious, and forced OCR did not produce alternative text.';
+                            $notes[] = 'The initial PDF text extraction looked suspicious, and forced OCR did not produce alternative text. Importable rows were withheld.';
                         }
                     } else {
-                        $notes[] = 'The OCR-based statement parse looked suspicious. Review the extracted rows carefully before importing.';
+                        $notes[] = 'The OCR-based statement parse looked suspicious. Importable rows were withheld to avoid posting hallucinated transactions.';
                     }
                 }
             } catch (Throwable $textAiError) {
@@ -6149,23 +6413,24 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
             }
         } elseif (str_starts_with($mimeType, 'image/')) {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $text = accumul8_statement_structured_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
             if ($text === '') {
-                throw new RuntimeException('Could not extract readable text from the statement image. Backend OCR did not produce usable text.');
+                throw new RuntimeException('Could not extract readable text from the statement image. The backend OCR provider did not produce usable text.');
             }
             try {
                 $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
                 $parsedCandidate = is_array($ai['json'] ?? null) ? $ai['json'] : [];
                 if ($parsedCandidate !== [] && accumul8_statement_ai_result_is_suspicious($parsedCandidate, $text, (string)($upload['original_filename'] ?? ''))) {
-                    $notes[] = 'The OCR-based image parse looked suspicious. Review the extracted rows carefully before importing.';
+                    $suspiciousParse = true;
+                    $notes[] = 'The OCR-based image parse looked suspicious. Importable rows were withheld to avoid posting hallucinated transactions.';
                 }
             } catch (Throwable $imageAiError) {
                 throw new RuntimeException('Could not generate a valid statement scan from backend OCR text: ' . accumul8_normalize_text($imageAiError->getMessage(), 400));
             }
         } else {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
-            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $text = accumul8_statement_structured_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? $extract['page_catalog'] : [];
             if ($text === '') {
                 throw new RuntimeException('Could not extract readable text from the statement file.');
@@ -6173,6 +6438,18 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
             $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
         }
         $parsed = is_array($ai['json'] ?? null) ? accumul8_statement_normalize_parsed_payload($ai['json']) : [];
+        if ($suspiciousParse) {
+            $parsed = accumul8_statement_empty_parsed_payload([
+                'statement_kind' => $parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account',
+                'institution_name' => $parsed['institution_name'] ?? $upload['institution_name'] ?? '',
+                'account_name_hint' => $parsed['account_name_hint'] ?? $upload['account_name_hint'] ?? '',
+                'account_last4' => $parsed['account_last4'] ?? $upload['account_mask_last4'] ?? '',
+                'period_start' => $parsed['period_start'] ?? '',
+                'period_end' => $parsed['period_end'] ?? '',
+                'opening_balance' => $parsed['opening_balance'] ?? null,
+                'closing_balance' => $parsed['closing_balance'] ?? null,
+            ]);
+        }
         $match = accumul8_statement_match_account($viewerId, $parsed, $selectedAccountId);
         $accountId = isset($match['account_id']) && (int)$match['account_id'] > 0 ? (int)$match['account_id'] : null;
         if (count(accumul8_statement_distinct_account_tags($parsed)) > 1) {
@@ -6273,6 +6550,20 @@ function accumul8_statement_find_or_create_account_group(int $viewerId, string $
 
 function accumul8_statement_ocr_diagnostics(int $viewerId, ?int $uploadId = null, bool $forceOcr = false): array
 {
+    $imagickFormats = [];
+    if (class_exists('Imagick')) {
+        try {
+            $imagickFormats = array_values(array_filter(array_map(
+                static fn($format): string => strtoupper(trim((string)$format)),
+                Imagick::queryFormats()
+            )));
+        } catch (Throwable $e) {
+            $imagickFormats = [];
+        }
+    }
+    $dedicatedServiceAccount = (string)secret_get(catn8_secret_key('accumul8.ocr.google.service_account_json'));
+    $vertexServiceAccount = (string)secret_get(catn8_settings_ai_secret_key('google_vertex_ai', 'service_account_json'));
+    $mysteryServiceAccount = (string)secret_get('CATN8_MYSTERY_GCP_SERVICE_ACCOUNT_JSON');
     $diagnostics = [
         'shell_exec_available' => function_exists('shell_exec'),
         'binaries' => [
@@ -6281,6 +6572,14 @@ function accumul8_statement_ocr_diagnostics(int $viewerId, ?int $uploadId = null
             'pdftoppm' => accumul8_statement_find_binary('pdftoppm', ['/usr/bin/pdftoppm', '/usr/local/bin/pdftoppm', '/opt/homebrew/bin/pdftoppm']),
             'tesseract' => accumul8_statement_find_binary('tesseract', ['/usr/bin/tesseract', '/usr/local/bin/tesseract', '/opt/homebrew/bin/tesseract']),
         ],
+        'imagick' => [
+            'available' => class_exists('Imagick'),
+            'supports_pdf' => in_array('PDF', $imagickFormats, true),
+            'supports_png' => in_array('PNG', $imagickFormats, true),
+        ],
+        'dedicated_accumul8_service_account_available' => trim($dedicatedServiceAccount) !== '',
+        'google_vertex_service_account_available' => trim($vertexServiceAccount) !== '',
+        'mystery_gcp_service_account_available' => trim($mysteryServiceAccount) !== '',
         'test' => null,
     ];
 
@@ -6319,11 +6618,11 @@ function accumul8_statement_ocr_diagnostics(int $viewerId, ?int $uploadId = null
         } elseif ($forceOcr && str_starts_with($mimeType, 'image/')) {
             $method = 'image_ocr_forced';
             $text = accumul8_statement_extract_image_text_with_tesseract($tmpPath);
-            $pageCatalog = $text !== '' ? [['page_number' => 1, 'text_excerpt' => accumul8_statement_excerpt_text($text, 6000)]] : [];
+            $pageCatalog = $text !== '' ? [['page_number' => 1, 'text_excerpt' => accumul8_statement_structured_text_excerpt($text, 6000)]] : [];
         } else {
             $extract = accumul8_statement_extract_text_from_file($tmpPath, (string)($upload['mime_type'] ?? 'application/pdf'));
             $method = (string)($extract['method'] ?? '');
-            $text = accumul8_statement_text_from_bytes((string)($extract['text'] ?? ''), 120000);
+            $text = accumul8_statement_structured_text_from_bytes((string)($extract['text'] ?? ''), 120000);
             $pageCatalog = is_array($extract['page_catalog'] ?? null) ? (array)$extract['page_catalog'] : [];
         }
 
@@ -6335,7 +6634,7 @@ function accumul8_statement_ocr_diagnostics(int $viewerId, ?int $uploadId = null
             'method' => $method,
             'text_length' => strlen($text),
             'page_catalog_count' => count($pageCatalog),
-            'text_excerpt' => accumul8_statement_excerpt_text($text, 1200),
+            'text_excerpt' => accumul8_statement_structured_text_excerpt($text, 1200),
         ];
     } finally {
         @unlink($tmpPath);

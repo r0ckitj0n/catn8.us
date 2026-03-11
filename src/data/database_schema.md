@@ -288,7 +288,7 @@ Business term: Banking Organizations
 - `file_sha256` (CHAR(64))
 - `file_blob` (LONGBLOB, original uploaded statement file)
 - `extracted_text` (LONGTEXT, OCR / extracted statement text)
-- `extracted_method` (VARCHAR(32), e.g. `pdftotext`/`pdf_ocr`/`image_ocr`)
+- `extracted_method` (VARCHAR(32), e.g. `google_vision_pdf`/`google_vision_image`)
 - `ai_provider` (VARCHAR(64))
 - `ai_model` (VARCHAR(191))
 - `institution_name` (VARCHAR(191), statement institution / bank label)

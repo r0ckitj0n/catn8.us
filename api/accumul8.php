@@ -318,6 +318,7 @@ function accumul8_statement_openai_response_format(): array
                     'period_end',
                     'opening_balance',
                     'closing_balance',
+                    'account_sections',
                     'transactions',
                     'reconciliation_notes',
                     'account_match_hints',

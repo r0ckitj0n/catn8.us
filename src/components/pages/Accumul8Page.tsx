@@ -1,11 +1,11 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
+import { Accumul8StatementsPanel } from '../accumul8/Accumul8StatementsPanel';
 import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
 import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
-import { Accumul8StatementModal } from '../modals/Accumul8StatementModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
@@ -47,7 +47,7 @@ import './Accumul8Page.css';
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync';
+type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
   | 'all'
@@ -570,7 +570,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>('');
   const [bankingOrganizationManagerOpen, setBankingOrganizationManagerOpen] = React.useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = React.useState(false);
-  const [statementModalOpen, setStatementModalOpen] = React.useState(false);
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
@@ -2197,7 +2196,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                 type="button"
                                 className="btn btn-outline-primary"
                                 onClick={() => {
-                                  setStatementModalOpen(true);
+                                  setTab('statements');
                                   setSettingsMenuOpen(false);
                                 }}
                               >
@@ -3498,6 +3497,26 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <p className="small text-muted mb-0">Target institutions include Capital One, Navy Federal Credit Union, Barclays, Fifth Third, and Truist via the Plaid institution network.</p>
             </div>
           )}
+          {tab === 'statements' && (
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
+              <Accumul8StatementsPanel
+                busy={busy}
+                accounts={accounts}
+                bankingOrganizations={bankingOrganizations}
+                statementUploads={statementUploads}
+                transactions={transactions}
+                ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
+                onUpload={uploadStatement}
+                onRescan={rescanStatementUpload}
+                onConfirmImport={confirmStatementImport}
+                onImportReviewRow={importStatementReviewRow}
+                onLinkReviewRow={linkStatementReviewRow}
+                onSearch={searchStatementUploads}
+                onOpenTransaction={beginViewTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
+              />
+            </div>
+          )}
           </div>
           {ledgerMoveModalOpen && (
             <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Move ledger rows to another account" onClick={() => setLedgerMoveModalOpen(false)}>
@@ -3695,24 +3714,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             onClose={closeTransactionModal}
             onEdit={transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined}
             onSave={submitTransactionModal}
-          />
-          <Accumul8StatementModal
-            open={statementModalOpen}
-            busy={busy}
-            accounts={accounts}
-            bankingOrganizations={bankingOrganizations}
-            statementUploads={statementUploads}
-            transactions={transactions}
-            ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
-            onClose={() => setStatementModalOpen(false)}
-            onUpload={uploadStatement}
-            onRescan={rescanStatementUpload}
-            onConfirmImport={confirmStatementImport}
-            onImportReviewRow={importStatementReviewRow}
-            onLinkReviewRow={linkStatementReviewRow}
-            onSearch={searchStatementUploads}
-            onOpenTransaction={beginViewTransaction}
-            onDeleteTransaction={handleDeleteTransaction}
           />
           <BankingOrganizationManagerModal
             open={bankingOrganizationManagerOpen}

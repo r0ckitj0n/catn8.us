@@ -357,6 +357,8 @@ function accumul8_statement_openai_response_format(): array
                                 'amount',
                                 'running_balance',
                                 'page_number',
+                                'statement_account_name_hint',
+                                'statement_account_last4',
                             ],
                             'properties' => [
                                 'transaction_date' => ['type' => 'string'],
@@ -376,6 +378,8 @@ function accumul8_statement_openai_response_format(): array
                                         ['type' => 'null'],
                                     ],
                                 ],
+                                'statement_account_name_hint' => ['type' => 'string'],
+                                'statement_account_last4' => ['type' => 'string'],
                             ],
                         ],
                     ],
@@ -398,6 +402,87 @@ function accumul8_statement_normalize_kind($value): string
     return accumul8_validate_enum('statement_kind', $value, ['bank_account', 'credit_card', 'loan', 'mortgage', 'other'], 'bank_account');
 }
 
+function accumul8_statement_build_account_tag_label(string $nameHint, string $last4): string
+{
+    $parts = array_values(array_filter([
+        accumul8_normalize_text($nameHint, 191),
+        $last4 !== '' ? '••' . $last4 : '',
+    ], static fn($value): bool => trim((string)$value) !== ''));
+    return implode(' ', $parts);
+}
+
+function accumul8_statement_normalize_parsed_payload(array $parsed): array
+{
+    $transactions = [];
+    $topLevelName = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191);
+    $topLevelLast4 = accumul8_normalize_text((string)($parsed['account_last4'] ?? ''), 16);
+
+    foreach ((array)($parsed['transactions'] ?? []) as $tx) {
+        if (!is_array($tx)) {
+            $transactions[] = $tx;
+            continue;
+        }
+        $rowName = accumul8_normalize_text((string)($tx['statement_account_name_hint'] ?? $topLevelName), 191);
+        $rowLast4 = accumul8_normalize_text((string)($tx['statement_account_last4'] ?? $topLevelLast4), 16);
+        if ($topLevelName === '' && $rowName !== '') {
+            $topLevelName = $rowName;
+        }
+        if ($topLevelLast4 === '' && $rowLast4 !== '') {
+            $topLevelLast4 = $rowLast4;
+        }
+        $tx['statement_account_name_hint'] = $rowName;
+        $tx['statement_account_last4'] = $rowLast4;
+        $transactions[] = $tx;
+    }
+
+    $parsed['transactions'] = $transactions;
+    $parsed['account_name_hint'] = $topLevelName;
+    $parsed['account_last4'] = $topLevelLast4;
+    return $parsed;
+}
+
+function accumul8_statement_transaction_rows(array $parsed): array
+{
+    $parsed = accumul8_statement_normalize_parsed_payload($parsed);
+    $rows = [];
+    $topLevelName = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191);
+    $topLevelLast4 = accumul8_normalize_text((string)($parsed['account_last4'] ?? ''), 16);
+    foreach ((array)($parsed['transactions'] ?? []) as $index => $tx) {
+        $isValidJson = is_array($tx);
+        $row = $isValidJson ? $tx : [];
+        $rowName = accumul8_normalize_text((string)($row['statement_account_name_hint'] ?? $topLevelName), 191);
+        $rowLast4 = accumul8_normalize_text((string)($row['statement_account_last4'] ?? $topLevelLast4), 16);
+        $rows[] = [
+            'row_index' => (int)$index,
+            'is_valid_json' => $isValidJson ? 1 : 0,
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'posted_date' => (string)($row['posted_date'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'memo' => (string)($row['memo'] ?? ''),
+            'amount' => $row['amount'] ?? null,
+            'running_balance' => $row['running_balance'] ?? null,
+            'page_number' => $row['page_number'] ?? null,
+            'statement_account_name_hint' => $rowName,
+            'statement_account_last4' => $rowLast4,
+            'statement_account_label' => accumul8_statement_build_account_tag_label($rowName, $rowLast4),
+        ];
+    }
+    return $rows;
+}
+
+function accumul8_statement_distinct_account_tags(array $parsed): array
+{
+    $labels = [];
+    foreach (accumul8_statement_transaction_rows($parsed) as $row) {
+        $key = strtolower(trim((string)($row['statement_account_name_hint'] ?? ''))) . '|' . preg_replace('/\D+/', '', (string)($row['statement_account_last4'] ?? ''));
+        if ($key === '|') {
+            continue;
+        }
+        $labels[$key] = (string)($row['statement_account_label'] ?? '');
+    }
+    return array_values(array_filter($labels, static fn($value): bool => trim((string)$value) !== ''));
+}
+
 function accumul8_statement_filename_month_hint(string $filename): string
 {
     if (preg_match('/\b(20\d{2})(\d{2})\d{2}\b/', $filename, $matches)) {
@@ -411,11 +496,12 @@ function accumul8_statement_filename_month_hint(string $filename): string
 
 function accumul8_statement_ai_result_is_suspicious(array $parsed, string $sourceText, string $filename): bool
 {
+    $parsed = accumul8_statement_normalize_parsed_payload($parsed);
     $sourceTextLower = strtolower($sourceText);
     $statementKind = strtolower(trim((string)($parsed['statement_kind'] ?? '')));
     $institutionName = strtolower(trim((string)($parsed['institution_name'] ?? '')));
     $accountNameHint = strtolower(trim((string)($parsed['account_name_hint'] ?? '')));
-    $transactionCount = is_array($parsed['transactions'] ?? null) ? count($parsed['transactions']) : 0;
+    $transactionCount = count(accumul8_statement_transaction_rows($parsed));
 
     $fileMonthHint = accumul8_statement_filename_month_hint($filename);
     $periodStart = accumul8_normalize_date((string)($parsed['period_start'] ?? ''));
@@ -939,9 +1025,9 @@ function accumul8_statement_ai_json_schema_prompt(string $mode): string
 You extract financial statement data into strict JSON {$sourcePhrase}.
 Amounts must be signed exactly how they affect the account balance.
 Return one JSON object only.
-If the document mentions multiple accounts, choose the single account whose transaction table you are extracting.
+If the document mentions multiple accounts, keep track of the active account section and tag every transaction row with the account section it belongs to.
 Ignore summary-only account references that do not own the listed transactions.
-Set account_name_hint and account_last4 for the transaction-bearing account only.
+Set account_name_hint and account_last4 to the first transaction-bearing account section in document order.
 Use this schema:
 {
   "statement_kind": "bank_account|credit_card|loan|mortgage|other",
@@ -960,7 +1046,9 @@ Use this schema:
       "memo": "",
       "amount": number,
       "running_balance": number|null,
-      "page_number": number|null
+      "page_number": number|null,
+      "statement_account_name_hint": "",
+      "statement_account_last4": ""
     }
   ],
   "reconciliation_notes": [""],
@@ -1206,9 +1294,9 @@ function accumul8_ai_generate_statement_json(string $text, array $accountCatalog
 You extract financial statement data into strict JSON.
 Amounts must be signed exactly how they affect the account balance.
 Return one JSON object only.
-If the OCR text mentions multiple accounts, extract the account that owns the detailed transaction rows.
+If the OCR text mentions multiple accounts, keep track of the active account section and tag every transaction row with the account section it belongs to.
 Ignore teaser balances, related accounts, and cross-sell summaries that are not the source of the transactions.
-Set account_name_hint and account_last4 for the transaction-bearing account only.
+Set account_name_hint and account_last4 to the first transaction-bearing account section in document order.
 Use the provided page catalog to set each transaction's page_number when the page can be identified with reasonable confidence.
 If the page cannot be determined, return page_number as null.
 Use this schema:
@@ -1229,7 +1317,9 @@ Use this schema:
       "memo": "",
       "amount": number,
       "running_balance": number|null,
-      "page_number": number|null
+      "page_number": number|null,
+      "statement_account_name_hint": "",
+      "statement_account_last4": ""
     }
   ],
   "reconciliation_notes": [""],
@@ -2306,52 +2396,16 @@ function accumul8_statement_account_catalog(int $viewerId): array
     }, $rows);
 }
 
-function accumul8_statement_pick_account_id(int $viewerId, array $statementJson, ?int $selectedAccountId = null): ?int
+function accumul8_statement_match_account_from_catalog(array $catalog, array $statementJson, ?int $selectedAccountId = null): array
 {
     if ($selectedAccountId !== null && $selectedAccountId > 0) {
-        return accumul8_owned_id_or_null('accounts', $viewerId, $selectedAccountId);
-    }
-    $catalog = accumul8_statement_account_catalog($viewerId);
-    $last4 = preg_replace('/\D+/', '', (string)($statementJson['account_last4'] ?? ''));
-    $nameHint = strtolower(accumul8_normalize_text((string)($statementJson['account_name_hint'] ?? ''), 191));
-    $institution = strtolower(accumul8_normalize_text((string)($statementJson['institution_name'] ?? ''), 191));
-    $bestId = null;
-    $bestScore = 0;
-    foreach ($catalog as $account) {
-        $score = 0;
-        $accountName = strtolower((string)($account['account_name'] ?? ''));
-        $orgName = strtolower((string)($account['banking_organization_name'] ?? ''));
-        $instName = strtolower((string)($account['institution_name'] ?? ''));
-        $maskLast4 = preg_replace('/\D+/', '', (string)($account['mask_last4'] ?? ''));
-        if ($last4 !== '' && $maskLast4 !== '' && $last4 === $maskLast4) {
-            $score += 5;
-        }
-        if ($nameHint !== '' && ($accountName !== '' && (str_contains($accountName, $nameHint) || str_contains($nameHint, $accountName)))) {
-            $score += 3;
-        }
-        if ($institution !== '' && (($orgName !== '' && str_contains($orgName, $institution)) || ($instName !== '' && str_contains($instName, $institution)))) {
-            $score += 2;
-        }
-        if ($score > $bestScore) {
-            $bestScore = $score;
-            $bestId = (int)($account['id'] ?? 0);
-        }
-    }
-    return $bestScore >= 3 && $bestId > 0 ? $bestId : null;
-}
-
-function accumul8_statement_match_account(int $viewerId, array $statementJson, ?int $selectedAccountId = null): array
-{
-    if ($selectedAccountId !== null && $selectedAccountId > 0) {
-        $forcedId = accumul8_owned_id_or_null('accounts', $viewerId, $selectedAccountId);
         return [
-            'account_id' => $forcedId,
-            'score' => $forcedId !== null ? 100 : 0,
-            'reason' => $forcedId !== null ? '' : 'Selected account is unavailable.',
+            'account_id' => $selectedAccountId,
+            'score' => 100,
+            'reason' => '',
         ];
     }
 
-    $catalog = accumul8_statement_account_catalog($viewerId);
     $last4 = preg_replace('/\D+/', '', (string)($statementJson['account_last4'] ?? ''));
     $nameHint = strtolower(accumul8_normalize_text((string)($statementJson['account_name_hint'] ?? ''), 191));
     $institution = strtolower(accumul8_normalize_text((string)($statementJson['institution_name'] ?? ''), 191));
@@ -2370,7 +2424,7 @@ function accumul8_statement_match_account(int $viewerId, array $statementJson, ?
             $score += 5;
             $bits[] = 'last 4 matched';
         }
-        if ($nameHint !== '' && ($accountName !== '' && (str_contains($accountName, $nameHint) || str_contains($nameHint, $accountName)))) {
+        if ($nameHint !== '' && $accountName !== '' && (str_contains($accountName, $nameHint) || str_contains($nameHint, $accountName))) {
             $score += 3;
             $bits[] = 'account name matched';
         }
@@ -2390,6 +2444,32 @@ function accumul8_statement_match_account(int $viewerId, array $statementJson, ?
         'score' => $bestScore,
         'reason' => $bestScore > 0 ? implode(', ', $reasonBits) : 'No confident account match was detected.',
     ];
+}
+
+function accumul8_statement_pick_account_id(int $viewerId, array $statementJson, ?int $selectedAccountId = null): ?int
+{
+    if ($selectedAccountId !== null && $selectedAccountId > 0) {
+        return accumul8_owned_id_or_null('accounts', $viewerId, $selectedAccountId);
+    }
+    $catalog = accumul8_statement_account_catalog($viewerId);
+    $match = accumul8_statement_match_account_from_catalog($catalog, $statementJson, null);
+    $accountId = isset($match['account_id']) ? (int)$match['account_id'] : 0;
+    return $accountId > 0 ? $accountId : null;
+}
+
+function accumul8_statement_match_account(int $viewerId, array $statementJson, ?int $selectedAccountId = null): array
+{
+    if ($selectedAccountId !== null && $selectedAccountId > 0) {
+        $forcedId = accumul8_owned_id_or_null('accounts', $viewerId, $selectedAccountId);
+        return [
+            'account_id' => $forcedId,
+            'score' => $forcedId !== null ? 100 : 0,
+            'reason' => $forcedId !== null ? '' : 'Selected account is unavailable.',
+        ];
+    }
+
+    $catalog = accumul8_statement_account_catalog($viewerId);
+    return accumul8_statement_match_account_from_catalog($catalog, $statementJson, null);
 }
 
 function accumul8_statement_suggested_new_account_payload(array $parsed, array $upload = []): array
@@ -2414,6 +2494,7 @@ function accumul8_statement_suggested_new_account_payload(array $parsed, array $
 
 function accumul8_statement_catalog_payload(array $parsed, string $text): array
 {
+    $parsed = accumul8_statement_normalize_parsed_payload($parsed);
     $keywords = [];
     foreach ([
         (string)($parsed['institution_name'] ?? ''),
@@ -2427,10 +2508,11 @@ function accumul8_statement_catalog_payload(array $parsed, string $text): array
             $keywords[] = $value;
         }
     }
-    foreach ((array)($parsed['transactions'] ?? []) as $tx) {
-        if (!is_array($tx)) {
-            continue;
-        }
+    $accountLabels = accumul8_statement_distinct_account_tags($parsed);
+    foreach ($accountLabels as $label) {
+        $keywords[] = accumul8_normalize_text($label, 80);
+    }
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
         $description = accumul8_normalize_text((string)($tx['description'] ?? ''), 80);
         if ($description !== '') {
             $keywords[] = $description;
@@ -2440,12 +2522,14 @@ function accumul8_statement_catalog_payload(array $parsed, string $text): array
         }
     }
 
-    $txCount = is_array($parsed['transactions'] ?? null) ? count((array)$parsed['transactions']) : 0;
+    $txCount = count(accumul8_statement_transaction_rows($parsed));
     $summaryParts = [];
     if (accumul8_normalize_text((string)($parsed['institution_name'] ?? ''), 191) !== '') {
         $summaryParts[] = accumul8_normalize_text((string)($parsed['institution_name'] ?? ''), 191);
     }
-    if (accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191) !== '') {
+    if ($accountLabels !== []) {
+        $summaryParts[] = implode(', ', array_slice($accountLabels, 0, 4));
+    } elseif (accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191) !== '') {
         $summaryParts[] = accumul8_normalize_text((string)($parsed['account_name_hint'] ?? ''), 191);
     }
     if ($txCount > 0) {
@@ -2464,17 +2548,31 @@ function accumul8_statement_catalog_payload(array $parsed, string $text): array
 
 function accumul8_statement_estimate_duplicates(int $viewerId, array $parsed, ?int $accountId): int
 {
-    if ($accountId === null || $accountId <= 0) {
-        return 0;
-    }
+    $catalog = accumul8_statement_account_catalog($viewerId);
+    $accountIdsByKey = [];
     $count = 0;
-    foreach ((array)($parsed['transactions'] ?? []) as $tx) {
-        if (!is_array($tx)) {
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
+        if ((int)($tx['is_valid_json'] ?? 0) !== 1) {
             continue;
         }
         $txDate = accumul8_normalize_date($tx['transaction_date'] ?? $tx['posted_date'] ?? '');
         $description = accumul8_normalize_text((string)($tx['description'] ?? ''), 255);
         if ($txDate === null || $description === '' || !is_numeric($tx['amount'] ?? null)) {
+            continue;
+        }
+        $statementJson = [
+            'statement_kind' => $parsed['statement_kind'] ?? 'bank_account',
+            'institution_name' => (string)($parsed['institution_name'] ?? ''),
+            'account_name_hint' => (string)($tx['statement_account_name_hint'] ?? $parsed['account_name_hint'] ?? ''),
+            'account_last4' => (string)($tx['statement_account_last4'] ?? $parsed['account_last4'] ?? ''),
+        ];
+        $cacheKey = strtolower(trim((string)$statementJson['account_name_hint'])) . '|' . preg_replace('/\D+/', '', (string)$statementJson['account_last4']);
+        if (!array_key_exists($cacheKey, $accountIdsByKey)) {
+            $match = accumul8_statement_match_account_from_catalog($catalog, $statementJson, $accountId);
+            $accountIdsByKey[$cacheKey] = isset($match['account_id']) ? (int)$match['account_id'] : null;
+        }
+        $resolvedAccountId = isset($accountIdsByKey[$cacheKey]) ? (int)$accountIdsByKey[$cacheKey] : 0;
+        if ($resolvedAccountId <= 0) {
             continue;
         }
         $amount = accumul8_normalize_amount($tx['amount']);
@@ -2487,7 +2585,7 @@ function accumul8_statement_estimate_duplicates(int $viewerId, array $parsed, ?i
                AND ROUND(amount, 2) = ?
                AND description = ?
              LIMIT 1',
-            [$viewerId, $accountId, $txDate, $amount, $description]
+            [$viewerId, $resolvedAccountId, $txDate, $amount, $description]
         );
         if ($duplicate) {
             $count++;
@@ -2498,11 +2596,14 @@ function accumul8_statement_estimate_duplicates(int $viewerId, array $parsed, ?i
 
 function accumul8_statement_build_plan(int $viewerId, array $upload, array $parsed): array
 {
+    $parsed = accumul8_statement_normalize_parsed_payload($parsed);
     $selectedAccountId = isset($upload['account_id']) ? (int)$upload['account_id'] : null;
     $match = accumul8_statement_match_account($viewerId, $parsed, $selectedAccountId);
     $accountId = isset($match['account_id']) ? (int)$match['account_id'] : 0;
+    $accountLabels = accumul8_statement_distinct_account_tags($parsed);
+    $hasMultipleAccounts = count($accountLabels) > 1;
     $accountRow = null;
-    if ($accountId > 0) {
+    if ($accountId > 0 && !$hasMultipleAccounts) {
         $accountRow = Database::queryOne(
             'SELECT a.id, a.account_name, a.account_type, a.mask_last4, a.institution_name, COALESCE(ag.group_name, "") AS banking_organization_name
              FROM accumul8_accounts a
@@ -2522,9 +2623,9 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
     $outflowTotal = 0.0;
     $firstDate = '';
     $lastDate = '';
-    foreach ((array)($parsed['transactions'] ?? []) as $tx) {
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
         $txCount++;
-        if (!is_array($tx)) {
+        if ((int)($tx['is_valid_json'] ?? 0) !== 1) {
             $invalidCount++;
             continue;
         }
@@ -2551,13 +2652,17 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
 
     $suggestedNewAccount = accumul8_statement_suggested_new_account_payload($parsed, $upload);
     $accountMatchReason = accumul8_normalize_text((string)($match['reason'] ?? ''), 255);
-    if ($accountId <= 0) {
+    if ($hasMultipleAccounts) {
+        $accountMatchReason = 'Multiple account sections were detected. Each transaction will be matched and imported against its tagged statement account.';
+    } elseif ($accountId <= 0) {
         $accountMatchReason = trim($accountMatchReason . ' A new account will be created automatically from the detected statement metadata during import.');
     }
 
     return [
-        'suggested_account_id' => $accountId > 0 ? $accountId : null,
-        'suggested_account_label' => $accountRow
+        'suggested_account_id' => $hasMultipleAccounts ? null : ($accountId > 0 ? $accountId : null),
+        'suggested_account_label' => $hasMultipleAccounts
+            ? implode(' | ', array_slice($accountLabels, 0, 4))
+            : ($accountRow
             ? implode(' · ', array_values(array_filter([
                 (string)($accountRow['banking_organization_name'] ?? ''),
                 (string)($accountRow['account_name'] ?? ''),
@@ -2567,7 +2672,7 @@ function accumul8_statement_build_plan(int $viewerId, array $upload, array $pars
                 (string)($suggestedNewAccount['banking_organization_name'] ?? ''),
                 (string)($suggestedNewAccount['account_name'] ?? ''),
                 (string)($suggestedNewAccount['mask_last4'] ?? '') !== '' ? '••' . (string)$suggestedNewAccount['mask_last4'] : '',
-            ]))),
+            ])))),
         'account_match_score' => (int)($match['score'] ?? 0),
         'account_match_reason' => $accountMatchReason,
         'requires_account_confirmation' => 0,
@@ -3107,6 +3212,22 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_statement_recon_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_accumul8_statement_recon_upload FOREIGN KEY (statement_upload_id) REFERENCES accumul8_statement_uploads(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_statement_audit_runs (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        actor_user_id INT NOT NULL DEFAULT 0,
+        audit_start_date DATE NULL,
+        audit_end_date DATE NULL,
+        upload_count INT NOT NULL DEFAULT 0,
+        passed_count INT NOT NULL DEFAULT 0,
+        warning_count INT NOT NULL DEFAULT 0,
+        failed_count INT NOT NULL DEFAULT 0,
+        summary_text TEXT NULL,
+        report_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_accumul8_statement_audit_owner (owner_user_id),
+        CONSTRAINT fk_accumul8_statement_audit_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
@@ -3335,6 +3456,21 @@ function accumul8_tables_ensure(): void
         }
         if (!accumul8_table_has_foreign_key('accumul8_statement_reconciliation_logs', 'fk_accumul8_statement_recon_upload')) {
             Database::execute('ALTER TABLE accumul8_statement_reconciliation_logs ADD CONSTRAINT fk_accumul8_statement_recon_upload FOREIGN KEY (statement_upload_id) REFERENCES accumul8_statement_uploads(id) ON DELETE CASCADE');
+        }
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'actor_user_id', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'audit_start_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'audit_end_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'upload_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'passed_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'warning_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'failed_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'summary_text', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_statement_audit_runs', 'report_json', 'LONGTEXT NULL');
+        if (!accumul8_table_has_index('accumul8_statement_audit_runs', 'idx_accumul8_statement_audit_owner')) {
+            Database::execute('ALTER TABLE accumul8_statement_audit_runs ADD INDEX idx_accumul8_statement_audit_owner (owner_user_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_statement_audit_runs', 'fk_accumul8_statement_audit_owner')) {
+            Database::execute('ALTER TABLE accumul8_statement_audit_runs ADD CONSTRAINT fk_accumul8_statement_audit_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE');
         }
 
         if (!accumul8_table_has_column('accumul8_transactions', 'debtor_id')) {
@@ -4057,7 +4193,8 @@ function accumul8_statement_upload_view_model(int $viewerId, array $row): array
     if (!is_array($pageCatalog)) {
         $pageCatalog = [];
     }
-    $reviewRows = is_array($parsedPayload) ? accumul8_statement_review_rows($parsedPayload, is_array($locators) ? $locators : []) : [];
+    $accountCatalog = accumul8_statement_account_catalog($viewerId);
+    $reviewRows = is_array($parsedPayload) ? accumul8_statement_review_rows($parsedPayload, is_array($locators) ? $locators : [], $accountCatalog) : [];
     $plan = is_array($parsedPayload) && $parsedPayload !== []
         ? accumul8_statement_build_plan($viewerId, $row, $parsedPayload)
         : null;
@@ -4167,6 +4304,272 @@ function accumul8_statement_reconciliation_logs_lookup(int $viewerId, array $upl
     }
 
     return $grouped;
+}
+
+function accumul8_statement_serialize_audit_run(array $row): array
+{
+    $report = json_decode((string)($row['report_json'] ?? '[]'), true);
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'audit_start_date' => (string)($row['audit_start_date'] ?? ''),
+        'audit_end_date' => (string)($row['audit_end_date'] ?? ''),
+        'upload_count' => (int)($row['upload_count'] ?? 0),
+        'passed_count' => (int)($row['passed_count'] ?? 0),
+        'warning_count' => (int)($row['warning_count'] ?? 0),
+        'failed_count' => (int)($row['failed_count'] ?? 0),
+        'summary_text' => (string)($row['summary_text'] ?? ''),
+        'report' => is_array($report) ? $report : [],
+        'created_at' => (string)($row['created_at'] ?? ''),
+    ];
+}
+
+function accumul8_list_statement_audit_runs(int $viewerId, int $limit = 10): array
+{
+    if (!accumul8_table_exists('accumul8_statement_audit_runs')) {
+        return [];
+    }
+    $limit = max(1, min(50, $limit));
+    $rows = Database::queryAll(
+        'SELECT id, audit_start_date, audit_end_date, upload_count, passed_count, warning_count, failed_count,
+                COALESCE(summary_text, "") AS summary_text, COALESCE(report_json, "[]") AS report_json, created_at
+         FROM accumul8_statement_audit_runs
+         WHERE owner_user_id = ?
+         ORDER BY id DESC
+         LIMIT ' . (int)$limit,
+        [$viewerId]
+    );
+    return array_map('accumul8_statement_serialize_audit_run', $rows);
+}
+
+function accumul8_statement_audit_single_upload(int $viewerId, array $upload): array
+{
+    $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
+    if (!is_array($parsed) || $parsed === []) {
+        $upload = accumul8_statement_scan_upload($viewerId, (int)($upload['id'] ?? 0), null, true);
+        $parsed = json_decode((string)($upload['parsed_payload_json'] ?? '{}'), true);
+    }
+    if (!is_array($parsed) || $parsed === []) {
+        return [
+            'upload_id' => (int)($upload['id'] ?? 0),
+            'original_filename' => (string)($upload['original_filename'] ?? ''),
+            'status' => 'failed',
+            'summary' => 'Statement has no parsed payload to audit.',
+            'counts' => ['valid_rows' => 0, 'matched_rows' => 0, 'wrong_account_rows' => 0, 'missing_rows' => 0, 'invalid_rows' => 0],
+            'account_sections' => [],
+        ];
+    }
+
+    $reviewRows = accumul8_statement_review_rows($parsed, accumul8_statement_transaction_locators($parsed));
+    $rowAccountIds = [];
+    $sectionSummaries = [];
+    $counts = [
+        'valid_rows' => 0,
+        'matched_rows' => 0,
+        'wrong_account_rows' => 0,
+        'missing_rows' => 0,
+        'invalid_rows' => 0,
+    ];
+    $issues = [];
+
+    foreach ($reviewRows as $row) {
+        $sectionLabel = (string)($row['statement_account_label'] ?? '');
+        if (!isset($sectionSummaries[$sectionLabel])) {
+            $sectionSummaries[$sectionLabel] = [
+                'statement_account_label' => $sectionLabel !== '' ? $sectionLabel : 'Unlabeled account section',
+                'statement_account_name_hint' => (string)($row['statement_account_name_hint'] ?? ''),
+                'statement_account_last4' => (string)($row['statement_account_last4'] ?? ''),
+                'expected_account_id' => null,
+                'statement_total' => 0.0,
+                'matched_total' => 0.0,
+                'row_count' => 0,
+                'matched_count' => 0,
+            ];
+        }
+        if (!empty($row['reason'])) {
+            $counts['invalid_rows']++;
+            $issues[] = [
+                'row_index' => (int)($row['row_index'] ?? -1),
+                'result' => 'invalid',
+                'details' => (string)$row['reason'],
+                'statement_account_label' => $sectionSummaries[$sectionLabel]['statement_account_label'],
+                'description' => (string)($row['description'] ?? ''),
+                'transaction_date' => (string)($row['transaction_date'] ?? ''),
+                'amount' => isset($row['amount']) && is_numeric($row['amount']) ? accumul8_normalize_amount($row['amount']) : null,
+            ];
+            continue;
+        }
+
+        $counts['valid_rows']++;
+        $amount = accumul8_normalize_amount($row['amount'] ?? 0);
+        $sectionSummaries[$sectionLabel]['statement_total'] += $amount;
+        $sectionSummaries[$sectionLabel]['row_count']++;
+        $expectedAccountId = accumul8_statement_resolve_row_account_id($viewerId, $upload, $parsed, $row, [], $rowAccountIds);
+        $sectionSummaries[$sectionLabel]['expected_account_id'] = $expectedAccountId;
+
+        $matches = Database::queryAll(
+            'SELECT id, account_id, COALESCE(source_ref, "") AS source_ref
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND transaction_date = ?
+               AND ROUND(amount, 2) = ?
+               AND description = ?
+             ORDER BY id ASC
+             LIMIT 20',
+            [$viewerId, $row['transaction_date'], $amount, $row['description']]
+        );
+
+        $expectedMatches = array_values(array_filter($matches, static fn(array $candidate): bool => (int)($candidate['account_id'] ?? 0) === $expectedAccountId));
+        if ($expectedMatches !== []) {
+            $counts['matched_rows']++;
+            $sectionSummaries[$sectionLabel]['matched_total'] += $amount;
+            $sectionSummaries[$sectionLabel]['matched_count']++;
+            continue;
+        }
+
+        if ($matches !== []) {
+            $counts['wrong_account_rows']++;
+            $issues[] = [
+                'row_index' => (int)($row['row_index'] ?? -1),
+                'result' => 'wrong_account',
+                'details' => 'Matching amount/date/description exists, but only in a different account.',
+                'statement_account_label' => $sectionSummaries[$sectionLabel]['statement_account_label'],
+                'description' => (string)($row['description'] ?? ''),
+                'transaction_date' => (string)($row['transaction_date'] ?? ''),
+                'amount' => $amount,
+                'matched_transaction_ids' => array_map(static fn(array $candidate): int => (int)($candidate['id'] ?? 0), $matches),
+                'matched_account_ids' => array_values(array_unique(array_map(static fn(array $candidate): int => (int)($candidate['account_id'] ?? 0), $matches))),
+            ];
+            continue;
+        }
+
+        $counts['missing_rows']++;
+        $issues[] = [
+            'row_index' => (int)($row['row_index'] ?? -1),
+            'result' => 'missing',
+            'details' => 'No exact ledger transaction matches this statement row.',
+            'statement_account_label' => $sectionSummaries[$sectionLabel]['statement_account_label'],
+            'description' => (string)($row['description'] ?? ''),
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'amount' => $amount,
+        ];
+    }
+
+    $sectionSummaries = array_values(array_map(static function (array $section): array {
+        $section['statement_total'] = round((float)$section['statement_total'], 2);
+        $section['matched_total'] = round((float)$section['matched_total'], 2);
+        $section['amount_delta'] = round($section['matched_total'] - $section['statement_total'], 2);
+        return $section;
+    }, $sectionSummaries));
+
+    $balanceSummary = accumul8_statement_reconciliation_payload($parsed, array_map(static function (array $row): array {
+        return [
+            'amount' => $row['amount'] ?? 0,
+        ];
+    }, array_values(array_filter($reviewRows, static fn(array $row): bool => empty($row['reason']) && isset($row['amount']) && is_numeric($row['amount'])))), 0);
+
+    $status = 'passed';
+    if ($counts['wrong_account_rows'] > 0 || $counts['missing_rows'] > 0 || $counts['invalid_rows'] > 0 || abs(array_sum(array_map(static fn(array $section): float => (float)($section['amount_delta'] ?? 0), $sectionSummaries))) > 0.01) {
+        $status = 'failed';
+    } elseif ($balanceSummary['status'] !== 'balanced') {
+        $status = 'warning';
+    }
+
+    $summaryParts = [
+        'Checked ' . $counts['valid_rows'] . ' valid row(s).',
+        $counts['matched_rows'] . ' matched the expected account.',
+    ];
+    if ($counts['wrong_account_rows'] > 0) {
+        $summaryParts[] = $counts['wrong_account_rows'] . ' appear to be in the wrong account.';
+    }
+    if ($counts['missing_rows'] > 0) {
+        $summaryParts[] = $counts['missing_rows'] . ' are missing from the ledger.';
+    }
+    if ($counts['invalid_rows'] > 0) {
+        $summaryParts[] = $counts['invalid_rows'] . ' were invalid.';
+    }
+    $balanceNote = accumul8_normalize_text((string)($balanceSummary['note'] ?? ''), 500);
+    if ($balanceNote !== '') {
+        $summaryParts[] = $balanceNote;
+    }
+
+    return [
+        'upload_id' => (int)($upload['id'] ?? 0),
+        'original_filename' => (string)($upload['original_filename'] ?? ''),
+        'status' => $status,
+        'summary' => implode(' ', $summaryParts),
+        'counts' => $counts,
+        'account_sections' => $sectionSummaries,
+        'issues' => array_slice($issues, 0, 200),
+    ];
+}
+
+function accumul8_statement_audit_uploads(int $viewerId, int $actorUserId, ?string $startDate = null, ?string $endDate = null): array
+{
+    $normalizedStart = $startDate !== null ? accumul8_normalize_date($startDate) : null;
+    $normalizedEnd = $endDate !== null ? accumul8_normalize_date($endDate) : null;
+    $uploads = accumul8_list_statement_uploads($viewerId, false);
+    $filteredUploads = array_values(array_filter($uploads, static function (array $upload) use ($normalizedStart, $normalizedEnd): bool {
+        $periodStart = accumul8_normalize_date((string)($upload['period_start'] ?? ''));
+        $periodEnd = accumul8_normalize_date((string)($upload['period_end'] ?? ''));
+        $compareStart = $periodStart ?? $periodEnd ?? accumul8_normalize_date(substr((string)($upload['created_at'] ?? ''), 0, 10));
+        $compareEnd = $periodEnd ?? $periodStart ?? $compareStart;
+        if ($normalizedStart !== null && $compareEnd !== null && $compareEnd < $normalizedStart) {
+            return false;
+        }
+        if ($normalizedEnd !== null && $compareStart !== null && $compareStart > $normalizedEnd) {
+            return false;
+        }
+        return true;
+    }));
+
+    $report = [];
+    $passedCount = 0;
+    $warningCount = 0;
+    $failedCount = 0;
+    foreach ($filteredUploads as $upload) {
+        $item = accumul8_statement_audit_single_upload($viewerId, $upload);
+        $report[] = $item;
+        if (($item['status'] ?? '') === 'passed') {
+            $passedCount++;
+        } elseif (($item['status'] ?? '') === 'warning') {
+            $warningCount++;
+        } else {
+            $failedCount++;
+        }
+    }
+
+    $summary = 'Audited ' . count($report) . ' statement(s). '
+        . $passedCount . ' passed, '
+        . $warningCount . ' warning, '
+        . $failedCount . ' failed.';
+
+    Database::execute(
+        'INSERT INTO accumul8_statement_audit_runs
+         (owner_user_id, actor_user_id, audit_start_date, audit_end_date, upload_count, passed_count, warning_count, failed_count, summary_text, report_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $actorUserId,
+            $normalizedStart,
+            $normalizedEnd,
+            count($report),
+            $passedCount,
+            $warningCount,
+            $failedCount,
+            $summary,
+            json_encode($report, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ]
+    );
+
+    $run = Database::queryOne(
+        'SELECT id, audit_start_date, audit_end_date, upload_count, passed_count, warning_count, failed_count,
+                COALESCE(summary_text, "") AS summary_text, COALESCE(report_json, "[]") AS report_json, created_at
+         FROM accumul8_statement_audit_runs
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [(int)Database::lastInsertId(), $viewerId]
+    );
+    return accumul8_statement_serialize_audit_run(is_array($run) ? $run : []);
 }
 
 function accumul8_list_statement_uploads(int $viewerId, bool $archived = false): array
@@ -4478,6 +4881,28 @@ function accumul8_find_duplicate_statement_upload(int $viewerId, string $fileSha
 
 function accumul8_statement_reconciliation_payload(array $parsed, array $importedRows, int $duplicateCount): array
 {
+    $accountLabels = accumul8_statement_distinct_account_tags($parsed);
+    if (count($accountLabels) > 1) {
+        $noteParts = ['Statement packet contains multiple account sections, so packet-level opening/closing balance validation was skipped.'];
+        if ($duplicateCount > 0) {
+            $noteParts[] = $duplicateCount . ' probable duplicate transaction(s) were skipped.';
+        }
+        if (!empty($parsed['reconciliation_notes']) && is_array($parsed['reconciliation_notes'])) {
+            foreach ($parsed['reconciliation_notes'] as $note) {
+                $note = accumul8_normalize_text((string)$note, 255);
+                if ($note !== '') {
+                    $noteParts[] = $note;
+                }
+            }
+        }
+        return [
+            'status' => 'balanced',
+            'note' => implode(' ', array_values(array_unique($noteParts))),
+            'opening_balance' => null,
+            'closing_balance' => null,
+        ];
+    }
+
     $opening = isset($parsed['opening_balance']) && is_numeric($parsed['opening_balance']) ? accumul8_normalize_amount($parsed['opening_balance']) : null;
     $closing = isset($parsed['closing_balance']) && is_numeric($parsed['closing_balance']) ? accumul8_normalize_amount($parsed['closing_balance']) : null;
     $sum = 0.0;
@@ -4607,10 +5032,11 @@ function accumul8_statement_reconcile_upload(int $viewerId, int $actorUserId, in
         throw new RuntimeException('Statement scan did not produce a reconciliation plan');
     }
 
-    $accountId = accumul8_statement_resolve_target_account_id($viewerId, $upload, $parsed, $options);
     $reviewRows = accumul8_statement_review_rows($parsed, accumul8_statement_transaction_locators($parsed));
     $matchedRows = [];
     $actions = [];
+    $primaryAccountId = null;
+    $rowAccountIds = [];
     $counts = [
         'transaction_count' => 0,
         'already_reconciled_count' => 0,
@@ -4640,6 +5066,14 @@ function accumul8_statement_reconcile_upload(int $viewerId, int $actorUserId, in
         }
 
         $counts['transaction_count']++;
+        $action['statement_account_name_hint'] = (string)($row['statement_account_name_hint'] ?? '');
+        $action['statement_account_last4'] = (string)($row['statement_account_last4'] ?? '');
+        $action['statement_account_label'] = (string)($row['statement_account_label'] ?? '');
+        $accountId = accumul8_statement_resolve_row_account_id($viewerId, $upload, $parsed, $row, $options, $rowAccountIds);
+        if ($primaryAccountId === null && $accountId > 0) {
+            $primaryAccountId = $accountId;
+        }
+        $action['resolved_account_id'] = $accountId > 0 ? $accountId : null;
         $match = accumul8_statement_find_best_transaction_match($viewerId, $accountId, $uploadId, $row);
         if (!$match) {
             $counts['missing_match_count']++;
@@ -4727,7 +5161,7 @@ function accumul8_statement_reconcile_upload(int $viewerId, int $actorUserId, in
          SET account_id = ?, status = ?, reconciliation_status = ?, reconciliation_note = ?, last_error = NULL
          WHERE id = ? AND owner_user_id = ?',
         [
-            $accountId,
+            $primaryAccountId,
             $finalStatus === 'balanced' ? 'processed' : 'needs_review',
             $finalStatus,
             $summary,
@@ -4742,8 +5176,8 @@ function accumul8_statement_reconcile_upload(int $viewerId, int $actorUserId, in
 function accumul8_statement_transaction_locators(array $parsed): array
 {
     $locators = [];
-    foreach ((array)($parsed['transactions'] ?? []) as $tx) {
-        if (!is_array($tx)) {
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
+        if ((int)($tx['is_valid_json'] ?? 0) !== 1) {
             continue;
         }
         $txDate = accumul8_normalize_date($tx['transaction_date'] ?? $tx['posted_date'] ?? '');
@@ -4755,6 +5189,7 @@ function accumul8_statement_transaction_locators(array $parsed): array
             ? (int)$tx['page_number']
             : null;
         $locators[] = [
+            'row_index' => (int)($tx['row_index'] ?? 0),
             'transaction_date' => $txDate,
             'description' => $description,
             'amount' => accumul8_normalize_amount($tx['amount']),
@@ -4762,19 +5197,26 @@ function accumul8_statement_transaction_locators(array $parsed): array
                 ? accumul8_normalize_amount($tx['running_balance'])
                 : null,
             'page_number' => $pageNumber !== null && $pageNumber > 0 ? $pageNumber : null,
+            'statement_account_name_hint' => (string)($tx['statement_account_name_hint'] ?? ''),
+            'statement_account_last4' => (string)($tx['statement_account_last4'] ?? ''),
+            'statement_account_label' => (string)($tx['statement_account_label'] ?? ''),
         ];
     }
     return $locators;
 }
 
-function accumul8_statement_review_rows(array $parsed, array $transactionLocators = []): array
+function accumul8_statement_review_rows(array $parsed, array $transactionLocators = [], array $accountCatalog = []): array
 {
     $rows = [];
-    foreach ((array)($parsed['transactions'] ?? []) as $index => $tx) {
-        if (!is_array($tx)) {
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
+        $index = (int)($tx['row_index'] ?? 0);
+        if ((int)($tx['is_valid_json'] ?? 0) !== 1) {
             $rows[] = [
                 'row_index' => (int)$index,
                 'reason' => 'Transaction entry was not valid JSON',
+                'statement_account_name_hint' => (string)($tx['statement_account_name_hint'] ?? ''),
+                'statement_account_last4' => (string)($tx['statement_account_last4'] ?? ''),
+                'statement_account_label' => (string)($tx['statement_account_label'] ?? ''),
             ];
             continue;
         }
@@ -4797,6 +5239,9 @@ function accumul8_statement_review_rows(array $parsed, array $transactionLocator
                 if (!is_array($locator)) {
                     continue;
                 }
+                if ((int)($locator['row_index'] ?? -1) !== $index) {
+                    continue;
+                }
                 if ((string)($locator['transaction_date'] ?? '') !== (string)$txDate) {
                     continue;
                 }
@@ -4814,6 +5259,16 @@ function accumul8_statement_review_rows(array $parsed, array $transactionLocator
             }
         }
 
+        $statementJson = [
+            'statement_kind' => $parsed['statement_kind'] ?? 'bank_account',
+            'institution_name' => (string)($parsed['institution_name'] ?? ''),
+            'account_name_hint' => (string)($tx['statement_account_name_hint'] ?? ''),
+            'account_last4' => (string)($tx['statement_account_last4'] ?? ''),
+        ];
+        $match = $accountCatalog !== []
+            ? accumul8_statement_match_account_from_catalog($accountCatalog, $statementJson, null)
+            : ['account_id' => null];
+
         $rows[] = [
             'row_index' => (int)$index,
             'transaction_date' => $txDate,
@@ -4823,6 +5278,10 @@ function accumul8_statement_review_rows(array $parsed, array $transactionLocator
             'running_balance' => $runningBalance,
             'page_number' => $pageNumber !== null && $pageNumber > 0 ? $pageNumber : null,
             'reason' => $reason,
+            'statement_account_name_hint' => (string)($tx['statement_account_name_hint'] ?? ''),
+            'statement_account_last4' => (string)($tx['statement_account_last4'] ?? ''),
+            'statement_account_label' => (string)($tx['statement_account_label'] ?? ''),
+            'suggested_account_id' => isset($match['account_id']) && (int)$match['account_id'] > 0 ? (int)$match['account_id'] : null,
         ];
     }
 
@@ -4907,6 +5366,44 @@ function accumul8_statement_resolve_target_account_id(int $viewerId, array $uplo
         $viewerId,
         accumul8_statement_suggested_new_account_payload($parsed, $upload)
     );
+}
+
+function accumul8_statement_row_statement_json(array $upload, array $parsed, array $row): array
+{
+    return [
+        'statement_kind' => $parsed['statement_kind'] ?? $upload['statement_kind'] ?? 'bank_account',
+        'institution_name' => (string)($parsed['institution_name'] ?? $upload['institution_name'] ?? ''),
+        'account_name_hint' => (string)($row['statement_account_name_hint'] ?? $parsed['account_name_hint'] ?? $upload['account_name_hint'] ?? ''),
+        'account_last4' => (string)($row['statement_account_last4'] ?? $parsed['account_last4'] ?? $upload['account_mask_last4'] ?? ''),
+    ];
+}
+
+function accumul8_statement_resolve_row_account_id(int $viewerId, array $upload, array $parsed, array $row, array $options = [], array &$cache = []): int
+{
+    if (isset($options['create_account']) && is_array($options['create_account'])) {
+        return accumul8_statement_create_account_from_plan($viewerId, (array)$options['create_account']);
+    }
+    if (isset($options['account_id']) && (int)$options['account_id'] > 0) {
+        return accumul8_require_owned_id('accounts', $viewerId, (int)$options['account_id']);
+    }
+
+    $statementJson = accumul8_statement_row_statement_json($upload, $parsed, $row);
+    $cacheKey = strtolower(trim((string)$statementJson['institution_name'])) . '|' . strtolower(trim((string)$statementJson['account_name_hint'])) . '|' . preg_replace('/\D+/', '', (string)$statementJson['account_last4']);
+    if (isset($cache[$cacheKey]) && (int)$cache[$cacheKey] > 0) {
+        return (int)$cache[$cacheKey];
+    }
+
+    $match = accumul8_statement_match_account($viewerId, $statementJson, null);
+    $accountId = isset($match['account_id']) ? (int)$match['account_id'] : 0;
+    if ($accountId <= 0) {
+        $accountId = accumul8_statement_create_account_from_plan(
+            $viewerId,
+            accumul8_statement_suggested_new_account_payload($statementJson, $upload)
+        );
+    }
+
+    $cache[$cacheKey] = $accountId;
+    return $accountId;
 }
 
 function accumul8_statement_insert_transaction_row(int $viewerId, int $actorUserId, int $uploadId, int $accountId, array $resolvedRow): int
@@ -5141,7 +5638,7 @@ function accumul8_statement_upload_has_parsed_payload(array $upload): bool
     if ($parsed === []) {
         return false;
     }
-    if (!empty($parsed['transactions']) && is_array($parsed['transactions'])) {
+    if (accumul8_statement_transaction_rows($parsed) !== []) {
         return true;
     }
     foreach (['institution_name', 'account_name_hint', 'account_last4', 'period_start', 'period_end'] as $field) {
@@ -5492,9 +5989,12 @@ function accumul8_statement_scan_upload(int $viewerId, int $uploadId, ?int $sele
             }
             $ai = accumul8_ai_generate_statement_json($text, $accountCatalog, $pageCatalog);
         }
-        $parsed = is_array($ai['json'] ?? null) ? $ai['json'] : [];
+        $parsed = is_array($ai['json'] ?? null) ? accumul8_statement_normalize_parsed_payload($ai['json']) : [];
         $match = accumul8_statement_match_account($viewerId, $parsed, $selectedAccountId);
         $accountId = isset($match['account_id']) && (int)$match['account_id'] > 0 ? (int)$match['account_id'] : null;
+        if (count(accumul8_statement_distinct_account_tags($parsed)) > 1) {
+            $accountId = null;
+        }
         $transactionLocators = accumul8_statement_transaction_locators($parsed);
         $notes = [];
         foreach ((array)($parsed['account_match_hints'] ?? []) as $hint) {
@@ -5730,24 +6230,37 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
         throw new RuntimeException('Statement scan did not produce an importable plan');
     }
 
-    $accountId = accumul8_statement_resolve_target_account_id($viewerId, $upload, $parsed, $options);
-
     $txRows = [];
     $duplicateRows = [];
     $failedRows = [];
-    foreach ((array)($parsed['transactions'] ?? []) as $index => $tx) {
-        if (!is_array($tx)) {
+    $primaryAccountId = null;
+    $rowAccountIds = [];
+    foreach (accumul8_statement_transaction_rows($parsed) as $tx) {
+        $index = (int)($tx['row_index'] ?? 0);
+        $statementAccountNameHint = accumul8_normalize_text((string)($tx['statement_account_name_hint'] ?? ''), 191);
+        $statementAccountLast4 = accumul8_normalize_text((string)($tx['statement_account_last4'] ?? ''), 16);
+        $statementAccountLabel = accumul8_statement_build_account_tag_label($statementAccountNameHint, $statementAccountLast4);
+        if ((int)($tx['is_valid_json'] ?? 0) !== 1) {
             $failedRows[] = ['index' => $index, 'reason' => 'Transaction entry was not valid JSON'];
             continue;
         }
         $txDate = accumul8_normalize_date($tx['transaction_date'] ?? $tx['posted_date'] ?? '');
         $description = accumul8_normalize_text((string)($tx['description'] ?? ''), 255);
         if ($txDate === null || $description === '' || !is_numeric($tx['amount'] ?? null)) {
-            $failedRows[] = ['index' => $index, 'transaction_date' => accumul8_normalize_text((string)($tx['transaction_date'] ?? ''), 32), 'description' => $description, 'reason' => 'Missing date, description, or amount'];
+            $failedRows[] = ['index' => $index, 'transaction_date' => accumul8_normalize_text((string)($tx['transaction_date'] ?? ''), 32), 'description' => $description, 'reason' => 'Missing date, description, or amount', 'statement_account_name_hint' => $statementAccountNameHint, 'statement_account_last4' => $statementAccountLast4, 'statement_account_label' => $statementAccountLabel];
             continue;
         }
         $amount = accumul8_normalize_amount($tx['amount']);
         $memo = accumul8_normalize_text((string)($tx['memo'] ?? ''), 2000);
+        try {
+            $accountId = accumul8_statement_resolve_row_account_id($viewerId, $upload, $parsed, $tx, $options, $rowAccountIds);
+        } catch (Throwable $accountError) {
+            $failedRows[] = ['index' => $index, 'transaction_date' => $txDate, 'description' => $description, 'amount' => $amount, 'reason' => accumul8_normalize_text($accountError->getMessage(), 255), 'statement_account_name_hint' => $statementAccountNameHint, 'statement_account_last4' => $statementAccountLast4, 'statement_account_label' => $statementAccountLabel];
+            continue;
+        }
+        if ($primaryAccountId === null && $accountId > 0) {
+            $primaryAccountId = $accountId;
+        }
         $entityId = accumul8_statement_resolve_entity_id($viewerId, $description);
         $duplicate = Database::queryOne(
             'SELECT id
@@ -5757,11 +6270,11 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
                AND transaction_date = ?
                AND ROUND(amount, 2) = ?
                AND description = ?
-             LIMIT 1',
+            LIMIT 1',
             [$viewerId, $accountId, $txDate, $amount, $description]
         );
         if ($duplicate) {
-            $duplicateRows[] = ['transaction_date' => $txDate, 'description' => $description, 'amount' => $amount, 'existing_transaction_id' => (int)($duplicate['id'] ?? 0)];
+            $duplicateRows[] = ['transaction_date' => $txDate, 'description' => $description, 'amount' => $amount, 'existing_transaction_id' => (int)($duplicate['id'] ?? 0), 'statement_account_name_hint' => $statementAccountNameHint, 'statement_account_last4' => $statementAccountLast4, 'statement_account_label' => $statementAccountLabel, 'suggested_account_id' => $accountId];
             continue;
         }
         try {
@@ -5796,14 +6309,18 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
             );
             $txRows[] = [
                 'id' => $insertedId,
+                'account_id' => $accountId,
                 'transaction_date' => $txDate,
                 'description' => $description,
                 'amount' => $amount,
                 'entity_id' => $entityId,
                 'running_balance' => isset($tx['running_balance']) && is_numeric($tx['running_balance']) ? accumul8_normalize_amount($tx['running_balance']) : null,
+                'statement_account_name_hint' => $statementAccountNameHint,
+                'statement_account_last4' => $statementAccountLast4,
+                'statement_account_label' => $statementAccountLabel,
             ];
         } catch (Throwable $error) {
-            $failedRows[] = ['index' => $index, 'transaction_date' => $txDate, 'description' => $description, 'amount' => $amount, 'reason' => accumul8_normalize_text($error->getMessage(), 255)];
+            $failedRows[] = ['index' => $index, 'transaction_date' => $txDate, 'description' => $description, 'amount' => $amount, 'reason' => accumul8_normalize_text($error->getMessage(), 255), 'statement_account_name_hint' => $statementAccountNameHint, 'statement_account_last4' => $statementAccountLast4, 'statement_account_label' => $statementAccountLabel, 'suggested_account_id' => $accountId];
         }
     }
 
@@ -5836,7 +6353,7 @@ function accumul8_statement_import_upload(int $viewerId, int $actorUserId, int $
              last_error = NULL, processed_at = NOW()
          WHERE id = ? AND owner_user_id = ?',
         [
-            $accountId,
+            $primaryAccountId,
             $status,
             count($txRows),
             count($duplicateRows),
@@ -5913,11 +6430,14 @@ function accumul8_statement_search_uploads(int $viewerId, string $query): array
 
         $matchedPage = null;
         $parsed = json_decode((string)($row['parsed_payload_json'] ?? '{}'), true);
-        foreach ((array)($parsed['transactions'] ?? []) as $tx) {
-            if (!is_array($tx)) {
-                continue;
-            }
-            $txText = strtolower(implode(' ', [(string)($tx['description'] ?? ''), (string)($tx['memo'] ?? ''), (string)($tx['transaction_date'] ?? '')]));
+        foreach (accumul8_statement_transaction_rows(is_array($parsed) ? $parsed : []) as $tx) {
+            $txText = strtolower(implode(' ', [
+                (string)($tx['description'] ?? ''),
+                (string)($tx['memo'] ?? ''),
+                (string)($tx['transaction_date'] ?? ''),
+                (string)($tx['statement_account_name_hint'] ?? ''),
+                (string)($tx['statement_account_last4'] ?? ''),
+            ]));
             $allMatched = true;
             foreach ($terms as $term) {
                 if (!str_contains($txText, $term)) {
@@ -6419,6 +6939,7 @@ if ($action === 'bootstrap') {
     $connections = accumul8_bootstrap_section('bank_connections', static fn() => accumul8_list_bank_connections($viewerId), [], $warnings);
     $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, false), [], $warnings);
     $archivedStatementUploads = accumul8_bootstrap_section('archived_statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, true), [], $warnings);
+    $statementAuditRuns = accumul8_bootstrap_section('statement_audit_runs', static fn() => accumul8_list_statement_audit_runs($viewerId, 10), [], $warnings);
     $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
     $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
         'net_amount' => 0.0,
@@ -6450,6 +6971,7 @@ if ($action === 'bootstrap') {
         'bank_connections' => $connections,
         'statement_uploads' => $statementUploads,
         'archived_statement_uploads' => $archivedStatementUploads,
+        'statement_audit_runs' => $statementAuditRuns,
         'sync_provider' => [
             'provider' => 'plaid',
             'env' => accumul8_plaid_env(),
@@ -8217,6 +8739,31 @@ if ($action === 'search_statement_uploads') {
         'success' => true,
         'results' => accumul8_statement_search_uploads($viewerId, $query),
     ]);
+}
+
+if ($action === 'list_statement_audit_runs') {
+    catn8_require_method('GET');
+    $limit = max(1, min(50, (int)($_GET['limit'] ?? 10)));
+    catn8_json_response([
+        'success' => true,
+        'runs' => accumul8_list_statement_audit_runs($viewerId, $limit),
+    ]);
+}
+
+if ($action === 'audit_statement_uploads') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    try {
+        $run = accumul8_statement_audit_uploads(
+            $viewerId,
+            $actorUserId,
+            isset($body['start_date']) ? (string)$body['start_date'] : null,
+            isset($body['end_date']) ? (string)$body['end_date'] : null
+        );
+        catn8_json_response(['success' => true, 'run' => $run, 'runs' => accumul8_list_statement_audit_runs($viewerId, 10)]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
 }
 
 if ($action === 'download_statement_upload') {

@@ -5,6 +5,7 @@ import {
   Accumul8BankingOrganization,
   Accumul8StatementArchiveResponse,
   Accumul8StatementArchiveSection,
+  Accumul8StatementAuditRun,
   Accumul8StatementImportResult,
   Accumul8StatementImportResultRow,
   Accumul8StatementKind,
@@ -28,6 +29,7 @@ interface Accumul8StatementModalProps {
   bankingOrganizations: Accumul8BankingOrganization[];
   statementUploads: Accumul8StatementUpload[];
   archivedStatementUploads: Accumul8StatementUpload[];
+  statementAuditRuns?: Accumul8StatementAuditRun[];
   transactions: Accumul8Transaction[];
   ownerUserId: number;
   onClose: () => void;
@@ -57,6 +59,7 @@ interface Accumul8StatementModalProps {
     transaction_id: number;
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; linked_transaction_id: number }>;
   onSearch: (query: string) => Promise<Accumul8StatementSearchResult[]>;
+  onAuditStatements?: (payload: { start_date?: string | null; end_date?: string | null }) => Promise<{ success: boolean; run: Accumul8StatementAuditRun }>;
   onOpenTransaction: (id: number) => void;
   onDeleteTransaction: (id: number, description: string) => void;
 }
@@ -170,13 +173,10 @@ function StatementPickerItem({
 function buildWorkspace(
   upload: Accumul8StatementUpload,
   transactions: Accumul8Transaction[],
-  selectedAccountId: number | null,
   dismissedKeys: Set<string>,
 ): StatementWorkspaceData {
   const importedCandidates = transactions.filter((tx) => tx.source_ref === `statement_upload:${upload.id}`);
-  const duplicateCandidates = selectedAccountId
-    ? transactions.filter((tx) => Number(tx.account_id || 0) === selectedAccountId)
-    : [];
+  const duplicateCandidates = transactions;
 
   const imported: StatementWorkspaceRow[] = [];
   const duplicates: StatementWorkspaceRow[] = [];
@@ -196,6 +196,9 @@ function buildWorkspace(
       && amountsMatch(tx.amount, row.amount)
     )) || null;
     const duplicate = !linked ? duplicateCandidates.find((tx) => (
+      Number(row.suggested_account_id || 0) > 0
+      && Number(tx.account_id || 0) === Number(row.suggested_account_id || 0)
+      &&
       String(tx.transaction_date || '') === String(row.transaction_date || '')
       && String(tx.description || '').trim() === String(row.description || '').trim()
       && amountsMatch(tx.amount, row.amount)
@@ -277,6 +280,7 @@ export function Accumul8StatementModal({
   busy,
   statementUploads,
   archivedStatementUploads,
+  statementAuditRuns = [],
   transactions,
   ownerUserId,
   onClose,
@@ -290,6 +294,7 @@ export function Accumul8StatementModal({
   onImportReviewRow,
   onLinkReviewRow,
   onSearch,
+  onAuditStatements,
   onOpenTransaction,
   onDeleteTransaction,
 }: Accumul8StatementModalProps) {
@@ -366,7 +371,6 @@ export function Accumul8StatementModal({
       acc[upload.id] = buildWorkspace(
         upload,
         transactions,
-        upload.account_id || upload.plan?.suggested_account_id || null,
         new Set<string>(dismissedRowKeysByUpload[upload.id] || []),
       );
       return acc;
@@ -377,16 +381,11 @@ export function Accumul8StatementModal({
     () => pendingUploads.find((upload) => upload.id === selectedReviewUploadId) || pendingUploads[0] || null,
     [pendingUploads, selectedReviewUploadId],
   );
-  const activeReviewAccountId = React.useMemo(() => {
-    if (!activeReviewUpload) {
-      return null;
-    }
-    return activeReviewUpload.account_id || activeReviewUpload.plan?.suggested_account_id || null;
-  }, [activeReviewUpload]);
   const activeWorkspace = React.useMemo(
     () => (activeReviewUpload ? workspaceByUploadId[activeReviewUpload.id] || null : null),
     [activeReviewUpload, workspaceByUploadId],
   );
+  const latestAuditRun = React.useMemo(() => statementAuditRuns[0] || null, [statementAuditRuns]);
   const filteredLibraryUploads = React.useMemo(() => {
     const query = libraryQuery.trim().toLowerCase();
     return sortedStatementUploads.filter((upload) => {
@@ -547,9 +546,8 @@ export function Accumul8StatementModal({
       description: nextDescription,
       memo: nextMemo,
       amount: nextAmount,
-      account_id: activeReviewAccountId,
     });
-  }, [activeReviewAccountId, onImportReviewRow]);
+  }, [onImportReviewRow]);
   const linkWorkspaceRow = React.useCallback(async (upload: Accumul8StatementUpload, row: StatementWorkspaceRow, transactionId: number | null) => {
     if (!transactionId) {
       return;
@@ -586,6 +584,41 @@ export function Accumul8StatementModal({
       archived_from_section: 'inbox',
     });
   }, [onArchiveStatement]);
+  const handleBatchProcessInbox = React.useCallback(async () => {
+    if (pendingUploads.length === 0) {
+      return;
+    }
+    const confirmed = window.confirm(`Process ${pendingUploads.length} inbox statement(s) by re-scan, reconcile, and approve/import in order?`);
+    if (!confirmed) {
+      return;
+    }
+    const uploadIds = pendingUploads.map((upload) => upload.id);
+    for (const uploadId of uploadIds) {
+      await onRescan(uploadId, null);
+      if (onReconcile) {
+        await onReconcile({ id: uploadId });
+      }
+      await onConfirmImport({ id: uploadId });
+    }
+  }, [onConfirmImport, onReconcile, onRescan, pendingUploads]);
+  const handleAuditStatements = React.useCallback(async () => {
+    if (!onAuditStatements) {
+      return;
+    }
+    const startDate = window.prompt('Audit start date (YYYY-MM-DD, optional)', '') || '';
+    if (startDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      return;
+    }
+    const endDate = window.prompt('Audit end date (YYYY-MM-DD, optional)', '') || '';
+    if (endDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return;
+    }
+    const response = await onAuditStatements({
+      start_date: startDate || null,
+      end_date: endDate || null,
+    });
+    window.alert(response.run.summary_text);
+  }, [onAuditStatements]);
   const restoreArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload, shouldFocus = false) => {
     const response = await onRestoreStatement(upload.id);
     if (shouldFocus) {
@@ -621,6 +654,26 @@ export function Accumul8StatementModal({
           <div className="modal-header">
             <h5 className="modal-title">Bank Statements</h5>
             <div className="accumul8-statement-modal-header-actions">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => void handleBatchProcessInbox()}
+                disabled={busy || pendingUploads.length === 0}
+                title={`Batch process inbox (${pendingUploads.length})`}
+                aria-label={`Batch process inbox (${pendingUploads.length})`}
+              >
+                ⚙️
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => void handleAuditStatements()}
+                disabled={busy || !onAuditStatements}
+                title="Audit captured statements"
+                aria-label="Audit captured statements"
+              >
+                🔎
+              </button>
               <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
@@ -723,6 +776,18 @@ export function Accumul8StatementModal({
                     <div className="small text-muted">Use Inbox for items that still need decisions. Use Library to browse older statements by filter and open one statement at a time instead of expanding a long list.</div>
                   </section>
                 )}
+                {latestAuditRun ? (
+                  <section className="accumul8-statement-history-card accumul8-statement-result-card">
+                    <strong>Latest audit</strong>
+                    <div className="small text-muted mb-2">{latestAuditRun.created_at || 'Saved audit run'}</div>
+                    <div className="accumul8-statement-chip-row">
+                      <span className="accumul8-statement-chip is-processed">{latestAuditRun.passed_count} passed</span>
+                      <span className="accumul8-statement-chip">{latestAuditRun.warning_count} warning</span>
+                      <span className={`accumul8-statement-chip${latestAuditRun.failed_count > 0 ? ' is-warning' : ''}`}>{latestAuditRun.failed_count} failed</span>
+                    </div>
+                    <div className="small text-muted">{latestAuditRun.summary_text}</div>
+                  </section>
+                ) : null}
               </section>
 
               {activeSection === 'search' ? (
@@ -831,7 +896,7 @@ export function Accumul8StatementModal({
                                                   <span className="accumul8-statement-detail-amount">{Number(detail.amount || 0).toFixed(2)}</span>
                                                 </div>
                                                 <div className="small text-muted">
-                                                  {[detail.transaction_date || 'No date', detail.result || '', detail.details || ''].filter(Boolean).join(' · ')}
+                                                  {[detail.statement_account_label || '', detail.transaction_date || 'No date', detail.result || '', detail.details || ''].filter(Boolean).join(' · ')}
                                                 </div>
                                               </div>
                                               <div className="accumul8-statement-detail-actions">
@@ -874,7 +939,7 @@ export function Accumul8StatementModal({
                                                     <span className="accumul8-statement-detail-amount">{Number(row.amount || 0).toFixed(2)}</span>
                                                   </div>
                                                   <div className="small text-muted">
-                                                    {[row.transaction_date || 'No date', row.page_number ? `Page ${row.page_number}` : '', row.running_balance !== undefined && row.running_balance !== null ? `Balance ${Number(row.running_balance).toFixed(2)}` : ''].filter(Boolean).join(' · ')}
+                                                    {[row.statement_account_label || '', row.transaction_date || 'No date', row.page_number ? `Page ${row.page_number}` : '', row.running_balance !== undefined && row.running_balance !== null ? `Balance ${Number(row.running_balance).toFixed(2)}` : ''].filter(Boolean).join(' · ')}
                                                   </div>
                                                   {row.reason ? <div className="accumul8-statement-error mt-1">{row.reason}</div> : null}
                                                   {row.memo ? <div className="small text-muted mt-1">{row.memo}</div> : null}

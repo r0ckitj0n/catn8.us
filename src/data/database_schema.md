@@ -307,7 +307,7 @@ Business term: Banking Organizations
 - `processing_notes_json` (LONGTEXT/JSON, NULLABLE)
 - `transaction_locator_json` (LONGTEXT/JSON, per-transaction page map for opening the saved PDF to the right page)
 - `page_catalog_json` (LONGTEXT/JSON, per-page extracted text catalog used to infer likely statement pages)
-- `parsed_payload_json` (LONGTEXT/JSON, NULLABLE)
+- `parsed_payload_json` (LONGTEXT/JSON, NULLABLE, parsed statement payload with per-transaction account tags for multi-account packets)
 - `catalog_summary` (TEXT, NULLABLE, AI-generated catalog/search summary)
 - `catalog_keywords_json` (LONGTEXT/JSON, NULLABLE)
 - `import_result_json` (LONGTEXT/JSON, NULLABLE, last import outcome snapshot)
@@ -335,6 +335,20 @@ Business term: Banking Organizations
 - `invalid_row_count` (INT)
 - `summary_text` (TEXT, human-readable run summary shown in the UI)
 - `details_json` (LONGTEXT/JSON, per-row action log for the reconciliation run)
+- `created_at` (TIMESTAMP)
+
+### accumul8_statement_audit_runs
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `actor_user_id` (INT, user who ran the audit)
+- `audit_start_date` (DATE, NULLABLE)
+- `audit_end_date` (DATE, NULLABLE)
+- `upload_count` (INT, statements audited in the run)
+- `passed_count` (INT)
+- `warning_count` (INT)
+- `failed_count` (INT)
+- `summary_text` (TEXT, run summary shown in the UI)
+- `report_json` (LONGTEXT/JSON, saved per-statement audit report including account-section totals and discrepancies)
 - `created_at` (TIMESTAMP)
 
 ## VALID8 Tables

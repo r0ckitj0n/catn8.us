@@ -28,6 +28,7 @@ import {
   Accumul8StatementArchiveResponse,
   Accumul8StatementRestoreResponse,
   Accumul8StatementDeleteArchivedResponse,
+  Accumul8StatementAuditRun,
   Accumul8StatementImportResult,
   Accumul8StatementSearchResult,
   Accumul8Transaction,
@@ -59,6 +60,7 @@ export function useAccumul8(
   const [bankConnections, setBankConnections] = React.useState<any[]>([]);
   const [statementUploads, setStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [archivedStatementUploads, setArchivedStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
+  const [statementAuditRuns, setStatementAuditRuns] = React.useState<Accumul8StatementAuditRun[]>([]);
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'plaid', env: 'sandbox', configured: 0 });
   const handleError = React.useCallback((error: any, fallback = 'Accumul8 request failed') => {
     const message = String(error?.message || fallback);
@@ -96,6 +98,7 @@ export function useAccumul8(
       setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
       setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
       setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
+      setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
       setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
       setLoaded(true);
@@ -570,6 +573,28 @@ export function useAccumul8(
       throw error;
     }
   }, [handleError, scopedActionUrl]);
+  const auditStatementUploads = React.useCallback(async (payload: {
+    start_date?: string | null;
+    end_date?: string | null;
+  }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; run: Accumul8StatementAuditRun; runs: Accumul8StatementAuditRun[] }>(
+        scopedActionUrl('audit_statement_uploads'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Statement audit finished. Review the audit report for discrepancies and totals.' });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to audit bank statements');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -613,6 +638,7 @@ export function useAccumul8(
     bankConnections,
     statementUploads,
     archivedStatementUploads,
+    statementAuditRuns,
     syncProvider,
     load,
     createEntity,
@@ -662,5 +688,6 @@ export function useAccumul8(
     importStatementReviewRow,
     linkStatementReviewRow,
     searchStatementUploads,
+    auditStatementUploads,
   };
 }

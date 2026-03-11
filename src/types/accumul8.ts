@@ -17,11 +17,15 @@ export interface Accumul8StatementAlert {
 }
 
 export interface Accumul8StatementTransactionLocator {
+  row_index?: number;
   transaction_date: string;
   description: string;
   amount: number;
   running_balance: number | null;
   page_number: number | null;
+  statement_account_name_hint?: string;
+  statement_account_last4?: string;
+  statement_account_label?: string;
 }
 
 export interface Accumul8StatementPageCatalogEntry {
@@ -71,6 +75,10 @@ export interface Accumul8StatementImportResultRow {
   page_number?: number | null;
   reason?: string;
   existing_transaction_id?: number;
+  suggested_account_id?: number | null;
+  statement_account_name_hint?: string;
+  statement_account_last4?: string;
+  statement_account_label?: string;
   id?: number;
 }
 
@@ -91,6 +99,63 @@ export interface Accumul8StatementReconciliationDetail {
   transaction_id: number | null;
   result: string;
   details: string;
+  resolved_account_id?: number | null;
+  statement_account_name_hint?: string;
+  statement_account_last4?: string;
+  statement_account_label?: string;
+}
+
+export interface Accumul8StatementAuditSection {
+  statement_account_label: string;
+  statement_account_name_hint: string;
+  statement_account_last4: string;
+  expected_account_id: number | null;
+  statement_total: number;
+  matched_total: number;
+  amount_delta: number;
+  row_count: number;
+  matched_count: number;
+}
+
+export interface Accumul8StatementAuditIssue {
+  row_index: number;
+  result: string;
+  details: string;
+  statement_account_label: string;
+  description: string;
+  transaction_date: string;
+  amount: number | null;
+  matched_transaction_ids?: number[];
+  matched_account_ids?: number[];
+}
+
+export interface Accumul8StatementAuditReportItem {
+  upload_id: number;
+  original_filename: string;
+  status: string;
+  summary: string;
+  counts: {
+    valid_rows: number;
+    matched_rows: number;
+    wrong_account_rows: number;
+    missing_rows: number;
+    invalid_rows: number;
+  };
+  account_sections: Accumul8StatementAuditSection[];
+  issues?: Accumul8StatementAuditIssue[];
+}
+
+export interface Accumul8StatementAuditRun {
+  id: number;
+  audit_start_date: string;
+  audit_end_date: string;
+  upload_count: number;
+  passed_count: number;
+  warning_count: number;
+  failed_count: number;
+  summary_text: string;
+  report: Accumul8StatementAuditReportItem[];
+  created_at: string;
 }
 
 export interface Accumul8StatementReconciliationRun {
@@ -609,6 +674,7 @@ export interface Accumul8BootstrapResponse {
   debtors: Accumul8Debtor[];
   debtor_ledger: Accumul8Transaction[];
   budget_rows: Accumul8BudgetRow[];
+  statement_audit_runs: Accumul8StatementAuditRun[];
   sync_provider: {
     provider: string;
     env: string;

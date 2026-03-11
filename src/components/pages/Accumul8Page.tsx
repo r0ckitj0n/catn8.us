@@ -480,6 +480,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     bankConnections,
     statementUploads,
     archivedStatementUploads,
+    statementAuditRuns,
     syncProvider,
     load,
     createEntity,
@@ -524,6 +525,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     importStatementReviewRow,
     linkStatementReviewRow,
     searchStatementUploads,
+    auditStatementUploads,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [entityForm, setEntityForm] = React.useState<EntityFormState>(DEFAULT_ENTITY_FORM);
@@ -3510,6 +3512,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 bankingOrganizations={bankingOrganizations}
                 statementUploads={statementUploads}
                 archivedStatementUploads={archivedStatementUploads}
+                statementAuditRuns={statementAuditRuns}
                 transactions={transactions}
                 ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
                 onUpload={uploadStatement}
@@ -3522,6 +3525,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onImportReviewRow={importStatementReviewRow}
                 onLinkReviewRow={linkStatementReviewRow}
                 onSearch={searchStatementUploads}
+                onAuditStatements={auditStatementUploads}
                 onOpenTransaction={beginViewTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />

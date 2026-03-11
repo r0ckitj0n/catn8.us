@@ -1,4 +1,4 @@
-export type SiteMaintenanceTab = 'status' | 'database' | 'backups' | 'restore' | 'cleanup';
+export type SiteMaintenanceTab = 'status' | 'database' | 'backups' | 'restore' | 'cleanup' | 'accumul8';
 
 export interface ISiteMaintenancePrimaryIdentity {
   identifier: string;
@@ -64,4 +64,34 @@ export interface ISiteMaintenanceActionResult {
   success: boolean;
   message?: string;
   [key: string]: unknown;
+}
+
+export interface ISiteMaintenanceAccumul8RescanRow {
+  id: number;
+  owner_user_id: number;
+  status: string;
+  original_filename: string;
+  reasons?: string[];
+  needs_catalog_refresh?: boolean;
+  has_successful_scan?: boolean;
+  last_error?: string;
+  last_scanned_at?: string;
+  error?: string;
+  catalog_page_count?: number;
+  locator_count?: number;
+}
+
+export interface ISiteMaintenanceAccumul8RescanResult {
+  owner_user_id: number | null;
+  dry_run: boolean;
+  limit: number;
+  only_missing_successful_scan: boolean;
+  include_missing_catalog: boolean;
+  force: boolean;
+  candidate_count: number;
+  scanned_count: number;
+  success_count: number;
+  failure_count: number;
+  skipped_count: number;
+  results: ISiteMaintenanceAccumul8RescanRow[];
 }

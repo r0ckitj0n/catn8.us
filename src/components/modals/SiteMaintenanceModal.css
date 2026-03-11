@@ -242,6 +242,47 @@
   color: #465772;
 }
 
+.catn8-site-maint-accumul8-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 0.85rem 0 1rem;
+}
+
+.catn8-site-maint-accumul8-checks {
+  margin-bottom: 1rem;
+}
+
+.catn8-site-maint-result-table-wrap {
+  margin-top: 1rem;
+  overflow: auto;
+  border: 1px solid #d8dee7;
+  border-radius: 10px;
+}
+
+.catn8-site-maint-result-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.catn8-site-maint-result-table th,
+.catn8-site-maint-result-table td {
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid #e7ebf1;
+  text-align: left;
+  vertical-align: top;
+}
+
+.catn8-site-maint-result-table th {
+  background: #f4f6fa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.74rem;
+  color: #55657b;
+}
+
 .catn8-site-maint-check-label {
   font-size: 1.15rem;
 }
@@ -269,6 +310,10 @@
   }
 
   .catn8-site-maint-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .catn8-site-maint-accumul8-grid {
     grid-template-columns: 1fr;
   }
 

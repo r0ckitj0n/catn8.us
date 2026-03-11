@@ -2,7 +2,7 @@ import React from 'react';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
-import { SiteMaintenanceTab } from '../../types/siteMaintenance';
+import { ISiteMaintenanceAccumul8RescanResult, SiteMaintenanceTab } from '../../types/siteMaintenance';
 import { useSiteMaintenance } from './hooks/useSiteMaintenance';
 import './SiteMaintenanceModal.css';
 
@@ -18,6 +18,7 @@ const tabs: Array<{ key: SiteMaintenanceTab; label: string }> = [
   { key: 'backups', label: 'Backups' },
   { key: 'restore', label: 'Restore' },
   { key: 'cleanup', label: 'Cleanup' },
+  { key: 'accumul8', label: 'Accumul8' },
 ];
 
 const statCard = (
@@ -40,6 +41,13 @@ export function SiteMaintenanceModal({ open, onClose, onToast }: SiteMaintenance
   const [restoreWebsiteMode, setRestoreWebsiteMode] = React.useState<'full' | 'selected'>('full');
   const [restoreDatabaseMode, setRestoreDatabaseMode] = React.useState<'full' | 'selected'>('full');
   const [cleanupDryRun, setCleanupDryRun] = React.useState(true);
+  const [accumul8OwnerUserId, setAccumul8OwnerUserId] = React.useState('1');
+  const [accumul8Limit, setAccumul8Limit] = React.useState('25');
+  const [accumul8DryRun, setAccumul8DryRun] = React.useState(true);
+  const [accumul8OnlyMissingSuccessfulScan, setAccumul8OnlyMissingSuccessfulScan] = React.useState(true);
+  const [accumul8IncludeMissingCatalog, setAccumul8IncludeMissingCatalog] = React.useState(true);
+  const [accumul8Force, setAccumul8Force] = React.useState(false);
+  const [accumul8Result, setAccumul8Result] = React.useState<ISiteMaintenanceAccumul8RescanResult | null>(null);
 
   const [selectedImageGroups, setSelectedImageGroups] = React.useState<string[]>(['all']);
   const [selectedDbGroups, setSelectedDbGroups] = React.useState<string[]>([]);
@@ -90,6 +98,36 @@ export function SiteMaintenanceModal({ open, onClose, onToast }: SiteMaintenance
     } catch (err: any) {
       pushToast(onToast, 'error', String(err?.message || 'Action failed'));
       return null;
+    }
+  };
+
+  const runAccumul8Rescan = async () => {
+    const parsedLimit = Number.parseInt(accumul8Limit, 10);
+    const normalizedLimit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(500, parsedLimit)) : 25;
+    const parsedOwnerId = Number.parseInt(accumul8OwnerUserId, 10);
+    const ownerUserId = Number.isFinite(parsedOwnerId) && parsedOwnerId > 0 ? parsedOwnerId : null;
+
+    const res = await runAction(
+      () =>
+        maint.runJsonAction('accumul8_rescan_statements', {
+          owner_user_id: ownerUserId,
+          limit: normalizedLimit,
+          dry_run: accumul8DryRun,
+          only_missing_successful_scan: accumul8OnlyMissingSuccessfulScan,
+          include_missing_catalog: accumul8IncludeMissingCatalog,
+          force: accumul8Force,
+        }),
+      accumul8DryRun ? 'Accumul8 dry run completed' : 'Accumul8 rescan completed',
+    );
+
+    if (res?.result && typeof res.result === 'object') {
+      const next = res.result as ISiteMaintenanceAccumul8RescanResult;
+      setAccumul8Result(next);
+      pushToast(
+        onToast,
+        next.failure_count > 0 ? 'info' : 'success',
+        `${next.candidate_count} candidate(s), ${next.success_count} succeeded, ${next.failure_count} failed.`,
+      );
     }
   };
 
@@ -270,6 +308,76 @@ export function SiteMaintenanceModal({ open, onClose, onToast }: SiteMaintenance
                     return res;
                   })}>Run Cleanup</button></div>
                 </div>
+              </div>
+            ) : null}
+
+            {activeTab === 'accumul8' ? (
+              <div className="catn8-site-maint-panel" role="tabpanel">
+                <div className="catn8-site-maint-dashed-card">
+                  <h3>Statement Rescan Batch</h3>
+                  <p>Runs the server-side Accumul8 statement rescan flow for uploads missing a successful scan and/or missing locator catalog data.</p>
+                  <div className="catn8-site-maint-accumul8-grid">
+                    <label>
+                      <span className="catn8-site-maint-upload-label">Owner User ID</span>
+                      <input className="form-control" type="number" min={1} value={accumul8OwnerUserId} onChange={(e) => setAccumul8OwnerUserId(e.target.value)} />
+                    </label>
+                    <label>
+                      <span className="catn8-site-maint-upload-label">Batch Limit</span>
+                      <input className="form-control" type="number" min={1} max={500} value={accumul8Limit} onChange={(e) => setAccumul8Limit(e.target.value)} />
+                    </label>
+                  </div>
+                  <div className="catn8-site-maint-checkbox-grid catn8-site-maint-accumul8-checks">
+                    <label><input type="checkbox" checked={accumul8DryRun} onChange={(e) => setAccumul8DryRun(e.target.checked)} /> Dry run only</label>
+                    <label><input type="checkbox" checked={accumul8OnlyMissingSuccessfulScan} onChange={(e) => setAccumul8OnlyMissingSuccessfulScan(e.target.checked)} /> Include missing successful scan</label>
+                    <label><input type="checkbox" checked={accumul8IncludeMissingCatalog} onChange={(e) => setAccumul8IncludeMissingCatalog(e.target.checked)} /> Include missing catalog data</label>
+                    <label><input type="checkbox" checked={accumul8Force} onChange={(e) => setAccumul8Force(e.target.checked)} /> Force all statements in scope</label>
+                  </div>
+                  <div className="catn8-site-maint-bar">
+                    <div className="catn8-site-maint-muted">Run a dry run first, then execute in chunks if the candidate list looks right.</div>
+                    <button type="button" className="btn catn8-site-maint-btn-green" disabled={maint.busy || maint.loading} onClick={() => void runAccumul8Rescan()}>
+                      {accumul8DryRun ? 'Preview Candidates' : 'Run Statement Rescan'}
+                    </button>
+                  </div>
+                </div>
+
+                {accumul8Result ? (
+                  <div className="catn8-site-maint-card mt-3">
+                    <h3>Latest Batch Result</h3>
+                    <div className="catn8-site-maint-chip-row">
+                      <span className="catn8-site-maint-chip">candidates {accumul8Result.candidate_count}</span>
+                      <span className="catn8-site-maint-chip">scanned {accumul8Result.scanned_count}</span>
+                      <span className="catn8-site-maint-chip">success {accumul8Result.success_count}</span>
+                      <span className="catn8-site-maint-chip">failed {accumul8Result.failure_count}</span>
+                      <span className="catn8-site-maint-chip">skipped {accumul8Result.skipped_count}</span>
+                    </div>
+                    <div className="catn8-site-maint-result-table-wrap">
+                      <table className="catn8-site-maint-result-table">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Status</th>
+                            <th>Reasons</th>
+                            <th>Catalog</th>
+                            <th>Last Scan</th>
+                            <th>Details</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {accumul8Result.results.map((row) => (
+                            <tr key={`${row.owner_user_id}-${row.id}`}>
+                              <td>{row.id}</td>
+                              <td>{row.status || 'unknown'}</td>
+                              <td>{Array.isArray(row.reasons) && row.reasons.length > 0 ? row.reasons.join(', ') : 'n/a'}</td>
+                              <td>{typeof row.catalog_page_count === 'number' || typeof row.locator_count === 'number' ? `${row.catalog_page_count ?? 0} page(s), ${row.locator_count ?? 0} locator(s)` : row.needs_catalog_refresh ? 'needs refresh' : 'ok'}</td>
+                              <td>{row.last_scanned_at || 'never'}</td>
+                              <td>{row.error || row.last_error || row.original_filename}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

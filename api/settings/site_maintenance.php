@@ -1133,4 +1133,72 @@ if ($action === 'cleanup_images') {
     catn8_json_response(['success' => true, 'message' => $dryRun ? 'Dry run completed' : 'Cleanup completed', 'result' => $res]);
 }
 
+if ($action === 'accumul8_rescan_statements') {
+    $requireMethod('POST');
+    $body = $requireJsonBody();
+
+    $ownerUserId = isset($body['owner_user_id']) && $body['owner_user_id'] !== ''
+        ? (int)$body['owner_user_id']
+        : null;
+    if ($ownerUserId !== null && $ownerUserId <= 0) {
+        $fail('settings.site_maintenance.accumul8_rescan', 400, 'Invalid owner_user_id');
+    }
+
+    $limit = isset($body['limit']) ? (int)$body['limit'] : 25;
+    if ($limit <= 0 || $limit > 500) {
+        $fail('settings.site_maintenance.accumul8_rescan', 400, 'limit must be between 1 and 500');
+    }
+
+    $options = [
+        'dry_run' => !empty($body['dry_run']),
+        'force' => !empty($body['force']),
+        'limit' => $limit,
+        'only_missing_successful_scan' => array_key_exists('only_missing_successful_scan', $body)
+            ? (bool)$body['only_missing_successful_scan']
+            : true,
+        'include_missing_catalog' => array_key_exists('include_missing_catalog', $body)
+            ? (bool)$body['include_missing_catalog']
+            : true,
+    ];
+
+    if (!$options['force'] && !$options['only_missing_successful_scan'] && !$options['include_missing_catalog']) {
+        $fail('settings.site_maintenance.accumul8_rescan', 400, 'Select at least one candidate filter or enable force');
+    }
+
+    try {
+        if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
+            define('CATN8_ACCUMUL8_LIBRARY_ONLY', true);
+        }
+        require_once __DIR__ . '/../accumul8.php';
+
+        $result = accumul8_statement_batch_rescan($ownerUserId, $options);
+        catn8_diagnostics_log_event(
+            'settings.site_maintenance.accumul8_rescan',
+            true,
+            200,
+            $options['dry_run'] ? 'Accumul8 statement dry run completed' : 'Accumul8 statement rescan completed',
+            [
+                'owner_user_id' => $ownerUserId,
+                'limit' => $limit,
+                'dry_run' => $options['dry_run'],
+                'force' => $options['force'],
+                'candidate_count' => (int)($result['candidate_count'] ?? 0),
+                'success_count' => (int)($result['success_count'] ?? 0),
+                'failure_count' => (int)($result['failure_count'] ?? 0),
+            ]
+        );
+
+        catn8_json_response([
+            'success' => true,
+            'message' => $options['dry_run'] ? 'Accumul8 statement dry run completed' : 'Accumul8 statement rescan completed',
+            'result' => $result,
+        ]);
+    } catch (Throwable $e) {
+        $fail('settings.site_maintenance.accumul8_rescan', 500, (string)$e->getMessage(), [
+            'owner_user_id' => $ownerUserId,
+            'limit' => $limit,
+        ]);
+    }
+}
+
 $fail('settings.site_maintenance', 400, 'Unknown action');

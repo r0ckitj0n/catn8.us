@@ -347,6 +347,26 @@
   gap: 0.55rem;
 }
 
+.accumul8-statement-inline-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0d6efd;
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
+.accumul8-statement-inline-link:disabled {
+  color: #6c757d;
+  cursor: default;
+  text-decoration: none;
+}
+
+.accumul8-statement-inline-delimiter {
+  color: #6d5d44;
+}
+
 .accumul8-statement-card-actions {
   display: inline-flex;
   flex-wrap: wrap;

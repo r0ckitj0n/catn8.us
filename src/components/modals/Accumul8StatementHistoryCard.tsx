@@ -1,7 +1,7 @@
 import React from 'react';
 import { Accumul8StatementImportResultRow, Accumul8StatementSearchResult, Accumul8StatementTransactionLocator, Accumul8StatementUpload, Accumul8Transaction } from '../../types/accumul8';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
-import { Accumul8StatementOcrDialog } from './Accumul8StatementOcrDialog';
+import { openAccumul8StatementOcrPopup, openAccumul8StatementPdfPopup } from '../../utils/accumul8StatementPopup';
 
 export type StatementHistoryPanel = 'status' | 'review' | 'reconciliation' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | null;
 
@@ -165,10 +165,10 @@ export function Accumul8StatementHistoryCard({
   formatFileSize,
 }: Accumul8StatementHistoryCardProps) {
   const [activePanel, setActivePanel] = React.useState<StatementHistoryPanel>(null);
-  const [ocrDialogOpen, setOcrDialogOpen] = React.useState(false);
   const importedRows = upload.import_result?.successful_rows || [];
   const duplicateRows = upload.import_result?.duplicate_rows || [];
   const failedRows = upload.import_result?.failed_rows || [];
+  const statementHref = buildStatementHref(upload.id, ownerUserId);
 
   const openPanel = React.useCallback((panel: Exclude<StatementHistoryPanel, null>) => {
     if (panel !== 'status' && onOpenWorkspace) {
@@ -193,6 +193,14 @@ export function Accumul8StatementHistoryCard({
     }
     openPanel('reconciliation');
   }, [onOpenWorkspace, onReconcile, openPanel]);
+  const handleOpenStatement = React.useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    openAccumul8StatementPdfPopup(statementHref, upload.id);
+  }, [statementHref, upload.id]);
+  const handleOpenOcrStatement = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    openAccumul8StatementOcrPopup(upload);
+  }, [upload]);
 
   const renderPanel = () => {
     if (activePanel === 'status') {
@@ -348,11 +356,12 @@ export function Accumul8StatementHistoryCard({
       <div className="accumul8-statement-history-card-head">
         <div>
           <div className="accumul8-statement-file-row">
-            <strong>
-              <a href={buildStatementHref(upload.id, ownerUserId)} target="_blank" rel="noreferrer">{upload.original_filename}</a>
-            </strong>
+            <a href={statementHref} onClick={handleOpenStatement} title={upload.original_filename}>Bank Statement</a>
             {upload.ocr_statement ? (
-              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => setOcrDialogOpen(true)}>OCR Statement</button>
+              <>
+                <span className="accumul8-statement-inline-delimiter" aria-hidden="true">|</span>
+                <button type="button" className="accumul8-statement-inline-link" disabled={busy} onClick={handleOpenOcrStatement}>OCR Statement</button>
+              </>
             ) : null}
           </div>
           <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), upload.account_name || 'Unmatched account', formatDateRange(upload), formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
@@ -363,7 +372,7 @@ export function Accumul8StatementHistoryCard({
           ) : null}
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onRescan}>Re-scan</button>
           {onReconcile ? <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={runReconciliation}>Reconciliation</button> : null}
-          <a className="btn btn-sm btn-outline-primary" href={buildStatementHref(upload.id, ownerUserId)} target="_blank" rel="noreferrer">View</a>
+          <a className="btn btn-sm btn-outline-primary" href={statementHref} onClick={handleOpenStatement}>View</a>
         </div>
       </div>
       <div className="accumul8-statement-chip-row">
@@ -385,7 +394,6 @@ export function Accumul8StatementHistoryCard({
       {!activePanel && (upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note) ? <div className="small text-muted">{upload.reconciliation_runs[0]?.summary_text || upload.reconciliation_note}</div> : null}
       {!activePanel && upload.processing_notes.length > 0 ? <div className="small text-muted">{upload.processing_notes.join(' ')}</div> : null}
       {!activePanel && upload.last_error ? <div className="accumul8-statement-error">{upload.last_error}</div> : null}
-      <Accumul8StatementOcrDialog open={ocrDialogOpen} upload={upload} ownerUserId={ownerUserId} onClose={() => setOcrDialogOpen(false)} />
     </article>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Accumul8StatementKind, Accumul8StatementUpload } from '../../types/accumul8';
 import { StatementHistoryPanel } from './Accumul8StatementHistoryCard';
-import { Accumul8StatementOcrDialog } from './Accumul8StatementOcrDialog';
+import { openAccumul8StatementOcrPopup, openAccumul8StatementPdfPopup } from '../../utils/accumul8StatementPopup';
 
 export interface Accumul8StatementNewAccountDraft {
   banking_organization_name: string;
@@ -52,7 +52,6 @@ export function Accumul8StatementPlanCard({
   const accountMatchReason = normalizeStatementHelperText(plan?.account_match_reason || '');
   const filteredProcessingNotes = upload.processing_notes.filter((note) => normalizeStatementHelperText(note) !== '');
   const [activePanel, setActivePanel] = React.useState<'importable' | 'duplicates' | 'invalid' | 'totals' | null>(null);
-  const [ocrDialogOpen, setOcrDialogOpen] = React.useState(false);
   const [selectedKind, setSelectedKind] = React.useState<Accumul8StatementKind>(upload.statement_kind || 'bank_account');
   const [selectedSection, setSelectedSection] = React.useState(() => {
     const sections = plan?.account_section_options || [];
@@ -90,6 +89,14 @@ export function Accumul8StatementPlanCard({
       account_last4: section.account_last4,
     });
   }, [onUpdateMetadata, plan?.account_section_options, upload.id]);
+  const handleOpenStatement = React.useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    openAccumul8StatementPdfPopup(statementHref, upload.id);
+  }, [statementHref, upload.id]);
+  const handleOpenOcrStatement = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    openAccumul8StatementOcrPopup(upload);
+  }, [upload]);
 
   return (
     <article className="accumul8-statement-history-card accumul8-statement-plan-card">
@@ -104,11 +111,12 @@ export function Accumul8StatementPlanCard({
         <div className="accumul8-statement-plan-main">
           <div>
             <div className="accumul8-statement-file-row">
-              <strong>
-                <a href={statementHref} target="_blank" rel="noreferrer">{upload.original_filename}</a>
-              </strong>
+              <a href={statementHref} onClick={handleOpenStatement} title={upload.original_filename}>Bank Statement</a>
               {upload.ocr_statement ? (
-                <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => setOcrDialogOpen(true)}>OCR Statement</button>
+                <>
+                  <span className="accumul8-statement-inline-delimiter" aria-hidden="true">|</span>
+                  <button type="button" className="accumul8-statement-inline-link" disabled={busy} onClick={handleOpenOcrStatement}>OCR Statement</button>
+                </>
               ) : null}
             </div>
             <div className="small text-muted">{[upload.statement_kind.replace('_', ' '), formatDateRange(upload), `${plan?.importable_transaction_count || 0} importable rows`, formatFileSize(upload.file_size_bytes)].join(' · ')}</div>
@@ -178,7 +186,6 @@ export function Accumul8StatementPlanCard({
       {upload.catalog_verification?.summary ? <div className={`small text-muted accumul8-statement-catalog-check is-${upload.catalog_verification.status}`}>{upload.catalog_verification.summary}</div> : null}
       {filteredProcessingNotes.length > 0 ? <div className="small text-muted mt-2">{filteredProcessingNotes.join(' ')}</div> : null}
       {upload.last_error ? <div className="accumul8-statement-error">{upload.last_error}</div> : null}
-      <Accumul8StatementOcrDialog open={ocrDialogOpen} upload={upload} ownerUserId={ownerUserId} onClose={() => setOcrDialogOpen(false)} />
     </article>
   );
 }

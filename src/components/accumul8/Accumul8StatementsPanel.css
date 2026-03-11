@@ -156,6 +156,33 @@
   max-width: 100%;
 }
 
+.accumul8-statement-result-card.is-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.7rem;
+  flex-wrap: nowrap;
+}
+
+.accumul8-statement-result-card.is-inline strong,
+.accumul8-statement-result-card.is-inline .small,
+.accumul8-statement-result-card.is-inline .accumul8-statement-chip-row {
+  margin: 0;
+}
+
+.accumul8-statement-result-card.is-inline strong {
+  white-space: nowrap;
+}
+
+.accumul8-statement-result-card.is-inline .small {
+  white-space: nowrap;
+}
+
+.accumul8-statement-result-card.is-inline .accumul8-statement-chip-row {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
 .accumul8-statement-section-head {
   display: flex;
   justify-content: space-between;

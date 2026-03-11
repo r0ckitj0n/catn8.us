@@ -50,7 +50,7 @@ interface Accumul8StatementsPanelProps {
 }
 const DEFAULT_KIND: Accumul8StatementKind = 'bank_account';
 
-type StatementModalSection = 'inbox' | 'library' | 'search';
+type StatementModalSection = 'inbox' | 'library' | 'search' | 'signals';
 type StatementLibraryFilter = 'all' | 'review' | 'processed' | 'failed' | 'suspicious';
 type StatementWorkspacePanel = 'review' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | 'reconciliation';
 
@@ -269,6 +269,7 @@ export function Accumul8StatementsPanel({
   const [activeSection, setActiveSection] = React.useState<StatementModalSection>('inbox');
   const [selectedWorkspacePanel, setSelectedWorkspacePanel] = React.useState<StatementWorkspacePanel>('review');
   const [selectedLibraryUploadId, setSelectedLibraryUploadId] = React.useState<number | null>(null);
+  const [selectedSignalUploadId, setSelectedSignalUploadId] = React.useState<number | null>(null);
   const [libraryFilter, setLibraryFilter] = React.useState<StatementLibraryFilter>('all');
   const [libraryQuery, setLibraryQuery] = React.useState('');
   const [dismissedRowKeysByUpload, setDismissedRowKeysByUpload] = React.useState<Record<number, string[]>>({});
@@ -284,6 +285,7 @@ export function Accumul8StatementsPanel({
     setActiveSection('inbox');
     setSelectedWorkspacePanel('review');
     setSelectedLibraryUploadId(null);
+    setSelectedSignalUploadId(null);
     setLibraryFilter('all');
     setLibraryQuery('');
     setDismissedRowKeysByUpload({});
@@ -405,6 +407,24 @@ export function Accumul8StatementsPanel({
     () => (selectedLibraryUpload ? workspaceByUploadId[selectedLibraryUpload.id] || null : null),
     [selectedLibraryUpload, workspaceByUploadId],
   );
+  const signalUploads = React.useMemo(
+    () => sortedStatementUploads.filter((upload) => {
+      const workspace = workspaceByUploadId[upload.id];
+      return Boolean(workspace && (workspace.failed.length > 0 || workspace.suspicious.length > 0));
+    }),
+    [sortedStatementUploads, workspaceByUploadId],
+  );
+  const selectedSignalUpload = React.useMemo(
+    () => signalUploads.find((upload) => upload.id === selectedSignalUploadId)
+      || sortedStatementUploads.find((upload) => upload.id === selectedSignalUploadId)
+      || signalUploads[0]
+      || null,
+    [selectedSignalUploadId, signalUploads, sortedStatementUploads],
+  );
+  const selectedSignalWorkspace = React.useMemo(
+    () => (selectedSignalUpload ? workspaceByUploadId[selectedSignalUpload.id] || null : null),
+    [selectedSignalUpload, workspaceByUploadId],
+  );
   const overview = React.useMemo(() => ({
     review: pendingUploads.length,
     imported: statementUploads.reduce((sum, upload) => sum + (workspaceByUploadId[upload.id]?.imported.length || upload.imported_transaction_count || 0), 0),
@@ -438,6 +458,15 @@ export function Accumul8StatementsPanel({
       setSelectedLibraryUploadId(filteredLibraryUploads[0].id);
     }
   }, [filteredLibraryUploads, selectedLibraryUploadId]);
+  React.useEffect(() => {
+    if (signalUploads.length === 0) {
+      setSelectedSignalUploadId(null);
+      return;
+    }
+    if (!signalUploads.some((upload) => upload.id === selectedSignalUploadId)) {
+      setSelectedSignalUploadId(signalUploads[0].id);
+    }
+  }, [selectedSignalUploadId, signalUploads]);
 
   const handleSubmit = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -570,10 +599,10 @@ export function Accumul8StatementsPanel({
             <span className="accumul8-statement-summary-label">Search</span>
             <strong>{searchResults.length}</strong>
           </button>
-          <div className="accumul8-statement-summary-card">
+          <button type="button" className={`accumul8-statement-summary-card${activeSection === 'signals' ? ' is-active' : ''}`} onClick={() => setActiveSection('signals')}>
             <span className="accumul8-statement-summary-label">Signals</span>
             <strong>{overview.failed + overview.suspicious}</strong>
-          </div>
+          </button>
         </section>
         <div className="accumul8-statement-modal-header-actions">
           <Accumul8ModalHelp buttonLabel="Statement upload help" buttonTitle="Statement upload help" modalTitle="Statement Upload Help" parentOpen>
@@ -592,7 +621,7 @@ export function Accumul8StatementsPanel({
       </div>
       <div className="accumul8-statements-page-body">
         <div className="accumul8-statement-shell">
-          <section className={`accumul8-statement-top-grid${latestImportResult ? '' : ' is-single-column'}`}>
+          <section className="accumul8-statement-top-grid is-single-column">
             <div className="accumul8-statement-upload-card">
               <div className="accumul8-statement-upload-toolbar">
                 <div className="accumul8-statement-section-head">
@@ -627,20 +656,6 @@ export function Accumul8StatementsPanel({
                 <div className="small text-muted">{`${files.length} file(s) queued: ${files.map((file) => file.name).join(', ')}`}</div>
               ) : null}
             </div>
-
-            {latestImportResult ? (
-              <section className="accumul8-statement-history-card accumul8-statement-result-card">
-                <strong>Latest import result</strong>
-                <div className="small text-muted mb-2">{latestImportResult.filename}</div>
-                <div className="accumul8-statement-chip-row">
-                  <span className="accumul8-statement-chip is-processed">{latestImportResult.result?.imported_count || 0} imported</span>
-                  <span className="accumul8-statement-chip">{latestImportResult.result?.duplicate_count || 0} duplicates skipped</span>
-                  <span className={`accumul8-statement-chip${(latestImportResult.result?.failed_count || 0) > 0 ? ' is-warning' : ''}`}>{latestImportResult.result?.failed_count || 0} failed</span>
-                </div>
-                {latestImportResult.result?.successful_rows?.length ? <div className="small text-muted">Imported: {latestImportResult.result.successful_rows.map((row) => `${row.transaction_date || ''} ${row.description || ''}`.trim()).slice(0, 4).join(' | ')}</div> : null}
-                {latestImportResult.result?.failed_rows?.length ? <div className="accumul8-statement-error">Failed: {latestImportResult.result.failed_rows.map((row) => row.reason || 'Unknown error').slice(0, 3).join(' | ')}</div> : null}
-              </section>
-            ) : null}
           </section>
 
           {activeSection === 'search' ? (
@@ -668,6 +683,17 @@ export function Accumul8StatementsPanel({
                 <div>
                   <strong>Review inbox</strong>
                 </div>
+                {latestImportResult ? (
+                  <section className="accumul8-statement-history-card accumul8-statement-result-card is-inline">
+                    <strong>Latest import result</strong>
+                    <div className="small text-muted">{latestImportResult.filename}</div>
+                    <div className="accumul8-statement-chip-row">
+                      <span className="accumul8-statement-chip is-processed">{latestImportResult.result?.imported_count || 0} imported</span>
+                      <span className="accumul8-statement-chip">{latestImportResult.result?.duplicate_count || 0} duplicates skipped</span>
+                      <span className={`accumul8-statement-chip${(latestImportResult.result?.failed_count || 0) > 0 ? ' is-warning' : ''}`}>{latestImportResult.result?.failed_count || 0} failed</span>
+                    </div>
+                  </section>
+                ) : null}
               </div>
               {pendingUploads.length === 0 ? (
                 <div className="accumul8-statement-history-empty">Nothing is waiting for review. Open Library to inspect previous statements, or scan a new file to create a fresh review item.</div>
@@ -884,6 +910,72 @@ export function Accumul8StatementsPanel({
                   )}
                 </div>
               </div>
+            </section>
+          ) : null}
+
+          {activeSection === 'signals' ? (
+            <section className="accumul8-statement-panel accumul8-statement-workspace-shell">
+              <div className="accumul8-statement-section-head">
+                <div>
+                  <strong>Signals</strong>
+                </div>
+              </div>
+              {signalUploads.length === 0 ? (
+                <div className="accumul8-statement-history-empty">No failed or suspicious statement rows are waiting for attention.</div>
+              ) : (
+                <div className="accumul8-statement-workspace-grid">
+                  <div className="accumul8-statement-picker-column">
+                    <div className="accumul8-statement-picker-list">
+                      {signalUploads.map((upload) => {
+                        const workspace = selectedSignalWorkspace && selectedSignalUpload?.id === upload.id
+                          ? selectedSignalWorkspace
+                          : workspaceByUploadId[upload.id];
+                        return (
+                          <StatementPickerItem
+                            key={`signals-${upload.id}`}
+                            upload={upload}
+                            active={selectedSignalUpload?.id === upload.id}
+                            reviewCount={workspace?.review.length || 0}
+                            failedCount={workspace?.failed.length || 0}
+                            suspiciousCount={workspace?.suspicious.length || 0}
+                            onClick={() => setSelectedSignalUploadId(upload.id)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="accumul8-statement-detail-column">
+                    {selectedSignalUpload ? (
+                      <Accumul8StatementHistoryCard
+                        key={`signal-${selectedSignalUpload.id}`}
+                        busy={busy}
+                        ownerUserId={ownerUserId}
+                        upload={selectedSignalUpload}
+                        counts={{
+                          review: selectedSignalWorkspace?.review.length || 0,
+                          imported: selectedSignalWorkspace?.imported.length || 0,
+                          duplicates: selectedSignalWorkspace?.duplicates.length || 0,
+                          failed: selectedSignalWorkspace?.failed.length || 0,
+                          suspicious: selectedSignalWorkspace?.suspicious.length || 0,
+                        }}
+                        transactionsById={transactionsById}
+                        onRescan={() => void onRescan(selectedSignalUpload.id, selectedSignalUpload.account_id)}
+                        onReview={() => openWorkspace(
+                          selectedSignalUpload.id,
+                          (selectedSignalWorkspace?.failed.length || 0) > 0 ? 'failed' : 'suspicious',
+                        )}
+                        onOpenTransaction={onOpenTransaction}
+                        onDeleteTransaction={onDeleteTransaction}
+                        isReviewable={isAwaitingImportApproval(selectedSignalUpload)}
+                        formatDateRange={formatStatementDateRange}
+                        formatFileSize={formatStatementFileSize}
+                      />
+                    ) : (
+                      <div className="accumul8-statement-history-empty">Select a signal to inspect its statement details.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
           ) : null}
         </div>

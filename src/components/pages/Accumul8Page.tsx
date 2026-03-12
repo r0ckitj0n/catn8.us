@@ -569,6 +569,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     entities,
     entityAliases,
     entityEndexGuides,
+    entityEndexScanLogs,
     contacts,
     recurringPayments,
     transactions,
@@ -690,6 +691,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
   const [entityEndexFindingAll, setEntityEndexFindingAll] = React.useState(false);
+  const [entityEndexLogOpen, setEntityEndexLogOpen] = React.useState(false);
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
     if (!selectedBankingOrganizationId) {
@@ -3630,14 +3632,26 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                    placeholder="Search parents or aliases"
 	                  />
 	                </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => void runEntityEndexFinder()}
-                    disabled={busy}
-                  >
-                    {entityEndexFindingAll ? 'Searching All...' : 'Find Related Names'}
-                  </button>
+                  <div className="accumul8-entity-endex-toolbar-actions">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => void runEntityEndexFinder()}
+                      disabled={busy}
+                    >
+                      {entityEndexFindingAll ? 'Searching All...' : 'Find Related Names'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary accumul8-icon-action"
+                      onClick={() => setEntityEndexLogOpen(true)}
+                      disabled={busy && entityEndexScanLogs.length === 0}
+                      aria-label="View Entity Endex scan history"
+                      title="View Entity Endex scan history"
+                    >
+                      <span aria-hidden="true">i</span>
+                    </button>
+                  </div>
 	              </div>
                 <div className="accumul8-entity-endex-scroll">
 	                <div className="accumul8-entity-endex-guide mb-3">
@@ -4176,6 +4190,49 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+          {entityEndexLogOpen && (
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Entity Endex scan history" onClick={() => setEntityEndexLogOpen(false)}>
+              <div className="accumul8-help-modal accumul8-entity-endex-log-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="accumul8-settings-modal-header">
+                  <div>
+                    <h2 className="accumul8-settings-modal-title mb-0">Entity Endex Scan History</h2>
+                    <div className="small text-muted">Recent global runs and the parent-to-alias changes they made.</div>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityEndexLogOpen(false)}>Close</button>
+                </div>
+                <div className="accumul8-entity-endex-log-list accumul8-scroll-area accumul8-scroll-area--cards">
+                  {entityEndexScanLogs.length > 0 ? entityEndexScanLogs.map((log) => (
+                    <section key={log.id} className="accumul8-entity-endex-log-card">
+                      <div className="accumul8-entity-endex-log-card-head">
+                        <div>
+                          <strong>{formatInlineDate(log.created_at)}</strong>
+                          <div className="small text-muted">{log.summary_text}</div>
+                        </div>
+                        <div className="small text-muted">
+                          {log.created_count + log.updated_count} change{log.created_count + log.updated_count === 1 ? '' : 's'}
+                        </div>
+                      </div>
+                      <div className="accumul8-entity-endex-log-meta">
+                        <span>{log.scanned_entity_count} scanned</span>
+                        <span>{log.touched_entity_count} touched</span>
+                        <span>{log.conflict_count} conflicts</span>
+                      </div>
+                      <div className="accumul8-entity-endex-log-items">
+                        {log.items.length > 0 ? log.items.map((item, index) => (
+                          <div key={`${log.id}-${item.parent_entity_id}-${item.alias_name}-${index}`} className="accumul8-entity-endex-log-item">
+                            <span className="accumul8-entity-endex-log-item-status">{item.status === 'created' ? 'Added' : 'Updated'}</span>
+                            <span>{item.parent_name} ← {item.alias_name}</span>
+                          </div>
+                        )) : <div className="small text-muted">This run did not record any parent-to-alias changes.</div>}
+                      </div>
+                    </section>
+                  )) : (
+                    <div className="text-muted">No Entity Endex scan history yet.</div>
+                  )}
                 </div>
               </div>
             </div>

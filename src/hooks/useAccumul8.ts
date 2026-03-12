@@ -17,6 +17,7 @@ import {
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
   Accumul8EntityAlias,
+  Accumul8EntityEndexScanLog,
   Accumul8EntityAliasGlobalScanResponse,
   Accumul8EntityAliasScanRequest,
   Accumul8EntityAliasScanResponse,
@@ -55,6 +56,7 @@ export function useAccumul8(
   const [entities, setEntities] = React.useState<Accumul8Entity[]>([]);
   const [entityAliases, setEntityAliases] = React.useState<Accumul8EntityAlias[]>([]);
   const [entityEndexGuides, setEntityEndexGuides] = React.useState<Accumul8EntityEndexGuide[]>([]);
+  const [entityEndexScanLogs, setEntityEndexScanLogs] = React.useState<Accumul8EntityEndexScanLog[]>([]);
   const [contacts, setContacts] = React.useState<Accumul8Contact[]>([]);
   const [recurringPayments, setRecurringPayments] = React.useState<Accumul8RecurringPayment[]>([]);
   const [transactions, setTransactions] = React.useState<Accumul8Transaction[]>([]);
@@ -100,6 +102,7 @@ export function useAccumul8(
       setEntities(Array.isArray(res?.entities) ? res.entities : []);
       setEntityAliases(Array.isArray(res?.entity_aliases) ? res.entity_aliases : []);
       setEntityEndexGuides(Array.isArray(res?.entity_endex_guides) ? res.entity_endex_guides : []);
+      setEntityEndexScanLogs(Array.isArray(res?.entity_endex_scan_logs) ? res.entity_endex_scan_logs : []);
       setContacts(Array.isArray(res?.contacts) ? res.contacts : []);
       setRecurringPayments(Array.isArray(res?.recurring_payments) ? res.recurring_payments : []);
       setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -800,6 +803,7 @@ export function useAccumul8(
     entities,
     entityAliases,
     entityEndexGuides,
+    entityEndexScanLogs,
     contacts,
     recurringPayments,
     transactions,

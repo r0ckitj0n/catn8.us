@@ -172,6 +172,19 @@ Business term: Banking Organizations
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_entity_endex_scan_logs
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `scanned_entity_count` (INT)
+- `touched_entity_count` (INT)
+- `created_count` (INT)
+- `updated_count` (INT)
+- `skipped_count` (INT)
+- `conflict_count` (INT)
+- `summary_text` (VARCHAR(255))
+- `items_json` (LONGTEXT, JSON-encoded parent-to-alias change list for the run)
+- `created_at` (TIMESTAMP)
+
 ### accumul8_debtors
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)

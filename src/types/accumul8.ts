@@ -819,6 +819,26 @@ export interface Accumul8EntityAliasGlobalScanResponse {
   conflict_count: number;
 }
 
+export interface Accumul8EntityEndexScanLogItem {
+  parent_entity_id: number;
+  parent_name: string;
+  alias_name: string;
+  status: 'created' | 'updated';
+}
+
+export interface Accumul8EntityEndexScanLog {
+  id: number;
+  scanned_entity_count: number;
+  touched_entity_count: number;
+  created_count: number;
+  updated_count: number;
+  skipped_count: number;
+  conflict_count: number;
+  summary_text: string;
+  items: Accumul8EntityEndexScanLogItem[];
+  created_at: string;
+}
+
 export interface Accumul8DebtorUpsertRequest {
   debtor_name: string;
   contact_id?: number | null;
@@ -850,6 +870,7 @@ export interface Accumul8BootstrapResponse {
   entities: Accumul8Entity[];
   entity_aliases: Accumul8EntityAlias[];
   entity_endex_guides: Accumul8EntityEndexGuide[];
+  entity_endex_scan_logs: Accumul8EntityEndexScanLog[];
   contacts: Accumul8Contact[];
   recurring_payments: Accumul8RecurringPayment[];
   transactions: Accumul8Transaction[];

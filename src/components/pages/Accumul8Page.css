@@ -2028,6 +2028,13 @@ body.accumul8-column-resize-active {
   width: min(100%, 18rem);
 }
 
+.accumul8-entity-endex-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .accumul8-entity-endex-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -2467,6 +2474,67 @@ body.accumul8-column-resize-active {
 
 .accumul8-entity-history-modal .small.text-muted {
   color: var(--accumul8-deco-muted) !important;
+}
+
+.accumul8-entity-endex-log-modal {
+  width: min(980px, 96vw);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 31, 0.98), rgba(9, 14, 19, 0.98)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 58%);
+  color: var(--accumul8-deco-paper);
+}
+
+.accumul8-entity-endex-log-modal .small.text-muted {
+  color: var(--accumul8-deco-muted) !important;
+}
+
+.accumul8-entity-endex-log-list {
+  display: grid;
+  gap: 0.8rem;
+  max-height: 70vh;
+}
+
+.accumul8-entity-endex-log-card {
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.85rem;
+}
+
+.accumul8-entity-endex-log-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.45rem;
+}
+
+.accumul8-entity-endex-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.76rem;
+  color: var(--accumul8-deco-muted);
+  margin-bottom: 0.7rem;
+}
+
+.accumul8-entity-endex-log-items {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.accumul8-entity-endex-log-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  font-size: 0.84rem;
+}
+
+.accumul8-entity-endex-log-item-status {
+  color: #f4d47c;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .accumul8-entity-history-table th,

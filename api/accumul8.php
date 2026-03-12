@@ -3182,6 +3182,7 @@ function accumul8_entity_alias_candidate_matches_parent(string $candidate, strin
     }
 
     foreach ($seedKeys as $seedKey) {
+        $seedKey = (string)$seedKey;
         if ($seedKey === '' || strlen($seedKey) < 6) {
             continue;
         }
@@ -3302,17 +3303,30 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
     $skippedCount = 0;
     $conflictCount = 0;
     $aliasNames = [];
+    $items = [];
     foreach ($candidatesByKey as $candidate) {
         $result = accumul8_assign_entity_alias($viewerId, $entityId, $candidate, false);
         $status = (string)($result['status'] ?? '');
         if ($status === 'created') {
             $createdCount++;
             $aliasNames[] = $candidate;
+            $items[] = [
+                'parent_entity_id' => $entityId,
+                'parent_name' => $parentName,
+                'alias_name' => $candidate,
+                'status' => 'created',
+            ];
             continue;
         }
         if ($status === 'updated') {
             $updatedCount++;
             $aliasNames[] = $candidate;
+            $items[] = [
+                'parent_entity_id' => $entityId,
+                'parent_name' => $parentName,
+                'alias_name' => $candidate,
+                'status' => 'updated',
+            ];
             continue;
         }
         if ($status === 'conflict') {
@@ -3329,6 +3343,7 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
         'alias_names' => array_values($aliasNames),
+        'items' => $items,
     ];
 }
 
@@ -3395,6 +3410,7 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
     $updatedCount = 0;
     $skippedCount = 0;
     $conflictCount = 0;
+    $logItems = [];
     $entityDisplayNames = [];
     foreach ($entityRows as $row) {
         $entityId = (int)($row['id'] ?? 0);
@@ -3454,11 +3470,33 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
             $touchedEntityCount++;
         }
 
+        foreach ((array)($result['items'] ?? []) as $item) {
+            if (is_array($item)) {
+                $logItems[] = $item;
+            }
+        }
+
         $createdCount += $created;
         $updatedCount += $updated;
         $skippedCount += $skipped;
         $conflictCount += $conflicts;
     }
+
+    $summaryText = ($createdCount + $updatedCount) > 0
+        ? 'Updated ' . $touchedEntityCount . ' parent' . ($touchedEntityCount === 1 ? '' : 's')
+            . ' and added ' . ($createdCount + $updatedCount) . ' related name' . (($createdCount + $updatedCount) === 1 ? '' : 's') . '.'
+        : 'No new related names were found across the Entity Endex.';
+
+    accumul8_record_entity_endex_scan_log($viewerId, [
+        'scanned_entity_count' => $scannedEntityCount,
+        'touched_entity_count' => $touchedEntityCount,
+        'created_count' => $createdCount,
+        'updated_count' => $updatedCount,
+        'skipped_count' => $skippedCount,
+        'conflict_count' => $conflictCount,
+        'summary_text' => $summaryText,
+        'items' => $logItems,
+    ]);
 
     return [
         'scanned_entity_count' => $scannedEntityCount,
@@ -3467,7 +3505,38 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
         'updated_count' => $updatedCount,
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
+        'summary_text' => $summaryText,
     ];
+}
+
+function accumul8_record_entity_endex_scan_log(int $viewerId, array $payload): void
+{
+    if (!accumul8_table_exists('accumul8_entity_endex_scan_logs')) {
+        return;
+    }
+
+    $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+    $itemsJson = json_encode(array_values($items), JSON_UNESCAPED_SLASHES);
+    if (!is_string($itemsJson)) {
+        $itemsJson = '[]';
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_entity_endex_scan_logs
+         (owner_user_id, scanned_entity_count, touched_entity_count, created_count, updated_count, skipped_count, conflict_count, summary_text, items_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            (int)($payload['scanned_entity_count'] ?? 0),
+            (int)($payload['touched_entity_count'] ?? 0),
+            (int)($payload['created_count'] ?? 0),
+            (int)($payload['updated_count'] ?? 0),
+            (int)($payload['skipped_count'] ?? 0),
+            (int)($payload['conflict_count'] ?? 0),
+            accumul8_normalize_text((string)($payload['summary_text'] ?? ''), 255),
+            $itemsJson,
+        ]
+    );
 }
 
 function accumul8_merge_entities(int $viewerId, int $targetEntityId, int $sourceEntityId): void
@@ -4985,6 +5054,22 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_entity_aliases_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entity_endex_scan_logs (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        scanned_entity_count INT NOT NULL DEFAULT 0,
+        touched_entity_count INT NOT NULL DEFAULT 0,
+        created_count INT NOT NULL DEFAULT 0,
+        updated_count INT NOT NULL DEFAULT 0,
+        skipped_count INT NOT NULL DEFAULT 0,
+        conflict_count INT NOT NULL DEFAULT 0,
+        summary_text VARCHAR(255) NOT NULL DEFAULT '',
+        items_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_accumul8_entity_endex_scan_logs_owner_created (owner_user_id, created_at),
+        CONSTRAINT fk_accumul8_entity_endex_scan_logs_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_debtors (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
@@ -5677,6 +5762,56 @@ function accumul8_list_entity_aliases(int $viewerId): array
             'id' => (int)($row['id'] ?? 0),
             'entity_id' => (int)($row['entity_id'] ?? 0),
             'alias_name' => (string)($row['alias_name'] ?? ''),
+        ];
+    }, $rows);
+}
+
+function accumul8_list_entity_endex_scan_logs(int $viewerId, int $limit = 12): array
+{
+    if (!accumul8_table_exists('accumul8_entity_endex_scan_logs')) {
+        return [];
+    }
+
+    $limit = max(1, min(50, $limit));
+    $rows = Database::queryAll(
+        'SELECT id, scanned_entity_count, touched_entity_count, created_count, updated_count, skipped_count, conflict_count, summary_text, items_json, created_at
+         FROM accumul8_entity_endex_scan_logs
+         WHERE owner_user_id = ?
+         ORDER BY id DESC
+         LIMIT ' . $limit,
+        [$viewerId]
+    );
+
+    return array_map(static function (array $row): array {
+        $decodedItems = json_decode((string)($row['items_json'] ?? '[]'), true);
+        $items = [];
+        foreach (is_array($decodedItems) ? $decodedItems : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $status = (string)($item['status'] ?? '');
+            if (!in_array($status, ['created', 'updated'], true)) {
+                $status = 'created';
+            }
+            $items[] = [
+                'parent_entity_id' => (int)($item['parent_entity_id'] ?? 0),
+                'parent_name' => (string)($item['parent_name'] ?? ''),
+                'alias_name' => (string)($item['alias_name'] ?? ''),
+                'status' => $status,
+            ];
+        }
+
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'scanned_entity_count' => (int)($row['scanned_entity_count'] ?? 0),
+            'touched_entity_count' => (int)($row['touched_entity_count'] ?? 0),
+            'created_count' => (int)($row['created_count'] ?? 0),
+            'updated_count' => (int)($row['updated_count'] ?? 0),
+            'skipped_count' => (int)($row['skipped_count'] ?? 0),
+            'conflict_count' => (int)($row['conflict_count'] ?? 0),
+            'summary_text' => (string)($row['summary_text'] ?? ''),
+            'items' => $items,
+            'created_at' => (string)($row['created_at'] ?? ''),
         ];
     }, $rows);
 }
@@ -10065,6 +10200,7 @@ if ($action === 'bootstrap') {
     $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, false), [], $warnings);
     $archivedStatementUploads = accumul8_bootstrap_section('archived_statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, true), [], $warnings);
     $statementAuditRuns = accumul8_bootstrap_section('statement_audit_runs', static fn() => accumul8_list_statement_audit_runs($viewerId, 10), [], $warnings);
+    $entityEndexScanLogs = accumul8_bootstrap_section('entity_endex_scan_logs', static fn() => accumul8_list_entity_endex_scan_logs($viewerId, 12), [], $warnings);
     $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
     $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
         'net_amount' => 0.0,
@@ -10081,6 +10217,7 @@ if ($action === 'bootstrap') {
         'entities' => $entities,
         'entity_aliases' => $entityAliases,
         'entity_endex_guides' => accumul8_entity_endex_guides(),
+        'entity_endex_scan_logs' => $entityEndexScanLogs,
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
         'transactions' => $transactions,

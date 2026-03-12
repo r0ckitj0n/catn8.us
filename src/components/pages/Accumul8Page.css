@@ -14,6 +14,13 @@
   --accumul8-deco-line: rgba(212, 175, 55, 0.42);
   --accumul8-deco-line-strong: rgba(212, 175, 55, 0.72);
   --accumul8-deco-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  --accumul8-ledger-row-height: 1.82rem;
+  --accumul8-ledger-font-family: 'Lexend Exa', sans-serif;
+  --accumul8-ledger-font-size: 0.8rem;
+  --accumul8-ledger-line-height: 1.22;
+  --accumul8-ledger-letter-spacing: 0.03em;
+  --accumul8-ledger-text-color: #f3e6be;
+  --accumul8-ledger-text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
 .catn8-page[data-page="accumul8"] {
@@ -1023,7 +1030,7 @@
   width: 100%;
   min-width: 0;
   table-layout: fixed;
-  font-size: 0.8rem;
+  font-size: var(--accumul8-ledger-font-size);
 }
 
 .accumul8-month-table th,
@@ -1033,10 +1040,18 @@
 }
 
 .accumul8-table {
-  font-family: 'Lexend Exa', sans-serif;
-  font-size: 0.8rem;
-  letter-spacing: 0.03em;
-  color: #f5e8bd;
+  font-family: var(--accumul8-ledger-font-family);
+  font-size: var(--accumul8-ledger-font-size);
+  letter-spacing: var(--accumul8-ledger-letter-spacing);
+  color: var(--accumul8-ledger-text-color);
+}
+
+.accumul8-month-table,
+.accumul8-ledger-table {
+  font-family: var(--accumul8-ledger-font-family);
+  font-size: var(--accumul8-ledger-font-size);
+  letter-spacing: var(--accumul8-ledger-letter-spacing);
+  color: var(--accumul8-ledger-text-color);
 }
 
 .accumul8-ledger-table {
@@ -1106,20 +1121,20 @@
 }
 
 .accumul8-ledger-table tbody td {
-  color: #f3e6be;
-  font-size: 0.8rem;
-  line-height: 1.22;
+  color: var(--accumul8-ledger-text-color);
+  font-size: var(--accumul8-ledger-font-size);
+  line-height: var(--accumul8-ledger-line-height);
   font-weight: 400;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
+  text-shadow: var(--accumul8-ledger-text-shadow);
 }
 
 .accumul8-table tbody td {
   background: linear-gradient(180deg, rgba(17, 22, 28, 0.94), rgba(11, 15, 20, 0.96)) !important;
-  color: #f3e6be;
-  font-size: 0.8rem;
-  line-height: 1.22;
+  color: var(--accumul8-ledger-text-color);
+  font-size: var(--accumul8-ledger-font-size);
+  line-height: var(--accumul8-ledger-line-height);
   font-weight: 400;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
+  text-shadow: var(--accumul8-ledger-text-shadow);
 }
 
 .accumul8-table tbody tr:nth-child(even) td,
@@ -1129,10 +1144,10 @@
 
 .accumul8-month-table tbody td {
   background: linear-gradient(180deg, rgba(17, 22, 28, 0.94), rgba(11, 15, 20, 0.96)) !important;
-  color: #f3e6be;
-  font-size: 0.8rem;
-  line-height: 1.24;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
+  color: var(--accumul8-ledger-text-color);
+  font-size: var(--accumul8-ledger-font-size);
+  line-height: var(--accumul8-ledger-line-height);
+  text-shadow: var(--accumul8-ledger-text-shadow);
 }
 
 .accumul8-month-table th:nth-child(9),
@@ -1680,11 +1695,13 @@
 .accumul8-month-table-input {
   min-width: 0;
   width: 100%;
-  min-height: 1.55rem;
-  height: 1.55rem;
+  min-height: var(--accumul8-ledger-row-height);
+  height: var(--accumul8-ledger-row-height);
   padding: 1px 0.24rem;
-  font-size: 0.66rem;
-  line-height: 1.05;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: var(--accumul8-ledger-line-height);
+  color: inherit;
 }
 
 .accumul8-month-table-select,
@@ -1697,12 +1714,12 @@
   padding: 0;
   color: inherit;
   font-size: inherit;
-  line-height: 1.05;
+  line-height: var(--accumul8-ledger-line-height);
 }
 
 .accumul8-month-table-select {
-  min-height: 1.55rem;
-  height: 1.55rem;
+  min-height: var(--accumul8-ledger-row-height);
+  height: var(--accumul8-ledger-row-height);
   padding-top: 1px;
   padding-bottom: 1px;
   padding-right: 1.35rem;
@@ -1764,7 +1781,8 @@
 }
 
 .accumul8-inline-cell-trigger {
-  display: block;
+  display: grid;
+  align-content: center;
   width: 100%;
   border: 0;
   background: transparent;
@@ -1776,13 +1794,13 @@
   font-weight: inherit;
   letter-spacing: inherit;
   line-height: inherit;
-  min-height: 0.92rem;
+  min-height: var(--accumul8-ledger-row-height);
 }
 
 .accumul8-month-table .accumul8-inline-cell-trigger,
 .accumul8-month-table .accumul8-inline-cell-trigger:disabled {
-  font-size: 0.8rem;
-  line-height: 1.24;
+  font-size: var(--accumul8-ledger-font-size);
+  line-height: var(--accumul8-ledger-line-height);
 }
 
 .accumul8-month-table .accumul8-inline-cell-trigger,
@@ -1802,6 +1820,16 @@
   overflow-wrap: anywhere;
 }
 
+.accumul8-spreadsheet-table td:nth-child(3) .accumul8-inline-cell-trigger,
+.accumul8-spreadsheet-table td:nth-child(4) .accumul8-inline-cell-trigger,
+.accumul8-spreadsheet-table td:nth-child(5) .accumul8-inline-cell-trigger,
+.accumul8-spreadsheet-table td:nth-child(6) .accumul8-inline-cell-trigger,
+.accumul8-spreadsheet-table td:nth-child(10) .accumul8-inline-cell-trigger {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .accumul8-month-table td:nth-child(2) .accumul8-inline-cell-trigger,
 .accumul8-month-table td:nth-child(7) .accumul8-inline-cell-trigger,
 .accumul8-month-table td:nth-child(8) .accumul8-inline-cell-trigger,
@@ -1809,17 +1837,12 @@
   white-space: nowrap;
 }
 
-.accumul8-spreadsheet-table tbody td {
-  font-size: 0.92rem;
-  line-height: 1.3;
-}
-
 .accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger,
 .accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger:disabled,
 .accumul8-spreadsheet-table tbody .accumul8-month-table-input,
 .accumul8-spreadsheet-table tbody .accumul8-month-table-select {
-  font-size: 0.92rem;
-  line-height: 1.3;
+  font-size: var(--accumul8-ledger-font-size);
+  line-height: var(--accumul8-ledger-line-height);
 }
 
 .accumul8-inline-cell-trigger:focus-visible {
@@ -1833,6 +1856,7 @@
 
 .accumul8-inline-cell-trigger--numeric {
   text-align: right;
+  justify-items: end;
 }
 
 .accumul8-inline-cell-trigger--past-due,

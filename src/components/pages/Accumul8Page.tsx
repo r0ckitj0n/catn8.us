@@ -588,6 +588,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     updateEntity,
     createEntityAlias,
     deleteEntityAlias,
+    findEntityAliases,
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
@@ -688,6 +689,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
+  const [entityEndexFindingId, setEntityEndexFindingId] = React.useState<number | null>(null);
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
     if (!selectedBankingOrganizationId) {
@@ -2337,6 +2339,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const removeEntityAlias = React.useCallback(async (aliasId: number) => {
     await deleteEntityAlias(aliasId);
   }, [deleteEntityAlias]);
+  const runEntityEndexFinder = React.useCallback(async (entityId: number) => {
+    setEntityEndexFindingId(entityId);
+    try {
+      await findEntityAliases({ entity_id: entityId });
+    } finally {
+      setEntityEndexFindingId(null);
+    }
+  }, [findEntityAliases]);
   const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
     const draft = recurringDraftById[row.id];
     if (!draft) {
@@ -3621,26 +3631,27 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                  />
 	                </div>
 	              </div>
-	              <div className="accumul8-entity-endex-guide mb-3">
-	                <div className="accumul8-entity-endex-guide-head">
-	                  <h4>Grouping Guide</h4>
-	                  <span className="small text-muted">Use these parent names when new statement imports create messy merchant variants.</span>
-	                </div>
-	                <div className="accumul8-entity-endex-guide-grid">
-	                  {entityEndexGuides.map((guide) => (
-	                    <div key={guide.parent_name} className="accumul8-entity-endex-guide-card">
-	                      <strong>{guide.parent_name}</strong>
-	                      <div className="accumul8-entity-endex-guide-rule">{guide.match_rule}</div>
-	                      <div className="accumul8-entity-endex-guide-examples">
-	                        {guide.examples.map((example) => (
-	                          <span key={example} className="accumul8-entity-endex-chip">{example}</span>
-	                        ))}
+                <div className="accumul8-entity-endex-scroll">
+	                <div className="accumul8-entity-endex-guide mb-3">
+	                  <div className="accumul8-entity-endex-guide-head">
+	                    <h4>Grouping Guide</h4>
+	                    <span className="small text-muted">Use these parent names when new statement imports create messy merchant variants.</span>
+	                  </div>
+	                  <div className="accumul8-entity-endex-guide-grid">
+	                    {entityEndexGuides.map((guide) => (
+	                      <div key={guide.parent_name} className="accumul8-entity-endex-guide-card">
+	                        <strong>{guide.parent_name}</strong>
+	                        <div className="accumul8-entity-endex-guide-rule">{guide.match_rule}</div>
+	                        <div className="accumul8-entity-endex-guide-examples">
+	                          {guide.examples.map((example) => (
+	                            <span key={example} className="accumul8-entity-endex-chip">{example}</span>
+	                          ))}
+	                        </div>
 	                      </div>
-	                    </div>
-	                  ))}
+	                    ))}
+	                  </div>
 	                </div>
-	              </div>
-	              <div className="accumul8-entity-endex-grid">
+	                <div className="accumul8-entity-endex-grid">
 	                {entityEndexParents.map((entity) => {
 	                  const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
 	                  const summary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
@@ -3656,7 +3667,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                            {summary.lastDate ? ` · ${formatInlineDate(summary.lastDate)}` : ''}
 	                          </div>
 	                        </div>
-	                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditEntity(entity.id)} disabled={busy}>Edit</button>
+                          <div className="accumul8-entity-endex-card-actions">
+	                          <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => void runEntityEndexFinder(entity.id)}
+                              disabled={busy}
+                            >
+                              {entityEndexFindingId === entity.id ? 'Searching...' : 'Find Related Names'}
+                            </button>
+	                          <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditEntity(entity.id)} disabled={busy}>Edit</button>
+                          </div>
 	                      </div>
 	                      <div className="accumul8-entity-endex-section">
 	                        <span className="accumul8-entity-endex-label">Aliases</span>
@@ -3697,7 +3718,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                {entityEndexParents.length === 0 ? (
 	                  <div className="text-muted">No parent entities matched the current search.</div>
 	                ) : null}
-	              </div>
+	                </div>
+                </div>
 	            </div>
 	          )}
           {tab === 'recurring' && (

@@ -3115,6 +3115,241 @@ function accumul8_upsert_entity_alias(int $viewerId, int $entityId, string $alia
     return $aliasId > 0 ? $aliasId : null;
 }
 
+function accumul8_entity_family_definition_for_parent(string $parentName): ?array
+{
+    $parentKey = accumul8_entity_match_key($parentName);
+    if ($parentKey === '') {
+        return null;
+    }
+
+    foreach (accumul8_entity_family_definitions() as $definition) {
+        if (accumul8_entity_match_key((string)($definition['parent_name'] ?? '')) === $parentKey) {
+            return $definition;
+        }
+    }
+
+    return null;
+}
+
+function accumul8_entity_alias_scan_tokens(string $value): array
+{
+    $normalized = strtolower(accumul8_entity_alias_display_name($value));
+    if ($normalized === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[^a-z0-9]+/i', $normalized) ?: [];
+    $stopWords = [
+        'the', 'and', 'for', 'from', 'with', 'into', 'onto', 'llc', 'inc', 'co', 'corp', 'ltd',
+        'debit', 'credit', 'payment', 'online', 'store', 'shop', 'purchase', 'bill', 'card',
+        'web', 'transfer', 'withdrawal', 'deposit', 'signature', 'adjustment', 'service', 'services',
+    ];
+    $tokens = [];
+    foreach ($parts as $part) {
+        $token = trim((string)$part);
+        if ($token === '' || strlen($token) < 3 || in_array($token, $stopWords, true)) {
+            continue;
+        }
+        $tokens[$token] = true;
+    }
+
+    return array_keys($tokens);
+}
+
+function accumul8_entity_alias_candidate_matches_parent(string $candidate, string $parentName, array $seedKeys, array $seedTokens, ?array $familyDefinition): bool
+{
+    $candidateDisplay = accumul8_entity_alias_display_name($candidate);
+    $candidateKey = accumul8_entity_match_key($candidateDisplay);
+    $parentKey = accumul8_entity_match_key($parentName);
+    if ($candidateDisplay === '' || $candidateKey === '' || $parentKey === '') {
+        return false;
+    }
+
+    if ($candidateKey === $parentKey) {
+        return false;
+    }
+
+    $candidateAliasParentKey = accumul8_entity_match_key(accumul8_entity_alias_name($candidate));
+    if ($candidateAliasParentKey !== '' && $candidateAliasParentKey === $parentKey) {
+        return true;
+    }
+
+    if ($familyDefinition !== null) {
+        $matchedFamily = accumul8_find_entity_family_definition($candidate);
+        if (is_array($matchedFamily) && accumul8_entity_match_key((string)($matchedFamily['parent_name'] ?? '')) === $parentKey) {
+            return true;
+        }
+    }
+
+    foreach ($seedKeys as $seedKey) {
+        if ($seedKey === '' || strlen($seedKey) < 6) {
+            continue;
+        }
+        if (strpos($candidateKey, $seedKey) !== false) {
+            return true;
+        }
+    }
+
+    $candidateTokens = accumul8_entity_alias_scan_tokens($candidateDisplay);
+    if ($candidateTokens === [] || $seedTokens === []) {
+        return false;
+    }
+
+    $overlapCount = 0;
+    foreach ($candidateTokens as $token) {
+        if (isset($seedTokens[$token])) {
+            $overlapCount++;
+        }
+    }
+
+    if ($overlapCount >= 2) {
+        return true;
+    }
+
+    $candidateText = strtolower($candidateDisplay);
+    $parentText = strtolower(accumul8_entity_alias_display_name($parentName));
+    return $overlapCount >= 1
+        && $parentText !== ''
+        && (strpos($candidateText, $parentText) !== false || strpos($parentText, $candidateText) !== false);
+}
+
+function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
+{
+    if ($entityId <= 0 || !accumul8_table_exists('accumul8_entity_aliases')) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid entity_id'], 400);
+    }
+
+    $entity = Database::queryOne(
+        'SELECT id, display_name
+         FROM accumul8_entities
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$entityId, $viewerId]
+    );
+    if (!$entity) {
+        catn8_json_response(['success' => false, 'error' => 'Entity not found'], 404);
+    }
+
+    $parentName = (string)($entity['display_name'] ?? '');
+    $parentKey = accumul8_entity_match_key($parentName);
+    if ($parentKey === '') {
+        catn8_json_response(['success' => false, 'error' => 'Parent entity name is required'], 400);
+    }
+
+    $aliasRows = Database::queryAll(
+        'SELECT alias_name
+         FROM accumul8_entity_aliases
+         WHERE owner_user_id = ? AND entity_id = ?
+         ORDER BY id ASC',
+        [$viewerId, $entityId]
+    );
+
+    $seedKeys = [$parentKey => true];
+    $seedTokens = [];
+    $seedTexts = [$parentName];
+    foreach ($aliasRows as $aliasRow) {
+        $aliasName = (string)($aliasRow['alias_name'] ?? '');
+        if ($aliasName !== '') {
+            $seedTexts[] = $aliasName;
+            $seedKeys[accumul8_entity_match_key($aliasName)] = true;
+        }
+    }
+
+    $familyDefinition = accumul8_entity_family_definition_for_parent($parentName);
+    if (is_array($familyDefinition)) {
+        foreach ((array)($familyDefinition['examples'] ?? []) as $example) {
+            $seedTexts[] = (string)$example;
+        }
+        foreach ((array)($familyDefinition['match_contains'] ?? []) as $fragment) {
+            $seedTexts[] = (string)$fragment;
+        }
+    }
+
+    foreach ($seedTexts as $seedText) {
+        foreach (accumul8_entity_alias_scan_tokens((string)$seedText) as $token) {
+            $seedTokens[$token] = true;
+        }
+    }
+    unset($seedKeys['']);
+
+    $candidatesByKey = [];
+    $entityRows = Database::queryAll(
+        'SELECT display_name
+         FROM accumul8_entities
+         WHERE owner_user_id = ?
+           AND id <> ?
+         ORDER BY id ASC',
+        [$viewerId, $entityId]
+    );
+    foreach ($entityRows as $row) {
+        $candidate = accumul8_entity_alias_display_name((string)($row['display_name'] ?? ''));
+        $candidateKey = accumul8_entity_match_key($candidate);
+        if ($candidateKey === '' || isset($seedKeys[$candidateKey])) {
+            continue;
+        }
+        if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
+            $candidatesByKey[$candidateKey] = $candidate;
+        }
+    }
+
+    if (accumul8_table_exists('accumul8_transactions')) {
+        $transactionRows = Database::queryAll(
+            'SELECT description
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+             GROUP BY description
+             ORDER BY description ASC',
+            [$viewerId]
+        );
+        foreach ($transactionRows as $row) {
+            $candidate = accumul8_entity_alias_display_name((string)($row['description'] ?? ''));
+            $candidateKey = accumul8_entity_match_key($candidate);
+            if ($candidateKey === '' || isset($seedKeys[$candidateKey])) {
+                continue;
+            }
+            if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
+                $candidatesByKey[$candidateKey] = $candidate;
+            }
+        }
+    }
+
+    ksort($candidatesByKey);
+
+    $createdCount = 0;
+    $updatedCount = 0;
+    $skippedCount = 0;
+    $conflictCount = 0;
+    $aliasNames = [];
+    foreach ($candidatesByKey as $candidate) {
+        $result = accumul8_assign_entity_alias($viewerId, $entityId, $candidate, false);
+        $status = (string)($result['status'] ?? '');
+        if ($status === 'created') {
+            $createdCount++;
+            $aliasNames[] = $candidate;
+            continue;
+        }
+        if ($status === 'updated') {
+            $updatedCount++;
+            $aliasNames[] = $candidate;
+            continue;
+        }
+        if ($status === 'conflict') {
+            $conflictCount++;
+            continue;
+        }
+        $skippedCount++;
+    }
+
+    return [
+        'entity_id' => $entityId,
+        'created_count' => $createdCount,
+        'updated_count' => $updatedCount,
+        'skipped_count' => $skippedCount,
+        'conflict_count' => $conflictCount,
+        'alias_names' => array_values($aliasNames),
+    ];
+}
+
 function accumul8_merge_entities(int $viewerId, int $targetEntityId, int $sourceEntityId): void
 {
     if ($targetEntityId <= 0 || $sourceEntityId <= 0 || $targetEntityId === $sourceEntityId) {
@@ -9875,6 +10110,23 @@ if ($action === 'delete_entity_alias') {
         [$id, $viewerId]
     );
     catn8_json_response(['success' => true]);
+}
+
+if ($action === 'scan_entity_aliases') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $entityId = (int)($body['entity_id'] ?? 0);
+    $result = accumul8_scan_entity_aliases($viewerId, $entityId);
+    catn8_json_response([
+        'success' => true,
+        'entity_id' => (int)($result['entity_id'] ?? 0),
+        'created_count' => (int)($result['created_count'] ?? 0),
+        'updated_count' => (int)($result['updated_count'] ?? 0),
+        'skipped_count' => (int)($result['skipped_count'] ?? 0),
+        'conflict_count' => (int)($result['conflict_count'] ?? 0),
+        'alias_names' => array_values(array_map('strval', is_array($result['alias_names'] ?? null) ? $result['alias_names'] : [])),
+    ]);
 }
 
 if ($action === 'update_entity') {

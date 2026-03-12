@@ -17,6 +17,8 @@ import {
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
   Accumul8EntityAlias,
+  Accumul8EntityAliasScanRequest,
+  Accumul8EntityAliasScanResponse,
   Accumul8EntityEndexGuide,
   Accumul8EntityAliasUpsertRequest,
   Accumul8EntityUpsertRequest,
@@ -166,6 +168,38 @@ export function useAccumul8(
       'Alias deleted',
     );
   }, [scopedActionUrl, withReload]);
+  const findEntityAliases = React.useCallback(async (payload: Accumul8EntityAliasScanRequest) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8EntityAliasScanResponse>(
+        scopedActionUrl('scan_entity_aliases'),
+        payload,
+      );
+      await load();
+      if (onToast) {
+        const createdCount = Number(res?.created_count || 0);
+        const updatedCount = Number(res?.updated_count || 0);
+        const conflictCount = Number(res?.conflict_count || 0);
+        const skippedCount = Number(res?.skipped_count || 0);
+        const actionCount = createdCount + updatedCount;
+        let message = actionCount > 0
+          ? `Added ${actionCount} related name${actionCount === 1 ? '' : 's'} to the parent.`
+          : 'No new related names were found for that parent.';
+        if (conflictCount > 0) {
+          message += ` ${conflictCount} conflict${conflictCount === 1 ? ' was' : 's were'} skipped.`;
+        } else if (skippedCount > 0 && actionCount > 0) {
+          message += ` ${skippedCount} existing match${skippedCount === 1 ? ' was' : 'es were'} already covered.`;
+        }
+        onToast({ tone: actionCount > 0 ? 'success' : 'info', message });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to scan for related entity names');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBankingOrganization = React.useCallback(async (form: Accumul8BankingOrganizationUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_banking_organization'), form),
@@ -755,6 +789,7 @@ export function useAccumul8(
     updateEntity,
     createEntityAlias,
     deleteEntityAlias,
+    findEntityAliases,
     createContact,
     createBankingOrganization,
     updateBankingOrganization,

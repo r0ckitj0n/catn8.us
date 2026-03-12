@@ -795,6 +795,20 @@ export interface Accumul8EntityAliasUpsertRequest {
   merge_entity_id?: number | null;
 }
 
+export interface Accumul8EntityAliasScanRequest {
+  entity_id: number;
+}
+
+export interface Accumul8EntityAliasScanResponse {
+  success: boolean;
+  entity_id: number;
+  created_count: number;
+  updated_count: number;
+  skipped_count: number;
+  conflict_count: number;
+  alias_names: string[];
+}
+
 export interface Accumul8DebtorUpsertRequest {
   debtor_name: string;
   contact_id?: number | null;

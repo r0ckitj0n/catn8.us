@@ -2028,10 +2028,23 @@ body.accumul8-column-resize-active {
   width: min(100%, 18rem);
 }
 
-.accumul8-entity-endex-grid {
+.accumul8-entity-endex-scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.accumul8-entity-endex-scroll::-webkit-scrollbar {
+  width: 0.75rem;
+}
+
+.accumul8-entity-endex-scroll::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.35);
+  border: 2px solid rgba(10, 16, 22, 0.96);
+}
+
+.accumul8-entity-endex-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
@@ -2102,6 +2115,13 @@ body.accumul8-column-resize-active {
   gap: 0.75rem;
   align-items: flex-start;
   margin-bottom: 0.85rem;
+}
+
+.accumul8-entity-endex-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .accumul8-entity-endex-card-head h4 {

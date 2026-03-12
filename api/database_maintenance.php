@@ -91,6 +91,157 @@ $closeStream = static function (array $stream): void {
     @fclose($h);
 };
 
+$safeTable = static function (string $table): string {
+    return '`' . str_replace('`', '``', $table) . '`';
+};
+
+$sqlValue = static function (PDO $pdo, $value): string {
+    if ($value === null) return 'NULL';
+    if (is_bool($value)) return $value ? '1' : '0';
+    if (is_int($value) || is_float($value)) return (string)$value;
+    return $pdo->quote((string)$value);
+};
+
+$getAllBaseTables = static function (PDO $pdo): array {
+    $out = [];
+    try {
+        $rows = $pdo->query('SHOW FULL TABLES')->fetchAll(PDO::FETCH_NUM);
+        foreach ($rows as $row) {
+            $name = isset($row[0]) ? trim((string)$row[0]) : '';
+            $kind = isset($row[1]) ? strtoupper(trim((string)$row[1])) : 'BASE TABLE';
+            if ($name === '' || $kind !== 'BASE TABLE') {
+                continue;
+            }
+            $out[] = $name;
+        }
+    } catch (Throwable $e) {
+        $rows = Database::queryAll(
+            'SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE() AND TABLE_TYPE = "BASE TABLE"'
+        );
+        foreach ($rows as $row) {
+            $name = trim((string)($row['TABLE_NAME'] ?? ''));
+            if ($name !== '') {
+                $out[] = $name;
+            }
+        }
+    }
+    $out = array_values(array_unique($out));
+    sort($out);
+    return $out;
+};
+
+$dumpTablesToSqlGz = static function (PDO $pdo, array $tables, string $destPath) use ($safeTable, $sqlValue, $fail): array {
+    $h = gzopen($destPath, 'wb9');
+    if (!$h) {
+        $fail('database_maintenance.export_secure_backup', 500, 'Failed to open secure backup SQL output file');
+    }
+
+    $write = static function (string $line) use ($h): void {
+        gzwrite($h, $line);
+    };
+
+    $write("-- Secure backup\n");
+    $write("-- Generated at " . gmdate('c') . "\n\n");
+    $write("SET FOREIGN_KEY_CHECKS=0;\n\n");
+
+    $tablesDumped = 0;
+    $rowsDumped = 0;
+
+    foreach ($tables as $table) {
+        $tableSql = $safeTable($table);
+        try {
+            $createRes = $pdo->query('SHOW CREATE TABLE ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
+            if (!$createRes || !isset($createRes['Create Table'])) {
+                continue;
+            }
+
+            $write("--\n-- Table structure for " . $table . "\n--\n\n");
+            $write('DROP TABLE IF EXISTS ' . $tableSql . ";\n");
+            $write((string)$createRes['Create Table'] . ";\n\n");
+
+            $countRow = $pdo->query('SELECT COUNT(*) AS c FROM ' . $tableSql)->fetch(PDO::FETCH_ASSOC);
+            $rowCount = (int)($countRow['c'] ?? 0);
+            $write("--\n-- Data for " . $table . "\n--\n");
+            if ($rowCount <= 0) {
+                $write("\n");
+                $tablesDumped++;
+                continue;
+            }
+
+            $colRows = $pdo->query('SHOW COLUMNS FROM ' . $tableSql)->fetchAll(PDO::FETCH_ASSOC);
+            $cols = [];
+            foreach ($colRows as $c) {
+                $name = (string)($c['Field'] ?? '');
+                if ($name !== '') {
+                    $cols[] = $name;
+                }
+            }
+            if ($cols === []) {
+                $tablesDumped++;
+                continue;
+            }
+
+            $colList = '(' . implode(', ', array_map($safeTable, $cols)) . ')';
+            $batchSize = 1000;
+            $offset = 0;
+            while ($offset < $rowCount) {
+                $stmt = $pdo->query('SELECT * FROM ' . $tableSql . ' LIMIT ' . (int)$batchSize . ' OFFSET ' . (int)$offset);
+                $valueSets = [];
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $vals = [];
+                    foreach ($cols as $col) {
+                        $vals[] = $sqlValue($pdo, $row[$col] ?? null);
+                    }
+                    $valueSets[] = '(' . implode(', ', $vals) . ')';
+                    if (count($valueSets) >= 200) {
+                        $write('INSERT INTO ' . $tableSql . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valueSets) . ";\n");
+                        $rowsDumped += count($valueSets);
+                        $valueSets = [];
+                    }
+                }
+                if ($valueSets !== []) {
+                    $write('INSERT INTO ' . $tableSql . ' ' . $colList . " VALUES\n  " . implode(",\n  ", $valueSets) . ";\n");
+                    $rowsDumped += count($valueSets);
+                }
+                $offset += $batchSize;
+            }
+
+            $write("\n");
+            $tablesDumped++;
+        } catch (Throwable $e) {
+            $write("-- Skipped table " . $table . " due to error: " . str_replace(["\n", "\r"], ' ', (string)$e->getMessage()) . "\n\n");
+        }
+    }
+
+    $write("SET FOREIGN_KEY_CHECKS=1;\n");
+    gzclose($h);
+
+    return ['tables' => $tablesDumped, 'rows' => $rowsDumped];
+};
+
+$encryptSecureBackup = static function (string $plaintext, string $passphrase): array {
+    $salt = random_bytes(16);
+    $iterations = 600000;
+    $key = hash_pbkdf2('sha256', $passphrase, $salt, $iterations, 32, true);
+    $iv = random_bytes(12);
+    $tag = '';
+    $ciphertext = openssl_encrypt($plaintext, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+    if (!is_string($ciphertext) || $ciphertext === '') {
+        throw new RuntimeException('Failed to encrypt secure backup payload');
+    }
+
+    return [
+        'version' => 1,
+        'cipher' => 'aes-256-gcm',
+        'kdf' => 'pbkdf2-sha256',
+        'iterations' => $iterations,
+        'salt_b64' => base64_encode($salt),
+        'iv_b64' => base64_encode($iv),
+        'tag_b64' => base64_encode($tag),
+        'ciphertext_b64' => base64_encode($ciphertext),
+    ];
+};
+
 $streamSqlIntoPdo = static function (PDO $pdo, array $stream) use ($readChunk): void {
     $stmt = '';
 
@@ -270,6 +421,101 @@ if ($action === 'restore_database') {
         ]);
     } catch (Throwable $e) {
         $fail('database_maintenance.restore', 500, (string)$e->getMessage(), ['path' => $sqlPath]);
+    }
+}
+
+if ($action === 'export_secure_backup') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+        $fail('database_maintenance.export_secure_backup', 405, 'Method not allowed');
+    }
+
+    $body = $readJsonBody();
+    $passphrase = trim((string)($body['passphrase'] ?? ''));
+    if (strlen($passphrase) < 12) {
+        $fail('database_maintenance.export_secure_backup', 400, 'passphrase must be at least 12 characters');
+    }
+
+    $includeDatabase = !isset($body['include_database']) || (int)$body['include_database'] === 1;
+    $includeSecretStore = !isset($body['include_secret_store']) || (int)$body['include_secret_store'] === 1;
+    if (!$includeDatabase && !$includeSecretStore) {
+        $fail('database_maintenance.export_secure_backup', 400, 'Select at least one backup component');
+    }
+
+    $tmpSqlPath = $uploadsDir . '/secure_backup_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.sql.gz';
+
+    try {
+        $pdo = Database::getInstance();
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $payload = [
+            'version' => 1,
+            'created_at' => gmdate('c'),
+            'database_name' => (string)($pdo->query('SELECT DATABASE()')->fetchColumn() ?: ''),
+            'includes' => [
+                'database' => $includeDatabase ? 1 : 0,
+                'secret_store' => $includeSecretStore ? 1 : 0,
+            ],
+        ];
+
+        if ($includeDatabase) {
+            $tables = $getAllBaseTables($pdo);
+            $dumpMeta = $dumpTablesToSqlGz($pdo, $tables, $tmpSqlPath);
+            $sqlBytes = @file_get_contents($tmpSqlPath);
+            if (!is_string($sqlBytes) || $sqlBytes === '') {
+                throw new RuntimeException('Failed to read secure backup SQL dump');
+            }
+            $payload['database_backup'] = [
+                'format' => 'sql.gz',
+                'tables_dumped' => (int)($dumpMeta['tables'] ?? 0),
+                'rows_dumped' => (int)($dumpMeta['rows'] ?? 0),
+                'sql_gz_b64' => base64_encode($sqlBytes),
+            ];
+        }
+
+        if ($includeSecretStore) {
+            $secretKeyPath = $rootDir . '/config/secret.key';
+            $secretKeyBytes = @file_get_contents($secretKeyPath);
+            if (!is_string($secretKeyBytes) || $secretKeyBytes === '') {
+                throw new RuntimeException('Live config/secret.key was not found or is empty');
+            }
+
+            $secretRows = Database::queryAll('SELECT `key`, value_enc, created_at, updated_at FROM secrets ORDER BY `key` ASC');
+            $payload['secret_store_backup'] = [
+                'secret_key_filename' => 'config/secret.key',
+                'secret_key_b64' => base64_encode($secretKeyBytes),
+                'rows' => array_map(static function (array $row): array {
+                    return [
+                        'key' => (string)($row['key'] ?? ''),
+                        'value_enc_b64' => base64_encode((string)($row['value_enc'] ?? '')),
+                        'created_at' => (string)($row['created_at'] ?? ''),
+                        'updated_at' => (string)($row['updated_at'] ?? ''),
+                    ];
+                }, $secretRows),
+            ];
+        }
+
+        $plaintext = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if (!is_string($plaintext) || $plaintext === '') {
+            throw new RuntimeException('Failed to encode secure backup payload');
+        }
+
+        $encrypted = $encryptSecureBackup($plaintext, $passphrase);
+        $fileName = 'catn8-secure-backup-' . date('Ymd_His') . '.json';
+
+        header('Content-Type: application/json');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Pragma: no-cache');
+        echo json_encode([
+            'backup_type' => 'catn8-secure-backup',
+            'exported_at' => gmdate('c'),
+            'encrypted_payload' => $encrypted,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        exit;
+    } catch (Throwable $e) {
+        $fail('database_maintenance.export_secure_backup', 500, (string)$e->getMessage());
+    } finally {
+        @unlink($tmpSqlPath);
     }
 }
 

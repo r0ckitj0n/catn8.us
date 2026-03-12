@@ -3839,12 +3839,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
-              <div className="alert alert-info py-2">
-                If Teller says there are no suitable accounts for an institution such as Fifth Third or Truist, that decision is happening inside Teller&apos;s hosted bank-connection flow. Accumul8 can&apos;t override it, so use the Bank Statements tab to import those accounts instead.
-                <div className="mt-2">
-                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={openStatementImportFallback}>Import Statement Instead</button>
-                </div>
-              </div>
               <h4 className="h6">Connected Institutions</h4>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--sync">
                 <table

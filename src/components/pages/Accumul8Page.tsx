@@ -1945,7 +1945,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       is_reconciled: Number(draft.is_reconciled ?? tx.is_reconciled ?? 0),
       is_budget_planner: Number(draft.is_budget_planner ?? tx.is_budget_planner ?? 0),
       entity_id: draft.entity_id ?? tx.entity_id ?? null,
-      account_id: tx.account_id ?? null,
+      account_id: draft.account_id ?? tx.account_id ?? null,
       balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
     });
     setPayBillDraftById((prev) => {
@@ -2653,7 +2653,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                         <td className="text-end">{Number(debtor.total_loaned || 0).toFixed(2)}</td>
                         <td className="text-end">{Number(debtor.total_repaid || 0).toFixed(2)}</td>
-                        <td className="text-end fw-bold">{Number(debtor.outstanding_balance || 0).toFixed(2)}</td>
+                        <td className="text-end">{Number(debtor.outstanding_balance || 0).toFixed(2)}</td>
                         <td>
                           {activeDebtorRowId === debtor.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={debtorDraftById[debtor.id]?.notes ?? debtor.notes ?? ''} onChange={(e) => setDebtorRowDraft(debtor, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
@@ -3073,7 +3073,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             </div>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
-                              <span className="fw-semibold">{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
+                              <span>{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
                               {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
                               {entity.aliases.length > 0 ? (
                                 <span className="small text-muted d-block accumul8-entity-alias-summary">

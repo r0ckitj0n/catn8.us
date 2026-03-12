@@ -1109,6 +1109,7 @@
   color: #f3e6be;
   font-size: 0.8rem;
   line-height: 1.22;
+  font-weight: 400;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -1117,6 +1118,7 @@
   color: #f3e6be;
   font-size: 0.8rem;
   line-height: 1.22;
+  font-weight: 400;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
 }
 
@@ -1769,9 +1771,12 @@
   padding: 0;
   text-align: left;
   color: inherit;
-  line-height: 1.1;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   min-height: 0.92rem;
-  font-weight: 500;
 }
 
 .accumul8-month-table .accumul8-inline-cell-trigger,

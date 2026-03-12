@@ -2555,23 +2555,34 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table
                   ref={ledgerTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head"
-                  style={buildMeasuredTableStyle(ledgerColumnWidths)}
+                  style={ledgerTable.tableStyle}
                 >
                   <colgroup>
-                    <col style={{ width: 'var(--accumul8-col-date-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.4)' }} />
-                    <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.67))' }} />
-                    <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.33))' }} />
-                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-paid-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-reconciled-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    <col style={ledgerTable.getColumnStyle('date')} />
+                    <col style={ledgerTable.getColumnStyle('due')} />
+                    <col style={ledgerTable.getColumnStyle('account')} />
+                    <col style={ledgerTable.getColumnStyle('description')} />
+                    <col style={ledgerTable.getColumnStyle('memo')} />
+                    <col style={ledgerTable.getColumnStyle('amount')} />
+                    <col style={ledgerTable.getColumnStyle('balance')} />
+                    <col style={ledgerTable.getColumnStyle('paid')} />
+                    <col style={ledgerTable.getColumnStyle('reconciled')} />
+                    <col style={ledgerTable.getColumnStyle('actions')} />
                   </colgroup>
-                  <thead><tr><th>Date</th><th>Due</th><th>Account</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Balance</th><th className="text-center">Paid</th><th className="text-center">Reconciled</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr>
+                    <Accumul8TableHeaderCell label="Date" columnKey="date" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Balance" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Paid" columnKey="paid" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Reconciled" columnKey="reconciled" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                  </tr></thead>
                   <tbody>
-                    {ledgerRows.map((tx) => (
+                    {ledgerTable.rows.map((tx) => (
                       (() => {
                         const txEditPolicy = getAccumul8TransactionEditPolicy(tx);
                         const statementLink = resolveAccumul8StatementLink(tx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
@@ -2671,7 +2682,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         );
                       })()
                     ))}
-                    {ledgerRows.length === 0 && (
+                    {ledgerTable.rows.length === 0 && (
                       <tr>
                         <td colSpan={11} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
                       </tr>
@@ -2716,20 +2727,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table
                   ref={debtorsTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--debtors accumul8-sticky-head"
-                  style={buildMeasuredTableStyle(debtorsColumnWidths)}
+                  style={debtorsTable.tableStyle}
                 >
                   <colgroup>
-                    <col className="accumul8-col--flex-60" />
-                    <col className="accumul8-col--flex-40" />
-                    <col style={{ width: 'var(--accumul8-col-charges-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-credits-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-net-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-activity-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    <col style={debtorsTable.getColumnStyle('person')} />
+                    <col style={debtorsTable.getColumnStyle('linkedEntity')} />
+                    <col style={debtorsTable.getColumnStyle('charges')} />
+                    <col style={debtorsTable.getColumnStyle('credits')} />
+                    <col style={debtorsTable.getColumnStyle('net')} />
+                    <col style={debtorsTable.getColumnStyle('activity')} />
+                    <col style={debtorsTable.getColumnStyle('actions')} />
                   </colgroup>
-                  <thead><tr><th>Person</th><th>Linked Entity</th><th className="text-end">Charges</th><th className="text-end">Credits</th><th className="text-end">Net IOU</th><th>Last Activity</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr>
+                    <Accumul8TableHeaderCell label="Person" columnKey="person" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Linked Entity" columnKey="linkedEntity" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Charges" columnKey="charges" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Credits" columnKey="credits" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Net IOU" columnKey="net" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Last Activity" columnKey="activity" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
+                  </tr></thead>
                   <tbody>
-                    {debtorRows.map((debtor) => (
+                    {debtorsTable.rows.map((debtor) => (
                       <tr ref={(node) => setInlineRowRef(`debtor-${debtor.id}`, node)} key={debtor.id} className={['accumul8-list-item', activeDebtorRowId === debtor.id ? 'is-editing' : '', debtorDraftById[debtor.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
                           {activeDebtorRowId === debtor.id ? (
@@ -2782,7 +2801,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     ))}
-                    {debtorRows.length === 0 && (
+                    {debtorsTable.rows.length === 0 && (
                       <tr>
                         <td colSpan={7} className="text-center text-muted py-4">No personal IOUs matched the current filter.</td>
                       </tr>
@@ -2815,20 +2834,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <table
                     ref={balanceLedgerTableRef}
                     className="table table-sm accumul8-table accumul8-table--measured accumul8-table--balance-ledger accumul8-sticky-head"
-                    style={buildMeasuredTableStyle(balanceLedgerColumnWidths)}
+                    style={balanceLedgerTable.tableStyle}
                   >
                     <colgroup>
-                      <col style={{ width: 'var(--accumul8-col-date-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-person-width)' }} />
-                      <col className="accumul8-col--flex-60" />
-                      <col className="accumul8-col--flex-40" />
-                      <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-running-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                      <col style={balanceLedgerTable.getColumnStyle('date')} />
+                      <col style={balanceLedgerTable.getColumnStyle('person')} />
+                      <col style={balanceLedgerTable.getColumnStyle('description')} />
+                      <col style={balanceLedgerTable.getColumnStyle('memo')} />
+                      <col style={balanceLedgerTable.getColumnStyle('amount')} />
+                      <col style={balanceLedgerTable.getColumnStyle('running')} />
+                      <col style={balanceLedgerTable.getColumnStyle('actions')} />
                     </colgroup>
-                    <thead><tr><th>Date</th><th>Person</th><th>Description</th><th>Memo</th><th className="text-end">Amount</th><th className="text-end">Running IOU</th><th className="text-end">Actions</th></tr></thead>
+                    <thead><tr>
+                      <Accumul8TableHeaderCell label="Date" columnKey="date" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Person" columnKey="person" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Running IOU" columnKey="running" className="text-end" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                    </tr></thead>
                     <tbody>
-                      {selectedDebtorEntries.map((tx) => (
+                      {balanceLedgerTable.rows.map((tx) => (
                         <tr
                           key={tx.id}
                           ref={(node) => setInlineRowRef(`ledger-${tx.id}`, node)}
@@ -2967,20 +2994,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table
                   ref={payBillsTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--pay-bills accumul8-sticky-head"
-                  style={buildMeasuredTableStyle(payBillsColumnWidths)}
+                  style={payBillsTable.tableStyle}
                 >
                   <colgroup>
-                    <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-paidDate-width)' }} />
-                    <col className="accumul8-col--flex-100" />
-                    <col style={{ width: 'var(--accumul8-col-account-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    <col style={payBillsTable.getColumnStyle('due')} />
+                    <col style={payBillsTable.getColumnStyle('paidDate')} />
+                    <col style={payBillsTable.getColumnStyle('description')} />
+                    <col style={payBillsTable.getColumnStyle('account')} />
+                    <col style={payBillsTable.getColumnStyle('amount')} />
+                    <col style={payBillsTable.getColumnStyle('status')} />
+                    <col style={payBillsTable.getColumnStyle('actions')} />
                   </colgroup>
-                  <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th>Account</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr>
+                    <Accumul8TableHeaderCell label="Due Date" columnKey="due" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Paid Date" columnKey="paidDate" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                  </tr></thead>
                   <tbody>
-                    {payBillsRows.map((billTx) => (
+                    {payBillsTable.rows.map((billTx) => (
                       (() => {
                         const billEditPolicy = getAccumul8TransactionEditPolicy(billTx);
                         const statementLink = resolveAccumul8StatementLink(billTx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
@@ -3092,7 +3127,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         );
                       })()
                     ))}
-                    {payBillsRows.length === 0 && (
+                    {payBillsTable.rows.length === 0 && (
                       <tr>
                         <td colSpan={7} className="text-center text-muted py-4">No unpaid upcoming or past-due bills matched the current filter.</td>
                       </tr>
@@ -3125,28 +3160,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     'table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head',
                     activeEntityRowId !== null ? 'has-active-inline-edit' : '',
                   ].filter(Boolean).join(' ')}
-                  style={buildMeasuredTableStyle(entitiesColumnWidths)}
+                  style={entitiesTable.tableStyle}
                 >
                   <colgroup>
-                    <col className="accumul8-col--flex-55" />
-                    <col style={{ width: 'var(--accumul8-col-roles-width)' }} />
-                    <col className="accumul8-col--flex-45" />
-                    <col style={{ width: 'var(--accumul8-col-lastTransaction-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    <col style={entitiesTable.getColumnStyle('name')} />
+                    <col style={entitiesTable.getColumnStyle('roles')} />
+                    <col style={entitiesTable.getColumnStyle('contactInfo')} />
+                    <col style={entitiesTable.getColumnStyle('lastTransaction')} />
+                    <col style={entitiesTable.getColumnStyle('status')} />
+                    <col style={entitiesTable.getColumnStyle('actions')} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Roles</th>
-                      <th>Contact Info</th>
-                      <th className="text-end">Last Transaction</th>
-                      <th>Status</th>
-                      <th className="text-end">Actions</th>
+                      <Accumul8TableHeaderCell label="Name" columnKey="name" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
+                      <Accumul8TableHeaderCell label="Roles" columnKey="roles" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
+                      <Accumul8TableHeaderCell label="Contact Info" columnKey="contactInfo" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
+                      <Accumul8TableHeaderCell label="Last Transaction" columnKey="lastTransaction" className="text-end" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
+                      <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
+                      <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
                     </tr>
                   </thead>
                   <tbody>
-                    {entityRows.map((entity) => {
+                    {entitiesTable.rows.map((entity) => {
                       const entityDraft = entityDraftById[entity.id];
                       const entitySummary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
                       const entityContactSummary = formatEntityContactSummary({
@@ -3302,7 +3337,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     )})}
-                    {entityRows.length === 0 && (
+                    {entitiesTable.rows.length === 0 && (
                       <tr>
                         <td colSpan={6} className="text-center text-muted py-4">No entities matched the current filter.</td>
                       </tr>
@@ -3427,22 +3462,32 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table
                   ref={recurringTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--recurring accumul8-sticky-head"
-                  style={buildMeasuredTableStyle(recurringColumnWidths)}
+                  style={recurringTable.tableStyle}
                 >
                     <colgroup>
-                      <col className="accumul8-col--flex-100" />
-                      <col style={{ width: 'var(--accumul8-col-nextDue-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-frequency-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-account-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-paymentMethod-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-planner-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-status-width)' }} />
-                      <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                      <col style={recurringTable.getColumnStyle('title')} />
+                      <col style={recurringTable.getColumnStyle('nextDue')} />
+                      <col style={recurringTable.getColumnStyle('amount')} />
+                      <col style={recurringTable.getColumnStyle('frequency')} />
+                      <col style={recurringTable.getColumnStyle('account')} />
+                      <col style={recurringTable.getColumnStyle('paymentMethod')} />
+                      <col style={recurringTable.getColumnStyle('planner')} />
+                      <col style={recurringTable.getColumnStyle('status')} />
+                      <col style={recurringTable.getColumnStyle('actions')} />
                     </colgroup>
-                  <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Account</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr>
+                    <Accumul8TableHeaderCell label="Title" columnKey="title" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Next Due" columnKey="nextDue" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Payment Method" columnKey="paymentMethod" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Planner" columnKey="planner" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                  </tr></thead>
                   <tbody>
-                    {recurringRows.map((rp) => {
+                    {recurringTable.rows.map((rp) => {
                       const recurringDraft = recurringDraftById[rp.id];
                       return (
                       <tr ref={(node) => setInlineRowRef(`recurring-${rp.id}`, node)} key={rp.id} className={['accumul8-list-item', activeRecurringRowId === rp.id ? 'is-editing' : '', recurringDraft ? 'has-draft' : ''].filter(Boolean).join(' ')}>
@@ -3543,7 +3588,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                       </tr>
                     )})}
-                    {recurringRows.length === 0 && (
+                    {recurringTable.rows.length === 0 && (
                       <tr>
                         <td colSpan={9} className="text-center text-muted py-4">No recurring payments matched the current filter.</td>
                       </tr>
@@ -3628,17 +3673,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <table
                   ref={syncTableRef}
                   className="table table-sm accumul8-table accumul8-table--measured accumul8-table--sync-list accumul8-sticky-head"
-                  style={buildMeasuredTableStyle(syncColumnWidths)}
+                  style={syncTable.tableStyle}
                 >
                   <colgroup>
-                    <col className="accumul8-col--flex-100" />
-                    <col style={{ width: 'var(--accumul8-col-status-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-lastSync-width)' }} />
-                    <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
+                    <col style={syncTable.getColumnStyle('institution')} />
+                    <col style={syncTable.getColumnStyle('status')} />
+                    <col style={syncTable.getColumnStyle('lastSync')} />
+                    <col style={syncTable.getColumnStyle('actions')} />
                   </colgroup>
-                  <thead><tr><th>Institution</th><th>Status</th><th>Last Sync</th><th></th></tr></thead>
+                  <thead><tr>
+                    <Accumul8TableHeaderCell label="Institution" columnKey="institution" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
+                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
+                    <Accumul8TableHeaderCell label="Last Sync" columnKey="lastSync" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" sortable={false} sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
+                  </tr></thead>
                   <tbody>
-                    {bankConnections.map((c: any) => (
+                    {syncTable.rows.map((c: any) => (
                       <tr key={c.id}>
                         <td>
                           <div className="accumul8-sync-institution-name">{c.institution_name || c.institution_id || 'Unknown'}</div>

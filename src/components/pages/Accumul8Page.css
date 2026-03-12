@@ -1175,6 +1175,75 @@
   text-overflow: clip;
 }
 
+.accumul8-table-header-cell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.accumul8-table-header-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.accumul8-table-header-button--static {
+  cursor: default;
+}
+
+.accumul8-table-header-button:focus-visible {
+  outline: 1px solid rgba(255, 224, 137, 0.85);
+  outline-offset: 2px;
+}
+
+.accumul8-table-header-sort-indicator {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  opacity: 0.72;
+}
+
+.accumul8-table-header-resize-handle {
+  flex: 0 0 10px;
+  align-self: stretch;
+  margin-left: 0.2rem;
+  cursor: col-resize;
+  position: relative;
+}
+
+.accumul8-table-header-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(212, 175, 55, 0.34);
+}
+
+.accumul8-table-header-resize-handle:hover::before,
+.accumul8-table-header-cell:focus-within .accumul8-table-header-resize-handle::before {
+  background: rgba(255, 224, 137, 0.82);
+}
+
+body.accumul8-column-resize-active {
+  cursor: col-resize;
+  user-select: none;
+}
+
 .accumul8-month-table tr.is-editing td {
   background: linear-gradient(180deg, rgba(247, 237, 206, 0.9), rgba(230, 214, 173, 0.92)) !important;
   color: var(--accumul8-deco-ink) !important;

@@ -809,6 +809,16 @@ export interface Accumul8EntityAliasScanResponse {
   alias_names: string[];
 }
 
+export interface Accumul8EntityAliasGlobalScanResponse {
+  success: boolean;
+  scanned_entity_count: number;
+  touched_entity_count: number;
+  created_count: number;
+  updated_count: number;
+  skipped_count: number;
+  conflict_count: number;
+}
+
 export interface Accumul8DebtorUpsertRequest {
   debtor_name: string;
   contact_id?: number | null;

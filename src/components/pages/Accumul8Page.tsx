@@ -588,7 +588,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     updateEntity,
     createEntityAlias,
     deleteEntityAlias,
-    findEntityAliases,
+    findAllEntityAliases,
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
@@ -689,7 +689,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
-  const [entityEndexFindingId, setEntityEndexFindingId] = React.useState<number | null>(null);
+  const [entityEndexFindingAll, setEntityEndexFindingAll] = React.useState(false);
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
     if (!selectedBankingOrganizationId) {
@@ -2339,14 +2339,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const removeEntityAlias = React.useCallback(async (aliasId: number) => {
     await deleteEntityAlias(aliasId);
   }, [deleteEntityAlias]);
-  const runEntityEndexFinder = React.useCallback(async (entityId: number) => {
-    setEntityEndexFindingId(entityId);
+  const runEntityEndexFinder = React.useCallback(async () => {
+    setEntityEndexFindingAll(true);
     try {
-      await findEntityAliases({ entity_id: entityId });
+      await findAllEntityAliases();
     } finally {
-      setEntityEndexFindingId(null);
+      setEntityEndexFindingAll(false);
     }
-  }, [findEntityAliases]);
+  }, [findAllEntityAliases]);
   const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
     const draft = recurringDraftById[row.id];
     if (!draft) {
@@ -2731,7 +2731,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <a
-                className={`accumul8-header-brand-logo${syncingConnectionId !== null ? ' accumul8-header-brand-logo--syncing' : ''}`}
+                className={`accumul8-header-brand-logo${syncingConnectionId !== null || entityEndexFindingAll ? ' accumul8-header-brand-logo--syncing' : ''}`}
                 href="https://catn8.us"
                 aria-label="Go to catn8.us"
               >
@@ -3630,6 +3630,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                    placeholder="Search parents or aliases"
 	                  />
 	                </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => void runEntityEndexFinder()}
+                    disabled={busy}
+                  >
+                    {entityEndexFindingAll ? 'Searching All...' : 'Find Related Names'}
+                  </button>
 	              </div>
                 <div className="accumul8-entity-endex-scroll">
 	                <div className="accumul8-entity-endex-guide mb-3">
@@ -3668,14 +3676,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                          </div>
 	                        </div>
                           <div className="accumul8-entity-endex-card-actions">
-	                          <button
-                              type="button"
-                              className="btn btn-sm btn-outline-primary"
-                              onClick={() => void runEntityEndexFinder(entity.id)}
-                              disabled={busy}
-                            >
-                              {entityEndexFindingId === entity.id ? 'Searching...' : 'Find Related Names'}
-                            </button>
 	                          <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditEntity(entity.id)} disabled={busy}>Edit</button>
                           </div>
 	                      </div>

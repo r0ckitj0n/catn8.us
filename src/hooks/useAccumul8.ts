@@ -17,6 +17,7 @@ import {
   Accumul8DebtorUpsertRequest,
   Accumul8Entity,
   Accumul8EntityAlias,
+  Accumul8EntityAliasGlobalScanResponse,
   Accumul8EntityAliasScanRequest,
   Accumul8EntityAliasScanResponse,
   Accumul8EntityEndexGuide,
@@ -195,6 +196,36 @@ export function useAccumul8(
       return res;
     } catch (error: any) {
       handleError(error, 'Failed to scan for related entity names');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const findAllEntityAliases = React.useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8EntityAliasGlobalScanResponse>(
+        scopedActionUrl('scan_all_entity_aliases'),
+        {},
+      );
+      await load();
+      if (onToast) {
+        const touchedEntityCount = Number(res?.touched_entity_count || 0);
+        const createdCount = Number(res?.created_count || 0);
+        const updatedCount = Number(res?.updated_count || 0);
+        const conflictCount = Number(res?.conflict_count || 0);
+        const actionCount = createdCount + updatedCount;
+        let message = actionCount > 0
+          ? `Updated ${touchedEntityCount} parent${touchedEntityCount === 1 ? '' : 's'} and added ${actionCount} related name${actionCount === 1 ? '' : 's'}.`
+          : 'No new related names were found across the Entity Endex.';
+        if (conflictCount > 0) {
+          message += ` ${conflictCount} conflict${conflictCount === 1 ? ' was' : 's were'} skipped.`;
+        }
+        onToast({ tone: actionCount > 0 ? 'success' : 'info', message });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to scan all entity parents for related names');
       throw error;
     } finally {
       setBusy(false);
@@ -790,6 +821,7 @@ export function useAccumul8(
     createEntityAlias,
     deleteEntityAlias,
     findEntityAliases,
+    findAllEntityAliases,
     createContact,
     createBankingOrganization,
     updateBankingOrganization,

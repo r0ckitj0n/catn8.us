@@ -3213,7 +3213,7 @@ function accumul8_entity_alias_candidate_matches_parent(string $candidate, strin
         && (strpos($candidateText, $parentText) !== false || strpos($parentText, $candidateText) !== false);
 }
 
-function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
+function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entityId, array $entityDisplayNames, array $transactionDescriptions): array
 {
     if ($entityId <= 0 || !accumul8_table_exists('accumul8_entity_aliases')) {
         catn8_json_response(['success' => false, 'error' => 'Invalid entity_id'], 400);
@@ -3273,16 +3273,8 @@ function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
     unset($seedKeys['']);
 
     $candidatesByKey = [];
-    $entityRows = Database::queryAll(
-        'SELECT display_name
-         FROM accumul8_entities
-         WHERE owner_user_id = ?
-           AND id <> ?
-         ORDER BY id ASC',
-        [$viewerId, $entityId]
-    );
-    foreach ($entityRows as $row) {
-        $candidate = accumul8_entity_alias_display_name((string)($row['display_name'] ?? ''));
+    foreach ($entityDisplayNames as $displayName) {
+        $candidate = accumul8_entity_alias_display_name((string)$displayName);
         $candidateKey = accumul8_entity_match_key($candidate);
         if ($candidateKey === '' || isset($seedKeys[$candidateKey])) {
             continue;
@@ -3292,24 +3284,14 @@ function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
         }
     }
 
-    if (accumul8_table_exists('accumul8_transactions')) {
-        $transactionRows = Database::queryAll(
-            'SELECT description
-             FROM accumul8_transactions
-             WHERE owner_user_id = ?
-             GROUP BY description
-             ORDER BY description ASC',
-            [$viewerId]
-        );
-        foreach ($transactionRows as $row) {
-            $candidate = accumul8_entity_alias_display_name((string)($row['description'] ?? ''));
-            $candidateKey = accumul8_entity_match_key($candidate);
-            if ($candidateKey === '' || isset($seedKeys[$candidateKey])) {
-                continue;
-            }
-            if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
-                $candidatesByKey[$candidateKey] = $candidate;
-            }
+    foreach ($transactionDescriptions as $description) {
+        $candidate = accumul8_entity_alias_display_name((string)$description);
+        $candidateKey = accumul8_entity_match_key($candidate);
+        if ($candidateKey === '' || isset($seedKeys[$candidateKey])) {
+            continue;
+        }
+        if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
+            $candidatesByKey[$candidateKey] = $candidate;
         }
     }
 
@@ -3347,6 +3329,144 @@ function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
         'alias_names' => array_values($aliasNames),
+    ];
+}
+
+function accumul8_scan_entity_aliases(int $viewerId, int $entityId): array
+{
+    $entityDisplayNames = [];
+    $entityRows = Database::queryAll(
+        'SELECT display_name
+         FROM accumul8_entities
+         WHERE owner_user_id = ?
+           AND id <> ?
+         ORDER BY id ASC',
+        [$viewerId, $entityId]
+    );
+    foreach ($entityRows as $row) {
+        $displayName = (string)($row['display_name'] ?? '');
+        if ($displayName !== '') {
+            $entityDisplayNames[] = $displayName;
+        }
+    }
+
+    $transactionDescriptions = [];
+    if (accumul8_table_exists('accumul8_transactions')) {
+        $transactionRows = Database::queryAll(
+            'SELECT description
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+             GROUP BY description
+             ORDER BY description ASC',
+            [$viewerId]
+        );
+        foreach ($transactionRows as $row) {
+            $description = (string)($row['description'] ?? '');
+            if ($description !== '') {
+                $transactionDescriptions[] = $description;
+            }
+        }
+    }
+
+    return accumul8_scan_entity_aliases_from_candidates($viewerId, $entityId, $entityDisplayNames, $transactionDescriptions);
+}
+
+function accumul8_scan_all_entity_aliases(int $viewerId): array
+{
+    $entityRows = Database::queryAll(
+        'SELECT e.id,
+                e.display_name,
+                e.legacy_contact_id,
+                e.legacy_debtor_id,
+                COUNT(a.id) AS alias_count
+         FROM accumul8_entities e
+         LEFT JOIN accumul8_entity_aliases a
+           ON a.entity_id = e.id
+          AND a.owner_user_id = e.owner_user_id
+         WHERE e.owner_user_id = ?
+         GROUP BY e.id, e.display_name, e.legacy_contact_id, e.legacy_debtor_id
+         ORDER BY e.display_name ASC, e.id ASC',
+        [$viewerId]
+    );
+
+    $scannedEntityCount = 0;
+    $touchedEntityCount = 0;
+    $createdCount = 0;
+    $updatedCount = 0;
+    $skippedCount = 0;
+    $conflictCount = 0;
+    $entityDisplayNames = [];
+    foreach ($entityRows as $row) {
+        $entityId = (int)($row['id'] ?? 0);
+        $displayName = (string)($row['display_name'] ?? '');
+        if ($entityId > 0 && $displayName !== '') {
+            $entityDisplayNames[$entityId] = $displayName;
+        }
+    }
+
+    $transactionDescriptions = [];
+    if (accumul8_table_exists('accumul8_transactions')) {
+        $transactionRows = Database::queryAll(
+            'SELECT description
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+             GROUP BY description
+             ORDER BY description ASC',
+            [$viewerId]
+        );
+        foreach ($transactionRows as $row) {
+            $description = (string)($row['description'] ?? '');
+            if ($description !== '') {
+                $transactionDescriptions[] = $description;
+            }
+        }
+    }
+
+    foreach ($entityRows as $row) {
+        $entityId = (int)($row['id'] ?? 0);
+        if ($entityId <= 0) {
+            continue;
+        }
+
+        $displayName = (string)($row['display_name'] ?? '');
+        $hasGuide = accumul8_entity_family_definition_for_parent($displayName) !== null;
+        $isImportedParent = (int)($row['legacy_contact_id'] ?? 0) > 0 || (int)($row['legacy_debtor_id'] ?? 0) > 0;
+        $hasAliases = (int)($row['alias_count'] ?? 0) > 0;
+        if (!$hasGuide && !$isImportedParent && !$hasAliases) {
+            continue;
+        }
+
+        $scannedEntityCount++;
+        $otherEntityDisplayNames = $entityDisplayNames;
+        unset($otherEntityDisplayNames[$entityId]);
+        $result = accumul8_scan_entity_aliases_from_candidates(
+            $viewerId,
+            $entityId,
+            array_values($otherEntityDisplayNames),
+            $transactionDescriptions,
+        );
+        $created = (int)($result['created_count'] ?? 0);
+        $updated = (int)($result['updated_count'] ?? 0);
+        $skipped = (int)($result['skipped_count'] ?? 0);
+        $conflicts = (int)($result['conflict_count'] ?? 0);
+
+        if (($created + $updated) > 0) {
+            $touchedEntityCount++;
+        }
+
+        $createdCount += $created;
+        $updatedCount += $updated;
+        $skippedCount += $skipped;
+        $conflictCount += $conflicts;
+    }
+
+    return [
+        'scanned_entity_count' => $scannedEntityCount,
+        'touched_entity_count' => $touchedEntityCount,
+        'created_count' => $createdCount,
+        'updated_count' => $updatedCount,
+        'skipped_count' => $skippedCount,
+        'conflict_count' => $conflictCount,
     ];
 }
 
@@ -10126,6 +10246,21 @@ if ($action === 'scan_entity_aliases') {
         'skipped_count' => (int)($result['skipped_count'] ?? 0),
         'conflict_count' => (int)($result['conflict_count'] ?? 0),
         'alias_names' => array_values(array_map('strval', is_array($result['alias_names'] ?? null) ? $result['alias_names'] : [])),
+    ]);
+}
+
+if ($action === 'scan_all_entity_aliases') {
+    catn8_require_method('POST');
+
+    $result = accumul8_scan_all_entity_aliases($viewerId);
+    catn8_json_response([
+        'success' => true,
+        'scanned_entity_count' => (int)($result['scanned_entity_count'] ?? 0),
+        'touched_entity_count' => (int)($result['touched_entity_count'] ?? 0),
+        'created_count' => (int)($result['created_count'] ?? 0),
+        'updated_count' => (int)($result['updated_count'] ?? 0),
+        'skipped_count' => (int)($result['skipped_count'] ?? 0),
+        'conflict_count' => (int)($result['conflict_count'] ?? 0),
     ]);
 }
 

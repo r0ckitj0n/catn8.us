@@ -64,6 +64,7 @@ interface Accumul8StatementsPanelProps {
   onAuditImportedCleanup: (payload?: { start_date?: string | null; end_date?: string | null; limit?: number }) => Promise<Accumul8ImportedTransactionCleanupReport | undefined>;
   onPurgeImportedCleanup: (transactionIds: number[]) => Promise<Accumul8ImportedTransactionCleanupPurgeResponse | undefined>;
   onPurgeAllImportedTransactions: () => Promise<Accumul8ImportedTransactionCleanupPurgeResponse | undefined>;
+  onPurgeAllStatementUploads: () => Promise<{ success: boolean; deleted_count: number } | undefined>;
   onOpenTransaction: (id: number) => void;
   onDeleteTransaction: (id: number, description: string) => void;
 }
@@ -72,6 +73,7 @@ const DEFAULT_KIND: Accumul8StatementKind = 'bank_account';
 type StatementModalSection = 'inbox' | 'library' | 'search' | 'signals';
 type StatementLibraryFilter = 'all' | 'review' | 'processed' | 'failed' | 'suspicious';
 type StatementWorkspacePanel = 'review' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | 'reconciliation';
+type CleanupMode = 'transactions' | 'files';
 
 interface StatementWorkspaceRow extends Accumul8StatementImportResultRow {
   row_index: number;
@@ -301,11 +303,13 @@ export function Accumul8StatementsPanel({
   onAuditImportedCleanup,
   onPurgeImportedCleanup,
   onPurgeAllImportedTransactions,
+  onPurgeAllStatementUploads,
   onOpenTransaction,
   onDeleteTransaction,
 }: Accumul8StatementsPanelProps) {
   const [auditBusy, setAuditBusy] = React.useState(false);
   const [cleanupBusy, setCleanupBusy] = React.useState(false);
+  const [cleanupMode, setCleanupMode] = React.useState<CleanupMode>('transactions');
   const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind | ''>('');
   const [files, setFiles] = React.useState<File[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -339,6 +343,7 @@ export function Accumul8StatementsPanel({
     setCleanupModalOpen(false);
     setCleanupReport(null);
     setCleanupSelectedIds([]);
+    setCleanupMode('transactions');
     setArchiveDialogOpen(false);
     setLibraryFilter('all');
     setLibraryQuery('');
@@ -659,6 +664,7 @@ export function Accumul8StatementsPanel({
   }, [onAuditStatements]);
   const handleAuditImportedCleanup = React.useCallback(async () => {
     setCleanupBusy(true);
+    setCleanupMode('transactions');
     try {
       const report = await onAuditImportedCleanup({ limit: 1000 });
       setCleanupReport(report || null);
@@ -681,6 +687,7 @@ export function Accumul8StatementsPanel({
       return;
     }
     setCleanupBusy(true);
+    setCleanupMode('transactions');
     try {
       await onPurgeImportedCleanup(cleanupSelectedIds);
       const report = await onAuditImportedCleanup({ limit: 1000 });
@@ -703,6 +710,7 @@ export function Accumul8StatementsPanel({
       return;
     }
     setCleanupBusy(true);
+    setCleanupMode('transactions');
     try {
       await onPurgeAllImportedTransactions();
       setCleanupReport(null);
@@ -712,6 +720,23 @@ export function Accumul8StatementsPanel({
       setCleanupBusy(false);
     }
   }, [onPurgeAllImportedTransactions]);
+  const handlePurgeAllStatementUploads = React.useCallback(async () => {
+    const confirmed = window.confirm('Delete every saved bank statement file for this owner? Imported statement ledger rows are already gone, so this will clear the statement library and free up space.');
+    if (!confirmed) {
+      return;
+    }
+    setCleanupBusy(true);
+    setCleanupMode('files');
+    try {
+      await onPurgeAllStatementUploads();
+      setCleanupReport(null);
+      setCleanupSelectedIds([]);
+      setCleanupModalOpen(false);
+      setArchiveDialogOpen(false);
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [onPurgeAllStatementUploads]);
   const restoreArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload, shouldFocus = false) => {
     const response = await onRestoreStatement(upload.id);
     if (shouldFocus) {
@@ -730,7 +755,7 @@ export function Accumul8StatementsPanel({
   return (
     <section className="accumul8-statements-page">
       {busy ? (
-        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label={auditBusy ? 'Statement audit in progress' : cleanupBusy ? 'Imported transaction cleanup in progress' : 'Statement scan in progress'}>
+        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label={auditBusy ? 'Statement audit in progress' : cleanupBusy ? (cleanupMode === 'files' ? 'Statement file deletion in progress' : 'Imported transaction cleanup in progress') : 'Statement scan in progress'}>
           <div className="accumul8-statement-busy-card">
             <WebpImage
               className="accumul8-statement-busy-logo"
@@ -738,7 +763,7 @@ export function Accumul8StatementsPanel({
               alt=""
               aria-hidden="true"
             />
-            <div className="accumul8-statement-busy-text">{auditBusy ? 'Auditing statements and reconciling the ledger...' : cleanupBusy ? 'Reviewing imported transactions for cleanup...' : 'Scanning statement...'}</div>
+            <div className="accumul8-statement-busy-text">{auditBusy ? 'Auditing statements and reconciling the ledger...' : cleanupBusy ? (cleanupMode === 'files' ? 'Deleting saved bank statement files...' : 'Reviewing imported transactions for cleanup...') : 'Scanning statement...'}</div>
           </div>
         </div>
       ) : null}
@@ -792,6 +817,16 @@ export function Accumul8StatementsPanel({
             aria-label="Purge all bank-statement-imported ledger transactions"
           >
             🧹
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => void handlePurgeAllStatementUploads()}
+            disabled={busy || statementUploads.length + archivedStatementUploads.length === 0}
+            title="Delete all saved bank statement files"
+            aria-label="Delete all saved bank statement files"
+          >
+            🗑️
           </button>
           <button
             type="button"

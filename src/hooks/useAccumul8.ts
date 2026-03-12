@@ -72,6 +72,13 @@ export function useAccumul8(
       onToast({ tone: 'error', message });
     }
   }, [onToast]);
+  const isTellerRateLimitError = React.useCallback((error: unknown) => {
+    const message = String((error as any)?.message || '').toLowerCase();
+    return message.includes('too_many_requests')
+      || message.includes('request rate limit exceeded')
+      || message.includes('http 429')
+      || message.includes('status of 429');
+  }, []);
   const scopedActionUrl = React.useCallback((action: string) => {
     const params = new URLSearchParams({ action });
     const ownerUserId = Number(selectedOwnerUserId || 0);
@@ -344,11 +351,15 @@ export function useAccumul8(
       await load();
       return res;
     } catch (error: any) {
-      handleError(error, 'Bank sync failed');
+      if (isTellerRateLimitError(error) && onToast) {
+        onToast({ tone: 'warning', message: 'Teller asked us to wait before syncing again. Give it a little time, then retry.' });
+      } else {
+        handleError(error, 'Bank sync failed');
+      }
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, isTellerRateLimitError, load, onToast, scopedActionUrl]);
   const uploadStatement = React.useCallback(async (formData: FormData) => {
     setBusy(true);
     try {
@@ -674,6 +685,25 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const purgeAllStatementUploads = React.useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; deleted_count: number }>(
+        scopedActionUrl('purge_all_statement_uploads'),
+        {},
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: `Deleted ${Number(res?.deleted_count || 0)} bank statement file${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to purge bank statement files');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -772,5 +802,6 @@ export function useAccumul8(
     auditImportedTransactionCleanup,
     purgeImportedTransactionCleanup,
     purgeAllImportedStatementTransactions,
+    purgeAllStatementUploads,
   };
 }

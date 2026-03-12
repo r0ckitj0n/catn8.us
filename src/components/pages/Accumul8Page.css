@@ -1494,19 +1494,27 @@
   overflow-wrap: anywhere;
 }
 
+.accumul8-table--pay-bills th:nth-child(4),
+.accumul8-table--pay-bills td:nth-child(4) {
+  min-width: 10rem;
+  max-width: 14rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .accumul8-table--balance-ledger th:nth-child(5),
 .accumul8-table--balance-ledger td:nth-child(5),
 .accumul8-table--balance-ledger th:nth-child(6),
 .accumul8-table--balance-ledger td:nth-child(6),
-.accumul8-table--pay-bills th:nth-child(4),
-.accumul8-table--pay-bills td:nth-child(4) {
+.accumul8-table--pay-bills th:nth-child(5),
+.accumul8-table--pay-bills td:nth-child(5) {
   min-width: 7rem;
 }
 
 .accumul8-table--balance-ledger th:nth-child(7),
 .accumul8-table--balance-ledger td:nth-child(7),
-.accumul8-table--pay-bills th:nth-child(6),
-.accumul8-table--pay-bills td:nth-child(6) {
+.accumul8-table--pay-bills th:nth-child(7),
+.accumul8-table--pay-bills td:nth-child(7) {
   min-width: 4.5rem;
 }
 
@@ -1517,8 +1525,8 @@
   min-width: 5.5rem;
 }
 
-.accumul8-table--pay-bills th:nth-child(5),
-.accumul8-table--pay-bills td:nth-child(5) {
+.accumul8-table--pay-bills th:nth-child(6),
+.accumul8-table--pay-bills td:nth-child(6) {
   min-width: 6.5rem;
 }
 
@@ -1664,6 +1672,10 @@
 .accumul8-sync-status {
   white-space: normal;
   font-weight: 700;
+}
+
+.accumul8-sync-status.is-rate-limited {
+  color: #ffe28c;
 }
 
 .accumul8-sync-error,

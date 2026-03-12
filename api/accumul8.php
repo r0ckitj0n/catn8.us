@@ -11516,6 +11516,47 @@ if ($action === 'purge_all_imported_statement_transactions') {
     ]);
 }
 
+if ($action === 'purge_all_statement_uploads') {
+    catn8_require_method('POST');
+    $linkedRow = Database::queryOne(
+        'SELECT COUNT(*) AS linked_count
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND source_kind IN (?, ?)',
+        [$viewerId, 'statement_upload', 'statement_pdf']
+    );
+    if ((int)($linkedRow['linked_count'] ?? 0) > 0) {
+        catn8_json_response(['success' => false, 'error' => 'Purge imported ledger rows before deleting statement files'], 409);
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id
+         FROM accumul8_statement_uploads
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    );
+    if ($rows === []) {
+        catn8_json_response([
+            'success' => true,
+            'deleted_count' => 0,
+        ]);
+    }
+
+    $uploadIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $rows);
+    foreach ($uploadIds as $uploadId) {
+        Database::execute(
+            'DELETE FROM accumul8_statement_uploads
+             WHERE id = ? AND owner_user_id = ?',
+            [$uploadId, $viewerId]
+        );
+    }
+
+    catn8_json_response([
+        'success' => true,
+        'deleted_count' => count($uploadIds),
+    ]);
+}
+
 if ($action === 'download_statement_upload') {
     catn8_require_method('GET');
     $id = (int)($_GET['id'] ?? 0);

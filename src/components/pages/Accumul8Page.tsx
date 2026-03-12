@@ -126,7 +126,7 @@ type LedgerFormState = {
   account_id: string;
   balance_entity_id: string;
 };
-type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'balance_entity_id' | 'balance_entity_name'>>;
+type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'account_id' | 'balance_entity_id' | 'balance_entity_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes'>>;
@@ -465,6 +465,27 @@ function formatSyncConnectionStatus(status: string): string {
   return normalized.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function isTellerRateLimited(message: string): boolean {
+  const normalized = String(message || '').trim().toLowerCase();
+  return normalized.includes('too_many_requests')
+    || normalized.includes('request rate limit exceeded')
+    || normalized.includes('http 429')
+    || normalized.includes('status of 429');
+}
+
+function formatSyncStatusLabel(status: string, lastError: string): string {
+  if (isTellerRateLimited(lastError)) return 'Wait And Retry';
+  return formatSyncConnectionStatus(status);
+}
+
+function formatSyncStatusMessage(lastError: string): string {
+  if (!String(lastError || '').trim()) return '';
+  if (isTellerRateLimited(lastError)) {
+    return 'Teller asked us to pause before the next sync. Give it a little time, then retry.';
+  }
+  return String(lastError);
+}
+
 function formatAccountMappingLabel(account: Accumul8Account): string {
   const parts = [
     account.account_name || 'Unnamed account',
@@ -564,6 +585,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     auditImportedTransactionCleanup,
     purgeImportedTransactionCleanup,
     purgeAllImportedStatementTransactions,
+    purgeAllStatementUploads,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [entityForm, setEntityForm] = React.useState<EntityFormState>(DEFAULT_ENTITY_FORM);
@@ -865,6 +887,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       ledgerMoveSelectedTransactions.some((tx) => Number(tx.account_id || 0) !== account.id)
     ))
   ), [ledgerMoveAccountOptions, ledgerMoveSelectedTransactions]);
+  const payBillsAccountOptions = React.useMemo(() => (
+    accounts
+      .filter((account) => Number(account.is_active || 0) === 1)
+      .slice()
+      .sort((a, b) => formatAccountOptionLabel(a).localeCompare(formatAccountOptionLabel(b)))
+  ), [accounts]);
   const resetLedgerMoveState = React.useCallback(() => {
     setLedgerMoveMode(false);
     setSelectedLedgerMoveIds([]);
@@ -1166,9 +1194,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
     { key: 'due', index: 0, fallback: 120, header: 'Due Date' },
     { key: 'paidDate', index: 1, fallback: 120, header: 'Paid Date' },
-    { key: 'amount', index: 3, fallback: 112, header: 'Amount' },
-    { key: 'status', index: 4, fallback: 116, header: 'Status' },
-    { key: 'actions', index: 5, fallback: 182, header: 'Actions' },
+    { key: 'account', index: 3, fallback: 180, header: 'Account' },
+    { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
+    { key: 'status', index: 5, fallback: 116, header: 'Status' },
+    { key: 'actions', index: 6, fallback: 182, header: 'Actions' },
   ], [payBillsTableRef, payBillsRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
   const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
     { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
@@ -1968,7 +1997,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       is_reconciled: Number(draft.is_reconciled ?? tx.is_reconciled ?? 0),
       is_budget_planner: Number(draft.is_budget_planner ?? tx.is_budget_planner ?? 0),
       entity_id: draft.entity_id ?? tx.entity_id ?? null,
-      account_id: tx.account_id ?? null,
+      account_id: draft.account_id ?? tx.account_id ?? null,
       balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
     });
     setLedgerDraftById((prev) => {
@@ -2939,11 +2968,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-paidDate-width)' }} />
                     <col className="accumul8-col--flex-100" />
+                    <col style={{ width: 'var(--accumul8-col-account-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-status-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                   </colgroup>
-                  <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Due Date</th><th>Paid Date</th><th>Description</th><th>Account</th><th className="text-end">Amount</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {payBillsRows.map((billTx) => (
                       (() => {
@@ -2987,6 +3017,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineText(billTx.description, '-')}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activePayBillRowId === billTx.id ? (
+                            <select
+                              className="form-select form-select-sm accumul8-month-table-select"
+                              value={String(payBillDraftById[billTx.id]?.account_id ?? billTx.account_id ?? '')}
+                              onChange={(e) => setPayBillRowDraft(billTx, { account_id: e.target.value ? Number(e.target.value) : null })}
+                              disabled={busy || !billEditPolicy.canEditCoreFields}
+                            >
+                              <option value="">No account</option>
+                              {payBillsAccountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineText(billTx.account_name, 'No account')}</button>
                           )}
                         </td>
                         <td className="text-end">
@@ -3042,7 +3089,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     ))}
                     {payBillsRows.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">No unpaid upcoming or past-due bills matched the current filter.</td>
+                        <td colSpan={7} className="text-center text-muted py-4">No unpaid upcoming or past-due bills matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>
@@ -3588,8 +3635,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           </div>
                         </td>
                         <td>
-                          <div className="accumul8-sync-status">{formatSyncConnectionStatus(String(c.status || ''))}</div>
-                          {c.last_error ? <div className="accumul8-sync-error">{String(c.last_error)}</div> : null}
+                          <div className={`accumul8-sync-status${isTellerRateLimited(String(c.last_error || '')) ? ' is-rate-limited' : ''}`}>
+                            {formatSyncStatusLabel(String(c.status || ''), String(c.last_error || ''))}
+                          </div>
+                          {c.last_error ? <div className="accumul8-sync-error">{formatSyncStatusMessage(String(c.last_error || ''))}</div> : null}
                         </td>
                         <td>{c.last_sync_at || '-'}</td>
                         <td className="text-end">
@@ -3673,6 +3722,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onAuditImportedCleanup={auditImportedTransactionCleanup}
                 onPurgeImportedCleanup={purgeImportedTransactionCleanup}
                 onPurgeAllImportedTransactions={purgeAllImportedStatementTransactions}
+                onPurgeAllStatementUploads={purgeAllStatementUploads}
                 onOpenTransaction={beginViewTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />

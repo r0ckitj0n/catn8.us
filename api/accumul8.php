@@ -11723,6 +11723,8 @@ if ($action === 'teller_connect_diagnostic') {
     $allowedEvents = [
         'open_requested',
         'init',
+        'iframe_detected',
+        'message',
         'success',
         'exit',
         'failure',

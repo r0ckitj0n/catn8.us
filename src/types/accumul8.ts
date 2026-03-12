@@ -850,6 +850,8 @@ export interface Accumul8TellerConnectTokenResponse {
 export type Accumul8TellerDiagnosticEventName =
   | 'open_requested'
   | 'init'
+  | 'iframe_detected'
+  | 'message'
   | 'success'
   | 'exit'
   | 'failure'

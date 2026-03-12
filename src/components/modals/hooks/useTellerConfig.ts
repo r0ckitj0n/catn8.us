@@ -248,7 +248,8 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
             return;
           }
           const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
-          const institutionId = String((payload as any)?.enrollment?.institution?.id || connectedInstitutionId || '');
+          const detectedInstitutionId = String((payload as any)?.institution_id || '');
+          const institutionId = String((payload as any)?.enrollment?.institution?.id || detectedInstitutionId || connectedInstitutionId || '');
           const institutionName = String((payload as any)?.enrollment?.institution?.name || connectedInstitutionName || '');
           const enrollmentId = String((payload as any)?.enrollment?.id || connectedEnrollmentId || '');
           const failureMessage = String((payload as any)?.message || (payload as any)?.code || '');
@@ -263,6 +264,7 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
             message: failureMessage || `Teller Connect ${event.name}`,
             meta: {
               select_account: 'disabled',
+              event_payload: payload,
               watched_institution: isWatchedTellerInstitution(institutionId, institutionName) ? 1 : 0,
             },
           });

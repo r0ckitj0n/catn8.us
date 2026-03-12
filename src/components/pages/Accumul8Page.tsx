@@ -8,6 +8,7 @@ import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
+import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
@@ -19,6 +20,7 @@ import { WebpImage } from '../common/WebpImage';
 import { StandardIconButton } from '../common/StandardIconButton';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
+import { PriorityTableColumn, usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
 import { ApiClient } from '../../core/ApiClient';
 import { openTellerConnect } from '../../core/tellerConnect';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
@@ -414,46 +416,11 @@ function formatCurrencyAmount(value: number): string {
   }).format(value);
 }
 
-type MeasuredTableColumn = {
-  key: string;
-  index: number;
-  fallback: number;
-  header: string;
-};
-
 type EntityTransactionSummary = {
   count: number;
   lastAmount: number | null;
   lastDate: string;
 };
-
-function estimateHeaderWidth(label: string): number {
-  const normalized = label.replace(/\s+/g, ' ').trim();
-  return Math.ceil(24 + normalized.length * 8.75);
-}
-
-function useMeasuredTableColumnWidths(
-  _tableRef: React.RefObject<HTMLTableElement | null>,
-  columns: readonly MeasuredTableColumn[],
-  _deps: React.DependencyList,
-): Record<string, number> {
-  return columns.reduce<Record<string, number>>((acc, column) => {
-    acc[column.key] = Math.max(column.fallback, estimateHeaderWidth(column.header));
-    return acc;
-  }, {});
-}
-
-function buildMeasuredTableStyle(widths: Record<string, number>): React.CSSProperties {
-  const style: Record<string, string> = {};
-  let fitTotal = 0;
-  Object.entries(widths).forEach(([key, value]) => {
-    const safeValue = Number.isFinite(value) ? value : 0;
-    fitTotal += safeValue;
-    style[`--accumul8-col-${key}-width`] = `${safeValue}px`;
-  });
-  style['--accumul8-col-fit-total'] = `${fitTotal}px`;
-  return style as React.CSSProperties;
-}
 
 function formatSyncConnectionStatus(status: string): string {
   const normalized = String(status || '').trim().toLowerCase();
@@ -539,6 +506,21 @@ function formatSyncSummaryBackfillNote(account: Accumul8TellerSyncAccountSummary
     return `Backfill in progress. Coverage so far: ${coverage}. Pulled ${account.backfill_pages_fetched} older page${account.backfill_pages_fetched === 1 ? '' : 's'} this sync and will resume next time.`;
   }
   return `Backfill not finished yet. Recent refresh window: ${account.recent_window_start_date} to ${account.recent_window_end_date}. Coverage so far: ${coverage}.`;
+}
+
+function formatEntityTransactionSummaryLabel(summary: EntityTransactionSummary): string {
+  if (!summary.lastDate) {
+    return `${summary.count} tx`;
+  }
+  const amountLabel = summary.lastAmount === null ? '-' : Number(summary.lastAmount || 0).toFixed(2);
+  return `${amountLabel} ${formatInlineDate(summary.lastDate)} ${summary.count} tx`;
+}
+
+function formatPayBillStatusLabel(transaction: Pick<Accumul8Transaction, 'is_paid' | 'due_date' | 'transaction_date'>, todayDate: string): string {
+  if (Number(transaction.is_paid || 0) === 1) {
+    return 'Paid';
+  }
+  return ((transaction.due_date || transaction.transaction_date) < todayDate) ? 'Past due' : 'Upcoming';
 }
 
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
@@ -1132,46 +1114,67 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(debtor.is_active || 0) === 1 ? 'active' : 'paused',
     ]))
   ), [debtors, debtorsSearchQuery]);
-  const ledgerColumnWidths = useMeasuredTableColumnWidths(ledgerTableRef, [
-    { key: 'date', index: 0, fallback: 96, header: 'Date' },
-    { key: 'due', index: 1, fallback: 96, header: 'Due' },
-    { key: 'account', index: 2, fallback: 104, header: 'Account' },
-    { key: 'amount', index: 5, fallback: 120, header: 'Amount' },
-    { key: 'balance', index: 6, fallback: 136, header: 'Balance' },
-    { key: 'paid', index: 7, fallback: 88, header: 'Paid' },
-    { key: 'reconciled', index: 8, fallback: 160, header: 'Reconciled' },
-    { key: 'actions', index: 9, fallback: 182, header: 'Actions' },
-  ], [ledgerTableRef, ledgerRows, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
-  const debtorsColumnWidths = useMeasuredTableColumnWidths(debtorsTableRef, [
-    { key: 'charges', index: 2, fallback: 112, header: 'Charges' },
-    { key: 'credits', index: 3, fallback: 112, header: 'Credits' },
-    { key: 'net', index: 4, fallback: 136, header: 'Net IOU' },
-    { key: 'activity', index: 5, fallback: 132, header: 'Last Activity' },
-    { key: 'actions', index: 6, fallback: 238, header: 'Actions' },
-  ], [debtorsTableRef, debtorRows, debtorDraftById, activeDebtorRowId, flashingSaveButtonKey, selectedDebtorId]);
-  const payBillsColumnWidths = useMeasuredTableColumnWidths(payBillsTableRef, [
-    { key: 'due', index: 0, fallback: 120, header: 'Due Date' },
-    { key: 'paidDate', index: 1, fallback: 120, header: 'Paid Date' },
-    { key: 'account', index: 3, fallback: 180, header: 'Account' },
-    { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
-    { key: 'status', index: 5, fallback: 116, header: 'Status' },
-    { key: 'actions', index: 6, fallback: 182, header: 'Actions' },
-  ], [payBillsTableRef, payBillsRows, payBillDraftById, activePayBillRowId, flashingSaveButtonKey]);
-  const recurringColumnWidths = useMeasuredTableColumnWidths(recurringTableRef, [
-    { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
-    { key: 'amount', index: 2, fallback: 112, header: 'Amount' },
-    { key: 'frequency', index: 3, fallback: 120, header: 'Frequency' },
-    { key: 'account', index: 4, fallback: 360, header: 'Account' },
-    { key: 'paymentMethod', index: 5, fallback: 172, header: 'Payment Method' },
-    { key: 'planner', index: 6, fallback: 108, header: 'Planner' },
-    { key: 'status', index: 7, fallback: 104, header: 'Status' },
-    { key: 'actions', index: 8, fallback: 182, header: 'Actions' },
-  ], [recurringTableRef, recurringRows, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
-  const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
-    { key: 'status', index: 1, fallback: 164, header: 'Status' },
-    { key: 'lastSync', index: 2, fallback: 188, header: 'Last Sync' },
-    { key: 'actions', index: 3, fallback: 138, header: 'Actions' },
-  ], [syncTableRef, bankConnections, busy]);
+  const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
+    { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
+    { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
+    { key: 'account', header: 'Account', minWidth: 168, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => tx.account_name || tx.banking_organization_name || '', contentAccessor: (tx) => tx.account_name || tx.banking_organization_name || '-' },
+    { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
+    { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
+    { key: 'amount', header: 'Amount', minWidth: 126, maxAutoWidth: 150, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'balance', header: 'Balance', minWidth: 136, maxAutoWidth: 160, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
+    { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
+    { key: 'reconciled', header: 'Reconciled', minWidth: 138, maxAutoWidth: 156, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
+    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
+  ]), []);
+  const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
+    { key: 'person', header: 'Person', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '', contentAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '-' },
+    { key: 'linkedEntity', header: 'Linked Entity', minWidth: 170, maxAutoWidth: 280, priority: 3, sortable: true, sortAccessor: (debtor) => debtor.contact_name || '', contentAccessor: (debtor) => debtor.contact_name || '-' },
+    { key: 'charges', header: 'Charges', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_loaned || 0), contentAccessor: (debtor) => Number(debtor.total_loaned || 0).toFixed(2) },
+    { key: 'credits', header: 'Credits', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_repaid || 0), contentAccessor: (debtor) => Number(debtor.total_repaid || 0).toFixed(2) },
+    { key: 'net', header: 'Net IOU', minWidth: 132, maxAutoWidth: 152, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.outstanding_balance || 0), contentAccessor: (debtor) => Number(debtor.outstanding_balance || 0).toFixed(2) },
+    { key: 'activity', header: 'Last Activity', minWidth: 136, maxAutoWidth: 170, priority: 1, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => debtor.last_activity_date || '', contentAccessor: (debtor) => debtor.last_activity_date || '-' },
+    { key: 'actions', header: 'Actions', minWidth: 228, maxAutoWidth: 250, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+  ]), []);
+  const payBillsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
+    { key: 'due', header: 'Due Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.due_date || tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date || tx.transaction_date) },
+    { key: 'paidDate', header: 'Paid Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.paid_date || '', contentAccessor: (tx) => formatInlineDate(tx.paid_date) },
+    { key: 'description', header: 'Description', minWidth: 250, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
+    { key: 'account', header: 'Account', minWidth: 170, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => tx.account_name || '', contentAccessor: (tx) => tx.account_name || 'No account' },
+    { key: 'amount', header: 'Amount', minWidth: 120, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'asc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'status', header: 'Status', minWidth: 116, maxAutoWidth: 132, sortable: true, sortAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate), contentAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate) },
+    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
+  ]), [todayDate]);
+  const recurringTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8RecurringPayment>>>(() => ([
+    { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring payment', item.notes || ''] },
+    { key: 'nextDue', header: 'Next Due', minWidth: 126, maxAutoWidth: 144, sortable: true, sortAccessor: (item) => item.next_due_date || '', contentAccessor: (item) => formatInlineDate(item.next_due_date) },
+    { key: 'amount', header: 'Amount', minWidth: 118, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
+    { key: 'frequency', header: 'Frequency', minWidth: 122, maxAutoWidth: 150, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
+    { key: 'account', header: 'Account', minWidth: 180, maxAutoWidth: 300, priority: 2, sortable: true, sortAccessor: (item) => item.account_name || '', contentAccessor: (item) => item.account_name || 'No account' },
+    { key: 'paymentMethod', header: 'Payment Method', minWidth: 170, maxAutoWidth: 220, priority: 1, sortable: true, sortAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod], contentAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod] },
+    { key: 'planner', header: 'Planner', minWidth: 108, maxAutoWidth: 120, sortable: true, sortAccessor: (item) => Number(item.is_budget_planner || 0), contentAccessor: (item) => Number(item.is_budget_planner || 0) === 1 ? 'Shown' : 'Hidden' },
+    { key: 'status', header: 'Status', minWidth: 104, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => Number(item.is_active || 0), contentAccessor: (item) => Number(item.is_active || 0) === 1 ? 'Active' : 'Paused' },
+    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+  ]), []);
+  const ledgerTable = usePriorityTableLayout({
+    tableRef: ledgerTableRef,
+    rows: ledgerRows,
+    columns: ledgerTableColumns,
+  });
+  const debtorsTable = usePriorityTableLayout({
+    tableRef: debtorsTableRef,
+    rows: debtorRows,
+    columns: debtorsTableColumns,
+  });
+  const payBillsTable = usePriorityTableLayout({
+    tableRef: payBillsTableRef,
+    rows: payBillsRows,
+    columns: payBillsTableColumns,
+  });
+  const recurringTable = usePriorityTableLayout({
+    tableRef: recurringTableRef,
+    rows: recurringRows,
+    columns: recurringTableColumns,
+  });
   const linkedAccountsByConnectionId = React.useMemo(() => {
     const next: Record<number, Accumul8Account[]> = {};
     accounts.forEach((account) => {
@@ -1186,6 +1189,30 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [accounts]);
+  const syncTableColumns = React.useMemo<Array<PriorityTableColumn<any>>>(() => ([
+    {
+      key: 'institution',
+      header: 'Institution',
+      minWidth: 300,
+      maxAutoWidth: 580,
+      priority: 6,
+      sortable: true,
+      sortAccessor: (connection) => connection.institution_name || connection.institution_id || '',
+      contentAccessor: (connection) => [
+        connection.institution_name || connection.institution_id || 'Unknown',
+        connection.teller_enrollment_id || 'Not stored yet',
+        ...(linkedAccountsByConnectionId[Number(connection.id || 0)] || []).map((account) => formatAccountMappingLabel(account)),
+      ],
+    },
+    { key: 'status', header: 'Status', minWidth: 166, maxAutoWidth: 196, sortable: true, sortAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || ''), contentAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || '') },
+    { key: 'lastSync', header: 'Last Sync', minWidth: 188, maxAutoWidth: 214, sortable: true, defaultSortDirection: 'desc', sortAccessor: (connection) => connection.last_synced_at || '', contentAccessor: (connection) => formatInlineDate(connection.last_synced_at) },
+    { key: 'actions', header: 'Actions', minWidth: 138, maxAutoWidth: 160, sortable: false, contentAccessor: () => 'Sync Reconnect Delete' },
+  ]), [linkedAccountsByConnectionId]);
+  const syncTable = usePriorityTableLayout({
+    tableRef: syncTableRef,
+    rows: bankConnections,
+    columns: syncTableColumns,
+  });
   const runConnectionSync = React.useCallback(async (connectionId: number, institutionName: string) => {
     setSyncingConnectionId(connectionId);
     try {
@@ -1851,19 +1878,64 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
   }, [debtorLedger, selectedDebtorId]);
-  const entitiesColumnWidths = useMeasuredTableColumnWidths(entitiesTableRef, [
-    { key: 'roles', index: 1, fallback: 120, header: 'Roles' },
-    { key: 'lastTransaction', index: 3, fallback: 172, header: 'Last Transaction' },
-    { key: 'status', index: 4, fallback: 96, header: 'Status' },
-    { key: 'actions', index: 5, fallback: 218, header: 'Actions' },
-  ], [entitiesTableRef, entityRows, entityDraftById, activeEntityRowId, flashingSaveButtonKey]);
-  const balanceLedgerColumnWidths = useMeasuredTableColumnWidths(balanceLedgerTableRef, [
-    { key: 'date', index: 0, fallback: 96, header: 'Date' },
-    { key: 'person', index: 1, fallback: 132, header: 'Person' },
-    { key: 'amount', index: 4, fallback: 112, header: 'Amount' },
-    { key: 'running', index: 5, fallback: 168, header: 'Running IOU' },
-    { key: 'actions', index: 6, fallback: 182, header: 'Actions' },
-  ], [balanceLedgerTableRef, selectedDebtorEntries, ledgerDraftById, activeLedgerRowId, flashingSaveButtonKey]);
+  const entitiesTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Entity>>>(() => ([
+    {
+      key: 'name',
+      header: 'Name',
+      minWidth: 240,
+      maxAutoWidth: 520,
+      priority: 5,
+      sortable: true,
+      sortAccessor: (entity) => entity.display_name || '',
+      contentAccessor: (entity) => [
+        entity.display_name || 'Unnamed entity',
+        entity.notes || '',
+        entity.aliases.map((alias) => alias.alias_name).join(' | '),
+      ],
+    },
+    { key: 'roles', header: 'Roles', minWidth: 126, maxAutoWidth: 180, priority: 1, sortable: true, sortAccessor: (entity) => formatEntityRoles(entity), contentAccessor: (entity) => formatEntityRoles(entity) },
+    {
+      key: 'contactInfo',
+      header: 'Contact Info',
+      minWidth: 220,
+      maxAutoWidth: 420,
+      priority: 4,
+      sortable: true,
+      sortAccessor: (entity) => formatEntityContactSummary(entity).join(' | '),
+      contentAccessor: (entity) => formatEntityContactSummary(entity),
+    },
+    {
+      key: 'lastTransaction',
+      header: 'Last Transaction',
+      minWidth: 172,
+      maxAutoWidth: 220,
+      sortable: true,
+      defaultSortDirection: 'desc',
+      sortAccessor: (entity) => (entityTransactionSummaryById[entity.id]?.lastDate || ''),
+      contentAccessor: (entity) => formatEntityTransactionSummaryLabel(entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' }),
+    },
+    { key: 'status', header: 'Status', minWidth: 98, maxAutoWidth: 118, sortable: true, sortAccessor: (entity) => Number(entity.is_active || 0), contentAccessor: (entity) => Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused' },
+    { key: 'actions', header: 'Actions', minWidth: 218, maxAutoWidth: 240, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+  ]), [entityTransactionSummaryById]);
+  const balanceLedgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
+    { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
+    { key: 'person', header: 'Person', minWidth: 156, maxAutoWidth: 230, priority: 2, sortable: true, sortAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '', contentAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '-' },
+    { key: 'description', header: 'Description', minWidth: 220, maxAutoWidth: 520, priority: 5, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
+    { key: 'memo', header: 'Memo', minWidth: 148, maxAutoWidth: 340, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
+    { key: 'amount', header: 'Amount', minWidth: 118, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'running', header: 'Running IOU', minWidth: 166, maxAutoWidth: 196, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
+    { key: 'actions', header: 'Actions', minWidth: 182, maxAutoWidth: 204, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+  ]), []);
+  const entitiesTable = usePriorityTableLayout({
+    tableRef: entitiesTableRef,
+    rows: entityRows,
+    columns: entitiesTableColumns,
+  });
+  const balanceLedgerTable = usePriorityTableLayout({
+    tableRef: balanceLedgerTableRef,
+    rows: selectedDebtorEntries,
+    columns: balanceLedgerTableColumns,
+  });
   const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
     if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {
       void deleteTransaction(id);

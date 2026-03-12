@@ -1409,6 +1409,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setSyncHelpError(String(opts?.error || ''));
     setSyncHelpOpen(true);
   }, []);
+  const openStatementImportFallback = React.useCallback(() => {
+    setSyncHelpOpen(false);
+    setTab('statements');
+  }, []);
   const resetContactForm = React.useCallback(() => {
     setEditingContactId(null);
     setContactForm(DEFAULT_CONTACT_FORM);
@@ -1768,7 +1772,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       const linkResult = await openTellerConnect(applicationId, environment);
 
       if (linkResult.outcome === 'cancelled') {
-        onToast({ tone: 'info', message: 'Teller Connect was closed before connecting an account.' });
+        const exitMessage = 'Teller Connect closed without linking an account. If Teller showed "no suitable accounts," that means the bank/login is not exposing any eligible accounts for sync right now. Use the Bank Statements tab as the fallback import path.';
+        openSyncHelp({ error: exitMessage });
+        onToast({ tone: 'info', message: exitMessage });
         return;
       }
 
@@ -3833,6 +3839,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
+              <div className="alert alert-info py-2">
+                If Teller says there are no suitable accounts for an institution such as Fifth Third or Truist, that decision is happening inside Teller&apos;s hosted bank-connection flow. Accumul8 can&apos;t override it, so use the Bank Statements tab to import those accounts instead.
+                <div className="mt-2">
+                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={openStatementImportFallback}>Import Statement Instead</button>
+                </div>
+              </div>
               <h4 className="h6">Connected Institutions</h4>
               <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--sync">
                 <table
@@ -3994,6 +4006,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <li>Complete Teller Connect and authorize your institution.</li>
                   <li>Accumul8 will automatically exchange token, save the connection, and sync transactions.</li>
                 </ol>
+                <div className="alert alert-info py-2">
+                  If Teller shows a message like &quot;no suitable accounts,&quot; the institution/login did not expose any eligible accounts for Teller sync. Accumul8 cannot force that connection, so import those accounts from the Bank Statements tab instead.
+                  <div className="mt-2">
+                    <strong>Fifth Third / Truist guidance:</strong> Chase credit cards can sync through Teller, but some Fifth Third and Truist credit-card logins are still getting rejected inside Teller Connect before Accumul8 receives any account metadata. When that happens, statement import is the reliable fallback path.
+                  </div>
+                  <div className="mt-2">
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={openStatementImportFallback}>Go To Bank Statements</button>
+                  </div>
+                </div>
                 <div className="small">
                   Quick references: <a href="https://teller.io/docs/connect" target="_blank" rel="noreferrer">Teller Connect</a> | <a href="https://teller.io/docs/api" target="_blank" rel="noreferrer">Teller API</a>
                 </div>

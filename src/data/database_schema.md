@@ -209,6 +209,7 @@ Business term: Banking Organizations
 - `day_of_month` (INT, NULLABLE)
 - `day_of_week` (INT, NULLABLE)
 - `next_due_date` (DATE)
+- `paid_date` (DATE, NULLABLE)
 - `notes` (TEXT, NULLABLE)
 - `is_active` (TINYINT(1), DEFAULT 1)
 - `is_budget_planner` (TINYINT(1), DEFAULT 0)

@@ -23,6 +23,7 @@ export interface Accumul8SpreadsheetMonthRow {
   banking_organization_id: number | null;
   title: string;
   due_date: string;
+  paid_date: string;
   dueDayLabel: string;
   amount: number;
   direction: string;
@@ -206,6 +207,7 @@ export function buildSpreadsheetMonthData(
         banking_organization_id: recurring.banking_organization_id ?? null,
         title: recurring.title || 'Recurring Payment',
         due_date: occurrenceDate,
+        paid_date: recurring.paid_date || '',
         dueDayLabel: formatDayLabel(occurrenceDate),
         amount: Number(signedAmount.toFixed(2)),
         direction: recurring.direction || 'outflow',

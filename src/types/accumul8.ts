@@ -444,6 +444,7 @@ export interface Accumul8RecurringPayment {
   day_of_month: number | null;
   day_of_week: number | null;
   next_due_date: string;
+  paid_date: string;
   notes: string;
   is_active: number;
   is_budget_planner: number;
@@ -460,6 +461,7 @@ export interface Accumul8RecurringUpsertRequest {
   payment_method: Accumul8PaymentMethod;
   interval_count: number;
   next_due_date: string;
+  paid_date?: string;
   entity_id?: number | null;
   contact_id?: number | null;
   account_id?: number | null;

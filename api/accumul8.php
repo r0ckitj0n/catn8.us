@@ -4676,6 +4676,7 @@ function accumul8_tables_ensure(): void
         day_of_month INT NULL,
         day_of_week INT NULL,
         next_due_date DATE NOT NULL,
+        paid_date DATE NULL,
         notes TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         is_budget_planner TINYINT(1) NOT NULL DEFAULT 0,
@@ -4988,6 +4989,7 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'payment_method', "VARCHAR(24) NOT NULL DEFAULT 'unspecified'");
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'day_of_month', 'INT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'day_of_week', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'paid_date', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'notes', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_budget_planner', 'TINYINT(1) NOT NULL DEFAULT 0');
@@ -5401,6 +5403,7 @@ function accumul8_list_recurring(int $viewerId): array
     $paymentMethodSelect = accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'rp.payment_method', "'unspecified' AS payment_method");
     $dayOfMonthSelect = accumul8_optional_select('accumul8_recurring_payments', 'day_of_month', 'rp.day_of_month', 'NULL AS day_of_month');
     $dayOfWeekSelect = accumul8_optional_select('accumul8_recurring_payments', 'day_of_week', 'rp.day_of_week', 'NULL AS day_of_week');
+    $paidDateSelect = accumul8_optional_select('accumul8_recurring_payments', 'paid_date', 'rp.paid_date', "'' AS paid_date");
     $notesSelect = accumul8_optional_select('accumul8_recurring_payments', 'notes', 'rp.notes', "'' AS notes");
     $isActiveSelect = accumul8_optional_select('accumul8_recurring_payments', 'is_active', 'rp.is_active', '1 AS is_active');
     $isBudgetPlannerSelect = accumul8_optional_select('accumul8_recurring_payments', 'is_budget_planner', 'rp.is_budget_planner', '0 AS is_budget_planner');
@@ -5416,7 +5419,7 @@ function accumul8_list_recurring(int $viewerId): array
 
     $rows = Database::queryAll(
         'SELECT rp.id, ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $paymentMethodSelect . ', ' . $intervalCountSelect . ',
-                ' . $dayOfMonthSelect . ', ' . $dayOfWeekSelect . ', rp.next_due_date, ' . $notesSelect . ', ' . $isActiveSelect . ', ' . $isBudgetPlannerSelect . ',
+                ' . $dayOfMonthSelect . ', ' . $dayOfWeekSelect . ', rp.next_due_date, ' . $paidDateSelect . ', ' . $notesSelect . ', ' . $isActiveSelect . ', ' . $isBudgetPlannerSelect . ',
                 c.contact_name, ' . $accountNameSelect . '
          FROM accumul8_recurring_payments rp
          LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
@@ -5445,6 +5448,7 @@ function accumul8_list_recurring(int $viewerId): array
             'day_of_month' => isset($r['day_of_month']) ? (int)$r['day_of_month'] : null,
             'day_of_week' => isset($r['day_of_week']) ? (int)$r['day_of_week'] : null,
             'next_due_date' => (string)($r['next_due_date'] ?? ''),
+            'paid_date' => (string)($r['paid_date'] ?? ''),
             'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
             'is_budget_planner' => (int)($r['is_budget_planner'] ?? 0),
@@ -10362,6 +10366,7 @@ if ($action === 'create_recurring') {
     $intervalCount = (int)($body['interval_count'] ?? 1);
     $intervalCount = max(1, min(365, $intervalCount));
     $nextDue = accumul8_require_valid_date('next_due_date', $body['next_due_date'] ?? '');
+    $paidDate = accumul8_normalize_date($body['paid_date'] ?? null);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 0);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
@@ -10393,8 +10398,8 @@ if ($action === 'create_recurring') {
 
     Database::execute(
         'INSERT INTO accumul8_recurring_payments
-            (owner_user_id, entity_id, contact_id, account_id, title, direction, amount, frequency, payment_method, interval_count, day_of_month, day_of_week, next_due_date, notes, is_active, is_budget_planner)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+            (owner_user_id, entity_id, contact_id, account_id, title, direction, amount, frequency, payment_method, interval_count, day_of_month, day_of_week, next_due_date, paid_date, notes, is_active, is_budget_planner)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
         [
             $viewerId,
             $entityIdOrNull,
@@ -10409,6 +10414,7 @@ if ($action === 'create_recurring') {
             $dayOfMonth,
             $dayOfWeek,
             $nextDue,
+            $paidDate,
             $notes === '' ? null : $notes,
             $isBudgetPlanner,
         ]
@@ -10430,6 +10436,7 @@ if ($action === 'update_recurring') {
     $intervalCount = (int)($body['interval_count'] ?? 1);
     $intervalCount = max(1, min(365, $intervalCount));
     $nextDue = accumul8_require_valid_date('next_due_date', $body['next_due_date'] ?? '');
+    $paidDate = accumul8_normalize_date($body['paid_date'] ?? null);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
     $isBudgetPlanner = accumul8_normalize_bool($body['is_budget_planner'] ?? 0);
     $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
@@ -10465,7 +10472,7 @@ if ($action === 'update_recurring') {
     Database::execute(
         'UPDATE accumul8_recurring_payments
          SET entity_id = ?, contact_id = ?, account_id = ?, title = ?, direction = ?, amount = ?, frequency = ?, payment_method = ?, interval_count = ?,
-             day_of_month = ?, day_of_week = ?, next_due_date = ?, notes = ?, is_budget_planner = ?
+             day_of_month = ?, day_of_week = ?, next_due_date = ?, paid_date = ?, notes = ?, is_budget_planner = ?
          WHERE id = ? AND owner_user_id = ?',
         [
             $entityIdOrNull,
@@ -10480,6 +10487,7 @@ if ($action === 'update_recurring') {
             $dayOfMonth,
             $dayOfWeek,
             $nextDue,
+            $paidDate,
             $notes === '' ? null : $notes,
             $isBudgetPlanner,
             $id,

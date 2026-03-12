@@ -257,9 +257,10 @@ export function Accumul8SpreadsheetView({
       rows: normalizedBudgetFilterQuery === ''
         ? panel.rows
         : panel.rows.filter((row) => [
-          row.direction === 'inflow' ? 'inflow' : 'outflow',
           formatDateLabel(row.due_date),
           row.due_date,
+          formatDateLabel(row.paid_date),
+          row.paid_date,
           row.vendor_input,
           row.title,
           getRowAccountDisplayName(row, ''),
@@ -281,8 +282,8 @@ export function Accumul8SpreadsheetView({
   const selectedPanel = filteredMonthPanels[0] || null;
   const selectedSummary = selectedPanel?.summary || null;
   const budgetTableColumns = React.useMemo<Array<PriorityTableColumn<EditableSpreadsheetRow>>>(() => ([
-    { key: 'type', header: 'Type', minWidth: 110, maxAutoWidth: 140, priority: 2, sortable: true, sortAccessor: (row) => row.direction, contentAccessor: (row) => row.direction === 'inflow' ? 'Inflow' : 'Outflow' },
     { key: 'due', header: 'Due', minWidth: 96, maxAutoWidth: 112, sortable: true, sortAccessor: (row) => row.due_date, contentAccessor: (row) => formatDateLabel(row.due_date) },
+    { key: 'paidDate', header: 'Paid Date', minWidth: 118, maxAutoWidth: 136, sortable: true, sortAccessor: (row) => row.paid_date || '', contentAccessor: (row) => formatDateLabel(row.paid_date) },
     { key: 'vendor', header: 'Vendor', minWidth: 200, maxAutoWidth: 360, priority: 6, sortable: true, sortAccessor: (row) => row.vendor_input || row.title, contentAccessor: (row) => row.vendor_input || row.title || 'Add vendor' },
     { key: 'account', header: 'Account', minWidth: 140, maxAutoWidth: 220, priority: 4, sortable: true, sortAccessor: (row) => getRowAccountDisplayName(row, ''), contentAccessor: (row) => getRowAccountDisplayName(row) },
     { key: 'method', header: 'Method', minWidth: 120, maxAutoWidth: 170, priority: 3, sortable: true, sortAccessor: (row) => paymentMethodLabels[row.payment_method] || row.payment_method, contentAccessor: (row) => paymentMethodLabels[row.payment_method] || 'Unspecified' },
@@ -290,7 +291,7 @@ export function Accumul8SpreadsheetView({
     { key: 'amount', header: 'Amount', minWidth: 132, maxAutoWidth: 156, sortable: true, sortAccessor: (row) => Number(row.amount || 0), contentAccessor: (row) => formatCurrency(Number(row.amount || 0)) },
     { key: 'rta', header: 'RTA', minWidth: 100, maxAutoWidth: 120, sortable: true, sortAccessor: (row) => Number(row.rta || 0), contentAccessor: (row) => Number(row.rta || 0).toFixed(2) },
     { key: 'balance', header: 'Balance', minWidth: 136, maxAutoWidth: 170, sortable: true, sortAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0) : Number.NEGATIVE_INFINITY, contentAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-' },
-    { key: 'notes', header: 'Notes', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (row) => row.notes || '', contentAccessor: (row) => formatEditableValue(row.notes, 'Add notes') },
+    { key: 'notes', header: 'Notes', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (row) => row.notes || '', contentAccessor: (row) => formatEditableValue(row.notes) },
     { key: 'actions', header: 'Actions', minWidth: 126, maxAutoWidth: 180, sortable: false, resizable: true },
   ]), [getRowAccountDisplayName, paymentMethodLabels]);
   const budgetTable = usePriorityTableLayout({
@@ -377,6 +378,7 @@ export function Accumul8SpreadsheetView({
       payment_method: (row.payment_method || recurring.payment_method) as Accumul8PaymentMethod,
       interval_count: Number(recurring.interval_count || 1),
       next_due_date: nextDueDate,
+      paid_date: row.paid_date || '',
       entity_id: entityId,
       account_id: row.account_id ?? null,
       is_budget_planner: Number(recurring.is_budget_planner || 0),
@@ -476,8 +478,8 @@ export function Accumul8SpreadsheetView({
                   style={budgetTable.tableStyle}
                 >
                   <colgroup>
-                    <col style={budgetTable.getColumnStyle('type')} />
                     <col style={budgetTable.getColumnStyle('due')} />
+                    <col style={budgetTable.getColumnStyle('paidDate')} />
                     <col style={budgetTable.getColumnStyle('vendor')} />
                     <col style={budgetTable.getColumnStyle('account')} />
                     <col style={budgetTable.getColumnStyle('method')} />
@@ -490,8 +492,8 @@ export function Accumul8SpreadsheetView({
                   </colgroup>
                   <thead>
                     <tr>
-                      <Accumul8TableHeaderCell label="Type" columnKey="type" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Paid Date" columnKey="paidDate" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Vendor" columnKey="vendor" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Method" columnKey="method" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
@@ -515,23 +517,6 @@ export function Accumul8SpreadsheetView({
                           draftRowByKey[row.rowKey] ? 'has-draft' : '',
                         ].filter(Boolean).join(' ')}
                       >
-                        <td>
-                          {activeRowKey === row.rowKey ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={row.direction}
-                              onChange={(event) => setRowDraft(row, { direction: event.target.value })}
-                              disabled={busy}
-                            >
-                              <option value="outflow">Outflow</option>
-                              <option value="inflow">Inflow</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
-                              {row.direction === 'inflow' ? 'Inflow' : 'Outflow'}
-                            </button>
-                          )}
-                        </td>
                         <td title={row.due_date || ''}>
                           {activeRowKey === row.rowKey ? (
                             <input
@@ -544,6 +529,21 @@ export function Accumul8SpreadsheetView({
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
                               {formatDateLabel(row.due_date)}
+                            </button>
+                          )}
+                        </td>
+                        <td title={row.paid_date || ''}>
+                          {activeRowKey === row.rowKey ? (
+                            <input
+                              className="form-control form-control-sm accumul8-month-table-input"
+                              type="date"
+                              value={row.paid_date || ''}
+                              onChange={(event) => setRowDraft(row, { paid_date: event.target.value })}
+                              disabled={busy}
+                            />
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
+                              {formatDateLabel(row.paid_date)}
                             </button>
                           )}
                         </td>
@@ -674,7 +674,7 @@ export function Accumul8SpreadsheetView({
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
-                              {formatEditableValue(row.notes, 'Add notes')}
+                              {formatEditableValue(row.notes)}
                             </button>
                           )}
                         </td>

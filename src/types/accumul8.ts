@@ -572,6 +572,11 @@ export interface Accumul8Account {
   mask_last4: string;
   routing_number: string;
   currency_code: string;
+  teller_sync_anchor_date: string;
+  teller_backfill_cursor_id: string;
+  teller_backfill_complete: number;
+  teller_history_start_date: string;
+  teller_history_end_date: string;
   statement_day_of_month: number | null;
   payment_due_day_of_month: number | null;
   autopay_enabled: number;
@@ -869,6 +874,11 @@ export interface Accumul8TellerSyncAccountSummary {
   mapping_action: 'created' | 'updated';
   history_start_date: string;
   history_end_date: string;
+  recent_window_start_date: string;
+  recent_window_end_date: string;
+  backfill_cursor_id: string;
+  backfill_complete: number;
+  backfill_pages_fetched: number;
   transactions_added: number;
   transactions_modified: number;
   transactions_unchanged: number;

@@ -503,6 +503,44 @@ function formatSyncSummaryAccountLabel(account: Accumul8TellerSyncAccountSummary
   return parts.join(' | ');
 }
 
+function formatTellerCoverageLabel(startDate: string, endDate: string): string {
+  if (startDate && endDate) {
+    return `${startDate} to ${endDate}`;
+  }
+  if (endDate) {
+    return `through ${endDate}`;
+  }
+  if (startDate) {
+    return `starting ${startDate}`;
+  }
+  return 'No Teller history saved yet';
+}
+
+function formatAccountBackfillNote(account: Accumul8Account): string {
+  const coverage = formatTellerCoverageLabel(account.teller_history_start_date, account.teller_history_end_date);
+  if (account.teller_backfill_complete) {
+    return `Backfill complete. Coverage: ${coverage}.`;
+  }
+  if (account.teller_backfill_cursor_id || account.teller_history_start_date || account.teller_history_end_date) {
+    return `Backfill in progress. Coverage so far: ${coverage}.`;
+  }
+  if (account.teller_sync_anchor_date) {
+    return `Recent sync checkpoint saved at ${account.teller_sync_anchor_date}. Historical backfill starts on the next sync.`;
+  }
+  return 'Waiting for first Teller sync.';
+}
+
+function formatSyncSummaryBackfillNote(account: Accumul8TellerSyncAccountSummary): string {
+  const coverage = formatTellerCoverageLabel(account.history_start_date, account.history_end_date);
+  if (account.backfill_complete) {
+    return `Backfill complete. Coverage: ${coverage}.`;
+  }
+  if (account.backfill_pages_fetched > 0) {
+    return `Backfill in progress. Coverage so far: ${coverage}. Pulled ${account.backfill_pages_fetched} older page${account.backfill_pages_fetched === 1 ? '' : 's'} this sync and will resume next time.`;
+  }
+  return `Backfill not finished yet. Recent refresh window: ${account.recent_window_start_date} to ${account.recent_window_end_date}. Coverage so far: ${coverage}.`;
+}
+
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
   const isAdministrator = Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1;
@@ -2450,7 +2488,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.6)' }} />
+                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.4)' }} />
                     <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.67))' }} />
                     <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.33))' }} />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
@@ -3540,6 +3578,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               (linkedAccountsByConnectionId[Number(c.id || 0)] || []).map((account) => (
                                 <div key={account.id} className="accumul8-sync-linked-account">
                                   {formatAccountMappingLabel(account)}
+                                  <div className="accumul8-sync-meta">
+                                    {formatAccountBackfillNote(account)}
+                                  </div>
                                 </div>
                               ))
                             ) : (
@@ -3592,6 +3633,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               Teller history returned: {account.history_start_date} to {account.history_end_date}.
                             </div>
                           ) : null}
+                          <div className="accumul8-sync-report__account-meta">
+                            {formatSyncSummaryBackfillNote(account)}
+                          </div>
                           <div className="accumul8-sync-report__account-meta">
                             Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
                           </div>

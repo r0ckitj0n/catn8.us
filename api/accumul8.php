@@ -4824,6 +4824,11 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_accounts', 'mask_last4', "VARCHAR(8) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'routing_number', "VARCHAR(32) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_accounts', 'currency_code', "VARCHAR(3) NOT NULL DEFAULT 'USD'");
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'teller_sync_anchor_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'teller_backfill_cursor_id', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'teller_backfill_complete', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'teller_history_start_date', 'DATE NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'teller_history_end_date', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'statement_day_of_month', 'TINYINT UNSIGNED NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'payment_due_day_of_month', 'TINYINT UNSIGNED NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'autopay_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
@@ -5398,6 +5403,11 @@ function accumul8_list_accounts(int $viewerId): array
     $maskLast4Select = accumul8_optional_select('accumul8_accounts', 'mask_last4', 'a.mask_last4', "'' AS mask_last4");
     $routingNumberSelect = accumul8_optional_select('accumul8_accounts', 'routing_number', 'a.routing_number', "'' AS routing_number");
     $currencyCodeSelect = accumul8_optional_select('accumul8_accounts', 'currency_code', 'a.currency_code', "'USD' AS currency_code");
+    $tellerSyncAnchorDateSelect = accumul8_optional_select('accumul8_accounts', 'teller_sync_anchor_date', 'a.teller_sync_anchor_date', 'NULL AS teller_sync_anchor_date');
+    $tellerBackfillCursorIdSelect = accumul8_optional_select('accumul8_accounts', 'teller_backfill_cursor_id', 'a.teller_backfill_cursor_id', "'' AS teller_backfill_cursor_id");
+    $tellerBackfillCompleteSelect = accumul8_optional_select('accumul8_accounts', 'teller_backfill_complete', 'a.teller_backfill_complete', '0 AS teller_backfill_complete');
+    $tellerHistoryStartDateSelect = accumul8_optional_select('accumul8_accounts', 'teller_history_start_date', 'a.teller_history_start_date', 'NULL AS teller_history_start_date');
+    $tellerHistoryEndDateSelect = accumul8_optional_select('accumul8_accounts', 'teller_history_end_date', 'a.teller_history_end_date', 'NULL AS teller_history_end_date');
     $statementDaySelect = accumul8_optional_select('accumul8_accounts', 'statement_day_of_month', 'a.statement_day_of_month', 'NULL AS statement_day_of_month');
     $paymentDueDaySelect = accumul8_optional_select('accumul8_accounts', 'payment_due_day_of_month', 'a.payment_due_day_of_month', 'NULL AS payment_due_day_of_month');
     $autopayEnabledSelect = accumul8_optional_select('accumul8_accounts', 'autopay_enabled', 'a.autopay_enabled', '0 AS autopay_enabled');
@@ -5411,7 +5421,7 @@ function accumul8_list_accounts(int $viewerId): array
     $isActiveSelect = accumul8_optional_select('accumul8_accounts', 'is_active', 'a.is_active', '1 AS is_active');
 
     $rows = Database::queryAll(
-        'SELECT a.id, ' . $bankingOrganizationIdSelect . ', ' . $bankConnectionIdSelect . ', ' . $providerNameSelect . ', ' . $tellerAccountIdSelect . ', ' . $tellerEnrollmentIdSelect . ', a.account_name, ' . $accountNicknameSelect . ', ' . $accountTypeSelect . ', ' . $accountSubtypeSelect . ', ' . $institutionNameSelect . ', ' . $accountNumberMaskSelect . ', ' . $maskLast4Select . ', ' . $routingNumberSelect . ', ' . $currencyCodeSelect . ', ' . $statementDaySelect . ', ' . $paymentDueDaySelect . ', ' . $autopayEnabledSelect . ', ' . $creditLimitSelect . ', ' . $interestRateSelect . ', ' . $minimumPaymentSelect . ', ' . $openedOnSelect . ', ' . $closedOnSelect . ', ' . $notesSelect . ',
+        'SELECT a.id, ' . $bankingOrganizationIdSelect . ', ' . $bankConnectionIdSelect . ', ' . $providerNameSelect . ', ' . $tellerAccountIdSelect . ', ' . $tellerEnrollmentIdSelect . ', a.account_name, ' . $accountNicknameSelect . ', ' . $accountTypeSelect . ', ' . $accountSubtypeSelect . ', ' . $institutionNameSelect . ', ' . $accountNumberMaskSelect . ', ' . $maskLast4Select . ', ' . $routingNumberSelect . ', ' . $currencyCodeSelect . ', ' . $tellerSyncAnchorDateSelect . ', ' . $tellerBackfillCursorIdSelect . ', ' . $tellerBackfillCompleteSelect . ', ' . $tellerHistoryStartDateSelect . ', ' . $tellerHistoryEndDateSelect . ', ' . $statementDaySelect . ', ' . $paymentDueDaySelect . ', ' . $autopayEnabledSelect . ', ' . $creditLimitSelect . ', ' . $interestRateSelect . ', ' . $minimumPaymentSelect . ', ' . $openedOnSelect . ', ' . $closedOnSelect . ', ' . $notesSelect . ',
                 a.current_balance, ' . $availableBalanceSelect . ', ' . $isActiveSelect . ', COALESCE(ag.group_name, "") AS banking_organization_name
          FROM accumul8_accounts a
          LEFT JOIN accumul8_account_groups ag ON ag.id = a.account_group_id AND ag.owner_user_id = a.owner_user_id
@@ -5438,6 +5448,11 @@ function accumul8_list_accounts(int $viewerId): array
             'mask_last4' => (string)($r['mask_last4'] ?? ''),
             'routing_number' => (string)($r['routing_number'] ?? ''),
             'currency_code' => (string)($r['currency_code'] ?? 'USD'),
+            'teller_sync_anchor_date' => isset($r['teller_sync_anchor_date']) && $r['teller_sync_anchor_date'] !== null ? (string)$r['teller_sync_anchor_date'] : '',
+            'teller_backfill_cursor_id' => (string)($r['teller_backfill_cursor_id'] ?? ''),
+            'teller_backfill_complete' => (int)($r['teller_backfill_complete'] ?? 0),
+            'teller_history_start_date' => isset($r['teller_history_start_date']) && $r['teller_history_start_date'] !== null ? (string)$r['teller_history_start_date'] : '',
+            'teller_history_end_date' => isset($r['teller_history_end_date']) && $r['teller_history_end_date'] !== null ? (string)$r['teller_history_end_date'] : '',
             'statement_day_of_month' => isset($r['statement_day_of_month']) ? (int)$r['statement_day_of_month'] : null,
             'payment_due_day_of_month' => isset($r['payment_due_day_of_month']) ? (int)$r['payment_due_day_of_month'] : null,
             'autopay_enabled' => (int)($r['autopay_enabled'] ?? 0),
@@ -5829,7 +5844,12 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
     $enrollmentId = accumul8_normalize_text((string)($connection['teller_enrollment_id'] ?? ''), 191);
 
     $existing = Database::queryOne(
-        'SELECT id
+        'SELECT id,
+                ' . accumul8_optional_select('accumul8_accounts', 'teller_sync_anchor_date', 'teller_sync_anchor_date', 'NULL AS teller_sync_anchor_date') . ',
+                ' . accumul8_optional_select('accumul8_accounts', 'teller_backfill_cursor_id', 'teller_backfill_cursor_id', 'NULL AS teller_backfill_cursor_id') . ',
+                ' . accumul8_optional_select('accumul8_accounts', 'teller_backfill_complete', 'teller_backfill_complete', '0 AS teller_backfill_complete') . ',
+                ' . accumul8_optional_select('accumul8_accounts', 'teller_history_start_date', 'teller_history_start_date', 'NULL AS teller_history_start_date') . ',
+                ' . accumul8_optional_select('accumul8_accounts', 'teller_history_end_date', 'teller_history_end_date', 'NULL AS teller_history_end_date') . '
          FROM accumul8_accounts
          WHERE owner_user_id = ?
            AND provider_name = ?
@@ -5875,6 +5895,11 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
             'mask_last4' => $maskLast4,
             'institution_name' => $institutionName,
             'mapping_action' => 'updated',
+            'teller_sync_anchor_date' => isset($existing['teller_sync_anchor_date']) && $existing['teller_sync_anchor_date'] !== null ? (string)$existing['teller_sync_anchor_date'] : '',
+            'teller_backfill_cursor_id' => (string)($existing['teller_backfill_cursor_id'] ?? ''),
+            'teller_backfill_complete' => (int)($existing['teller_backfill_complete'] ?? 0),
+            'teller_history_start_date' => isset($existing['teller_history_start_date']) && $existing['teller_history_start_date'] !== null ? (string)$existing['teller_history_start_date'] : '',
+            'teller_history_end_date' => isset($existing['teller_history_end_date']) && $existing['teller_history_end_date'] !== null ? (string)$existing['teller_history_end_date'] : '',
         ];
     }
 
@@ -5912,6 +5937,11 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
         'mask_last4' => $maskLast4,
         'institution_name' => $institutionName,
         'mapping_action' => 'created',
+        'teller_sync_anchor_date' => '',
+        'teller_backfill_cursor_id' => '',
+        'teller_backfill_complete' => 0,
+        'teller_history_start_date' => '',
+        'teller_history_end_date' => '',
     ];
 }
 
@@ -9203,16 +9233,35 @@ function accumul8_teller_request(string $method, string $path, ?string $accessTo
     }
 }
 
-function accumul8_teller_list_all_transactions(string $accessToken, string $remoteAccountId): array
+function accumul8_shift_date(string $date, int $days): string
+{
+    $timestamp = strtotime($date . ' UTC');
+    if ($timestamp === false) {
+        $timestamp = strtotime($date);
+    }
+    if ($timestamp === false) {
+        $timestamp = time();
+    }
+
+    return gmdate('Y-m-d', strtotime(($days >= 0 ? '+' : '') . $days . ' day', $timestamp));
+}
+
+function accumul8_teller_list_transactions(string $accessToken, string $remoteAccountId, array $baseQuery = [], int $pageSize = 500, int $maxPages = 100): array
 {
     $all = [];
     $seenIds = [];
-    $cursor = null;
-    $pageSize = 500;
-    $maxPages = 100;
+    $cursor = accumul8_normalize_text((string)($baseQuery['from_id'] ?? ''), 191);
+    unset($baseQuery['from_id']);
+    $pageSize = max(1, min(500, $pageSize));
+    $maxPages = max(1, min(100, $maxPages));
+    $newestId = '';
+    $oldestId = '';
+    $hasMore = false;
+    $pagesFetched = 0;
 
     for ($page = 0; $page < $maxPages; $page++) {
-        $query = ['count' => $pageSize];
+        $query = $baseQuery;
+        $query['count'] = $pageSize;
         if ($cursor !== null && $cursor !== '') {
             $query['from_id'] = $cursor;
         }
@@ -9227,6 +9276,7 @@ function accumul8_teller_list_all_transactions(string $accessToken, string $remo
             break;
         }
 
+        $pagesFetched++;
         $lastIdOnPage = null;
         $pageAdded = 0;
         foreach ($pageTransactions as $tx) {
@@ -9241,6 +9291,10 @@ function accumul8_teller_list_all_transactions(string $accessToken, string $remo
                 continue;
             }
             $seenIds[$txId] = true;
+            if ($newestId === '') {
+                $newestId = $txId;
+            }
+            $oldestId = $txId;
             $all[] = $tx;
             $lastIdOnPage = $txId;
             $pageAdded++;
@@ -9251,9 +9305,16 @@ function accumul8_teller_list_all_transactions(string $accessToken, string $remo
         }
 
         $cursor = $lastIdOnPage;
+        $hasMore = true;
     }
 
-    return $all;
+    return [
+        'transactions' => $all,
+        'newest_id' => $newestId,
+        'oldest_id' => $oldestId,
+        'has_more' => $hasMore,
+        'pages_fetched' => $pagesFetched,
+    ];
 }
 
 function accumul8_delete_transactions_by_ids(int $viewerId, array $transactionIds): int
@@ -11686,6 +11747,11 @@ if ($action === 'teller_sync_transactions') {
     $unchangedTotal = 0;
     $removedTotal = 0;
     $accountSummaries = [];
+    $today = gmdate('Y-m-d');
+    $recentWindowDays = 30;
+    $recentOverlapDays = 10;
+    $backfillPageSize = 500;
+    $backfillPagesPerSync = 1;
 
     try {
         $accounts = accumul8_teller_request('GET', '/accounts', $accessToken);
@@ -11733,133 +11799,222 @@ if ($action === 'teller_sync_transactions') {
             $accountStatementImportsRemoved = 0;
             $historyStartDate = '';
             $historyEndDate = '';
+            $fetchedHistoryStartDate = '';
+            $fetchedHistoryEndDate = '';
             $remoteTransactionIds = [];
-            $transactions = accumul8_teller_list_all_transactions($accessToken, $remoteAccountId);
-            foreach ($transactions as $tx) {
-                if (!is_array($tx)) {
-                    continue;
-                }
+            $recentSyncAnchorDate = accumul8_normalize_text((string)($accountMapping['teller_sync_anchor_date'] ?? ''), 32);
+            $storedBackfillCursorId = accumul8_normalize_text((string)($accountMapping['teller_backfill_cursor_id'] ?? ''), 191);
+            $backfillComplete = (int)($accountMapping['teller_backfill_complete'] ?? 0) === 1;
+            $recentWindowStartDate = $recentSyncAnchorDate !== ''
+                ? accumul8_shift_date($recentSyncAnchorDate, -$recentOverlapDays)
+                : accumul8_shift_date($today, -($recentWindowDays - 1));
+            $recentWindowEndDate = $today;
 
-                $externalId = accumul8_normalize_text((string)($tx['id'] ?? ''), 191);
-                if ($externalId === '') {
-                    continue;
-                }
-                $remoteTransactionIds[$externalId] = true;
-
-                $description = accumul8_normalize_text(
-                    (string)($tx['description'] ?? (($tx['counterparty']['name'] ?? 'Bank Transaction'))),
-                    255
-                );
-                if ($description === '') {
-                    $description = 'Bank Transaction';
-                }
-
-                $date = accumul8_require_valid_date('transaction_date', $tx['date'] ?? date('Y-m-d'));
-                $amount = round((float)($tx['amount'] ?? 0), 2);
-                $statusText = strtolower(accumul8_normalize_text((string)($tx['status'] ?? ''), 32));
-                $pending = $statusText === 'pending' ? 1 : 0;
-                if ($historyStartDate === '' || strcmp($date, $historyStartDate) < 0) {
-                    $historyStartDate = $date;
-                }
-                if ($historyEndDate === '' || strcmp($date, $historyEndDate) > 0) {
-                    $historyEndDate = $date;
-                }
-
-                $existingTx = Database::queryOne(
-                    'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
-                     FROM accumul8_transactions
-                     WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
-                     LIMIT 1',
-                    [$viewerId, 'teller', $externalId]
-                );
-
-                if ($existingTx) {
-                    $nextPaidDate = $pending ? null : $date;
-                    $hasChanges =
-                        (int)($existingTx['account_id'] ?? 0) !== $localAccountId
-                        || (string)($existingTx['transaction_date'] ?? '') !== $date
-                        || (string)($existingTx['due_date'] ?? '') !== $date
-                        || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
-                        || (string)($existingTx['description'] ?? '') !== $description
-                        || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
-                        || (int)($existingTx['pending_status'] ?? 0) !== $pending
-                        || (string)($existingTx['source_ref'] ?? '') !== $remoteAccountId;
-
-                    if ($hasChanges) {
-                        Database::execute(
-                            'UPDATE accumul8_transactions
-                             SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
-                             WHERE id = ? AND owner_user_id = ?',
-                            [
-                                $localAccountId,
-                                $date,
-                                $date,
-                                $nextPaidDate,
-                                $description,
-                                $amount,
-                                $pending,
-                                $remoteAccountId,
-                                (int)$existingTx['id'],
-                                $viewerId,
-                            ]
-                        );
-                        $modifiedTotal++;
-                        $accountModified++;
-                    } else {
-                        $unchangedTotal++;
-                        $accountUnchanged++;
-                    }
-                    continue;
-                }
-
-                Database::execute(
-                    'INSERT INTO accumul8_transactions
-                        (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
-                         is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [
-                        $viewerId,
-                        $localAccountId,
-                        $date,
-                        $date,
-                        'manual',
-                        $description,
-                        $amount,
-                        1,
-                        1,
-                        0,
-                        'teller',
-                        $remoteAccountId,
-                        $externalId,
-                        $pending,
-                        $pending ? null : $date,
-                        $actorUserId,
-                    ]
-                );
-                $addedTotal++;
-                $accountAdded++;
-            }
-
-            $localTellerTransactions = Database::queryAll(
-                'SELECT id, external_id
+            $oldestLocalRow = Database::queryOne(
+                'SELECT external_id, transaction_date
                  FROM accumul8_transactions
                  WHERE owner_user_id = ?
                    AND account_id = ?
                    AND source_kind = ?
-                   AND source_ref = ?',
+                   AND source_ref = ?
+                   AND external_id IS NOT NULL
+                   AND external_id <> ""
+                 ORDER BY transaction_date ASC, id ASC
+                 LIMIT 1',
                 [$viewerId, $localAccountId, 'teller', $remoteAccountId]
-            );
-            $staleLocalTellerIds = [];
-            foreach ($localTellerTransactions as $row) {
-                $localExternalId = accumul8_normalize_text((string)($row['external_id'] ?? ''), 191);
-                if ($localExternalId !== '' && isset($remoteTransactionIds[$localExternalId])) {
-                    continue;
-                }
-                $staleLocalTellerIds[] = (int)($row['id'] ?? 0);
-            }
-            $accountStaleTellerRemoved = accumul8_delete_transactions_by_ids($viewerId, $staleLocalTellerIds);
+            ) ?: [];
 
-            if ($historyStartDate !== '' && $historyEndDate !== '') {
+            $recentResult = accumul8_teller_list_transactions(
+                $accessToken,
+                $remoteAccountId,
+                [
+                    'start_date' => $recentWindowStartDate,
+                    'end_date' => $recentWindowEndDate,
+                ],
+                500,
+                100
+            );
+            $recentTransactions = is_array($recentResult['transactions'] ?? null) ? $recentResult['transactions'] : [];
+
+            $backfillSeedCursorId = $storedBackfillCursorId;
+            if ($backfillSeedCursorId === '') {
+                $backfillSeedCursorId = accumul8_normalize_text((string)($oldestLocalRow['external_id'] ?? ''), 191);
+            }
+            if ($backfillSeedCursorId === '' && $recentTransactions !== []) {
+                $backfillSeedCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
+            }
+
+            $backfillResult = [
+                'transactions' => [],
+                'oldest_id' => '',
+                'has_more' => false,
+                'pages_fetched' => 0,
+            ];
+            if (!$backfillComplete) {
+                if ($backfillSeedCursorId !== '') {
+                    $backfillResult = accumul8_teller_list_transactions(
+                        $accessToken,
+                        $remoteAccountId,
+                        ['from_id' => $backfillSeedCursorId],
+                        $backfillPageSize,
+                        $backfillPagesPerSync
+                    );
+                } elseif ($recentTransactions === []) {
+                    $backfillResult = accumul8_teller_list_transactions(
+                        $accessToken,
+                        $remoteAccountId,
+                        [],
+                        $backfillPageSize,
+                        $backfillPagesPerSync
+                    );
+                }
+            }
+
+            $processedExternalIds = [];
+            $syncBatches = [
+                [
+                    'transactions' => $recentTransactions,
+                    'track_remote_ids' => true,
+                ],
+                [
+                    'transactions' => is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [],
+                    'track_remote_ids' => false,
+                ],
+            ];
+
+            foreach ($syncBatches as $batch) {
+                foreach (($batch['transactions'] ?? []) as $tx) {
+                    if (!is_array($tx)) {
+                        continue;
+                    }
+
+                    $externalId = accumul8_normalize_text((string)($tx['id'] ?? ''), 191);
+                    if ($externalId === '' || isset($processedExternalIds[$externalId])) {
+                        continue;
+                    }
+                    $processedExternalIds[$externalId] = true;
+                    if (!empty($batch['track_remote_ids'])) {
+                        $remoteTransactionIds[$externalId] = true;
+                    }
+
+                    $description = accumul8_normalize_text(
+                        (string)($tx['description'] ?? (($tx['counterparty']['name'] ?? 'Bank Transaction'))),
+                        255
+                    );
+                    if ($description === '') {
+                        $description = 'Bank Transaction';
+                    }
+
+                    $date = accumul8_require_valid_date('transaction_date', $tx['date'] ?? date('Y-m-d'));
+                    $amount = round((float)($tx['amount'] ?? 0), 2);
+                    $statusText = strtolower(accumul8_normalize_text((string)($tx['status'] ?? ''), 32));
+                    $pending = $statusText === 'pending' ? 1 : 0;
+                    if ($fetchedHistoryStartDate === '' || strcmp($date, $fetchedHistoryStartDate) < 0) {
+                        $fetchedHistoryStartDate = $date;
+                    }
+                    if ($fetchedHistoryEndDate === '' || strcmp($date, $fetchedHistoryEndDate) > 0) {
+                        $fetchedHistoryEndDate = $date;
+                    }
+
+                    $existingTx = Database::queryOne(
+                        'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
+                         FROM accumul8_transactions
+                         WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
+                         LIMIT 1',
+                        [$viewerId, 'teller', $externalId]
+                    );
+
+                    if ($existingTx) {
+                        $nextPaidDate = $pending ? null : $date;
+                        $hasChanges =
+                            (int)($existingTx['account_id'] ?? 0) !== $localAccountId
+                            || (string)($existingTx['transaction_date'] ?? '') !== $date
+                            || (string)($existingTx['due_date'] ?? '') !== $date
+                            || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
+                            || (string)($existingTx['description'] ?? '') !== $description
+                            || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
+                            || (int)($existingTx['pending_status'] ?? 0) !== $pending
+                            || (string)($existingTx['source_ref'] ?? '') !== $remoteAccountId;
+
+                        if ($hasChanges) {
+                            Database::execute(
+                                'UPDATE accumul8_transactions
+                                 SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
+                                 WHERE id = ? AND owner_user_id = ?',
+                                [
+                                    $localAccountId,
+                                    $date,
+                                    $date,
+                                    $nextPaidDate,
+                                    $description,
+                                    $amount,
+                                    $pending,
+                                    $remoteAccountId,
+                                    (int)$existingTx['id'],
+                                    $viewerId,
+                                ]
+                            );
+                            $modifiedTotal++;
+                            $accountModified++;
+                        } else {
+                            $unchangedTotal++;
+                            $accountUnchanged++;
+                        }
+                        continue;
+                    }
+
+                    Database::execute(
+                        'INSERT INTO accumul8_transactions
+                            (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
+                             is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [
+                            $viewerId,
+                            $localAccountId,
+                            $date,
+                            $date,
+                            'manual',
+                            $description,
+                            $amount,
+                            1,
+                            1,
+                            0,
+                            'teller',
+                            $remoteAccountId,
+                            $externalId,
+                            $pending,
+                            $pending ? null : $date,
+                            $actorUserId,
+                        ]
+                    );
+                    $addedTotal++;
+                    $accountAdded++;
+                }
+            }
+
+            if ($recentWindowStartDate !== '' && $recentWindowEndDate !== '') {
+                $localRecentTransactions = Database::queryAll(
+                    'SELECT id, external_id
+                     FROM accumul8_transactions
+                     WHERE owner_user_id = ?
+                       AND account_id = ?
+                       AND source_kind = ?
+                       AND source_ref = ?
+                       AND transaction_date BETWEEN ? AND ?',
+                    [$viewerId, $localAccountId, 'teller', $remoteAccountId, $recentWindowStartDate, $recentWindowEndDate]
+                );
+                $staleLocalTellerIds = [];
+                foreach ($localRecentTransactions as $row) {
+                    $localExternalId = accumul8_normalize_text((string)($row['external_id'] ?? ''), 191);
+                    if ($localExternalId !== '' && isset($remoteTransactionIds[$localExternalId])) {
+                        continue;
+                    }
+                    $staleLocalTellerIds[] = (int)($row['id'] ?? 0);
+                }
+                $accountStaleTellerRemoved = accumul8_delete_transactions_by_ids($viewerId, $staleLocalTellerIds);
+            }
+
+            if ($fetchedHistoryStartDate !== '' && $fetchedHistoryEndDate !== '') {
                 $statementTransactionsToRemove = Database::queryAll(
                     'SELECT id
                      FROM accumul8_transactions
@@ -11867,7 +12022,7 @@ if ($action === 'teller_sync_transactions') {
                        AND account_id = ?
                        AND source_kind IN (?, ?)
                        AND transaction_date BETWEEN ? AND ?',
-                    [$viewerId, $localAccountId, 'statement_upload', 'statement_pdf', $historyStartDate, $historyEndDate]
+                    [$viewerId, $localAccountId, 'statement_upload', 'statement_pdf', $fetchedHistoryStartDate, $fetchedHistoryEndDate]
                 );
                 $statementTransactionIds = array_map(
                     static fn(array $row): int => (int)($row['id'] ?? 0),
@@ -11876,6 +12031,48 @@ if ($action === 'teller_sync_transactions') {
                 $accountStatementImportsRemoved = accumul8_delete_transactions_by_ids($viewerId, $statementTransactionIds);
             }
 
+            $nextBackfillCursorId = $storedBackfillCursorId;
+            $nextBackfillComplete = $backfillComplete ? 1 : 0;
+            $backfillTransactions = is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [];
+            if (!$backfillComplete) {
+                if ($backfillTransactions !== []) {
+                    $nextBackfillCursorId = accumul8_normalize_text((string)($backfillResult['oldest_id'] ?? ''), 191);
+                    $nextBackfillComplete = !empty($backfillResult['has_more']) ? 0 : 1;
+                } elseif ($backfillSeedCursorId !== '' || $recentTransactions === []) {
+                    $nextBackfillCursorId = $backfillSeedCursorId;
+                    $nextBackfillComplete = 1;
+                } elseif ($recentTransactions !== []) {
+                    $nextBackfillCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
+                    $nextBackfillComplete = 0;
+                }
+            }
+
+            $historyCoverage = Database::queryOne(
+                'SELECT MIN(transaction_date) AS min_date, MAX(transaction_date) AS max_date
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND account_id = ?
+                   AND source_kind = ?
+                   AND source_ref = ?',
+                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
+            ) ?: [];
+            $historyStartDate = isset($historyCoverage['min_date']) && $historyCoverage['min_date'] !== null ? (string)$historyCoverage['min_date'] : '';
+            $historyEndDate = isset($historyCoverage['max_date']) && $historyCoverage['max_date'] !== null ? (string)$historyCoverage['max_date'] : '';
+
+            Database::execute(
+                'UPDATE accumul8_accounts
+                 SET teller_sync_anchor_date = ?, teller_backfill_cursor_id = ?, teller_backfill_complete = ?, teller_history_start_date = ?, teller_history_end_date = ?, updated_at = NOW()
+                 WHERE id = ? AND owner_user_id = ?',
+                [
+                    $today,
+                    $nextBackfillCursorId !== '' ? $nextBackfillCursorId : null,
+                    $nextBackfillComplete,
+                    $historyStartDate !== '' ? $historyStartDate : null,
+                    $historyEndDate !== '' ? $historyEndDate : null,
+                    $localAccountId,
+                    $viewerId,
+                ]
+            );
             $accountRemoved = $accountStaleTellerRemoved + $accountStatementImportsRemoved;
             $removedTotal += $accountRemoved;
 
@@ -11891,6 +12088,11 @@ if ($action === 'teller_sync_transactions') {
                 'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
                 'history_start_date' => $historyStartDate,
                 'history_end_date' => $historyEndDate,
+                'recent_window_start_date' => $recentWindowStartDate,
+                'recent_window_end_date' => $recentWindowEndDate,
+                'backfill_cursor_id' => $nextBackfillCursorId,
+                'backfill_complete' => $nextBackfillComplete,
+                'backfill_pages_fetched' => (int)($backfillResult['pages_fetched'] ?? 0),
                 'transactions_added' => $accountAdded,
                 'transactions_modified' => $accountModified,
                 'transactions_unchanged' => $accountUnchanged,

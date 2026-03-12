@@ -1440,9 +1440,12 @@ body.accumul8-column-resize-active {
   table-layout: fixed;
 }
 
-.accumul8-spreadsheet-table th,
-.accumul8-spreadsheet-table td {
-  padding: 1px 0.63rem;
+.table.accumul8-spreadsheet-table > :not(caption) > * > * {
+  padding: 1px 0.63rem !important;
+}
+
+.table.accumul8-spreadsheet-table > tbody > tr > td {
+  line-height: var(--accumul8-ledger-line-height);
 }
 
 .accumul8-spreadsheet-table thead th {

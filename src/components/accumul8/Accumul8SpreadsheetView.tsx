@@ -449,7 +449,7 @@ export function Accumul8SpreadsheetView({
               aria-label={`${panel.monthLabel} spreadsheet panel`}
             >
               <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
-                <table className="table table-sm accumul8-sticky-head accumul8-month-table accumul8-spreadsheet-table">
+                <table className="table accumul8-table accumul8-sticky-head accumul8-month-table accumul8-spreadsheet-table">
                   <colgroup>
                     <col className="accumul8-month-table-col accumul8-month-table-col--type" />
                     <col className="accumul8-month-table-col accumul8-month-table-col--due" />
@@ -484,6 +484,7 @@ export function Accumul8SpreadsheetView({
                         ref={(node) => setInlineRowRef(row.rowKey, node)}
                         key={row.rowKey}
                         className={[
+                          'accumul8-list-item',
                           row.amount < 0 ? 'is-outflow' : 'is-inflow',
                           activeRowKey === row.rowKey ? 'is-editing' : '',
                           draftRowByKey[row.rowKey] ? 'has-draft' : '',

@@ -1442,8 +1442,7 @@ body.accumul8-column-resize-active {
 
 .accumul8-spreadsheet-table th,
 .accumul8-spreadsheet-table td {
-  padding-left: 0.63rem;
-  padding-right: 0.63rem;
+  padding: 1px 0.63rem;
 }
 
 .accumul8-spreadsheet-table thead th {
@@ -1500,12 +1499,13 @@ body.accumul8-column-resize-active {
 }
 
 .accumul8-spreadsheet-table .accumul8-row-actions {
+  align-items: center;
   gap: 0.25rem;
 }
 
 .accumul8-spreadsheet-table .accumul8-icon-action {
-  min-width: 1.82rem;
-  min-height: 1.82rem;
+  min-width: var(--accumul8-ledger-row-height);
+  min-height: var(--accumul8-ledger-row-height);
   padding: 0.18rem 0.3rem;
 }
 

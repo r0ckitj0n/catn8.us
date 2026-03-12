@@ -128,7 +128,7 @@ type LedgerFormState = {
 type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'account_id' | 'balance_entity_id' | 'balance_entity_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
-type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes'>>;
+type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes' | 'account_id'>>;
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
@@ -1123,10 +1123,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'nextDue', index: 1, fallback: 124, header: 'Next Due' },
     { key: 'amount', index: 2, fallback: 112, header: 'Amount' },
     { key: 'frequency', index: 3, fallback: 120, header: 'Frequency' },
-    { key: 'paymentMethod', index: 4, fallback: 172, header: 'Payment Method' },
-    { key: 'planner', index: 5, fallback: 108, header: 'Planner' },
-    { key: 'status', index: 6, fallback: 104, header: 'Status' },
-    { key: 'actions', index: 7, fallback: 182, header: 'Actions' },
+    { key: 'account', index: 4, fallback: 360, header: 'Account' },
+    { key: 'paymentMethod', index: 5, fallback: 172, header: 'Payment Method' },
+    { key: 'planner', index: 6, fallback: 108, header: 'Planner' },
+    { key: 'status', index: 7, fallback: 104, header: 'Status' },
+    { key: 'actions', index: 8, fallback: 182, header: 'Actions' },
   ], [recurringTableRef, recurringRows, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
     { key: 'status', index: 1, fallback: 164, header: 'Status' },
@@ -2023,7 +2024,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       interval_count: Number(row.interval_count || 1),
       next_due_date: draft.next_due_date ?? row.next_due_date,
       entity_id: row.entity_id ?? null,
-      account_id: row.account_id ?? null,
+      account_id: draft.account_id ?? row.account_id ?? null,
       is_budget_planner: Number(draft.is_budget_planner ?? row.is_budget_planner ?? 0),
       notes: draft.notes ?? row.notes ?? '',
     });
@@ -2449,9 +2450,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <colgroup>
                     <col style={{ width: 'var(--accumul8-col-date-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-due-width)' }} />
-                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.3)' }} />
-                    <col className="accumul8-col--flex-45" />
-                    <col className="accumul8-col--flex-55" />
+                    <col style={{ width: 'calc(var(--accumul8-col-account-width) * 1.6)' }} />
+                    <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.67))' }} />
+                    <col style={{ width: 'max(0px, calc((100% - var(--accumul8-col-fit-total, 0px)) * 0.33))' }} />
                     <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-balance-width)' }} />
                     <col style={{ width: 'var(--accumul8-col-paid-width)' }} />
@@ -3323,12 +3324,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       <col style={{ width: 'var(--accumul8-col-nextDue-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-amount-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-frequency-width)' }} />
+                      <col style={{ width: 'var(--accumul8-col-account-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-paymentMethod-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-planner-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-status-width)' }} />
                       <col style={{ width: 'var(--accumul8-col-actions-width)' }} />
                     </colgroup>
-                  <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
+                  <thead><tr><th>Title</th><th>Next Due</th><th className="text-end">Amount</th><th>Frequency</th><th>Account</th><th>Payment Method</th><th>Planner</th><th>Status</th><th className="text-end">Actions</th></tr></thead>
                   <tbody>
                     {recurringRows.map((rp) => {
                       const recurringDraft = recurringDraftById[rp.id];
@@ -3375,6 +3377,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                         <td>
                           {activeRecurringRowId === rp.id ? (
+                            <select
+                              className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select"
+                              value={String(recurringDraft?.account_id ?? rp.account_id ?? '')}
+                              onChange={(e) => setRecurringRowDraft(rp, { account_id: e.target.value ? Number(e.target.value) : null })}
+                              disabled={busy}
+                            >
+                              <option value="">No account</option>
+                              {payBillsAccountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineText(rp.account_name, 'No account')}</button>
+                          )}
+                        </td>
+                        <td>
+                          {activeRecurringRowId === rp.id ? (
                             <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={recurringDraft?.payment_method ?? rp.payment_method} onChange={(e) => setRecurringRowDraft(rp, { payment_method: e.target.value as Accumul8PaymentMethod })} disabled={busy}>
                               {Object.entries(RECURRING_PAYMENT_METHOD_LABELS).map(([value, label]) => (
                                 <option key={value} value={value}>{label}</option>
@@ -3416,7 +3435,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     )})}
                     {recurringRows.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="text-center text-muted py-4">No recurring payments matched the current filter.</td>
+                        <td colSpan={9} className="text-center text-muted py-4">No recurring payments matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>

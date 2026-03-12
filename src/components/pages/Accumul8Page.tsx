@@ -692,6 +692,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
   const [entityEndexFindingAll, setEntityEndexFindingAll] = React.useState(false);
   const [entityEndexLogOpen, setEntityEndexLogOpen] = React.useState(false);
+  const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
     if (!selectedBankingOrganizationId) {
@@ -2733,7 +2734,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <a
-                className={`accumul8-header-brand-logo${syncingConnectionId !== null || entityEndexFindingAll ? ' accumul8-header-brand-logo--syncing' : ''}`}
+                className={`accumul8-header-brand-logo${isHeaderLogoSpinning ? ' accumul8-header-brand-logo--syncing' : ''}`}
                 href="https://catn8.us"
                 aria-label="Go to catn8.us"
               >

@@ -2,6 +2,8 @@ import React from 'react';
 import {
   Accumul8Account,
   Accumul8BankingOrganization,
+  Accumul8ImportedTransactionCleanupPurgeResponse,
+  Accumul8ImportedTransactionCleanupReport,
   Accumul8StatementArchiveResponse,
   Accumul8StatementArchiveSection,
   Accumul8StatementAuditRequest,
@@ -59,6 +61,9 @@ interface Accumul8StatementsPanelProps {
   }) => Promise<{ success: boolean; upload: Accumul8StatementUpload; linked_transaction_id: number }>;
   onSearch: (query: string) => Promise<Accumul8StatementSearchResult[]>;
   onAuditStatements: (payload: Accumul8StatementAuditRequest) => Promise<{ success: boolean; run: Accumul8StatementAuditRun }>;
+  onAuditImportedCleanup: (payload?: { start_date?: string | null; end_date?: string | null; limit?: number }) => Promise<Accumul8ImportedTransactionCleanupReport | undefined>;
+  onPurgeImportedCleanup: (transactionIds: number[]) => Promise<Accumul8ImportedTransactionCleanupPurgeResponse | undefined>;
+  onPurgeAllImportedTransactions: () => Promise<Accumul8ImportedTransactionCleanupPurgeResponse | undefined>;
   onOpenTransaction: (id: number) => void;
   onDeleteTransaction: (id: number, description: string) => void;
 }
@@ -293,10 +298,14 @@ export function Accumul8StatementsPanel({
   onLinkReviewRow,
   onSearch,
   onAuditStatements,
+  onAuditImportedCleanup,
+  onPurgeImportedCleanup,
+  onPurgeAllImportedTransactions,
   onOpenTransaction,
   onDeleteTransaction,
 }: Accumul8StatementsPanelProps) {
   const [auditBusy, setAuditBusy] = React.useState(false);
+  const [cleanupBusy, setCleanupBusy] = React.useState(false);
   const [statementKind, setStatementKind] = React.useState<Accumul8StatementKind | ''>('');
   const [files, setFiles] = React.useState<File[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -308,6 +317,9 @@ export function Accumul8StatementsPanel({
   const [selectedWorkspacePanel, setSelectedWorkspacePanel] = React.useState<StatementWorkspacePanel>('review');
   const [selectedLibraryUploadId, setSelectedLibraryUploadId] = React.useState<number | null>(null);
   const [selectedSignalUploadId, setSelectedSignalUploadId] = React.useState<number | null>(null);
+  const [cleanupModalOpen, setCleanupModalOpen] = React.useState(false);
+  const [cleanupReport, setCleanupReport] = React.useState<Accumul8ImportedTransactionCleanupReport | null>(null);
+  const [cleanupSelectedIds, setCleanupSelectedIds] = React.useState<number[]>([]);
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
   const [libraryFilter, setLibraryFilter] = React.useState<StatementLibraryFilter>('all');
   const [libraryQuery, setLibraryQuery] = React.useState('');
@@ -324,6 +336,9 @@ export function Accumul8StatementsPanel({
     setSelectedWorkspacePanel('review');
     setSelectedLibraryUploadId(null);
     setSelectedSignalUploadId(null);
+    setCleanupModalOpen(false);
+    setCleanupReport(null);
+    setCleanupSelectedIds([]);
     setArchiveDialogOpen(false);
     setLibraryFilter('all');
     setLibraryQuery('');
@@ -373,6 +388,11 @@ export function Accumul8StatementsPanel({
     [activeReviewUpload, workspaceByUploadId],
   );
   const latestAuditRun = React.useMemo(() => statementAuditRuns[0] || null, [statementAuditRuns]);
+  const recommendedCleanupIds = React.useMemo(() => (
+    cleanupReport?.candidates
+      .filter((candidate) => Number(candidate.safe_to_purge || 0) === 1)
+      .map((candidate) => candidate.transaction_id) || []
+  ), [cleanupReport]);
   const filteredLibraryUploads = React.useMemo(() => {
     const query = libraryQuery.trim().toLowerCase();
     return sortedStatementUploads.filter((upload) => {
@@ -637,6 +657,61 @@ export function Accumul8StatementsPanel({
       setAuditBusy(false);
     }
   }, [onAuditStatements]);
+  const handleAuditImportedCleanup = React.useCallback(async () => {
+    setCleanupBusy(true);
+    try {
+      const report = await onAuditImportedCleanup({ limit: 1000 });
+      setCleanupReport(report || null);
+      setCleanupSelectedIds(
+        (report?.candidates || [])
+          .filter((candidate) => Number(candidate.safe_to_purge || 0) === 1)
+          .map((candidate) => candidate.transaction_id),
+      );
+      setCleanupModalOpen(true);
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [onAuditImportedCleanup]);
+  const handlePurgeImportedCleanup = React.useCallback(async () => {
+    if (cleanupSelectedIds.length === 0) {
+      return;
+    }
+    const confirmed = window.confirm(`Purge ${cleanupSelectedIds.length} imported transaction${cleanupSelectedIds.length === 1 ? '' : 's'} from the ledger?`);
+    if (!confirmed) {
+      return;
+    }
+    setCleanupBusy(true);
+    try {
+      await onPurgeImportedCleanup(cleanupSelectedIds);
+      const report = await onAuditImportedCleanup({ limit: 1000 });
+      setCleanupReport(report || null);
+      setCleanupSelectedIds(
+        (report?.candidates || [])
+          .filter((candidate) => Number(candidate.safe_to_purge || 0) === 1)
+          .map((candidate) => candidate.transaction_id),
+      );
+      if (!report || report.candidates.length === 0) {
+        setCleanupModalOpen(false);
+      }
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [cleanupSelectedIds, onAuditImportedCleanup, onPurgeImportedCleanup]);
+  const handlePurgeAllImportedTransactions = React.useCallback(async () => {
+    const confirmed = window.confirm('Purge every ledger transaction that came from a bank statement import for this owner? This will leave the statement files in place, but remove all imported statement rows from the ledger.');
+    if (!confirmed) {
+      return;
+    }
+    setCleanupBusy(true);
+    try {
+      await onPurgeAllImportedTransactions();
+      setCleanupReport(null);
+      setCleanupSelectedIds([]);
+      setCleanupModalOpen(false);
+    } finally {
+      setCleanupBusy(false);
+    }
+  }, [onPurgeAllImportedTransactions]);
   const restoreArchivedUpload = React.useCallback(async (upload: Accumul8StatementUpload, shouldFocus = false) => {
     const response = await onRestoreStatement(upload.id);
     if (shouldFocus) {
@@ -655,7 +730,7 @@ export function Accumul8StatementsPanel({
   return (
     <section className="accumul8-statements-page">
       {busy ? (
-        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label={auditBusy ? 'Statement audit in progress' : 'Statement scan in progress'}>
+        <div className="accumul8-statement-busy-overlay" role="status" aria-live="polite" aria-label={auditBusy ? 'Statement audit in progress' : cleanupBusy ? 'Imported transaction cleanup in progress' : 'Statement scan in progress'}>
           <div className="accumul8-statement-busy-card">
             <WebpImage
               className="accumul8-statement-busy-logo"
@@ -663,7 +738,7 @@ export function Accumul8StatementsPanel({
               alt=""
               aria-hidden="true"
             />
-            <div className="accumul8-statement-busy-text">{auditBusy ? 'Auditing statements and reconciling the ledger...' : 'Scanning statement...'}</div>
+            <div className="accumul8-statement-busy-text">{auditBusy ? 'Auditing statements and reconciling the ledger...' : cleanupBusy ? 'Reviewing imported transactions for cleanup...' : 'Scanning statement...'}</div>
           </div>
         </div>
       ) : null}
@@ -711,6 +786,16 @@ export function Accumul8StatementsPanel({
           <button
             type="button"
             className="btn btn-sm btn-outline-secondary"
+            onClick={() => void handlePurgeAllImportedTransactions()}
+            disabled={busy}
+            title="Purge all bank-statement-imported ledger transactions"
+            aria-label="Purge all bank-statement-imported ledger transactions"
+          >
+            🧹
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
             onClick={() => setArchiveDialogOpen(true)}
             disabled={busy}
             title={`Archived statements (${archivedStatementUploads.length})`}
@@ -732,6 +817,75 @@ export function Accumul8StatementsPanel({
           </Accumul8ModalHelp>
         </div>
       </div>
+      {cleanupModalOpen ? (
+        <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Imported transaction cleanup audit" onClick={() => setCleanupModalOpen(false)}>
+          <div className="accumul8-help-modal accumul8-import-cleanup-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="accumul8-settings-modal-header">
+              <div>
+                <h2 className="accumul8-settings-modal-title mb-0">Imported Transaction Cleanup</h2>
+                <div className="small text-muted">{cleanupReport?.summary_text || 'Review imported transaction cleanup candidates.'}</div>
+              </div>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCleanupModalOpen(false)}>Close</button>
+            </div>
+            <div className="accumul8-import-cleanup-modal__body">
+              {cleanupReport ? (
+                <>
+                  <div className="accumul8-statement-chip-row">
+                    <span className="accumul8-statement-chip is-warning">{cleanupReport.total_candidates} candidate{cleanupReport.total_candidates === 1 ? '' : 's'}</span>
+                    <span className="accumul8-statement-chip is-processed">{cleanupReport.safe_candidate_count} recommended</span>
+                    {cleanupReport.category_counts.map((category) => (
+                      <span key={category.category} className={`accumul8-statement-chip${category.safe_to_purge ? ' is-processed' : ''}`}>{category.category_label}: {category.count}</span>
+                    ))}
+                  </div>
+                  <div className="accumul8-import-cleanup-modal__actions">
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCleanupSelectedIds(recommendedCleanupIds)} disabled={busy}>Select Recommended</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCleanupSelectedIds(cleanupReport.candidates.map((candidate) => candidate.transaction_id))} disabled={busy}>Select All</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCleanupSelectedIds([])} disabled={busy}>Clear</button>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => void handlePurgeImportedCleanup()} disabled={busy || cleanupSelectedIds.length === 0}>Purge Selected ({cleanupSelectedIds.length})</button>
+                  </div>
+                  <div className="accumul8-import-cleanup-modal__list">
+                    {cleanupReport.candidates.length > 0 ? cleanupReport.candidates.map((candidate) => {
+                      const selected = cleanupSelectedIds.includes(candidate.transaction_id);
+                      return (
+                        <label key={candidate.transaction_id} className={`accumul8-import-cleanup-row${selected ? ' is-selected' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(event) => {
+                              setCleanupSelectedIds((current) => (
+                                event.target.checked
+                                  ? [...current, candidate.transaction_id]
+                                  : current.filter((value) => value !== candidate.transaction_id)
+                              ));
+                            }}
+                          />
+                          <div className="accumul8-import-cleanup-row__content">
+                            <div className="accumul8-import-cleanup-row__head">
+                              <strong>{candidate.description || 'Imported transaction'}</strong>
+                              <span className={`accumul8-statement-chip${candidate.safe_to_purge ? ' is-processed' : ' is-warning'}`}>{candidate.category_label}</span>
+                            </div>
+                            <div className="small text-muted">
+                              {[candidate.transaction_date, candidate.account_name || 'Unknown account', candidate.banking_organization_name || candidate.source_kind, candidate.amount.toFixed(2)].filter(Boolean).join(' · ')}
+                            </div>
+                            <div className="small text-muted">{candidate.reason}</div>
+                            {candidate.teller_history_start && candidate.teller_history_end ? (
+                              <div className="small text-muted">Teller history: {candidate.teller_history_start} to {candidate.teller_history_end}</div>
+                            ) : null}
+                          </div>
+                        </label>
+                      );
+                    }) : (
+                      <div className="accumul8-statement-history-empty">No imported transactions need cleanup right now.</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="accumul8-statement-history-empty">Run the cleanup audit to load imported transaction candidates.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="accumul8-statements-page-body">
         <div className="accumul8-statement-shell">
           <section className="accumul8-statement-top-grid is-single-column">

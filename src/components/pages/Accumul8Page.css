@@ -505,6 +505,20 @@
   filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.2));
 }
 
+.accumul8-header-brand-logo--syncing .accumul8-header-brand-logo-image {
+  animation: accumul8-logo-spin 1.15s linear infinite;
+  filter: drop-shadow(0 0 14px rgba(212, 175, 55, 0.38));
+}
+
+@keyframes accumul8-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .accumul8-tabs {
   display: flex;
   flex-wrap: wrap;

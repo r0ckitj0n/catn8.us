@@ -32,6 +32,8 @@ import {
   Accumul8StatementAuditRequest,
   Accumul8StatementAuditResponse,
   Accumul8StatementImportResult,
+  Accumul8ImportedTransactionCleanupAuditResponse,
+  Accumul8ImportedTransactionCleanupPurgeResponse,
   Accumul8StatementSearchResult,
   Accumul8Transaction,
   Accumul8TransactionMoveRequest,
@@ -619,6 +621,59 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const auditImportedTransactionCleanup = React.useCallback(async (payload?: { start_date?: string | null; end_date?: string | null; limit?: number }) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8ImportedTransactionCleanupAuditResponse>(
+        scopedActionUrl('audit_imported_transaction_cleanup'),
+        payload || {},
+      );
+      return res?.report;
+    } catch (error: any) {
+      handleError(error, 'Failed to audit imported transaction cleanup candidates');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, scopedActionUrl]);
+  const purgeImportedTransactionCleanup = React.useCallback(async (transactionIds: number[]) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8ImportedTransactionCleanupPurgeResponse>(
+        scopedActionUrl('purge_imported_transaction_cleanup'),
+        { transaction_ids: transactionIds },
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: `Purged ${Number(res?.deleted_count || 0)} imported transaction${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to purge imported transactions');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
+  const purgeAllImportedStatementTransactions = React.useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<Accumul8ImportedTransactionCleanupPurgeResponse>(
+        scopedActionUrl('purge_all_imported_statement_transactions'),
+        {},
+      );
+      await load();
+      if (onToast) {
+        onToast({ tone: 'success', message: `Purged ${Number(res?.deleted_count || 0)} bank-statement transaction${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
+      }
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to purge bank-statement transactions');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -714,5 +769,8 @@ export function useAccumul8(
     linkStatementReviewRow,
     searchStatementUploads,
     auditStatementUploads,
+    auditImportedTransactionCleanup,
+    purgeImportedTransactionCleanup,
+    purgeAllImportedStatementTransactions,
   };
 }

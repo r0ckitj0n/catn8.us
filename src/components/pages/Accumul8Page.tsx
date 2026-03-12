@@ -561,6 +561,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     linkStatementReviewRow,
     searchStatementUploads,
     auditStatementUploads,
+    auditImportedTransactionCleanup,
+    purgeImportedTransactionCleanup,
+    purgeAllImportedStatementTransactions,
   } = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
   const [tab, setTab] = React.useState<TabKey>('ledger');
   const [entityForm, setEntityForm] = React.useState<EntityFormState>(DEFAULT_ENTITY_FORM);
@@ -573,6 +576,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [customLedgerStartDate, setCustomLedgerStartDate] = React.useState<string>('');
   const [customLedgerEndDate, setCustomLedgerEndDate] = React.useState<string>('');
   const [lastSyncReport, setLastSyncReport] = React.useState<Accumul8SyncReport | null>(null);
+  const [syncingConnectionId, setSyncingConnectionId] = React.useState<number | null>(null);
   const [ledgerMoveMode, setLedgerMoveMode] = React.useState(false);
   const [selectedLedgerMoveIds, setSelectedLedgerMoveIds] = React.useState<number[]>([]);
   const [ledgerMoveModalOpen, setLedgerMoveModalOpen] = React.useState(false);
@@ -1195,16 +1199,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     return next;
   }, [accounts]);
   const runConnectionSync = React.useCallback(async (connectionId: number, institutionName: string) => {
-    const result = await syncBankConnection(connectionId);
-    if (!result || !result.success) {
-      return;
+    setSyncingConnectionId(connectionId);
+    try {
+      const result = await syncBankConnection(connectionId);
+      if (!result || !result.success) {
+        return;
+      }
+      setLastSyncReport({
+        connectionId,
+        institutionName,
+        syncedAt: new Date().toISOString(),
+        result,
+      });
+    } finally {
+      setSyncingConnectionId((current) => (current === connectionId ? null : current));
     }
-    setLastSyncReport({
-      connectionId,
-      institutionName,
-      syncedAt: new Date().toISOString(),
-      result,
-    });
   }, [syncBankConnection]);
   const renderDateRangeControls = React.useCallback((
     prefix: 'ledger' | 'pay-bills',
@@ -2435,7 +2444,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 </div>
               </div>
               <a
-                className="accumul8-header-brand-logo"
+                className={`accumul8-header-brand-logo${syncingConnectionId !== null ? ' accumul8-header-brand-logo--syncing' : ''}`}
                 href="https://catn8.us"
                 aria-label="Go to catn8.us"
               >
@@ -3583,7 +3592,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {c.last_error ? <div className="accumul8-sync-error">{String(c.last_error)}</div> : null}
                         </td>
                         <td>{c.last_sync_at || '-'}</td>
-                        <td className="text-end"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void runConnectionSync(Number(c.id || 0), String(c.institution_name || c.institution_id || 'Unknown'))} disabled={busy}>Sync</button></td>
+                        <td className="text-end">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => void runConnectionSync(Number(c.id || 0), String(c.institution_name || c.institution_id || 'Unknown'))}
+                            disabled={busy}
+                          >
+                            {syncingConnectionId === Number(c.id || 0) ? 'Syncing...' : 'Sync'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -3595,7 +3613,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <strong>Last Sync Report:</strong> {lastSyncReport.institutionName} at {lastSyncReport.syncedAt.replace('T', ' ').slice(0, 19)}
                   </div>
                   <div className="accumul8-sync-report__summary">
-                    Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, removed {lastSyncReport.result.removed}.
+                    Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, unchanged {lastSyncReport.result.unchanged}, removed {lastSyncReport.result.removed}.
                   </div>
                   <div className="accumul8-sync-report__accounts">
                     {lastSyncReport.result.accounts.length > 0 ? (
@@ -3607,8 +3625,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <div className="accumul8-sync-report__account-meta">
                             {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {account.local_account_name || 'Unnamed local account'}
                           </div>
+                          {account.history_start_date && account.history_end_date ? (
+                            <div className="accumul8-sync-report__account-meta">
+                              Teller history returned: {account.history_start_date} to {account.history_end_date}.
+                            </div>
+                          ) : null}
                           <div className="accumul8-sync-report__account-meta">
-                            Transactions added: {account.transactions_added}; modified: {account.transactions_modified}.
+                            Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
+                          </div>
+                          <div className="accumul8-sync-report__account-meta">
+                            Cleanup removed {account.stale_teller_removed} stale Teller row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside Teller's returned history window.
                           </div>
                         </div>
                       ))
@@ -3644,6 +3670,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onLinkReviewRow={linkStatementReviewRow}
                 onSearch={searchStatementUploads}
                 onAuditStatements={auditStatementUploads}
+                onAuditImportedCleanup={auditImportedTransactionCleanup}
+                onPurgeImportedCleanup={purgeImportedTransactionCleanup}
+                onPurgeAllImportedTransactions={purgeAllImportedStatementTransactions}
                 onOpenTransaction={beginViewTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />

@@ -256,6 +256,53 @@ export interface Accumul8StatementAuditResponse {
   runs: Accumul8StatementAuditRun[];
 }
 
+export interface Accumul8ImportedTransactionCleanupCandidate {
+  transaction_id: number;
+  account_id: number | null;
+  account_name: string;
+  banking_organization_name: string;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  source_kind: string;
+  source_ref: string;
+  statement_upload_id: number | null;
+  category: string;
+  category_label: string;
+  reason: string;
+  safe_to_purge: number;
+  teller_history_start: string;
+  teller_history_end: string;
+  matched_teller_transaction_id: number | null;
+}
+
+export interface Accumul8ImportedTransactionCleanupCategoryCount {
+  category: string;
+  category_label: string;
+  count: number;
+  safe_to_purge: number;
+}
+
+export interface Accumul8ImportedTransactionCleanupReport {
+  generated_at: string;
+  total_candidates: number;
+  safe_candidate_count: number;
+  summary_text: string;
+  category_counts: Accumul8ImportedTransactionCleanupCategoryCount[];
+  candidates: Accumul8ImportedTransactionCleanupCandidate[];
+}
+
+export interface Accumul8ImportedTransactionCleanupAuditResponse {
+  success: boolean;
+  report: Accumul8ImportedTransactionCleanupReport;
+}
+
+export interface Accumul8ImportedTransactionCleanupPurgeResponse {
+  success: boolean;
+  deleted_count: number;
+  affected_upload_ids: number[];
+}
+
 export interface Accumul8StatementReconciliationRun {
   id: number;
   reconciliation_status: string;
@@ -805,6 +852,7 @@ export interface Accumul8TellerSyncResponse {
   success: boolean;
   added: number;
   modified: number;
+  unchanged: number;
   removed: number;
   accounts: Accumul8TellerSyncAccountSummary[];
 }
@@ -819,6 +867,12 @@ export interface Accumul8TellerSyncAccountSummary {
   local_account_name: string;
   institution_name: string;
   mapping_action: 'created' | 'updated';
+  history_start_date: string;
+  history_end_date: string;
   transactions_added: number;
   transactions_modified: number;
+  transactions_unchanged: number;
+  transactions_removed: number;
+  stale_teller_removed: number;
+  statement_imports_removed: number;
 }

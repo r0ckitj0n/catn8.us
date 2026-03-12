@@ -9118,56 +9118,397 @@ function accumul8_teller_request(string $method, string $path, ?string $accessTo
             }
         }
 
-        $ch = curl_init();
-        if ($ch === false) {
-            throw new RuntimeException('Failed to init curl');
-        }
+        $maxAttempts = 5;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $ch = curl_init();
+            if ($ch === false) {
+                throw new RuntimeException('Failed to init curl');
+            }
 
-        $headers = ['Accept: application/json'];
-        if ($payload !== null) {
-            $headers[] = 'Content-Type: application/json';
-        }
+            $headers = ['Accept: application/json'];
+            if ($payload !== null) {
+                $headers[] = 'Content-Type: application/json';
+            }
 
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper(trim($method)));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, ($accessToken !== null ? $accessToken : '') . ':');
-        curl_setopt($ch, CURLOPT_SSLCERT, $certFile);
-        curl_setopt($ch, CURLOPT_SSLKEY, $keyFile);
-        if ($payload !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        }
+            $responseHeaders = [];
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper(trim($method)));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+            curl_setopt($ch, CURLOPT_USERPWD, ($accessToken !== null ? $accessToken : '') . ':');
+            curl_setopt($ch, CURLOPT_SSLCERT, $certFile);
+            curl_setopt($ch, CURLOPT_SSLKEY, $keyFile);
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($curl, string $headerLine) use (&$responseHeaders): int {
+                $length = strlen($headerLine);
+                $parts = explode(':', $headerLine, 2);
+                if (count($parts) === 2) {
+                    $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+                }
+                return $length;
+            });
+            if ($payload !== null) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            }
 
-        $raw = curl_exec($ch);
-        $err = curl_error($ch);
-        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $raw = curl_exec($ch);
+            $err = curl_error($ch);
+            $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if (!is_string($raw)) {
-            throw new RuntimeException('Teller request failed: ' . ($err !== '' ? $err : 'unknown error'));
-        }
+            if (!is_string($raw)) {
+                if ($attempt < $maxAttempts) {
+                    usleep(250000 * $attempt);
+                    continue;
+                }
+                throw new RuntimeException('Teller request failed: ' . ($err !== '' ? $err : 'unknown error'));
+            }
 
-        $decoded = json_decode($raw, true);
-        if ($status < 200 || $status >= 300) {
-            $errorText = is_array($decoded)
-                ? (string)($decoded['error'] ?? $decoded['message'] ?? $decoded['detail'] ?? 'Teller request failed')
-                : 'Teller request failed';
+            $decoded = json_decode($raw, true);
+            if ($status >= 200 && $status < 300) {
+                if (!is_array($decoded)) {
+                    throw new RuntimeException('Teller returned non-JSON response');
+                }
+                return $decoded;
+            }
+
+            if (in_array($status, [408, 429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                $retryAfterSeconds = (int)($responseHeaders['retry-after'] ?? 0);
+                if ($retryAfterSeconds <= 0) {
+                    $retryAfterSeconds = min(10, $attempt * 2);
+                }
+                usleep($retryAfterSeconds * 1000000);
+                continue;
+            }
+
+            $errorValue = is_array($decoded)
+                ? ($decoded['error'] ?? $decoded['message'] ?? $decoded['detail'] ?? null)
+                : null;
+            if (is_array($errorValue)) {
+                $errorText = json_encode($errorValue, JSON_UNESCAPED_SLASHES);
+            } elseif (is_scalar($errorValue)) {
+                $errorText = (string)$errorValue;
+            } else {
+                $errorText = 'Teller request failed';
+            }
             throw new RuntimeException($errorText . ' (HTTP ' . $status . ')');
         }
 
-        if (!is_array($decoded)) {
-            throw new RuntimeException('Teller returned non-JSON response');
-        }
-
-        return $decoded;
+        throw new RuntimeException('Teller request failed after retries');
     } finally {
         @unlink($certFile);
         @unlink($keyFile);
     }
+}
+
+function accumul8_teller_list_all_transactions(string $accessToken, string $remoteAccountId): array
+{
+    $all = [];
+    $seenIds = [];
+    $cursor = null;
+    $pageSize = 500;
+    $maxPages = 100;
+
+    for ($page = 0; $page < $maxPages; $page++) {
+        $query = ['count' => $pageSize];
+        if ($cursor !== null && $cursor !== '') {
+            $query['from_id'] = $cursor;
+        }
+
+        $pageTransactions = accumul8_teller_request(
+            'GET',
+            '/accounts/' . rawurlencode($remoteAccountId) . '/transactions',
+            $accessToken,
+            $query
+        );
+        if (!is_array($pageTransactions) || $pageTransactions === []) {
+            break;
+        }
+
+        $lastIdOnPage = null;
+        $pageAdded = 0;
+        foreach ($pageTransactions as $tx) {
+            if (!is_array($tx)) {
+                continue;
+            }
+            $txId = accumul8_normalize_text((string)($tx['id'] ?? ''), 191);
+            if ($txId === '') {
+                continue;
+            }
+            if (isset($seenIds[$txId])) {
+                continue;
+            }
+            $seenIds[$txId] = true;
+            $all[] = $tx;
+            $lastIdOnPage = $txId;
+            $pageAdded++;
+        }
+
+        if ($pageAdded <= 0 || count($pageTransactions) < $pageSize || $lastIdOnPage === null) {
+            break;
+        }
+
+        $cursor = $lastIdOnPage;
+    }
+
+    return $all;
+}
+
+function accumul8_delete_transactions_by_ids(int $viewerId, array $transactionIds): int
+{
+    $ids = array_values(array_unique(array_map(static fn($value): int => (int)$value, $transactionIds)));
+    $ids = array_values(array_filter($ids, static fn(int $value): bool => $value > 0));
+    if ($ids === []) {
+        return 0;
+    }
+
+    $deleted = 0;
+    foreach (array_chunk($ids, 500) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        Database::execute(
+            'DELETE FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND id IN (' . $placeholders . ')',
+            array_merge([$viewerId], $chunk)
+        );
+        $deleted += count($chunk);
+    }
+
+    return $deleted;
+}
+
+function accumul8_import_cleanup_description_key(string $value): string
+{
+    $normalized = strtolower(trim($value));
+    $normalized = preg_replace('/[^a-z0-9]+/', ' ', $normalized);
+    return trim((string)$normalized);
+}
+
+function accumul8_refresh_statement_upload_import_counts(int $viewerId, array $uploadIds): void
+{
+    $ids = array_values(array_unique(array_map(static fn($value): int => (int)$value, $uploadIds)));
+    $ids = array_values(array_filter($ids, static fn(int $value): bool => $value > 0));
+    foreach ($ids as $uploadId) {
+        $row = Database::queryOne(
+            'SELECT
+                SUM(CASE WHEN source_kind IN (?, ?) AND source_ref = ? THEN 1 ELSE 0 END) AS imported_count
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?',
+            ['statement_upload', 'statement_pdf', 'statement_upload:' . $uploadId, $viewerId]
+        );
+        Database::execute(
+            'UPDATE accumul8_statement_uploads
+             SET imported_transaction_count = ?, updated_at = NOW()
+             WHERE id = ? AND owner_user_id = ?',
+            [(int)($row['imported_count'] ?? 0), $uploadId, $viewerId]
+        );
+    }
+}
+
+function accumul8_audit_imported_transaction_cleanup(int $viewerId, ?string $startDate = null, ?string $endDate = null, int $limit = 500): array
+{
+    $limit = max(1, min(2000, $limit));
+    $where = [
+        't.owner_user_id = ?',
+        "t.source_kind IN ('statement_upload', 'statement_pdf')",
+    ];
+    $params = [$viewerId];
+    if ($startDate !== null && $startDate !== '') {
+        $where[] = 't.transaction_date >= ?';
+        $params[] = $startDate;
+    }
+    if ($endDate !== null && $endDate !== '') {
+        $where[] = 't.transaction_date <= ?';
+        $params[] = $endDate;
+    }
+
+    $rows = Database::queryAll(
+        'SELECT
+            t.id,
+            t.account_id,
+            t.transaction_date,
+            t.description,
+            t.amount,
+            t.source_kind,
+            t.source_ref,
+            a.account_name,
+            ag.group_name AS banking_organization_name,
+            a.bank_connection_id,
+            a.provider_name,
+            a.teller_account_id
+         FROM accumul8_transactions t
+         LEFT JOIN accumul8_accounts a
+           ON a.id = t.account_id
+          AND a.owner_user_id = t.owner_user_id
+         LEFT JOIN accumul8_account_groups ag
+           ON ag.id = a.account_group_id
+          AND ag.owner_user_id = t.owner_user_id
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY t.transaction_date DESC, t.id DESC
+         LIMIT ' . $limit,
+        $params
+    );
+
+    if ($rows === []) {
+        return [
+            'generated_at' => gmdate('c'),
+            'total_candidates' => 0,
+            'safe_candidate_count' => 0,
+            'summary_text' => 'No imported statement transactions need cleanup review.',
+            'category_counts' => [],
+            'candidates' => [],
+        ];
+    }
+
+    $accountIds = [];
+    foreach ($rows as $row) {
+        $accountId = (int)($row['account_id'] ?? 0);
+        if ($accountId > 0) {
+            $accountIds[$accountId] = true;
+        }
+    }
+
+    $tellerCoverageByAccount = [];
+    $tellerMatchesByAccount = [];
+    if ($accountIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($accountIds), '?'));
+        $accountParams = array_merge([$viewerId], array_keys($accountIds));
+        $coverageRows = Database::queryAll(
+            'SELECT account_id, MIN(transaction_date) AS min_date, MAX(transaction_date) AS max_date
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND source_kind = ?
+               AND account_id IN (' . $placeholders . ')
+             GROUP BY account_id',
+            array_merge([$viewerId, 'teller'], array_keys($accountIds))
+        );
+        foreach ($coverageRows as $row) {
+            $tellerCoverageByAccount[(int)($row['account_id'] ?? 0)] = [
+                'min_date' => (string)($row['min_date'] ?? ''),
+                'max_date' => (string)($row['max_date'] ?? ''),
+            ];
+        }
+
+        $tellerRows = Database::queryAll(
+            'SELECT id, account_id, transaction_date, description, amount
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND source_kind = ?
+               AND account_id IN (' . $placeholders . ')',
+            array_merge([$viewerId, 'teller'], array_keys($accountIds))
+        );
+        foreach ($tellerRows as $row) {
+            $accountId = (int)($row['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                continue;
+            }
+            if (!isset($tellerMatchesByAccount[$accountId])) {
+                $tellerMatchesByAccount[$accountId] = [];
+            }
+            $signature = implode('|', [
+                (string)($row['transaction_date'] ?? ''),
+                number_format((float)($row['amount'] ?? 0), 2, '.', ''),
+                accumul8_import_cleanup_description_key((string)($row['description'] ?? '')),
+            ]);
+            $tellerMatchesByAccount[$accountId][$signature] = (int)($row['id'] ?? 0);
+        }
+    }
+
+    $categoryMeta = [
+        'orphaned_account' => ['label' => 'Missing Account', 'safe' => 0],
+        'unsynced_account' => ['label' => 'Unsynced Account', 'safe' => 0],
+        'teller_history_missing' => ['label' => 'No Teller History Yet', 'safe' => 0],
+        'outside_teller_history' => ['label' => 'Outside Teller History', 'safe' => 0],
+        'duplicate_of_teller' => ['label' => 'Duplicate Of Teller', 'safe' => 1],
+        'no_matching_teller_transaction' => ['label' => 'No Teller Match In Covered Range', 'safe' => 1],
+    ];
+
+    $categoryCounts = [];
+    $safeCandidateCount = 0;
+    $candidates = [];
+    foreach ($rows as $row) {
+        $accountId = isset($row['account_id']) ? (int)$row['account_id'] : null;
+        $accountCoverage = $accountId !== null && $accountId > 0 ? ($tellerCoverageByAccount[$accountId] ?? null) : null;
+        $historyStart = (string)($accountCoverage['min_date'] ?? '');
+        $historyEnd = (string)($accountCoverage['max_date'] ?? '');
+        $signature = implode('|', [
+            (string)($row['transaction_date'] ?? ''),
+            number_format((float)($row['amount'] ?? 0), 2, '.', ''),
+            accumul8_import_cleanup_description_key((string)($row['description'] ?? '')),
+        ]);
+        $matchedTellerTransactionId = ($accountId !== null && $accountId > 0)
+            ? (int)($tellerMatchesByAccount[$accountId][$signature] ?? 0)
+            : 0;
+
+        if ($accountId === null || $accountId <= 0 || trim((string)($row['account_name'] ?? '')) === '') {
+            $category = 'orphaned_account';
+            $reason = 'The imported transaction points to an account record that no longer exists locally.';
+        } elseif ((int)($row['bank_connection_id'] ?? 0) <= 0 || (string)($row['provider_name'] ?? '') !== 'teller' || trim((string)($row['teller_account_id'] ?? '')) === '') {
+            $category = 'unsynced_account';
+            $reason = 'This imported transaction belongs to an account that is not currently mapped to a Teller feed.';
+        } elseif ($historyStart === '' || $historyEnd === '') {
+            $category = 'teller_history_missing';
+            $reason = 'This account is Teller-mapped, but no Teller transactions have been synced into the ledger for it yet.';
+        } elseif ((string)($row['transaction_date'] ?? '') < $historyStart || (string)($row['transaction_date'] ?? '') > $historyEnd) {
+            $category = 'outside_teller_history';
+            $reason = 'This imported transaction is outside the history window currently returned by Teller for the mapped account.';
+        } elseif ($matchedTellerTransactionId > 0) {
+            $category = 'duplicate_of_teller';
+            $reason = 'A Teller transaction already matches this imported row on account, date, amount, and normalized description.';
+        } else {
+            $category = 'no_matching_teller_transaction';
+            $reason = 'This imported transaction falls inside Teller coverage for the account, but no matching Teller transaction exists.';
+        }
+
+        $meta = $categoryMeta[$category] ?? ['label' => 'Cleanup Candidate', 'safe' => 0];
+        if (!isset($categoryCounts[$category])) {
+            $categoryCounts[$category] = [
+                'category' => $category,
+                'category_label' => $meta['label'],
+                'count' => 0,
+                'safe_to_purge' => (int)$meta['safe'],
+            ];
+        }
+        $categoryCounts[$category]['count']++;
+        if ((int)$meta['safe'] === 1) {
+            $safeCandidateCount++;
+        }
+
+        $sourceRef = (string)($row['source_ref'] ?? '');
+        $statementUploadId = accumul8_parse_statement_upload_id_from_source_ref($sourceRef);
+        $candidates[] = [
+            'transaction_id' => (int)($row['id'] ?? 0),
+            'account_id' => $accountId,
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'banking_organization_name' => (string)($row['banking_organization_name'] ?? ''),
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'amount' => round((float)($row['amount'] ?? 0), 2),
+            'source_kind' => (string)($row['source_kind'] ?? ''),
+            'source_ref' => $sourceRef,
+            'statement_upload_id' => $statementUploadId,
+            'category' => $category,
+            'category_label' => $meta['label'],
+            'reason' => $reason,
+            'safe_to_purge' => (int)$meta['safe'],
+            'teller_history_start' => $historyStart,
+            'teller_history_end' => $historyEnd,
+            'matched_teller_transaction_id' => $matchedTellerTransactionId > 0 ? $matchedTellerTransactionId : null,
+        ];
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'total_candidates' => count($candidates),
+        'safe_candidate_count' => $safeCandidateCount,
+        'summary_text' => count($candidates) > 0
+            ? 'Found ' . count($candidates) . ' imported transaction cleanup candidate(s); ' . $safeCandidateCount . ' are recommended for purge.'
+            : 'No imported statement transactions need cleanup review.',
+        'category_counts' => array_values($categoryCounts),
+        'candidates' => $candidates,
+    ];
 }
 
 try {
@@ -11068,6 +11409,113 @@ if ($action === 'audit_statement_uploads') {
     }
 }
 
+if ($action === 'audit_imported_transaction_cleanup') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $startDate = accumul8_normalize_text((string)($body['start_date'] ?? ''), 10);
+    $endDate = accumul8_normalize_text((string)($body['end_date'] ?? ''), 10);
+    $limit = (int)($body['limit'] ?? 500);
+    try {
+        catn8_json_response([
+            'success' => true,
+            'report' => accumul8_audit_imported_transaction_cleanup(
+                $viewerId,
+                $startDate !== '' ? accumul8_require_valid_date('start_date', $startDate) : null,
+                $endDate !== '' ? accumul8_require_valid_date('end_date', $endDate) : null,
+                $limit
+            ),
+        ]);
+    } catch (Throwable $e) {
+        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+if ($action === 'purge_imported_transaction_cleanup') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $transactionIds = $body['transaction_ids'] ?? [];
+    if (!is_array($transactionIds) || $transactionIds === []) {
+        catn8_json_response(['success' => false, 'error' => 'transaction_ids is required'], 400);
+    }
+    $ids = array_values(array_unique(array_map(static fn($value): int => (int)$value, $transactionIds)));
+    $ids = array_values(array_filter($ids, static fn(int $value): bool => $value > 0));
+    if ($ids === []) {
+        catn8_json_response(['success' => false, 'error' => 'No valid transaction ids were provided'], 400);
+    }
+    if (count($ids) > 2000) {
+        catn8_json_response(['success' => false, 'error' => 'Too many transactions requested for purge'], 400);
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $rows = Database::queryAll(
+        'SELECT id, source_kind, source_ref
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND id IN (' . $placeholders . ')
+           AND source_kind IN (?, ?)',
+        array_merge([$viewerId], $ids, ['statement_upload', 'statement_pdf'])
+    );
+    if ($rows === []) {
+        catn8_json_response(['success' => false, 'error' => 'No purgeable imported transactions were found'], 404);
+    }
+
+    $purgeIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $rows);
+    $affectedUploadIds = [];
+    foreach ($rows as $row) {
+        $uploadId = accumul8_parse_statement_upload_id_from_source_ref((string)($row['source_ref'] ?? ''));
+        if ($uploadId !== null && $uploadId > 0) {
+            $affectedUploadIds[] = $uploadId;
+        }
+    }
+
+    $deletedCount = accumul8_delete_transactions_by_ids($viewerId, $purgeIds);
+    accumul8_refresh_statement_upload_import_counts($viewerId, $affectedUploadIds);
+    accumul8_recompute_running_balance($viewerId);
+
+    catn8_json_response([
+        'success' => true,
+        'deleted_count' => $deletedCount,
+        'affected_upload_ids' => array_values(array_unique($affectedUploadIds)),
+    ]);
+}
+
+if ($action === 'purge_all_imported_statement_transactions') {
+    catn8_require_method('POST');
+    $rows = Database::queryAll(
+        'SELECT id, source_ref
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND source_kind IN (?, ?)',
+        [$viewerId, 'statement_upload', 'statement_pdf']
+    );
+    if ($rows === []) {
+        catn8_json_response([
+            'success' => true,
+            'deleted_count' => 0,
+            'affected_upload_ids' => [],
+        ]);
+    }
+
+    $transactionIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $rows);
+    $affectedUploadIds = [];
+    foreach ($rows as $row) {
+        $uploadId = accumul8_parse_statement_upload_id_from_source_ref((string)($row['source_ref'] ?? ''));
+        if ($uploadId !== null && $uploadId > 0) {
+            $affectedUploadIds[] = $uploadId;
+        }
+    }
+
+    $deletedCount = accumul8_delete_transactions_by_ids($viewerId, $transactionIds);
+    accumul8_refresh_statement_upload_import_counts($viewerId, $affectedUploadIds);
+    accumul8_recompute_running_balance($viewerId);
+
+    catn8_json_response([
+        'success' => true,
+        'deleted_count' => $deletedCount,
+        'affected_upload_ids' => array_values(array_unique($affectedUploadIds)),
+    ]);
+}
+
 if ($action === 'download_statement_upload') {
     catn8_require_method('GET');
     $id = (int)($_GET['id'] ?? 0);
@@ -11194,6 +11642,7 @@ if ($action === 'teller_sync_transactions') {
 
     $addedTotal = 0;
     $modifiedTotal = 0;
+    $unchangedTotal = 0;
     $removedTotal = 0;
     $accountSummaries = [];
 
@@ -11237,7 +11686,14 @@ if ($action === 'teller_sync_transactions') {
 
             $accountAdded = 0;
             $accountModified = 0;
-            $transactions = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/transactions', $accessToken);
+            $accountUnchanged = 0;
+            $accountRemoved = 0;
+            $accountStaleTellerRemoved = 0;
+            $accountStatementImportsRemoved = 0;
+            $historyStartDate = '';
+            $historyEndDate = '';
+            $remoteTransactionIds = [];
+            $transactions = accumul8_teller_list_all_transactions($accessToken, $remoteAccountId);
             foreach ($transactions as $tx) {
                 if (!is_array($tx)) {
                     continue;
@@ -11247,6 +11703,7 @@ if ($action === 'teller_sync_transactions') {
                 if ($externalId === '') {
                     continue;
                 }
+                $remoteTransactionIds[$externalId] = true;
 
                 $description = accumul8_normalize_text(
                     (string)($tx['description'] ?? (($tx['counterparty']['name'] ?? 'Bank Transaction'))),
@@ -11260,9 +11717,15 @@ if ($action === 'teller_sync_transactions') {
                 $amount = round((float)($tx['amount'] ?? 0), 2);
                 $statusText = strtolower(accumul8_normalize_text((string)($tx['status'] ?? ''), 32));
                 $pending = $statusText === 'pending' ? 1 : 0;
+                if ($historyStartDate === '' || strcmp($date, $historyStartDate) < 0) {
+                    $historyStartDate = $date;
+                }
+                if ($historyEndDate === '' || strcmp($date, $historyEndDate) > 0) {
+                    $historyEndDate = $date;
+                }
 
                 $existingTx = Database::queryOne(
-                    'SELECT id
+                    'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
                      FROM accumul8_transactions
                      WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
                      LIMIT 1',
@@ -11270,25 +11733,41 @@ if ($action === 'teller_sync_transactions') {
                 );
 
                 if ($existingTx) {
-                    Database::execute(
-                        'UPDATE accumul8_transactions
-                         SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
-                         WHERE id = ? AND owner_user_id = ?',
-                        [
-                            $localAccountId,
-                            $date,
-                            $date,
-                            $pending ? null : $date,
-                            $description,
-                            $amount,
-                            $pending,
-                            $remoteAccountId,
-                            (int)$existingTx['id'],
-                            $viewerId,
-                        ]
-                    );
-                    $modifiedTotal++;
-                    $accountModified++;
+                    $nextPaidDate = $pending ? null : $date;
+                    $hasChanges =
+                        (int)($existingTx['account_id'] ?? 0) !== $localAccountId
+                        || (string)($existingTx['transaction_date'] ?? '') !== $date
+                        || (string)($existingTx['due_date'] ?? '') !== $date
+                        || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
+                        || (string)($existingTx['description'] ?? '') !== $description
+                        || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
+                        || (int)($existingTx['pending_status'] ?? 0) !== $pending
+                        || (string)($existingTx['source_ref'] ?? '') !== $remoteAccountId;
+
+                    if ($hasChanges) {
+                        Database::execute(
+                            'UPDATE accumul8_transactions
+                             SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
+                             WHERE id = ? AND owner_user_id = ?',
+                            [
+                                $localAccountId,
+                                $date,
+                                $date,
+                                $nextPaidDate,
+                                $description,
+                                $amount,
+                                $pending,
+                                $remoteAccountId,
+                                (int)$existingTx['id'],
+                                $viewerId,
+                            ]
+                        );
+                        $modifiedTotal++;
+                        $accountModified++;
+                    } else {
+                        $unchangedTotal++;
+                        $accountUnchanged++;
+                    }
                     continue;
                 }
 
@@ -11320,6 +11799,45 @@ if ($action === 'teller_sync_transactions') {
                 $accountAdded++;
             }
 
+            $localTellerTransactions = Database::queryAll(
+                'SELECT id, external_id
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND account_id = ?
+                   AND source_kind = ?
+                   AND source_ref = ?',
+                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
+            );
+            $staleLocalTellerIds = [];
+            foreach ($localTellerTransactions as $row) {
+                $localExternalId = accumul8_normalize_text((string)($row['external_id'] ?? ''), 191);
+                if ($localExternalId !== '' && isset($remoteTransactionIds[$localExternalId])) {
+                    continue;
+                }
+                $staleLocalTellerIds[] = (int)($row['id'] ?? 0);
+            }
+            $accountStaleTellerRemoved = accumul8_delete_transactions_by_ids($viewerId, $staleLocalTellerIds);
+
+            if ($historyStartDate !== '' && $historyEndDate !== '') {
+                $statementTransactionsToRemove = Database::queryAll(
+                    'SELECT id
+                     FROM accumul8_transactions
+                     WHERE owner_user_id = ?
+                       AND account_id = ?
+                       AND source_kind IN (?, ?)
+                       AND transaction_date BETWEEN ? AND ?',
+                    [$viewerId, $localAccountId, 'statement_upload', 'statement_pdf', $historyStartDate, $historyEndDate]
+                );
+                $statementTransactionIds = array_map(
+                    static fn(array $row): int => (int)($row['id'] ?? 0),
+                    $statementTransactionsToRemove
+                );
+                $accountStatementImportsRemoved = accumul8_delete_transactions_by_ids($viewerId, $statementTransactionIds);
+            }
+
+            $accountRemoved = $accountStaleTellerRemoved + $accountStatementImportsRemoved;
+            $removedTotal += $accountRemoved;
+
             $accountSummaries[] = [
                 'remote_account_id' => (string)($accountMapping['remote_account_id'] ?? $remoteAccountId),
                 'remote_account_name' => (string)($accountMapping['remote_account_name'] ?? ($account['name'] ?? 'Teller Account')),
@@ -11330,8 +11848,14 @@ if ($action === 'teller_sync_transactions') {
                 'local_account_name' => (string)($accountMapping['local_account_name'] ?? ''),
                 'institution_name' => (string)($accountMapping['institution_name'] ?? ($connection['institution_name'] ?? '')),
                 'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
+                'history_start_date' => $historyStartDate,
+                'history_end_date' => $historyEndDate,
                 'transactions_added' => $accountAdded,
                 'transactions_modified' => $accountModified,
+                'transactions_unchanged' => $accountUnchanged,
+                'transactions_removed' => $accountRemoved,
+                'stale_teller_removed' => $accountStaleTellerRemoved,
+                'statement_imports_removed' => $accountStatementImportsRemoved,
             ];
         }
 
@@ -11348,6 +11872,7 @@ if ($action === 'teller_sync_transactions') {
             'success' => true,
             'added' => $addedTotal,
             'modified' => $modifiedTotal,
+            'unchanged' => $unchangedTotal,
             'removed' => $removedTotal,
             'accounts' => $accountSummaries,
         ]);

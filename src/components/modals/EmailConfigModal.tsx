@@ -124,12 +124,12 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
             <form onSubmit={save}>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-host">SMTP Host</label>
-                <input className="form-control" id="smtp-host" value={form.host} onChange={setField('host')} disabled={busy} />
+                <input className="form-control" id="smtp-host" value={form.host} onChange={setField('host')} disabled={busy} autoComplete="off" />
               </div>
               <div className="row">
                 <div className="col-md-6 mb-3">
                   <label className="form-label" htmlFor="smtp-port">Port</label>
-                  <input className="form-control" id="smtp-port" type="number" value={form.port} onChange={setField('port')} disabled={busy} />
+                  <input className="form-control" id="smtp-port" type="number" value={form.port} onChange={setField('port')} disabled={busy} autoComplete="off" />
                 </div>
                 <div className="col-md-6 mb-3">
                   <label className="form-label" htmlFor="smtp-secure">Encryption</label>
@@ -142,20 +142,20 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-user">SMTP Username</label>
-                <input className="form-control" id="smtp-user" value={form.user} onChange={setField('user')} disabled={busy} />
+                <input className="form-control" id="smtp-user" value={form.user} onChange={setField('user')} disabled={busy} autoComplete="username" />
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-pass">SMTP Password</label>
-                <input className="form-control" id="smtp-pass" type="password" value={form.pass} onChange={setField('pass')} disabled={busy} />
+                <input className="form-control" id="smtp-pass" type="password" value={form.pass} onChange={setField('pass')} disabled={busy} autoComplete="current-password" />
                 <div className="form-text">Leave blank to keep the existing password.</div>
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-from-email">From Email</label>
-                <input className="form-control" id="smtp-from-email" type="email" value={form.from_email} onChange={setField('from_email')} disabled={busy} />
+                <input className="form-control" id="smtp-from-email" type="email" value={form.from_email} onChange={setField('from_email')} disabled={busy} autoComplete="email" />
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-from-name">From Name</label>
-                <input className="form-control" id="smtp-from-name" value={form.from_name} onChange={setField('from_name')} disabled={busy} />
+                <input className="form-control" id="smtp-from-name" value={form.from_name} onChange={setField('from_name')} disabled={busy} autoComplete="name" />
               </div>
             </form>
           </div>

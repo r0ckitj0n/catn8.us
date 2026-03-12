@@ -30,15 +30,15 @@ export function UserCreateSection({
       <form onSubmit={createUser} className="row g-2 mt-1">
         <div className="col-md-4">
           <label className="form-label" htmlFor="settings-user-create-username">Username</label>
-          <input id="settings-user-create-username" className="form-control" value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} disabled={busy} />
+          <input id="settings-user-create-username" className="form-control" value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} disabled={busy} autoComplete="username" />
         </div>
         <div className="col-md-4">
           <label className="form-label" htmlFor="settings-user-create-email">Email</label>
-          <input id="settings-user-create-email" className="form-control" type="email" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} disabled={busy} />
+          <input id="settings-user-create-email" className="form-control" type="email" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} disabled={busy} autoComplete="email" />
         </div>
         <div className="col-md-4">
           <label className="form-label" htmlFor="settings-user-create-password">Password</label>
-          <input id="settings-user-create-password" className="form-control" type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} disabled={busy} />
+          <input id="settings-user-create-password" className="form-control" type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} disabled={busy} autoComplete="new-password" />
         </div>
         <div className="col-md-3">
           <div className="form-check mt-4">

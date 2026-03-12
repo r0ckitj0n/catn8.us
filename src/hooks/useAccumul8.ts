@@ -340,6 +340,7 @@ export function useAccumul8(
         onToast({ tone: 'success', message: `Synced bank transactions (added ${Number(res?.added || 0)}).` });
       }
       await load();
+      return res;
     } catch (error: any) {
       handleError(error, 'Bank sync failed');
     } finally {

@@ -133,6 +133,7 @@ export function Valid8EntryEditModal({
                   value={state.url}
                   onChange={(event) => setState((prev) => ({ ...prev, url: event.target.value }))}
                   maxLength={2048}
+                  autoComplete="url"
                 />
               </div>
               <div className="col-md-6">
@@ -144,6 +145,7 @@ export function Valid8EntryEditModal({
                   onChange={(event) => setState((prev) => ({ ...prev, username: event.target.value }))}
                   maxLength={8192}
                   required
+                  autoComplete="username"
                 />
               </div>
               <div className="col-md-6">
@@ -155,6 +157,7 @@ export function Valid8EntryEditModal({
                   value={state.email_address}
                   onChange={(event) => setState((prev) => ({ ...prev, email_address: event.target.value }))}
                   maxLength={191}
+                  autoComplete="email"
                 />
               </div>
               <div className="col-md-6">
@@ -166,6 +169,7 @@ export function Valid8EntryEditModal({
                   onChange={(event) => setState((prev) => ({ ...prev, password: event.target.value }))}
                   maxLength={8192}
                   required
+                  autoComplete="current-password"
                 />
               </div>
               <div className="col-md-3">

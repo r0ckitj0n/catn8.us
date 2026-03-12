@@ -1610,17 +1610,94 @@
 
 .accumul8-table--sync-list th:nth-child(2),
 .accumul8-table--sync-list td:nth-child(2) {
-  min-width: 6rem;
+  min-width: 10rem;
+  max-width: 14rem;
+  vertical-align: top;
 }
 
 .accumul8-table--sync-list th:nth-child(3),
 .accumul8-table--sync-list td:nth-child(3) {
-  min-width: 8rem;
+  min-width: 11rem;
 }
 
 .accumul8-table--sync-list th:nth-child(4),
 .accumul8-table--sync-list td:nth-child(4) {
   min-width: 4.5rem;
+}
+
+.accumul8-sync-institution-name {
+  font-weight: 700;
+}
+
+.accumul8-sync-meta,
+.accumul8-sync-report__account-meta {
+  font-size: 0.74rem;
+  color: rgba(245, 235, 201, 0.76);
+}
+
+.accumul8-sync-linked-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  margin-top: 0.35rem;
+}
+
+.accumul8-sync-linked-account {
+  font-size: 0.76rem;
+  color: rgba(255, 245, 213, 0.92);
+}
+
+.accumul8-sync-status {
+  white-space: normal;
+  font-weight: 700;
+}
+
+.accumul8-sync-error,
+.accumul8-sync-empty {
+  font-size: 0.74rem;
+  color: rgba(245, 235, 201, 0.76);
+  white-space: normal;
+}
+
+.accumul8-sync-error {
+  color: #ffd4c4;
+}
+
+.accumul8-sync-report {
+  border: 2px solid rgba(212, 175, 55, 0.36);
+  background: linear-gradient(180deg, rgba(20, 17, 11, 0.76), rgba(9, 13, 19, 0.94));
+  padding: 0.8rem 0.9rem;
+}
+
+.accumul8-sync-report__header {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accumul8-deco-paper);
+}
+
+.accumul8-sync-report__summary {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.accumul8-sync-report__accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.accumul8-sync-report__account {
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  background: rgba(8, 13, 19, 0.84);
+  padding: 0.55rem 0.65rem;
+}
+
+.accumul8-sync-report__account-title {
+  font-weight: 700;
+  margin-bottom: 0.2rem;
 }
 
 .accumul8-month-table-input {

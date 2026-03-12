@@ -29,6 +29,7 @@ import {
   Accumul8TellerConnectTokenResponse,
   Accumul8TellerEnrollmentResponse,
   Accumul8TellerSyncResponse,
+  Accumul8TellerSyncAccountSummary,
   Accumul8Account,
   Accumul8ContactType,
   Accumul8Direction,
@@ -65,6 +66,12 @@ type Accumul8HeaderSummary = {
   projectedBalance: number;
   unpaidBills: number;
   upcomingWindfalls: number;
+};
+type Accumul8SyncReport = {
+  connectionId: number;
+  institutionName: string;
+  syncedAt: string;
+  result: Accumul8TellerSyncResponse;
 };
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
@@ -449,6 +456,33 @@ function buildMeasuredTableStyle(widths: Record<string, number>): React.CSSPrope
   return style as React.CSSProperties;
 }
 
+function formatSyncConnectionStatus(status: string): string {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'connected') return 'Connected';
+  if (normalized === 'setup_pending') return 'Setup Pending';
+  if (normalized === 'sync_error') return 'Sync Error';
+  if (normalized === '') return 'Unknown';
+  return normalized.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function formatAccountMappingLabel(account: Accumul8Account): string {
+  const parts = [
+    account.account_name || 'Unnamed account',
+    account.account_subtype || account.account_type || '',
+    account.mask_last4 ? `...${account.mask_last4}` : (account.account_number_mask || ''),
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function formatSyncSummaryAccountLabel(account: Accumul8TellerSyncAccountSummary): string {
+  const parts = [
+    account.remote_account_name || 'Unnamed account',
+    account.remote_account_subtype || account.remote_account_type || '',
+    account.mask_last4 ? `...${account.mask_last4}` : '',
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
   const isAdministrator = Number(viewer?.is_admin || 0) === 1 || Number(viewer?.is_administrator || 0) === 1;
@@ -538,6 +572,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [ledgerDateFilter, setLedgerDateFilter] = React.useState<DateRangeFilter>('all_dates');
   const [customLedgerStartDate, setCustomLedgerStartDate] = React.useState<string>('');
   const [customLedgerEndDate, setCustomLedgerEndDate] = React.useState<string>('');
+  const [lastSyncReport, setLastSyncReport] = React.useState<Accumul8SyncReport | null>(null);
   const [ledgerMoveMode, setLedgerMoveMode] = React.useState(false);
   const [selectedLedgerMoveIds, setSelectedLedgerMoveIds] = React.useState<number[]>([]);
   const [ledgerMoveModalOpen, setLedgerMoveModalOpen] = React.useState(false);
@@ -1141,10 +1176,36 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'actions', index: 7, fallback: 182, header: 'Actions' },
   ], [recurringTableRef, recurringRows, recurringDraftById, activeRecurringRowId, flashingSaveButtonKey]);
   const syncColumnWidths = useMeasuredTableColumnWidths(syncTableRef, [
-    { key: 'status', index: 1, fallback: 96, header: 'Status' },
-    { key: 'lastSync', index: 2, fallback: 156, header: 'Last Sync' },
+    { key: 'status', index: 1, fallback: 164, header: 'Status' },
+    { key: 'lastSync', index: 2, fallback: 188, header: 'Last Sync' },
     { key: 'actions', index: 3, fallback: 138, header: 'Actions' },
   ], [syncTableRef, bankConnections, busy]);
+  const linkedAccountsByConnectionId = React.useMemo(() => {
+    const next: Record<number, Accumul8Account[]> = {};
+    accounts.forEach((account) => {
+      const connectionId = Number(account.bank_connection_id || 0);
+      if (connectionId <= 0) {
+        return;
+      }
+      if (!next[connectionId]) {
+        next[connectionId] = [];
+      }
+      next[connectionId].push(account);
+    });
+    return next;
+  }, [accounts]);
+  const runConnectionSync = React.useCallback(async (connectionId: number, institutionName: string) => {
+    const result = await syncBankConnection(connectionId);
+    if (!result || !result.success) {
+      return;
+    }
+    setLastSyncReport({
+      connectionId,
+      institutionName,
+      syncedAt: new Date().toISOString(),
+      result,
+    });
+  }, [syncBankConnection]);
   const renderDateRangeControls = React.useCallback((
     prefix: 'ledger' | 'pay-bills',
     filter: DateRangeFilter,
@@ -1579,6 +1640,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       }
       const syncRes = await ApiClient.post<Accumul8TellerSyncResponse>(scopedActionUrl('teller_sync_transactions'), {
         connection_id: connectionId,
+      });
+      setLastSyncReport({
+        connectionId,
+        institutionName: String(linkResult.payload?.enrollment?.institution?.name || 'Connected institution'),
+        syncedAt: new Date().toISOString(),
+        result: syncRes,
       });
       const added = Number(syncRes?.added || 0);
       onToast({ tone: 'success', message: `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
@@ -3494,16 +3561,64 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <tbody>
                     {bankConnections.map((c: any) => (
                       <tr key={c.id}>
-                        <td>{c.institution_name || c.institution_id || 'Unknown'}</td>
-                        <td>{c.status}</td>
+                        <td>
+                          <div className="accumul8-sync-institution-name">{c.institution_name || c.institution_id || 'Unknown'}</div>
+                          <div className="accumul8-sync-meta">
+                            Enrollment: {c.teller_enrollment_id || 'Not stored yet'}
+                          </div>
+                          <div className="accumul8-sync-linked-accounts">
+                            {(linkedAccountsByConnectionId[Number(c.id || 0)] || []).length > 0 ? (
+                              (linkedAccountsByConnectionId[Number(c.id || 0)] || []).map((account) => (
+                                <div key={account.id} className="accumul8-sync-linked-account">
+                                  {formatAccountMappingLabel(account)}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="accumul8-sync-empty">No local account mappings yet. Run Sync to import and map Teller accounts.</div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="accumul8-sync-status">{formatSyncConnectionStatus(String(c.status || ''))}</div>
+                          {c.last_error ? <div className="accumul8-sync-error">{String(c.last_error)}</div> : null}
+                        </td>
                         <td>{c.last_sync_at || '-'}</td>
-                        <td className="text-end"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void syncBankConnection(Number(c.id || 0))} disabled={busy}>Sync</button></td>
+                        <td className="text-end"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void runConnectionSync(Number(c.id || 0), String(c.institution_name || c.institution_id || 'Unknown'))} disabled={busy}>Sync</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="small text-muted mb-0">Teller-supported institutions can be connected here and each remote account is mapped into a local Accumul8 account record for ongoing sync.</p>
+              {lastSyncReport ? (
+                <div className="accumul8-sync-report mt-3">
+                  <div className="accumul8-sync-report__header">
+                    <strong>Last Sync Report:</strong> {lastSyncReport.institutionName} at {lastSyncReport.syncedAt.replace('T', ' ').slice(0, 19)}
+                  </div>
+                  <div className="accumul8-sync-report__summary">
+                    Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, removed {lastSyncReport.result.removed}.
+                  </div>
+                  <div className="accumul8-sync-report__accounts">
+                    {lastSyncReport.result.accounts.length > 0 ? (
+                      lastSyncReport.result.accounts.map((account) => (
+                        <div key={`${account.remote_account_id}-${account.local_account_id}`} className="accumul8-sync-report__account">
+                          <div className="accumul8-sync-report__account-title">
+                            {formatSyncSummaryAccountLabel(account)}
+                          </div>
+                          <div className="accumul8-sync-report__account-meta">
+                            {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {account.local_account_name || 'Unnamed local account'}
+                          </div>
+                          <div className="accumul8-sync-report__account-meta">
+                            Transactions added: {account.transactions_added}; modified: {account.transactions_modified}.
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="accumul8-sync-empty">No Teller accounts were returned in the most recent sync.</div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              <p className="small text-muted mb-0">Teller accounts are matched by Teller’s stable account IDs and enrollment IDs. On sync, Accumul8 creates or updates a local account record for each returned Teller account and then attaches transactions to that mapped local account.</p>
             </div>
           )}
           {tab === 'statements' && (

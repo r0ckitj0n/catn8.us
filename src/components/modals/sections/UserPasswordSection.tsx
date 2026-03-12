@@ -35,7 +35,7 @@ export function UserPasswordSection({
         />
         <div className="col-md-8">
           <label className="form-label" htmlFor="settings-user-pw">New Password</label>
-          <input id="settings-user-pw" className="form-control" type="password" value={pwValue} onChange={(e) => setPwValue(e.target.value)} disabled={busy} />
+          <input id="settings-user-pw" className="form-control" type="password" value={pwValue} onChange={(e) => setPwValue(e.target.value)} disabled={busy} autoComplete="new-password" />
         </div>
         <div className="col-md-4 d-flex justify-content-end align-items-end gap-2">
           <button type="button" className="btn btn-outline-secondary" onClick={cancelPassword} disabled={busy}>Cancel</button>

@@ -135,6 +135,7 @@ export function DbConfigModal({ open, onClose, onToast }: DbConfigModalProps) {
                     value={profileCfg.user}
                     onChange={(e) => state.setCfgByProfile(all => ({ ...all, [state.selectedProfile]: { ...profileCfg, user: e.target.value } }))}
                     disabled={state.busy}
+                    autoComplete="username"
                   />
                 </div>
                 <div className="col-md-6">
@@ -147,6 +148,7 @@ export function DbConfigModal({ open, onClose, onToast }: DbConfigModalProps) {
                     onChange={(e) => state.setCfgByProfile(all => ({ ...all, [state.selectedProfile]: { ...profileCfg, pass: e.target.value } }))}
                     disabled={state.busy}
                     placeholder="(not loaded)"
+                    autoComplete="current-password"
                   />
                 </div>
               </div>

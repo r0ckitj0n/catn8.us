@@ -806,4 +806,19 @@ export interface Accumul8TellerSyncResponse {
   added: number;
   modified: number;
   removed: number;
+  accounts: Accumul8TellerSyncAccountSummary[];
+}
+
+export interface Accumul8TellerSyncAccountSummary {
+  remote_account_id: string;
+  remote_account_name: string;
+  remote_account_type: string;
+  remote_account_subtype: string;
+  mask_last4: string;
+  local_account_id: number;
+  local_account_name: string;
+  institution_name: string;
+  mapping_action: 'created' | 'updated';
+  transactions_added: number;
+  transactions_modified: number;
 }

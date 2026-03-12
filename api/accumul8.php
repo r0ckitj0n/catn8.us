@@ -5791,7 +5791,7 @@ function accumul8_find_or_create_account_group_by_institution(int $viewerId, str
     return (int)Database::lastInsertId();
 }
 
-function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array $connection, array $account, array $balances = [], array $details = []): int
+function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array $connection, array $account, array $balances = [], array $details = []): array
 {
     $tellerAccountId = accumul8_normalize_text((string)($account['id'] ?? ''), 191);
     if ($tellerAccountId === '') {
@@ -5865,7 +5865,17 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
                 $viewerId,
             ]
         );
-        return (int)$existing['id'];
+        return [
+            'local_account_id' => (int)$existing['id'],
+            'local_account_name' => $accountName,
+            'remote_account_id' => $tellerAccountId,
+            'remote_account_name' => $accountName,
+            'remote_account_type' => $accountType,
+            'remote_account_subtype' => $accountSubtype,
+            'mask_last4' => $maskLast4,
+            'institution_name' => $institutionName,
+            'mapping_action' => 'updated',
+        ];
     }
 
     Database::execute(
@@ -5892,7 +5902,17 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
         ]
     );
 
-    return (int)Database::lastInsertId();
+    return [
+        'local_account_id' => (int)Database::lastInsertId(),
+        'local_account_name' => $accountName,
+        'remote_account_id' => $tellerAccountId,
+        'remote_account_name' => $accountName,
+        'remote_account_type' => $accountType,
+        'remote_account_subtype' => $accountSubtype,
+        'mask_last4' => $maskLast4,
+        'institution_name' => $institutionName,
+        'mapping_action' => 'created',
+    ];
 }
 
 function accumul8_list_bank_connections(int $viewerId): array
@@ -11175,6 +11195,7 @@ if ($action === 'teller_sync_transactions') {
     $addedTotal = 0;
     $modifiedTotal = 0;
     $removedTotal = 0;
+    $accountSummaries = [];
 
     try {
         $accounts = accumul8_teller_request('GET', '/accounts', $accessToken);
@@ -11201,7 +11222,7 @@ if ($action === 'teller_sync_transactions') {
                 $details = [];
             }
 
-            $localAccountId = accumul8_upsert_teller_account(
+            $accountMapping = accumul8_upsert_teller_account(
                 $viewerId,
                 $connectionId,
                 $connection,
@@ -11209,7 +11230,13 @@ if ($action === 'teller_sync_transactions') {
                 is_array($balances) ? $balances : [],
                 is_array($details) ? $details : []
             );
+            $localAccountId = (int)($accountMapping['local_account_id'] ?? 0);
+            if ($localAccountId <= 0) {
+                throw new RuntimeException('Failed to map Teller account into a local Accumul8 account');
+            }
 
+            $accountAdded = 0;
+            $accountModified = 0;
             $transactions = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/transactions', $accessToken);
             foreach ($transactions as $tx) {
                 if (!is_array($tx)) {
@@ -11261,6 +11288,7 @@ if ($action === 'teller_sync_transactions') {
                         ]
                     );
                     $modifiedTotal++;
+                    $accountModified++;
                     continue;
                 }
 
@@ -11289,7 +11317,22 @@ if ($action === 'teller_sync_transactions') {
                     ]
                 );
                 $addedTotal++;
+                $accountAdded++;
             }
+
+            $accountSummaries[] = [
+                'remote_account_id' => (string)($accountMapping['remote_account_id'] ?? $remoteAccountId),
+                'remote_account_name' => (string)($accountMapping['remote_account_name'] ?? ($account['name'] ?? 'Teller Account')),
+                'remote_account_type' => (string)($accountMapping['remote_account_type'] ?? ''),
+                'remote_account_subtype' => (string)($accountMapping['remote_account_subtype'] ?? ''),
+                'mask_last4' => (string)($accountMapping['mask_last4'] ?? ''),
+                'local_account_id' => $localAccountId,
+                'local_account_name' => (string)($accountMapping['local_account_name'] ?? ''),
+                'institution_name' => (string)($accountMapping['institution_name'] ?? ($connection['institution_name'] ?? '')),
+                'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
+                'transactions_added' => $accountAdded,
+                'transactions_modified' => $accountModified,
+            ];
         }
 
         Database::execute(
@@ -11306,6 +11349,7 @@ if ($action === 'teller_sync_transactions') {
             'added' => $addedTotal,
             'modified' => $modifiedTotal,
             'removed' => $removedTotal,
+            'accounts' => $accountSummaries,
         ]);
     } catch (Throwable $e) {
         Database::execute(

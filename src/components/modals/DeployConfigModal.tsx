@@ -118,23 +118,23 @@ export function DeployConfigModal({ open, onClose, onToast }: DeployConfigModalP
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Public Base (CATN8_PUBLIC_BASE)</label>
-                  <input className="form-control" value={state.cfg.public_base} onChange={(e) => state.setCfg(prev => ({ ...prev, public_base: e.target.value }))} disabled={state.busy} placeholder="/subdir (optional)" />
+                  <input className="form-control" value={state.cfg.public_base} onChange={(e) => state.setCfg(prev => ({ ...prev, public_base: e.target.value }))} disabled={state.busy} placeholder="/subdir (optional)" autoComplete="off" />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Remote SQL Dir (CATN8_REMOTE_SQL_DIR)</label>
-                  <input className="form-control" value={state.cfg.remote_sql_dir} onChange={(e) => state.setCfg(prev => ({ ...prev, remote_sql_dir: e.target.value }))} disabled={state.busy} placeholder="backups/sql" />
+                  <input className="form-control" value={state.cfg.remote_sql_dir} onChange={(e) => state.setCfg(prev => ({ ...prev, remote_sql_dir: e.target.value }))} disabled={state.busy} placeholder="backups/sql" autoComplete="off" />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Upload Live Env (CATN8_UPLOAD_LIVE_ENV)</label>
-                  <input className="form-control" value={state.cfg.upload_live_env} onChange={(e) => state.setCfg(prev => ({ ...prev, upload_live_env: e.target.value }))} disabled={state.busy} placeholder="1 to enable .env.live upload" />
+                  <input className="form-control" value={state.cfg.upload_live_env} onChange={(e) => state.setCfg(prev => ({ ...prev, upload_live_env: e.target.value }))} disabled={state.busy} placeholder="1 to enable .env.live upload" autoComplete="off" />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Deploy Pass (CATN8_DEPLOY_PASS)</label>
-                  <input type="password" className="form-control" value={state.secrets.deploy_pass} onChange={(e) => state.setSecrets(prev => ({ ...prev, deploy_pass: e.target.value }))} disabled={state.busy} placeholder={state.secretStatus.CATN8_DEPLOY_PASS_set ? '•••••••• (set)' : 'enter password'} />
+                  <input type="password" className="form-control" value={state.secrets.deploy_pass} onChange={(e) => state.setSecrets(prev => ({ ...prev, deploy_pass: e.target.value }))} disabled={state.busy} placeholder={state.secretStatus.CATN8_DEPLOY_PASS_set ? '•••••••• (set)' : 'enter password'} autoComplete="current-password" />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Admin Token (CATN8_ADMIN_TOKEN)</label>
-                  <input type="password" className="form-control" value={state.secrets.admin_token} onChange={(e) => state.setSecrets(prev => ({ ...prev, admin_token: e.target.value }))} disabled={state.busy} placeholder={state.secretStatus.CATN8_ADMIN_TOKEN_set ? '•••••••• (set)' : 'enter token'} />
+                  <input type="password" className="form-control" value={state.secrets.admin_token} onChange={(e) => state.setSecrets(prev => ({ ...prev, admin_token: e.target.value }))} disabled={state.busy} placeholder={state.secretStatus.CATN8_ADMIN_TOKEN_set ? '•••••••• (set)' : 'enter token'} autoComplete="off" />
                   <div className="mt-2 d-flex gap-2">
                     <button type="button" className="btn btn-outline-secondary btn-sm" disabled={state.busy} onClick={state.generateAdminToken}>Generate Admin Token</button>
                     <button type="button" className="btn btn-outline-secondary btn-sm" disabled={state.busy || !state.secrets.admin_token.trim()} onClick={copyAdminToken}>Copy token</button>

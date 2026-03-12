@@ -120,83 +120,13 @@ $probeTellerApi = static function (string $applicationId, string $certificate, s
     }
 };
 
-$requestOrigin = static function (): string {
-    $forwardedProto = strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));
-    $https = strtolower(trim((string)($_SERVER['HTTPS'] ?? '')));
-    $scheme = ($forwardedProto === 'https' || ($forwardedProto === '' && $https !== '' && $https !== 'off'))
-        ? 'https'
-        : 'http';
-    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
-    if ($host === '') {
-        throw new RuntimeException('Unable to determine the current site origin for Teller Connect validation');
-    }
-    return $scheme . '://' . $host;
-};
-
-$buildConnectProbeQuery = static function (array $params): string {
-    $parts = [];
-    foreach ($params as $key => $value) {
-        if (is_array($value)) {
-            foreach ($value as $item) {
-                if ($item === null || $item === '') {
-                    continue;
-                }
-                $parts[] = rawurlencode((string)$key) . '[]=' . rawurlencode((string)$item);
-            }
-            continue;
-        }
-        if ($value === null || $value === '') {
-            continue;
-        }
-        if (is_bool($value)) {
-            $value = $value ? 'true' : 'false';
-        }
-        $parts[] = rawurlencode((string)$key) . '=' . rawurlencode((string)$value);
-    }
-    return implode('&', $parts);
-};
-
-$probeTellerConnect = static function (string $applicationId, string $env, string $origin) use ($buildConnectProbeQuery): void {
-    $query = $buildConnectProbeQuery([
-        'origin' => $origin,
-        'environment' => $env,
-        'products' => ['transactions', 'balance'],
-        'skip_picker' => false,
-        'loader_id' => 'settings_test_' . bin2hex(random_bytes(8)),
-    ]);
-    $url = 'https://teller.io/connect/' . rawurlencode($env) . '/' . rawurlencode($applicationId) . '?' . $query;
-
-    $ch = curl_init($url);
-    if ($ch === false) {
-        throw new RuntimeException('Failed to init curl for Teller Connect validation');
+$validateApplicationId = static function (string $applicationId): void {
+    if (strlen($applicationId) > 191) {
+        throw new RuntimeException('Application ID must be 191 characters or fewer');
     }
 
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'User-Agent: catn8-teller-settings-test/1.0',
-    ]);
-
-    $raw = curl_exec($ch);
-    $err = curl_error($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if (!is_string($raw)) {
-        throw new RuntimeException('Teller Connect probe failed: ' . ($err !== '' ? $err : 'unknown error'));
-    }
-
-    if ($status < 200 || $status >= 300) {
-        $summary = trim((string)preg_replace('/\s+/', ' ', strip_tags(substr($raw, 0, 400))));
-        $message = 'Teller Connect rejected the application ID/origin/environment (HTTP ' . $status . ')';
-        if ($summary !== '') {
-            $message .= ': ' . $summary;
-        }
-        throw new RuntimeException($message);
+    if (!preg_match('/^app_[A-Za-z0-9][A-Za-z0-9_-]*$/', $applicationId)) {
+        throw new RuntimeException('Application ID must look like a Teller application id (for example: app_xxxxxx)');
     }
 };
 
@@ -311,10 +241,9 @@ if ($action === 'test') {
     }
 
     try {
+        $validateApplicationId($applicationId);
         $validatePemPair($certificate, $privateKey);
         $probeTellerApi($applicationId, $certificate, $privateKey);
-        $origin = $requestOrigin();
-        $probeTellerConnect($applicationId, $env, $origin);
 
         $savedFromTest = 0;
         if ($applicationIdInput !== '' || $certificateInput !== '' || $privateKeyInput !== '') {
@@ -335,7 +264,6 @@ if ($action === 'test') {
 
         catn8_diagnostics_log_event('settings.teller.test', true, 200, 'Teller test OK', [
             'env' => $env,
-            'origin' => $origin,
             'saved_from_test' => $savedFromTest,
         ]);
 
@@ -343,8 +271,8 @@ if ($action === 'test') {
             'success' => true,
             'ok' => true,
             'message' => $savedFromTest === 1
-                ? 'Teller credentials and Connect application settings are valid and saved'
-                : 'Teller credentials and Connect application settings are valid',
+                ? 'Teller credentials were validated and saved. Use Connect Bank via Teller to verify the browser-side Connect flow.'
+                : 'Teller credentials were validated. Use Connect Bank via Teller to verify the browser-side Connect flow.',
             'teller_env' => $env,
         ]);
     } catch (Throwable $e) {

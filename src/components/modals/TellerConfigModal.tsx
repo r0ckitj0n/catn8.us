@@ -130,6 +130,7 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                     onChange={(e) => state.setForm((prev) => ({ ...prev, application_id: e.target.value }))}
                     disabled={state.busy}
                     placeholder="Teller application id"
+                    autoComplete="off"
                   />
                 </div>
                 <div className="col-12">
@@ -150,6 +151,7 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                     accept=".pem,.crt,.cer,.txt"
                     className="d-none"
                     tabIndex={-1}
+                    autoComplete="off"
                     onChange={(event) => handlePemFileChange(event, 'certificate', 'Certificate PEM')}
                   />
                   <textarea
@@ -181,6 +183,7 @@ export function TellerConfigModal({ open, onClose, onToast }: TellerConfigModalP
                     accept=".pem,.key,.txt"
                     className="d-none"
                     tabIndex={-1}
+                    autoComplete="off"
                     onChange={(event) => handlePemFileChange(event, 'private_key', 'Private key PEM')}
                   />
                   <textarea

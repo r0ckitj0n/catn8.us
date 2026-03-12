@@ -9245,6 +9245,34 @@ function accumul8_shift_date(string $date, int $days): string
     return gmdate('Y-m-d', strtotime(($days >= 0 ? '+' : '') . $days . ' day', $timestamp));
 }
 
+function accumul8_teller_account_supports_link(array $account, string $linkKey): bool
+{
+    $links = $account['links'] ?? null;
+    if (!is_array($links)) {
+        return true;
+    }
+
+    $value = $links[$linkKey] ?? null;
+    if (is_string($value)) {
+        return trim($value) !== '';
+    }
+    if (is_array($value)) {
+        return $value !== [];
+    }
+
+    return (bool)$value;
+}
+
+function accumul8_teller_backfill_pages_per_sync(): int
+{
+    $raw = getenv('ACCUMUL8_TELLER_BACKFILL_PAGES_PER_SYNC');
+    if (!is_string($raw) || trim($raw) === '') {
+        return 10;
+    }
+
+    return max(1, min(100, (int)$raw));
+}
+
 function accumul8_teller_list_transactions(string $accessToken, string $remoteAccountId, array $baseQuery = [], int $pageSize = 500, int $maxPages = 100): array
 {
     $all = [];
@@ -11750,7 +11778,7 @@ if ($action === 'teller_sync_transactions') {
     $recentWindowDays = 30;
     $recentOverlapDays = 10;
     $backfillPageSize = 500;
-    $backfillPagesPerSync = 1;
+    $backfillPagesPerSync = accumul8_teller_backfill_pages_per_sync();
 
     try {
         $accounts = accumul8_teller_request('GET', '/accounts', $accessToken);
@@ -11764,17 +11792,24 @@ if ($action === 'teller_sync_transactions') {
                 continue;
             }
 
+            $supportsTransactions = accumul8_teller_account_supports_link($account, 'transactions');
+            $supportsBalances = accumul8_teller_account_supports_link($account, 'balances');
+            $supportsDetails = accumul8_teller_account_supports_link($account, 'details');
             $balances = [];
             $details = [];
-            try {
-                $balances = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/balances', $accessToken);
-            } catch (Throwable $e) {
-                $balances = [];
+            if ($supportsBalances) {
+                try {
+                    $balances = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/balances', $accessToken);
+                } catch (Throwable $e) {
+                    $balances = [];
+                }
             }
-            try {
-                $details = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/details', $accessToken);
-            } catch (Throwable $e) {
-                $details = [];
+            if ($supportsDetails) {
+                try {
+                    $details = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/details', $accessToken);
+                } catch (Throwable $e) {
+                    $details = [];
+                }
             }
 
             $accountMapping = accumul8_upsert_teller_account(
@@ -11796,6 +11831,7 @@ if ($action === 'teller_sync_transactions') {
             $accountRemoved = 0;
             $accountStaleTellerRemoved = 0;
             $accountStatementImportsRemoved = 0;
+            $syncSkippedReason = '';
             $historyStartDate = '';
             $historyEndDate = '';
             $fetchedHistoryStartDate = '';
@@ -11823,17 +11859,28 @@ if ($action === 'teller_sync_transactions') {
                 [$viewerId, $localAccountId, 'teller', $remoteAccountId]
             ) ?: [];
 
-            $recentResult = accumul8_teller_list_transactions(
-                $accessToken,
-                $remoteAccountId,
-                [
-                    'start_date' => $recentWindowStartDate,
-                    'end_date' => $recentWindowEndDate,
-                ],
-                500,
-                100
-            );
-            $recentTransactions = is_array($recentResult['transactions'] ?? null) ? $recentResult['transactions'] : [];
+            $recentResult = [
+                'transactions' => [],
+                'oldest_id' => '',
+                'has_more' => false,
+                'pages_fetched' => 0,
+            ];
+            $recentTransactions = [];
+            if ($supportsTransactions) {
+                $recentResult = accumul8_teller_list_transactions(
+                    $accessToken,
+                    $remoteAccountId,
+                    [
+                        'start_date' => $recentWindowStartDate,
+                        'end_date' => $recentWindowEndDate,
+                    ],
+                    500,
+                    100
+                );
+                $recentTransactions = is_array($recentResult['transactions'] ?? null) ? $recentResult['transactions'] : [];
+            } else {
+                $syncSkippedReason = 'Teller did not expose transaction access for this account.';
+            }
 
             $backfillSeedCursorId = $storedBackfillCursorId;
             if ($backfillSeedCursorId === '') {
@@ -11849,7 +11896,7 @@ if ($action === 'teller_sync_transactions') {
                 'has_more' => false,
                 'pages_fetched' => 0,
             ];
-            if (!$backfillComplete) {
+            if ($supportsTransactions && !$backfillComplete) {
                 if ($backfillSeedCursorId !== '') {
                     $backfillResult = accumul8_teller_list_transactions(
                         $accessToken,
@@ -11991,7 +12038,7 @@ if ($action === 'teller_sync_transactions') {
                 }
             }
 
-            if ($recentWindowStartDate !== '' && $recentWindowEndDate !== '') {
+            if ($supportsTransactions && $recentWindowStartDate !== '' && $recentWindowEndDate !== '') {
                 $localRecentTransactions = Database::queryAll(
                     'SELECT id, external_id
                      FROM accumul8_transactions
@@ -12033,7 +12080,7 @@ if ($action === 'teller_sync_transactions') {
             $nextBackfillCursorId = $storedBackfillCursorId;
             $nextBackfillComplete = $backfillComplete ? 1 : 0;
             $backfillTransactions = is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [];
-            if (!$backfillComplete) {
+            if ($supportsTransactions && !$backfillComplete) {
                 if ($backfillTransactions !== []) {
                     $nextBackfillCursorId = accumul8_normalize_text((string)($backfillResult['oldest_id'] ?? ''), 191);
                     $nextBackfillComplete = !empty($backfillResult['has_more']) ? 0 : 1;
@@ -12085,6 +12132,10 @@ if ($action === 'teller_sync_transactions') {
                 'local_account_name' => (string)($accountMapping['local_account_name'] ?? ''),
                 'institution_name' => (string)($accountMapping['institution_name'] ?? ($connection['institution_name'] ?? '')),
                 'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
+                'transactions_supported' => $supportsTransactions ? 1 : 0,
+                'balances_supported' => $supportsBalances ? 1 : 0,
+                'details_supported' => $supportsDetails ? 1 : 0,
+                'sync_skipped_reason' => $syncSkippedReason,
                 'history_start_date' => $historyStartDate,
                 'history_end_date' => $historyEndDate,
                 'recent_window_start_date' => $recentWindowStartDate,

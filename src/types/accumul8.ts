@@ -872,6 +872,10 @@ export interface Accumul8TellerSyncAccountSummary {
   local_account_name: string;
   institution_name: string;
   mapping_action: 'created' | 'updated';
+  transactions_supported: number;
+  balances_supported: number;
+  details_supported: number;
+  sync_skipped_reason: string;
   history_start_date: string;
   history_end_date: string;
   recent_window_start_date: string;

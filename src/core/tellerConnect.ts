@@ -23,6 +23,7 @@ interface TellerConnectGlobal {
     applicationId: string;
     environment: 'sandbox' | 'development' | 'production';
     products: string[];
+    selectAccount?: 'disabled' | 'single' | 'multiple';
     onSuccess: (payload: TellerConnectSuccessPayload) => void;
     onExit: () => void;
   }) => TellerConnectInstance;
@@ -37,6 +38,7 @@ declare global {
 const TELLER_CONNECT_SCRIPT_ID = 'catn8-teller-connect-sdk';
 const TELLER_CONNECT_SCRIPT_SRC = 'https://cdn.teller.io/connect/connect.js';
 const TELLER_CONNECT_PRODUCTS = ['transactions', 'balance'];
+const TELLER_CONNECT_SELECT_ACCOUNT = 'multiple';
 
 export async function ensureTellerConnectLoaded(): Promise<void> {
   if (typeof window === 'undefined') {
@@ -95,6 +97,7 @@ export async function openTellerConnect(
       applicationId,
       environment,
       products: TELLER_CONNECT_PRODUCTS,
+      selectAccount: TELLER_CONNECT_SELECT_ACCOUNT,
       onSuccess: (payload) => {
         didSucceed = true;
         resolve({ outcome: 'linked', payload });

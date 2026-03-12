@@ -504,6 +504,9 @@ function formatAccountBackfillNote(account: Accumul8Account): string {
 }
 
 function formatSyncSummaryBackfillNote(account: Accumul8TellerSyncAccountSummary): string {
+  if (!account.transactions_supported) {
+    return account.sync_skipped_reason || 'Teller did not expose transaction access for this account.';
+  }
   const coverage = formatTellerCoverageLabel(account.history_start_date, account.history_end_date);
   if (account.backfill_complete) {
     return `Backfill complete. Coverage: ${coverage}.`;
@@ -3899,6 +3902,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <div className="accumul8-sync-report__account-meta">
                             {formatSyncSummaryBackfillNote(account)}
                           </div>
+                          {!account.transactions_supported ? (
+                            <div className="accumul8-sync-report__account-meta">
+                              Balance access: {account.balances_supported ? 'available' : 'not available'}; details access: {account.details_supported ? 'available' : 'not available'}.
+                            </div>
+                          ) : null}
                           <div className="accumul8-sync-report__account-meta">
                             Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
                           </div>

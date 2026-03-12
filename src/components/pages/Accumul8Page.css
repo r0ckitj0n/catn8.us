@@ -811,6 +811,46 @@
   width: min(100%, 22rem);
 }
 
+.accumul8-ledger-pagination-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.accumul8-ledger-pagination-toolbar .form-select {
+  flex: 0 1 15rem;
+  min-width: 12rem;
+  max-width: 15rem;
+}
+
+.accumul8-ledger-pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.accumul8-ledger-pagination-status {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accumul8-deco-muted);
+  white-space: nowrap;
+}
+
+.accumul8-ledger-pagination-summary {
+  margin-top: 0.65rem;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accumul8-deco-muted);
+}
+
 .accumul8-panel-toolbar--ledger > .btn {
   justify-self: end;
   white-space: nowrap;
@@ -2554,6 +2594,23 @@ body.accumul8-column-resize-active {
   .accumul8-panel-toolbar-search .form-control {
     width: 100%;
     max-width: none;
+  }
+
+  .accumul8-ledger-pagination-toolbar,
+  .accumul8-ledger-pagination-nav {
+    width: 100%;
+    justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .accumul8-ledger-pagination-toolbar .form-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .accumul8-ledger-pagination-status {
+    white-space: normal;
   }
 
   .accumul8-panel-toolbar-range-select {

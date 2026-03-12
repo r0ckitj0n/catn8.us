@@ -147,6 +147,7 @@ type EntityFormState = {
   is_active: number;
 };
 type DateRangeFilter = 'all_dates' | '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
+type LedgerPaginationMode = '100' | 'all';
 const DEFAULT_CONTACT_FORM = {
   contact_name: '',
   contact_type: 'payee' as Accumul8ContactType,
@@ -405,6 +406,10 @@ function isDateInRange(value: string, range: { startDate: string; endDate: strin
   return true;
 }
 
+function getLedgerEffectiveDate(transaction: Pick<Accumul8Transaction, 'transaction_date' | 'due_date'>): string {
+  return String(transaction.due_date || transaction.transaction_date || '');
+}
+
 function roundCurrency(value: number): number {
   return Number(value.toFixed(2));
 }
@@ -615,6 +620,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [ledgerDateFilter, setLedgerDateFilter] = React.useState<DateRangeFilter>('all_dates');
   const [customLedgerStartDate, setCustomLedgerStartDate] = React.useState<string>('');
   const [customLedgerEndDate, setCustomLedgerEndDate] = React.useState<string>('');
+  const [ledgerArchivePage, setLedgerArchivePage] = React.useState<number>(1);
+  const [ledgerPaginationMode, setLedgerPaginationMode] = React.useState<LedgerPaginationMode>('100');
   const [lastSyncReport, setLastSyncReport] = React.useState<Accumul8SyncReport | null>(null);
   const [syncingConnectionId, setSyncingConnectionId] = React.useState<number | null>(null);
   const [payBillsDateFilter, setPayBillsDateFilter] = React.useState<DateRangeFilter>('30_days');
@@ -834,7 +841,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const ledgerSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.ledger), [listSearchQueryByTab.ledger]);
   const ledgerRowsBase = React.useMemo(() => (
     filteredTransactions.filter((tx) => {
-      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      const effectiveDate = getLedgerEffectiveDate(tx);
       const isPaid = Number(tx.is_paid || 0) === 1;
       const isReconciled = Number(tx.is_reconciled || 0) === 1;
       const isPendingBank = Number(tx.pending_status || 0) === 1;
@@ -1160,6 +1167,53 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     rows: ledgerRows,
     columns: ledgerTableColumns,
   });
+  const ledgerPaginationCutoffDate = React.useMemo(() => addUtcDays(todayDate, -60), [todayDate]);
+  const ledgerPagination = React.useMemo(() => {
+    const allRows = ledgerTable.rows;
+    if (ledgerPaginationMode === 'all') {
+      return {
+        rows: allRows,
+        recentCount: allRows.filter((tx) => {
+          const effectiveDate = getLedgerEffectiveDate(tx);
+          return Boolean(effectiveDate) && effectiveDate >= ledgerPaginationCutoffDate;
+        }).length,
+        archivedCount: allRows.filter((tx) => {
+          const effectiveDate = getLedgerEffectiveDate(tx);
+          return Boolean(effectiveDate) && effectiveDate < ledgerPaginationCutoffDate;
+        }).length,
+        totalRows: allRows.length,
+        currentPage: 1,
+        totalPages: 1,
+        hasArchivedPages: false,
+      };
+    }
+
+    const recentRows: Accumul8Transaction[] = [];
+    const archivedRows: Accumul8Transaction[] = [];
+    allRows.forEach((tx) => {
+      const effectiveDate = getLedgerEffectiveDate(tx);
+      if (effectiveDate && effectiveDate < ledgerPaginationCutoffDate) {
+        archivedRows.push(tx);
+      } else {
+        recentRows.push(tx);
+      }
+    });
+
+    const totalPages = Math.max(1, Math.ceil(archivedRows.length / 100));
+    const currentPage = Math.min(Math.max(ledgerArchivePage, 1), totalPages);
+    const archivedStart = (currentPage - 1) * 100;
+    const archivedSlice = archivedRows.slice(archivedStart, archivedStart + 100);
+
+    return {
+      rows: currentPage === 1 ? [...recentRows, ...archivedSlice] : archivedSlice,
+      recentCount: recentRows.length,
+      archivedCount: archivedRows.length,
+      totalRows: allRows.length,
+      currentPage,
+      totalPages,
+      hasArchivedPages: archivedRows.length > 100,
+    };
+  }, [ledgerArchivePage, ledgerPaginationCutoffDate, ledgerPaginationMode, ledgerTable.rows]);
   const debtorsTable = usePriorityTableLayout({
     tableRef: debtorsTableRef,
     rows: debtorRows,
@@ -1175,6 +1229,31 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     rows: recurringRows,
     columns: recurringTableColumns,
   });
+  React.useEffect(() => {
+    setLedgerArchivePage(1);
+  }, [
+    ledgerDateFilter,
+    customLedgerStartDate,
+    customLedgerEndDate,
+    ledgerFilterPreset,
+    ledgerSearchQuery,
+    selectedBankingOrganizationId,
+    selectedBankAccountId,
+    ledgerPaginationMode,
+    ledgerTable.sortState?.key,
+    ledgerTable.sortState?.direction,
+  ]);
+  React.useEffect(() => {
+    if (ledgerPaginationMode === 'all') {
+      if (ledgerArchivePage !== 1) {
+        setLedgerArchivePage(1);
+      }
+      return;
+    }
+    if (ledgerArchivePage > ledgerPagination.totalPages) {
+      setLedgerArchivePage(ledgerPagination.totalPages);
+    }
+  }, [ledgerArchivePage, ledgerPagination.totalPages, ledgerPaginationMode]);
   const linkedAccountsByConnectionId = React.useMemo(() => {
     const next: Record<number, Accumul8Account[]> = {};
     accounts.forEach((account) => {
@@ -2548,8 +2627,49 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       aria-label="Search visible ledger rows"
                     />
                   </div>
+                  <div className="accumul8-ledger-pagination-toolbar" aria-label="Ledger pagination controls">
+                    <label className="visually-hidden" htmlFor="accumul8-ledger-page-mode">Ledger page size</label>
+                    <select
+                      id="accumul8-ledger-page-mode"
+                      className={getActiveFilterClass('form-select form-select-sm', ledgerPaginationMode !== '100')}
+                      value={ledgerPaginationMode}
+                      onChange={(e) => setLedgerPaginationMode(e.target.value as LedgerPaginationMode)}
+                      aria-label="Ledger page size"
+                    >
+                      <option value="100">100 older rows per page</option>
+                      <option value="all">Show all on one page</option>
+                    </select>
+                    {ledgerPaginationMode !== 'all' && ledgerPagination.archivedCount > 0 ? (
+                      <div className="accumul8-ledger-pagination-nav">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => setLedgerArchivePage((current) => Math.max(current - 1, 1))}
+                          disabled={ledgerPagination.currentPage <= 1}
+                        >
+                          Prev
+                        </button>
+                        <span className="accumul8-ledger-pagination-status">
+                          Older pages {ledgerPagination.currentPage} / {ledgerPagination.totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => setLedgerArchivePage((current) => Math.min(current + 1, ledgerPagination.totalPages))}
+                          disabled={ledgerPagination.currentPage >= ledgerPagination.totalPages}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
+              </div>
+              <div className="accumul8-ledger-pagination-summary">
+                {ledgerPaginationMode === 'all'
+                  ? `Showing all ${ledgerPagination.totalRows} filtered ledger transaction${ledgerPagination.totalRows === 1 ? '' : 's'} on one page.`
+                  : `Showing ${ledgerPagination.rows.length} filtered ledger transaction${ledgerPagination.rows.length === 1 ? '' : 's'} on this page, including ${ledgerPagination.recentCount} from the last 60 days and ${ledgerPagination.archivedCount} older transaction${ledgerPagination.archivedCount === 1 ? '' : 's'} split into ${ledgerPagination.totalPages} page${ledgerPagination.totalPages === 1 ? '' : 's'}.`}
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
                 <table
@@ -2582,7 +2702,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                   </tr></thead>
                   <tbody>
-                    {ledgerTable.rows.map((tx) => (
+                    {ledgerPagination.rows.map((tx) => (
                       (() => {
                         const txEditPolicy = getAccumul8TransactionEditPolicy(tx);
                         const statementLink = resolveAccumul8StatementLink(tx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
@@ -2682,7 +2802,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         );
                       })()
                     ))}
-                    {ledgerTable.rows.length === 0 && (
+                    {ledgerPagination.rows.length === 0 && (
                       <tr>
                         <td colSpan={11} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
                       </tr>

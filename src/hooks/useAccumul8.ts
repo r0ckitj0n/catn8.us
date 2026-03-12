@@ -4,6 +4,7 @@ import {
   Accumul8Account,
   Accumul8BankingOrganization,
   Accumul8BankingOrganizationUpsertRequest,
+  Accumul8AccountDeleteRequest,
   Accumul8AccountUpsertRequest,
   Accumul8AccessibleOwner,
   Accumul8BudgetRow,
@@ -195,9 +196,9 @@ export function useAccumul8(
       'Bank account updated',
     );
   }, [scopedActionUrl, withReload]);
-  const deleteAccount = React.useCallback(async (id: number) => {
+  const deleteAccount = React.useCallback(async (request: Accumul8AccountDeleteRequest) => {
     await withReload(
-      () => ApiClient.post(scopedActionUrl('delete_account'), { id }),
+      () => ApiClient.post(scopedActionUrl('delete_account'), request),
       'Bank account deleted',
     );
   }, [scopedActionUrl, withReload]);

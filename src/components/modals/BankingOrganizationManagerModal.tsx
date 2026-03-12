@@ -3,6 +3,7 @@ import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import {
   Accumul8Account,
+  Accumul8AccountDeleteRequest,
   Accumul8BankingOrganization,
   Accumul8BankingOrganizationUpsertRequest,
   Accumul8AccountUpsertRequest,
@@ -24,7 +25,7 @@ interface BankingOrganizationManagerModalProps {
   deleteBankingOrganization: (id: number) => Promise<void>;
   createAccount: (form: Accumul8AccountUpsertRequest) => Promise<void>;
   updateAccount: (id: number, form: Accumul8AccountUpsertRequest) => Promise<void>;
-  deleteAccount: (id: number) => Promise<void>;
+  deleteAccount: (request: Accumul8AccountDeleteRequest) => Promise<void>;
 }
 
 const DEFAULT_BANKING_ORGANIZATION_FORM: Accumul8BankingOrganizationUpsertRequest = {
@@ -137,12 +138,12 @@ export function BankingOrganizationManagerModal({
   const handleAccountDelete = React.useCallback(async (account: Accumul8Account) => {
     const confirmed = await confirm({
       title: 'Delete Bank Account?',
-      message: `Delete "${getAccumul8AccountDisplayName(account)}"? This will be blocked if ledger or recurring records exist.`,
-      confirmLabel: 'Delete',
+      message: `Delete "${getAccumul8AccountDisplayName(account)}" and permanently remove every ledger and recurring entry tied to it? Saved statement files will stay in place, but their account link will be cleared.`,
+      confirmLabel: 'Delete Everything',
       tone: 'danger',
     });
     if (!confirmed) return;
-    await deleteAccount(account.id);
+    await deleteAccount({ id: account.id, delete_associated_records: 1 });
     resetAccountForm();
   }, [confirm, deleteAccount, resetAccountForm]);
 
@@ -392,7 +393,7 @@ export function BankingOrganizationManagerModal({
               </>
             ) : (
               <>
-                <p className="text-muted small mb-3">Create, rename, reassign, disable, or remove bank accounts. Deletion is blocked once ledger or recurring records reference the account.</p>
+                <p className="text-muted small mb-3">Create, rename, reassign, disable, or remove bank accounts. Deleting an account also permanently removes its ledger and recurring records, while saved statement files remain but lose their account link.</p>
                 <form
                   className="row g-2 mb-3"
                   onSubmit={(e) => {

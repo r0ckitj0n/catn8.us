@@ -4422,6 +4422,52 @@ function accumul8_account_has_associations(int $viewerId, int $accountId): bool
     return $recurringCount > 0;
 }
 
+function accumul8_delete_account_and_associated_records(int $viewerId, int $accountId): array
+{
+    $deletedTransactionCount = 0;
+    $deletedRecurringCount = 0;
+
+    Database::beginTransaction();
+    try {
+        $deletedTransactionCount = Database::execute(
+            'DELETE FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND account_id = ?',
+            [$viewerId, $accountId]
+        );
+
+        $deletedRecurringCount = Database::execute(
+            'DELETE FROM accumul8_recurring_payments
+             WHERE owner_user_id = ?
+               AND account_id = ?',
+            [$viewerId, $accountId]
+        );
+
+        $deletedAccountCount = Database::execute(
+            'DELETE FROM accumul8_accounts
+             WHERE id = ?
+               AND owner_user_id = ?',
+            [$accountId, $viewerId]
+        );
+
+        if ($deletedAccountCount !== 1) {
+            throw new RuntimeException('Failed to delete bank account');
+        }
+
+        Database::commit();
+    } catch (Throwable $exception) {
+        if (Database::inTransaction()) {
+            Database::rollBack();
+        }
+        throw $exception;
+    }
+
+    return [
+        'deleted_transaction_count' => $deletedTransactionCount,
+        'deleted_recurring_count' => $deletedRecurringCount,
+    ];
+}
+
 function accumul8_transactions_has_debtor_column(): bool
 {
     static $hasColumn = null;
@@ -10102,18 +10148,24 @@ if ($action === 'delete_account') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
     $id = (int)($body['id'] ?? 0);
+    $deleteAssociatedRecords = !empty($body['delete_associated_records']);
     if ($id <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
 
     accumul8_require_owned_id('accounts', $viewerId, $id);
 
-    if (accumul8_account_has_associations($viewerId, $id)) {
+    if (!$deleteAssociatedRecords && accumul8_account_has_associations($viewerId, $id)) {
         catn8_json_response(['success' => false, 'error' => 'Cannot delete a bank account that has ledger or recurring records associated with it'], 409);
     }
 
+    if ($deleteAssociatedRecords) {
+        $result = accumul8_delete_account_and_associated_records($viewerId, $id);
+        catn8_json_response(['success' => true] + $result);
+    }
+
     Database::execute('DELETE FROM accumul8_accounts WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
-    catn8_json_response(['success' => true]);
+    catn8_json_response(['success' => true, 'deleted_transaction_count' => 0, 'deleted_recurring_count' => 0]);
 }
 
 if ($action === 'update_contact') {

@@ -614,6 +614,11 @@ export interface Accumul8AccountUpsertRequest {
   is_active?: number;
 }
 
+export interface Accumul8AccountDeleteRequest {
+  id: number;
+  delete_associated_records?: number;
+}
+
 export interface Accumul8AccessibleOwner {
   owner_user_id: number;
   username: string;

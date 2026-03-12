@@ -18,6 +18,8 @@ import {
   ACCUMUL8_SAVE_BUTTON_EMOJI,
   ACCUMUL8_VIEW_BUTTON_EMOJI,
 } from './accumul8Ui';
+import { Accumul8TableHeaderCell } from './Accumul8TableHeaderCell';
+import { PriorityTableColumn, usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
 
 interface Accumul8SpreadsheetViewProps {
   busy: boolean;
@@ -112,6 +114,7 @@ export function Accumul8SpreadsheetView({
   const [rowRtaByKey, setRowRtaByKey] = React.useState<Record<string, number>>({});
   const [draftRowByKey, setDraftRowByKey] = React.useState<Record<string, EditableSpreadsheetRow>>({});
   const inlineRowRefs = React.useRef<Record<string, HTMLTableRowElement | null>>({});
+  const budgetTableRef = React.useRef<HTMLTableElement | null>(null);
   const paymentMethodLabels: Record<Accumul8PaymentMethod, string> = {
     unspecified: 'Unspecified',
     autopay: 'Autopay',
@@ -277,6 +280,24 @@ export function Accumul8SpreadsheetView({
   }, [onSelectedMonthChange, selectedMonth]);
   const selectedPanel = filteredMonthPanels[0] || null;
   const selectedSummary = selectedPanel?.summary || null;
+  const budgetTableColumns = React.useMemo<Array<PriorityTableColumn<EditableSpreadsheetRow>>>(() => ([
+    { key: 'type', header: 'Type', minWidth: 110, maxAutoWidth: 140, priority: 2, sortable: true, sortAccessor: (row) => row.direction, contentAccessor: (row) => row.direction === 'inflow' ? 'Inflow' : 'Outflow' },
+    { key: 'due', header: 'Due', minWidth: 96, maxAutoWidth: 112, sortable: true, sortAccessor: (row) => row.due_date, contentAccessor: (row) => formatDateLabel(row.due_date) },
+    { key: 'vendor', header: 'Vendor', minWidth: 200, maxAutoWidth: 360, priority: 6, sortable: true, sortAccessor: (row) => row.vendor_input || row.title, contentAccessor: (row) => row.vendor_input || row.title || 'Add vendor' },
+    { key: 'account', header: 'Account', minWidth: 140, maxAutoWidth: 220, priority: 4, sortable: true, sortAccessor: (row) => getRowAccountDisplayName(row, ''), contentAccessor: (row) => getRowAccountDisplayName(row) },
+    { key: 'method', header: 'Method', minWidth: 120, maxAutoWidth: 170, priority: 3, sortable: true, sortAccessor: (row) => paymentMethodLabels[row.payment_method] || row.payment_method, contentAccessor: (row) => paymentMethodLabels[row.payment_method] || 'Unspecified' },
+    { key: 'frequency', header: 'Frequency', minWidth: 120, maxAutoWidth: 150, priority: 3, sortable: true, sortAccessor: (row) => row.frequency, contentAccessor: (row) => formatEditableValue(row.frequency, '-') },
+    { key: 'amount', header: 'Amount', minWidth: 132, maxAutoWidth: 156, sortable: true, sortAccessor: (row) => Number(row.amount || 0), contentAccessor: (row) => formatCurrency(Number(row.amount || 0)) },
+    { key: 'rta', header: 'RTA', minWidth: 100, maxAutoWidth: 120, sortable: true, sortAccessor: (row) => Number(row.rta || 0), contentAccessor: (row) => Number(row.rta || 0).toFixed(2) },
+    { key: 'balance', header: 'Balance', minWidth: 136, maxAutoWidth: 170, sortable: true, sortAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0) : Number.NEGATIVE_INFINITY, contentAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-' },
+    { key: 'notes', header: 'Notes', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (row) => row.notes || '', contentAccessor: (row) => formatEditableValue(row.notes, 'Add notes') },
+    { key: 'actions', header: 'Actions', minWidth: 126, maxAutoWidth: 180, sortable: false, resizable: true },
+  ]), [getRowAccountDisplayName, paymentMethodLabels]);
+  const budgetTable = usePriorityTableLayout({
+    tableRef: budgetTableRef,
+    rows: selectedPanel?.rows || [],
+    columns: budgetTableColumns,
+  });
 
   const handleRowRtaChange = React.useCallback((rowKey: string, rawValue: string) => {
     const parsed = rawValue === '' ? 0 : Number(rawValue);
@@ -449,37 +470,41 @@ export function Accumul8SpreadsheetView({
               aria-label={`${panel.monthLabel} spreadsheet panel`}
             >
               <div className="accumul8-scroll-area accumul8-scroll-area--spreadsheet">
-                <table className="table accumul8-table accumul8-sticky-head accumul8-month-table accumul8-spreadsheet-table">
+                <table
+                  ref={budgetTableRef}
+                  className="table accumul8-table accumul8-sticky-head accumul8-month-table accumul8-spreadsheet-table"
+                  style={budgetTable.tableStyle}
+                >
                   <colgroup>
-                    <col className="accumul8-month-table-col accumul8-month-table-col--type" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--due" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--vendor" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--account" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--method" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--frequency" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--amount" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--rta" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--balance" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--notes" />
-                    <col className="accumul8-month-table-col accumul8-month-table-col--actions" />
+                    <col style={budgetTable.getColumnStyle('type')} />
+                    <col style={budgetTable.getColumnStyle('due')} />
+                    <col style={budgetTable.getColumnStyle('vendor')} />
+                    <col style={budgetTable.getColumnStyle('account')} />
+                    <col style={budgetTable.getColumnStyle('method')} />
+                    <col style={budgetTable.getColumnStyle('frequency')} />
+                    <col style={budgetTable.getColumnStyle('amount')} />
+                    <col style={budgetTable.getColumnStyle('rta')} />
+                    <col style={budgetTable.getColumnStyle('balance')} />
+                    <col style={budgetTable.getColumnStyle('notes')} />
+                    <col style={budgetTable.getColumnStyle('actions')} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Type</th>
-                      <th>Due</th>
-                      <th>Vendor</th>
-                      <th>Account</th>
-                      <th>Method</th>
-                      <th>Frequency</th>
-                      <th className="text-end">Amount</th>
-                      <th className="text-end">RTA</th>
-                      <th className="text-end">Balance</th>
-                      <th>Notes</th>
-                      <th className="text-end">Actions</th>
+                      <Accumul8TableHeaderCell label="Type" columnKey="type" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Vendor" columnKey="vendor" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Method" columnKey="method" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="RTA" columnKey="rta" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Balance" columnKey="balance" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Notes" columnKey="notes" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                     </tr>
                   </thead>
                   <tbody>
-                    {panel.rows.length > 0 ? panel.rows.map((row) => (
+                    {budgetTable.rows.length > 0 ? budgetTable.rows.map((row) => (
                       <tr
                         ref={(node) => setInlineRowRef(row.rowKey, node)}
                         key={row.rowKey}

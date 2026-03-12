@@ -517,6 +517,23 @@ function formatSyncSummaryBackfillNote(account: Accumul8TellerSyncAccountSummary
   return `Backfill not finished yet. Recent refresh window: ${account.recent_window_start_date} to ${account.recent_window_end_date}. Coverage so far: ${coverage}.`;
 }
 
+function isTellerEligibilityFailure(message: string): boolean {
+  const normalized = String(message || '').toLowerCase();
+  return normalized.includes('suitable account')
+    || normalized.includes('suitable accounts')
+    || normalized.includes('unable to link your account')
+    || normalized.includes('unable to link account');
+}
+
+function formatTellerConnectError(message: string, institutionName: string): string {
+  if (!isTellerEligibilityFailure(message)) {
+    return message;
+  }
+
+  const label = institutionName.trim() || 'this bank';
+  return `${label} connected through Teller, but Teller says none of the accounts under this login are eligible for Accumul8 sync. Try another ${label} login/account, or use the Bank Statements tab to import statements instead.`;
+}
+
 function formatEntityTransactionSummaryLabel(summary: EntityTransactionSummary): string {
   if (!summary.lastDate) {
     return `${summary.count} tx`;
@@ -1736,6 +1753,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return;
     }
 
+    let connectedInstitutionName = '';
     try {
       const tokenRes = await ApiClient.post<Accumul8TellerConnectTokenResponse>(scopedActionUrl('teller_connect_token'), {});
       const applicationId = String(tokenRes?.application_id || '');
@@ -1753,6 +1771,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         onToast({ tone: 'info', message: 'Teller Connect was closed before connecting an account.' });
         return;
       }
+
+      connectedInstitutionName = String(linkResult.payload?.enrollment?.institution?.name || '');
 
       const exchangeRes = await ApiClient.post<Accumul8TellerEnrollmentResponse>(scopedActionUrl('teller_enroll'), {
         access_token: String(linkResult.payload?.accessToken || ''),
@@ -1778,9 +1798,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       onToast({ tone: 'success', message: `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
       await load();
     } catch (error: any) {
-      const message = String(error?.message || 'Failed to start Teller Connect');
+      const rawMessage = String(error?.message || 'Failed to start Teller Connect');
+      const message = formatTellerConnectError(rawMessage, connectedInstitutionName);
       openSyncHelp({ error: message });
-      onToast({ tone: 'error', message });
+      onToast({ tone: isTellerEligibilityFailure(rawMessage) ? 'warning' : 'error', message });
     }
   }, [load, onToast, openSyncHelp, scopedActionUrl, syncProvider.configured, syncProvider.env]);
   const budgetRowsSorted = React.useMemo(() => (

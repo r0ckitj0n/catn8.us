@@ -37,7 +37,7 @@ declare global {
 
 const TELLER_CONNECT_SCRIPT_ID = 'catn8-teller-connect-sdk';
 const TELLER_CONNECT_SCRIPT_SRC = 'https://cdn.teller.io/connect/connect.js';
-const TELLER_CONNECT_PRODUCTS = ['transactions', 'balance'];
+const TELLER_CONNECT_PRODUCTS = ['transactions'];
 const TELLER_CONNECT_SELECT_ACCOUNT = 'multiple';
 
 export async function ensureTellerConnectLoaded(): Promise<void> {

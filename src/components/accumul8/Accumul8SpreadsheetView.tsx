@@ -12,6 +12,7 @@ import {
   buildSpreadsheetMonthOptions,
   shiftMonthValue,
 } from '../../utils/accumul8Spreadsheet';
+import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
   ACCUMUL8_SAVE_BUTTON_EMOJI,
@@ -116,6 +117,20 @@ export function Accumul8SpreadsheetView({
     autopay: 'Autopay',
     manual: 'Manual',
   };
+  const accountDisplayNameById = React.useMemo(() => {
+    const next: Record<number, string> = {};
+    accounts.forEach((account) => {
+      next[account.id] = getAccumul8AccountDisplayName(account);
+    });
+    return next;
+  }, [accounts]);
+  const getRowAccountDisplayName = React.useCallback((row: Pick<EditableSpreadsheetRow, 'account_id' | 'account_name' | 'banking_organization_name'>, fallback = 'None') => {
+    const resolved = row.account_id ? accountDisplayNameById[row.account_id] : '';
+    if (resolved) {
+      return resolved;
+    }
+    return formatEditableValue(row.account_name || row.banking_organization_name, fallback);
+  }, [accountDisplayNameById]);
   const monthOptions = React.useMemo(
     () => buildSpreadsheetMonthOptions(recurringPayments, selectedMonth),
     [recurringPayments, selectedMonth],
@@ -244,7 +259,7 @@ export function Accumul8SpreadsheetView({
           row.due_date,
           row.vendor_input,
           row.title,
-          row.account_name,
+          getRowAccountDisplayName(row, ''),
           row.banking_organization_name,
           paymentMethodLabels[row.payment_method] || row.payment_method,
           row.frequency,
@@ -254,7 +269,7 @@ export function Accumul8SpreadsheetView({
           row.notes,
         ].some((value) => String(value || '').toLowerCase().includes(normalizedBudgetFilterQuery))),
     })),
-    [monthPanelsWithProjection, normalizedBudgetFilterQuery, paymentMethodLabels],
+    [getRowAccountDisplayName, monthPanelsWithProjection, normalizedBudgetFilterQuery, paymentMethodLabels],
   );
 
   const handleMonthShift = React.useCallback((offset: number) => {
@@ -532,7 +547,7 @@ export function Accumul8SpreadsheetView({
                                 setRowDraft(row, {
                                   account_id: selectedAccountId,
                                   banking_organization_id: account?.banking_organization_id ?? null,
-                                  account_name: account?.account_name || '',
+                                  account_name: getAccumul8AccountDisplayName(account, ''),
                                   banking_organization_name: account?.banking_organization_name || '',
                                 });
                               }}
@@ -540,12 +555,12 @@ export function Accumul8SpreadsheetView({
                             >
                               <option value="">None</option>
                               {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.account_name}</option>
+                                <option key={account.id} value={account.id}>{getAccumul8AccountDisplayName(account)}</option>
                               ))}
                             </select>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
-                              {formatEditableValue(row.account_name, 'None')}
+                              {getRowAccountDisplayName(row)}
                             </button>
                           )}
                         </td>

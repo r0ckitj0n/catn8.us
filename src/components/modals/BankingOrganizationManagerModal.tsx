@@ -7,6 +7,7 @@ import {
   Accumul8BankingOrganizationUpsertRequest,
   Accumul8AccountUpsertRequest,
 } from '../../types/accumul8';
+import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
 type Mode = 'banking_organization' | 'account';
@@ -117,7 +118,7 @@ export function BankingOrganizationManagerModal({
     [bankingOrganizations],
   );
   const visibleAccounts = React.useMemo(
-    () => [...accounts].sort((a, b) => a.account_name.localeCompare(b.account_name) || a.id - b.id),
+    () => [...accounts].sort((a, b) => getAccumul8AccountDisplayName(a).localeCompare(getAccumul8AccountDisplayName(b)) || a.id - b.id),
     [accounts],
   );
 
@@ -136,7 +137,7 @@ export function BankingOrganizationManagerModal({
   const handleAccountDelete = React.useCallback(async (account: Accumul8Account) => {
     const confirmed = await confirm({
       title: 'Delete Bank Account?',
-      message: `Delete "${account.account_name}"? This will be blocked if ledger or recurring records exist.`,
+      message: `Delete "${getAccumul8AccountDisplayName(account)}"? This will be blocked if ledger or recurring records exist.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     });
@@ -662,8 +663,8 @@ export function BankingOrganizationManagerModal({
                       {visibleAccounts.map((account) => (
                         <tr key={account.id}>
                           <td>
-                            {account.account_name}
-                            {account.account_nickname ? <div className="small text-muted">{account.account_nickname}</div> : null}
+                            {getAccumul8AccountDisplayName(account)}
+                            {account.account_nickname ? <div className="small text-muted">{account.account_name}</div> : null}
                             {account.mask_last4 ? <span className="text-muted"> • {account.mask_last4}</span> : null}
                           </td>
                           <td>{account.banking_organization_name || '-'}</td>

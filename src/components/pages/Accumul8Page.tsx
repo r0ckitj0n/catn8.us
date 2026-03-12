@@ -25,6 +25,7 @@ import { ApiClient } from '../../core/ApiClient';
 import { openTellerConnect } from '../../core/tellerConnect';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
+import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   Accumul8TellerConnectTokenResponse,
@@ -257,7 +258,7 @@ function formatInlineText(value: string | number | null | undefined, fallback = 
 }
 
 function formatAccountOptionLabel(account: Pick<Accumul8Account, 'account_name' | 'account_nickname' | 'banking_organization_name' | 'mask_last4'>): string {
-  const primaryName = formatInlineText(account.account_nickname || account.account_name, 'Unnamed account');
+  const primaryName = formatInlineText(getAccumul8AccountDisplayName(account), 'Unnamed account');
   const bankingName = formatInlineText(account.banking_organization_name, '');
   const maskLast4 = formatInlineText(account.mask_last4, '');
   return [primaryName, bankingName, maskLast4 ? `••••${maskLast4}` : ''].filter(Boolean).join(' • ');
@@ -459,7 +460,7 @@ function formatSyncStatusMessage(lastError: string): string {
 
 function formatAccountMappingLabel(account: Accumul8Account): string {
   const parts = [
-    account.account_name || 'Unnamed account',
+    getAccumul8AccountDisplayName(account),
     account.account_subtype || account.account_type || '',
     account.mask_last4 ? `...${account.mask_last4}` : (account.account_number_mask || ''),
   ].filter(Boolean);
@@ -781,6 +782,26 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     return accounts.filter((account) => Number(account.banking_organization_id || 0) === bankingOrganizationId);
   }, [accounts, selectedBankingOrganizationId]);
+  const accountDisplayNameById = React.useMemo(() => {
+    const next: Record<number, string> = {};
+    accounts.forEach((account) => {
+      next[account.id] = getAccumul8AccountDisplayName(account);
+    });
+    return next;
+  }, [accounts]);
+  const getAccountDisplayName = React.useCallback((
+    accountId: number | null | undefined,
+    fallbackName?: string | null,
+    bankingOrganizationName?: string | null,
+    emptyFallback = '-',
+  ): string => {
+    const resolved = accountId ? accountDisplayNameById[accountId] : '';
+    if (resolved) {
+      return resolved;
+    }
+    const fallback = String(fallbackName || '').trim() || String(bankingOrganizationName || '').trim();
+    return fallback || emptyFallback;
+  }, [accountDisplayNameById]);
   React.useEffect(() => {
     const bankAccountId = Number(selectedBankAccountId || 0);
     if (bankAccountId <= 0) {
@@ -882,7 +903,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       tx.due_date,
       tx.description,
       tx.memo,
-      tx.account_name,
+      getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name),
       tx.contact_name,
       tx.entity_name,
       tx.balance_entity_name,
@@ -893,7 +914,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(tx.is_paid || 0) === 1 ? 'paid' : 'unpaid',
       Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
     ]))
-  ), [ledgerRowsBase, ledgerSearchQuery]);
+  ), [getAccountDisplayName, ledgerRowsBase, ledgerSearchQuery]);
   const payBillsAccountOptions = React.useMemo(() => (
     accounts
       .filter((account) => Number(account.is_active || 0) === 1)
@@ -923,12 +944,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       item.payment_method,
       item.direction,
       item.entity_name,
-      item.account_name,
+      getAccountDisplayName(item.account_id, item.account_name),
       item.amount,
       Number(item.is_budget_planner || 0) === 1 ? 'shown' : 'hidden',
       Number(item.is_active || 0) === 1 ? 'active' : 'paused',
     ]))
-  ), [filteredRecurringPayments, recurringSearchQuery]);
+  ), [filteredRecurringPayments, getAccountDisplayName, recurringSearchQuery]);
   const payBillRows = React.useMemo(() => {
     return filteredTransactions
       .filter((tx) => {
@@ -1017,13 +1038,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       tx.paid_date,
       tx.description,
       tx.memo,
-      tx.account_name,
+      getAccountDisplayName(tx.account_id, tx.account_name),
       tx.contact_name,
       tx.entity_name,
       tx.amount,
       Number(tx.is_paid || 0) === 1 ? 'paid' : ((tx.due_date || tx.transaction_date) < todayDate ? 'past due' : 'upcoming'),
     ]))
-  ), [filteredPayBillRows, payBillsSearchQuery, todayDate]);
+  ), [filteredPayBillRows, getAccountDisplayName, payBillsSearchQuery, todayDate]);
   const currentVisibleBalance = React.useMemo(() => (
     roundCurrency(scopedAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
   ), [scopedAccounts]);
@@ -1124,7 +1145,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
     { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
-    { key: 'account', header: 'Account', minWidth: 168, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => tx.account_name || tx.banking_organization_name || '', contentAccessor: (tx) => tx.account_name || tx.banking_organization_name || '-' },
+    { key: 'account', header: 'Account', minWidth: 168, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
     { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
     { key: 'amount', header: 'Amount', minWidth: 126, maxAutoWidth: 150, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
@@ -1132,7 +1153,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
     { key: 'reconciled', header: 'Reconciled', minWidth: 138, maxAutoWidth: 156, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
     { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
-  ]), []);
+  ]), [getAccountDisplayName]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '', contentAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '-' },
     { key: 'linkedEntity', header: 'Linked Entity', minWidth: 170, maxAutoWidth: 280, priority: 3, sortable: true, sortAccessor: (debtor) => debtor.contact_name || '', contentAccessor: (debtor) => debtor.contact_name || '-' },
@@ -1146,22 +1167,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'due', header: 'Due Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.due_date || tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date || tx.transaction_date) },
     { key: 'paidDate', header: 'Paid Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.paid_date || '', contentAccessor: (tx) => formatInlineDate(tx.paid_date) },
     { key: 'description', header: 'Description', minWidth: 250, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
-    { key: 'account', header: 'Account', minWidth: 170, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => tx.account_name || '', contentAccessor: (tx) => tx.account_name || 'No account' },
+    { key: 'account', header: 'Account', minWidth: 170, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', 'No account') },
     { key: 'amount', header: 'Amount', minWidth: 120, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'asc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
     { key: 'status', header: 'Status', minWidth: 116, maxAutoWidth: 132, sortable: true, sortAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate), contentAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate) },
     { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
-  ]), [todayDate]);
+  ]), [getAccountDisplayName, todayDate]);
   const recurringTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8RecurringPayment>>>(() => ([
     { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring payment', item.notes || ''] },
     { key: 'nextDue', header: 'Next Due', minWidth: 126, maxAutoWidth: 144, sortable: true, sortAccessor: (item) => item.next_due_date || '', contentAccessor: (item) => formatInlineDate(item.next_due_date) },
     { key: 'amount', header: 'Amount', minWidth: 118, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
     { key: 'frequency', header: 'Frequency', minWidth: 122, maxAutoWidth: 150, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
-    { key: 'account', header: 'Account', minWidth: 180, maxAutoWidth: 300, priority: 2, sortable: true, sortAccessor: (item) => item.account_name || '', contentAccessor: (item) => item.account_name || 'No account' },
+    { key: 'account', header: 'Account', minWidth: 180, maxAutoWidth: 300, priority: 2, sortable: true, sortAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', ''), contentAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', 'No account') },
     { key: 'paymentMethod', header: 'Payment Method', minWidth: 170, maxAutoWidth: 220, priority: 1, sortable: true, sortAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod], contentAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod] },
     { key: 'planner', header: 'Planner', minWidth: 108, maxAutoWidth: 120, sortable: true, sortAccessor: (item) => Number(item.is_budget_planner || 0), contentAccessor: (item) => Number(item.is_budget_planner || 0) === 1 ? 'Shown' : 'Hidden' },
     { key: 'status', header: 'Status', minWidth: 104, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => Number(item.is_active || 0), contentAccessor: (item) => Number(item.is_active || 0) === 1 ? 'Active' : 'Paused' },
     { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
-  ]), []);
+  ]), [getAccountDisplayName]);
   const ledgerTable = usePriorityTableLayout({
     tableRef: ledgerTableRef,
     rows: ledgerRows,
@@ -2525,7 +2546,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           >
                             <option value="">All bank accounts</option>
                             {visibleAccounts.map((account) => (
-                              <option key={account.id} value={account.id}>{account.account_name}</option>
+                              <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
                             ))}
                           </select>
                         </div>
@@ -2733,7 +2754,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           )}
                         </td>
                         <td>
-                          <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</button>
+                          <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name)}</button>
                         </td>
                         <td>
                           {activeLedgerRowId === tx.id ? (
@@ -3193,7 +3214,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               ))}
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineText(billTx.account_name, 'No account')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{getAccountDisplayName(billTx.account_id, billTx.account_name, '', 'No account')}</button>
                           )}
                         </td>
                         <td className="text-end">
@@ -3664,7 +3685,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               ))}
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineText(rp.account_name, 'No account')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{getAccountDisplayName(rp.account_id, rp.account_name, '', 'No account')}</button>
                           )}
                         </td>
                         <td>
@@ -3868,7 +3889,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             {formatSyncSummaryAccountLabel(account)}
                           </div>
                           <div className="accumul8-sync-report__account-meta">
-                            {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {account.local_account_name || 'Unnamed local account'}
+                            {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {getAccountDisplayName(account.local_account_id, account.local_account_name, '', 'Unnamed local account')}
                           </div>
                           {account.history_start_date && account.history_end_date ? (
                             <div className="accumul8-sync-report__account-meta">
@@ -3991,7 +4012,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <td>{formatInlineDate(tx.transaction_date || tx.due_date)}</td>
                           <td>{getLedgerDescriptionLabel(tx)}</td>
                           <td>{formatInlineText(tx.memo, '-')}</td>
-                          <td>{formatInlineText(tx.account_name || tx.banking_organization_name, '-')}</td>
+                          <td>{getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name)}</td>
                           <td className="text-end">{Number(tx.amount || 0).toFixed(2)}</td>
                         </tr>
                       ))}

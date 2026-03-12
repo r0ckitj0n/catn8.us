@@ -5862,7 +5862,7 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
         Database::execute(
             'UPDATE accumul8_accounts
              SET account_group_id = ?, bank_connection_id = ?, provider_name = ?, teller_account_id = ?, teller_enrollment_id = ?,
-                 account_name = ?, account_type = ?, account_subtype = ?, institution_name = ?, account_number_mask = ?,
+                 account_type = ?, account_subtype = ?, institution_name = ?, account_number_mask = ?,
                  mask_last4 = ?, routing_number = ?, currency_code = ?, current_balance = ?, available_balance = ?, is_active = 1
              WHERE id = ? AND owner_user_id = ?',
             [
@@ -5871,7 +5871,6 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
                 'teller',
                 $tellerAccountId,
                 $enrollmentId === '' ? null : $enrollmentId,
-                $accountName,
                 $accountType,
                 $accountSubtype,
                 $institutionName,

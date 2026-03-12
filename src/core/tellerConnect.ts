@@ -160,12 +160,14 @@ export async function openTellerConnect(
     window.addEventListener('message', messageHandler);
 
     const seenIframeSrcs = new Set<string>();
+    const trackedIframes = new Set<HTMLIFrameElement>();
     const inspectIframe = (iframe: HTMLIFrameElement | null) => {
       if (!iframe) return;
       const src = String(iframe.getAttribute('src') || iframe.src || '');
       if (!/https:\/\/([a-z0-9-]+\.)?teller\.io\//i.test(src)) {
         return;
       }
+      trackedIframes.add(iframe);
       if (seenIframeSrcs.has(src)) {
         return;
       }
@@ -195,9 +197,22 @@ export async function openTellerConnect(
     });
     mutationObserver.observe(document.body, { childList: true, subtree: true });
 
+    const iframePollInterval = window.setInterval(() => {
+      trackedIframes.forEach((iframe) => {
+        if (!document.contains(iframe)) {
+          trackedIframes.delete(iframe);
+          return;
+        }
+        inspectIframe(iframe);
+      });
+      document.querySelectorAll('iframe').forEach((iframe) => inspectIframe(iframe as HTMLIFrameElement));
+    }, 1000);
+
     const cleanup = () => {
       window.removeEventListener('message', messageHandler);
       mutationObserver.disconnect();
+      window.clearInterval(iframePollInterval);
+      trackedIframes.clear();
     };
 
     const connection = teller.setup({

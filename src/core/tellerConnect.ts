@@ -14,6 +14,17 @@ export interface TellerConnectSuccessPayload {
   enrollment?: TellerConnectEnrollment;
 }
 
+export interface TellerConnectFailurePayload {
+  code?: string;
+  message?: string;
+  type?: string;
+}
+
+export interface TellerConnectEvent {
+  name: 'open' | 'init' | 'success' | 'exit' | 'failure';
+  payload?: TellerConnectSuccessPayload | TellerConnectFailurePayload;
+}
+
 interface TellerConnectInstance {
   open: () => void;
 }
@@ -24,7 +35,9 @@ interface TellerConnectGlobal {
     environment: 'sandbox' | 'development' | 'production';
     products: string[];
     selectAccount?: 'disabled' | 'single' | 'multiple';
+    onInit?: () => void;
     onSuccess: (payload: TellerConnectSuccessPayload) => void;
+    onFailure?: (payload: TellerConnectFailurePayload) => void;
     onExit: () => void;
   }) => TellerConnectInstance;
 }
@@ -38,7 +51,6 @@ declare global {
 const TELLER_CONNECT_SCRIPT_ID = 'catn8-teller-connect-sdk';
 const TELLER_CONNECT_SCRIPT_SRC = 'https://cdn.teller.io/connect/connect.js';
 const TELLER_CONNECT_PRODUCTS = ['transactions'];
-const TELLER_CONNECT_SELECT_ACCOUNT = 'multiple';
 
 export async function ensureTellerConnectLoaded(): Promise<void> {
   if (typeof window === 'undefined') {
@@ -78,6 +90,10 @@ export async function ensureTellerConnectLoaded(): Promise<void> {
 export async function openTellerConnect(
   applicationId: string,
   environment: 'sandbox' | 'development' | 'production',
+  options?: {
+    selectAccount?: 'disabled' | 'single' | 'multiple';
+    onEvent?: (event: TellerConnectEvent) => void;
+  },
 ): Promise<{ outcome: 'linked'; payload: TellerConnectSuccessPayload } | { outcome: 'cancelled' }> {
   if (typeof applicationId !== 'string' || applicationId.trim() === '') {
     throw new Error('Teller application id is required');
@@ -92,18 +108,42 @@ export async function openTellerConnect(
 
   return await new Promise((resolve, reject) => {
     let didSucceed = false;
+    let isSettled = false;
+
+    const emitEvent = (event: TellerConnectEvent) => {
+      try {
+        options?.onEvent?.(event);
+      } catch (error) {
+        console.warn('[TellerConnect] event hook failed', event.name, error);
+      }
+    };
 
     const connection = teller.setup({
       applicationId,
       environment,
       products: TELLER_CONNECT_PRODUCTS,
-      selectAccount: TELLER_CONNECT_SELECT_ACCOUNT,
+      selectAccount: options?.selectAccount || 'disabled',
+      onInit: () => {
+        emitEvent({ name: 'init' });
+      },
       onSuccess: (payload) => {
+        if (isSettled) return;
+        isSettled = true;
         didSucceed = true;
+        emitEvent({ name: 'success', payload });
         resolve({ outcome: 'linked', payload });
       },
+      onFailure: (payload) => {
+        if (isSettled) return;
+        isSettled = true;
+        emitEvent({ name: 'failure', payload });
+        const message = String(payload?.message || payload?.code || 'Teller Connect failed');
+        reject(new Error(message));
+      },
       onExit: () => {
-        if (didSucceed) return;
+        emitEvent({ name: 'exit' });
+        if (didSucceed || isSettled) return;
+        isSettled = true;
         resolve({ outcome: 'cancelled' });
       },
     });
@@ -113,6 +153,7 @@ export async function openTellerConnect(
       return;
     }
 
+    emitEvent({ name: 'open' });
     connection.open();
   });
 }

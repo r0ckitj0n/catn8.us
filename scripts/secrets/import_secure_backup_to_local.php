@@ -11,6 +11,7 @@ if (PHP_SAPI !== 'cli') {
 $root = dirname(__DIR__, 2);
 require_once $root . '/api/config.php';
 require_once $root . '/includes/database.php';
+require_once $root . '/includes/secret_store.php';
 
 function secure_import_usage(): void
 {
@@ -258,7 +259,37 @@ if (is_array($payload['secret_store_backup'] ?? null)) {
     }
     file_put_contents($secretKeyPath, $secretKey);
     @chmod($secretKeyPath, 0600);
+
+    $secretRows = $payload['secret_store_backup']['rows'] ?? null;
+    if (!is_array($secretRows)) {
+        fwrite(STDERR, "Secret rows payload is missing.\n");
+        exit(1);
+    }
+
+    $pdo = Database::getInstance();
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    secret_table_ensure($pdo);
+    $pdo->exec('TRUNCATE TABLE secrets');
+
+    $insertStmt = $pdo->prepare(
+        'INSERT INTO secrets (`key`, value_enc, created_at, updated_at) VALUES (?, ?, ?, ?)'
+    );
+    foreach ($secretRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $keyName = (string)($row['key'] ?? '');
+        $valueEnc = base64_decode((string)($row['value_enc_b64'] ?? ''), true);
+        $createdAt = trim((string)($row['created_at'] ?? '')) ?: gmdate('Y-m-d H:i:s');
+        $updatedAt = trim((string)($row['updated_at'] ?? '')) ?: $createdAt;
+        if ($keyName === '' || !is_string($valueEnc)) {
+            continue;
+        }
+        $insertStmt->execute([$keyName, $valueEnc, $createdAt, $updatedAt]);
+    }
 }
+
+fwrite(STDOUT, "Secure backup imported successfully.\n");
 
 fwrite(STDOUT, "Imported secure backup into local environment.\n");
 fwrite(STDOUT, "Artifacts saved under {$stateDir}\n");

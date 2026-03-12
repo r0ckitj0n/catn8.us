@@ -88,13 +88,11 @@ $probeTellerApi = static function (string $applicationId, string $certificate, s
         file_put_contents($certFile, $certificate);
         file_put_contents($keyFile, $privateKey);
 
-        $ch = curl_init('https://api.teller.io/accounts');
+        $ch = curl_init('https://api.teller.io/');
         if ($ch === false) {
             throw new RuntimeException('Failed to init curl');
         }
 
-        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, $applicationId . ':credential-test');
         curl_setopt($ch, CURLOPT_SSLCERT, $certFile);
         curl_setopt($ch, CURLOPT_SSLKEY, $keyFile);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -113,6 +111,9 @@ $probeTellerApi = static function (string $applicationId, string $certificate, s
 
         if ($status === 0) {
             throw new RuntimeException('Teller API probe did not receive an HTTP response');
+        }
+        if ($status < 200 || $status >= 300) {
+            throw new RuntimeException('Teller API probe failed with HTTP ' . $status);
         }
     } finally {
         @unlink($certFile);

@@ -847,6 +847,32 @@ export interface Accumul8TellerConnectTokenResponse {
   environment: string;
 }
 
+export type Accumul8TellerDiagnosticEventName =
+  | 'open_requested'
+  | 'init'
+  | 'success'
+  | 'exit'
+  | 'failure'
+  | 'error'
+  | 'enroll_success'
+  | 'sync_success'
+  | 'sync_error';
+
+export interface Accumul8TellerDiagnosticRequest {
+  source: string;
+  event_name: Accumul8TellerDiagnosticEventName;
+  institution_id?: string;
+  institution_name?: string;
+  enrollment_id?: string;
+  connection_id?: number;
+  message?: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface Accumul8TellerDiagnosticResponse {
+  success: boolean;
+}
+
 export interface Accumul8TellerEnrollmentResponse {
   success: boolean;
   connection_id: number;

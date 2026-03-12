@@ -6,6 +6,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/emailer.php';
 require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
+require_once __DIR__ . '/../includes/diagnostics_log.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
 if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
@@ -26,6 +27,26 @@ function accumul8_normalize_text($value, int $maxLen = 191): string
         $v = substr($v, 0, $maxLen);
     }
     return trim($v);
+}
+
+function accumul8_teller_is_watched_institution(?string $institutionId, ?string $institutionName): bool
+{
+    $normalizedId = strtolower(accumul8_normalize_text((string)$institutionId, 64));
+    if ($normalizedId !== '' && in_array($normalizedId, ['fifth_third', 'truist'], true)) {
+        return true;
+    }
+
+    $normalizedName = accumul8_normalize_text((string)$institutionName, 191);
+    if ($normalizedName === '') {
+        return false;
+    }
+
+    return preg_match('/fifth\s*third|5\/3|truist/i', $normalizedName) === 1;
+}
+
+function accumul8_teller_log_diagnostic(string $eventKey, bool $ok, ?int $httpStatus, string $message, array $meta = []): void
+{
+    catn8_diagnostics_log_event($eventKey, $ok, $httpStatus, $message, $meta);
 }
 
 function accumul8_is_generic_import_artifact_text($value): bool
@@ -11686,6 +11707,55 @@ if ($action === 'teller_connect_token') {
     ]);
 }
 
+if ($action === 'teller_connect_diagnostic') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $source = accumul8_normalize_text($body['source'] ?? '', 64);
+    $eventName = accumul8_normalize_text($body['event_name'] ?? '', 64);
+    $institutionId = accumul8_normalize_text($body['institution_id'] ?? '', 64);
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $enrollmentId = accumul8_normalize_text($body['enrollment_id'] ?? '', 191);
+    $connectionId = (int)($body['connection_id'] ?? 0);
+    $message = accumul8_normalize_text($body['message'] ?? '', 500);
+    $meta = is_array($body['meta'] ?? null) ? $body['meta'] : [];
+
+    $allowedEvents = [
+        'open_requested',
+        'init',
+        'success',
+        'exit',
+        'failure',
+        'error',
+        'enroll_success',
+        'sync_success',
+        'sync_error',
+    ];
+    if (!in_array($eventName, $allowedEvents, true)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid event_name'], 400);
+    }
+
+    $watchedInstitution = accumul8_teller_is_watched_institution($institutionId, $institutionName);
+    $ok = !in_array($eventName, ['exit', 'failure', 'error', 'sync_error'], true);
+    accumul8_teller_log_diagnostic(
+        'accumul8.teller.connect.' . $eventName,
+        $ok,
+        200,
+        $message !== '' ? $message : 'Teller Connect diagnostic event',
+        [
+            'source' => $source,
+            'institution_id' => $institutionId !== '' ? $institutionId : null,
+            'institution_name' => $institutionName !== '' ? $institutionName : null,
+            'enrollment_id' => $enrollmentId !== '' ? $enrollmentId : null,
+            'connection_id' => $connectionId > 0 ? $connectionId : null,
+            'watched_institution' => $watchedInstitution ? 1 : 0,
+            'meta' => $meta,
+        ]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
 if ($action === 'teller_enroll') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -11703,8 +11773,22 @@ if ($action === 'teller_enroll') {
         catn8_json_response(['success' => false, 'error' => 'enrollment_id is required'], 400);
     }
 
+    $watchedInstitution = accumul8_teller_is_watched_institution($institutionId, $institutionName);
+
     $secretKey = 'accumul8.teller.access_token.' . $viewerId . '.' . preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $enrollmentId);
     if (!secret_set($secretKey, $accessToken)) {
+        accumul8_teller_log_diagnostic(
+            'accumul8.teller.enroll',
+            false,
+            500,
+            'Failed to persist Teller access token',
+            [
+                'institution_id' => $institutionId !== '' ? $institutionId : null,
+                'institution_name' => $institutionName !== '' ? $institutionName : null,
+                'enrollment_id' => $enrollmentId,
+                'watched_institution' => $watchedInstitution ? 1 : 0,
+            ]
+        );
         catn8_json_response(['success' => false, 'error' => 'Failed to persist Teller access token'], 500);
     }
 
@@ -11736,6 +11820,20 @@ if ($action === 'teller_enroll') {
         $connectionId = (int)Database::lastInsertId();
     }
 
+    accumul8_teller_log_diagnostic(
+        'accumul8.teller.enroll',
+        true,
+        200,
+        'Teller enrollment stored',
+        [
+            'connection_id' => $connectionId,
+            'institution_id' => $institutionId !== '' ? $institutionId : null,
+            'institution_name' => $institutionName !== '' ? $institutionName : null,
+            'enrollment_id' => $enrollmentId,
+            'watched_institution' => $watchedInstitution ? 1 : 0,
+        ]
+    );
+
     catn8_json_response([
         'success' => true,
         'connection_id' => $connectionId,
@@ -11762,6 +11860,24 @@ if ($action === 'teller_sync_transactions') {
     if (!$connection) {
         catn8_json_response(['success' => false, 'error' => 'Connection not found'], 404);
     }
+
+    $connectionInstitutionId = accumul8_normalize_text((string)($connection['institution_id'] ?? ''), 64);
+    $connectionInstitutionName = accumul8_normalize_text((string)($connection['institution_name'] ?? ''), 191);
+    $connectionEnrollmentId = accumul8_normalize_text((string)($connection['teller_enrollment_id'] ?? ''), 191);
+    $watchedInstitution = accumul8_teller_is_watched_institution($connectionInstitutionId, $connectionInstitutionName);
+    accumul8_teller_log_diagnostic(
+        'accumul8.teller.sync',
+        true,
+        200,
+        'Teller sync started',
+        [
+            'connection_id' => $connectionId,
+            'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+            'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+            'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+            'watched_institution' => $watchedInstitution ? 1 : 0,
+        ]
+    );
 
     $secretKey = (string)($connection['teller_access_token_secret_key'] ?? '');
     $accessToken = (string)(secret_get($secretKey) ?? '');
@@ -12161,6 +12277,40 @@ if ($action === 'teller_sync_transactions') {
 
         accumul8_recompute_running_balance($viewerId);
 
+        accumul8_teller_log_diagnostic(
+            'accumul8.teller.sync',
+            true,
+            200,
+            'Teller sync completed',
+            [
+                'connection_id' => $connectionId,
+                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+                'watched_institution' => $watchedInstitution ? 1 : 0,
+                'added' => $addedTotal,
+                'modified' => $modifiedTotal,
+                'unchanged' => $unchangedTotal,
+                'removed' => $removedTotal,
+                'account_count' => count($accountSummaries),
+                'accounts' => array_map(static function (array $summary): array {
+                    return [
+                        'remote_account_id' => (string)($summary['remote_account_id'] ?? ''),
+                        'remote_account_name' => (string)($summary['remote_account_name'] ?? ''),
+                        'remote_account_type' => (string)($summary['remote_account_type'] ?? ''),
+                        'remote_account_subtype' => (string)($summary['remote_account_subtype'] ?? ''),
+                        'transactions_supported' => (int)($summary['transactions_supported'] ?? 0),
+                        'sync_skipped_reason' => (string)($summary['sync_skipped_reason'] ?? ''),
+                        'history_start_date' => (string)($summary['history_start_date'] ?? ''),
+                        'history_end_date' => (string)($summary['history_end_date'] ?? ''),
+                        'transactions_added' => (int)($summary['transactions_added'] ?? 0),
+                        'transactions_modified' => (int)($summary['transactions_modified'] ?? 0),
+                        'transactions_removed' => (int)($summary['transactions_removed'] ?? 0),
+                    ];
+                }, $accountSummaries),
+            ]
+        );
+
         catn8_json_response([
             'success' => true,
             'added' => $addedTotal,
@@ -12175,6 +12325,19 @@ if ($action === 'teller_sync_transactions') {
              SET status = ?, last_error = ?, updated_at = NOW()
              WHERE id = ? AND owner_user_id = ?',
             ['sync_error', accumul8_normalize_text($e->getMessage(), 2000), $connectionId, $viewerId]
+        );
+        accumul8_teller_log_diagnostic(
+            'accumul8.teller.sync',
+            false,
+            500,
+            accumul8_normalize_text($e->getMessage(), 500),
+            [
+                'connection_id' => $connectionId,
+                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+                'watched_institution' => $watchedInstitution ? 1 : 0,
+            ]
         );
         catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
     }

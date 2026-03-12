@@ -14,7 +14,7 @@ require_once $root . '/api/config.php';
 function secure_backup_usage(): void
 {
     $msg = <<<TXT
-Usage: php scripts/secrets/export_live_secure_backup.php --passphrase="..." [--base-url=https://catn8.us]
+Usage: php scripts/secrets/export_live_secure_backup.php --passphrase="..." [--base-url=https://catn8.us] [--secret-store-only|--database-only]
 
 Downloads an encrypted live backup that includes:
 - the full live database dump
@@ -50,6 +50,12 @@ if (strlen($passphrase) < 12) {
     fwrite(STDERR, "Missing or weak passphrase. Use --passphrase or CATN8_SECURE_BACKUP_PASSPHRASE.\n");
     exit(2);
 }
+$secretStoreOnly = in_array('--secret-store-only', $argvList, true);
+$databaseOnly = in_array('--database-only', $argvList, true);
+if ($secretStoreOnly && $databaseOnly) {
+    fwrite(STDERR, "Use either --secret-store-only or --database-only, not both.\n");
+    exit(2);
+}
 
 $baseUrl = rtrim((string)(secure_backup_opt(
     $argvList,
@@ -71,8 +77,8 @@ if (!is_dir($outDir) && !mkdir($outDir, 0777, true) && !is_dir($outDir)) {
 $url = $baseUrl . '/api/database_maintenance.php?action=export_secure_backup&admin_token=' . rawurlencode($adminToken);
 $body = json_encode([
     'passphrase' => $passphrase,
-    'include_database' => 1,
-    'include_secret_store' => 1,
+    'include_database' => $secretStoreOnly ? 0 : 1,
+    'include_secret_store' => $databaseOnly ? 0 : 1,
 ], JSON_UNESCAPED_SLASHES);
 if (!is_string($body)) {
     fwrite(STDERR, "Failed to encode request body.\n");
@@ -109,7 +115,6 @@ curl_setopt_array($ch, [
 $raw = curl_exec($ch);
 $error = curl_error($ch);
 $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
 
 if (!is_string($raw)) {
     fwrite(STDERR, "Secure backup export failed: " . ($error !== '' ? $error : 'unknown error') . "\n");

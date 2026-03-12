@@ -809,57 +809,6 @@
   white-space: nowrap;
 }
 
-.accumul8-ledger-move-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  justify-self: start;
-}
-
-.accumul8-ledger-selection-heading,
-.accumul8-ledger-selection-cell {
-  width: 3rem;
-  min-width: 3rem;
-}
-
-.accumul8-ledger-selection-heading {
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.accumul8-ledger-move-modal {
-  width: min(100%, 42rem);
-}
-
-.accumul8-ledger-move-modal__body {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.accumul8-ledger-move-modal__preview {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.accumul8-ledger-move-modal__preview-row {
-  display: grid;
-  grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.75rem;
-  font-size: 0.92rem;
-}
-
-.accumul8-ledger-move-modal__preview-row > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .catn8-page[data-page="accumul8"] .form-control.accumul8-filter-control--active,
 .catn8-page[data-page="accumul8"] .form-select.accumul8-filter-control--active {
   background: linear-gradient(180deg, #fff2c6, #ecd27d);
@@ -1151,8 +1100,8 @@
 .accumul8-table th:is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(10), :nth-child(11)),
 .accumul8-month-table td:is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(11)),
 .accumul8-month-table th:is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(11)),
-.accumul8-ledger-table td:is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(10), :nth-child(11)),
-.accumul8-ledger-table th:is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(10), :nth-child(11)) {
+.accumul8-ledger-table td:is(:nth-child(1), :nth-child(2), :nth-child(3), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(10)),
+.accumul8-ledger-table th:is(:nth-child(1), :nth-child(2), :nth-child(3), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9), :nth-child(10)) {
   white-space: nowrap;
 }
 
@@ -2527,10 +2476,6 @@
     margin-left: 0;
   }
 
-  .accumul8-ledger-move-modal__preview-row {
-    grid-template-columns: 1fr;
-    gap: 0.2rem;
-  }
 }
 
 @media (max-width: 767px) {

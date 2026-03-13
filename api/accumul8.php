@@ -6854,13 +6854,14 @@ function accumul8_aicountant_watchlist_payload(int $viewerId): array
         [$viewerId, 'outflow', $today, $fourteenDaysOut]
     );
     $spendingRows = Database::queryAll(
-        'SELECT COALESCE(entity_name, description, "Spending") AS label, SUM(ABS(amount)) AS total_spend
-         FROM accumul8_transactions
-         WHERE owner_user_id = ?
-           AND transaction_date BETWEEN ? AND ?
-           AND amount < 0
-           AND is_paid = 1
-         GROUP BY COALESCE(entity_name, description, "Spending")
+        'SELECT COALESCE(e.display_name, t.description, "Spending") AS label, SUM(ABS(t.amount)) AS total_spend
+         FROM accumul8_transactions t
+         LEFT JOIN accumul8_entities e ON e.id = t.entity_id
+         WHERE t.owner_user_id = ?
+           AND t.transaction_date BETWEEN ? AND ?
+           AND t.amount < 0
+           AND t.is_paid = 1
+         GROUP BY COALESCE(e.display_name, t.description, "Spending")
          ORDER BY total_spend DESC, label ASC
          LIMIT 5',
         [$viewerId, $ninetyDaysAgo, $today]

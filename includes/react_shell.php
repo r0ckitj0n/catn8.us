@@ -22,6 +22,7 @@ function catn8_render_react_shell(string $page, string $title): void
     echo "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     echo "  <title>" . htmlspecialchars($title) . "</title>\n";
     echo "  <meta name=\"theme-color\" content=\"#ffffff\">\n";
+    echo "  <meta name=\"mobile-web-app-capable\" content=\"yes\">\n";
     echo "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">\n";
     echo "  <meta name=\"apple-mobile-web-app-title\" content=\"catn8.us\">\n";
     echo "  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">\n";

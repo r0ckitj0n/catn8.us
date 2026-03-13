@@ -322,6 +322,28 @@
   align-self: flex-start;
 }
 
+.accumul8-title-mark-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.accumul8-title-mark-button.has-alert .accumul8-title-mark-image {
+  filter:
+    drop-shadow(0 0 12px rgba(255, 153, 0, 0.68))
+    saturate(1.18)
+    hue-rotate(-10deg);
+}
+
+.accumul8-title-mark-button:focus-visible {
+  outline: 2px solid rgba(255, 153, 0, 0.9);
+  outline-offset: 6px;
+}
+
 .accumul8-title-mark-picture {
   display: flex;
   width: auto;
@@ -524,6 +546,57 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.accumul8-message-board-modal {
+  width: min(920px, calc(100vw - 2rem));
+}
+
+.accumul8-message-board-list {
+  display: grid;
+  gap: 0.75rem;
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
+}
+
+.accumul8-message-board-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  padding: 0.9rem;
+  background: rgba(255, 248, 232, 0.03);
+}
+
+.accumul8-message-board-item.is-success {
+  border-color: rgba(117, 179, 111, 0.36);
+}
+
+.accumul8-message-board-item.is-warning {
+  border-color: rgba(255, 153, 0, 0.48);
+}
+
+.accumul8-message-board-item.is-error {
+  border-color: rgba(214, 92, 92, 0.52);
+}
+
+.accumul8-message-board-item.is-acknowledged {
+  opacity: 0.72;
+}
+
+.accumul8-message-board-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+  color: var(--accumul8-deco-muted);
+  font-size: 0.75rem;
+}
+
+.accumul8-message-board-item-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
 }
 
 .accumul8-tabs {

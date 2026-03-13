@@ -1,0 +1,272 @@
+.accumul8-aicountant {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  min-height: calc(100dvh - 16rem);
+}
+
+.accumul8-aicountant-sidebar,
+.accumul8-aicountant-main {
+  border: 1px solid var(--accumul8-deco-line);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 31, 0.94), rgba(10, 15, 20, 0.96)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.06), transparent 60%);
+  box-shadow: var(--accumul8-deco-shadow);
+  min-height: 0;
+}
+
+.accumul8-aicountant-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.accumul8-aicountant-sidebar-top,
+.accumul8-aicountant-header,
+.accumul8-aicountant-composer {
+  padding: 1rem;
+}
+
+.accumul8-aicountant-new-chat {
+  width: 100%;
+  margin-bottom: 0.85rem;
+}
+
+.accumul8-aicountant-note {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--accumul8-deco-cream);
+}
+
+.accumul8-aicountant-note span,
+.accumul8-aicountant-header p,
+.accumul8-aicountant-composer-bar span,
+.accumul8-aicountant-empty-rail {
+  color: var(--accumul8-deco-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.accumul8-aicountant-sidebar-list {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0 1rem 1rem;
+  overflow-y: auto;
+}
+
+.accumul8-aicountant-conversation-card {
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 0.85rem;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--accumul8-deco-cream);
+}
+
+.accumul8-aicountant-conversation-card.is-active {
+  border-color: rgba(240, 217, 141, 0.78);
+  background: rgba(212, 175, 55, 0.14);
+}
+
+.accumul8-aicountant-conversation-card span,
+.accumul8-aicountant-conversation-card small {
+  color: var(--accumul8-deco-muted);
+}
+
+.accumul8-aicountant-system-prompt {
+  border-top: 1px solid rgba(212, 175, 55, 0.18);
+  padding: 0.9rem 1rem 1rem;
+}
+
+.accumul8-aicountant-system-prompt summary {
+  cursor: pointer;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accumul8-aicountant-system-prompt textarea {
+  margin-top: 0.75rem;
+}
+
+.accumul8-aicountant-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.accumul8-aicountant-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.16);
+}
+
+.accumul8-aicountant-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: min(100%, 430px);
+}
+
+.accumul8-aicountant-message-board-pill {
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--accumul8-deco-cream);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.accumul8-aicountant-thread {
+  padding: 1.25rem clamp(1rem, 3vw, 2rem);
+  overflow-y: auto;
+  display: grid;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top, rgba(212, 175, 55, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(245, 245, 220, 0.015), transparent 25%);
+}
+
+.accumul8-aicountant-welcome,
+.accumul8-aicountant-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.accumul8-aicountant-message--user {
+  justify-self: end;
+  width: min(100%, 920px);
+}
+
+.accumul8-aicountant-message--assistant,
+.accumul8-aicountant-welcome {
+  width: min(100%, 920px);
+}
+
+.accumul8-aicountant-avatar {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 217, 141, 0.55);
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.28), rgba(42, 30, 6, 0.72));
+  color: #fff7dc;
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.accumul8-aicountant-bubble,
+.accumul8-aicountant-welcome-body {
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  background: rgba(255, 248, 232, 0.05);
+  padding: 1rem 1.1rem;
+}
+
+.accumul8-aicountant-message--user .accumul8-aicountant-bubble {
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.accumul8-aicountant-bubble-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+  color: var(--accumul8-deco-muted);
+  font-size: 0.75rem;
+}
+
+.accumul8-aicountant-bubble-text {
+  white-space: pre-wrap;
+  color: var(--accumul8-deco-cream);
+  line-height: 1.72;
+}
+
+.accumul8-aicountant-welcome-body h4 {
+  margin-bottom: 0.5rem;
+}
+
+.accumul8-aicountant-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.accumul8-aicountant-composer {
+  border-top: 1px solid rgba(212, 175, 55, 0.16);
+  display: grid;
+  gap: 0.75rem;
+  background: rgba(9, 14, 18, 0.92);
+}
+
+.accumul8-aicountant-composer textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.accumul8-aicountant-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.accumul8-aicountant-typing {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.accumul8-aicountant-typing span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(240, 217, 141, 0.85);
+  animation: accumul8-aicountant-bounce 1.1s infinite ease-in-out;
+}
+
+.accumul8-aicountant-typing span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.accumul8-aicountant-typing span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes accumul8-aicountant-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 991px) {
+  .accumul8-aicountant {
+    grid-template-columns: 1fr;
+  }
+
+  .accumul8-aicountant-sidebar {
+    max-height: none;
+  }
+
+  .accumul8-aicountant-header,
+  .accumul8-aicountant-header-actions,
+  .accumul8-aicountant-composer-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

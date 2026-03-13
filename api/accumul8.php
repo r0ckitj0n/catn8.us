@@ -323,6 +323,60 @@ function accumul8_openai_responses_json(string $model, array $input, string $bas
     ];
 }
 
+function accumul8_openai_responses_text(string $model, array $input, string $baseUrl = '', float $temperature = 0.0, int $maxOutputTokens = 4096, int $timeoutSeconds = 90): array
+{
+    $apiKey = secret_get(catn8_settings_ai_secret_key('openai', 'api_key'));
+    if (!is_string($apiKey) || trim($apiKey) === '') {
+        throw new RuntimeException('Missing AI API key (openai)');
+    }
+
+    $root = $baseUrl !== '' ? rtrim(catn8_validate_external_base_url($baseUrl), '/') : 'https://api.openai.com';
+    if (!preg_match('#/v\d+$#', $root)) {
+        $root .= '/v1';
+    }
+
+    $payload = [
+        'model' => $model !== '' ? $model : 'gpt-4o-mini',
+        'input' => $input,
+        'temperature' => $temperature,
+        'max_output_tokens' => $maxOutputTokens,
+        'text' => [
+            'format' => [
+                'type' => 'text',
+            ],
+        ],
+    ];
+
+    $resp = catn8_http_json_with_status(
+        'POST',
+        $root . '/responses',
+        [
+            'Authorization' => 'Bearer ' . trim((string)$apiKey),
+            'Content-Type' => 'application/json',
+        ],
+        $payload,
+        10,
+        $timeoutSeconds
+    );
+
+    $status = (int)($resp['status'] ?? 0);
+    $json = is_array($resp['json'] ?? null) ? $resp['json'] : null;
+    if ($status < 200 || $status >= 300) {
+        $error = accumul8_openai_response_error_message($json);
+        throw new RuntimeException('HTTP ' . $status . ($error !== '' ? ': ' . $error : ''));
+    }
+
+    $content = accumul8_openai_response_output_text($json);
+    if (trim($content) === '') {
+        throw new RuntimeException('OpenAI returned an empty AIcountant response');
+    }
+
+    return [
+        'content' => $content,
+        'raw' => $json ?: [],
+    ];
+}
+
 function accumul8_statement_openai_response_format(): array
 {
     return [
@@ -5669,6 +5723,2352 @@ function accumul8_has_debtor_support(): bool
     return accumul8_transactions_has_debtor_column() && accumul8_table_exists('accumul8_debtors');
 }
 
+function accumul8_aicountant_normalize_title($value, int $maxLen = 191): string
+{
+    return accumul8_normalize_text($value, $maxLen);
+}
+
+function accumul8_aicountant_normalize_message($value, int $maxLen = 4000): string
+{
+    return catn8_ai_sanitize_user_text((string)$value, $maxLen);
+}
+
+function accumul8_aicountant_title_from_message(string $message): string
+{
+    $title = accumul8_aicountant_normalize_title($message, 80);
+    if ($title === '') {
+        return 'AIcountant Chat ' . date('M j, Y');
+    }
+    if (strlen($title) <= 80) {
+        return $title;
+    }
+    return rtrim(substr($title, 0, 77)) . '...';
+}
+
+function accumul8_aicountant_default_system_prompt(): string
+{
+    return <<<PROMPT
+You are AIcountant, my personal household accountant and bookkeeping assistant.
+
+Your job is to help me keep my household books organized, accurate, current, and easy to understand. Use the Accumul8 financial data snapshot provided with each request as the authoritative source of truth for balances, transactions, recurring bills, budget rows, and account-level details.
+
+When you respond:
+- Prioritize bookkeeping accuracy over sounding confident.
+- Explain spending patterns, cash-flow risks, overdue items, and budgeting opportunities in plain English.
+- Help categorize transactions, identify likely duplicates or anomalies, and point out anything that appears miscoded, uncategorized, overdue, or financially risky.
+- Look at recent spending trends to infer likely near-term cash needs, bill pressure, and areas the household should watch closely.
+- Recommend practical next steps such as which bills to pay first, where spending appears off track, and what records should be reviewed manually.
+- When the user asks for categorization or cleanup help, suggest the most reasonable category based on the available data and clearly say when confidence is low.
+- Use dates, dollar amounts, and account names from the provided data whenever possible.
+- If information is missing or ambiguous, say exactly what is missing instead of inventing details.
+- Do not claim that you changed ledger records, budgets, categories, balances, reminders, or notifications unless the user explicitly asked for an action and a real tool confirms it happened.
+
+Communication style:
+- Be concise, organized, and practical.
+- Prefer short paragraphs and small bullet lists when helpful.
+- End substantial answers with a short “Next best step” recommendation.
+PROMPT;
+}
+
+function accumul8_aicountant_suggested_starters(): array
+{
+    return [
+        'Review the last 30 days of household spending and flag anything unusual.',
+        'Categorize my recent uncategorized spending and tell me where I may be overspending.',
+        'Look at my upcoming bills and tell me what I should prioritize this week.',
+        'Run a watchlist and tell me what bills, cash-flow risks, or reminders I should watch.',
+        'Reconcile my opening balances so Accumul8 matches my bank balances.',
+        'Compare my recent spending against my budget rows and point out problem areas.',
+        'Review my recurring payments and suggest any subscriptions or bills worth revisiting.',
+    ];
+}
+
+function accumul8_aicountant_decode_json_object($value): array
+{
+    if (is_array($value)) {
+        return $value;
+    }
+    $decoded = json_decode((string)$value, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function accumul8_aicountant_message_role($value): string
+{
+    $role = strtolower(accumul8_normalize_text((string)$value, 24));
+    if (!in_array($role, ['user', 'assistant', 'system'], true)) {
+        $role = 'user';
+    }
+    return $role;
+}
+
+function accumul8_aicountant_provider_has_credentials(string $provider): bool
+{
+    $provider = strtolower(trim($provider));
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        return is_string($saJson) && trim($saJson) !== '';
+    }
+
+    $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+    return is_string($apiKey) && trim($apiKey) !== '';
+}
+
+function accumul8_message_board_map_row(array $row): array
+{
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+        'actor_user_id' => (int)($row['actor_user_id'] ?? 0),
+        'source_kind' => (string)($row['source_kind'] ?? ''),
+        'message_level' => (string)($row['message_level'] ?? 'info'),
+        'title' => (string)($row['title'] ?? ''),
+        'body_text' => (string)($row['body_text'] ?? ''),
+        'meta' => accumul8_aicountant_decode_json_object($row['meta_json'] ?? '{}'),
+        'is_acknowledged' => (int)($row['is_acknowledged'] ?? 0),
+        'acknowledged_at' => (string)($row['acknowledged_at'] ?? ''),
+        'created_at' => (string)($row['created_at'] ?? ''),
+    ];
+}
+
+function accumul8_message_board_post(int $viewerId, int $actorUserId, string $sourceKind, string $level, string $title, string $bodyText, array $meta = []): int
+{
+    $normalizedSource = accumul8_normalize_text($sourceKind, 64);
+    $normalizedLevel = strtolower(accumul8_normalize_text($level, 24));
+    if (!in_array($normalizedLevel, ['info', 'success', 'warning', 'error'], true)) {
+        $normalizedLevel = 'info';
+    }
+    $normalizedTitle = accumul8_normalize_text($title, 191);
+    $normalizedBody = accumul8_normalize_text($bodyText, 2000);
+    if ($normalizedTitle === '' && $normalizedBody === '') {
+        return 0;
+    }
+    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
+    if (!is_string($metaJson)) {
+        $metaJson = json_encode(new stdClass(), JSON_UNESCAPED_SLASHES);
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_message_board_messages
+            (owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, is_acknowledged)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+        [$viewerId, $actorUserId, $normalizedSource, $normalizedLevel, $normalizedTitle, $normalizedBody, $metaJson]
+    );
+
+    return (int)Database::lastInsertId();
+}
+
+function accumul8_message_board_list(int $viewerId, int $limit = 150): array
+{
+    $limit = max(1, min(250, $limit));
+    $rows = Database::queryAll(
+        'SELECT id, owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, is_acknowledged, acknowledged_at, created_at
+         FROM accumul8_message_board_messages
+         WHERE owner_user_id = ?
+         ORDER BY is_acknowledged ASC, created_at DESC, id DESC
+         LIMIT ' . $limit,
+        [$viewerId]
+    );
+    return array_map('accumul8_message_board_map_row', $rows);
+}
+
+function accumul8_message_board_unacknowledged_count(int $viewerId): int
+{
+    $row = Database::queryOne(
+        'SELECT COUNT(*) AS total
+         FROM accumul8_message_board_messages
+         WHERE owner_user_id = ? AND is_acknowledged = 0',
+        [$viewerId]
+    );
+    return (int)($row['total'] ?? 0);
+}
+
+function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $actorUserId, int $connectionId): array
+{
+    $connection = Database::queryOne(
+        'SELECT id, institution_id, institution_name, teller_enrollment_id, teller_access_token_secret_key
+         FROM accumul8_bank_connections
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$connectionId, $viewerId]
+    );
+    if (!$connection) {
+        throw new RuntimeException('Connection not found');
+    }
+
+    $connectionInstitutionId = accumul8_normalize_text((string)($connection['institution_id'] ?? ''), 64);
+    $connectionInstitutionName = accumul8_normalize_text((string)($connection['institution_name'] ?? ''), 191);
+    $connectionEnrollmentId = accumul8_normalize_text((string)($connection['teller_enrollment_id'] ?? ''), 191);
+    $watchedInstitution = accumul8_teller_is_watched_institution($connectionInstitutionId, $connectionInstitutionName);
+    accumul8_teller_log_diagnostic(
+        'accumul8.teller.sync',
+        true,
+        200,
+        'Teller sync started',
+        [
+            'connection_id' => $connectionId,
+            'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+            'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+            'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+            'watched_institution' => $watchedInstitution ? 1 : 0,
+        ]
+    );
+
+    $secretKey = (string)($connection['teller_access_token_secret_key'] ?? '');
+    $accessToken = (string)(secret_get($secretKey) ?? '');
+    if ($secretKey === '' || $accessToken === '') {
+        throw new RuntimeException('Stored Teller access token was not found');
+    }
+
+    $addedTotal = 0;
+    $modifiedTotal = 0;
+    $unchangedTotal = 0;
+    $removedTotal = 0;
+    $accountSummaries = [];
+    $today = gmdate('Y-m-d');
+    $recentWindowDays = 30;
+    $recentOverlapDays = 10;
+    $backfillPageSize = 500;
+    $backfillPagesPerSync = accumul8_teller_backfill_pages_per_sync();
+
+    try {
+        $accounts = accumul8_teller_request('GET', '/accounts', $accessToken);
+        foreach ($accounts as $account) {
+            if (!is_array($account)) {
+                continue;
+            }
+
+            $remoteAccountId = accumul8_normalize_text((string)($account['id'] ?? ''), 191);
+            if ($remoteAccountId === '') {
+                continue;
+            }
+
+            $supportsTransactions = accumul8_teller_account_supports_link($account, 'transactions');
+            $supportsBalances = accumul8_teller_account_supports_link($account, 'balances');
+            $supportsDetails = accumul8_teller_account_supports_link($account, 'details');
+            $balances = [];
+            $details = [];
+            if ($supportsBalances) {
+                try {
+                    $balances = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/balances', $accessToken);
+                } catch (Throwable $e) {
+                    $balances = [];
+                }
+            }
+            if ($supportsDetails) {
+                try {
+                    $details = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/details', $accessToken);
+                } catch (Throwable $e) {
+                    $details = [];
+                }
+            }
+
+            $accountMapping = accumul8_upsert_teller_account(
+                $viewerId,
+                $connectionId,
+                $connection,
+                $account,
+                is_array($balances) ? $balances : [],
+                is_array($details) ? $details : []
+            );
+            $localAccountId = (int)($accountMapping['local_account_id'] ?? 0);
+            if ($localAccountId <= 0) {
+                throw new RuntimeException('Failed to map Teller account into a local Accumul8 account');
+            }
+
+            $accountAdded = 0;
+            $accountModified = 0;
+            $accountUnchanged = 0;
+            $accountRemoved = 0;
+            $accountStaleTellerRemoved = 0;
+            $accountStatementImportsRemoved = 0;
+            $syncSkippedReason = '';
+            $historyStartDate = '';
+            $historyEndDate = '';
+            $fetchedHistoryStartDate = '';
+            $fetchedHistoryEndDate = '';
+            $remoteTransactionIds = [];
+            $recentSyncAnchorDate = accumul8_normalize_text((string)($accountMapping['teller_sync_anchor_date'] ?? ''), 32);
+            $storedBackfillCursorId = accumul8_normalize_text((string)($accountMapping['teller_backfill_cursor_id'] ?? ''), 191);
+            $backfillComplete = (int)($accountMapping['teller_backfill_complete'] ?? 0) === 1;
+            $recentWindowStartDate = $recentSyncAnchorDate !== ''
+                ? accumul8_shift_date($recentSyncAnchorDate, -$recentOverlapDays)
+                : accumul8_shift_date($today, -($recentWindowDays - 1));
+            $recentWindowEndDate = $today;
+
+            $oldestLocalRow = Database::queryOne(
+                'SELECT external_id, transaction_date
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND account_id = ?
+                   AND source_kind = ?
+                   AND source_ref = ?
+                   AND external_id IS NOT NULL
+                   AND external_id <> ""
+                 ORDER BY transaction_date ASC, id ASC
+                 LIMIT 1',
+                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
+            ) ?: [];
+
+            $recentResult = [
+                'transactions' => [],
+                'oldest_id' => '',
+                'has_more' => false,
+                'pages_fetched' => 0,
+            ];
+            $recentTransactions = [];
+            if ($supportsTransactions) {
+                $recentResult = accumul8_teller_list_transactions(
+                    $accessToken,
+                    $remoteAccountId,
+                    [
+                        'start_date' => $recentWindowStartDate,
+                        'end_date' => $recentWindowEndDate,
+                    ],
+                    500,
+                    100
+                );
+                $recentTransactions = is_array($recentResult['transactions'] ?? null) ? $recentResult['transactions'] : [];
+            } else {
+                $syncSkippedReason = 'Teller did not expose transaction access for this account.';
+            }
+
+            $backfillSeedCursorId = $storedBackfillCursorId;
+            if ($backfillSeedCursorId === '') {
+                $backfillSeedCursorId = accumul8_normalize_text((string)($oldestLocalRow['external_id'] ?? ''), 191);
+            }
+            if ($backfillSeedCursorId === '' && $recentTransactions !== []) {
+                $backfillSeedCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
+            }
+
+            $backfillResult = [
+                'transactions' => [],
+                'oldest_id' => '',
+                'has_more' => false,
+                'pages_fetched' => 0,
+            ];
+            if ($supportsTransactions && !$backfillComplete) {
+                if ($backfillSeedCursorId !== '') {
+                    $backfillResult = accumul8_teller_list_transactions(
+                        $accessToken,
+                        $remoteAccountId,
+                        ['from_id' => $backfillSeedCursorId],
+                        $backfillPageSize,
+                        $backfillPagesPerSync
+                    );
+                } elseif ($recentTransactions === []) {
+                    $backfillResult = accumul8_teller_list_transactions(
+                        $accessToken,
+                        $remoteAccountId,
+                        [],
+                        $backfillPageSize,
+                        $backfillPagesPerSync
+                    );
+                }
+            }
+
+            $processedExternalIds = [];
+            $syncBatches = [
+                [
+                    'transactions' => $recentTransactions,
+                    'track_remote_ids' => true,
+                ],
+                [
+                    'transactions' => is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [],
+                    'track_remote_ids' => false,
+                ],
+            ];
+
+            foreach ($syncBatches as $batch) {
+                foreach (($batch['transactions'] ?? []) as $tx) {
+                    if (!is_array($tx)) {
+                        continue;
+                    }
+
+                    $externalId = accumul8_normalize_text((string)($tx['id'] ?? ''), 191);
+                    if ($externalId === '' || isset($processedExternalIds[$externalId])) {
+                        continue;
+                    }
+                    $processedExternalIds[$externalId] = true;
+                    if (!empty($batch['track_remote_ids'])) {
+                        $remoteTransactionIds[$externalId] = true;
+                    }
+
+                    $description = accumul8_normalize_text(
+                        (string)($tx['description'] ?? (($tx['counterparty']['name'] ?? 'Bank Transaction'))),
+                        255
+                    );
+                    if ($description === '') {
+                        $description = 'Bank Transaction';
+                    }
+
+                    $date = accumul8_require_valid_date('transaction_date', $tx['date'] ?? date('Y-m-d'));
+                    $amount = round((float)($tx['amount'] ?? 0), 2);
+                    $statusText = strtolower(accumul8_normalize_text((string)($tx['status'] ?? ''), 32));
+                    $pending = $statusText === 'pending' ? 1 : 0;
+                    if ($fetchedHistoryStartDate === '' || strcmp($date, $fetchedHistoryStartDate) < 0) {
+                        $fetchedHistoryStartDate = $date;
+                    }
+                    if ($fetchedHistoryEndDate === '' || strcmp($date, $fetchedHistoryEndDate) > 0) {
+                        $fetchedHistoryEndDate = $date;
+                    }
+
+                    $existingTx = Database::queryOne(
+                        'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
+                         FROM accumul8_transactions
+                         WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
+                         LIMIT 1',
+                        [$viewerId, 'teller', $externalId]
+                    );
+
+                    if ($existingTx) {
+                        $nextPaidDate = $pending ? null : $date;
+                        $hasChanges =
+                            (int)($existingTx['account_id'] ?? 0) !== $localAccountId
+                            || (string)($existingTx['transaction_date'] ?? '') !== $date
+                            || (string)($existingTx['due_date'] ?? '') !== $date
+                            || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
+                            || (string)($existingTx['description'] ?? '') !== $description
+                            || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
+                            || (int)($existingTx['pending_status'] ?? 0) !== $pending
+                            || (string)($existingTx['source_ref'] ?? '') !== $remoteAccountId;
+
+                        if ($hasChanges) {
+                            Database::execute(
+                                'UPDATE accumul8_transactions
+                                 SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
+                                 WHERE id = ? AND owner_user_id = ?',
+                                [
+                                    $localAccountId,
+                                    $date,
+                                    $date,
+                                    $nextPaidDate,
+                                    $description,
+                                    $amount,
+                                    $pending,
+                                    $remoteAccountId,
+                                    (int)$existingTx['id'],
+                                    $viewerId,
+                                ]
+                            );
+                            $modifiedTotal++;
+                            $accountModified++;
+                        } else {
+                            $unchangedTotal++;
+                            $accountUnchanged++;
+                        }
+                        continue;
+                    }
+
+                    Database::execute(
+                        'INSERT INTO accumul8_transactions
+                            (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
+                             is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [
+                            $viewerId,
+                            $localAccountId,
+                            $date,
+                            $date,
+                            'manual',
+                            $description,
+                            $amount,
+                            1,
+                            1,
+                            0,
+                            'teller',
+                            $remoteAccountId,
+                            $externalId,
+                            $pending,
+                            $pending ? null : $date,
+                            $actorUserId,
+                        ]
+                    );
+                    $addedTotal++;
+                    $accountAdded++;
+                }
+            }
+
+            if ($supportsTransactions && $recentWindowStartDate !== '' && $recentWindowEndDate !== '') {
+                $localRecentTransactions = Database::queryAll(
+                    'SELECT id, external_id
+                     FROM accumul8_transactions
+                     WHERE owner_user_id = ?
+                       AND account_id = ?
+                       AND source_kind = ?
+                       AND source_ref = ?
+                       AND transaction_date BETWEEN ? AND ?',
+                    [$viewerId, $localAccountId, 'teller', $remoteAccountId, $recentWindowStartDate, $recentWindowEndDate]
+                );
+                $staleLocalTellerIds = [];
+                foreach ($localRecentTransactions as $row) {
+                    $localExternalId = accumul8_normalize_text((string)($row['external_id'] ?? ''), 191);
+                    if ($localExternalId !== '' && isset($remoteTransactionIds[$localExternalId])) {
+                        continue;
+                    }
+                    $staleLocalTellerIds[] = (int)($row['id'] ?? 0);
+                }
+                $accountStaleTellerRemoved = accumul8_delete_transactions_by_ids($viewerId, $staleLocalTellerIds);
+            }
+
+            if ($fetchedHistoryStartDate !== '' && $fetchedHistoryEndDate !== '') {
+                $statementTransactionsToRemove = Database::queryAll(
+                    'SELECT id
+                     FROM accumul8_transactions
+                     WHERE owner_user_id = ?
+                       AND account_id = ?
+                       AND source_kind IN (?, ?)
+                       AND transaction_date BETWEEN ? AND ?',
+                    [$viewerId, $localAccountId, 'statement_upload', 'statement_pdf', $fetchedHistoryStartDate, $fetchedHistoryEndDate]
+                );
+                $statementTransactionIds = array_map(
+                    static fn(array $row): int => (int)($row['id'] ?? 0),
+                    $statementTransactionsToRemove
+                );
+                $accountStatementImportsRemoved = accumul8_delete_transactions_by_ids($viewerId, $statementTransactionIds);
+            }
+
+            $nextBackfillCursorId = $storedBackfillCursorId;
+            $nextBackfillComplete = $backfillComplete ? 1 : 0;
+            $backfillTransactions = is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [];
+            if ($supportsTransactions && !$backfillComplete) {
+                if ($backfillTransactions !== []) {
+                    $nextBackfillCursorId = accumul8_normalize_text((string)($backfillResult['oldest_id'] ?? ''), 191);
+                    $nextBackfillComplete = !empty($backfillResult['has_more']) ? 0 : 1;
+                } elseif ($backfillSeedCursorId !== '' || $recentTransactions === []) {
+                    $nextBackfillCursorId = $backfillSeedCursorId;
+                    $nextBackfillComplete = 1;
+                } elseif ($recentTransactions !== []) {
+                    $nextBackfillCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
+                    $nextBackfillComplete = 0;
+                }
+            }
+
+            $historyCoverage = Database::queryOne(
+                'SELECT MIN(transaction_date) AS min_date, MAX(transaction_date) AS max_date
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND account_id = ?
+                   AND source_kind = ?
+                   AND source_ref = ?',
+                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
+            ) ?: [];
+            $historyStartDate = isset($historyCoverage['min_date']) && $historyCoverage['min_date'] !== null ? (string)$historyCoverage['min_date'] : '';
+            $historyEndDate = isset($historyCoverage['max_date']) && $historyCoverage['max_date'] !== null ? (string)$historyCoverage['max_date'] : '';
+
+            Database::execute(
+                'UPDATE accumul8_accounts
+                 SET teller_sync_anchor_date = ?, teller_backfill_cursor_id = ?, teller_backfill_complete = ?, teller_history_start_date = ?, teller_history_end_date = ?, updated_at = NOW()
+                 WHERE id = ? AND owner_user_id = ?',
+                [
+                    $today,
+                    $nextBackfillCursorId !== '' ? $nextBackfillCursorId : null,
+                    $nextBackfillComplete,
+                    $historyStartDate !== '' ? $historyStartDate : null,
+                    $historyEndDate !== '' ? $historyEndDate : null,
+                    $localAccountId,
+                    $viewerId,
+                ]
+            );
+            $accountRemoved = $accountStaleTellerRemoved + $accountStatementImportsRemoved;
+            $removedTotal += $accountRemoved;
+
+            $accountSummaries[] = [
+                'remote_account_id' => (string)($accountMapping['remote_account_id'] ?? $remoteAccountId),
+                'remote_account_name' => (string)($accountMapping['remote_account_name'] ?? ($account['name'] ?? 'Teller Account')),
+                'remote_account_type' => (string)($accountMapping['remote_account_type'] ?? ''),
+                'remote_account_subtype' => (string)($accountMapping['remote_account_subtype'] ?? ''),
+                'mask_last4' => (string)($accountMapping['mask_last4'] ?? ''),
+                'local_account_id' => $localAccountId,
+                'local_account_name' => (string)($accountMapping['local_account_name'] ?? ''),
+                'institution_name' => (string)($accountMapping['institution_name'] ?? ($connection['institution_name'] ?? '')),
+                'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
+                'transactions_supported' => $supportsTransactions ? 1 : 0,
+                'balances_supported' => $supportsBalances ? 1 : 0,
+                'details_supported' => $supportsDetails ? 1 : 0,
+                'sync_skipped_reason' => $syncSkippedReason,
+                'history_start_date' => $historyStartDate,
+                'history_end_date' => $historyEndDate,
+                'recent_window_start_date' => $recentWindowStartDate,
+                'recent_window_end_date' => $recentWindowEndDate,
+                'backfill_cursor_id' => $nextBackfillCursorId,
+                'backfill_complete' => $nextBackfillComplete,
+                'backfill_pages_fetched' => (int)($backfillResult['pages_fetched'] ?? 0),
+                'transactions_added' => $accountAdded,
+                'transactions_modified' => $accountModified,
+                'transactions_unchanged' => $accountUnchanged,
+                'transactions_removed' => $accountRemoved,
+                'stale_teller_removed' => $accountStaleTellerRemoved,
+                'statement_imports_removed' => $accountStatementImportsRemoved,
+            ];
+        }
+
+        Database::execute(
+            'UPDATE accumul8_bank_connections
+             SET last_sync_at = NOW(), status = ?, last_error = NULL
+             WHERE id = ? AND owner_user_id = ?',
+            ['connected', $connectionId, $viewerId]
+        );
+
+        accumul8_recompute_running_balance($viewerId);
+
+        accumul8_teller_log_diagnostic(
+            'accumul8.teller.sync',
+            true,
+            200,
+            'Teller sync completed',
+            [
+                'connection_id' => $connectionId,
+                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+                'watched_institution' => $watchedInstitution ? 1 : 0,
+                'added' => $addedTotal,
+                'modified' => $modifiedTotal,
+                'unchanged' => $unchangedTotal,
+                'removed' => $removedTotal,
+                'account_count' => count($accountSummaries),
+                'accounts' => array_map(static function (array $summary): array {
+                    return [
+                        'remote_account_id' => (string)($summary['remote_account_id'] ?? ''),
+                        'remote_account_name' => (string)($summary['remote_account_name'] ?? ''),
+                        'remote_account_type' => (string)($summary['remote_account_type'] ?? ''),
+                        'remote_account_subtype' => (string)($summary['remote_account_subtype'] ?? ''),
+                        'transactions_supported' => (int)($summary['transactions_supported'] ?? 0),
+                        'sync_skipped_reason' => (string)($summary['sync_skipped_reason'] ?? ''),
+                        'history_start_date' => (string)($summary['history_start_date'] ?? ''),
+                        'history_end_date' => (string)($summary['history_end_date'] ?? ''),
+                        'transactions_added' => (int)($summary['transactions_added'] ?? 0),
+                        'transactions_modified' => (int)($summary['transactions_modified'] ?? 0),
+                        'transactions_removed' => (int)($summary['transactions_removed'] ?? 0),
+                    ];
+                }, $accountSummaries),
+            ]
+        );
+
+        return [
+            'added' => $addedTotal,
+            'modified' => $modifiedTotal,
+            'unchanged' => $unchangedTotal,
+            'removed' => $removedTotal,
+            'accounts' => $accountSummaries,
+        ];
+    } catch (Throwable $e) {
+        Database::execute(
+            'UPDATE accumul8_bank_connections
+             SET status = ?, last_error = ?, updated_at = NOW()
+             WHERE id = ? AND owner_user_id = ?',
+            ['sync_error', accumul8_normalize_text($e->getMessage(), 2000), $connectionId, $viewerId]
+        );
+        accumul8_teller_log_diagnostic(
+            'accumul8.teller.sync',
+            false,
+            500,
+            accumul8_normalize_text($e->getMessage(), 500),
+            [
+                'connection_id' => $connectionId,
+                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
+                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
+                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
+                'watched_institution' => $watchedInstitution ? 1 : 0,
+            ]
+        );
+        throw $e;
+    }
+}
+
+function accumul8_balance_books(int $viewerId, int $actorUserId): array
+{
+    $connections = Database::queryAll(
+        'SELECT id, institution_name, provider_name
+         FROM accumul8_bank_connections
+         WHERE owner_user_id = ?
+         ORDER BY institution_name ASC, id ASC',
+        [$viewerId]
+    );
+    $eligibleConnections = array_values(array_filter($connections, static function (array $connection): bool {
+        return (int)($connection['id'] ?? 0) > 0
+            && strtolower((string)($connection['provider_name'] ?? 'teller')) === 'teller';
+    }));
+
+    $beforeRows = Database::queryAll(
+        'SELECT id, account_name, current_balance
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    );
+    $beforeBalanceByAccountId = [];
+    foreach ($beforeRows as $row) {
+        $beforeBalanceByAccountId[(int)($row['id'] ?? 0)] = [
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'current_balance' => round((float)($row['current_balance'] ?? 0), 2),
+        ];
+    }
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_balance_books',
+        'info',
+        'Balance the Books started',
+        $eligibleConnections !== []
+            ? 'AIcountant started a balance run across ' . count($eligibleConnections) . ' bank connection' . (count($eligibleConnections) === 1 ? '' : 's') . '.'
+            : 'AIcountant started a balance run but found no Teller bank connections to sync.'
+    );
+
+    if ($eligibleConnections === []) {
+        return [
+            'synced_connection_count' => 0,
+            'skipped_connection_count' => 0,
+            'error_connection_count' => 0,
+            'messages' => accumul8_message_board_list($viewerId),
+            'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+        ];
+    }
+
+    $syncedCount = 0;
+    $errorCount = 0;
+    $skippedCount = 0;
+
+    foreach ($eligibleConnections as $connection) {
+        $connectionId = (int)($connection['id'] ?? 0);
+        $institutionName = accumul8_normalize_text((string)($connection['institution_name'] ?? ''), 191);
+        if ($institutionName === '') {
+            $institutionName = 'Connected bank';
+        }
+
+        try {
+            $result = accumul8_teller_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
+            $syncedCount++;
+            $allAccountsSkipped = true;
+            foreach (($result['accounts'] ?? []) as $accountSummary) {
+                if (!is_array($accountSummary)) {
+                    continue;
+                }
+                if ((int)($accountSummary['transactions_supported'] ?? 0) === 1 || (string)($accountSummary['sync_skipped_reason'] ?? '') === '') {
+                    $allAccountsSkipped = false;
+                    break;
+                }
+            }
+            if ($allAccountsSkipped) {
+                $skippedCount++;
+            }
+            accumul8_message_board_post(
+                $viewerId,
+                $actorUserId,
+                'aicountant_balance_books',
+                $allAccountsSkipped ? 'warning' : 'success',
+                'Synced ' . $institutionName,
+                'Added ' . (int)($result['added'] ?? 0)
+                    . ', modified ' . (int)($result['modified'] ?? 0)
+                    . ', removed ' . (int)($result['removed'] ?? 0)
+                    . ', unchanged ' . (int)($result['unchanged'] ?? 0)
+                    . ' transactions.',
+                [
+                    'connection_id' => $connectionId,
+                    'institution_name' => $institutionName,
+                    'result' => $result,
+                ]
+            );
+        } catch (Throwable $exception) {
+            $errorCount++;
+            accumul8_message_board_post(
+                $viewerId,
+                $actorUserId,
+                'aicountant_balance_books',
+                'error',
+                'Sync failed for ' . $institutionName,
+                accumul8_normalize_text($exception->getMessage(), 2000),
+                [
+                    'connection_id' => $connectionId,
+                    'institution_name' => $institutionName,
+                ]
+            );
+        }
+    }
+
+    $afterRows = Database::queryAll(
+        'SELECT id, account_name, current_balance
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    );
+    $changedAccounts = [];
+    foreach ($afterRows as $row) {
+        $accountId = (int)($row['id'] ?? 0);
+        $afterBalance = round((float)($row['current_balance'] ?? 0), 2);
+        $beforeInfo = $beforeBalanceByAccountId[$accountId] ?? ['account_name' => (string)($row['account_name'] ?? ''), 'current_balance' => 0.0];
+        $beforeBalance = round((float)($beforeInfo['current_balance'] ?? 0), 2);
+        if (abs($afterBalance - $beforeBalance) <= 0.009) {
+            continue;
+        }
+        $changedAccounts[] = [
+            'account_id' => $accountId,
+            'account_name' => (string)($row['account_name'] ?? $beforeInfo['account_name'] ?? ''),
+            'before_balance' => $beforeBalance,
+            'after_balance' => $afterBalance,
+        ];
+    }
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_balance_books',
+        $errorCount > 0 ? 'warning' : 'success',
+        'Balance the Books finished',
+        'Synced ' . $syncedCount . ' connection' . ($syncedCount === 1 ? '' : 's') . '. '
+            . ($errorCount > 0
+                ? $errorCount . ' connection' . ($errorCount === 1 ? '' : 's') . ' failed.'
+                : 'No connection failures were reported.')
+            . ' '
+            . ($changedAccounts !== []
+                ? 'Updated balances were detected for ' . count($changedAccounts) . ' account' . (count($changedAccounts) === 1 ? '' : 's') . '.'
+                : 'No account balance changes were detected after synchronization.'),
+        [
+            'synced_count' => $syncedCount,
+            'skipped_count' => $skippedCount,
+            'error_count' => $errorCount,
+            'changed_accounts' => $changedAccounts,
+        ]
+    );
+
+    return [
+        'synced_connection_count' => $syncedCount,
+        'skipped_connection_count' => $skippedCount,
+        'error_connection_count' => $errorCount,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ];
+}
+
+function accumul8_opening_balance_adjustment_anchor_date(int $viewerId, int $accountId): string
+{
+    $row = Database::queryOne(
+        'SELECT MIN(transaction_date) AS first_transaction_date
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND account_id = ?
+           AND NOT (
+               description = ?
+               AND source_ref = ?
+           )',
+        [$viewerId, $accountId, 'Opening Balance', 'aicountant_opening_balance']
+    );
+    $firstDate = accumul8_normalize_date($row['first_transaction_date'] ?? null);
+    if ($firstDate !== null) {
+        return accumul8_shift_date($firstDate, -1);
+    }
+    return gmdate('Y-m-d');
+}
+
+function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): array
+{
+    $rows = Database::queryAll(
+        'SELECT id, account_name, provider_name, institution_name, current_balance, available_balance, bank_connection_id
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?
+           AND is_active = 1
+         ORDER BY institution_name ASC, account_name ASC, id ASC',
+        [$viewerId]
+    );
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_opening_balance',
+        'info',
+        'Opening balance reconciliation started',
+        'AIcountant started reconciling opening balances against available bank balances.'
+    );
+
+    $results = [];
+    $skippedCount = 0;
+    $hasDebtor = accumul8_has_debtor_support();
+    foreach ($rows as $row) {
+        $accountId = (int)($row['id'] ?? 0);
+        if ($accountId <= 0) {
+            continue;
+        }
+
+        $providerName = strtolower(accumul8_normalize_text((string)($row['provider_name'] ?? ''), 64));
+        $bankConnectionId = (int)($row['bank_connection_id'] ?? 0);
+        $bankBalance = round((float)($row['available_balance'] ?? 0), 2);
+        $ledgerBalance = round((float)($row['current_balance'] ?? 0), 2);
+        $accountName = accumul8_normalize_text((string)($row['account_name'] ?? ''), 191);
+        if ($accountName === '') {
+            $accountName = 'Account #' . $accountId;
+        }
+
+        if ($bankConnectionId <= 0 || $providerName !== 'teller') {
+            $skippedCount++;
+            continue;
+        }
+
+        $delta = round($bankBalance - $ledgerBalance, 2);
+        if (abs($delta) <= 0.009) {
+            $skippedCount++;
+            continue;
+        }
+
+        $anchorDate = accumul8_opening_balance_adjustment_anchor_date($viewerId, $accountId);
+        $memo = 'AIcountant opening balance adjustment derived from bank balance reconciliation on ' . gmdate('Y-m-d H:i:s') . ' UTC.';
+        $existing = Database::queryOne(
+            'SELECT id
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND account_id = ?
+               AND description = ?
+               AND source_ref = ?
+             ORDER BY id ASC
+             LIMIT 1',
+            [$viewerId, $accountId, 'Opening Balance', 'aicountant_opening_balance']
+        );
+
+        if ($existing) {
+            Database::execute(
+                'UPDATE accumul8_transactions
+                 SET transaction_date = ?, due_date = ?, paid_date = ?, amount = ?, memo = ?, is_paid = 1, is_reconciled = 1, is_budget_planner = 0, updated_at = NOW()
+                 WHERE id = ? AND owner_user_id = ?',
+                [$anchorDate, $anchorDate, $anchorDate, $delta, $memo, (int)$existing['id'], $viewerId]
+            );
+            $transactionId = (int)$existing['id'];
+            $action = 'updated';
+        } else {
+            if ($hasDebtor) {
+                Database::execute(
+                    'INSERT INTO accumul8_transactions
+                        (owner_user_id, account_id, entity_id, balance_entity_id, contact_id, debtor_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                         is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, paid_date, created_by_user_id)
+                     VALUES (?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, 0.00, 1, 1, 0, ?, ?, ?, ?)',
+                    [$viewerId, $accountId, $anchorDate, $anchorDate, 'manual', 'Opening Balance', $memo, $delta, 'manual', 'aicountant_opening_balance', $anchorDate, $actorUserId]
+                );
+            } else {
+                Database::execute(
+                    'INSERT INTO accumul8_transactions
+                        (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                         is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, paid_date, created_by_user_id)
+                     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 0.00, 1, 1, 0, ?, ?, ?, ?)',
+                    [$viewerId, $accountId, $anchorDate, $anchorDate, 'manual', 'Opening Balance', $memo, $delta, 'manual', 'aicountant_opening_balance', $anchorDate, $actorUserId]
+                );
+            }
+            $transactionId = (int)Database::lastInsertId();
+            $action = 'created';
+        }
+
+        $results[] = [
+            'account_id' => $accountId,
+            'account_name' => $accountName,
+            'prior_ledger_balance' => $ledgerBalance,
+            'bank_balance' => $bankBalance,
+            'adjustment_amount' => $delta,
+            'transaction_id' => $transactionId,
+            'action' => $action,
+        ];
+
+        accumul8_message_board_post(
+            $viewerId,
+            $actorUserId,
+            'aicountant_opening_balance',
+            'warning',
+            'Opening balance adjusted for ' . $accountName,
+            'Applied a ' . ($delta >= 0 ? '+' : '') . number_format($delta, 2) . ' opening balance adjustment so the ledger can align with the bank balance of ' . number_format($bankBalance, 2) . '.',
+            end($results) ?: []
+        );
+    }
+
+    if ($results !== []) {
+        accumul8_recompute_running_balance($viewerId);
+    }
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_opening_balance',
+        $results !== [] ? 'success' : 'info',
+        'Opening balance reconciliation finished',
+        $results !== []
+            ? 'Adjusted opening balances for ' . count($results) . ' account' . (count($results) === 1 ? '' : 's') . '.'
+            : 'No opening balance adjustments were needed.',
+        [
+            'reconciled_count' => count($results),
+            'skipped_count' => $skippedCount,
+            'results' => $results,
+        ]
+    );
+
+    return [
+        'reconciled_count' => count($results),
+        'skipped_count' => $skippedCount,
+        'results' => $results,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ];
+}
+
+function accumul8_aicountant_watchlist_payload(int $viewerId): array
+{
+    $today = gmdate('Y-m-d');
+    $sevenDaysOut = accumul8_shift_date($today, 7);
+    $fourteenDaysOut = accumul8_shift_date($today, 14);
+    $ninetyDaysAgo = accumul8_shift_date($today, -89);
+
+    $overdueRows = Database::queryAll(
+        'SELECT id, description, due_date, amount
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND amount < 0
+           AND is_paid = 0
+           AND due_date IS NOT NULL
+           AND due_date < ?
+         ORDER BY due_date ASC, id ASC
+         LIMIT 8',
+        [$viewerId, $today]
+    );
+    $dueSoonRows = Database::queryAll(
+        'SELECT id, description, due_date, amount
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND amount < 0
+           AND is_paid = 0
+           AND due_date IS NOT NULL
+           AND due_date BETWEEN ? AND ?
+         ORDER BY due_date ASC, id ASC
+         LIMIT 10',
+        [$viewerId, $today, $sevenDaysOut]
+    );
+    $recurringSoonRows = Database::queryAll(
+        'SELECT id, title, next_due_date, amount
+         FROM accumul8_recurring_payments
+         WHERE owner_user_id = ?
+           AND is_active = 1
+           AND direction = ?
+           AND next_due_date BETWEEN ? AND ?
+         ORDER BY next_due_date ASC, id ASC
+         LIMIT 10',
+        [$viewerId, 'outflow', $today, $fourteenDaysOut]
+    );
+    $spendingRows = Database::queryAll(
+        'SELECT COALESCE(entity_name, description, "Spending") AS label, SUM(ABS(amount)) AS total_spend
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND transaction_date BETWEEN ? AND ?
+           AND amount < 0
+           AND is_paid = 1
+         GROUP BY COALESCE(entity_name, description, "Spending")
+         ORDER BY total_spend DESC, label ASC
+         LIMIT 5',
+        [$viewerId, $ninetyDaysAgo, $today]
+    );
+    $accountTotals = Database::queryOne(
+        'SELECT COALESCE(SUM(current_balance), 0.00) AS ledger_total,
+                COALESCE(SUM(available_balance), 0.00) AS available_total
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?
+           AND is_active = 1',
+        [$viewerId]
+    ) ?: [];
+
+    $dueSoonTotal = 0.0;
+    foreach ($dueSoonRows as $row) {
+        $dueSoonTotal += abs((float)($row['amount'] ?? 0));
+    }
+    $recurringSoonTotal = 0.0;
+    foreach ($recurringSoonRows as $row) {
+        $recurringSoonTotal += abs((float)($row['amount'] ?? 0));
+    }
+    $averageMonthlySpend = 0.0;
+    foreach ($spendingRows as $row) {
+        $averageMonthlySpend += (float)($row['total_spend'] ?? 0);
+    }
+    $averageMonthlySpend = round($averageMonthlySpend / 3, 2);
+
+    $availableTotal = round((float)($accountTotals['available_total'] ?? 0), 2);
+    $cashNeedSoon = round($dueSoonTotal + $recurringSoonTotal, 2);
+    $cashTight = $cashNeedSoon > 0 && $availableTotal < $cashNeedSoon;
+
+    $topSpendingLabels = [];
+    foreach ($spendingRows as $row) {
+        $label = accumul8_normalize_text((string)($row['label'] ?? ''), 120);
+        if ($label === '') {
+            continue;
+        }
+        $topSpendingLabels[] = $label . ' (' . number_format((float)($row['total_spend'] ?? 0), 2) . ')';
+    }
+
+    $summaryParts = [];
+    if ($overdueRows !== []) {
+        $summaryParts[] = count($overdueRows) . ' overdue bill' . (count($overdueRows) === 1 ? '' : 's');
+    }
+    if ($dueSoonRows !== []) {
+        $summaryParts[] = count($dueSoonRows) . ' unpaid bill' . (count($dueSoonRows) === 1 ? '' : 's') . ' due within 7 days';
+    }
+    if ($recurringSoonRows !== []) {
+        $summaryParts[] = count($recurringSoonRows) . ' recurring outflow' . (count($recurringSoonRows) === 1 ? '' : 's') . ' due within 14 days';
+    }
+    if ($summaryParts === []) {
+        $summaryParts[] = 'no immediate due-date pressure was detected';
+    }
+
+    $summaryTitle = $cashTight ? 'AIcountant cash-flow watch' : 'AIcountant spending watch';
+    $summaryBody = implode(', ', $summaryParts) . '. '
+        . 'Available bank balance: ' . number_format($availableTotal, 2) . '. '
+        . 'Expected cash need over the next two weeks: ' . number_format($cashNeedSoon, 2) . '. '
+        . 'Estimated average monthly spend from the last 90 days: ' . number_format($averageMonthlySpend, 2) . '.';
+    if ($topSpendingLabels !== []) {
+        $summaryBody .= ' Top recent spending: ' . implode('; ', $topSpendingLabels) . '.';
+    }
+
+    return [
+        'summary_title' => $summaryTitle,
+        'summary_body' => $summaryBody,
+        'overdue_count' => count($overdueRows),
+        'due_soon_count' => count($dueSoonRows),
+        'recurring_soon_count' => count($recurringSoonRows),
+        'available_total' => $availableTotal,
+        'cash_need_soon' => $cashNeedSoon,
+        'average_monthly_spend' => $averageMonthlySpend,
+        'cash_tight' => $cashTight ? 1 : 0,
+    ];
+}
+
+function accumul8_notification_rule_find_by_name(int $viewerId, string $ruleName): ?array
+{
+    $row = Database::queryOne(
+        'SELECT id, rule_name, trigger_type, days_before_due, target_scope, custom_user_ids_json,
+                email_subject_template, email_body_template, is_active, last_triggered_at
+         FROM accumul8_notification_rules
+         WHERE owner_user_id = ?
+           AND rule_name = ?
+         LIMIT 1',
+        [$viewerId, $ruleName]
+    );
+    if (!$row) {
+        return null;
+    }
+    $json = json_decode((string)($row['custom_user_ids_json'] ?? '[]'), true);
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'rule_name' => (string)($row['rule_name'] ?? ''),
+        'trigger_type' => (string)($row['trigger_type'] ?? 'upcoming_due'),
+        'days_before_due' => (int)($row['days_before_due'] ?? 0),
+        'target_scope' => (string)($row['target_scope'] ?? 'group'),
+        'custom_user_ids' => is_array($json) ? array_values(array_unique(array_map('intval', $json))) : [],
+        'email_subject_template' => (string)($row['email_subject_template'] ?? ''),
+        'email_body_template' => (string)($row['email_body_template'] ?? ''),
+        'is_active' => (int)($row['is_active'] ?? 0),
+        'last_triggered_at' => (string)($row['last_triggered_at'] ?? ''),
+    ];
+}
+
+function accumul8_send_notification_message(int $viewerId, array $rule, string $subject, string $textBody): array
+{
+    $dueSoonRows = Database::queryAll(
+        'SELECT description, due_date, amount
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND amount < 0
+           AND is_paid = 0
+           AND due_date IS NOT NULL
+         ORDER BY due_date ASC, id ASC
+         LIMIT 10',
+        [$viewerId]
+    );
+
+    $dueLines = [];
+    foreach ($dueSoonRows as $due) {
+        $dueLines[] = '- ' . (string)($due['description'] ?? 'Bill') . ' | due ' . (string)($due['due_date'] ?? '') . ' | ' . number_format((float)($due['amount'] ?? 0), 2);
+    }
+
+    $appendix = "\n\nUpcoming Unpaid Bills:\n" . ($dueLines ? implode("\n", $dueLines) : '- None');
+    $safeText = nl2br(htmlspecialchars($textBody . $appendix, ENT_QUOTES, 'UTF-8'));
+    $html = '<div style="font-family:Arial,sans-serif;line-height:1.5">'
+        . '<h2 style="margin-bottom:8px">Accumul8 Notification</h2>'
+        . '<div>' . $safeText . '</div>'
+        . '</div>';
+
+    $recipients = accumul8_notification_recipients_from_rule($viewerId, $rule);
+    if (!$recipients) {
+        throw new RuntimeException('No recipients available for this rule');
+    }
+
+    $sent = [];
+    $failed = [];
+    foreach ($recipients as $recipient) {
+        $email = accumul8_normalize_text($recipient['email'] ?? '', 191);
+        if ($email === '') {
+            continue;
+        }
+        try {
+            catn8_send_email($email, (string)($recipient['username'] ?? ''), $subject, $html);
+            $sent[] = [
+                'id' => (int)($recipient['id'] ?? 0),
+                'username' => (string)($recipient['username'] ?? ''),
+                'email' => $email,
+            ];
+        } catch (Throwable $e) {
+            $failed[] = [
+                'id' => (int)($recipient['id'] ?? 0),
+                'username' => (string)($recipient['username'] ?? ''),
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_notification_logs (owner_user_id, rule_id, subject, body_excerpt, recipients_json, sent_at)
+         VALUES (?, ?, ?, ?, ?, NOW())',
+        [
+            $viewerId,
+            $rule['id'] ?? null,
+            $subject,
+            substr(strip_tags($textBody), 0, 500),
+            json_encode(['sent' => $sent, 'failed' => $failed]),
+        ]
+    );
+
+    if (($rule['id'] ?? null) !== null) {
+        Database::execute(
+            'UPDATE accumul8_notification_rules SET last_triggered_at = NOW() WHERE id = ? AND owner_user_id = ?',
+            [(int)$rule['id'], $viewerId]
+        );
+    }
+
+    return [
+        'sent_count' => count($sent),
+        'failed_count' => count($failed),
+        'sent' => $sent,
+        'failed' => $failed,
+    ];
+}
+
+function accumul8_aicountant_upsert_bill_watch_rule(int $viewerId): array
+{
+    $ruleName = 'AIcountant Bill Watch';
+    $subject = 'AIcountant bill watch';
+    $body = 'Review due and overdue household bills, upcoming recurring payments, and any near-term cash-flow pressure.';
+    $existing = accumul8_notification_rule_find_by_name($viewerId, $ruleName);
+    if ($existing) {
+        Database::execute(
+            'UPDATE accumul8_notification_rules
+             SET trigger_type = ?, days_before_due = ?, target_scope = ?, custom_user_ids_json = ?, email_subject_template = ?, email_body_template = ?, is_active = 1
+             WHERE id = ? AND owner_user_id = ?',
+            ['upcoming_due', 3, 'group', json_encode([]), $subject, $body, (int)$existing['id'], $viewerId]
+        );
+        return accumul8_notification_rule_find_by_name($viewerId, $ruleName) ?? $existing;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_notification_rules
+            (owner_user_id, rule_name, trigger_type, days_before_due, target_scope, custom_user_ids_json, email_subject_template, email_body_template, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
+        [$viewerId, $ruleName, 'upcoming_due', 3, 'group', json_encode([]), $subject, $body]
+    );
+
+    return accumul8_notification_rule_find_by_name($viewerId, $ruleName) ?? [
+        'id' => (int)Database::lastInsertId(),
+        'rule_name' => $ruleName,
+        'target_scope' => 'group',
+        'custom_user_ids' => [],
+    ];
+}
+
+function accumul8_aicountant_run_watchlist(int $viewerId, int $actorUserId, bool $sendEmail = false, bool $createNotificationRule = false): array
+{
+    $payload = accumul8_aicountant_watchlist_payload($viewerId);
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_watchlist',
+        (int)($payload['cash_tight'] ?? 0) === 1 || (int)($payload['overdue_count'] ?? 0) > 0 ? 'warning' : 'info',
+        (string)($payload['summary_title'] ?? 'AIcountant watchlist'),
+        (string)($payload['summary_body'] ?? '')
+    );
+
+    $notificationRuleId = null;
+    if ($createNotificationRule) {
+        $rule = accumul8_aicountant_upsert_bill_watch_rule($viewerId);
+        $notificationRuleId = (int)($rule['id'] ?? 0);
+        accumul8_message_board_post(
+            $viewerId,
+            $actorUserId,
+            'aicountant_watchlist',
+            'success',
+            'AIcountant reminder rule saved',
+            'Saved the "' . (string)($rule['rule_name'] ?? 'AIcountant Bill Watch') . '" notification rule so reminders can be reused from Accumul8.',
+            ['notification_rule_id' => $notificationRuleId]
+        );
+    }
+
+    $emailResult = ['sent_count' => 0, 'failed_count' => 0];
+    if ($sendEmail) {
+        $emailRule = $notificationRuleId !== null
+            ? (accumul8_notification_rule_find_by_name($viewerId, 'AIcountant Bill Watch') ?? ['id' => null, 'target_scope' => 'group', 'custom_user_ids' => []])
+            : ['id' => null, 'target_scope' => 'group', 'custom_user_ids' => []];
+        $emailResult = accumul8_send_notification_message(
+            $viewerId,
+            $emailRule,
+            (string)($payload['summary_title'] ?? 'AIcountant watchlist'),
+            (string)($payload['summary_body'] ?? '')
+        );
+        accumul8_message_board_post(
+            $viewerId,
+            $actorUserId,
+            'aicountant_watchlist',
+            (int)($emailResult['failed_count'] ?? 0) > 0 ? 'warning' : 'success',
+            'AIcountant email notification sent',
+            'Sent ' . (int)($emailResult['sent_count'] ?? 0) . ' email notification' . ((int)($emailResult['sent_count'] ?? 0) === 1 ? '' : 's')
+                . ((int)($emailResult['failed_count'] ?? 0) > 0 ? ' with ' . (int)($emailResult['failed_count'] ?? 0) . ' failure' . ((int)($emailResult['failed_count'] ?? 0) === 1 ? '' : 's') . '.' : '.'),
+            $emailResult
+        );
+    }
+
+    return [
+        'summary_title' => (string)($payload['summary_title'] ?? ''),
+        'summary_body' => (string)($payload['summary_body'] ?? ''),
+        'overdue_count' => (int)($payload['overdue_count'] ?? 0),
+        'due_soon_count' => (int)($payload['due_soon_count'] ?? 0),
+        'recurring_soon_count' => (int)($payload['recurring_soon_count'] ?? 0),
+        'sent_email_count' => (int)($emailResult['sent_count'] ?? 0),
+        'failed_email_count' => (int)($emailResult['failed_count'] ?? 0),
+        'notification_rule_id' => $notificationRuleId,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ];
+}
+
+function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, array $options = []): array
+{
+    $sendEmail = !array_key_exists('send_email', $options) || accumul8_normalize_bool($options['send_email']) === 1;
+    $createNotificationRule = !array_key_exists('create_notification_rule', $options) || accumul8_normalize_bool($options['create_notification_rule']) === 1;
+    $emailOnAttentionOnly = !array_key_exists('email_on_attention_only', $options) || accumul8_normalize_bool($options['email_on_attention_only']) === 1;
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_housekeeping',
+        'info',
+        'AIcountant housekeeping started',
+        'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, watchlist review, and reminder upkeep.'
+    );
+
+    $balanceResult = accumul8_balance_books($viewerId, $actorUserId);
+    $openingBalanceResult = accumul8_reconcile_opening_balances($viewerId, $actorUserId);
+
+    $watchlistPreview = accumul8_aicountant_watchlist_payload($viewerId);
+    $attentionNeeded = (int)($watchlistPreview['overdue_count'] ?? 0) > 0
+        || (int)($watchlistPreview['due_soon_count'] ?? 0) > 0
+        || (int)($watchlistPreview['recurring_soon_count'] ?? 0) > 0
+        || (int)($watchlistPreview['cash_tight'] ?? 0) === 1;
+    $shouldSendEmail = $sendEmail && (!$emailOnAttentionOnly || $attentionNeeded);
+
+    $watchlistResult = accumul8_aicountant_run_watchlist(
+        $viewerId,
+        $actorUserId,
+        $shouldSendEmail,
+        $createNotificationRule
+    );
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_housekeeping',
+        ((int)($balanceResult['error_connection_count'] ?? 0) > 0 || (int)($watchlistResult['overdue_count'] ?? 0) > 0 || (int)($watchlistPreview['cash_tight'] ?? 0) === 1)
+            ? 'warning'
+            : 'success',
+        'AIcountant housekeeping finished',
+        'Housekeeping finished with '
+            . (int)($balanceResult['synced_connection_count'] ?? 0) . ' bank sync'
+            . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+            . ', ' . (int)($openingBalanceResult['reconciled_count'] ?? 0) . ' opening-balance adjustment'
+            . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
+            . ', and ' . (int)($watchlistResult['sent_email_count'] ?? 0) . ' email alert'
+            . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
+        [
+            'balance_books' => $balanceResult,
+            'opening_balance_reconciliation' => $openingBalanceResult,
+            'watchlist' => $watchlistResult,
+            'attention_needed' => $attentionNeeded ? 1 : 0,
+        ]
+    );
+
+    return [
+        'balance_books' => $balanceResult,
+        'opening_balance_reconciliation' => $openingBalanceResult,
+        'watchlist' => $watchlistResult,
+        'attention_needed' => $attentionNeeded ? 1 : 0,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ];
+}
+
+function accumul8_aicountant_effective_ai_config(): array
+{
+    $cfg = catn8_settings_ai_get_config();
+    $preferredProvider = strtolower(trim((string)($cfg['provider'] ?? '')));
+    $provider = '';
+    foreach ([$preferredProvider, 'openai', 'google_ai_studio', 'google_vertex_ai'] as $candidateProvider) {
+        if ($candidateProvider === '' || !in_array($candidateProvider, ['openai', 'google_ai_studio', 'google_vertex_ai'], true)) {
+            continue;
+        }
+        if (accumul8_aicountant_provider_has_credentials($candidateProvider)) {
+            $provider = $candidateProvider;
+            break;
+        }
+    }
+
+    if ($provider === '') {
+        throw new RuntimeException('No supported AI provider is configured for AIcountant');
+    }
+
+    $model = trim((string)($cfg['model'] ?? ''));
+    if ($model === '') {
+        $model = $provider === 'openai' ? 'gpt-4o-mini' : 'gemini-1.5-pro';
+    }
+
+    $temperature = (float)($cfg['temperature'] ?? 0.2);
+    if (!is_finite($temperature)) {
+        $temperature = 0.2;
+    }
+    if ($temperature < 0) {
+        $temperature = 0;
+    }
+    if ($temperature > 1.2) {
+        $temperature = 1.2;
+    }
+
+    return [
+        'provider' => $provider,
+        'model' => $model,
+        'base_url' => trim((string)($cfg['base_url'] ?? '')),
+        'location' => trim((string)($cfg['location'] ?? '')),
+        'temperature' => $temperature,
+    ];
+}
+
+function accumul8_aicountant_build_financial_context(int $viewerId): array
+{
+    $accounts = array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'institution_name' => (string)($row['institution_name'] ?? ''),
+            'account_type' => (string)($row['account_type'] ?? ''),
+            'current_balance' => round((float)($row['current_balance'] ?? 0), 2),
+            'available_balance' => round((float)($row['available_balance'] ?? 0), 2),
+            'credit_limit' => round((float)($row['credit_limit'] ?? 0), 2),
+            'minimum_payment' => round((float)($row['minimum_payment'] ?? 0), 2),
+            'payment_due_day_of_month' => isset($row['payment_due_day_of_month']) ? (int)$row['payment_due_day_of_month'] : null,
+            'autopay_enabled' => (int)($row['autopay_enabled'] ?? 0),
+        ];
+    }, Database::queryAll(
+        "SELECT id, account_name, institution_name, account_type, current_balance, available_balance,
+                credit_limit, minimum_payment, payment_due_day_of_month, autopay_enabled
+         FROM accumul8_accounts
+         WHERE owner_user_id = ? AND is_active = 1
+         ORDER BY institution_name ASC, account_name ASC",
+        [$viewerId]
+    ));
+
+    $monthlySummary = array_map(static function (array $row): array {
+        return [
+            'month' => (string)($row['month_key'] ?? ''),
+            'inflow_total' => round((float)($row['inflow_total'] ?? 0), 2),
+            'outflow_total' => round((float)($row['outflow_total'] ?? 0), 2),
+            'net_total' => round((float)($row['net_total'] ?? 0), 2),
+        ];
+    }, Database::queryAll(
+        "SELECT DATE_FORMAT(transaction_date, '%Y-%m') AS month_key,
+                SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS inflow_total,
+                SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS outflow_total,
+                SUM(amount) AS net_total
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?
+           AND transaction_date >= DATE_SUB(CURDATE(), INTERVAL 180 DAY)
+         GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
+         ORDER BY month_key DESC
+         LIMIT 6",
+        [$viewerId]
+    ));
+
+    $recentTransactions = array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'due_date' => (string)($row['due_date'] ?? ''),
+            'paid_date' => (string)($row['paid_date'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'memo' => accumul8_filter_note_for_display((string)($row['memo'] ?? ''), 300),
+            'amount' => round((float)($row['amount'] ?? 0), 2),
+            'is_paid' => (int)($row['is_paid'] ?? 0),
+            'is_reconciled' => (int)($row['is_reconciled'] ?? 0),
+            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+            'entity_id' => isset($row['entity_id']) ? (int)$row['entity_id'] : null,
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'entity_name' => (string)($row['entity_name'] ?? ''),
+            'source_kind' => (string)($row['source_kind'] ?? ''),
+        ];
+    }, Database::queryAll(
+        "SELECT t.id, t.account_id, t.entity_id, t.transaction_date, t.due_date, t.paid_date, t.description, t.memo, t.amount, t.is_paid, t.is_reconciled,
+                t.source_kind, COALESCE(a.account_name, '') AS account_name, COALESCE(e.display_name, '') AS entity_name
+         FROM accumul8_transactions t
+         LEFT JOIN accumul8_accounts a ON a.id = t.account_id
+         LEFT JOIN accumul8_entities e ON e.id = t.entity_id
+         WHERE t.owner_user_id = ?
+         ORDER BY t.transaction_date DESC, t.id DESC
+         LIMIT 120",
+        [$viewerId]
+    ));
+
+    $upcomingBills = array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'title' => (string)($row['title'] ?? ''),
+            'amount' => round((float)($row['amount'] ?? 0), 2),
+            'next_due_date' => (string)($row['next_due_date'] ?? ''),
+            'payment_method' => (string)($row['payment_method'] ?? ''),
+            'frequency' => (string)($row['frequency'] ?? ''),
+            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+            'entity_id' => isset($row['entity_id']) ? (int)$row['entity_id'] : null,
+            'is_active' => (int)($row['is_active'] ?? 0),
+            'account_name' => (string)($row['account_name'] ?? ''),
+        ];
+    }, Database::queryAll(
+        "SELECT rp.id, rp.title, rp.amount, rp.next_due_date, rp.payment_method, rp.frequency, rp.account_id, rp.entity_id, rp.is_active, COALESCE(a.account_name, '') AS account_name
+         FROM accumul8_recurring_payments rp
+         LEFT JOIN accumul8_accounts a ON a.id = rp.account_id
+         WHERE rp.owner_user_id = ?
+         ORDER BY rp.next_due_date ASC, rp.id ASC
+         LIMIT 40",
+        [$viewerId]
+    ));
+
+    $budgetRows = array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'category_name' => (string)($row['category_name'] ?? ''),
+            'monthly_budget' => round((float)($row['monthly_budget'] ?? 0), 2),
+            'match_pattern' => (string)($row['match_pattern'] ?? ''),
+        ];
+    }, Database::queryAll(
+        "SELECT id, category_name, monthly_budget, match_pattern
+         FROM accumul8_budget_rows
+         WHERE owner_user_id = ?
+           AND is_active = 1
+         ORDER BY row_order ASC, id ASC",
+        [$viewerId]
+    ));
+
+    $entities = array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'display_name' => (string)($row['display_name'] ?? ''),
+            'entity_kind' => (string)($row['entity_kind'] ?? ''),
+            'contact_type' => (string)($row['contact_type'] ?? ''),
+            'is_active' => (int)($row['is_active'] ?? 0),
+        ];
+    }, Database::queryAll(
+        "SELECT id, display_name, entity_kind, contact_type, is_active
+         FROM accumul8_entities
+         WHERE owner_user_id = ?
+         ORDER BY is_active DESC, display_name ASC
+         LIMIT 250",
+        [$viewerId]
+    ));
+
+    $topOutflows = array_map(static function (array $row): array {
+        return [
+            'label' => (string)($row['label'] ?? ''),
+            'transaction_count' => (int)($row['transaction_count'] ?? 0),
+            'outflow_total' => round((float)($row['outflow_total'] ?? 0), 2),
+        ];
+    }, Database::queryAll(
+        "SELECT COALESCE(NULLIF(TRIM(e.display_name), ''), NULLIF(TRIM(t.description), ''), 'Unlabeled') AS label,
+                COUNT(*) AS transaction_count,
+                SUM(ABS(t.amount)) AS outflow_total
+         FROM accumul8_transactions t
+         LEFT JOIN accumul8_entities e ON e.id = t.entity_id
+         WHERE t.owner_user_id = ?
+           AND t.amount < 0
+           AND t.transaction_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+         GROUP BY label
+         ORDER BY outflow_total DESC
+         LIMIT 20",
+        [$viewerId]
+    ));
+
+    $attentionItems = array_map(static function (array $row): array {
+        return [
+            'transaction_date' => (string)($row['transaction_date'] ?? ''),
+            'due_date' => (string)($row['due_date'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'amount' => round((float)($row['amount'] ?? 0), 2),
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'is_paid' => (int)($row['is_paid'] ?? 0),
+            'is_reconciled' => (int)($row['is_reconciled'] ?? 0),
+        ];
+    }, Database::queryAll(
+        "SELECT t.transaction_date, t.due_date, t.description, t.amount, t.is_paid, t.is_reconciled,
+                COALESCE(a.account_name, '') AS account_name
+         FROM accumul8_transactions t
+         LEFT JOIN accumul8_accounts a ON a.id = t.account_id
+         WHERE t.owner_user_id = ?
+           AND (
+                (t.amount < 0 AND t.is_paid = 0 AND t.due_date IS NOT NULL AND t.due_date <= DATE_ADD(CURDATE(), INTERVAL 14 DAY))
+                OR t.is_reconciled = 0
+           )
+         ORDER BY
+           CASE
+             WHEN t.amount < 0 AND t.is_paid = 0 AND t.due_date IS NOT NULL THEN 0
+             ELSE 1
+           END,
+           t.due_date ASC,
+           t.transaction_date DESC,
+           t.id DESC
+         LIMIT 40",
+        [$viewerId]
+    ));
+
+    $summary = Database::queryOne(
+        "SELECT
+            COUNT(*) AS transaction_count,
+            SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS inflow_total,
+            SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS outflow_total,
+            SUM(CASE WHEN amount < 0 AND is_paid = 0 THEN ABS(amount) ELSE 0 END) AS unpaid_outflow_total,
+            SUM(CASE WHEN is_reconciled = 0 THEN 1 ELSE 0 END) AS unreconciled_count
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?",
+        [$viewerId]
+    ) ?: [];
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'transaction_count' => (int)($summary['transaction_count'] ?? 0),
+            'inflow_total' => round((float)($summary['inflow_total'] ?? 0), 2),
+            'outflow_total' => round((float)($summary['outflow_total'] ?? 0), 2),
+            'unpaid_outflow_total' => round((float)($summary['unpaid_outflow_total'] ?? 0), 2),
+            'unreconciled_count' => (int)($summary['unreconciled_count'] ?? 0),
+            'account_count' => count($accounts),
+            'active_recurring_count' => count(array_filter($upcomingBills, static fn(array $row): bool => (int)($row['is_active'] ?? 0) === 1)),
+            'budget_row_count' => count($budgetRows),
+        ],
+        'accounts' => $accounts,
+        'entities' => $entities,
+        'monthly_summary' => $monthlySummary,
+        'top_outflows_last_90_days' => $topOutflows,
+        'upcoming_recurring_bills' => $upcomingBills,
+        'budget_rows' => $budgetRows,
+        'attention_items' => $attentionItems,
+        'recent_transactions' => $recentTransactions,
+    ];
+}
+
+function accumul8_aicountant_map_conversation_row(array $row): array
+{
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+        'title' => (string)($row['title'] ?? ''),
+        'system_prompt' => (string)($row['system_prompt'] ?? ''),
+        'status' => (string)($row['status'] ?? 'active'),
+        'conversation_summary' => (string)($row['conversation_summary'] ?? ''),
+        'last_message_preview' => (string)($row['last_message_preview'] ?? ''),
+        'message_count' => (int)($row['message_count'] ?? 0),
+        'created_at' => (string)($row['created_at'] ?? ''),
+        'updated_at' => (string)($row['updated_at'] ?? ''),
+    ];
+}
+
+function accumul8_aicountant_map_message_row(array $row): array
+{
+    return [
+        'id' => (int)($row['id'] ?? 0),
+        'conversation_id' => (int)($row['conversation_id'] ?? 0),
+        'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
+        'role' => accumul8_aicountant_message_role($row['role'] ?? 'user'),
+        'content_text' => (string)($row['content_text'] ?? ''),
+        'provider' => (string)($row['provider'] ?? ''),
+        'model' => (string)($row['model'] ?? ''),
+        'meta' => accumul8_aicountant_decode_json_object($row['meta_json'] ?? '{}'),
+        'created_at' => (string)($row['created_at'] ?? ''),
+    ];
+}
+
+function accumul8_aicountant_require_conversation(int $viewerId, int $conversationId): array
+{
+    $row = Database::queryOne(
+        "SELECT c.*,
+                (SELECT COUNT(*) FROM accumul8_ai_conversation_events e WHERE e.conversation_id = c.id) AS message_count
+         FROM accumul8_ai_conversations c
+         WHERE c.id = ? AND c.owner_user_id = ?
+         LIMIT 1",
+        [$conversationId, $viewerId]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Conversation not found'], 404);
+    }
+    return $row;
+}
+
+function accumul8_aicountant_list_conversations(int $viewerId): array
+{
+    $rows = Database::queryAll(
+        "SELECT c.*,
+                (SELECT COUNT(*) FROM accumul8_ai_conversation_events e WHERE e.conversation_id = c.id) AS message_count
+         FROM accumul8_ai_conversations c
+         WHERE c.owner_user_id = ?
+           AND c.status <> 'deleted'
+         ORDER BY c.updated_at DESC, c.id DESC",
+        [$viewerId]
+    );
+
+    return array_map('accumul8_aicountant_map_conversation_row', $rows);
+}
+
+function accumul8_aicountant_list_messages(int $viewerId, int $conversationId, int $limit = 400): array
+{
+    $limit = max(1, min(400, $limit));
+    $rows = Database::queryAll(
+        "SELECT id, conversation_id, owner_user_id, role, content_text, provider, model, meta_json, created_at
+         FROM accumul8_ai_conversation_events
+         WHERE owner_user_id = ?
+           AND conversation_id = ?
+         ORDER BY id ASC
+         LIMIT ?",
+        [$viewerId, $conversationId, $limit]
+    );
+
+    return array_map('accumul8_aicountant_map_message_row', $rows);
+}
+
+function accumul8_aicountant_create_conversation(int $viewerId, string $title = '', string $systemPrompt = ''): int
+{
+    $normalizedTitle = accumul8_aicountant_normalize_title($title, 191);
+    if ($normalizedTitle === '') {
+        $normalizedTitle = 'AIcountant Chat ' . date('M j, Y');
+    }
+    $normalizedSystemPrompt = trim($systemPrompt) !== '' ? trim($systemPrompt) : accumul8_aicountant_default_system_prompt();
+
+    Database::execute(
+        "INSERT INTO accumul8_ai_conversations
+            (owner_user_id, title, system_prompt, status, conversation_summary, last_message_preview)
+         VALUES (?, ?, ?, 'active', '', '')",
+        [$viewerId, $normalizedTitle, $normalizedSystemPrompt]
+    );
+
+    $row = Database::queryOne(
+        "SELECT id
+         FROM accumul8_ai_conversations
+         WHERE owner_user_id = ?
+         ORDER BY id DESC
+         LIMIT 1",
+        [$viewerId]
+    );
+
+    return (int)($row['id'] ?? 0);
+}
+
+function accumul8_aicountant_append_message(
+    int $viewerId,
+    int $conversationId,
+    string $role,
+    string $content,
+    string $provider = '',
+    string $model = '',
+    array $meta = []
+): int {
+    $normalizedRole = accumul8_aicountant_message_role($role);
+    $normalizedContent = trim((string)$content);
+    if ($normalizedContent === '') {
+        throw new RuntimeException('Cannot save an empty AIcountant message');
+    }
+
+    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
+    if (!is_string($metaJson)) {
+        $metaJson = json_encode(new stdClass(), JSON_UNESCAPED_SLASHES);
+    }
+
+    Database::execute(
+        "INSERT INTO accumul8_ai_conversation_events
+            (conversation_id, owner_user_id, role, content_text, provider, model, meta_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [$conversationId, $viewerId, $normalizedRole, $normalizedContent, $provider, $model, $metaJson]
+    );
+
+    $preview = accumul8_normalize_text($normalizedContent, 255);
+    Database::execute(
+        "UPDATE accumul8_ai_conversations
+         SET last_message_preview = ?, updated_at = NOW()
+         WHERE id = ? AND owner_user_id = ?",
+        [$preview, $conversationId, $viewerId]
+    );
+
+    $row = Database::queryOne(
+        "SELECT id
+         FROM accumul8_ai_conversation_events
+         WHERE conversation_id = ?
+         ORDER BY id DESC
+         LIMIT 1",
+        [$conversationId]
+    );
+
+    return (int)($row['id'] ?? 0);
+}
+
+function accumul8_aicountant_recent_transcript(int $viewerId, int $conversationId, int $limit = 24): array
+{
+    $limit = max(1, min(60, $limit));
+    $rows = Database::queryAll(
+        "SELECT id, conversation_id, owner_user_id, role, content_text, provider, model, meta_json, created_at
+         FROM (
+            SELECT id, conversation_id, owner_user_id, role, content_text, provider, model, meta_json, created_at
+            FROM accumul8_ai_conversation_events
+            WHERE owner_user_id = ?
+              AND conversation_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+         ) recent_events
+         ORDER BY id ASC",
+        [$viewerId, $conversationId, $limit]
+    );
+
+    return array_map('accumul8_aicountant_map_message_row', $rows);
+}
+
+function accumul8_aicountant_action_summary_lines(array $results): array
+{
+    $lines = [];
+    foreach ($results as $result) {
+        if (!is_array($result)) {
+            continue;
+        }
+        $status = (string)($result['status'] ?? '');
+        $type = (string)($result['type'] ?? 'action');
+        $summary = accumul8_normalize_text((string)($result['summary'] ?? ''), 240);
+        $lines[] = strtoupper($status !== '' ? $status : 'info') . ': ' . $type . ($summary !== '' ? ' - ' . $summary : '');
+    }
+    return $lines;
+}
+
+function accumul8_aicountant_extract_actions(int $viewerId, string $userMessage): array
+{
+    $trimmedMessage = trim($userMessage);
+    if ($trimmedMessage === '') {
+        return [];
+    }
+
+    if (!preg_match('/\b(rename|update|change|modify|mark|set|balance|reconcile|recategorize|assign|deactivate|activate|sync|synchronize|refresh|download)\b/i', $trimmedMessage)) {
+        return [];
+    }
+
+    $aiConfig = accumul8_aicountant_effective_ai_config();
+    $context = accumul8_aicountant_build_financial_context($viewerId);
+    $systemPrompt = <<<PROMPT
+You extract bookkeeping actions from a household-finance request.
+
+Return JSON only in this shape:
+{"actions":[
+  {"type":"rename_entity","entity_id":123,"new_display_name":"..."},
+  {"type":"update_recurring_rule","recurring_id":55,"title":"...","amount":100.00,"frequency":"monthly","payment_method":"autopay","next_due_date":"2026-03-20","is_active":1,"account_id":12,"entity_id":8,"notes":"..."},
+  {"type":"update_transaction_entity","transaction_id":999,"entity_id":8},
+  {"type":"mark_transaction_paid","transaction_id":999,"is_paid":1,"paid_date":"2026-03-13"},
+  {"type":"mark_transaction_reconciled","transaction_id":999,"is_reconciled":1},
+  {"type":"update_account_balance","account_id":12,"current_balance":1234.56,"available_balance":1200.00},
+  {"type":"balance_books"},
+  {"type":"reconcile_opening_balances"},
+  {"type":"run_watchlist","send_email":1,"create_notification_rule":1},
+  {"type":"run_housekeeping","send_email":1,"create_notification_rule":1,"email_on_attention_only":1}
+]}
+
+Rules:
+- Use only the supported action types shown above.
+- Include an action only when the user clearly asked for a real data change.
+- Use {"type":"balance_books"} when the user asks you to balance the books, sync connected banks, refresh downloaded bank records, or reconcile balances against the latest bank data.
+- Use {"type":"reconcile_opening_balances"} when the user asks you to fix, infer, or correct opening balances so the ledger matches the bank.
+- Use {"type":"run_watchlist"} when the user asks for proactive monitoring, future-spending watchouts, bill reminders, email alerts, or notification-rule setup. Set send_email to 1 only if the user asked for email. Set create_notification_rule to 1 only if the user asked to save or set up reminders.
+- Use {"type":"run_housekeeping"} when the user asks for a full finance housekeeping pass that should sync accounts, reconcile balances, review bills, and send alerts if needed.
+- Use IDs from the provided snapshot only. If the request is ambiguous, return no action for that item.
+- Never invent IDs or values.
+- If no changes should be applied, return {"actions":[]}.
+PROMPT;
+    $userPrompt = "Available finance snapshot (JSON):\n"
+        . json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        . "\n\nUser request:\n"
+        . $trimmedMessage;
+
+    $provider = (string)($aiConfig['provider'] ?? 'openai');
+    $model = (string)($aiConfig['model'] ?? '');
+    $temperature = 0.0;
+    $json = [];
+
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        if (!is_string($saJson) || trim($saJson) === '') {
+            return [];
+        }
+        $sa = json_decode((string)$saJson, true);
+        if (!is_array($sa)) {
+            return [];
+        }
+        $content = catn8_vertex_ai_gemini_generate_text([
+            'service_account_json' => $saJson,
+            'project_id' => trim((string)($sa['project_id'] ?? '')),
+            'location' => trim((string)($aiConfig['location'] ?? '')) !== '' ? (string)$aiConfig['location'] : 'us-central1',
+            'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'temperature' => $temperature,
+            'max_output_tokens' => 2048,
+        ]);
+        $json = json_decode(accumul8_extract_json_from_text((string)$content), true);
+    } elseif ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            return [];
+        }
+        $resolvedModel = $model !== '' ? $model : 'gemini-1.5-pro';
+        $resp = catn8_http_json_with_status(
+            'POST',
+            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($resolvedModel) . ':generateContent',
+            ['x-goog-api-key' => trim($apiKey)],
+            [
+                'contents' => [['role' => 'user', 'parts' => [['text' => $userPrompt]]]],
+                'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                'generationConfig' => ['temperature' => $temperature],
+            ],
+            10,
+            45
+        );
+        $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        $json = json_decode(accumul8_extract_json_from_text($content), true);
+    } else {
+        $resolvedModel = $model !== '' ? $model : 'gpt-4o-mini';
+        $result = accumul8_openai_responses_json(
+            $resolvedModel,
+            [[
+                'role' => 'system',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $systemPrompt],
+                ],
+            ], [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $userPrompt],
+                ],
+            ]],
+            (string)($aiConfig['base_url'] ?? ''),
+            $temperature,
+            2048,
+            [
+                'format' => [
+                    'type' => 'json_object',
+                ],
+            ]
+        );
+        $json = is_array($result['json'] ?? null) ? $result['json'] : [];
+    }
+
+    $actions = is_array($json['actions'] ?? null) ? $json['actions'] : [];
+    return array_values(array_filter($actions, static fn($action): bool => is_array($action) && trim((string)($action['type'] ?? '')) !== ''));
+}
+
+function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, array $actions): array
+{
+    $results = [];
+    foreach (array_slice($actions, 0, 12) as $action) {
+        $type = strtolower(accumul8_normalize_text((string)($action['type'] ?? ''), 64));
+        if ($type === '') {
+            continue;
+        }
+
+        try {
+            if ($type === 'rename_entity') {
+                $entityId = (int)($action['entity_id'] ?? 0);
+                $newDisplayName = accumul8_normalize_text($action['new_display_name'] ?? '', 191);
+                $existing = Database::queryOne('SELECT * FROM accumul8_entities WHERE id = ? AND owner_user_id = ? LIMIT 1', [$entityId, $viewerId]);
+                if (!$existing || $newDisplayName === '') {
+                    throw new RuntimeException('Entity rename request was missing a valid target or name');
+                }
+                accumul8_upsert_entity($viewerId, [
+                    'display_name' => $newDisplayName,
+                    'entity_kind' => (string)($existing['entity_kind'] ?? 'business'),
+                    'contact_type' => (string)($existing['contact_type'] ?? 'payee'),
+                    'is_payee' => (int)($existing['is_payee'] ?? 0),
+                    'is_payer' => (int)($existing['is_payer'] ?? 0),
+                    'is_vendor' => (int)($existing['is_vendor'] ?? 0),
+                    'is_balance_person' => (int)($existing['is_balance_person'] ?? 0),
+                    'default_amount' => accumul8_normalize_amount($existing['default_amount'] ?? 0),
+                    'email' => (string)($existing['email'] ?? ''),
+                    'phone_number' => (string)($existing['phone_number'] ?? ''),
+                    'street_address' => (string)($existing['street_address'] ?? ''),
+                    'city' => (string)($existing['city'] ?? ''),
+                    'state' => (string)($existing['state'] ?? ''),
+                    'zip' => (string)($existing['zip'] ?? ''),
+                    'notes' => (string)($existing['notes'] ?? ''),
+                    'is_active' => (int)($existing['is_active'] ?? 1),
+                ], $entityId);
+                accumul8_sync_contact_from_entity($viewerId, $entityId);
+                accumul8_sync_debtor_from_entity($viewerId, $entityId);
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Renamed entity #' . $entityId . ' to "' . $newDisplayName . '".'];
+                continue;
+            }
+
+            if ($type === 'update_recurring_rule') {
+                $recurringId = (int)($action['recurring_id'] ?? 0);
+                $existing = Database::queryOne('SELECT * FROM accumul8_recurring_payments WHERE id = ? AND owner_user_id = ? LIMIT 1', [$recurringId, $viewerId]);
+                if (!$existing) {
+                    throw new RuntimeException('Recurring rule not found');
+                }
+                $title = accumul8_normalize_text($action['title'] ?? (string)($existing['title'] ?? ''), 191);
+                if ($title === '') {
+                    throw new RuntimeException('Recurring rule title is required');
+                }
+                $direction = accumul8_validate_enum('direction', $action['direction'] ?? ($existing['direction'] ?? 'outflow'), ['outflow', 'inflow'], 'outflow');
+                $frequency = accumul8_validate_enum('frequency', $action['frequency'] ?? ($existing['frequency'] ?? 'monthly'), ['daily', 'weekly', 'biweekly', 'monthly'], 'monthly');
+                $paymentMethod = accumul8_validate_enum('payment_method', $action['payment_method'] ?? ($existing['payment_method'] ?? 'unspecified'), ['unspecified', 'autopay', 'manual'], 'unspecified');
+                $amount = array_key_exists('amount', $action) ? accumul8_normalize_amount($action['amount']) : accumul8_normalize_amount($existing['amount'] ?? 0);
+                $intervalCount = array_key_exists('interval_count', $action) ? max(1, min(365, (int)$action['interval_count'])) : max(1, min(365, (int)($existing['interval_count'] ?? 1)));
+                $nextDue = array_key_exists('next_due_date', $action)
+                    ? accumul8_require_valid_date('next_due_date', $action['next_due_date'])
+                    : accumul8_require_valid_date('next_due_date', $existing['next_due_date'] ?? '');
+                $paidDate = array_key_exists('paid_date', $action) ? accumul8_normalize_date($action['paid_date'] ?? null) : accumul8_normalize_date($existing['paid_date'] ?? null);
+                $notes = array_key_exists('notes', $action) ? accumul8_normalize_text($action['notes'] ?? '', 1500) : accumul8_normalize_text($existing['notes'] ?? '', 1500);
+                $isBudgetPlanner = array_key_exists('is_budget_planner', $action) ? accumul8_normalize_bool($action['is_budget_planner']) : (int)($existing['is_budget_planner'] ?? 1);
+                $isActive = array_key_exists('is_active', $action) ? accumul8_normalize_bool($action['is_active']) : (int)($existing['is_active'] ?? 1);
+                $dayOfMonth = array_key_exists('day_of_month', $action) ? ((string)$action['day_of_month'] !== '' ? (int)$action['day_of_month'] : null) : (isset($existing['day_of_month']) ? (int)$existing['day_of_month'] : null);
+                $dayOfWeek = array_key_exists('day_of_week', $action) ? ((string)$action['day_of_week'] !== '' ? (int)$action['day_of_week'] : null) : (isset($existing['day_of_week']) ? (int)$existing['day_of_week'] : null);
+                $entityId = array_key_exists('entity_id', $action) ? accumul8_owned_id_or_null('entities', $viewerId, (int)($action['entity_id'] ?? 0)) : accumul8_owned_id_or_null('entities', $viewerId, (int)($existing['entity_id'] ?? 0));
+                $accountId = array_key_exists('account_id', $action) ? accumul8_owned_id_or_null('accounts', $viewerId, (int)($action['account_id'] ?? 0)) : accumul8_owned_id_or_null('accounts', $viewerId, (int)($existing['account_id'] ?? 0));
+                $contactId = $entityId !== null ? accumul8_entity_contact_id_or_null($viewerId, $entityId) : accumul8_owned_id_or_null('contacts', $viewerId, (int)($existing['contact_id'] ?? 0));
+
+                Database::execute(
+                    'UPDATE accumul8_recurring_payments
+                     SET entity_id = ?, contact_id = ?, account_id = ?, title = ?, direction = ?, amount = ?, frequency = ?, payment_method = ?, interval_count = ?,
+                         day_of_month = ?, day_of_week = ?, next_due_date = ?, paid_date = ?, notes = ?, is_active = ?, is_budget_planner = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [
+                        $entityId,
+                        $contactId,
+                        $accountId,
+                        $title,
+                        $direction,
+                        $amount,
+                        $frequency,
+                        $paymentMethod,
+                        $intervalCount,
+                        $dayOfMonth,
+                        $dayOfWeek,
+                        $nextDue,
+                        $paidDate,
+                        $notes === '' ? null : $notes,
+                        $isActive,
+                        $isBudgetPlanner,
+                        $recurringId,
+                        $viewerId,
+                    ]
+                );
+                $syncedLinkedRows = accumul8_sync_open_recurring_transactions_from_template($viewerId, $recurringId, $existing, [
+                    'entity_id' => $entityId,
+                    'contact_id' => $contactId,
+                    'account_id' => $accountId,
+                    'title' => $title,
+                    'direction' => $direction,
+                    'amount' => $amount,
+                    'next_due_date' => $nextDue,
+                    'paid_date' => $paidDate,
+                    'notes' => $notes,
+                    'is_budget_planner' => $isBudgetPlanner,
+                ]);
+                if ($syncedLinkedRows > 0) {
+                    accumul8_recompute_running_balance($viewerId);
+                }
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Updated recurring rule #' . $recurringId . ' (' . $title . ').'];
+                continue;
+            }
+
+            if ($type === 'update_transaction_entity') {
+                $transactionId = (int)($action['transaction_id'] ?? 0);
+                $entityId = accumul8_owned_id_or_null('entities', $viewerId, (int)($action['entity_id'] ?? 0));
+                $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if (!$existingTx || $entityId === null) {
+                    throw new RuntimeException('Transaction entity update was missing a valid transaction or entity');
+                }
+                $contactId = accumul8_entity_contact_id_or_null($viewerId, $entityId);
+                Database::execute(
+                    'UPDATE accumul8_transactions
+                     SET entity_id = ?, contact_id = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [$entityId, $contactId, $transactionId, $viewerId]
+                );
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Assigned entity #' . $entityId . ' to transaction #' . $transactionId . '.'];
+                continue;
+            }
+
+            if ($type === 'mark_transaction_paid') {
+                $transactionId = (int)($action['transaction_id'] ?? 0);
+                $isPaid = accumul8_normalize_bool($action['is_paid'] ?? 1);
+                $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if (!$existingTx) {
+                    throw new RuntimeException('Transaction not found');
+                }
+                $editPolicy = accumul8_transaction_edit_policy($existingTx);
+                if (!$editPolicy['can_edit_paid_state']) {
+                    throw new RuntimeException('Paid state is read-only for this transaction');
+                }
+                $paidDate = $isPaid === 1
+                    ? accumul8_normalize_date($action['paid_date'] ?? ($existingTx['paid_date'] ?? $existingTx['due_date'] ?? $existingTx['transaction_date'])) ?: (string)$existingTx['transaction_date']
+                    : null;
+                Database::execute(
+                    'UPDATE accumul8_transactions
+                     SET is_paid = ?, paid_date = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [$isPaid, $paidDate, $transactionId, $viewerId]
+                );
+                $updatedTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if ($updatedTx) {
+                    accumul8_sync_recurring_template_from_transaction($viewerId, $existingTx, $updatedTx);
+                }
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Marked transaction #' . $transactionId . ' as ' . ($isPaid === 1 ? 'paid' : 'unpaid') . '.'];
+                continue;
+            }
+
+            if ($type === 'mark_transaction_reconciled') {
+                $transactionId = (int)($action['transaction_id'] ?? 0);
+                $isReconciled = accumul8_normalize_bool($action['is_reconciled'] ?? 1);
+                $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if (!$existingTx) {
+                    throw new RuntimeException('Transaction not found');
+                }
+                Database::execute(
+                    'UPDATE accumul8_transactions
+                     SET is_reconciled = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [$isReconciled, $transactionId, $viewerId]
+                );
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Marked transaction #' . $transactionId . ' as ' . ($isReconciled === 1 ? 'reconciled' : 'unreconciled') . '.'];
+                continue;
+            }
+
+            if ($type === 'update_account_balance') {
+                $accountId = (int)($action['account_id'] ?? 0);
+                $existing = Database::queryOne('SELECT id FROM accumul8_accounts WHERE id = ? AND owner_user_id = ? LIMIT 1', [$accountId, $viewerId]);
+                if (!$existing) {
+                    throw new RuntimeException('Account not found');
+                }
+                $currentBalance = array_key_exists('current_balance', $action) ? accumul8_normalize_amount($action['current_balance']) : null;
+                $availableBalance = array_key_exists('available_balance', $action) ? accumul8_normalize_amount($action['available_balance']) : $currentBalance;
+                if ($currentBalance === null && $availableBalance === null) {
+                    throw new RuntimeException('Account balance update did not include any balance value');
+                }
+                Database::execute(
+                    'UPDATE accumul8_accounts
+                     SET current_balance = COALESCE(?, current_balance),
+                         available_balance = COALESCE(?, available_balance),
+                         updated_at = NOW()
+                     WHERE id = ? AND owner_user_id = ?',
+                    [$currentBalance, $availableBalance, $accountId, $viewerId]
+                );
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Updated balances for account #' . $accountId . '.'];
+                continue;
+            }
+
+            if ($type === 'balance_books') {
+                $balanceResult = accumul8_balance_books($viewerId, $actorUserId);
+                $results[] = [
+                    'type' => $type,
+                    'status' => 'applied',
+                    'summary' => 'Balanced the books across '
+                        . (int)($balanceResult['synced_connection_count'] ?? 0)
+                        . ' synced connection' . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+                        . ((int)($balanceResult['error_connection_count'] ?? 0) > 0
+                            ? ' with ' . (int)($balanceResult['error_connection_count'] ?? 0) . ' error' . ((int)($balanceResult['error_connection_count'] ?? 0) === 1 ? '' : 's')
+                            : '.'),
+                    'synced_connection_count' => (int)($balanceResult['synced_connection_count'] ?? 0),
+                    'skipped_connection_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
+                    'error_connection_count' => (int)($balanceResult['error_connection_count'] ?? 0),
+                ];
+                continue;
+            }
+
+            if ($type === 'reconcile_opening_balances') {
+                $reconcileResult = accumul8_reconcile_opening_balances($viewerId, $actorUserId);
+                $results[] = [
+                    'type' => $type,
+                    'status' => 'applied',
+                    'summary' => 'Reconciled opening balances for ' . (int)($reconcileResult['reconciled_count'] ?? 0) . ' account' . ((int)($reconcileResult['reconciled_count'] ?? 0) === 1 ? '' : 's') . '.',
+                    'reconciled_count' => (int)($reconcileResult['reconciled_count'] ?? 0),
+                    'skipped_count' => (int)($reconcileResult['skipped_count'] ?? 0),
+                ];
+                continue;
+            }
+
+            if ($type === 'run_watchlist') {
+                $watchlistResult = accumul8_aicountant_run_watchlist(
+                    $viewerId,
+                    $actorUserId,
+                    accumul8_normalize_bool($action['send_email'] ?? 0) === 1,
+                    accumul8_normalize_bool($action['create_notification_rule'] ?? 0) === 1
+                );
+                $results[] = [
+                    'type' => $type,
+                    'status' => 'applied',
+                    'summary' => (string)($watchlistResult['summary_body'] ?? 'Watchlist generated.'),
+                    'sent_email_count' => (int)($watchlistResult['sent_email_count'] ?? 0),
+                    'notification_rule_id' => isset($watchlistResult['notification_rule_id']) ? (int)$watchlistResult['notification_rule_id'] : null,
+                ];
+                continue;
+            }
+
+            if ($type === 'run_housekeeping') {
+                $housekeepingResult = accumul8_run_aicountant_housekeeping($viewerId, $actorUserId, [
+                    'send_email' => $action['send_email'] ?? 1,
+                    'create_notification_rule' => $action['create_notification_rule'] ?? 1,
+                    'email_on_attention_only' => $action['email_on_attention_only'] ?? 1,
+                ]);
+                $results[] = [
+                    'type' => $type,
+                    'status' => 'applied',
+                    'summary' => 'Completed AIcountant housekeeping with '
+                        . (int)($housekeepingResult['balance_books']['synced_connection_count'] ?? 0) . ' sync'
+                        . ((int)($housekeepingResult['balance_books']['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+                        . ' and ' . (int)($housekeepingResult['watchlist']['sent_email_count'] ?? 0) . ' email alert'
+                        . ((int)($housekeepingResult['watchlist']['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
+                    'attention_needed' => (int)($housekeepingResult['attention_needed'] ?? 0),
+                ];
+                continue;
+            }
+
+            $results[] = ['type' => $type, 'status' => 'ignored', 'summary' => 'Unsupported action type'];
+        } catch (Throwable $exception) {
+            $results[] = ['type' => $type, 'status' => 'error', 'summary' => accumul8_normalize_text($exception->getMessage(), 240)];
+        }
+    }
+
+    return $results;
+}
+
+function accumul8_aicountant_generate_reply(int $viewerId, array $conversation, string $userMessage, array $actionResults = []): array
+{
+    $aiConfig = accumul8_aicountant_effective_ai_config();
+    $systemPrompt = trim((string)($conversation['system_prompt'] ?? ''));
+    if ($systemPrompt === '') {
+        $systemPrompt = accumul8_aicountant_default_system_prompt();
+    }
+
+    $context = accumul8_aicountant_build_financial_context($viewerId);
+    $history = accumul8_aicountant_recent_transcript($viewerId, (int)($conversation['id'] ?? 0), 24);
+    $historyText = '';
+    foreach ($history as $message) {
+        $roleLabel = $message['role'] === 'assistant' ? 'Assistant' : ($message['role'] === 'system' ? 'System' : 'User');
+        $historyText .= $roleLabel . ': ' . trim((string)($message['content_text'] ?? '')) . "\n\n";
+    }
+
+    $actionSummaryText = '';
+    $actionSummaryLines = accumul8_aicountant_action_summary_lines($actionResults);
+    if ($actionSummaryLines !== []) {
+        $actionSummaryText = "\n\nBookkeeping actions executed for this request:\n" . implode("\n", $actionSummaryLines);
+    }
+
+    $userPrompt = "Authoritative Accumul8 household finance snapshot (JSON):\n"
+        . json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        . "\n\nRecent conversation transcript:\n"
+        . ($historyText !== '' ? $historyText : "No prior messages.\n")
+        . "\nCurrent user request:\n"
+        . $userMessage
+        . $actionSummaryText
+        . "\n\nAnswer as AIcountant. Be specific about dates, balances, and risks when the data supports it. If the available data is not enough, say what to review next.";
+
+    $provider = (string)($aiConfig['provider'] ?? 'openai');
+    $model = (string)($aiConfig['model'] ?? '');
+    $temperature = (float)($aiConfig['temperature'] ?? 0.2);
+    $baseUrl = (string)($aiConfig['base_url'] ?? '');
+    $location = (string)($aiConfig['location'] ?? '');
+
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        if (!is_string($saJson) || trim($saJson) === '') {
+            throw new RuntimeException('Missing AI service account JSON (google_vertex_ai)');
+        }
+        $sa = json_decode((string)$saJson, true);
+        if (!is_array($sa)) {
+            throw new RuntimeException('AI Vertex service account JSON is invalid');
+        }
+        $content = catn8_vertex_ai_gemini_generate_text([
+            'service_account_json' => $saJson,
+            'project_id' => trim((string)($sa['project_id'] ?? '')),
+            'location' => $location !== '' ? $location : 'us-central1',
+            'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'temperature' => $temperature,
+            'max_output_tokens' => 3072,
+        ]);
+        return [
+            'provider' => $provider,
+            'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+            'content' => trim((string)$content),
+            'context' => $context,
+        ];
+    }
+
+    if ($provider === 'google_ai_studio') {
+        $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+        $resolvedModel = $model !== '' ? $model : 'gemini-1.5-pro';
+        $resp = catn8_http_json_with_status(
+            'POST',
+            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($resolvedModel) . ':generateContent',
+            ['x-goog-api-key' => trim($apiKey)],
+            [
+                'contents' => [['role' => 'user', 'parts' => [['text' => $userPrompt]]]],
+                'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                'generationConfig' => ['temperature' => $temperature],
+            ],
+            10,
+            60
+        );
+        $content = trim((string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+        if ($content === '') {
+            throw new RuntimeException('Google AI Studio returned an empty AIcountant response');
+        }
+        return [
+            'provider' => $provider,
+            'model' => $resolvedModel,
+            'content' => $content,
+            'context' => $context,
+        ];
+    }
+
+    $resolvedModel = $model !== '' ? $model : 'gpt-4o-mini';
+    $result = accumul8_openai_responses_text(
+        $resolvedModel,
+        [[
+            'role' => 'system',
+            'content' => [
+                ['type' => 'input_text', 'text' => $systemPrompt],
+            ],
+        ], [
+            'role' => 'user',
+            'content' => [
+                ['type' => 'input_text', 'text' => $userPrompt],
+            ],
+        ]],
+        $baseUrl,
+        $temperature,
+        3072,
+        90
+    );
+
+    return [
+        'provider' => 'openai',
+        'model' => $resolvedModel,
+        'content' => trim((string)($result['content'] ?? '')),
+        'context' => $context,
+    ];
+}
+
 function accumul8_tables_ensure(): void
 {
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_user_access_grants (
@@ -6106,6 +8506,50 @@ function accumul8_tables_ensure(): void
         KEY idx_accumul8_statement_audit_owner (owner_user_id),
         CONSTRAINT fk_accumul8_statement_audit_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_ai_conversations (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        title VARCHAR(191) NOT NULL,
+        system_prompt LONGTEXT NULL,
+        status VARCHAR(24) NOT NULL DEFAULT 'active',
+        conversation_summary TEXT NULL,
+        last_message_preview VARCHAR(255) NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_accumul8_ai_conversations_owner_updated (owner_user_id, updated_at),
+        CONSTRAINT fk_accumul8_ai_conversations_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_ai_conversation_events (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id BIGINT NOT NULL,
+        owner_user_id INT NOT NULL,
+        role VARCHAR(24) NOT NULL DEFAULT 'user',
+        content_text LONGTEXT NOT NULL,
+        provider VARCHAR(64) NOT NULL DEFAULT '',
+        model VARCHAR(191) NOT NULL DEFAULT '',
+        meta_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_accumul8_ai_events_conversation (conversation_id, created_at),
+        KEY idx_accumul8_ai_events_owner (owner_user_id, created_at),
+        CONSTRAINT fk_accumul8_ai_events_conversation FOREIGN KEY (conversation_id) REFERENCES accumul8_ai_conversations(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_ai_events_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_message_board_messages (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        actor_user_id INT NOT NULL DEFAULT 0,
+        source_kind VARCHAR(64) NOT NULL DEFAULT '',
+        message_level VARCHAR(24) NOT NULL DEFAULT 'info',
+        title VARCHAR(191) NOT NULL DEFAULT '',
+        body_text TEXT NOT NULL,
+        meta_json LONGTEXT NULL,
+        is_acknowledged TINYINT(1) NOT NULL DEFAULT 0,
+        acknowledged_at DATETIME NULL,
+        acknowledged_by_user_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_accumul8_message_board_owner_ack (owner_user_id, is_acknowledged, created_at),
+        CONSTRAINT fk_accumul8_message_board_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     try {
         // Legacy schema upgrades for installations that predate newer Accumul8 fields.
@@ -6343,6 +8787,42 @@ function accumul8_tables_ensure(): void
         }
         accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'actor_user_id', 'INT NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'reconciliation_status', "VARCHAR(24) NOT NULL DEFAULT 'pending'");
+        accumul8_table_add_column_if_missing('accumul8_ai_conversations', 'system_prompt', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_ai_conversations', 'status', "VARCHAR(24) NOT NULL DEFAULT 'active'");
+        accumul8_table_add_column_if_missing('accumul8_ai_conversations', 'conversation_summary', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_ai_conversations', 'last_message_preview', "VARCHAR(255) NOT NULL DEFAULT ''");
+        if (!accumul8_table_has_index('accumul8_ai_conversations', 'idx_accumul8_ai_conversations_owner_updated')) {
+            Database::execute('ALTER TABLE accumul8_ai_conversations ADD INDEX idx_accumul8_ai_conversations_owner_updated (owner_user_id, updated_at)');
+        }
+        accumul8_table_add_column_if_missing('accumul8_ai_conversation_events', 'provider', "VARCHAR(64) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_ai_conversation_events', 'model', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_ai_conversation_events', 'meta_json', 'LONGTEXT NULL');
+        if (!accumul8_table_has_index('accumul8_ai_conversation_events', 'idx_accumul8_ai_events_conversation')) {
+            Database::execute('ALTER TABLE accumul8_ai_conversation_events ADD INDEX idx_accumul8_ai_events_conversation (conversation_id, created_at)');
+        }
+        if (!accumul8_table_has_index('accumul8_ai_conversation_events', 'idx_accumul8_ai_events_owner')) {
+            Database::execute('ALTER TABLE accumul8_ai_conversation_events ADD INDEX idx_accumul8_ai_events_owner (owner_user_id, created_at)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_ai_conversation_events', 'fk_accumul8_ai_events_conversation')) {
+            Database::execute('ALTER TABLE accumul8_ai_conversation_events ADD CONSTRAINT fk_accumul8_ai_events_conversation FOREIGN KEY (conversation_id) REFERENCES accumul8_ai_conversations(id) ON DELETE CASCADE');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_ai_conversation_events', 'fk_accumul8_ai_events_owner')) {
+            Database::execute('ALTER TABLE accumul8_ai_conversation_events ADD CONSTRAINT fk_accumul8_ai_events_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE');
+        }
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'actor_user_id', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'source_kind', "VARCHAR(64) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'message_level', "VARCHAR(24) NOT NULL DEFAULT 'info'");
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'title', "VARCHAR(191) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'meta_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'is_acknowledged', 'TINYINT(1) NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'acknowledged_at', 'DATETIME NULL');
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'acknowledged_by_user_id', 'INT NULL');
+        if (!accumul8_table_has_index('accumul8_message_board_messages', 'idx_accumul8_message_board_owner_ack')) {
+            Database::execute('ALTER TABLE accumul8_message_board_messages ADD INDEX idx_accumul8_message_board_owner_ack (owner_user_id, is_acknowledged, created_at)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_message_board_messages', 'fk_accumul8_message_board_owner')) {
+            Database::execute('ALTER TABLE accumul8_message_board_messages ADD CONSTRAINT fk_accumul8_message_board_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE');
+        }
         accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'transaction_count', 'INT NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'already_reconciled_count', 'INT NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_statement_reconciliation_logs', 'reconciled_now_count', 'INT NOT NULL DEFAULT 0');
@@ -11241,6 +13721,287 @@ if ($action === 'list_statement_workspace') {
     ]);
 }
 
+if ($action === 'list_aicountant_conversations') {
+    catn8_require_method('GET');
+    catn8_json_response([
+        'success' => true,
+        'conversations' => accumul8_aicountant_list_conversations($viewerId),
+        'default_system_prompt' => accumul8_aicountant_default_system_prompt(),
+        'suggested_starters' => accumul8_aicountant_suggested_starters(),
+    ]);
+}
+
+if ($action === 'get_aicountant_conversation') {
+    catn8_require_method('GET');
+    $conversationId = (int)($_GET['id'] ?? 0);
+    if ($conversationId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $conversation = accumul8_aicountant_map_conversation_row(accumul8_aicountant_require_conversation($viewerId, $conversationId));
+    catn8_json_response([
+        'success' => true,
+        'conversation' => $conversation,
+        'messages' => accumul8_aicountant_list_messages($viewerId, $conversationId),
+    ]);
+}
+
+if ($action === 'create_aicountant_conversation') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $title = accumul8_aicountant_normalize_title($body['title'] ?? '', 191);
+    $systemPrompt = trim((string)($body['system_prompt'] ?? ''));
+    $conversationId = accumul8_aicountant_create_conversation($viewerId, $title, $systemPrompt);
+    $conversation = accumul8_aicountant_map_conversation_row(accumul8_aicountant_require_conversation($viewerId, $conversationId));
+    catn8_json_response([
+        'success' => true,
+        'conversation' => $conversation,
+        'messages' => [],
+    ]);
+}
+
+if ($action === 'rename_aicountant_conversation') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $conversationId = (int)($body['id'] ?? 0);
+    $title = accumul8_aicountant_normalize_title($body['title'] ?? '', 191);
+    if ($conversationId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($title === '') {
+        catn8_json_response(['success' => false, 'error' => 'Title is required'], 400);
+    }
+    accumul8_aicountant_require_conversation($viewerId, $conversationId);
+    Database::execute(
+        "UPDATE accumul8_ai_conversations
+         SET title = ?, updated_at = NOW()
+         WHERE id = ? AND owner_user_id = ?",
+        [$title, $conversationId, $viewerId]
+    );
+    $conversation = accumul8_aicountant_map_conversation_row(accumul8_aicountant_require_conversation($viewerId, $conversationId));
+    catn8_json_response([
+        'success' => true,
+        'conversation' => $conversation,
+        'messages' => accumul8_aicountant_list_messages($viewerId, $conversationId),
+    ]);
+}
+
+if ($action === 'delete_aicountant_conversation') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $conversationId = (int)($body['id'] ?? 0);
+    if ($conversationId <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    accumul8_aicountant_require_conversation($viewerId, $conversationId);
+    Database::execute(
+        'DELETE FROM accumul8_ai_conversations WHERE id = ? AND owner_user_id = ?',
+        [$conversationId, $viewerId]
+    );
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'send_aicountant_message') {
+    catn8_require_method('POST');
+    catn8_rate_limit_require('accumul8.aicountant.send.' . $actorUserId . '.' . $viewerId, 60, 600);
+
+    $body = catn8_read_json_body();
+    $conversationId = (int)($body['conversation_id'] ?? 0);
+    $message = accumul8_aicountant_normalize_message($body['message'] ?? '', 4000);
+    $title = accumul8_aicountant_normalize_title($body['title'] ?? '', 191);
+    if ($message === '') {
+        catn8_json_response(['success' => false, 'error' => 'Message is required'], 400);
+    }
+
+    if ($conversationId <= 0) {
+        $conversationId = accumul8_aicountant_create_conversation($viewerId, $title !== '' ? $title : accumul8_aicountant_title_from_message($message));
+    }
+
+    $conversationRow = accumul8_aicountant_require_conversation($viewerId, $conversationId);
+    if (trim((string)($conversationRow['title'] ?? '')) === '') {
+        Database::execute(
+            "UPDATE accumul8_ai_conversations
+             SET title = ?, updated_at = NOW()
+             WHERE id = ? AND owner_user_id = ?",
+            [accumul8_aicountant_title_from_message($message), $conversationId, $viewerId]
+        );
+        $conversationRow = accumul8_aicountant_require_conversation($viewerId, $conversationId);
+    }
+
+    accumul8_aicountant_append_message($viewerId, $conversationId, 'user', $message, '', '', [
+        'actor_user_id' => $actorUserId,
+    ]);
+
+    $actionResults = [];
+    try {
+        $requestedActions = accumul8_aicountant_extract_actions($viewerId, $message);
+        $actionResults = accumul8_aicountant_apply_actions($viewerId, $actorUserId, $requestedActions);
+        $reply = accumul8_aicountant_generate_reply($viewerId, $conversationRow, $message, $actionResults);
+    } catch (Throwable $exception) {
+        Database::execute(
+            "UPDATE accumul8_ai_conversations
+             SET updated_at = NOW()
+             WHERE id = ? AND owner_user_id = ?",
+            [$conversationId, $viewerId]
+        );
+        throw $exception;
+    }
+
+    $assistantText = trim((string)($reply['content'] ?? ''));
+    if ($assistantText === '') {
+        throw new RuntimeException('AIcountant returned an empty response');
+    }
+
+    Database::execute(
+        "UPDATE accumul8_ai_conversations
+         SET conversation_summary = ?, updated_at = NOW()
+         WHERE id = ? AND owner_user_id = ?",
+        [accumul8_normalize_text($assistantText, 1000), $conversationId, $viewerId]
+    );
+
+    accumul8_aicountant_append_message(
+        $viewerId,
+        $conversationId,
+        'assistant',
+        $assistantText,
+        (string)($reply['provider'] ?? ''),
+        (string)($reply['model'] ?? ''),
+        [
+            'action_results' => $actionResults,
+            'context_generated_at' => (string)($reply['context']['generated_at'] ?? ''),
+            'account_count' => (int)($reply['context']['summary']['account_count'] ?? 0),
+            'transaction_count' => (int)($reply['context']['summary']['transaction_count'] ?? 0),
+        ]
+    );
+    foreach ($actionResults as $actionResult) {
+        if (!is_array($actionResult)) {
+            continue;
+        }
+        $status = strtolower((string)($actionResult['status'] ?? ''));
+        $level = $status === 'error' ? 'error' : ($status === 'ignored' ? 'warning' : 'success');
+        $summary = accumul8_normalize_text((string)($actionResult['summary'] ?? ''), 240);
+        if ($summary === '') {
+            continue;
+        }
+        accumul8_message_board_post(
+            $viewerId,
+            $actorUserId,
+            'aicountant',
+            $level,
+            'AIcountant action update',
+            $summary,
+            $actionResult
+        );
+    }
+
+    $conversation = accumul8_aicountant_map_conversation_row(accumul8_aicountant_require_conversation($viewerId, $conversationId));
+    catn8_json_response([
+        'success' => true,
+        'conversation' => $conversation,
+        'messages' => accumul8_aicountant_list_messages($viewerId, $conversationId),
+    ]);
+}
+
+if ($action === 'list_message_board_messages') {
+    catn8_require_method('GET');
+    catn8_json_response([
+        'success' => true,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ]);
+}
+
+if ($action === 'create_message_board_message') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $title = accumul8_normalize_text($body['title'] ?? '', 191);
+    $bodyText = accumul8_normalize_text($body['body_text'] ?? '', 2000);
+    $sourceKind = accumul8_normalize_text($body['source_kind'] ?? 'manual', 64);
+    $messageLevel = accumul8_normalize_text($body['message_level'] ?? 'info', 24);
+    $meta = is_array($body['meta'] ?? null) ? $body['meta'] : [];
+    if ($title === '' && $bodyText === '') {
+        catn8_json_response(['success' => false, 'error' => 'title or body_text is required'], 400);
+    }
+    accumul8_message_board_post($viewerId, $actorUserId, $sourceKind, $messageLevel, $title, $bodyText, $meta);
+    catn8_json_response([
+        'success' => true,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ]);
+}
+
+if ($action === 'acknowledge_message_board_messages') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $ids = array_values(array_unique(array_filter(array_map('intval', is_array($body['ids'] ?? null) ? $body['ids'] : []), static fn(int $id): bool => $id > 0)));
+    if ($ids === []) {
+        catn8_json_response(['success' => false, 'error' => 'ids are required'], 400);
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    Database::execute(
+        'UPDATE accumul8_message_board_messages
+         SET is_acknowledged = 1, acknowledged_at = NOW(), acknowledged_by_user_id = ?
+         WHERE owner_user_id = ?
+           AND id IN (' . $placeholders . ')',
+        array_merge([$actorUserId, $viewerId], $ids)
+    );
+    catn8_json_response([
+        'success' => true,
+        'messages' => accumul8_message_board_list($viewerId),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ]);
+}
+
+if ($action === 'balance_books') {
+    catn8_require_method('POST');
+    try {
+        $result = accumul8_balance_books($viewerId, $actorUserId);
+        catn8_json_response(array_merge(['success' => true], $result));
+    } catch (Throwable $exception) {
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], 500);
+    }
+}
+
+if ($action === 'reconcile_opening_balances') {
+    catn8_require_method('POST');
+    try {
+        $result = accumul8_reconcile_opening_balances($viewerId, $actorUserId);
+        catn8_json_response(array_merge(['success' => true], $result));
+    } catch (Throwable $exception) {
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], 500);
+    }
+}
+
+if ($action === 'run_aicountant_watchlist') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    try {
+        $result = accumul8_aicountant_run_watchlist(
+            $viewerId,
+            $actorUserId,
+            accumul8_normalize_bool($body['send_email'] ?? 0) === 1,
+            accumul8_normalize_bool($body['create_notification_rule'] ?? 0) === 1
+        );
+        catn8_json_response(array_merge(['success' => true], $result));
+    } catch (Throwable $exception) {
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], 500);
+    }
+}
+
+if ($action === 'run_aicountant_housekeeping') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    try {
+        $result = accumul8_run_aicountant_housekeeping($viewerId, $actorUserId, [
+            'send_email' => $body['send_email'] ?? 1,
+            'create_notification_rule' => $body['create_notification_rule'] ?? 1,
+            'email_on_attention_only' => $body['email_on_attention_only'] ?? 1,
+        ]);
+        catn8_json_response(array_merge(['success' => true], $result));
+    } catch (Throwable $exception) {
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], 500);
+    }
+}
+
 if ($action === 'create_entity') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
@@ -13000,85 +15761,19 @@ if ($action === 'send_notification') {
         catn8_json_response(['success' => false, 'error' => 'Notification subject and body are required'], 400);
     }
 
-    $dueSoonRows = Database::queryAll(
-        'SELECT description, due_date, amount
-         FROM accumul8_transactions
-         WHERE owner_user_id = ?
-           AND amount < 0
-           AND is_paid = 0
-           AND due_date IS NOT NULL
-         ORDER BY due_date ASC, id ASC
-         LIMIT 10',
-        [$viewerId]
-    );
-
-    $dueLines = [];
-    foreach ($dueSoonRows as $due) {
-        $dueLines[] = '- ' . (string)($due['description'] ?? 'Bill') . ' | due ' . (string)($due['due_date'] ?? '') . ' | ' . number_format((float)($due['amount'] ?? 0), 2);
-    }
-
-    $appendix = "\n\nUpcoming Unpaid Bills:\n" . ($dueLines ? implode("\n", $dueLines) : '- None');
-
-    $safeText = nl2br(htmlspecialchars($textBody . $appendix, ENT_QUOTES, 'UTF-8'));
-    $html = '<div style="font-family:Arial,sans-serif;line-height:1.5">'
-        . '<h2 style="margin-bottom:8px">Accumul8 Notification</h2>'
-        . '<div>' . $safeText . '</div>'
-        . '</div>';
-
-    $recipients = accumul8_notification_recipients_from_rule($viewerId, $rule);
-    if (!$recipients) {
-        catn8_json_response(['success' => false, 'error' => 'No recipients available for this rule'], 400);
-    }
-
-    $sent = [];
-    $failed = [];
-    foreach ($recipients as $recipient) {
-        $email = accumul8_normalize_text($recipient['email'] ?? '', 191);
-        if ($email === '') {
-            continue;
-        }
-        try {
-            catn8_send_email($email, (string)($recipient['username'] ?? ''), $subject, $html);
-            $sent[] = [
-                'id' => (int)($recipient['id'] ?? 0),
-                'username' => (string)($recipient['username'] ?? ''),
-                'email' => $email,
-            ];
-        } catch (Throwable $e) {
-            $failed[] = [
-                'id' => (int)($recipient['id'] ?? 0),
-                'username' => (string)($recipient['username'] ?? ''),
-                'email' => $email,
-                'error' => $e->getMessage(),
-            ];
-        }
-    }
-
-    Database::execute(
-        'INSERT INTO accumul8_notification_logs (owner_user_id, rule_id, subject, body_excerpt, recipients_json, sent_at)
-         VALUES (?, ?, ?, ?, ?, NOW())',
-        [
-            $viewerId,
-            $rule['id'] ?? null,
-            $subject,
-            substr(strip_tags($textBody), 0, 500),
-            json_encode(['sent' => $sent, 'failed' => $failed]),
-        ]
-    );
-
-    if (($rule['id'] ?? null) !== null) {
-        Database::execute(
-            'UPDATE accumul8_notification_rules SET last_triggered_at = NOW() WHERE id = ? AND owner_user_id = ?',
-            [(int)$rule['id'], $viewerId]
-        );
+    try {
+        $notificationResult = accumul8_send_notification_message($viewerId, $rule, $subject, $textBody);
+    } catch (Throwable $exception) {
+        $statusCode = $exception->getMessage() === 'No recipients available for this rule' ? 400 : 500;
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], $statusCode);
     }
 
     catn8_json_response([
         'success' => true,
-        'sent_count' => count($sent),
-        'failed_count' => count($failed),
-        'sent' => $sent,
-        'failed' => $failed,
+        'sent_count' => (int)($notificationResult['sent_count'] ?? 0),
+        'failed_count' => (int)($notificationResult['failed_count'] ?? 0),
+        'sent' => $notificationResult['sent'] ?? [],
+        'failed' => $notificationResult['failed'] ?? [],
     ]);
 }
 
@@ -13752,496 +16447,12 @@ if ($action === 'teller_sync_transactions') {
         catn8_json_response(['success' => false, 'error' => 'connection_id is required'], 400);
     }
 
-    $connection = Database::queryOne(
-        'SELECT id, institution_id, institution_name, teller_enrollment_id, teller_access_token_secret_key
-         FROM accumul8_bank_connections
-         WHERE id = ? AND owner_user_id = ?
-         LIMIT 1',
-        [$connectionId, $viewerId]
-    );
-    if (!$connection) {
-        catn8_json_response(['success' => false, 'error' => 'Connection not found'], 404);
-    }
-
-    $connectionInstitutionId = accumul8_normalize_text((string)($connection['institution_id'] ?? ''), 64);
-    $connectionInstitutionName = accumul8_normalize_text((string)($connection['institution_name'] ?? ''), 191);
-    $connectionEnrollmentId = accumul8_normalize_text((string)($connection['teller_enrollment_id'] ?? ''), 191);
-    $watchedInstitution = accumul8_teller_is_watched_institution($connectionInstitutionId, $connectionInstitutionName);
-    accumul8_teller_log_diagnostic(
-        'accumul8.teller.sync',
-        true,
-        200,
-        'Teller sync started',
-        [
-            'connection_id' => $connectionId,
-            'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
-            'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
-            'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
-            'watched_institution' => $watchedInstitution ? 1 : 0,
-        ]
-    );
-
-    $secretKey = (string)($connection['teller_access_token_secret_key'] ?? '');
-    $accessToken = (string)(secret_get($secretKey) ?? '');
-    if ($secretKey === '' || $accessToken === '') {
-        catn8_json_response(['success' => false, 'error' => 'Stored Teller access token was not found'], 500);
-    }
-
-    $addedTotal = 0;
-    $modifiedTotal = 0;
-    $unchangedTotal = 0;
-    $removedTotal = 0;
-    $accountSummaries = [];
-    $today = gmdate('Y-m-d');
-    $recentWindowDays = 30;
-    $recentOverlapDays = 10;
-    $backfillPageSize = 500;
-    $backfillPagesPerSync = accumul8_teller_backfill_pages_per_sync();
-
     try {
-        $accounts = accumul8_teller_request('GET', '/accounts', $accessToken);
-        foreach ($accounts as $account) {
-            if (!is_array($account)) {
-                continue;
-            }
-
-            $remoteAccountId = accumul8_normalize_text((string)($account['id'] ?? ''), 191);
-            if ($remoteAccountId === '') {
-                continue;
-            }
-
-            $supportsTransactions = accumul8_teller_account_supports_link($account, 'transactions');
-            $supportsBalances = accumul8_teller_account_supports_link($account, 'balances');
-            $supportsDetails = accumul8_teller_account_supports_link($account, 'details');
-            $balances = [];
-            $details = [];
-            if ($supportsBalances) {
-                try {
-                    $balances = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/balances', $accessToken);
-                } catch (Throwable $e) {
-                    $balances = [];
-                }
-            }
-            if ($supportsDetails) {
-                try {
-                    $details = accumul8_teller_request('GET', '/accounts/' . rawurlencode($remoteAccountId) . '/details', $accessToken);
-                } catch (Throwable $e) {
-                    $details = [];
-                }
-            }
-
-            $accountMapping = accumul8_upsert_teller_account(
-                $viewerId,
-                $connectionId,
-                $connection,
-                $account,
-                is_array($balances) ? $balances : [],
-                is_array($details) ? $details : []
-            );
-            $localAccountId = (int)($accountMapping['local_account_id'] ?? 0);
-            if ($localAccountId <= 0) {
-                throw new RuntimeException('Failed to map Teller account into a local Accumul8 account');
-            }
-
-            $accountAdded = 0;
-            $accountModified = 0;
-            $accountUnchanged = 0;
-            $accountRemoved = 0;
-            $accountStaleTellerRemoved = 0;
-            $accountStatementImportsRemoved = 0;
-            $syncSkippedReason = '';
-            $historyStartDate = '';
-            $historyEndDate = '';
-            $fetchedHistoryStartDate = '';
-            $fetchedHistoryEndDate = '';
-            $remoteTransactionIds = [];
-            $recentSyncAnchorDate = accumul8_normalize_text((string)($accountMapping['teller_sync_anchor_date'] ?? ''), 32);
-            $storedBackfillCursorId = accumul8_normalize_text((string)($accountMapping['teller_backfill_cursor_id'] ?? ''), 191);
-            $backfillComplete = (int)($accountMapping['teller_backfill_complete'] ?? 0) === 1;
-            $recentWindowStartDate = $recentSyncAnchorDate !== ''
-                ? accumul8_shift_date($recentSyncAnchorDate, -$recentOverlapDays)
-                : accumul8_shift_date($today, -($recentWindowDays - 1));
-            $recentWindowEndDate = $today;
-
-            $oldestLocalRow = Database::queryOne(
-                'SELECT external_id, transaction_date
-                 FROM accumul8_transactions
-                 WHERE owner_user_id = ?
-                   AND account_id = ?
-                   AND source_kind = ?
-                   AND source_ref = ?
-                   AND external_id IS NOT NULL
-                   AND external_id <> ""
-                 ORDER BY transaction_date ASC, id ASC
-                 LIMIT 1',
-                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
-            ) ?: [];
-
-            $recentResult = [
-                'transactions' => [],
-                'oldest_id' => '',
-                'has_more' => false,
-                'pages_fetched' => 0,
-            ];
-            $recentTransactions = [];
-            if ($supportsTransactions) {
-                $recentResult = accumul8_teller_list_transactions(
-                    $accessToken,
-                    $remoteAccountId,
-                    [
-                        'start_date' => $recentWindowStartDate,
-                        'end_date' => $recentWindowEndDate,
-                    ],
-                    500,
-                    100
-                );
-                $recentTransactions = is_array($recentResult['transactions'] ?? null) ? $recentResult['transactions'] : [];
-            } else {
-                $syncSkippedReason = 'Teller did not expose transaction access for this account.';
-            }
-
-            $backfillSeedCursorId = $storedBackfillCursorId;
-            if ($backfillSeedCursorId === '') {
-                $backfillSeedCursorId = accumul8_normalize_text((string)($oldestLocalRow['external_id'] ?? ''), 191);
-            }
-            if ($backfillSeedCursorId === '' && $recentTransactions !== []) {
-                $backfillSeedCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
-            }
-
-            $backfillResult = [
-                'transactions' => [],
-                'oldest_id' => '',
-                'has_more' => false,
-                'pages_fetched' => 0,
-            ];
-            if ($supportsTransactions && !$backfillComplete) {
-                if ($backfillSeedCursorId !== '') {
-                    $backfillResult = accumul8_teller_list_transactions(
-                        $accessToken,
-                        $remoteAccountId,
-                        ['from_id' => $backfillSeedCursorId],
-                        $backfillPageSize,
-                        $backfillPagesPerSync
-                    );
-                } elseif ($recentTransactions === []) {
-                    $backfillResult = accumul8_teller_list_transactions(
-                        $accessToken,
-                        $remoteAccountId,
-                        [],
-                        $backfillPageSize,
-                        $backfillPagesPerSync
-                    );
-                }
-            }
-
-            $processedExternalIds = [];
-            $syncBatches = [
-                [
-                    'transactions' => $recentTransactions,
-                    'track_remote_ids' => true,
-                ],
-                [
-                    'transactions' => is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [],
-                    'track_remote_ids' => false,
-                ],
-            ];
-
-            foreach ($syncBatches as $batch) {
-                foreach (($batch['transactions'] ?? []) as $tx) {
-                    if (!is_array($tx)) {
-                        continue;
-                    }
-
-                    $externalId = accumul8_normalize_text((string)($tx['id'] ?? ''), 191);
-                    if ($externalId === '' || isset($processedExternalIds[$externalId])) {
-                        continue;
-                    }
-                    $processedExternalIds[$externalId] = true;
-                    if (!empty($batch['track_remote_ids'])) {
-                        $remoteTransactionIds[$externalId] = true;
-                    }
-
-                    $description = accumul8_normalize_text(
-                        (string)($tx['description'] ?? (($tx['counterparty']['name'] ?? 'Bank Transaction'))),
-                        255
-                    );
-                    if ($description === '') {
-                        $description = 'Bank Transaction';
-                    }
-
-                    $date = accumul8_require_valid_date('transaction_date', $tx['date'] ?? date('Y-m-d'));
-                    $amount = round((float)($tx['amount'] ?? 0), 2);
-                    $statusText = strtolower(accumul8_normalize_text((string)($tx['status'] ?? ''), 32));
-                    $pending = $statusText === 'pending' ? 1 : 0;
-                    if ($fetchedHistoryStartDate === '' || strcmp($date, $fetchedHistoryStartDate) < 0) {
-                        $fetchedHistoryStartDate = $date;
-                    }
-                    if ($fetchedHistoryEndDate === '' || strcmp($date, $fetchedHistoryEndDate) > 0) {
-                        $fetchedHistoryEndDate = $date;
-                    }
-
-                    $existingTx = Database::queryOne(
-                        'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
-                         FROM accumul8_transactions
-                         WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
-                         LIMIT 1',
-                        [$viewerId, 'teller', $externalId]
-                    );
-
-                    if ($existingTx) {
-                        $nextPaidDate = $pending ? null : $date;
-                        $hasChanges =
-                            (int)($existingTx['account_id'] ?? 0) !== $localAccountId
-                            || (string)($existingTx['transaction_date'] ?? '') !== $date
-                            || (string)($existingTx['due_date'] ?? '') !== $date
-                            || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
-                            || (string)($existingTx['description'] ?? '') !== $description
-                            || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
-                            || (int)($existingTx['pending_status'] ?? 0) !== $pending
-                            || (string)($existingTx['source_ref'] ?? '') !== $remoteAccountId;
-
-                        if ($hasChanges) {
-                            Database::execute(
-                                'UPDATE accumul8_transactions
-                                 SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
-                                 WHERE id = ? AND owner_user_id = ?',
-                                [
-                                    $localAccountId,
-                                    $date,
-                                    $date,
-                                    $nextPaidDate,
-                                    $description,
-                                    $amount,
-                                    $pending,
-                                    $remoteAccountId,
-                                    (int)$existingTx['id'],
-                                    $viewerId,
-                                ]
-                            );
-                            $modifiedTotal++;
-                            $accountModified++;
-                        } else {
-                            $unchangedTotal++;
-                            $accountUnchanged++;
-                        }
-                        continue;
-                    }
-
-                    Database::execute(
-                        'INSERT INTO accumul8_transactions
-                            (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
-                             is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [
-                            $viewerId,
-                            $localAccountId,
-                            $date,
-                            $date,
-                            'manual',
-                            $description,
-                            $amount,
-                            1,
-                            1,
-                            0,
-                            'teller',
-                            $remoteAccountId,
-                            $externalId,
-                            $pending,
-                            $pending ? null : $date,
-                            $actorUserId,
-                        ]
-                    );
-                    $addedTotal++;
-                    $accountAdded++;
-                }
-            }
-
-            if ($supportsTransactions && $recentWindowStartDate !== '' && $recentWindowEndDate !== '') {
-                $localRecentTransactions = Database::queryAll(
-                    'SELECT id, external_id
-                     FROM accumul8_transactions
-                     WHERE owner_user_id = ?
-                       AND account_id = ?
-                       AND source_kind = ?
-                       AND source_ref = ?
-                       AND transaction_date BETWEEN ? AND ?',
-                    [$viewerId, $localAccountId, 'teller', $remoteAccountId, $recentWindowStartDate, $recentWindowEndDate]
-                );
-                $staleLocalTellerIds = [];
-                foreach ($localRecentTransactions as $row) {
-                    $localExternalId = accumul8_normalize_text((string)($row['external_id'] ?? ''), 191);
-                    if ($localExternalId !== '' && isset($remoteTransactionIds[$localExternalId])) {
-                        continue;
-                    }
-                    $staleLocalTellerIds[] = (int)($row['id'] ?? 0);
-                }
-                $accountStaleTellerRemoved = accumul8_delete_transactions_by_ids($viewerId, $staleLocalTellerIds);
-            }
-
-            if ($fetchedHistoryStartDate !== '' && $fetchedHistoryEndDate !== '') {
-                $statementTransactionsToRemove = Database::queryAll(
-                    'SELECT id
-                     FROM accumul8_transactions
-                     WHERE owner_user_id = ?
-                       AND account_id = ?
-                       AND source_kind IN (?, ?)
-                       AND transaction_date BETWEEN ? AND ?',
-                    [$viewerId, $localAccountId, 'statement_upload', 'statement_pdf', $fetchedHistoryStartDate, $fetchedHistoryEndDate]
-                );
-                $statementTransactionIds = array_map(
-                    static fn(array $row): int => (int)($row['id'] ?? 0),
-                    $statementTransactionsToRemove
-                );
-                $accountStatementImportsRemoved = accumul8_delete_transactions_by_ids($viewerId, $statementTransactionIds);
-            }
-
-            $nextBackfillCursorId = $storedBackfillCursorId;
-            $nextBackfillComplete = $backfillComplete ? 1 : 0;
-            $backfillTransactions = is_array($backfillResult['transactions'] ?? null) ? $backfillResult['transactions'] : [];
-            if ($supportsTransactions && !$backfillComplete) {
-                if ($backfillTransactions !== []) {
-                    $nextBackfillCursorId = accumul8_normalize_text((string)($backfillResult['oldest_id'] ?? ''), 191);
-                    $nextBackfillComplete = !empty($backfillResult['has_more']) ? 0 : 1;
-                } elseif ($backfillSeedCursorId !== '' || $recentTransactions === []) {
-                    $nextBackfillCursorId = $backfillSeedCursorId;
-                    $nextBackfillComplete = 1;
-                } elseif ($recentTransactions !== []) {
-                    $nextBackfillCursorId = accumul8_normalize_text((string)($recentResult['oldest_id'] ?? ''), 191);
-                    $nextBackfillComplete = 0;
-                }
-            }
-
-            $historyCoverage = Database::queryOne(
-                'SELECT MIN(transaction_date) AS min_date, MAX(transaction_date) AS max_date
-                 FROM accumul8_transactions
-                 WHERE owner_user_id = ?
-                   AND account_id = ?
-                   AND source_kind = ?
-                   AND source_ref = ?',
-                [$viewerId, $localAccountId, 'teller', $remoteAccountId]
-            ) ?: [];
-            $historyStartDate = isset($historyCoverage['min_date']) && $historyCoverage['min_date'] !== null ? (string)$historyCoverage['min_date'] : '';
-            $historyEndDate = isset($historyCoverage['max_date']) && $historyCoverage['max_date'] !== null ? (string)$historyCoverage['max_date'] : '';
-
-            Database::execute(
-                'UPDATE accumul8_accounts
-                 SET teller_sync_anchor_date = ?, teller_backfill_cursor_id = ?, teller_backfill_complete = ?, teller_history_start_date = ?, teller_history_end_date = ?, updated_at = NOW()
-                 WHERE id = ? AND owner_user_id = ?',
-                [
-                    $today,
-                    $nextBackfillCursorId !== '' ? $nextBackfillCursorId : null,
-                    $nextBackfillComplete,
-                    $historyStartDate !== '' ? $historyStartDate : null,
-                    $historyEndDate !== '' ? $historyEndDate : null,
-                    $localAccountId,
-                    $viewerId,
-                ]
-            );
-            $accountRemoved = $accountStaleTellerRemoved + $accountStatementImportsRemoved;
-            $removedTotal += $accountRemoved;
-
-            $accountSummaries[] = [
-                'remote_account_id' => (string)($accountMapping['remote_account_id'] ?? $remoteAccountId),
-                'remote_account_name' => (string)($accountMapping['remote_account_name'] ?? ($account['name'] ?? 'Teller Account')),
-                'remote_account_type' => (string)($accountMapping['remote_account_type'] ?? ''),
-                'remote_account_subtype' => (string)($accountMapping['remote_account_subtype'] ?? ''),
-                'mask_last4' => (string)($accountMapping['mask_last4'] ?? ''),
-                'local_account_id' => $localAccountId,
-                'local_account_name' => (string)($accountMapping['local_account_name'] ?? ''),
-                'institution_name' => (string)($accountMapping['institution_name'] ?? ($connection['institution_name'] ?? '')),
-                'mapping_action' => (string)($accountMapping['mapping_action'] ?? 'updated'),
-                'transactions_supported' => $supportsTransactions ? 1 : 0,
-                'balances_supported' => $supportsBalances ? 1 : 0,
-                'details_supported' => $supportsDetails ? 1 : 0,
-                'sync_skipped_reason' => $syncSkippedReason,
-                'history_start_date' => $historyStartDate,
-                'history_end_date' => $historyEndDate,
-                'recent_window_start_date' => $recentWindowStartDate,
-                'recent_window_end_date' => $recentWindowEndDate,
-                'backfill_cursor_id' => $nextBackfillCursorId,
-                'backfill_complete' => $nextBackfillComplete,
-                'backfill_pages_fetched' => (int)($backfillResult['pages_fetched'] ?? 0),
-                'transactions_added' => $accountAdded,
-                'transactions_modified' => $accountModified,
-                'transactions_unchanged' => $accountUnchanged,
-                'transactions_removed' => $accountRemoved,
-                'stale_teller_removed' => $accountStaleTellerRemoved,
-                'statement_imports_removed' => $accountStatementImportsRemoved,
-            ];
-        }
-
-        Database::execute(
-            'UPDATE accumul8_bank_connections
-             SET last_sync_at = NOW(), status = ?, last_error = NULL
-             WHERE id = ? AND owner_user_id = ?',
-            ['connected', $connectionId, $viewerId]
-        );
-
-        accumul8_recompute_running_balance($viewerId);
-
-        accumul8_teller_log_diagnostic(
-            'accumul8.teller.sync',
-            true,
-            200,
-            'Teller sync completed',
-            [
-                'connection_id' => $connectionId,
-                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
-                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
-                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
-                'watched_institution' => $watchedInstitution ? 1 : 0,
-                'added' => $addedTotal,
-                'modified' => $modifiedTotal,
-                'unchanged' => $unchangedTotal,
-                'removed' => $removedTotal,
-                'account_count' => count($accountSummaries),
-                'accounts' => array_map(static function (array $summary): array {
-                    return [
-                        'remote_account_id' => (string)($summary['remote_account_id'] ?? ''),
-                        'remote_account_name' => (string)($summary['remote_account_name'] ?? ''),
-                        'remote_account_type' => (string)($summary['remote_account_type'] ?? ''),
-                        'remote_account_subtype' => (string)($summary['remote_account_subtype'] ?? ''),
-                        'transactions_supported' => (int)($summary['transactions_supported'] ?? 0),
-                        'sync_skipped_reason' => (string)($summary['sync_skipped_reason'] ?? ''),
-                        'history_start_date' => (string)($summary['history_start_date'] ?? ''),
-                        'history_end_date' => (string)($summary['history_end_date'] ?? ''),
-                        'transactions_added' => (int)($summary['transactions_added'] ?? 0),
-                        'transactions_modified' => (int)($summary['transactions_modified'] ?? 0),
-                        'transactions_removed' => (int)($summary['transactions_removed'] ?? 0),
-                    ];
-                }, $accountSummaries),
-            ]
-        );
-
-        catn8_json_response([
-            'success' => true,
-            'added' => $addedTotal,
-            'modified' => $modifiedTotal,
-            'unchanged' => $unchangedTotal,
-            'removed' => $removedTotal,
-            'accounts' => $accountSummaries,
-        ]);
-    } catch (Throwable $e) {
-        Database::execute(
-            'UPDATE accumul8_bank_connections
-             SET status = ?, last_error = ?, updated_at = NOW()
-             WHERE id = ? AND owner_user_id = ?',
-            ['sync_error', accumul8_normalize_text($e->getMessage(), 2000), $connectionId, $viewerId]
-        );
-        accumul8_teller_log_diagnostic(
-            'accumul8.teller.sync',
-            false,
-            500,
-            accumul8_normalize_text($e->getMessage(), 500),
-            [
-                'connection_id' => $connectionId,
-                'institution_id' => $connectionInstitutionId !== '' ? $connectionInstitutionId : null,
-                'institution_name' => $connectionInstitutionName !== '' ? $connectionInstitutionName : null,
-                'enrollment_id' => $connectionEnrollmentId !== '' ? $connectionEnrollmentId : null,
-                'watched_institution' => $watchedInstitution ? 1 : 0,
-            ]
-        );
-        catn8_json_response(['success' => false, 'error' => $e->getMessage()], 500);
+        $result = accumul8_teller_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
+        catn8_json_response(array_merge(['success' => true], $result));
+    } catch (Throwable $exception) {
+        $statusCode = $exception->getMessage() === 'Connection not found' ? 404 : 500;
+        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], $statusCode);
     }
 }
 

@@ -1,0 +1,305 @@
+import React from 'react';
+
+import { useAccumul8AIcountant } from '../../hooks/useAccumul8AIcountant';
+
+import './Accumul8AIcountantPanel.css';
+
+type ToastPayload = {
+  tone: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+};
+
+interface Accumul8AIcountantPanelProps {
+  ownerUserId: number;
+  ownerUsername: string;
+  balancingBooks: boolean;
+  reconcilingOpeningBalances: boolean;
+  runningWatchlist: boolean;
+  messageBoardPendingCount: number;
+  onBalanceBooks: () => void;
+  onReconcileOpeningBalances: () => void;
+  onRunWatchlist: () => void;
+  onToast?: (payload: ToastPayload) => void;
+}
+
+function formatConversationTime(value: string): string {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export function Accumul8AIcountantPanel({
+  ownerUserId,
+  ownerUsername,
+  balancingBooks,
+  reconcilingOpeningBalances,
+  runningWatchlist,
+  messageBoardPendingCount,
+  onBalanceBooks,
+  onReconcileOpeningBalances,
+  onRunWatchlist,
+  onToast,
+}: Accumul8AIcountantPanelProps) {
+  const {
+    loading,
+    sending,
+    conversations,
+    activeConversation,
+    messages,
+    defaultSystemPrompt,
+    suggestedStarters,
+    createConversation,
+    openConversation,
+    renameConversation,
+    deleteConversation,
+    sendMessage,
+  } = useAccumul8AIcountant(ownerUserId, onToast);
+  const [draft, setDraft] = React.useState('');
+  const [titleDraft, setTitleDraft] = React.useState('');
+  const threadRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    setTitleDraft(activeConversation?.title || '');
+  }, [activeConversation?.id, activeConversation?.title]);
+
+  React.useEffect(() => {
+    const node = threadRef.current;
+    if (!node) {
+      return;
+    }
+    node.scrollTop = node.scrollHeight;
+  }, [messages.length, activeConversation?.id]);
+
+  const submitMessage = React.useCallback(async () => {
+    const normalized = draft.trim();
+    if (!normalized || sending) {
+      return;
+    }
+    setDraft('');
+    try {
+      await sendMessage(normalized, activeConversation?.id || null);
+    } catch (error) {
+      setDraft(normalized);
+    }
+  }, [activeConversation?.id, draft, sendMessage, sending]);
+
+  return (
+    <div className="accumul8-aicountant">
+      <aside className="accumul8-aicountant-sidebar">
+        <div className="accumul8-aicountant-sidebar-top">
+          <button
+            type="button"
+            className="btn btn-primary accumul8-aicountant-new-chat"
+            onClick={() => {
+              void createConversation();
+            }}
+            disabled={loading || sending}
+          >
+            New Chat
+          </button>
+          <div className="accumul8-aicountant-note">
+            <strong>AIcountant</strong>
+            <span>ChatGPT-style bookkeeping assistant for {ownerUsername || 'this owner'}.</span>
+          </div>
+        </div>
+
+        <div className="accumul8-aicountant-sidebar-list">
+          {conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              type="button"
+              className={`accumul8-aicountant-conversation-card${activeConversation?.id === conversation.id ? ' is-active' : ''}`}
+              onClick={() => {
+                void openConversation(conversation.id);
+              }}
+            >
+              <strong>{conversation.title || 'Untitled Chat'}</strong>
+              <span>{conversation.last_message_preview || 'No messages yet.'}</span>
+              <small>{formatConversationTime(conversation.updated_at)}</small>
+            </button>
+          ))}
+          {!conversations.length ? (
+            <div className="accumul8-aicountant-empty-rail">Start a new chat to create your first saved AIcountant conversation.</div>
+          ) : null}
+        </div>
+
+        <details className="accumul8-aicountant-system-prompt">
+          <summary>Prompt Template</summary>
+          <textarea className="form-control" value={defaultSystemPrompt} readOnly rows={12} />
+        </details>
+      </aside>
+
+      <section className="accumul8-aicountant-main">
+        <header className="accumul8-aicountant-header">
+          <div>
+            <h3 className="mb-1">AIcountant</h3>
+            <p className="mb-0">
+              Connected to the selected Accumul8 owner data for balances, recent transactions, recurring bills, and budget rows.
+            </p>
+          </div>
+          <div className="accumul8-aicountant-header-actions">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={onBalanceBooks}
+              disabled={balancingBooks || sending || reconcilingOpeningBalances || runningWatchlist}
+            >
+              {balancingBooks ? 'Balancing...' : 'Balance the Books'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-primary btn-sm"
+              onClick={onReconcileOpeningBalances}
+              disabled={reconcilingOpeningBalances || sending || balancingBooks || runningWatchlist}
+            >
+              {reconcilingOpeningBalances ? 'Reconciling...' : 'Fix Opening Balances'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              onClick={onRunWatchlist}
+              disabled={runningWatchlist || sending || balancingBooks || reconcilingOpeningBalances}
+            >
+              {runningWatchlist ? 'Watching...' : 'Run Watchlist'}
+            </button>
+            <div className="accumul8-aicountant-message-board-pill">
+              Board: {messageBoardPendingCount} new
+            </div>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              placeholder="Conversation title"
+              disabled={!activeConversation || loading || sending}
+              aria-label="Conversation title"
+            />
+            <button
+              type="button"
+              className="btn btn-outline-primary btn-sm"
+              onClick={() => {
+                if (activeConversation) {
+                  void renameConversation(activeConversation.id, titleDraft);
+                }
+              }}
+              disabled={!activeConversation || loading || sending || titleDraft.trim() === ''}
+            >
+              Save Title
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm"
+              onClick={() => {
+                if (!activeConversation) {
+                  return;
+                }
+                if (!window.confirm(`Delete "${activeConversation.title}"?`)) {
+                  return;
+                }
+                void deleteConversation(activeConversation.id);
+              }}
+              disabled={!activeConversation || loading || sending}
+            >
+              Delete
+            </button>
+          </div>
+        </header>
+
+        <div className="accumul8-aicountant-thread" ref={threadRef}>
+          {!messages.length ? (
+            <div className="accumul8-aicountant-welcome">
+              <div className="accumul8-aicountant-avatar">AI</div>
+              <div className="accumul8-aicountant-welcome-body">
+                <h4>Household finance chat, saved like ChatGPT</h4>
+                <p>
+                  Ask AIcountant to review spending, categorize transactions, flag overdue items, compare your ledger with
+                  budgets, reconcile opening balances, or suggest what to pay next.
+                </p>
+                <div className="accumul8-aicountant-starters">
+                  {suggestedStarters.map((starter) => (
+                    <button
+                      key={starter}
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      onClick={() => setDraft(starter)}
+                    >
+                      {starter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <article
+                key={message.id}
+                className={`accumul8-aicountant-message accumul8-aicountant-message--${message.role === 'assistant' ? 'assistant' : 'user'}`}
+              >
+                <div className="accumul8-aicountant-avatar">{message.role === 'assistant' ? 'AI' : 'You'}</div>
+                <div className="accumul8-aicountant-bubble">
+                  <div className="accumul8-aicountant-bubble-meta">
+                    <strong>{message.role === 'assistant' ? 'AIcountant' : 'You'}</strong>
+                    <span>{formatConversationTime(message.created_at)}</span>
+                  </div>
+                  <div className="accumul8-aicountant-bubble-text">{message.content_text}</div>
+                </div>
+              </article>
+            ))
+          )}
+          {sending ? (
+            <div className="accumul8-aicountant-message accumul8-aicountant-message--assistant">
+              <div className="accumul8-aicountant-avatar">AI</div>
+              <div className="accumul8-aicountant-bubble">
+                <div className="accumul8-aicountant-typing">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <footer className="accumul8-aicountant-composer">
+          <textarea
+            className="form-control"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={4}
+            placeholder="Ask AIcountant about categorization, opening-balance fixes, cash-flow risks, recurring bills, reminders, or what to review next..."
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void submitMessage();
+              }
+            }}
+            disabled={sending}
+          />
+          <div className="accumul8-aicountant-composer-bar">
+            <span>Saved per conversation. Press Enter to send, Shift+Enter for a new line.</span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                void submitMessage();
+              }}
+              disabled={sending || draft.trim() === ''}
+            >
+              Send
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}

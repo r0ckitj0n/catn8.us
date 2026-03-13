@@ -7,6 +7,7 @@ import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8LedgerEntityModal } from '../modals/Accumul8LedgerEntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8EndexGroupModal } from '../accumul8/Accumul8EndexGroupModal';
+import { Accumul8AIcountantPanel } from '../accumul8/Accumul8AIcountantPanel';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
@@ -30,6 +31,9 @@ import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
+  Accumul8AIcountantWatchlistResponse,
+  Accumul8BalanceBooksResponse,
+  Accumul8OpeningBalanceReconciliationResponse,
   Accumul8TellerConnectTokenResponse,
   Accumul8TellerEnrollmentResponse,
   Accumul8TellerSyncResponse,
@@ -47,6 +51,9 @@ import {
   Accumul8EntityAliasDraft,
   Accumul8EntityEndexGuide,
   Accumul8EntityEndexGuideUpsertRequest,
+  Accumul8BootstrapResponse,
+  Accumul8MessageBoardMessage,
+  Accumul8MessageBoardResponse,
   Accumul8IdResponse,
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
@@ -77,7 +84,7 @@ const ACCUMUL8_TAB_LOADING_FALLBACK = <div className="accumul8-panel text-muted 
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-type TabKey = 'ledger' | 'calendar' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
+type TabKey = 'aicountant' | 'ledger' | 'calendar' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
   | 'all'
@@ -313,8 +320,7 @@ function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean 
   const normalizedDescription = String(transaction.description || '').trim().toLowerCase();
   const normalizedMemo = String(transaction.memo || '').trim().toLowerCase();
   return (
-    transaction.source_kind === 'statement_pdf'
-    && normalizedDescription === 'opening balance'
+    normalizedDescription === 'opening balance'
     && (normalizedMemo === '' || normalizedMemo.includes('opening balance'))
   );
 }
@@ -769,6 +775,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [entityEndexLogOpen, setEntityEndexLogOpen] = React.useState(false);
   const [entityEndexGuideModalOpen, setEntityEndexGuideModalOpen] = React.useState(false);
   const [editingEntityEndexGuideId, setEditingEntityEndexGuideId] = React.useState<number | null>(null);
+  const [messageBoardOpen, setMessageBoardOpen] = React.useState(false);
+  const [messageBoardLoading, setMessageBoardLoading] = React.useState(false);
+  const [messageBoardMessages, setMessageBoardMessages] = React.useState<Accumul8MessageBoardMessage[]>([]);
+  const [messageBoardUnacknowledgedCount, setMessageBoardUnacknowledgedCount] = React.useState(0);
+  const [balancingBooks, setBalancingBooks] = React.useState(false);
+  const [reconcilingOpeningBalances, setReconcilingOpeningBalances] = React.useState(false);
+  const [runningAIcountantWatchlist, setRunningAIcountantWatchlist] = React.useState(false);
   const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
@@ -883,6 +896,122 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     void loadStatementWorkspace();
   }, [loadStatementWorkspace, statementsLoaded, tab]);
+  const selectedOwnerProfile = React.useMemo(() => (
+    accessibleAccountOwners.find((owner) => owner.owner_user_id === (selectedOwnerUserId || activeOwnerUserId || 0)) || null
+  ), [accessibleAccountOwners, activeOwnerUserId, selectedOwnerUserId]);
+  const loadMessageBoard = React.useCallback(async () => {
+    const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
+    if (ownerUserId <= 0) {
+      setMessageBoardMessages([]);
+      setMessageBoardUnacknowledgedCount(0);
+      return;
+    }
+    setMessageBoardLoading(true);
+    try {
+      const response = await ApiClient.get<Accumul8MessageBoardResponse>(scopedActionUrl('list_message_board_messages'));
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to load the message board') });
+    } finally {
+      setMessageBoardLoading(false);
+    }
+  }, [activeOwnerUserId, onToast, scopedActionUrl, selectedOwnerUserId]);
+  React.useEffect(() => {
+    void loadMessageBoard();
+  }, [loadMessageBoard]);
+  const acknowledgeMessageBoardMessage = React.useCallback(async (messageId: number) => {
+    if (messageId <= 0) {
+      return;
+    }
+    setMessageBoardLoading(true);
+    try {
+      const response = await ApiClient.post<Accumul8MessageBoardResponse>(
+        scopedActionUrl('acknowledge_message_board_messages'),
+        { ids: [messageId] },
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to acknowledge message') });
+    } finally {
+      setMessageBoardLoading(false);
+    }
+  }, [onToast, scopedActionUrl]);
+  const handleBalanceBooks = React.useCallback(async () => {
+    if (balancingBooks) {
+      return;
+    }
+    setBalancingBooks(true);
+    try {
+      const response = await ApiClient.post<Accumul8BalanceBooksResponse>(
+        scopedActionUrl('balance_books'),
+        {},
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+      await load();
+      if (Number(response?.synced_connection_count || 0) <= 0) {
+        onToast?.({ tone: 'warning', message: 'No Teller bank connections were available to sync.' });
+        return;
+      }
+      onToast?.({
+        tone: Number(response?.error_connection_count || 0) > 0 ? 'warning' : 'success',
+        message: 'Balance the Books finished. Check the message board for the full run log.',
+      });
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'Balance the Books failed') });
+    } finally {
+      setBalancingBooks(false);
+    }
+  }, [balancingBooks, load, onToast, scopedActionUrl]);
+  const handleReconcileOpeningBalances = React.useCallback(async () => {
+    if (reconcilingOpeningBalances) {
+      return;
+    }
+    setReconcilingOpeningBalances(true);
+    try {
+      const response = await ApiClient.post<Accumul8OpeningBalanceReconciliationResponse>(
+        scopedActionUrl('reconcile_opening_balances'),
+        {},
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+      await load();
+      onToast?.({
+        tone: Number(response?.reconciled_count || 0) > 0 ? 'success' : 'info',
+        message: Number(response?.reconciled_count || 0) > 0
+          ? `Opening balances reconciled for ${Number(response?.reconciled_count || 0)} account${Number(response?.reconciled_count || 0) === 1 ? '' : 's'}.`
+          : 'No opening balance adjustments were needed.',
+      });
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'Opening balance reconciliation failed') });
+    } finally {
+      setReconcilingOpeningBalances(false);
+    }
+  }, [load, onToast, reconcilingOpeningBalances, scopedActionUrl]);
+  const handleRunAIcountantWatchlist = React.useCallback(async () => {
+    if (runningAIcountantWatchlist) {
+      return;
+    }
+    setRunningAIcountantWatchlist(true);
+    try {
+      const response = await ApiClient.post<Accumul8AIcountantWatchlistResponse>(
+        scopedActionUrl('run_aicountant_watchlist'),
+        { send_email: 0, create_notification_rule: 1 },
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+      onToast?.({
+        tone: Number(response?.overdue_count || 0) > 0 ? 'warning' : 'success',
+        message: 'AIcountant watchlist posted to the message board.',
+      });
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'AIcountant watchlist failed') });
+    } finally {
+      setRunningAIcountantWatchlist(false);
+    }
+  }, [onToast, runningAIcountantWatchlist, scopedActionUrl]);
   const visibleAccounts = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     if (bankingOrganizationId <= 0) {
@@ -2781,21 +2910,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           <div className="accumul8-page-header mb-2">
             <div className="accumul8-page-title-row">
               <h1 className="section-title mb-0 accumul8-title-mark">
-                <span className="visually-hidden">ACCUMUL8</span>
-                <picture className="accumul8-title-mark-picture" aria-hidden="true">
-                  <source srcSet="/images/branding/accumul8-title.webp" type="image/webp" />
-                  <img className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" />
-                </picture>
+                <button
+                  type="button"
+                  className={`accumul8-title-mark-button${messageBoardUnacknowledgedCount > 0 ? ' has-alert' : ''}`}
+                  onClick={() => setMessageBoardOpen(true)}
+                  aria-label={`Open message board${messageBoardUnacknowledgedCount > 0 ? ` (${messageBoardUnacknowledgedCount} new)` : ''}`}
+                >
+                  <span className="visually-hidden">ACCUMUL8</span>
+                  <picture className="accumul8-title-mark-picture" aria-hidden="true">
+                    <source srcSet="/images/branding/accumul8-title.webp" type="image/webp" />
+                    <img className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" />
+                  </picture>
+                </button>
               </h1>
               <div className="accumul8-header-control-deck">
                 <div className="accumul8-header-primary-row">
                   <div className="accumul8-tabs accumul8-tabs--header">
                     <div className="accumul8-tabs accumul8-tabs--header-buttons">
                       {[
-                        ['debtors', 'IOU'],
+                        ['aicountant', 'AIcountant'],
                         ['spreadsheet', 'Budget'],
-                        ['ledger', 'Ledger'],
                         ['calendar', 'Calendar'],
+                        ['debtors', 'IOU'],
+                        ['ledger', 'Ledger'],
                         ['pay_bills', 'Pay Bills'],
                       ].map(([key, label]) => (
                         <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
@@ -2999,6 +3136,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           </div>
           <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>
+          {tab === 'aicountant' && (
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
+              <Accumul8AIcountantPanel
+                ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
+                ownerUsername={selectedOwnerProfile?.username || viewer?.username || 'You'}
+                balancingBooks={balancingBooks}
+                reconcilingOpeningBalances={reconcilingOpeningBalances}
+                runningWatchlist={runningAIcountantWatchlist}
+                messageBoardPendingCount={messageBoardUnacknowledgedCount}
+                onBalanceBooks={handleBalanceBooks}
+                onReconcileOpeningBalances={handleReconcileOpeningBalances}
+                onRunWatchlist={handleRunAIcountantWatchlist}
+                onToast={onToast}
+              />
+            </div>
+          )}
           {tab === 'ledger' && (
             <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar accumul8-panel-toolbar--ledger">
@@ -4264,6 +4417,52 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </React.Suspense>
           )}
           </div>
+          {messageBoardOpen && (
+            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="AIcountant message board" onClick={() => setMessageBoardOpen(false)}>
+              <div className="accumul8-help-modal accumul8-message-board-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="accumul8-settings-modal-header">
+                  <div>
+                    <h2 className="accumul8-settings-modal-title mb-0">AIcountant Message Board</h2>
+                    <div className="small text-muted">
+                      {messageBoardUnacknowledgedCount} unacknowledged message{messageBoardUnacknowledgedCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void loadMessageBoard(); }} disabled={messageBoardLoading}>Refresh</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setMessageBoardOpen(false)}>Close</button>
+                  </div>
+                </div>
+                <div className="accumul8-message-board-list">
+                  {messageBoardMessages.map((message) => (
+                    <label key={message.id} className={`accumul8-message-board-item is-${message.message_level}${Number(message.is_acknowledged || 0) === 1 ? ' is-acknowledged' : ''}`}>
+                      <div className="accumul8-message-board-item-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={Number(message.is_acknowledged || 0) === 1}
+                          disabled={Number(message.is_acknowledged || 0) === 1 || messageBoardLoading}
+                          onChange={() => {
+                            void acknowledgeMessageBoardMessage(message.id);
+                          }}
+                          aria-label={`Acknowledge ${message.title || 'message'}`}
+                        />
+                      </div>
+                      <div className="accumul8-message-board-item-body">
+                        <div className="accumul8-message-board-item-header">
+                          <strong>{message.title || 'Update'}</strong>
+                          <span>{message.created_at}</span>
+                        </div>
+                        <div className="accumul8-message-board-item-text">{message.body_text}</div>
+                      </div>
+                    </label>
+                  ))}
+                  {!messageBoardMessages.length ? (
+                    <div className="text-muted">No message board items yet.</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
           {syncHelpOpen && (
             <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Teller setup guide">
               <div className="accumul8-help-modal">

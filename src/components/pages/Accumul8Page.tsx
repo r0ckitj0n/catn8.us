@@ -33,7 +33,6 @@ import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8Transactio
 import {
   Accumul8AIcountantWatchlistResponse,
   Accumul8BalanceBooksResponse,
-  Accumul8OpeningBalanceReconciliationResponse,
   Accumul8TellerConnectTokenResponse,
   Accumul8TellerEnrollmentResponse,
   Accumul8TellerSyncResponse,
@@ -108,6 +107,14 @@ type Accumul8SyncReport = {
   institutionName: string;
   syncedAt: string;
   result: Accumul8TellerSyncResponse;
+};
+type OpeningBalanceMessageMeta = {
+  accountName: string;
+  adjustmentAmount: number | null;
+  bankBalance: number | null;
+  priorLedgerBalance: number | null;
+  transactionDate: string;
+  transactionId: number | null;
 };
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
 const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
@@ -283,6 +290,53 @@ function formatInlineDate(value: string): string {
     day: 'numeric',
     year: '2-digit',
   });
+}
+
+function formatInlineDateTime(value: string): string {
+  if (!value) {
+    return '-';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function parseFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getOpeningBalanceMessageMeta(message: Accumul8MessageBoardMessage): OpeningBalanceMessageMeta | null {
+  if (String(message.source_kind || '') !== 'aicountant_opening_balance') {
+    return null;
+  }
+  const meta = message.meta && typeof message.meta === 'object' ? message.meta : {};
+  const safeMeta = meta as Record<string, unknown>;
+  const accountName = String(safeMeta.account_name || '').trim();
+  const transactionDate = String(safeMeta.transaction_date || '').trim();
+  const transactionId = Number(safeMeta.transaction_id || 0);
+  const adjustmentAmount = parseFiniteNumber(safeMeta.adjustment_amount);
+  const bankBalance = parseFiniteNumber(safeMeta.bank_balance);
+  const priorLedgerBalance = parseFiniteNumber(safeMeta.prior_ledger_balance);
+  if (!accountName && !transactionDate && transactionId <= 0 && adjustmentAmount === null && bankBalance === null && priorLedgerBalance === null) {
+    return null;
+  }
+  return {
+    accountName,
+    adjustmentAmount,
+    bankBalance,
+    priorLedgerBalance,
+    transactionDate,
+    transactionId: transactionId > 0 ? transactionId : null,
+  };
 }
 
 function formatInlineText(value: string | number | null | undefined, fallback = '-'): string {
@@ -780,7 +834,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [messageBoardMessages, setMessageBoardMessages] = React.useState<Accumul8MessageBoardMessage[]>([]);
   const [messageBoardUnacknowledgedCount, setMessageBoardUnacknowledgedCount] = React.useState(0);
   const [balancingBooks, setBalancingBooks] = React.useState(false);
-  const [reconcilingOpeningBalances, setReconcilingOpeningBalances] = React.useState(false);
   const [runningAIcountantWatchlist, setRunningAIcountantWatchlist] = React.useState(false);
   const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
   const launchableBankingOrganizations = React.useMemo(() => {
@@ -955,9 +1008,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         onToast?.({ tone: 'warning', message: 'No Teller bank connections were available to sync.' });
         return;
       }
+      const openingBalanceResult = response?.opening_balance_reconciliation;
       onToast?.({
-        tone: Number(response?.error_connection_count || 0) > 0 ? 'warning' : 'success',
-        message: 'Balance the Books finished. Check the message board for the full run log.',
+        tone: Number(response?.error_connection_count || 0) > 0 || Number(openingBalanceResult?.review_needed_count || 0) > 0 ? 'warning' : 'success',
+        message: Number(openingBalanceResult?.reconciled_count || 0) > 0
+          ? `Balance the Books finished and adjusted ${Number(openingBalanceResult?.reconciled_count || 0)} opening balance${Number(openingBalanceResult?.reconciled_count || 0) === 1 ? '' : 's'}. Check the message board for dates and ledger links.`
+          : 'Balance the Books finished. Check the message board for the full run log.',
       });
     } catch (error: any) {
       onToast?.({ tone: 'error', message: String(error?.message || 'Balance the Books failed') });
@@ -965,31 +1021,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setBalancingBooks(false);
     }
   }, [balancingBooks, load, onToast, scopedActionUrl]);
-  const handleReconcileOpeningBalances = React.useCallback(async () => {
-    if (reconcilingOpeningBalances) {
-      return;
-    }
-    setReconcilingOpeningBalances(true);
-    try {
-      const response = await ApiClient.post<Accumul8OpeningBalanceReconciliationResponse>(
-        scopedActionUrl('reconcile_opening_balances'),
-        {},
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-      await load();
-      onToast?.({
-        tone: Number(response?.reconciled_count || 0) > 0 ? 'success' : 'info',
-        message: Number(response?.reconciled_count || 0) > 0
-          ? `Opening balances reconciled for ${Number(response?.reconciled_count || 0)} account${Number(response?.reconciled_count || 0) === 1 ? '' : 's'}.`
-          : 'No opening balance adjustments were needed.',
-      });
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'Opening balance reconciliation failed') });
-    } finally {
-      setReconcilingOpeningBalances(false);
-    }
-  }, [load, onToast, reconcilingOpeningBalances, scopedActionUrl]);
   const handleRunAIcountantWatchlist = React.useCallback(async () => {
     if (runningAIcountantWatchlist) {
       return;
@@ -2946,13 +2977,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           aria-expanded={settingsMenuOpen}
                           onClick={() => setSettingsMenuOpen((current) => !current)}
                         >
-                          Settings
+                          Tools
                         </button>
                         {settingsMenuOpen ? (
                           <div
                             className="accumul8-settings-modal"
                             role="dialog"
-                            aria-label="Accumul8 settings sections"
+                            aria-label="Accumul8 tools sections"
                             style={{
                               top: `${settingsMenuPosition.top}px`,
                               left: `${settingsMenuPosition.left}px`,
@@ -3142,11 +3173,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
                 ownerUsername={selectedOwnerProfile?.username || viewer?.username || 'You'}
                 balancingBooks={balancingBooks}
-                reconcilingOpeningBalances={reconcilingOpeningBalances}
                 runningWatchlist={runningAIcountantWatchlist}
                 messageBoardPendingCount={messageBoardUnacknowledgedCount}
                 onBalanceBooks={handleBalanceBooks}
-                onReconcileOpeningBalances={handleReconcileOpeningBalances}
                 onRunWatchlist={handleRunAIcountantWatchlist}
                 onToast={onToast}
               />
@@ -4433,29 +4462,58 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                 </div>
                 <div className="accumul8-message-board-list">
-                  {messageBoardMessages.map((message) => (
-                    <label key={message.id} className={`accumul8-message-board-item is-${message.message_level}${Number(message.is_acknowledged || 0) === 1 ? ' is-acknowledged' : ''}`}>
-                      <div className="accumul8-message-board-item-check">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          checked={Number(message.is_acknowledged || 0) === 1}
-                          disabled={Number(message.is_acknowledged || 0) === 1 || messageBoardLoading}
-                          onChange={() => {
-                            void acknowledgeMessageBoardMessage(message.id);
-                          }}
-                          aria-label={`Acknowledge ${message.title || 'message'}`}
-                        />
-                      </div>
-                      <div className="accumul8-message-board-item-body">
-                        <div className="accumul8-message-board-item-header">
-                          <strong>{message.title || 'Update'}</strong>
-                          <span>{message.created_at}</span>
+                  {messageBoardMessages.map((message) => {
+                    const openingBalanceMeta = getOpeningBalanceMessageMeta(message);
+                    return (
+                      <label key={message.id} className={`accumul8-message-board-item is-${message.message_level}${Number(message.is_acknowledged || 0) === 1 ? ' is-acknowledged' : ''}`}>
+                        <div className="accumul8-message-board-item-check">
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={Number(message.is_acknowledged || 0) === 1}
+                            disabled={Number(message.is_acknowledged || 0) === 1 || messageBoardLoading}
+                            onChange={() => {
+                              void acknowledgeMessageBoardMessage(message.id);
+                            }}
+                            aria-label={`Acknowledge ${message.title || 'message'}`}
+                          />
                         </div>
-                        <div className="accumul8-message-board-item-text">{message.body_text}</div>
-                      </div>
-                    </label>
-                  ))}
+                        <div className="accumul8-message-board-item-body">
+                          <div className="accumul8-message-board-item-header">
+                            <strong>{message.title || 'Update'}</strong>
+                            <span>{formatInlineDateTime(message.created_at)}</span>
+                          </div>
+                          <div className="accumul8-message-board-item-text">{message.body_text}</div>
+                          {openingBalanceMeta ? (
+                            <div className="accumul8-message-board-item-meta">
+                              {openingBalanceMeta.accountName ? <span>Account: {openingBalanceMeta.accountName}</span> : null}
+                              {openingBalanceMeta.transactionDate ? <span>Adjustment date: {formatInlineDate(openingBalanceMeta.transactionDate)}</span> : null}
+                              {openingBalanceMeta.adjustmentAmount !== null ? <span>Adjustment: {formatCurrencyAmount(openingBalanceMeta.adjustmentAmount)}</span> : null}
+                              {openingBalanceMeta.priorLedgerBalance !== null ? <span>Ledger before: {formatCurrencyAmount(openingBalanceMeta.priorLedgerBalance)}</span> : null}
+                              {openingBalanceMeta.bankBalance !== null ? <span>Bank target: {formatCurrencyAmount(openingBalanceMeta.bankBalance)}</span> : null}
+                            </div>
+                          ) : null}
+                          {openingBalanceMeta?.transactionId ? (
+                            <div className="accumul8-message-board-item-actions">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setTab('ledger');
+                                  beginViewTransaction(openingBalanceMeta.transactionId || 0);
+                                  setMessageBoardOpen(false);
+                                }}
+                              >
+                                Open ledger entry
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })}
                   {!messageBoardMessages.length ? (
                     <div className="text-muted">No message board items yet.</div>
                   ) : null}

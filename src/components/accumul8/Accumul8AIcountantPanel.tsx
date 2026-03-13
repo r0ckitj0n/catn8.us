@@ -13,11 +13,9 @@ interface Accumul8AIcountantPanelProps {
   ownerUserId: number;
   ownerUsername: string;
   balancingBooks: boolean;
-  reconcilingOpeningBalances: boolean;
   runningWatchlist: boolean;
   messageBoardPendingCount: number;
   onBalanceBooks: () => void;
-  onReconcileOpeningBalances: () => void;
   onRunWatchlist: () => void;
   onToast?: (payload: ToastPayload) => void;
 }
@@ -42,11 +40,9 @@ export function Accumul8AIcountantPanel({
   ownerUserId,
   ownerUsername,
   balancingBooks,
-  reconcilingOpeningBalances,
   runningWatchlist,
   messageBoardPendingCount,
   onBalanceBooks,
-  onReconcileOpeningBalances,
   onRunWatchlist,
   onToast,
 }: Accumul8AIcountantPanelProps) {
@@ -152,23 +148,15 @@ export function Accumul8AIcountantPanel({
               type="button"
               className="btn btn-primary btn-sm"
               onClick={onBalanceBooks}
-              disabled={balancingBooks || sending || reconcilingOpeningBalances || runningWatchlist}
+              disabled={balancingBooks || sending || runningWatchlist}
             >
               {balancingBooks ? 'Balancing...' : 'Balance the Books'}
             </button>
             <button
               type="button"
-              className="btn btn-outline-primary btn-sm"
-              onClick={onReconcileOpeningBalances}
-              disabled={reconcilingOpeningBalances || sending || balancingBooks || runningWatchlist}
-            >
-              {reconcilingOpeningBalances ? 'Reconciling...' : 'Fix Opening Balances'}
-            </button>
-            <button
-              type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={onRunWatchlist}
-              disabled={runningWatchlist || sending || balancingBooks || reconcilingOpeningBalances}
+              disabled={runningWatchlist || sending || balancingBooks}
             >
               {runningWatchlist ? 'Watching...' : 'Run Watchlist'}
             </button>
@@ -223,7 +211,7 @@ export function Accumul8AIcountantPanel({
                 <h4>Household finance chat, saved like ChatGPT</h4>
                 <p>
                   Ask AIcountant to review spending, categorize transactions, flag overdue items, compare your ledger with
-                  budgets, reconcile opening balances, or suggest what to pay next.
+                  budgets, balance synced accounts, review opening balances, or suggest what to pay next.
                 </p>
                 <div className="accumul8-aicountant-starters">
                   {suggestedStarters.map((starter) => (

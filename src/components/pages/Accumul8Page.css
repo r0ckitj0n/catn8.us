@@ -599,6 +599,21 @@
   line-height: 1.6;
 }
 
+.accumul8-message-board-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 0.65rem;
+  color: var(--accumul8-deco-muted);
+  font-size: 0.8rem;
+}
+
+.accumul8-message-board-item-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 .accumul8-tabs {
   display: flex;
   flex-wrap: wrap;

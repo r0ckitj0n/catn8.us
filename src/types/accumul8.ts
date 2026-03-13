@@ -1005,6 +1005,7 @@ export interface Accumul8BalanceBooksResponse {
   synced_connection_count: number;
   skipped_connection_count: number;
   error_connection_count: number;
+  opening_balance_reconciliation: Accumul8OpeningBalanceReconciliationResponseCore;
   messages: Accumul8MessageBoardMessage[];
   unacknowledged_count: number;
 }
@@ -1016,14 +1017,26 @@ export interface Accumul8OpeningBalanceReconciliationResult {
   bank_balance: number;
   adjustment_amount: number;
   transaction_id: number;
+  transaction_date: string;
   action: 'created' | 'updated';
 }
 
-export interface Accumul8OpeningBalanceReconciliationResponse {
-  success: boolean;
+export interface Accumul8OpeningBalanceReviewItem {
+  account_id: number;
+  account_name: string;
+  reason: string;
+}
+
+export interface Accumul8OpeningBalanceReconciliationResponseCore {
   reconciled_count: number;
   skipped_count: number;
+  review_needed_count: number;
+  review_needed_accounts: Accumul8OpeningBalanceReviewItem[];
   results: Accumul8OpeningBalanceReconciliationResult[];
+}
+
+export interface Accumul8OpeningBalanceReconciliationResponse extends Accumul8OpeningBalanceReconciliationResponseCore {
+  success: boolean;
   messages: Accumul8MessageBoardMessage[];
   unacknowledged_count: number;
 }

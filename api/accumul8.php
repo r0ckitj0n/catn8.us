@@ -6376,7 +6376,7 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
     }
 }
 
-function accumul8_balance_books(int $viewerId, int $actorUserId): array
+function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
 {
     $connections = Database::queryAll(
         'SELECT id, institution_name, provider_name
@@ -6420,8 +6420,7 @@ function accumul8_balance_books(int $viewerId, int $actorUserId): array
             'synced_connection_count' => 0,
             'skipped_connection_count' => 0,
             'error_connection_count' => 0,
-            'messages' => accumul8_message_board_list($viewerId),
-            'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+            'changed_accounts' => [],
         ];
     }
 
@@ -6509,32 +6508,71 @@ function accumul8_balance_books(int $viewerId, int $actorUserId): array
         ];
     }
 
-    accumul8_message_board_post(
-        $viewerId,
-        $actorUserId,
-        'aicountant_balance_books',
-        $errorCount > 0 ? 'warning' : 'success',
-        'Balance the Books finished',
-        'Synced ' . $syncedCount . ' connection' . ($syncedCount === 1 ? '' : 's') . '. '
-            . ($errorCount > 0
-                ? $errorCount . ' connection' . ($errorCount === 1 ? '' : 's') . ' failed.'
-                : 'No connection failures were reported.')
-            . ' '
-            . ($changedAccounts !== []
-                ? 'Updated balances were detected for ' . count($changedAccounts) . ' account' . (count($changedAccounts) === 1 ? '' : 's') . '.'
-                : 'No account balance changes were detected after synchronization.'),
-        [
-            'synced_count' => $syncedCount,
-            'skipped_count' => $skippedCount,
-            'error_count' => $errorCount,
-            'changed_accounts' => $changedAccounts,
-        ]
-    );
-
     return [
         'synced_connection_count' => $syncedCount,
         'skipped_connection_count' => $skippedCount,
         'error_connection_count' => $errorCount,
+        'changed_accounts' => $changedAccounts,
+    ];
+}
+
+function accumul8_balance_books(int $viewerId, int $actorUserId): array
+{
+    $balanceResult = accumul8_balance_books_sync($viewerId, $actorUserId);
+    $openingBalanceResult = [
+        'reconciled_count' => 0,
+        'skipped_count' => 0,
+        'review_needed_count' => 0,
+        'review_needed_accounts' => [],
+        'results' => [],
+    ];
+
+    if ((int)($balanceResult['synced_connection_count'] ?? 0) > 0) {
+        $openingBalanceResult = accumul8_reconcile_opening_balances($viewerId, $actorUserId);
+    }
+
+    $changedAccounts = is_array($balanceResult['changed_accounts'] ?? null) ? $balanceResult['changed_accounts'] : [];
+    $errorCount = (int)($balanceResult['error_connection_count'] ?? 0);
+    $reviewNeededCount = (int)($openingBalanceResult['review_needed_count'] ?? 0);
+    $reconciledCount = (int)($openingBalanceResult['reconciled_count'] ?? 0);
+
+    $summaryParts = [
+        'Synced ' . (int)($balanceResult['synced_connection_count'] ?? 0) . ' connection' . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's') . '.',
+        $errorCount > 0
+            ? $errorCount . ' connection' . ($errorCount === 1 ? '' : 's') . ' failed.'
+            : 'No connection failures were reported.',
+        $changedAccounts !== []
+            ? 'Updated balances were detected for ' . count($changedAccounts) . ' account' . (count($changedAccounts) === 1 ? '' : 's') . '.'
+            : 'No account balance changes were detected after synchronization.',
+        $reconciledCount > 0
+            ? 'Opening balance review adjusted ' . $reconciledCount . ' account' . ($reconciledCount === 1 ? '' : 's') . '.'
+            : 'Opening balance review did not make any automatic adjustments.',
+    ];
+    if ($reviewNeededCount > 0) {
+        $summaryParts[] = $reviewNeededCount . ' account' . ($reviewNeededCount === 1 ? ' needs' : 's need') . ' manual review before any opening-balance change is safe.';
+    }
+
+    accumul8_message_board_post(
+        $viewerId,
+        $actorUserId,
+        'aicountant_balance_books',
+        ($errorCount > 0 || $reviewNeededCount > 0) ? 'warning' : 'success',
+        'Balance the Books finished',
+        implode(' ', $summaryParts),
+        [
+            'synced_count' => (int)($balanceResult['synced_connection_count'] ?? 0),
+            'skipped_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
+            'error_count' => $errorCount,
+            'changed_accounts' => $changedAccounts,
+            'opening_balance_reconciliation' => $openingBalanceResult,
+        ]
+    );
+
+    return [
+        'synced_connection_count' => (int)($balanceResult['synced_connection_count'] ?? 0),
+        'skipped_connection_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
+        'error_connection_count' => $errorCount,
+        'opening_balance_reconciliation' => $openingBalanceResult,
         'messages' => accumul8_message_board_list($viewerId),
         'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
     ];
@@ -6582,6 +6620,7 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
 
     $results = [];
     $skippedCount = 0;
+    $reviewNeeded = [];
     $hasDebtor = accumul8_has_debtor_support();
     foreach ($rows as $row) {
         $accountId = (int)($row['id'] ?? 0);
@@ -6609,8 +6648,42 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
             continue;
         }
 
+        $tellerHistory = Database::queryOne(
+            'SELECT COUNT(*) AS teller_count
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND account_id = ?
+               AND source_kind = ?',
+            [$viewerId, $accountId, 'teller']
+        );
+        if ((int)($tellerHistory['teller_count'] ?? 0) <= 0) {
+            $reviewNeeded[] = [
+                'account_id' => $accountId,
+                'account_name' => $accountName,
+                'reason' => 'No Teller transaction history has been synced yet, so AIcountant cannot infer a trustworthy opening balance.',
+            ];
+            continue;
+        }
+
+        $nonTellerActivity = Database::queryOne(
+            'SELECT COUNT(*) AS total
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND account_id = ?
+               AND description <> ?
+               AND COALESCE(source_kind, \'\') <> ?',
+            [$viewerId, $accountId, 'Opening Balance', 'teller']
+        );
+        if ((int)($nonTellerActivity['total'] ?? 0) > 0) {
+            $reviewNeeded[] = [
+                'account_id' => $accountId,
+                'account_name' => $accountName,
+                'reason' => 'This ledger already contains non-Teller activity, so an automatic opening-balance change could overwrite real bookkeeping work.',
+            ];
+            continue;
+        }
+
         $anchorDate = accumul8_opening_balance_adjustment_anchor_date($viewerId, $accountId);
-        $memo = 'AIcountant opening balance adjustment derived from bank balance reconciliation on ' . gmdate('Y-m-d H:i:s') . ' UTC.';
         $existing = Database::queryOne(
             'SELECT id
              FROM accumul8_transactions
@@ -6622,6 +6695,30 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
              LIMIT 1',
             [$viewerId, $accountId, 'Opening Balance', 'aicountant_opening_balance']
         );
+        $userOpeningBalanceRow = Database::queryOne(
+            'SELECT id
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND account_id = ?
+               AND description = ?
+               AND (source_ref IS NULL OR source_ref = ? OR source_ref <> ?)
+             ORDER BY id ASC
+             LIMIT 1',
+            [$viewerId, $accountId, 'Opening Balance', '', 'aicountant_opening_balance']
+        );
+        if ($userOpeningBalanceRow) {
+            $reviewNeeded[] = [
+                'account_id' => $accountId,
+                'account_name' => $accountName,
+                'reason' => 'A non-AI opening balance entry already exists for this account, so AIcountant left it alone for manual review.',
+            ];
+            continue;
+        }
+
+        $memo = 'AIcountant opening balance adjustment dated ' . $anchorDate
+            . ' after comparing Teller balance ' . number_format($bankBalance, 2)
+            . ' to ledger balance ' . number_format($ledgerBalance, 2)
+            . ' on ' . gmdate('Y-m-d H:i:s') . ' UTC.';
 
         if ($existing) {
             Database::execute(
@@ -6661,6 +6758,7 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
             'bank_balance' => $bankBalance,
             'adjustment_amount' => $delta,
             'transaction_id' => $transactionId,
+            'transaction_date' => $anchorDate,
             'action' => $action,
         ];
 
@@ -6670,7 +6768,7 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
             'aicountant_opening_balance',
             'warning',
             'Opening balance adjusted for ' . $accountName,
-            'Applied a ' . ($delta >= 0 ? '+' : '') . number_format($delta, 2) . ' opening balance adjustment so the ledger can align with the bank balance of ' . number_format($bankBalance, 2) . '.',
+            'Applied a ' . ($delta >= 0 ? '+' : '') . number_format($delta, 2) . ' opening balance adjustment dated ' . $anchorDate . ' so the ledger can align with the Teller bank balance of ' . number_format($bankBalance, 2) . '.',
             end($results) ?: []
         );
     }
@@ -6683,14 +6781,21 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
         $viewerId,
         $actorUserId,
         'aicountant_opening_balance',
-        $results !== [] ? 'success' : 'info',
+        ($results !== [] || $reviewNeeded !== []) ? ($reviewNeeded !== [] ? 'warning' : 'success') : 'info',
         'Opening balance reconciliation finished',
         $results !== []
             ? 'Adjusted opening balances for ' . count($results) . ' account' . (count($results) === 1 ? '' : 's') . '.'
-            : 'No opening balance adjustments were needed.',
+                . ($reviewNeeded !== []
+                    ? ' Left ' . count($reviewNeeded) . ' account' . (count($reviewNeeded) === 1 ? '' : 's') . ' unchanged because manual review is safer.'
+                    : '')
+            : ($reviewNeeded !== []
+                ? 'No automatic opening balance adjustments were made. ' . count($reviewNeeded) . ' account' . (count($reviewNeeded) === 1 ? ' needs' : 's need') . ' manual review first.'
+                : 'No opening balance adjustments were needed.'),
         [
             'reconciled_count' => count($results),
             'skipped_count' => $skippedCount,
+            'review_needed_count' => count($reviewNeeded),
+            'review_needed_accounts' => $reviewNeeded,
             'results' => $results,
         ]
     );
@@ -6698,6 +6803,8 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
     return [
         'reconciled_count' => count($results),
         'skipped_count' => $skippedCount,
+        'review_needed_count' => count($reviewNeeded),
+        'review_needed_accounts' => $reviewNeeded,
         'results' => $results,
         'messages' => accumul8_message_board_list($viewerId),
         'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
@@ -7052,7 +7159,15 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     );
 
     $balanceResult = accumul8_balance_books($viewerId, $actorUserId);
-    $openingBalanceResult = accumul8_reconcile_opening_balances($viewerId, $actorUserId);
+    $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
+        ? $balanceResult['opening_balance_reconciliation']
+        : [
+            'reconciled_count' => 0,
+            'skipped_count' => 0,
+            'review_needed_count' => 0,
+            'review_needed_accounts' => [],
+            'results' => [],
+        ];
 
     $watchlistPreview = accumul8_aicountant_watchlist_payload($viewerId);
     $attentionNeeded = (int)($watchlistPreview['overdue_count'] ?? 0) > 0
@@ -7874,18 +7989,27 @@ function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, arra
 
             if ($type === 'balance_books') {
                 $balanceResult = accumul8_balance_books($viewerId, $actorUserId);
+                $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
+                    ? $balanceResult['opening_balance_reconciliation']
+                    : ['reconciled_count' => 0, 'review_needed_count' => 0];
                 $results[] = [
                     'type' => $type,
                     'status' => 'applied',
                     'summary' => 'Balanced the books across '
                         . (int)($balanceResult['synced_connection_count'] ?? 0)
                         . ' synced connection' . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+                        . ' and adjusted ' . (int)($openingBalanceResult['reconciled_count'] ?? 0)
+                        . ' opening balance' . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
+                        . ((int)($openingBalanceResult['review_needed_count'] ?? 0) > 0
+                            ? ', leaving ' . (int)($openingBalanceResult['review_needed_count'] ?? 0) . ' account' . ((int)($openingBalanceResult['review_needed_count'] ?? 0) === 1 ? '' : 's') . ' for manual review'
+                            : '')
                         . ((int)($balanceResult['error_connection_count'] ?? 0) > 0
                             ? ' with ' . (int)($balanceResult['error_connection_count'] ?? 0) . ' error' . ((int)($balanceResult['error_connection_count'] ?? 0) === 1 ? '' : 's')
                             : '.'),
                     'synced_connection_count' => (int)($balanceResult['synced_connection_count'] ?? 0),
                     'skipped_connection_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
                     'error_connection_count' => (int)($balanceResult['error_connection_count'] ?? 0),
+                    'opening_balance_reconciliation' => $openingBalanceResult,
                 ];
                 continue;
             }

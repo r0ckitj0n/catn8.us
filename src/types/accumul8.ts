@@ -773,9 +773,24 @@ export interface Accumul8EntityAlias {
 }
 
 export interface Accumul8EntityEndexGuide {
+  id: number;
+  parent_entity_id: number | null;
   parent_name: string;
   match_rule: string;
   examples: string[];
+  match_fragments: string[];
+  match_contains: string[];
+  is_active: number;
+}
+
+export interface Accumul8EntityEndexGuideUpsertRequest {
+  parent_name: string;
+  parent_entity_id?: number | null;
+  match_rule?: string;
+  examples: string[];
+  match_fragments: string[];
+  match_contains: string[];
+  is_active?: number;
 }
 
 export interface Accumul8EntityAliasDraft {
@@ -820,7 +835,16 @@ export interface Accumul8EntityAliasScanResponse {
   updated_count: number;
   skipped_count: number;
   conflict_count: number;
+  reviewed_count: number;
+  approved_count: number;
+  rejected_count: number;
+  protected_skip_count: number;
   alias_names: string[];
+}
+
+export interface Accumul8IdResponse {
+  success: boolean;
+  id: number;
 }
 
 export interface Accumul8EntityAliasGlobalScanResponse {
@@ -831,6 +855,10 @@ export interface Accumul8EntityAliasGlobalScanResponse {
   updated_count: number;
   skipped_count: number;
   conflict_count: number;
+  reviewed_count: number;
+  approved_count: number;
+  rejected_count: number;
+  protected_skip_count: number;
 }
 
 export interface Accumul8EntityEndexScanLogItem {

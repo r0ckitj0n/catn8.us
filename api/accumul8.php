@@ -9,6 +9,9 @@ require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
 require_once __DIR__ . '/../includes/diagnostics_log.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
+const ACCUMUL8_ENTITY_ALIAS_REVIEW_VERSION = 2;
+const ACCUMUL8_ENTITY_ALIAS_AI_BATCH_SIZE = 20;
+
 if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
     catn8_session_start();
     catn8_groups_seed_core();
@@ -3115,6 +3118,129 @@ function accumul8_upsert_entity_alias(int $viewerId, int $entityId, string $alia
     return $aliasId > 0 ? $aliasId : null;
 }
 
+function accumul8_list_entity_endex_group_definitions(int $viewerId, bool $activeOnly = false): array
+{
+    if ($viewerId <= 0 || !accumul8_table_exists('accumul8_entity_endex_groups')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT g.id,
+                g.parent_entity_id,
+                g.parent_name,
+                g.match_rule,
+                g.examples_json,
+                g.match_fragments_json,
+                g.match_contains_json,
+                g.is_active
+         FROM accumul8_entity_endex_groups g
+         WHERE g.owner_user_id = ?
+           AND (? = 0 OR g.is_active = 1)
+         ORDER BY g.parent_name ASC, g.id ASC',
+        [$viewerId, $activeOnly ? 1 : 0]
+    );
+
+    $definitions = [];
+    foreach ($rows as $row) {
+        $parentName = accumul8_normalize_text((string)($row['parent_name'] ?? ''), 191);
+        if ($parentName === '') {
+            continue;
+        }
+        $examples = json_decode((string)($row['examples_json'] ?? '[]'), true);
+        $matchFragments = json_decode((string)($row['match_fragments_json'] ?? '[]'), true);
+        $matchContains = json_decode((string)($row['match_contains_json'] ?? '[]'), true);
+        $definitions[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'parent_entity_id' => isset($row['parent_entity_id']) && (int)$row['parent_entity_id'] > 0 ? (int)$row['parent_entity_id'] : null,
+            'parent_name' => $parentName,
+            'match_rule' => accumul8_normalize_text((string)($row['match_rule'] ?? ''), 255),
+            'examples' => array_values(array_filter(array_map(static fn($value): string => accumul8_normalize_text((string)$value, 191), is_array($examples) ? $examples : []), 'strlen')),
+            'match_fragments' => array_values(array_filter(array_map(static fn($value): string => strtolower(accumul8_entity_match_key((string)$value)), is_array($matchFragments) ? $matchFragments : []), 'strlen')),
+            'match_contains' => array_values(array_filter(array_map(static fn($value): string => strtolower(accumul8_normalize_text((string)$value, 191)), is_array($matchContains) ? $matchContains : []), 'strlen')),
+            'is_active' => (int)($row['is_active'] ?? 1),
+        ];
+    }
+
+    return $definitions;
+}
+
+function accumul8_ensure_default_entity_endex_groups(int $viewerId): void
+{
+    if ($viewerId <= 0 || !accumul8_table_exists('accumul8_entity_endex_groups')) {
+        return;
+    }
+
+    $existingRows = Database::queryAll(
+        'SELECT parent_key
+         FROM accumul8_entity_endex_groups
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    );
+    $existingKeys = [];
+    foreach ($existingRows as $row) {
+        $parentKey = trim((string)($row['parent_key'] ?? ''));
+        if ($parentKey !== '') {
+            $existingKeys[$parentKey] = true;
+        }
+    }
+
+    foreach (accumul8_base_entity_family_definitions() as $definition) {
+        $parentName = accumul8_normalize_text((string)($definition['parent_name'] ?? ''), 191);
+        $parentKey = accumul8_entity_match_key($parentName);
+        if ($parentKey === '' || isset($existingKeys[$parentKey])) {
+            continue;
+        }
+        $linkedEntity = Database::queryOne(
+            'SELECT id
+             FROM accumul8_entities
+             WHERE owner_user_id = ? AND display_name = ?
+             LIMIT 1',
+            [$viewerId, $parentName]
+        );
+        Database::execute(
+            'INSERT INTO accumul8_entity_endex_groups (
+                owner_user_id,
+                parent_entity_id,
+                parent_name,
+                parent_key,
+                match_rule,
+                examples_json,
+                match_fragments_json,
+                match_contains_json,
+                is_active
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
+            [
+                $viewerId,
+                $linkedEntity ? (int)($linkedEntity['id'] ?? 0) : null,
+                $parentName,
+                $parentKey,
+                accumul8_normalize_text((string)($definition['match_rule'] ?? ''), 255),
+                json_encode(array_values(array_map('strval', is_array($definition['examples'] ?? null) ? $definition['examples'] : [])), JSON_UNESCAPED_SLASHES),
+                json_encode(array_values(array_map('strval', is_array($definition['match_fragments'] ?? null) ? $definition['match_fragments'] : [])), JSON_UNESCAPED_SLASHES),
+                json_encode(array_values(array_map('strval', is_array($definition['match_contains'] ?? null) ? $definition['match_contains'] : [])), JSON_UNESCAPED_SLASHES),
+            ]
+        );
+        $existingKeys[$parentKey] = true;
+    }
+}
+
+function accumul8_list_entity_endex_guides_for_viewer(int $viewerId): array
+{
+    accumul8_ensure_default_entity_endex_groups($viewerId);
+    return array_values(array_map(static function (array $definition): array {
+        return [
+            'id' => (int)($definition['id'] ?? 0),
+            'parent_entity_id' => isset($definition['parent_entity_id']) ? (int)$definition['parent_entity_id'] : null,
+            'parent_name' => (string)($definition['parent_name'] ?? ''),
+            'match_rule' => (string)($definition['match_rule'] ?? ''),
+            'examples' => array_values(array_map('strval', is_array($definition['examples'] ?? null) ? $definition['examples'] : [])),
+            'match_fragments' => array_values(array_map('strval', is_array($definition['match_fragments'] ?? null) ? $definition['match_fragments'] : [])),
+            'match_contains' => array_values(array_map('strval', is_array($definition['match_contains'] ?? null) ? $definition['match_contains'] : [])),
+            'is_active' => (int)($definition['is_active'] ?? 1),
+        ];
+    }, accumul8_list_entity_endex_group_definitions($viewerId, false)));
+}
+
 function accumul8_entity_family_definition_for_parent(string $parentName): ?array
 {
     $parentKey = accumul8_entity_match_key($parentName);
@@ -3154,6 +3280,356 @@ function accumul8_entity_alias_scan_tokens(string $value): array
     }
 
     return array_keys($tokens);
+}
+
+function accumul8_entity_alias_review_provider_has_credentials(string $provider): bool
+{
+    $provider = strtolower(trim($provider));
+    if ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        return is_string($saJson) && trim($saJson) !== '';
+    }
+
+    return accumul8_statement_provider_has_api_key($provider);
+}
+
+function accumul8_entity_alias_review_effective_ai_config(): array
+{
+    $cfg = catn8_settings_ai_get_config();
+    $preferredProvider = strtolower(trim((string)($cfg['provider'] ?? '')));
+    $provider = '';
+    foreach ([$preferredProvider, 'openai', 'google_ai_studio', 'google_vertex_ai'] as $candidateProvider) {
+        $candidateProvider = strtolower(trim((string)$candidateProvider));
+        if ($candidateProvider === '' || !in_array($candidateProvider, ['openai', 'google_ai_studio', 'google_vertex_ai'], true)) {
+            continue;
+        }
+        if (accumul8_entity_alias_review_provider_has_credentials($candidateProvider)) {
+            $provider = $candidateProvider;
+            break;
+        }
+    }
+
+    if ($provider === '') {
+        throw new RuntimeException('Entity Endex AI review requires a configured OpenAI, Google AI Studio, or Vertex AI key.');
+    }
+
+    $configuredModel = trim((string)($cfg['model'] ?? ''));
+    $model = $configuredModel;
+    if ($model === '') {
+        $model = $provider === 'openai' ? 'gpt-4o-mini' : 'gemini-1.5-pro';
+    }
+
+    return [
+        'provider' => $provider,
+        'model' => $model,
+        'base_url' => trim((string)($cfg['base_url'] ?? '')),
+        'location' => trim((string)($cfg['location'] ?? 'us-central1')),
+    ];
+}
+
+function accumul8_entity_alias_review_map(int $viewerId, int $entityId): array
+{
+    if (!accumul8_table_exists('accumul8_entity_alias_reviews')) {
+        return [];
+    }
+
+    $rows = Database::queryAll(
+        'SELECT candidate_key,
+                candidate_name,
+                review_status,
+                review_source,
+                is_protected,
+                scanner_version
+         FROM accumul8_entity_alias_reviews
+         WHERE owner_user_id = ? AND entity_id = ?',
+        [$viewerId, $entityId]
+    );
+
+    $map = [];
+    foreach ($rows as $row) {
+        $candidateKey = trim((string)($row['candidate_key'] ?? ''));
+        if ($candidateKey === '') {
+            continue;
+        }
+        $map[$candidateKey] = [
+            'candidate_name' => (string)($row['candidate_name'] ?? ''),
+            'review_status' => strtolower(trim((string)($row['review_status'] ?? ''))),
+            'review_source' => strtolower(trim((string)($row['review_source'] ?? ''))),
+            'is_protected' => (int)($row['is_protected'] ?? 0),
+            'scanner_version' => (int)($row['scanner_version'] ?? 0),
+        ];
+    }
+
+    return $map;
+}
+
+function accumul8_upsert_entity_alias_review(
+    int $viewerId,
+    int $entityId,
+    string $candidateName,
+    string $reviewStatus,
+    string $reviewSource,
+    bool $isProtected,
+    int $scannerVersion,
+    string $provider = '',
+    string $model = '',
+    string $reason = ''
+): void {
+    if (!accumul8_table_exists('accumul8_entity_alias_reviews')) {
+        return;
+    }
+
+    $candidateDisplay = accumul8_entity_alias_display_name($candidateName);
+    $candidateKey = accumul8_entity_match_key($candidateDisplay);
+    $reviewStatus = strtolower(trim($reviewStatus));
+    $reviewSource = strtolower(trim($reviewSource));
+    $provider = strtolower(trim($provider));
+    $model = accumul8_normalize_text($model, 191);
+    $reason = accumul8_normalize_text($reason, 1000);
+    if ($entityId <= 0 || $candidateDisplay === '' || $candidateKey === '' || $reviewStatus === '') {
+        return;
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_entity_alias_reviews (
+            owner_user_id,
+            entity_id,
+            candidate_name,
+            candidate_key,
+            review_status,
+            review_source,
+            is_protected,
+            scanner_version,
+            ai_provider,
+            ai_model,
+            review_reason
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            candidate_name = VALUES(candidate_name),
+            review_status = VALUES(review_status),
+            review_source = VALUES(review_source),
+            is_protected = VALUES(is_protected),
+            scanner_version = VALUES(scanner_version),
+            ai_provider = VALUES(ai_provider),
+            ai_model = VALUES(ai_model),
+            review_reason = VALUES(review_reason)',
+        [
+            $viewerId,
+            $entityId,
+            $candidateDisplay,
+            $candidateKey,
+            $reviewStatus,
+            $reviewSource,
+            $isProtected ? 1 : 0,
+            $scannerVersion,
+            $provider,
+            $model,
+            $reason,
+        ]
+    );
+}
+
+function accumul8_delete_entity_alias_review(int $viewerId, int $entityId, string $candidateName): void
+{
+    if (!accumul8_table_exists('accumul8_entity_alias_reviews')) {
+        return;
+    }
+
+    $candidateKey = accumul8_entity_match_key(accumul8_entity_alias_display_name($candidateName));
+    if ($entityId <= 0 || $candidateKey === '') {
+        return;
+    }
+
+    Database::execute(
+        'DELETE FROM accumul8_entity_alias_reviews
+         WHERE owner_user_id = ? AND entity_id = ? AND candidate_key = ?',
+        [$viewerId, $entityId, $candidateKey]
+    );
+}
+
+function accumul8_entity_alias_review_request_schema(): array
+{
+    return [
+        'format' => [
+            'type' => 'json_schema',
+            'name' => 'accumul8_entity_alias_review',
+            'strict' => true,
+            'schema' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'required' => ['reviews'],
+                'properties' => [
+                    'reviews' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'required' => ['candidate_key', 'decision', 'reason'],
+                            'properties' => [
+                                'candidate_key' => ['type' => 'string'],
+                                'decision' => ['type' => 'string', 'enum' => ['approve', 'reject']],
+                                'reason' => ['type' => 'string'],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ];
+}
+
+function accumul8_entity_alias_ai_review_candidates(
+    string $parentName,
+    array $existingAliases,
+    ?array $familyDefinition,
+    array $candidates
+): array {
+    if ($candidates === []) {
+        return [];
+    }
+
+    $aiConfig = accumul8_entity_alias_review_effective_ai_config();
+    $provider = (string)($aiConfig['provider'] ?? '');
+    $model = (string)($aiConfig['model'] ?? '');
+    $baseUrl = (string)($aiConfig['base_url'] ?? '');
+    $location = (string)($aiConfig['location'] ?? 'us-central1');
+
+    $payload = [
+        'parent_name' => $parentName,
+        'existing_aliases' => array_values(array_map('strval', $existingAliases)),
+        'family_examples' => array_values(array_map('strval', is_array($familyDefinition['examples'] ?? null) ? $familyDefinition['examples'] : [])),
+        'family_match_contains' => array_values(array_map('strval', is_array($familyDefinition['match_contains'] ?? null) ? $familyDefinition['match_contains'] : [])),
+        'candidates' => array_values(array_map(static function (array $candidate): array {
+            return [
+                'candidate_key' => (string)($candidate['candidate_key'] ?? ''),
+                'candidate_name' => (string)($candidate['candidate_name'] ?? ''),
+                'source_types' => array_values(array_map('strval', is_array($candidate['source_types'] ?? null) ? $candidate['source_types'] : [])),
+            ];
+        }, $candidates)),
+    ];
+
+    $systemPrompt = <<<TXT
+You review possible alias names for a parent entity in a finance app.
+Approve only when the candidate is clearly the same real-world entity as the parent.
+Be conservative.
+Reject broad or ambiguous overlaps, shared generic words, nearby categories, or names that merely contain one shared word.
+Examples that should usually be rejected unless there is stronger evidence: names sharing only words like apple, express, store, market, club, gas, bank, food, or wireless.
+Return JSON only.
+TXT;
+
+    $userPrompt = <<<TXT
+Review these candidate aliases for the parent entity and decide whether each one should be approved or rejected.
+
+Rules:
+- Approve only clear spelling variants, abbreviations, OCR variants, punctuation variants, or known branded short forms for the exact same entity.
+- Reject if the candidate could reasonably refer to a different business, brand, location, or category.
+- Reject if the match depends only on one generic token.
+- The response must include every candidate_key exactly once.
+
+Input JSON:
+TXT;
+    $userPrompt .= "\n" . json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+    if ($provider === 'openai') {
+        $result = accumul8_openai_responses_json(
+            $model,
+            [[
+                'role' => 'system',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $systemPrompt],
+                ],
+            ], [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'input_text', 'text' => $userPrompt],
+                ],
+            ]],
+            $baseUrl,
+            0.0,
+            2500,
+            accumul8_entity_alias_review_request_schema(),
+            90
+        );
+        $decoded = is_array($result['json'] ?? null) ? $result['json'] : [];
+    } elseif ($provider === 'google_vertex_ai') {
+        $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+        if (!is_string($saJson) || trim($saJson) === '') {
+            throw new RuntimeException('Missing AI service account JSON (google_vertex_ai)');
+        }
+        $sa = json_decode((string)$saJson, true);
+        if (!is_array($sa)) {
+            throw new RuntimeException('AI Vertex service account JSON is invalid');
+        }
+        $content = catn8_vertex_ai_gemini_generate_text([
+            'service_account_json' => $saJson,
+            'project_id' => trim((string)($sa['project_id'] ?? '')),
+            'location' => $location !== '' ? $location : 'us-central1',
+            'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'temperature' => 0.0,
+            'max_output_tokens' => 2500,
+        ]);
+        $decoded = json_decode(accumul8_extract_json_from_text($content), true);
+    } else {
+        $apiKey = secret_get(catn8_settings_ai_secret_key('google_ai_studio', 'api_key'));
+        if (!is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('Missing AI API key (google_ai_studio)');
+        }
+        $resp = catn8_http_json_with_status(
+            'POST',
+            'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model !== '' ? $model : 'gemini-1.5-pro') . ':generateContent',
+            ['x-goog-api-key' => trim($apiKey)],
+            [
+                'contents' => [['role' => 'user', 'parts' => [['text' => $userPrompt]]]],
+                'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                'generationConfig' => [
+                    'temperature' => 0.0,
+                    'responseMimeType' => 'application/json',
+                ],
+            ],
+            10,
+            90
+        );
+        $content = (string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        $decoded = json_decode(accumul8_extract_json_from_text($content), true);
+    }
+
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Entity Endex AI review returned invalid JSON.');
+    }
+
+    $reviews = is_array($decoded['reviews'] ?? null) ? $decoded['reviews'] : [];
+    $decisions = [];
+    foreach ($reviews as $review) {
+        if (!is_array($review)) {
+            continue;
+        }
+        $candidateKey = trim((string)($review['candidate_key'] ?? ''));
+        $decision = strtolower(trim((string)($review['decision'] ?? '')));
+        if ($candidateKey === '' || !in_array($decision, ['approve', 'reject'], true)) {
+            continue;
+        }
+        $decisions[$candidateKey] = [
+            'decision' => $decision,
+            'reason' => accumul8_normalize_text((string)($review['reason'] ?? ''), 1000),
+            'provider' => $provider,
+            'model' => $model,
+        ];
+    }
+
+    $missingKeys = [];
+    foreach ($candidates as $candidate) {
+        $candidateKey = (string)($candidate['candidate_key'] ?? '');
+        if ($candidateKey !== '' && !isset($decisions[$candidateKey])) {
+            $missingKeys[] = $candidateKey;
+        }
+    }
+    if ($missingKeys !== []) {
+        throw new RuntimeException('Entity Endex AI review skipped candidate keys: ' . implode(', ', array_slice($missingKeys, 0, 8)));
+    }
+
+    return $decisions;
 }
 
 function accumul8_entity_alias_candidate_matches_parent(string $candidate, string $parentName, array $seedKeys, array $seedTokens, ?array $familyDefinition): bool
@@ -3238,7 +3714,7 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
     }
 
     $aliasRows = Database::queryAll(
-        'SELECT alias_name
+        'SELECT id, alias_name
          FROM accumul8_entity_aliases
          WHERE owner_user_id = ? AND entity_id = ?
          ORDER BY id ASC',
@@ -3248,11 +3724,13 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
     $seedKeys = [$parentKey => true];
     $seedTokens = [];
     $seedTexts = [$parentName];
+    $existingAliasNames = [];
     foreach ($aliasRows as $aliasRow) {
         $aliasName = (string)($aliasRow['alias_name'] ?? '');
         if ($aliasName !== '') {
             $seedTexts[] = $aliasName;
             $seedKeys[accumul8_entity_match_key($aliasName)] = true;
+            $existingAliasNames[] = $aliasName;
         }
     }
 
@@ -3281,7 +3759,14 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
             continue;
         }
         if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
-            $candidatesByKey[$candidateKey] = $candidate;
+            if (!isset($candidatesByKey[$candidateKey])) {
+                $candidatesByKey[$candidateKey] = [
+                    'candidate_name' => $candidate,
+                    'candidate_key' => $candidateKey,
+                    'source_types' => [],
+                ];
+            }
+            $candidatesByKey[$candidateKey]['source_types']['entity'] = true;
         }
     }
 
@@ -3292,7 +3777,14 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
             continue;
         }
         if (accumul8_entity_alias_candidate_matches_parent($candidate, $parentName, array_keys($seedKeys), $seedTokens, $familyDefinition)) {
-            $candidatesByKey[$candidateKey] = $candidate;
+            if (!isset($candidatesByKey[$candidateKey])) {
+                $candidatesByKey[$candidateKey] = [
+                    'candidate_name' => $candidate,
+                    'candidate_key' => $candidateKey,
+                    'source_types' => [],
+                ];
+            }
+            $candidatesByKey[$candidateKey]['source_types']['transaction'] = true;
         }
     }
 
@@ -3302,14 +3794,87 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
     $updatedCount = 0;
     $skippedCount = 0;
     $conflictCount = 0;
+    $reviewedCount = 0;
+    $approvedCount = 0;
+    $rejectedCount = 0;
+    $protectedSkipCount = 0;
     $aliasNames = [];
     $items = [];
-    foreach ($candidatesByKey as $candidate) {
+    $reviewMap = accumul8_entity_alias_review_map($viewerId, $entityId);
+    $scannerVersion = ACCUMUL8_ENTITY_ALIAS_REVIEW_VERSION;
+    $candidatesNeedingReview = [];
+    foreach ($candidatesByKey as $candidateKey => $candidate) {
+        $review = $reviewMap[$candidateKey] ?? null;
+        $reviewStatus = strtolower(trim((string)($review['review_status'] ?? '')));
+        $reviewVersion = (int)($review['scanner_version'] ?? 0);
+        if ($reviewVersion === $scannerVersion && in_array($reviewStatus, ['approved', 'rejected'], true)) {
+            $skippedCount++;
+            if ((int)($review['is_protected'] ?? 0) === 1) {
+                $protectedSkipCount++;
+            }
+            continue;
+        }
+        $candidate['source_types'] = array_keys(is_array($candidate['source_types'] ?? null) ? $candidate['source_types'] : []);
+        $candidatesNeedingReview[$candidateKey] = $candidate;
+    }
+
+    if ($candidatesNeedingReview !== []) {
+        foreach (array_chunk(array_values($candidatesNeedingReview), ACCUMUL8_ENTITY_ALIAS_AI_BATCH_SIZE) as $candidateBatch) {
+            $batchDecisions = accumul8_entity_alias_ai_review_candidates(
+                $parentName,
+                $existingAliasNames,
+                $familyDefinition,
+                $candidateBatch
+            );
+            foreach ($candidateBatch as $candidate) {
+                $candidateKey = (string)($candidate['candidate_key'] ?? '');
+                if ($candidateKey === '') {
+                    continue;
+                }
+                $decision = $batchDecisions[$candidateKey] ?? null;
+                if (!is_array($decision)) {
+                    continue;
+                }
+                $reviewedCount++;
+                if (($decision['decision'] ?? '') === 'approve') {
+                    $approvedCount++;
+                } else {
+                    $rejectedCount++;
+                    accumul8_upsert_entity_alias_review(
+                        $viewerId,
+                        $entityId,
+                        (string)($candidate['candidate_name'] ?? ''),
+                        'rejected',
+                        'ai',
+                        true,
+                        $scannerVersion,
+                        (string)($decision['provider'] ?? ''),
+                        (string)($decision['model'] ?? ''),
+                        (string)($decision['reason'] ?? '')
+                    );
+                }
+                $reviewMap[$candidateKey] = [
+                    'review_status' => ($decision['decision'] ?? '') === 'approve' ? 'approved' : 'rejected',
+                    'is_protected' => 1,
+                    'scanner_version' => $scannerVersion,
+                ];
+            }
+        }
+    }
+
+    foreach ($candidatesByKey as $candidateKey => $candidateMeta) {
+        $review = $reviewMap[$candidateKey] ?? null;
+        if (!is_array($review) || strtolower(trim((string)($review['review_status'] ?? ''))) !== 'approved' || (int)($review['scanner_version'] ?? 0) !== $scannerVersion) {
+            continue;
+        }
+
+        $candidate = (string)($candidateMeta['candidate_name'] ?? '');
         $result = accumul8_assign_entity_alias($viewerId, $entityId, $candidate, false);
         $status = (string)($result['status'] ?? '');
         if ($status === 'created') {
             $createdCount++;
             $aliasNames[] = $candidate;
+            accumul8_upsert_entity_alias_review($viewerId, $entityId, $candidate, 'approved', 'ai', true, $scannerVersion);
             $items[] = [
                 'parent_entity_id' => $entityId,
                 'parent_name' => $parentName,
@@ -3321,6 +3886,7 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
         if ($status === 'updated') {
             $updatedCount++;
             $aliasNames[] = $candidate;
+            accumul8_upsert_entity_alias_review($viewerId, $entityId, $candidate, 'approved', 'ai', true, $scannerVersion);
             $items[] = [
                 'parent_entity_id' => $entityId,
                 'parent_name' => $parentName,
@@ -3342,6 +3908,10 @@ function accumul8_scan_entity_aliases_from_candidates(int $viewerId, int $entity
         'updated_count' => $updatedCount,
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
+        'reviewed_count' => $reviewedCount,
+        'approved_count' => $approvedCount,
+        'rejected_count' => $rejectedCount,
+        'protected_skip_count' => $protectedSkipCount,
         'alias_names' => array_values($aliasNames),
         'items' => $items,
     ];
@@ -3410,6 +3980,10 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
     $updatedCount = 0;
     $skippedCount = 0;
     $conflictCount = 0;
+    $reviewedCount = 0;
+    $approvedCount = 0;
+    $rejectedCount = 0;
+    $protectedSkipCount = 0;
     $logItems = [];
     $entityDisplayNames = [];
     foreach ($entityRows as $row) {
@@ -3480,6 +4054,10 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
         $updatedCount += $updated;
         $skippedCount += $skipped;
         $conflictCount += $conflicts;
+        $reviewedCount += (int)($result['reviewed_count'] ?? 0);
+        $approvedCount += (int)($result['approved_count'] ?? 0);
+        $rejectedCount += (int)($result['rejected_count'] ?? 0);
+        $protectedSkipCount += (int)($result['protected_skip_count'] ?? 0);
     }
 
     $summaryText = ($createdCount + $updatedCount) > 0
@@ -3494,6 +4072,10 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
         'updated_count' => $updatedCount,
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
+        'reviewed_count' => $reviewedCount,
+        'approved_count' => $approvedCount,
+        'rejected_count' => $rejectedCount,
+        'protected_skip_count' => $protectedSkipCount,
         'summary_text' => $summaryText,
         'items' => $logItems,
     ]);
@@ -3505,6 +4087,10 @@ function accumul8_scan_all_entity_aliases(int $viewerId): array
         'updated_count' => $updatedCount,
         'skipped_count' => $skippedCount,
         'conflict_count' => $conflictCount,
+        'reviewed_count' => $reviewedCount,
+        'approved_count' => $approvedCount,
+        'rejected_count' => $rejectedCount,
+        'protected_skip_count' => $protectedSkipCount,
         'summary_text' => $summaryText,
     ];
 }
@@ -3535,6 +4121,122 @@ function accumul8_record_entity_endex_scan_log(int $viewerId, array $payload): v
             (int)($payload['conflict_count'] ?? 0),
             accumul8_normalize_text((string)($payload['summary_text'] ?? ''), 255),
             $itemsJson,
+        ]
+    );
+}
+
+function accumul8_entity_endex_guide_string_list($value, int $maxLen = 191, bool $normalizeKey = false): array
+{
+    $items = is_array($value) ? $value : [];
+    $seen = [];
+    $result = [];
+    foreach ($items as $item) {
+        $normalized = $normalizeKey
+            ? strtolower(accumul8_entity_match_key((string)$item))
+            : strtolower(accumul8_normalize_text((string)$item, $maxLen));
+        $display = $normalizeKey ? $normalized : accumul8_normalize_text((string)$item, $maxLen);
+        if ($display === '' || isset($seen[$normalized])) {
+            continue;
+        }
+        $seen[$normalized] = true;
+        $result[] = $display;
+    }
+    return $result;
+}
+
+function accumul8_validate_entity_endex_guide_payload(int $viewerId, array $body): array
+{
+    $parentName = accumul8_normalize_text((string)($body['parent_name'] ?? ''), 191);
+    $parentEntityId = isset($body['parent_entity_id']) && $body['parent_entity_id'] !== null ? (int)$body['parent_entity_id'] : 0;
+    if ($parentEntityId > 0) {
+        $entity = Database::queryOne(
+            'SELECT id, display_name
+             FROM accumul8_entities
+             WHERE id = ? AND owner_user_id = ?
+             LIMIT 1',
+            [$parentEntityId, $viewerId]
+        );
+        if (!$entity) {
+            catn8_json_response(['success' => false, 'error' => 'Parent entity not found'], 404);
+        }
+        if ($parentName === '') {
+            $parentName = accumul8_normalize_text((string)($entity['display_name'] ?? ''), 191);
+        }
+    }
+    if ($parentName === '') {
+        catn8_json_response(['success' => false, 'error' => 'Parent name is required'], 400);
+    }
+
+    $parentKey = accumul8_entity_match_key($parentName);
+    if ($parentKey === '') {
+        catn8_json_response(['success' => false, 'error' => 'Parent name is invalid'], 400);
+    }
+
+    return [
+        'parent_entity_id' => $parentEntityId > 0 ? $parentEntityId : null,
+        'parent_name' => $parentName,
+        'parent_key' => $parentKey,
+        'match_rule' => accumul8_normalize_text((string)($body['match_rule'] ?? ''), 255),
+        'examples' => accumul8_entity_endex_guide_string_list($body['examples'] ?? [], 191, false),
+        'match_fragments' => accumul8_entity_endex_guide_string_list($body['match_fragments'] ?? [], 191, true),
+        'match_contains' => accumul8_entity_endex_guide_string_list($body['match_contains'] ?? [], 191, false),
+        'is_active' => accumul8_normalize_bool($body['is_active'] ?? 1),
+    ];
+}
+
+function accumul8_create_entity_endex_guide(int $viewerId, array $payload): int
+{
+    Database::execute(
+        'INSERT INTO accumul8_entity_endex_groups (
+            owner_user_id,
+            parent_entity_id,
+            parent_name,
+            parent_key,
+            match_rule,
+            examples_json,
+            match_fragments_json,
+            match_contains_json,
+            is_active
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $payload['parent_entity_id'],
+            $payload['parent_name'],
+            $payload['parent_key'],
+            $payload['match_rule'],
+            json_encode($payload['examples'], JSON_UNESCAPED_SLASHES),
+            json_encode($payload['match_fragments'], JSON_UNESCAPED_SLASHES),
+            json_encode($payload['match_contains'], JSON_UNESCAPED_SLASHES),
+            $payload['is_active'],
+        ]
+    );
+    return (int)Database::lastInsertId();
+}
+
+function accumul8_update_entity_endex_guide(int $viewerId, int $id, array $payload): void
+{
+    Database::execute(
+        'UPDATE accumul8_entity_endex_groups
+         SET parent_entity_id = ?,
+             parent_name = ?,
+             parent_key = ?,
+             match_rule = ?,
+             examples_json = ?,
+             match_fragments_json = ?,
+             match_contains_json = ?,
+             is_active = ?
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $payload['parent_entity_id'],
+            $payload['parent_name'],
+            $payload['parent_key'],
+            $payload['match_rule'],
+            json_encode($payload['examples'], JSON_UNESCAPED_SLASHES),
+            json_encode($payload['match_fragments'], JSON_UNESCAPED_SLASHES),
+            json_encode($payload['match_contains'], JSON_UNESCAPED_SLASHES),
+            $payload['is_active'],
+            $id,
+            $viewerId,
         ]
     );
 }
@@ -5093,6 +5795,47 @@ function accumul8_tables_ensure(): void
         KEY idx_accumul8_entity_aliases_entity (entity_id),
         CONSTRAINT fk_accumul8_entity_aliases_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_accumul8_entity_aliases_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entity_endex_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        parent_entity_id INT NULL,
+        parent_name VARCHAR(191) NOT NULL,
+        parent_key VARCHAR(191) NOT NULL,
+        match_rule VARCHAR(255) NOT NULL DEFAULT '',
+        examples_json LONGTEXT NULL,
+        match_fragments_json LONGTEXT NULL,
+        match_contains_json LONGTEXT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_entity_endex_groups_owner_parent (owner_user_id, parent_key),
+        KEY idx_accumul8_entity_endex_groups_owner_active (owner_user_id, is_active),
+        KEY idx_accumul8_entity_endex_groups_parent_entity (parent_entity_id),
+        CONSTRAINT fk_accumul8_entity_endex_groups_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_entity_endex_groups_parent_entity FOREIGN KEY (parent_entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entity_alias_reviews (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        entity_id INT NOT NULL,
+        candidate_name VARCHAR(191) NOT NULL,
+        candidate_key VARCHAR(191) NOT NULL,
+        review_status VARCHAR(32) NOT NULL DEFAULT '',
+        review_source VARCHAR(32) NOT NULL DEFAULT '',
+        is_protected TINYINT(1) NOT NULL DEFAULT 0,
+        scanner_version INT NOT NULL DEFAULT 1,
+        ai_provider VARCHAR(64) NOT NULL DEFAULT '',
+        ai_model VARCHAR(191) NOT NULL DEFAULT '',
+        review_reason VARCHAR(1000) NOT NULL DEFAULT '',
+        reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_entity_alias_reviews_owner_entity_key (owner_user_id, entity_id, candidate_key),
+        KEY idx_accumul8_entity_alias_reviews_owner_status (owner_user_id, entity_id, review_status),
+        CONSTRAINT fk_accumul8_entity_alias_reviews_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_entity_alias_reviews_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_entity_endex_scan_logs (
@@ -10406,6 +11149,10 @@ try {
     error_log('accumul8 default account ensure failed: ' . $e->getMessage());
 }
 $viewerId = $scopeOwnerUserId;
+$GLOBALS['accumul8_dynamic_entity_family_definitions_provider'] = static function () use (&$viewerId): array {
+    accumul8_ensure_default_entity_endex_groups((int)$viewerId);
+    return accumul8_list_entity_endex_group_definitions((int)$viewerId, true);
+};
 
 $action = accumul8_normalize_text((string)($_GET['action'] ?? ''), 80);
 if ($action === '') {
@@ -10447,7 +11194,7 @@ if ($action === 'bootstrap') {
         'accessible_account_owners' => $accessibleOwners,
         'entities' => $entities,
         'entity_aliases' => $entityAliases,
-        'entity_endex_guides' => accumul8_entity_endex_guides(),
+        'entity_endex_guides' => accumul8_list_entity_endex_guides_for_viewer($viewerId),
         'entity_endex_scan_logs' => $entityEndexScanLogs,
         'contacts' => $contacts,
         'recurring_payments' => $recurring,
@@ -10575,6 +11322,17 @@ if ($action === 'create_entity_alias') {
     }
 
     $aliasId = isset($result['id']) ? (int)$result['id'] : 0;
+    if (in_array($status, ['created', 'updated'], true)) {
+        accumul8_upsert_entity_alias_review(
+            $viewerId,
+            $entityId,
+            $aliasName,
+            'approved',
+            'manual',
+            true,
+            ACCUMUL8_ENTITY_ALIAS_REVIEW_VERSION
+        );
+    }
     catn8_json_response([
         'success' => true,
         'id' => $aliasId > 0 ? $aliasId : null,
@@ -10592,8 +11350,78 @@ if ($action === 'delete_entity_alias') {
         catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
     }
 
+    $aliasRow = Database::queryOne(
+        'SELECT entity_id, alias_name
+         FROM accumul8_entity_aliases
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+
     Database::execute(
         'DELETE FROM accumul8_entity_aliases
+         WHERE id = ? AND owner_user_id = ?',
+        [$id, $viewerId]
+    );
+    if ($aliasRow) {
+        accumul8_delete_entity_alias_review(
+            $viewerId,
+            (int)($aliasRow['entity_id'] ?? 0),
+            (string)($aliasRow['alias_name'] ?? '')
+        );
+    }
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'create_entity_endex_guide') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $payload = accumul8_validate_entity_endex_guide_payload($viewerId, $body);
+    $existing = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entity_endex_groups
+         WHERE owner_user_id = ? AND parent_key = ?
+         LIMIT 1',
+        [$viewerId, (string)$payload['parent_key']]
+    );
+    if ($existing) {
+        catn8_json_response(['success' => false, 'error' => 'A grouping guide for that parent already exists'], 409);
+    }
+    $id = accumul8_create_entity_endex_guide($viewerId, $payload);
+    catn8_json_response(['success' => true, 'id' => $id]);
+}
+
+if ($action === 'update_entity_endex_guide') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    $payload = accumul8_validate_entity_endex_guide_payload($viewerId, $body);
+    $existing = Database::queryOne(
+        'SELECT id
+         FROM accumul8_entity_endex_groups
+         WHERE owner_user_id = ? AND parent_key = ? AND id <> ?
+         LIMIT 1',
+        [$viewerId, (string)$payload['parent_key'], $id]
+    );
+    if ($existing) {
+        catn8_json_response(['success' => false, 'error' => 'Another grouping guide already uses that parent name'], 409);
+    }
+    accumul8_update_entity_endex_guide($viewerId, $id, $payload);
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_entity_endex_guide') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    Database::execute(
+        'DELETE FROM accumul8_entity_endex_groups
          WHERE id = ? AND owner_user_id = ?',
         [$id, $viewerId]
     );
@@ -10613,6 +11441,10 @@ if ($action === 'scan_entity_aliases') {
         'updated_count' => (int)($result['updated_count'] ?? 0),
         'skipped_count' => (int)($result['skipped_count'] ?? 0),
         'conflict_count' => (int)($result['conflict_count'] ?? 0),
+        'reviewed_count' => (int)($result['reviewed_count'] ?? 0),
+        'approved_count' => (int)($result['approved_count'] ?? 0),
+        'rejected_count' => (int)($result['rejected_count'] ?? 0),
+        'protected_skip_count' => (int)($result['protected_skip_count'] ?? 0),
         'alias_names' => array_values(array_map('strval', is_array($result['alias_names'] ?? null) ? $result['alias_names'] : [])),
     ]);
 }
@@ -10629,6 +11461,10 @@ if ($action === 'scan_all_entity_aliases') {
         'updated_count' => (int)($result['updated_count'] ?? 0),
         'skipped_count' => (int)($result['skipped_count'] ?? 0),
         'conflict_count' => (int)($result['conflict_count'] ?? 0),
+        'reviewed_count' => (int)($result['reviewed_count'] ?? 0),
+        'approved_count' => (int)($result['approved_count'] ?? 0),
+        'rejected_count' => (int)($result['rejected_count'] ?? 0),
+        'protected_skip_count' => (int)($result['protected_skip_count'] ?? 0),
     ]);
 }
 

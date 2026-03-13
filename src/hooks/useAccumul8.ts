@@ -24,6 +24,7 @@ import {
   Accumul8EntityAliasScanRequest,
   Accumul8EntityAliasScanResponse,
   Accumul8EntityEndexGuide,
+  Accumul8EntityEndexGuideUpsertRequest,
   Accumul8EntityAliasUpsertRequest,
   Accumul8EntityUpsertRequest,
   Accumul8NotificationRule,
@@ -45,6 +46,7 @@ import {
   Accumul8Transaction,
   Accumul8TransactionMoveRequest,
   Accumul8TransactionUpsertRequest,
+  Accumul8IdResponse,
 } from '../types/accumul8';
 export function useAccumul8(
   onToast?: (payload: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void,
@@ -151,8 +153,8 @@ export function useAccumul8(
     );
   }, [scopedActionUrl, withReload]);
   const createEntity = React.useCallback(async (form: Accumul8EntityUpsertRequest) => {
-    await withReload(
-      () => ApiClient.post(scopedActionUrl('create_entity'), form),
+    return withReload<Accumul8IdResponse>(
+      () => ApiClient.post<Accumul8IdResponse>(scopedActionUrl('create_entity'), form),
       'Entity saved',
     );
   }, [scopedActionUrl, withReload]);
@@ -187,10 +189,18 @@ export function useAccumul8(
         const updatedCount = Number(res?.updated_count || 0);
         const conflictCount = Number(res?.conflict_count || 0);
         const skippedCount = Number(res?.skipped_count || 0);
+        const reviewedCount = Number(res?.reviewed_count || 0);
+        const rejectedCount = Number(res?.rejected_count || 0);
         const actionCount = createdCount + updatedCount;
         let message = actionCount > 0
           ? `Added ${actionCount} related name${actionCount === 1 ? '' : 's'} to the parent.`
           : 'No new related names were found for that parent.';
+        if (reviewedCount > 0) {
+          message += ` AI reviewed ${reviewedCount} candidate${reviewedCount === 1 ? '' : 's'}.`;
+        }
+        if (rejectedCount > 0) {
+          message += ` ${rejectedCount} ${rejectedCount === 1 ? 'was' : 'were'} rejected and protected from repeat scans.`;
+        }
         if (conflictCount > 0) {
           message += ` ${conflictCount} conflict${conflictCount === 1 ? ' was' : 's were'} skipped.`;
         } else if (skippedCount > 0 && actionCount > 0) {
@@ -219,10 +229,22 @@ export function useAccumul8(
         const createdCount = Number(res?.created_count || 0);
         const updatedCount = Number(res?.updated_count || 0);
         const conflictCount = Number(res?.conflict_count || 0);
+        const reviewedCount = Number(res?.reviewed_count || 0);
+        const rejectedCount = Number(res?.rejected_count || 0);
+        const protectedSkipCount = Number(res?.protected_skip_count || 0);
         const actionCount = createdCount + updatedCount;
         let message = actionCount > 0
           ? `Updated ${touchedEntityCount} parent${touchedEntityCount === 1 ? '' : 's'} and added ${actionCount} related name${actionCount === 1 ? '' : 's'}.`
           : 'No new related names were found across the Entity Endex.';
+        if (reviewedCount > 0) {
+          message += ` AI reviewed ${reviewedCount} candidate${reviewedCount === 1 ? '' : 's'}.`;
+        }
+        if (rejectedCount > 0) {
+          message += ` ${rejectedCount} ${rejectedCount === 1 ? 'was' : 'were'} rejected and protected.`;
+        }
+        if (protectedSkipCount > 0) {
+          message += ` ${protectedSkipCount} protected match${protectedSkipCount === 1 ? ' was' : 'es were'} skipped automatically.`;
+        }
         if (conflictCount > 0) {
           message += ` ${conflictCount} conflict${conflictCount === 1 ? ' was' : 's were'} skipped.`;
         }
@@ -236,6 +258,24 @@ export function useAccumul8(
       setBusy(false);
     }
   }, [handleError, load, onToast, scopedActionUrl]);
+  const createEntityEndexGuide = React.useCallback(async (form: Accumul8EntityEndexGuideUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_entity_endex_guide'), form),
+      'Grouping guide saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const updateEntityEndexGuide = React.useCallback(async (id: number, form: Accumul8EntityEndexGuideUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('update_entity_endex_guide'), { id, ...form }),
+      'Grouping guide updated',
+    );
+  }, [scopedActionUrl, withReload]);
+  const deleteEntityEndexGuide = React.useCallback(async (id: number) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('delete_entity_endex_guide'), { id }),
+      'Grouping guide deleted',
+    );
+  }, [scopedActionUrl, withReload]);
   const createBankingOrganization = React.useCallback(async (form: Accumul8BankingOrganizationUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_banking_organization'), form),
@@ -846,6 +886,9 @@ export function useAccumul8(
     deleteEntityAlias,
     findEntityAliases,
     findAllEntityAliases,
+    createEntityEndexGuide,
+    updateEntityEndexGuide,
+    deleteEntityEndexGuide,
     createContact,
     createBankingOrganization,
     updateBankingOrganization,

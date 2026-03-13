@@ -2134,6 +2134,22 @@ body.accumul8-column-resize-active {
   border: 1px solid rgba(212, 175, 55, 0.2);
   background: rgba(255, 255, 255, 0.03);
   padding: 0.8rem;
+  width: 100%;
+  text-align: left;
+  border-radius: 16px;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+button.accumul8-entity-endex-guide-card {
+  appearance: none;
+  color: inherit;
+}
+
+button.accumul8-entity-endex-guide-card:hover,
+button.accumul8-entity-endex-guide-card:focus-visible {
+  border-color: rgba(212, 175, 55, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
 }
 
 .accumul8-entity-endex-guide-card strong {
@@ -2304,6 +2320,18 @@ body.accumul8-column-resize-active {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+}
+
+.accumul8-row-actions--entity-name {
+  width: 100%;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.accumul8-row-actions--entity-name .accumul8-inline-cell-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
 }
 
 .accumul8-month-table .accumul8-row-actions--always-on {

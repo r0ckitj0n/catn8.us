@@ -5,8 +5,10 @@ import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationMa
 import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
+import { Accumul8LedgerEntityModal } from '../modals/Accumul8LedgerEntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8CalendarView } from '../accumul8/Accumul8CalendarView';
+import { Accumul8EndexGroupModal } from '../accumul8/Accumul8EndexGroupModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8SyncInstitutionsManager } from '../accumul8/Accumul8SyncInstitutionsManager';
@@ -14,6 +16,7 @@ import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
+  ACCUMUL8_MOVE_BUTTON_EMOJI,
   ACCUMUL8_SAVE_BUTTON_EMOJI,
   ACCUMUL8_STATEMENT_BUTTON_EMOJI,
   ACCUMUL8_VIEW_BUTTON_EMOJI,
@@ -47,6 +50,8 @@ import {
   Accumul8Entity,
   Accumul8EntityAliasDraft,
   Accumul8EntityEndexGuide,
+  Accumul8EntityEndexGuideUpsertRequest,
+  Accumul8IdResponse,
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import './Accumul8Page.css';
@@ -345,6 +350,34 @@ function normalizeEntityContactType(entity: Pick<Accumul8Entity, 'contact_type' 
   return 'payee';
 }
 
+function inferEntityContactTypeForAmount(amount: number): Accumul8ContactType {
+  return amount > 0 ? 'payer' : 'payee';
+}
+
+function uniqueTextValues(values: Array<string | null | undefined>, normalize: (value: string) => string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  values.forEach((value) => {
+    const display = String(value || '').trim();
+    const key = normalize(display);
+    if (!display || !key || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    result.push(display);
+  });
+  return result;
+}
+
+function buildEntityGuideRule(description: string, entityName: string): string {
+  const normalizedDescription = String(description || '').trim();
+  const normalizedEntityName = String(entityName || '').trim();
+  if (!normalizedDescription || !normalizedEntityName) {
+    return 'Contains approved entity-name variants';
+  }
+  return `Contains approved variants of "${normalizedEntityName}" based on "${normalizedDescription}"`;
+}
+
 function normalizeEntityKind(value: string | null | undefined, isVendor = 0): 'business' | 'contact' {
   return String(value || '').trim().toLowerCase() === 'business' || Number(isVendor || 0) === 1 ? 'business' : 'contact';
 }
@@ -565,6 +598,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     const parsed = Number(raw || 0);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   });
+  const accumul8ActionUrl = React.useCallback((action: string) => {
+    const params = new URLSearchParams({ action });
+    if (selectedOwnerUserId > 0) {
+      params.set('owner_user_id', String(selectedOwnerUserId));
+    }
+    return `/api/accumul8.php?${params.toString()}`;
+  }, [selectedOwnerUserId]);
   const {
     busy,
     loaded,
@@ -593,7 +633,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     updateEntity,
     createEntityAlias,
     deleteEntityAlias,
+    findEntityAliases,
     findAllEntityAliases,
+    createEntityEndexGuide,
+    updateEntityEndexGuide,
+    deleteEntityEndexGuide,
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
@@ -686,6 +730,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [transactionModalOpen, setTransactionModalOpen] = React.useState(false);
   const [transactionModalMode, setTransactionModalMode] = React.useState<'create' | 'view' | 'edit'>('create');
   const [transactionModalVariant, setTransactionModalVariant] = React.useState<'ledger' | 'iou'>('ledger');
+  const [ledgerEntityModalTransactionId, setLedgerEntityModalTransactionId] = React.useState<number | null>(null);
+  const [ledgerEntityModalSaving, setLedgerEntityModalSaving] = React.useState(false);
   const [entityHistoryEntityId, setEntityHistoryEntityId] = React.useState<number | null>(null);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
   const [selectedBankingOrganizationId, setSelectedBankingOrganizationId] = React.useState<string>('');
@@ -700,6 +746,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
   const [entityEndexFindingAll, setEntityEndexFindingAll] = React.useState(false);
   const [entityEndexLogOpen, setEntityEndexLogOpen] = React.useState(false);
+  const [entityEndexGuideModalOpen, setEntityEndexGuideModalOpen] = React.useState(false);
+  const [editingEntityEndexGuideId, setEditingEntityEndexGuideId] = React.useState<number | null>(null);
   const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
@@ -1179,6 +1227,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'account', header: 'Acct', minWidth: 138, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
     { key: 'description', header: 'Payee', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
+    { key: 'entityName', header: 'Entity Name', minWidth: 190, maxAutoWidth: 280, priority: 4, sortable: true, sortAccessor: (tx) => tx.entity_name || '', contentAccessor: (tx) => tx.entity_name || '-' },
     { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
     { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
@@ -1575,6 +1624,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setTransactionModalVariant('ledger');
     resetLedgerForm();
   }, [resetLedgerForm]);
+  const openLedgerEntityModal = React.useCallback((transactionId: number) => {
+    setLedgerEntityModalTransactionId(transactionId);
+  }, []);
+  const closeLedgerEntityModal = React.useCallback(() => {
+    setLedgerEntityModalTransactionId(null);
+  }, []);
   const collectEntityAliasNames = React.useCallback((entityId: number, entityDisplayName: string) => {
     const draft = entityAliasDraftById[entityId] || DEFAULT_ENTITY_ALIAS_DRAFT;
     const entity = entities.find((item) => item.id === entityId) || null;
@@ -1655,6 +1710,130 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     closeEntityModal();
   }, [closeEntityModal, collectEntityAliasNames, createEntity, editingEntityId, persistEntityAliases, updateEntity]);
+  const saveLedgerEntityRule = React.useCallback(async (payload: { mode: 'existing' | 'new'; entityId: number | null; newEntityName: string }) => {
+    const transaction = transactions.find((row) => row.id === ledgerEntityModalTransactionId) || null;
+    if (!transaction) {
+      return;
+    }
+
+    try {
+      setLedgerEntityModalSaving(true);
+      let targetEntityId = payload.entityId ?? 0;
+      let targetEntityName = '';
+
+      if (payload.mode === 'new') {
+        const createResponse = await ApiClient.post<Accumul8IdResponse>(accumul8ActionUrl('create_entity'), {
+          display_name: payload.newEntityName,
+          entity_kind: 'business',
+          contact_type: inferEntityContactTypeForAmount(Number(transaction.amount || 0)),
+          is_active: 1,
+          default_amount: Math.abs(Number(transaction.amount || 0)),
+          notes: String(transaction.memo || '').trim(),
+        });
+        targetEntityId = Number(createResponse?.id || 0);
+        targetEntityName = payload.newEntityName;
+      } else {
+        const selectedEntity = entities.find((entity) => entity.id === Number(payload.entityId || 0)) || null;
+        targetEntityId = Number(selectedEntity?.id || 0);
+        targetEntityName = String(selectedEntity?.display_name || '');
+      }
+
+      if (targetEntityId <= 0) {
+        throw new Error('Choose an entity before saving this rule.');
+      }
+
+      const description = String(transaction.description || '').trim();
+      const aliasKey = normalizeEntityAliasKey(description);
+      const conflictingAlias = entityAliases.find((alias) => (
+        normalizeEntityAliasKey(alias.alias_name) === aliasKey && Number(alias.entity_id || 0) !== targetEntityId
+      ));
+      if (conflictingAlias) {
+        await ApiClient.post(accumul8ActionUrl('delete_entity_alias'), { id: conflictingAlias.id });
+      }
+
+      if (aliasKey && normalizeEntityAliasKey(targetEntityName) !== aliasKey) {
+        await ApiClient.post(accumul8ActionUrl('create_entity_alias'), {
+          entity_id: targetEntityId,
+          alias_name: description,
+          merge_entity_id: null,
+        });
+      }
+
+      const guide = entityEndexGuides.find((item) => (
+        Number(item.parent_entity_id || 0) === targetEntityId
+          || toEntityEndexGuideKey(item) === normalizeEntityAliasKey(targetEntityName)
+      )) || null;
+      const guidePayload: Accumul8EntityEndexGuideUpsertRequest = {
+        parent_name: targetEntityName,
+        parent_entity_id: targetEntityId,
+        match_rule: buildEntityGuideRule(description, targetEntityName),
+        examples: uniqueTextValues([
+          ...(guide?.examples || []),
+          description,
+          transaction.entity_name || '',
+        ], (value) => value.trim().toLowerCase()),
+        match_contains: uniqueTextValues([
+          ...(guide?.match_contains || []),
+          description,
+          targetEntityName,
+        ], (value) => value.trim().toLowerCase()),
+        match_fragments: uniqueTextValues([
+          ...(guide?.match_fragments || []),
+          description,
+          targetEntityName,
+        ], normalizeEntityAliasKey),
+        is_active: 1,
+      };
+
+      if (guide?.id) {
+        await ApiClient.post(accumul8ActionUrl('update_entity_endex_guide'), { id: guide.id, ...guidePayload });
+      } else {
+        await ApiClient.post(accumul8ActionUrl('create_entity_endex_guide'), guidePayload);
+      }
+
+      await ApiClient.post(accumul8ActionUrl('update_transaction'), {
+        id: transaction.id,
+        transaction_date: transaction.transaction_date,
+        due_date: transaction.due_date,
+        paid_date: transaction.paid_date,
+        entry_type: transaction.entry_type,
+        description: transaction.description,
+        memo: transaction.memo,
+        amount: Number(transaction.amount || 0),
+        rta_amount: Number(transaction.rta_amount || 0),
+        is_paid: Number(transaction.is_paid || 0),
+        is_reconciled: Number(transaction.is_reconciled || 0),
+        is_budget_planner: Number(transaction.is_budget_planner || 0),
+        entity_id: targetEntityId,
+        account_id: transaction.account_id ?? null,
+        balance_entity_id: transaction.balance_entity_id ?? null,
+      });
+      await ApiClient.post(accumul8ActionUrl('scan_entity_aliases'), { entity_id: targetEntityId });
+      await load();
+      closeLedgerEntityModal();
+      onToast?.({
+        tone: 'success',
+        message: `Updated ${targetEntityName || 'entity'} for "${description}" and refreshed its matching rule.`,
+      });
+    } catch (error: any) {
+      onToast?.({
+        tone: 'error',
+        message: String(error?.message || 'Failed to update the entity name rule.'),
+      });
+    } finally {
+      setLedgerEntityModalSaving(false);
+    }
+  }, [
+    accumul8ActionUrl,
+    closeLedgerEntityModal,
+    entityAliases,
+    entityEndexGuides,
+    entities,
+    ledgerEntityModalTransactionId,
+    load,
+    onToast,
+    transactions,
+  ]);
   const beginEditRecurring = React.useCallback((id: number) => {
     const recurring = recurringPayments.find((v) => v.id === id);
     if (!recurring) return;
@@ -2008,6 +2187,27 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return acc;
     }, {})
   ), [entityEndexGuides]);
+  const entityEndexGuideById = React.useMemo(() => (
+    entityEndexGuides.reduce<Record<number, Accumul8EntityEndexGuide>>((acc, guide) => {
+      if (guide.id > 0) {
+        acc[guide.id] = guide;
+      }
+      return acc;
+    }, {})
+  ), [entityEndexGuides]);
+  const selectedEntityEndexGuide = React.useMemo(() => (
+    editingEntityEndexGuideId !== null ? (entityEndexGuideById[editingEntityEndexGuideId] || null) : null
+  ), [editingEntityEndexGuideId, entityEndexGuideById]);
+  const selectedEntityEndexParentEntity = React.useMemo(() => {
+    if (!selectedEntityEndexGuide) {
+      return null;
+    }
+    if (selectedEntityEndexGuide.parent_entity_id) {
+      return entitiesWithResolvedAliases.find((entity) => entity.id === selectedEntityEndexGuide.parent_entity_id) || null;
+    }
+    const parentKey = normalizeEntityAliasKey(selectedEntityEndexGuide.parent_name);
+    return entitiesWithResolvedAliases.find((entity) => normalizeEntityAliasKey(entity.display_name) === parentKey) || null;
+  }, [entitiesWithResolvedAliases, selectedEntityEndexGuide]);
   const entityTransactionsById = React.useMemo(() => {
     const grouped: Record<number, Accumul8Transaction[]> = {};
     for (const tx of transactions) {
@@ -2333,6 +2533,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const removeEntityAlias = React.useCallback(async (aliasId: number) => {
     await deleteEntityAlias(aliasId);
   }, [deleteEntityAlias]);
+  const openEntityEndexGuideModal = React.useCallback((guideId: number | null = null) => {
+    setEditingEntityEndexGuideId(guideId);
+    setEntityEndexGuideModalOpen(true);
+  }, []);
+  const closeEntityEndexGuideModal = React.useCallback(() => {
+    setEditingEntityEndexGuideId(null);
+    setEntityEndexGuideModalOpen(false);
+  }, []);
   const runEntityEndexFinder = React.useCallback(async () => {
     setEntityEndexFindingAll(true);
     try {
@@ -2341,6 +2549,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setEntityEndexFindingAll(false);
     }
   }, [findAllEntityAliases]);
+  const saveEntityEndexGuide = React.useCallback(async (payload: Accumul8EntityEndexGuideUpsertRequest) => {
+    if (editingEntityEndexGuideId) {
+      await updateEntityEndexGuide(editingEntityEndexGuideId, payload);
+    } else {
+      await createEntityEndexGuide(payload);
+    }
+    closeEntityEndexGuideModal();
+  }, [closeEntityEndexGuideModal, createEntityEndexGuide, editingEntityEndexGuideId, updateEntityEndexGuide]);
+  const removeEntityEndexGuide = React.useCallback(async (guideId: number) => {
+    await deleteEntityEndexGuide(guideId);
+    closeEntityEndexGuideModal();
+  }, [closeEntityEndexGuideModal, deleteEntityEndexGuide]);
+  const runEntityEndexGuideFinder = React.useCallback(async (entityId: number) => {
+    await findEntityAliases({ entity_id: entityId });
+  }, [findEntityAliases]);
   const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
     const draft = recurringDraftById[row.id];
     if (!draft) {
@@ -2826,6 +3049,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={ledgerTable.getColumnStyle('account')} />
                     <col style={ledgerTable.getColumnStyle('description')} />
                     <col style={ledgerTable.getColumnStyle('memo')} />
+                    <col style={ledgerTable.getColumnStyle('entityName')} />
                     <col style={ledgerTable.getColumnStyle('amount')} />
                     <col style={ledgerTable.getColumnStyle('balance')} />
                     <col style={ledgerTable.getColumnStyle('paid')} />
@@ -2838,6 +3062,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Entity Name" columnKey="entityName" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Bal" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Paid" columnKey="paid" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
@@ -2901,6 +3126,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo || tx.contact_name || tx.entity_name, '-')}</button>
                           )}
+                        </td>
+                        <td>
+                          <div className="accumul8-row-actions accumul8-row-actions--always-on accumul8-row-actions--entity-name">
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy}>
+                              {formatInlineText(tx.entity_name, '-')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
+                              onClick={() => openLedgerEntityModal(tx.id)}
+                              disabled={busy}
+                              aria-label={`Assign entity name for ${tx.description}`}
+                              title={`Assign entity name for ${tx.description}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_MOVE_BUTTON_EMOJI}</span>
+                            </button>
+                          </div>
                         </td>
                         <td className="text-end">
                           {activeLedgerRowId === tx.id ? (
@@ -3540,6 +3782,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="accumul8-entity-endex-toolbar-actions">
                     <button
                       type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => openEntityEndexGuideModal()}
+                      disabled={busy}
+                    >
+                      New Group
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-sm btn-outline-primary"
                       onClick={() => void runEntityEndexFinder()}
                       disabled={busy}
@@ -3566,7 +3816,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                  </div>
 	                  <div className="accumul8-entity-endex-guide-grid">
 	                    {entityEndexGuides.map((guide) => (
-	                      <div key={guide.parent_name} className="accumul8-entity-endex-guide-card">
+	                      <button
+                          key={guide.id || guide.parent_name}
+                          type="button"
+                          className="accumul8-entity-endex-guide-card"
+                          onClick={() => openEntityEndexGuideModal(guide.id || null)}
+                          disabled={busy}
+                        >
 	                        <strong>{guide.parent_name}</strong>
 	                        <div className="accumul8-entity-endex-guide-rule">{guide.match_rule}</div>
 	                        <div className="accumul8-entity-endex-guide-examples">
@@ -3574,7 +3830,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                            <span key={example} className="accumul8-entity-endex-chip">{example}</span>
 	                          ))}
 	                        </div>
-	                      </div>
+	                      </button>
 	                    ))}
 	                  </div>
 	                </div>
@@ -3582,7 +3838,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 	                {entityEndexParents.map((entity) => {
 	                  const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
 	                  const summary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
-	                  const matchingGuide = entityEndexGuideByParentKey[normalizeEntityAliasKey(entity.display_name)] || null;
+	                  const matchingGuide = entityEndexGuides.find((guide) => (
+                        Number(guide.parent_entity_id || 0) === entity.id
+                        || normalizeEntityAliasKey(guide.parent_name) === normalizeEntityAliasKey(entity.display_name)
+                      )) || entityEndexGuideByParentKey[normalizeEntityAliasKey(entity.display_name)] || null;
 	                  return (
 	                    <article key={entity.id} className="accumul8-entity-endex-card">
 	                      <div className="accumul8-entity-endex-card-head">
@@ -4115,6 +4374,39 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             }}
             onDeleteAlias={removeEntityAlias}
             onSave={submitEntityForm}
+        />
+        <Accumul8LedgerEntityModal
+          open={ledgerEntityModalTransactionId !== null}
+          busy={busy || ledgerEntityModalSaving}
+          transaction={ledgerEntityModalTransactionId !== null
+            ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
+            : null}
+          entities={entitiesSorted}
+          onClose={closeLedgerEntityModal}
+          onSave={saveLedgerEntityRule}
+        />
+        <Accumul8EndexGroupModal
+          open={entityEndexGuideModalOpen}
+          busy={busy}
+          guide={selectedEntityEndexGuide}
+          parentEntity={selectedEntityEndexParentEntity}
+          entities={entitiesWithResolvedAliases}
+          aliasDraft={selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
+            ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
+            : DEFAULT_ENTITY_ALIAS_DRAFT}
+          onClose={closeEntityEndexGuideModal}
+          onSave={saveEntityEndexGuide}
+          onDelete={removeEntityEndexGuide}
+          onFindRelated={runEntityEndexGuideFinder}
+          onAliasDraftChange={(draft) => {
+            if (!selectedEntityEndexParentEntity) return;
+            setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
+          }}
+          onAddAlias={async () => {
+            if (!selectedEntityEndexParentEntity) return;
+            await saveEntityAlias(selectedEntityEndexParentEntity);
+          }}
+          onRemoveAlias={removeEntityAlias}
         />
           <Accumul8ContactModal
             open={contactModalOpen}

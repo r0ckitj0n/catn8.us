@@ -102,8 +102,8 @@ if (!function_exists('accumul8_entity_match_key')) {
     }
 }
 
-if (!function_exists('accumul8_entity_family_definitions')) {
-    function accumul8_entity_family_definitions(): array
+if (!function_exists('accumul8_base_entity_family_definitions')) {
+    function accumul8_base_entity_family_definitions(): array
     {
         static $definitions = null;
         if (is_array($definitions)) {
@@ -595,6 +595,58 @@ if (!function_exists('accumul8_entity_family_definitions')) {
     }
 }
 
+if (!function_exists('accumul8_dynamic_entity_family_definitions')) {
+    function accumul8_dynamic_entity_family_definitions(): array
+    {
+        $provider = $GLOBALS['accumul8_dynamic_entity_family_definitions_provider'] ?? null;
+        if (is_callable($provider)) {
+            $definitions = $provider();
+            return is_array($definitions) ? $definitions : [];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('accumul8_entity_family_definitions')) {
+    function accumul8_entity_family_definitions(): array
+    {
+        $definitions = accumul8_base_entity_family_definitions();
+        $dynamicDefinitions = accumul8_dynamic_entity_family_definitions();
+        if (!is_array($dynamicDefinitions) || $dynamicDefinitions === []) {
+            return $definitions;
+        }
+
+        $merged = [];
+        foreach ($definitions as $definition) {
+            if (!is_array($definition)) {
+                continue;
+            }
+            $parentKey = accumul8_entity_match_key((string)($definition['parent_name'] ?? ''));
+            if ($parentKey === '') {
+                continue;
+            }
+            $merged[$parentKey] = $definition;
+        }
+
+        foreach ($dynamicDefinitions as $definition) {
+            if (!is_array($definition)) {
+                continue;
+            }
+            $parentKey = accumul8_entity_match_key((string)($definition['parent_name'] ?? ''));
+            if ($parentKey === '') {
+                continue;
+            }
+            $merged[$parentKey] = $definition;
+        }
+
+        uasort($merged, static function (array $a, array $b): int {
+            return strcasecmp((string)($a['parent_name'] ?? ''), (string)($b['parent_name'] ?? ''));
+        });
+
+        return array_values($merged);
+    }
+}
+
 if (!function_exists('accumul8_find_entity_family_definition')) {
     function accumul8_find_entity_family_definition(string $value): ?array
     {
@@ -665,9 +717,14 @@ if (!function_exists('accumul8_entity_endex_guides')) {
     {
         return array_map(static function (array $definition): array {
             return [
+                'id' => (int)($definition['id'] ?? 0),
+                'parent_entity_id' => isset($definition['parent_entity_id']) ? (int)$definition['parent_entity_id'] : null,
                 'parent_name' => (string)($definition['parent_name'] ?? ''),
                 'match_rule' => (string)($definition['match_rule'] ?? ''),
                 'examples' => array_values(array_map('strval', is_array($definition['examples'] ?? null) ? $definition['examples'] : [])),
+                'match_fragments' => array_values(array_map('strval', is_array($definition['match_fragments'] ?? null) ? $definition['match_fragments'] : [])),
+                'match_contains' => array_values(array_map('strval', is_array($definition['match_contains'] ?? null) ? $definition['match_contains'] : [])),
+                'is_active' => (int)($definition['is_active'] ?? 1),
             ];
         }, accumul8_entity_family_definitions());
     }

@@ -172,6 +172,36 @@ Business term: Banking Organizations
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_entity_endex_groups
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `parent_entity_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_entities.id)
+- `parent_name` (VARCHAR(191))
+- `parent_key` (VARCHAR(191), normalized lookup key)
+- `match_rule` (VARCHAR(255))
+- `examples_json` (LONGTEXT, JSON array)
+- `match_fragments_json` (LONGTEXT, JSON array)
+- `match_contains_json` (LONGTEXT, JSON array)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### accumul8_entity_alias_reviews
+- `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `entity_id` (INT, FOREIGN KEY -> accumul8_entities.id)
+- `candidate_name` (VARCHAR(191))
+- `candidate_key` (VARCHAR(191), normalized lookup key)
+- `review_status` (VARCHAR(32), e.g. `approved` / `rejected`)
+- `review_source` (VARCHAR(32), e.g. `manual` / `ai`)
+- `is_protected` (TINYINT(1), prevents repeat review until scanner version changes)
+- `scanner_version` (INT)
+- `ai_provider` (VARCHAR(64))
+- `ai_model` (VARCHAR(191))
+- `review_reason` (VARCHAR(1000))
+- `reviewed_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### accumul8_entity_endex_scan_logs
 - `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)

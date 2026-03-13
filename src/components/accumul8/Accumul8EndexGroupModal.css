@@ -1,0 +1,10 @@
+.accumul8-endex-group-modal .modal-content {
+  border-radius: 22px;
+}
+
+.accumul8-endex-group-modal-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}

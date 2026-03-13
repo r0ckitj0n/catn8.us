@@ -283,16 +283,16 @@ export function Accumul8SpreadsheetView({
   const selectedSummary = selectedPanel?.summary || null;
   const budgetTableColumns = React.useMemo<Array<PriorityTableColumn<EditableSpreadsheetRow>>>(() => ([
     { key: 'due', header: 'Due', minWidth: 96, maxAutoWidth: 112, sortable: true, sortAccessor: (row) => row.due_date, contentAccessor: (row) => formatDateLabel(row.due_date) },
-    { key: 'paidDate', header: 'Paid Date', minWidth: 118, maxAutoWidth: 136, sortable: true, sortAccessor: (row) => row.paid_date || '', contentAccessor: (row) => formatDateLabel(row.paid_date) },
+    { key: 'paidDate', header: 'Paid', minWidth: 96, maxAutoWidth: 114, sortable: true, sortAccessor: (row) => row.paid_date || '', contentAccessor: (row) => formatDateLabel(row.paid_date) },
     { key: 'vendor', header: 'Vendor', minWidth: 200, maxAutoWidth: 360, priority: 6, sortable: true, sortAccessor: (row) => row.vendor_input || row.title, contentAccessor: (row) => row.vendor_input || row.title || 'Add vendor' },
-    { key: 'account', header: 'Account', minWidth: 140, maxAutoWidth: 220, priority: 4, sortable: true, sortAccessor: (row) => getRowAccountDisplayName(row, ''), contentAccessor: (row) => getRowAccountDisplayName(row) },
-    { key: 'method', header: 'Method', minWidth: 120, maxAutoWidth: 170, priority: 3, sortable: true, sortAccessor: (row) => paymentMethodLabels[row.payment_method] || row.payment_method, contentAccessor: (row) => paymentMethodLabels[row.payment_method] || 'Unspecified' },
-    { key: 'frequency', header: 'Frequency', minWidth: 120, maxAutoWidth: 150, priority: 3, sortable: true, sortAccessor: (row) => row.frequency, contentAccessor: (row) => formatEditableValue(row.frequency, '-') },
-    { key: 'amount', header: 'Amount', minWidth: 132, maxAutoWidth: 156, sortable: true, sortAccessor: (row) => Number(row.amount || 0), contentAccessor: (row) => formatCurrency(Number(row.amount || 0)) },
-    { key: 'rta', header: 'RTA', minWidth: 100, maxAutoWidth: 120, sortable: true, sortAccessor: (row) => Number(row.rta || 0), contentAccessor: (row) => Number(row.rta || 0).toFixed(2) },
-    { key: 'balance', header: 'Balance', minWidth: 136, maxAutoWidth: 170, sortable: true, sortAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0) : Number.NEGATIVE_INFINITY, contentAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-' },
+    { key: 'account', header: 'Acct', minWidth: 128, maxAutoWidth: 190, priority: 4, sortable: true, sortAccessor: (row) => getRowAccountDisplayName(row, ''), contentAccessor: (row) => getRowAccountDisplayName(row) },
+    { key: 'method', header: 'Method', minWidth: 90, maxAutoWidth: 126, priority: 3, sortable: true, sortAccessor: (row) => paymentMethodLabels[row.payment_method] || row.payment_method, contentAccessor: (row) => paymentMethodLabels[row.payment_method] || 'Unspecified' },
+    { key: 'frequency', header: 'Frequency', minWidth: 92, maxAutoWidth: 114, priority: 3, sortable: true, sortAccessor: (row) => row.frequency, contentAccessor: (row) => formatEditableValue(row.frequency, '-') },
+    { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, sortAccessor: (row) => Number(row.amount || 0), contentAccessor: (row) => formatCurrency(Number(row.amount || 0)) },
+    { key: 'rta', header: 'RTA', minWidth: 82, maxAutoWidth: 100, sortable: true, sortAccessor: (row) => Number(row.rta || 0), contentAccessor: (row) => Number(row.rta || 0).toFixed(2) },
+    { key: 'balance', header: 'Bal', minWidth: 104, maxAutoWidth: 132, sortable: true, sortAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0) : Number.NEGATIVE_INFINITY, contentAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-' },
     { key: 'notes', header: 'Notes', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (row) => row.notes || '', contentAccessor: (row) => formatEditableValue(row.notes) },
-    { key: 'actions', header: 'Actions', minWidth: 126, maxAutoWidth: 180, sortable: false, resizable: true },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, resizable: true, contentAccessor: () => 'Actions' },
   ]), [getRowAccountDisplayName, paymentMethodLabels]);
   const budgetTable = usePriorityTableLayout({
     tableRef: budgetTableRef,
@@ -493,14 +493,14 @@ export function Accumul8SpreadsheetView({
                   <thead>
                     <tr>
                       <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
-                      <Accumul8TableHeaderCell label="Paid Date" columnKey="paidDate" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Paid" columnKey="paidDate" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Vendor" columnKey="vendor" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
-                      <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Method" columnKey="method" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
-                      <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="RTA" columnKey="rta" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
-                      <Accumul8TableHeaderCell label="Balance" columnKey="balance" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Bal" columnKey="balance" className="text-end" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Notes" columnKey="notes" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                     </tr>

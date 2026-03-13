@@ -1171,14 +1171,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
     { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
-    { key: 'account', header: 'Account', minWidth: 168, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
+    { key: 'account', header: 'Acct', minWidth: 138, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
     { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
-    { key: 'amount', header: 'Amount', minWidth: 126, maxAutoWidth: 150, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'balance', header: 'Balance', minWidth: 136, maxAutoWidth: 160, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
+    { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
-    { key: 'reconciled', header: 'Reconciled', minWidth: 138, maxAutoWidth: 156, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
-    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
+    { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '', contentAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '-' },
@@ -1187,27 +1187,27 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'credits', header: 'Credits', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_repaid || 0), contentAccessor: (debtor) => Number(debtor.total_repaid || 0).toFixed(2) },
     { key: 'net', header: 'Net IOU', minWidth: 132, maxAutoWidth: 152, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.outstanding_balance || 0), contentAccessor: (debtor) => Number(debtor.outstanding_balance || 0).toFixed(2) },
     { key: 'activity', header: 'Last Activity', minWidth: 136, maxAutoWidth: 170, priority: 1, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => debtor.last_activity_date || '', contentAccessor: (debtor) => debtor.last_activity_date || '-' },
-    { key: 'actions', header: 'Actions', minWidth: 228, maxAutoWidth: 250, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), []);
   const payBillsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
-    { key: 'due', header: 'Due Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.due_date || tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date || tx.transaction_date) },
-    { key: 'paidDate', header: 'Paid Date', minWidth: 124, maxAutoWidth: 140, sortable: true, sortAccessor: (tx) => tx.paid_date || '', contentAccessor: (tx) => formatInlineDate(tx.paid_date) },
+    { key: 'due', header: 'Due', minWidth: 96, maxAutoWidth: 114, sortable: true, sortAccessor: (tx) => tx.due_date || tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date || tx.transaction_date) },
+    { key: 'paidDate', header: 'Paid', minWidth: 96, maxAutoWidth: 114, sortable: true, sortAccessor: (tx) => tx.paid_date || '', contentAccessor: (tx) => formatInlineDate(tx.paid_date) },
     { key: 'description', header: 'Description', minWidth: 250, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
-    { key: 'account', header: 'Account', minWidth: 170, maxAutoWidth: 260, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', 'No account') },
-    { key: 'amount', header: 'Amount', minWidth: 120, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'asc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'status', header: 'Status', minWidth: 116, maxAutoWidth: 132, sortable: true, sortAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate), contentAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate) },
-    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'Statement View Edit Delete Save' },
+    { key: 'account', header: 'Acct', minWidth: 132, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', 'No account') },
+    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'asc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 112, sortable: true, sortAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate), contentAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate) },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName, todayDate]);
   const recurringTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8RecurringPayment>>>(() => ([
     { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring payment', item.notes || ''] },
     { key: 'nextDue', header: 'Next Due', minWidth: 126, maxAutoWidth: 144, sortable: true, sortAccessor: (item) => item.next_due_date || '', contentAccessor: (item) => formatInlineDate(item.next_due_date) },
-    { key: 'amount', header: 'Amount', minWidth: 118, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
-    { key: 'frequency', header: 'Frequency', minWidth: 122, maxAutoWidth: 150, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
-    { key: 'account', header: 'Account', minWidth: 180, maxAutoWidth: 300, priority: 2, sortable: true, sortAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', ''), contentAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', 'No account') },
-    { key: 'paymentMethod', header: 'Payment Method', minWidth: 170, maxAutoWidth: 220, priority: 1, sortable: true, sortAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod], contentAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod] },
+    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
+    { key: 'frequency', header: 'Frequency', minWidth: 96, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
+    { key: 'account', header: 'Acct', minWidth: 132, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', ''), contentAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', 'No account') },
+    { key: 'paymentMethod', header: 'Method', minWidth: 98, maxAutoWidth: 136, priority: 1, sortable: true, sortAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod], contentAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod] },
     { key: 'planner', header: 'Planner', minWidth: 108, maxAutoWidth: 120, sortable: true, sortAccessor: (item) => Number(item.is_budget_planner || 0), contentAccessor: (item) => Number(item.is_budget_planner || 0) === 1 ? 'Shown' : 'Hidden' },
-    { key: 'status', header: 'Status', minWidth: 104, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => Number(item.is_active || 0), contentAccessor: (item) => Number(item.is_active || 0) === 1 ? 'Active' : 'Paused' },
-    { key: 'actions', header: 'Actions', minWidth: 184, maxAutoWidth: 210, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 108, sortable: true, sortAccessor: (item) => Number(item.is_active || 0), contentAccessor: (item) => Number(item.is_active || 0) === 1 ? 'Active' : 'Paused' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName]);
   const ledgerTable = usePriorityTableLayout({
     tableRef: ledgerTableRef,
@@ -1330,9 +1330,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         ...(linkedAccountsByConnectionId[Number(connection.id || 0)] || []).map((account) => formatAccountMappingLabel(account)),
       ],
     },
-    { key: 'status', header: 'Status', minWidth: 166, maxAutoWidth: 196, sortable: true, sortAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || ''), contentAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || '') },
-    { key: 'lastSync', header: 'Last Sync', minWidth: 188, maxAutoWidth: 214, sortable: true, defaultSortDirection: 'desc', sortAccessor: (connection) => connection.last_synced_at || '', contentAccessor: (connection) => formatInlineDate(connection.last_synced_at) },
-    { key: 'actions', header: 'Actions', minWidth: 138, maxAutoWidth: 160, sortable: false, contentAccessor: () => 'Sync Reconnect Delete' },
+    { key: 'status', header: 'Status', minWidth: 96, maxAutoWidth: 120, sortable: true, sortAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || ''), contentAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || '') },
+    { key: 'lastSync', header: 'Last Sync', minWidth: 150, maxAutoWidth: 180, sortable: true, defaultSortDirection: 'desc', sortAccessor: (connection) => connection.last_synced_at || '', contentAccessor: (connection) => formatInlineDate(connection.last_synced_at) },
+    { key: 'actions', header: 'Actions', minWidth: 112, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
   ]), [linkedAccountsByConnectionId]);
   const syncTable = usePriorityTableLayout({
     tableRef: syncTableRef,
@@ -2136,17 +2136,17 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       sortAccessor: (entity) => (entityTransactionSummaryById[entity.id]?.lastDate || ''),
       contentAccessor: (entity) => formatEntityTransactionSummaryLabel(entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' }),
     },
-    { key: 'status', header: 'Status', minWidth: 98, maxAutoWidth: 118, sortable: true, sortAccessor: (entity) => Number(entity.is_active || 0), contentAccessor: (entity) => Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused' },
-    { key: 'actions', header: 'Actions', minWidth: 218, maxAutoWidth: 240, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 108, sortable: true, sortAccessor: (entity) => Number(entity.is_active || 0), contentAccessor: (entity) => Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [entityTransactionSummaryById]);
   const balanceLedgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
     { key: 'person', header: 'Person', minWidth: 156, maxAutoWidth: 230, priority: 2, sortable: true, sortAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '', contentAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '-' },
     { key: 'description', header: 'Description', minWidth: 220, maxAutoWidth: 520, priority: 5, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
     { key: 'memo', header: 'Memo', minWidth: 148, maxAutoWidth: 340, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
-    { key: 'amount', header: 'Amount', minWidth: 118, maxAutoWidth: 144, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
+    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
     { key: 'running', header: 'Running IOU', minWidth: 166, maxAutoWidth: 196, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
-    { key: 'actions', header: 'Actions', minWidth: 182, maxAutoWidth: 204, sortable: false, contentAccessor: () => 'View Edit Delete Save' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), []);
   const entitiesTable = usePriorityTableLayout({
     tableRef: entitiesTableRef,
@@ -2843,13 +2843,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <thead><tr>
                     <Accumul8TableHeaderCell label="Date" columnKey="date" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Balance" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Bal" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Paid" columnKey="paid" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Reconciled" columnKey="reconciled" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Rec'd" columnKey="reconciled" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                   </tr></thead>
                   <tbody>
@@ -3121,7 +3121,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       <Accumul8TableHeaderCell label="Person" columnKey="person" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
                       <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
                       <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
-                      <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
+                      <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
                       <Accumul8TableHeaderCell label="Running IOU" columnKey="running" className="text-end" sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
                       <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={balanceLedgerTable.sortState} onSort={balanceLedgerTable.requestSort} onResizeStart={balanceLedgerTable.startResize} />
                     </tr></thead>
@@ -3277,11 +3277,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={payBillsTable.getColumnStyle('actions')} />
                   </colgroup>
                   <thead><tr>
-                    <Accumul8TableHeaderCell label="Due Date" columnKey="due" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Paid Date" columnKey="paidDate" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Paid" columnKey="paidDate" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
                     <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
                     <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
                     <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
                   </tr></thead>
@@ -3773,10 +3773,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <thead><tr>
                     <Accumul8TableHeaderCell label="Title" columnKey="title" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Next Due" columnKey="nextDue" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amount" columnKey="amount" className="text-end" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Account" columnKey="account" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Payment Method" columnKey="paymentMethod" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Method" columnKey="paymentMethod" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Planner" columnKey="planner" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />

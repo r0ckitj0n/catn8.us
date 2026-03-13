@@ -174,7 +174,7 @@ const DEFAULT_RECURRING_FORM: RecurringFormState = {
   next_due_date: '',
   entity_id: '',
   account_id: '',
-  is_budget_planner: 0,
+  is_budget_planner: 1,
   notes: '',
 };
 const DEFAULT_ENTITY_FORM: EntityFormState = {

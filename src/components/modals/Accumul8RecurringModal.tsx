@@ -58,7 +58,7 @@ export function Accumul8RecurringModal({
     next_due_date: String(form.next_due_date || ''),
     entity_id: form.entity_id ? Number(form.entity_id) : null,
     account_id: form.account_id ? Number(form.account_id) : null,
-    is_budget_planner: Number(form.is_budget_planner || 0),
+    is_budget_planner: Number(form.is_budget_planner ?? 1),
     notes: String(form.notes || '').trim(),
   }), [form]);
   const isDirty = React.useMemo(
@@ -72,7 +72,7 @@ export function Accumul8RecurringModal({
       next_due_date: String(initialForm.next_due_date || ''),
       entity_id: initialForm.entity_id ? Number(initialForm.entity_id) : null,
       account_id: initialForm.account_id ? Number(initialForm.account_id) : null,
-      is_budget_planner: Number(initialForm.is_budget_planner || 0),
+      is_budget_planner: Number(initialForm.is_budget_planner ?? 1),
       notes: String(initialForm.notes || '').trim(),
     }),
     [buildPayload, initialForm],

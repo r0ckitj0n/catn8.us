@@ -473,6 +473,7 @@ export interface Accumul8Transaction {
   id: number;
   account_id: number | null;
   banking_organization_id: number | null;
+  recurring_payment_id: number | null;
   entity_id: number | null;
   entity_name: string;
   balance_entity_id: number | null;

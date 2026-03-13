@@ -225,7 +225,7 @@ Business term: Banking Organizations
 - `paid_date` (DATE, NULLABLE)
 - `notes` (TEXT, NULLABLE)
 - `is_active` (TINYINT(1), DEFAULT 1)
-- `is_budget_planner` (TINYINT(1), DEFAULT 0)
+- `is_budget_planner` (TINYINT(1), DEFAULT 1)
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 

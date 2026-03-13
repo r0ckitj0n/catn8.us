@@ -9,6 +9,7 @@ import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
 import { Accumul8CalendarView } from '../accumul8/Accumul8CalendarView';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
+import { Accumul8SyncInstitutionsManager } from '../accumul8/Accumul8SyncInstitutionsManager';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
@@ -596,6 +597,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
+    createBankConnection,
+    updateBankConnection,
+    deleteBankConnection,
     createAccount,
     updateAccount,
     deleteAccount,
@@ -766,7 +770,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const payBillsTableRef = React.useRef<HTMLTableElement | null>(null);
   const entitiesTableRef = React.useRef<HTMLTableElement | null>(null);
   const recurringTableRef = React.useRef<HTMLTableElement | null>(null);
-  const syncTableRef = React.useRef<HTMLTableElement | null>(null);
   const aliasRowsByEntityId = React.useMemo(() => {
     const next: Record<number, typeof entityAliases> = {};
     entityAliases.forEach((alias) => {
@@ -1316,30 +1319,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [accounts]);
-  const syncTableColumns = React.useMemo<Array<PriorityTableColumn<any>>>(() => ([
-    {
-      key: 'institution',
-      header: 'Institution',
-      minWidth: 300,
-      maxAutoWidth: 580,
-      priority: 6,
-      sortable: true,
-      sortAccessor: (connection) => connection.institution_name || connection.institution_id || '',
-      contentAccessor: (connection) => [
-        connection.institution_name || connection.institution_id || 'Unknown',
-        connection.teller_enrollment_id || 'Not stored yet',
-        ...(linkedAccountsByConnectionId[Number(connection.id || 0)] || []).map((account) => formatAccountMappingLabel(account)),
-      ],
-    },
-    { key: 'status', header: 'Status', minWidth: 96, maxAutoWidth: 120, sortable: true, sortAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || ''), contentAccessor: (connection) => formatSyncStatusLabel(connection.status || '', connection.last_error || '') },
-    { key: 'lastSync', header: 'Last Sync', minWidth: 150, maxAutoWidth: 180, sortable: true, defaultSortDirection: 'desc', sortAccessor: (connection) => connection.last_synced_at || '', contentAccessor: (connection) => formatInlineDate(connection.last_synced_at) },
-    { key: 'actions', header: 'Actions', minWidth: 112, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [linkedAccountsByConnectionId]);
-  const syncTable = usePriorityTableLayout({
-    tableRef: syncTableRef,
-    rows: bankConnections,
-    columns: syncTableColumns,
-  });
   const runConnectionSync = React.useCallback(async (connectionId: number, institutionName: string) => {
     setSyncingConnectionId(connectionId);
     try {
@@ -3888,70 +3867,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
               </div>
-              <h4 className="h6">Connected Institutions</h4>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--sync">
-                <table
-                  ref={syncTableRef}
-                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--sync-list accumul8-sticky-head"
-                  style={syncTable.tableStyle}
-                >
-                  <colgroup>
-                    <col style={syncTable.getColumnStyle('institution')} />
-                    <col style={syncTable.getColumnStyle('status')} />
-                    <col style={syncTable.getColumnStyle('lastSync')} />
-                    <col style={syncTable.getColumnStyle('actions')} />
-                  </colgroup>
-                  <thead><tr>
-                    <Accumul8TableHeaderCell label="Institution" columnKey="institution" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
-                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
-                    <Accumul8TableHeaderCell label="Last Sync" columnKey="lastSync" sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
-                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" sortable={false} sortState={syncTable.sortState} onSort={syncTable.requestSort} onResizeStart={syncTable.startResize} />
-                  </tr></thead>
-                  <tbody>
-                    {syncTable.rows.map((c: any) => (
-                      <tr key={c.id}>
-                        <td>
-                          <div className="accumul8-sync-institution-name">{c.institution_name || c.institution_id || 'Unknown'}</div>
-                          <div className="accumul8-sync-meta">
-                            Enrollment: {c.teller_enrollment_id || 'Not stored yet'}
-                          </div>
-                          <div className="accumul8-sync-linked-accounts">
-                            {(linkedAccountsByConnectionId[Number(c.id || 0)] || []).length > 0 ? (
-                              (linkedAccountsByConnectionId[Number(c.id || 0)] || []).map((account) => (
-                                <div key={account.id} className="accumul8-sync-linked-account">
-                                  {formatAccountMappingLabel(account)}
-                                  <div className="accumul8-sync-meta">
-                                    {formatAccountBackfillNote(account)}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="accumul8-sync-empty">No local account mappings yet. Run Sync to import and map Teller accounts.</div>
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          <div className={`accumul8-sync-status${isTellerRateLimited(String(c.last_error || '')) ? ' is-rate-limited' : ''}`}>
-                            {formatSyncStatusLabel(String(c.status || ''), String(c.last_error || ''))}
-                          </div>
-                          {c.last_error ? <div className="accumul8-sync-error">{formatSyncStatusMessage(String(c.last_error || ''))}</div> : null}
-                        </td>
-                        <td>{c.last_sync_at || '-'}</td>
-                        <td className="text-end">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => void runConnectionSync(Number(c.id || 0), String(c.institution_name || c.institution_id || 'Unknown'))}
-                            disabled={busy}
-                          >
-                            {syncingConnectionId === Number(c.id || 0) ? 'Syncing...' : 'Sync'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Accumul8SyncInstitutionsManager
+                bankConnections={bankConnections}
+                linkedAccountsByConnectionId={linkedAccountsByConnectionId}
+                busy={busy}
+                syncingConnectionId={syncingConnectionId}
+                onCreate={createBankConnection}
+                onUpdate={updateBankConnection}
+                onDelete={async (id) => {
+                  await deleteBankConnection({ id });
+                }}
+                onSync={runConnectionSync}
+                formatAccountMappingLabel={formatAccountMappingLabel}
+                formatAccountBackfillNote={formatAccountBackfillNote}
+                formatSyncStatusLabel={formatSyncStatusLabel}
+                formatSyncStatusMessage={formatSyncStatusMessage}
+                isTellerRateLimited={isTellerRateLimited}
+              />
               {lastSyncReport ? (
                 <div className="accumul8-sync-report mt-3">
                   <div className="accumul8-sync-report__header">

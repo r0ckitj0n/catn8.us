@@ -10,6 +10,8 @@ import {
   Accumul8BudgetRow,
   Accumul8BudgetRowUpsertRequest,
   Accumul8BillItem,
+  Accumul8BankConnectionDeleteRequest,
+  Accumul8BankConnectionUpsertRequest,
   Accumul8BootstrapResponse,
   Accumul8Contact,
   Accumul8ContactUpsertRequest,
@@ -250,6 +252,24 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('delete_banking_organization'), { id }),
       'Banking organization deleted',
+    );
+  }, [scopedActionUrl, withReload]);
+  const createBankConnection = React.useCallback(async (form: Accumul8BankConnectionUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('create_bank_connection'), form),
+      'Connected institution saved',
+    );
+  }, [scopedActionUrl, withReload]);
+  const updateBankConnection = React.useCallback(async (id: number, form: Accumul8BankConnectionUpsertRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('update_bank_connection'), { id, ...form }),
+      'Connected institution updated',
+    );
+  }, [scopedActionUrl, withReload]);
+  const deleteBankConnection = React.useCallback(async (request: Accumul8BankConnectionDeleteRequest) => {
+    await withReload(
+      () => ApiClient.post(scopedActionUrl('delete_bank_connection'), request),
+      'Connected institution deleted',
     );
   }, [scopedActionUrl, withReload]);
   const createAccount = React.useCallback(async (form: Accumul8AccountUpsertRequest) => {
@@ -830,6 +850,9 @@ export function useAccumul8(
     createBankingOrganization,
     updateBankingOrganization,
     deleteBankingOrganization,
+    createBankConnection,
+    updateBankConnection,
+    deleteBankConnection,
     createAccount,
     updateAccount,
     deleteAccount,

@@ -701,6 +701,19 @@ export interface Accumul8BankConnection {
   last_error: string;
 }
 
+export interface Accumul8BankConnectionUpsertRequest {
+  provider_name?: string;
+  institution_id?: string;
+  institution_name?: string;
+  teller_enrollment_id?: string;
+  teller_user_id?: string;
+  status?: string;
+}
+
+export interface Accumul8BankConnectionDeleteRequest {
+  id: number;
+}
+
 export interface Accumul8Summary {
   net_amount: number;
   inflow_total: number;

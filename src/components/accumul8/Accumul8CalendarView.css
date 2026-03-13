@@ -2,7 +2,29 @@
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 175, 55, 0.72) rgba(12, 18, 24, 0.94);
+}
+
+.accumul8-calendar-view::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.accumul8-calendar-view::-webkit-scrollbar-track {
+  background: rgba(12, 18, 24, 0.94);
+}
+
+.accumul8-calendar-view::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(12, 18, 24, 0.94);
+  background: linear-gradient(180deg, rgba(244, 218, 128, 0.92), rgba(184, 138, 42, 0.92));
+}
+
+.accumul8-calendar-view::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(246, 227, 165, 0.95), rgba(212, 175, 55, 0.95));
 }
 
 .accumul8-calendar-shell {
@@ -10,6 +32,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: visible;
 }
 
@@ -21,6 +44,9 @@
   padding: 1rem 1.1rem 0.8rem;
   border-bottom: 1px solid rgba(212, 175, 55, 0.28);
   background: linear-gradient(180deg, rgba(24, 34, 41, 0.92), rgba(15, 22, 28, 0.86));
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .accumul8-calendar-toolbar-copy {

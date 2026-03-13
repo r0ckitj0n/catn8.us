@@ -727,7 +727,7 @@
 }
 
 .accumul8-panel--calendar-scroll {
-  overflow: auto;
+  overflow: hidden;
 }
 
 .accumul8-panel-toolbar {
@@ -1754,6 +1754,43 @@ body.accumul8-column-resize-active {
 .accumul8-sync-linked-account {
   font-size: 0.76rem;
   color: rgba(255, 245, 213, 0.92);
+}
+
+.accumul8-sync-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.accumul8-sync-editor-row td {
+  padding-top: 0;
+  background: rgba(7, 11, 16, 0.94);
+}
+
+.accumul8-sync-editor {
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  background: linear-gradient(180deg, rgba(16, 19, 25, 0.96), rgba(8, 12, 17, 0.96));
+}
+
+.accumul8-sync-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.accumul8-sync-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  color: rgba(245, 235, 201, 0.76);
+}
+
+.accumul8-sync-editor-note {
+  margin-top: 0.75rem;
+  font-size: 0.74rem;
+  color: rgba(245, 235, 201, 0.76);
 }
 
 .accumul8-sync-status {

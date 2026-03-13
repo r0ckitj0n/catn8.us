@@ -4211,6 +4211,7 @@ function accumul8_owned_id_or_null(string $entityType, int $viewerId, int $id): 
         'entities' => 'accumul8_entities',
         'accounts' => 'accumul8_accounts',
         'debtors' => 'accumul8_debtors',
+        'bank_connections' => 'accumul8_bank_connections',
     ];
     $tableName = $tableByType[$entityType] ?? '';
     if ($tableName === '') {
@@ -4276,6 +4277,30 @@ function accumul8_validate_account_type($value): string
         catn8_json_response(['success' => false, 'error' => 'Invalid account_type'], 400);
     }
     return $type;
+}
+
+function accumul8_validate_bank_connection_provider($value): string
+{
+    $provider = strtolower(accumul8_normalize_text($value, 32));
+    if ($provider === '') {
+        $provider = 'teller';
+    }
+    if (!in_array($provider, ['teller'], true)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid provider_name'], 400);
+    }
+    return $provider;
+}
+
+function accumul8_validate_bank_connection_status($value): string
+{
+    $status = strtolower(accumul8_normalize_text($value, 32));
+    if ($status === '') {
+        $status = 'setup_pending';
+    }
+    if (!preg_match('/^[a-z0-9_ -]{2,32}$/', $status)) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid status'], 400);
+    }
+    return str_replace(' ', '_', $status);
 }
 
 function accumul8_count_rows(string $sql, array $params): int
@@ -4820,6 +4845,22 @@ function accumul8_account_group_has_associations(int $viewerId, int $groupId): b
            AND account_group_id = ?',
         [$viewerId, $groupId]
     ) > 0;
+}
+
+function accumul8_bank_connection_secret_key_for_row(array $row): string
+{
+    $secretKey = accumul8_normalize_text((string)($row['teller_access_token_secret_key'] ?? ''), 191);
+    if ($secretKey !== '') {
+        return $secretKey;
+    }
+
+    $enrollmentId = accumul8_normalize_text((string)($row['teller_enrollment_id'] ?? ''), 191);
+    $viewerId = (int)($row['owner_user_id'] ?? 0);
+    if ($viewerId <= 0 || $enrollmentId === '') {
+        return '';
+    }
+
+    return 'accumul8.teller.access_token.' . $viewerId . '.' . preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $enrollmentId);
 }
 
 function accumul8_account_has_associations(int $viewerId, int $accountId): bool
@@ -10577,6 +10618,159 @@ if ($action === 'delete_banking_organization') {
     }
 
     Database::execute('DELETE FROM accumul8_account_groups WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'create_bank_connection') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $providerName = accumul8_validate_bank_connection_provider($body['provider_name'] ?? 'teller');
+    $institutionId = accumul8_normalize_text($body['institution_id'] ?? '', 64);
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $tellerEnrollmentId = accumul8_normalize_text($body['teller_enrollment_id'] ?? '', 191);
+    $tellerUserId = accumul8_normalize_text($body['teller_user_id'] ?? '', 191);
+    $status = accumul8_validate_bank_connection_status($body['status'] ?? 'setup_pending');
+
+    if ($institutionId === '' && $institutionName === '') {
+        catn8_json_response(['success' => false, 'error' => 'institution_name or institution_id is required'], 400);
+    }
+
+    if ($tellerEnrollmentId !== '') {
+        $existing = Database::queryOne(
+            'SELECT id
+             FROM accumul8_bank_connections
+             WHERE owner_user_id = ?
+               AND provider_name = ?
+               AND teller_enrollment_id = ?
+             LIMIT 1',
+            [$viewerId, $providerName, $tellerEnrollmentId]
+        );
+        if ($existing) {
+            catn8_json_response(['success' => false, 'error' => 'A bank connection for that enrollment already exists'], 409);
+        }
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_bank_connections
+            (owner_user_id, provider_name, institution_id, institution_name, teller_enrollment_id, teller_user_id, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+            $viewerId,
+            $providerName,
+            $institutionId === '' ? null : $institutionId,
+            $institutionName === '' ? null : $institutionName,
+            $tellerEnrollmentId === '' ? null : $tellerEnrollmentId,
+            $tellerUserId === '' ? null : $tellerUserId,
+            $status,
+        ]
+    );
+
+    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+}
+
+if ($action === 'update_bank_connection') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+
+    $id = (int)($body['id'] ?? 0);
+    $providerName = accumul8_validate_bank_connection_provider($body['provider_name'] ?? 'teller');
+    $institutionId = accumul8_normalize_text($body['institution_id'] ?? '', 64);
+    $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
+    $tellerEnrollmentId = accumul8_normalize_text($body['teller_enrollment_id'] ?? '', 191);
+    $tellerUserId = accumul8_normalize_text($body['teller_user_id'] ?? '', 191);
+    $status = accumul8_validate_bank_connection_status($body['status'] ?? 'setup_pending');
+
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+    if ($institutionId === '' && $institutionName === '') {
+        catn8_json_response(['success' => false, 'error' => 'institution_name or institution_id is required'], 400);
+    }
+
+    accumul8_require_owned_id('bank_connections', $viewerId, $id);
+
+    if ($tellerEnrollmentId !== '') {
+        $existing = Database::queryOne(
+            'SELECT id
+             FROM accumul8_bank_connections
+             WHERE owner_user_id = ?
+               AND provider_name = ?
+               AND teller_enrollment_id = ?
+               AND id <> ?
+             LIMIT 1',
+            [$viewerId, $providerName, $tellerEnrollmentId, $id]
+        );
+        if ($existing) {
+            catn8_json_response(['success' => false, 'error' => 'A bank connection for that enrollment already exists'], 409);
+        }
+    }
+
+    Database::execute(
+        'UPDATE accumul8_bank_connections
+         SET provider_name = ?, institution_id = ?, institution_name = ?, teller_enrollment_id = ?, teller_user_id = ?, status = ?, updated_at = NOW()
+         WHERE id = ? AND owner_user_id = ?',
+        [
+            $providerName,
+            $institutionId === '' ? null : $institutionId,
+            $institutionName === '' ? null : $institutionName,
+            $tellerEnrollmentId === '' ? null : $tellerEnrollmentId,
+            $tellerUserId === '' ? null : $tellerUserId,
+            $status,
+            $id,
+            $viewerId,
+        ]
+    );
+
+    catn8_json_response(['success' => true]);
+}
+
+if ($action === 'delete_bank_connection') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $id = (int)($body['id'] ?? 0);
+    if ($id <= 0) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid id'], 400);
+    }
+
+    accumul8_require_owned_id('bank_connections', $viewerId, $id);
+    $row = Database::queryOne(
+        'SELECT id, owner_user_id, teller_enrollment_id, teller_access_token_secret_key
+         FROM accumul8_bank_connections
+         WHERE id = ? AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+    if (!$row) {
+        catn8_json_response(['success' => false, 'error' => 'Record not found'], 404);
+    }
+
+    $secretKey = accumul8_bank_connection_secret_key_for_row($row);
+
+    Database::beginTransaction();
+    try {
+        Database::execute(
+            'UPDATE accumul8_accounts
+             SET bank_connection_id = NULL
+             WHERE owner_user_id = ?
+               AND bank_connection_id = ?',
+            [$viewerId, $id]
+        );
+        Database::execute(
+            'DELETE FROM accumul8_bank_connections
+             WHERE id = ? AND owner_user_id = ?',
+            [$id, $viewerId]
+        );
+        Database::commit();
+    } catch (Throwable $e) {
+        Database::rollBack();
+        throw $e;
+    }
+
+    if ($secretKey !== '' && !secret_delete($secretKey)) {
+        error_log('accumul8 delete_bank_connection warning: failed to delete Teller secret for connection ' . $id);
+    }
+
     catn8_json_response(['success' => true]);
 }
 

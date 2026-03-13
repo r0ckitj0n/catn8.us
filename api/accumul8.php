@@ -3046,7 +3046,13 @@ function accumul8_find_matching_entity_id(int $viewerId, string $displayName): ?
     return null;
 }
 
-function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $aliasName, bool $skipConflict = false): array
+function accumul8_assign_entity_alias(
+    int $viewerId,
+    int $entityId,
+    string $aliasName,
+    bool $skipConflict = false,
+    bool $reassignConflict = false
+): array
 {
     if ($entityId <= 0 || !accumul8_table_exists('accumul8_entity_aliases')) {
         return ['id' => null, 'status' => 'invalid'];
@@ -3085,6 +3091,15 @@ function accumul8_assign_entity_alias(int $viewerId, int $entityId, string $alia
         $existingId = (int)($existing['id'] ?? 0);
         $existingEntityId = (int)($existing['entity_id'] ?? 0);
         if ($existingEntityId !== $entityId) {
+            if ($reassignConflict && $existingId > 0) {
+                Database::execute(
+                    'UPDATE accumul8_entity_aliases
+                     SET entity_id = ?, alias_name = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [$entityId, $displayAlias, $existingId, $viewerId]
+                );
+                return ['id' => $existingId, 'status' => 'reassigned', 'entity_id' => $entityId];
+            }
             return [
                 'id' => $existingId > 0 ? $existingId : null,
                 'status' => $skipConflict ? 'conflict_skipped' : 'conflict',
@@ -11275,6 +11290,7 @@ if ($action === 'create_entity_alias') {
     $entityId = (int)($body['entity_id'] ?? 0);
     $aliasName = (string)($body['alias_name'] ?? '');
     $mergeEntityId = (int)($body['merge_entity_id'] ?? 0);
+    $reassignIfConflict = !empty($body['reassign_if_conflict']);
     if ($entityId <= 0) {
         catn8_json_response(['success' => false, 'error' => 'Invalid entity_id'], 400);
     }
@@ -11310,7 +11326,7 @@ if ($action === 'create_entity_alias') {
         accumul8_merge_entities($viewerId, $entityId, $mergeEntityId);
     }
 
-    $result = accumul8_assign_entity_alias($viewerId, $entityId, $aliasName, false);
+    $result = accumul8_assign_entity_alias($viewerId, $entityId, $aliasName, false, $reassignIfConflict);
     $status = (string)($result['status'] ?? '');
     if ($status === 'conflict') {
         catn8_json_response(['success' => false, 'error' => 'Alias already belongs to another entity'], 409);
@@ -11326,7 +11342,7 @@ if ($action === 'create_entity_alias') {
     }
 
     $aliasId = isset($result['id']) ? (int)$result['id'] : 0;
-    if (in_array($status, ['created', 'updated'], true)) {
+    if (in_array($status, ['created', 'updated', 'reassigned'], true)) {
         accumul8_upsert_entity_alias_review(
             $viewerId,
             $entityId,

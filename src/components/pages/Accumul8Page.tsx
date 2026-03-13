@@ -1783,6 +1783,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             entity_id: targetEntityId,
             alias_name: description,
             merge_entity_id: null,
+            reassign_if_conflict: true,
           });
         } catch (error: any) {
           const message = String(error?.message || '');

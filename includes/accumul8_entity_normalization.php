@@ -122,6 +122,34 @@ if (!function_exists('accumul8_base_entity_family_definitions')) {
                 'match_contains' => ['360 checking card adjustment', '360 checking card', '360 adjustment signature'],
             ],
             [
+                'parent_name' => 'Netflix',
+                'match_rule' => 'Contains Netflix billing text',
+                'examples' => ['Netflix.Com 408-5403700 CA', 'DC 6573 NETFLIX.COM LOS GATOS US', 'POS Netflix'],
+                'match_fragments' => ['netflix'],
+                'match_contains' => ['netflix.com', 'pos netflix', ' netflix '],
+            ],
+            [
+                'parent_name' => 'Audible',
+                'match_rule' => 'Contains Audible billing text',
+                'examples' => ['AUDIBLE 127R02B43 AMZN COM BIL NJ', 'Audible*r228E3Nr1 NJ', 'Audible*f207W89O3 NJ'],
+                'match_fragments' => ['audible'],
+                'match_contains' => ['audible'],
+            ],
+            [
+                'parent_name' => 'Prime Video',
+                'match_rule' => 'Contains Prime Video billing text',
+                'examples' => ['Prime Video', 'Prime Video Channel', 'Prime Video *rs74J 888-802-3080'],
+                'match_fragments' => ['primevideo'],
+                'match_contains' => ['prime video'],
+            ],
+            [
+                'parent_name' => 'Chick Fil A',
+                'match_rule' => 'Contains Chick-fil-A card purchase text',
+                'examples' => ['CHICK FIL A 01469', 'Digital Card Purchase - CHICK FIL A 01469 DAWSONVILLE GA'],
+                'match_fragments' => ['chickfila'],
+                'match_contains' => ['chick fil a', 'chickfila'],
+            ],
+            [
                 'parent_name' => "McDonald's",
                 'match_rule' => 'Contains "mcdonald"',
                 'examples' => ['Mcdonald S F11591 Dawsonville', 'Mcdonald S F27153 Cumming'],
@@ -144,8 +172,9 @@ if (!function_exists('accumul8_base_entity_family_definitions')) {
                 'parent_name' => 'Apple',
                 'match_rule' => 'Contains Apple billing or subscription text',
                 'examples' => ['Apple Com Bill', 'Apple Photo Storage - 200GB (Apple Subscription)', 'Apple Tv+ (Apple Subscription)'],
-                'match_fragments' => ['apple'],
-                'match_contains' => ['apple com bill', 'apple subscription', 'apple tv', 'apple photo storage', 'apple'],
+                'match_fragments' => ['applecom', 'applecash', 'appletv', 'applephotostorage'],
+                'match_contains' => ['apple com', 'apple.com/bill', 'apple subscription', 'apple tv', 'apple photo storage', 'apple cash'],
+                'match_regexes' => ['/(^|[^a-z])apple\\s+com\\b/i', '/apple\\.com\\/bill/i', '/(^|[^a-z])apple\\s+cash\\b/i'],
             ],
             [
                 'parent_name' => 'Walmart',
@@ -171,7 +200,9 @@ if (!function_exists('accumul8_base_entity_family_definitions')) {
                 'parent_name' => 'ATT',
                 'match_rule' => 'Contains "att"',
                 'examples' => ['Withdrawal From Att Payment'],
-                'match_fragments' => ['attpayment', 'att'],
+                'match_fragments' => ['attpayment', 'attbillpayment', 'attbill', 'attbillpay'],
+                'match_contains' => ['at t payment', 'att bill payment', 'att payment', 'att*'],
+                'match_regexes' => ['/(^|[^a-z])at\\s+t\\b/i', '/(^|[^a-z])att\\*?\\b/i'],
             ],
             [
                 'parent_name' => 'Achieve',
@@ -412,8 +443,9 @@ if (!function_exists('accumul8_base_entity_family_definitions')) {
                 'parent_name' => 'QuikTrip',
                 'match_rule' => 'Contains QuikTrip shorthand',
                 'examples' => ['Qt'],
-                'match_fragments' => ['qt'],
-                'match_contains' => [' qt ', 'quiktrip'],
+                'match_fragments' => ['quiktrip'],
+                'match_contains' => ['quiktrip'],
+                'match_regexes' => ['/(^|[^a-z])qt\\b/i'],
             ],
             [
                 'parent_name' => 'Hall Hound Brewing',
@@ -668,12 +700,31 @@ if (!function_exists('accumul8_find_entity_family_definition')) {
             return null;
         }
 
+        $bestDefinition = null;
+        $bestScore = PHP_INT_MIN;
         foreach (accumul8_entity_family_definitions() as $definition) {
+            if (!is_array($definition)) {
+                continue;
+            }
+            $score = PHP_INT_MIN;
+            $parentKey = accumul8_entity_match_key((string)($definition['parent_name'] ?? ''));
+            if ($parentKey !== '' && $parentKey === $matchKey) {
+                $score = 100000 + strlen($parentKey);
+            }
+
             $contains = is_array($definition['match_contains'] ?? null) ? $definition['match_contains'] : [];
             foreach ($contains as $fragment) {
                 $needle = strtolower(accumul8_entity_normalize_text((string)$fragment, 191));
                 if ($needle !== '' && $normalizedText !== '' && strpos($normalizedText, $needle) !== false) {
-                    return $definition;
+                    $score = max($score, 30000 + strlen($needle));
+                }
+            }
+
+            $regexes = is_array($definition['match_regexes'] ?? null) ? $definition['match_regexes'] : [];
+            foreach ($regexes as $regex) {
+                $pattern = is_string($regex) ? $regex : '';
+                if ($pattern !== '' && $normalizedText !== '' && @preg_match($pattern, $normalizedText) === 1) {
+                    $score = max($score, 40000 + strlen($pattern));
                 }
             }
 
@@ -681,12 +732,17 @@ if (!function_exists('accumul8_find_entity_family_definition')) {
             foreach ($fragments as $fragment) {
                 $needle = strtolower((string)$fragment);
                 if ($needle !== '' && strpos($matchKey, $needle) !== false) {
-                    return $definition;
+                    $score = max($score, 20000 + strlen($needle));
                 }
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestDefinition = $definition;
             }
         }
 
-        return null;
+        return is_array($bestDefinition) ? $bestDefinition : null;
     }
 }
 

@@ -598,22 +598,33 @@ if (!function_exists('accumul8_base_entity_family_definitions')) {
 if (!function_exists('accumul8_dynamic_entity_family_definitions')) {
     function accumul8_dynamic_entity_family_definitions(): array
     {
+        static $cached = null;
+        if (is_array($cached)) {
+            return $cached;
+        }
         $provider = $GLOBALS['accumul8_dynamic_entity_family_definitions_provider'] ?? null;
         if (is_callable($provider)) {
             $definitions = $provider();
-            return is_array($definitions) ? $definitions : [];
+            $cached = is_array($definitions) ? $definitions : [];
+            return $cached;
         }
-        return [];
+        $cached = [];
+        return $cached;
     }
 }
 
 if (!function_exists('accumul8_entity_family_definitions')) {
     function accumul8_entity_family_definitions(): array
     {
+        static $cached = null;
+        if (is_array($cached)) {
+            return $cached;
+        }
         $definitions = accumul8_base_entity_family_definitions();
         $dynamicDefinitions = accumul8_dynamic_entity_family_definitions();
         if (!is_array($dynamicDefinitions) || $dynamicDefinitions === []) {
-            return $definitions;
+            $cached = $definitions;
+            return $cached;
         }
 
         $merged = [];
@@ -643,7 +654,8 @@ if (!function_exists('accumul8_entity_family_definitions')) {
             return strcasecmp((string)($a['parent_name'] ?? ''), (string)($b['parent_name'] ?? ''));
         });
 
-        return array_values($merged);
+        $cached = array_values($merged);
+        return $cached;
     }
 }
 

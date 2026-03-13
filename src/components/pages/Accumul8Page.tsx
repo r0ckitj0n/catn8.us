@@ -1254,12 +1254,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'account', header: 'Acct', minWidth: 138, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
     { key: 'description', header: 'Payee', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
-    { key: 'entityName', header: 'Entity Name', minWidth: 190, maxAutoWidth: 280, priority: 4, sortable: true, sortAccessor: (tx) => tx.entity_name || '', contentAccessor: (tx) => tx.entity_name || '-' },
+    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
     { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
     { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
     { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
@@ -1779,11 +1778,18 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       }
 
       if (aliasKey && normalizeEntityAliasKey(targetEntityName) !== aliasKey) {
-        await ApiClient.post(accumul8ActionUrl('create_entity_alias'), {
-          entity_id: targetEntityId,
-          alias_name: description,
-          merge_entity_id: null,
-        });
+        try {
+          await ApiClient.post(accumul8ActionUrl('create_entity_alias'), {
+            entity_id: targetEntityId,
+            alias_name: description,
+            merge_entity_id: null,
+          });
+        } catch (error: any) {
+          const message = String(error?.message || '');
+          if (!message.toLowerCase().includes('alias matches the entity name after normalization')) {
+            throw error;
+          }
+        }
       }
 
       const guide = entityEndexGuides.find((item) => (
@@ -1835,12 +1841,19 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         account_id: transaction.account_id ?? null,
         balance_entity_id: transaction.balance_entity_id ?? null,
       });
-      await ApiClient.post(accumul8ActionUrl('scan_entity_aliases'), { entity_id: targetEntityId });
+      let aliasScanWarning = false;
+      try {
+        await ApiClient.post(accumul8ActionUrl('scan_entity_aliases'), { entity_id: targetEntityId });
+      } catch (_error) {
+        aliasScanWarning = true;
+      }
       await load();
       closeLedgerEntityModal();
       onToast?.({
-        tone: 'success',
-        message: `Updated ${targetEntityName || 'entity'} for "${description}" and refreshed its matching rule.`,
+        tone: aliasScanWarning ? 'warning' : 'success',
+        message: aliasScanWarning
+          ? `Updated ${targetEntityName || 'entity'} for "${description}", but the follow-up alias scan could not finish.`
+          : `Updated ${targetEntityName || 'entity'} for "${description}" and refreshed its matching rule.`,
       });
     } catch (error: any) {
       onToast?.({
@@ -3076,12 +3089,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <col style={ledgerTable.getColumnStyle('account')} />
                     <col style={ledgerTable.getColumnStyle('description')} />
                     <col style={ledgerTable.getColumnStyle('memo')} />
-                    <col style={ledgerTable.getColumnStyle('entityName')} />
+                    <col style={ledgerTable.getColumnStyle('actions')} />
                     <col style={ledgerTable.getColumnStyle('amount')} />
                     <col style={ledgerTable.getColumnStyle('balance')} />
                     <col style={ledgerTable.getColumnStyle('paid')} />
                     <col style={ledgerTable.getColumnStyle('reconciled')} />
-                    <col style={ledgerTable.getColumnStyle('actions')} />
                   </colgroup>
                   <thead><tr>
                     <Accumul8TableHeaderCell label="Date" columnKey="date" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
@@ -3089,12 +3101,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Entity Name" columnKey="entityName" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
+                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Bal" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Paid" columnKey="paid" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                     <Accumul8TableHeaderCell label="Rec'd" columnKey="reconciled" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
                   </tr></thead>
                   <tbody>
                     {ledgerPagination.rows.map((tx) => (
@@ -3154,21 +3165,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo || tx.contact_name || tx.entity_name, '-')}</button>
                           )}
                         </td>
-                        <td>
-                          <div className="accumul8-row-actions accumul8-row-actions--always-on accumul8-row-actions--entity-name">
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy}>
-                              {formatInlineText(tx.entity_name, '-')}
-                            </button>
+                        <td className="text-end is-compact-actions">
+                          <div className="accumul8-row-actions">
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-primary accumul8-icon-action"
                               onClick={() => openLedgerEntityModal(tx.id)}
                               disabled={busy}
-                              aria-label={`Assign entity name for ${tx.description}`}
-                              title={`Assign entity name for ${tx.description}`}
+                              aria-label={`Assign entity for ${tx.description}`}
+                              title={tx.entity_name ? `Assign entity for ${tx.description} (current: ${tx.entity_name})` : `Assign entity for ${tx.description}`}
                             >
                               <span aria-hidden="true">{ACCUMUL8_MOVE_BUTTON_EMOJI}</span>
                             </button>
+                            {statementLink ? (
+                              <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${tx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
+                            ) : null}
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
+                            {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>
                         </td>
                         <td className="text-end">
@@ -3199,24 +3214,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             aria-label={`Mark ${tx.description} as reconciled`}
                           />
                         </td>
-                        <td className="text-end is-compact-actions">
-                          <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            {statementLink ? (
-                              <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${tx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
-                            ) : null}
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
-                            {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
-                          </div>
-                        </td>
                       </tr>
                         );
                       })()
                     ))}
                     {ledgerPagination.rows.length === 0 && (
                       <tr>
-                        <td colSpan={11} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
+                        <td colSpan={10} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>

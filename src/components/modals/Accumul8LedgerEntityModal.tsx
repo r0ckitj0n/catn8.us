@@ -31,7 +31,7 @@ function buildInitialForm(transaction: Accumul8Transaction | null): LedgerEntity
     return DEFAULT_FORM;
   }
   return {
-    mode: Number(transaction.entity_id || 0) > 0 ? 'existing' : 'new',
+    mode: 'existing',
     entityId: transaction.entity_id ? String(transaction.entity_id) : '',
     newEntityName: transaction.entity_name || '',
   };

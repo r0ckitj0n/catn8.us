@@ -10764,8 +10764,6 @@ if ($action === 'create_debtor') {
     );
 
     $debtorId = (int)Database::lastInsertId();
-    accumul8_debtor_entity_id_or_create($viewerId, $debtorId);
-
     catn8_json_response(['success' => true, 'id' => $debtorId]);
 }
 
@@ -10776,8 +10774,16 @@ if ($action === 'update_debtor') {
     $id = (int)($body['id'] ?? 0);
     $debtorName = accumul8_normalize_text($body['debtor_name'] ?? '', 191);
     $notes = accumul8_normalize_text($body['notes'] ?? '', 1500);
-    $contactId = isset($body['contact_id']) ? (int)$body['contact_id'] : 0;
-    $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
+    $existingDebtor = Database::queryOne(
+        'SELECT contact_id FROM accumul8_debtors WHERE id = ? AND owner_user_id = ? LIMIT 1',
+        [$id, $viewerId]
+    );
+    if (!$existingDebtor) {
+        catn8_json_response(['success' => false, 'error' => 'Debtor not found'], 404);
+    }
+    $contactIdOrNull = array_key_exists('contact_id', $body)
+        ? accumul8_owned_id_or_null('contacts', $viewerId, (int)($body['contact_id'] ?? 0))
+        : (isset($existingDebtor['contact_id']) ? (int)$existingDebtor['contact_id'] : null);
     $isActive = accumul8_normalize_bool($body['is_active'] ?? 1);
 
     if ($id <= 0) {
@@ -10793,8 +10799,6 @@ if ($action === 'update_debtor') {
          WHERE id = ? AND owner_user_id = ?',
         [$contactIdOrNull, $debtorName, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
-
-    accumul8_debtor_entity_id_or_create($viewerId, $id);
 
     catn8_json_response(['success' => true]);
 }
@@ -11096,26 +11100,36 @@ if ($action === 'create_transaction') {
     $hasDebtor = accumul8_has_debtor_support();
     $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
     $requestedBalanceEntityIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('entities', $viewerId, $balanceEntityId) : null;
-    $entityIdOrNull = $requestedEntityIdOrNull !== null
-        ? $requestedEntityIdOrNull
-        : ($contactIdOrNull !== null
-        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
-        : accumul8_transaction_entity_id_or_create($viewerId, [
-            'description' => $description,
-            'amount' => $amount,
-            'memo' => $memo,
-        ]));
-    if ($requestedEntityIdOrNull !== null) {
-        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
-    }
-    $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
-        ? $requestedBalanceEntityIdOrNull
-        : ($debtorIdOrNull !== null ? accumul8_debtor_entity_id_or_create($viewerId, (int)$debtorIdOrNull) : null);
-    if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
-        $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
-    }
-    if ($debtorIdOrNull !== null) {
+    $isIouTransaction = $debtorIdOrNull !== null;
+    if ($isIouTransaction) {
+        $contactIdOrNull = null;
+        $entityIdOrNull = null;
+        $balanceEntityIdOrNull = null;
+        $rtaAmount = 0.0;
+        $isReconciled = 0;
         $isBudgetPlanner = 0;
+    } else {
+        $entityIdOrNull = $requestedEntityIdOrNull !== null
+            ? $requestedEntityIdOrNull
+            : ($contactIdOrNull !== null
+            ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+            : accumul8_transaction_entity_id_or_create($viewerId, [
+                'description' => $description,
+                'amount' => $amount,
+                'memo' => $memo,
+            ]));
+        if ($requestedEntityIdOrNull !== null) {
+            $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+        }
+        $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
+            ? $requestedBalanceEntityIdOrNull
+            : null;
+        if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
+            $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
+        }
+        if ($debtorIdOrNull !== null) {
+            $isBudgetPlanner = 0;
+        }
     }
 
     if ($description === '') {
@@ -11218,26 +11232,36 @@ if ($action === 'update_transaction') {
     $hasDebtor = accumul8_has_debtor_support();
     $debtorIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('debtors', $viewerId, $debtorId) : null;
     $requestedBalanceEntityIdOrNull = $hasDebtor ? accumul8_owned_id_or_null('entities', $viewerId, $balanceEntityId) : null;
-    $entityIdOrNull = $requestedEntityIdOrNull !== null
-        ? $requestedEntityIdOrNull
-        : ($contactIdOrNull !== null
-        ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
-        : accumul8_transaction_entity_id_or_create($viewerId, [
-            'description' => $description,
-            'amount' => $amount,
-            'memo' => $memo,
-        ]));
-    if ($requestedEntityIdOrNull !== null) {
-        $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
-    }
-    $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
-        ? $requestedBalanceEntityIdOrNull
-        : ($debtorIdOrNull !== null ? accumul8_debtor_entity_id_or_create($viewerId, (int)$debtorIdOrNull) : null);
-    if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
-        $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
-    }
-    if ($debtorIdOrNull !== null) {
+    $isIouTransaction = $debtorIdOrNull !== null;
+    if ($isIouTransaction) {
+        $contactIdOrNull = null;
+        $entityIdOrNull = null;
+        $balanceEntityIdOrNull = null;
+        $rtaAmount = 0.0;
+        $isReconciled = 0;
         $isBudgetPlanner = 0;
+    } else {
+        $entityIdOrNull = $requestedEntityIdOrNull !== null
+            ? $requestedEntityIdOrNull
+            : ($contactIdOrNull !== null
+            ? accumul8_contact_entity_id_or_create($viewerId, (int)$contactIdOrNull)
+            : accumul8_transaction_entity_id_or_create($viewerId, [
+                'description' => $description,
+                'amount' => $amount,
+                'memo' => $memo,
+            ]));
+        if ($requestedEntityIdOrNull !== null) {
+            $contactIdOrNull = accumul8_entity_contact_id_or_null($viewerId, $requestedEntityIdOrNull);
+        }
+        $balanceEntityIdOrNull = $requestedBalanceEntityIdOrNull !== null
+            ? $requestedBalanceEntityIdOrNull
+            : null;
+        if ($requestedBalanceEntityIdOrNull !== null && $hasDebtor) {
+            $debtorIdOrNull = accumul8_entity_debtor_id_or_null($viewerId, $requestedBalanceEntityIdOrNull);
+        }
+        if ($debtorIdOrNull !== null) {
+            $isBudgetPlanner = 0;
+        }
     }
 
     if ($description === '') {

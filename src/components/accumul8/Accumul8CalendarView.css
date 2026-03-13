@@ -1,0 +1,223 @@
+.accumul8-calendar-view {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.accumul8-calendar-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.accumul8-calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem 0.8rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.28);
+  background: linear-gradient(180deg, rgba(24, 34, 41, 0.92), rgba(15, 22, 28, 0.86));
+}
+
+.accumul8-calendar-toolbar-copy {
+  max-width: 54rem;
+  color: var(--accumul8-deco-muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+}
+
+.accumul8-calendar-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.accumul8-calendar-period-picker,
+.accumul8-calendar-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accumul8-calendar-period-label {
+  min-width: 12rem;
+  text-align: center;
+  font-family: 'Bodoni Moda', Georgia, serif;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.accumul8-calendar-dropdowns .form-select {
+  min-width: 9rem;
+}
+
+.accumul8-calendar-grid {
+  display: grid;
+  gap: 1px;
+  padding: 1px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: rgba(212, 175, 55, 0.22);
+}
+
+.accumul8-calendar-grid--month {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.accumul8-calendar-grid--week {
+  grid-template-columns: repeat(7, minmax(14rem, 1fr));
+}
+
+.accumul8-calendar-day {
+  display: flex;
+  flex-direction: column;
+  min-height: 11rem;
+  background:
+    linear-gradient(180deg, rgba(18, 26, 32, 0.96), rgba(12, 18, 24, 0.94)),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 60%);
+  color: var(--accumul8-deco-cream);
+}
+
+.accumul8-calendar-day.is-outside-month {
+  opacity: 0.56;
+}
+
+.accumul8-calendar-day.is-today {
+  box-shadow: inset 0 0 0 2px rgba(244, 218, 128, 0.55);
+}
+
+.accumul8-calendar-day-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.8rem 0.85rem 0.5rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.18);
+}
+
+.accumul8-calendar-day-name {
+  display: block;
+  color: var(--accumul8-deco-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accumul8-calendar-day-number {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.accumul8-calendar-day-total {
+  color: #f4d97f;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+}
+
+.accumul8-calendar-day-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.42rem;
+  min-height: 0;
+  padding: 0.65rem 0.7rem 0.8rem;
+  overflow: auto;
+}
+
+.accumul8-calendar-day-empty {
+  margin-top: auto;
+  margin-bottom: auto;
+  color: rgba(245, 245, 220, 0.55);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+
+.accumul8-calendar-transaction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(212, 175, 55, 0.24);
+  background: rgba(12, 18, 24, 0.82);
+  color: inherit;
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.accumul8-calendar-transaction:hover,
+.accumul8-calendar-transaction:focus-visible {
+  border-color: rgba(244, 218, 128, 0.72);
+  background: rgba(24, 34, 41, 0.98);
+  transform: translateY(-1px);
+}
+
+.accumul8-calendar-transaction.is-inflow {
+  box-shadow: inset 3px 0 0 rgba(117, 192, 138, 0.82);
+}
+
+.accumul8-calendar-transaction.is-outflow {
+  box-shadow: inset 3px 0 0 rgba(214, 121, 98, 0.88);
+}
+
+.accumul8-calendar-transaction-topline,
+.accumul8-calendar-transaction-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.accumul8-calendar-transaction-title,
+.accumul8-calendar-transaction-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accumul8-calendar-transaction-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.accumul8-calendar-transaction-amount {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.accumul8-calendar-transaction-meta {
+  color: var(--accumul8-deco-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 991.98px) {
+  .accumul8-calendar-toolbar {
+    padding: 0.9rem 0.9rem 0.75rem;
+  }
+
+  .accumul8-calendar-period-label {
+    min-width: 0;
+  }
+
+  .accumul8-calendar-grid--month,
+  .accumul8-calendar-grid--week {
+    grid-template-columns: 1fr;
+  }
+
+  .accumul8-calendar-day {
+    min-height: auto;
+  }
+}

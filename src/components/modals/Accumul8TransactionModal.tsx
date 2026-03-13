@@ -2,6 +2,7 @@ import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import {
   Accumul8Account,
+  Accumul8Debtor,
   Accumul8Entity,
   Accumul8EntryType,
   Accumul8StatementUpload,
@@ -29,15 +30,18 @@ interface Accumul8TransactionModalFormState {
   entity_id: string;
   account_id: string;
   balance_entity_id: string;
+  debtor_id: string;
 }
 
 interface Accumul8TransactionModalProps {
   open: boolean;
   busy: boolean;
   mode: 'create' | 'view' | 'edit';
+  variant?: 'ledger' | 'iou';
   initialForm: Accumul8TransactionModalFormState;
   transaction: Accumul8Transaction | null;
   entities: Accumul8Entity[];
+  debtors?: Accumul8Debtor[];
   accounts: Accumul8Account[];
   statementUploads: Accumul8StatementUpload[];
   ownerUserId: number;
@@ -50,9 +54,11 @@ export function Accumul8TransactionModal({
   open,
   busy,
   mode,
+  variant = 'ledger',
   initialForm,
   transaction,
   entities,
+  debtors = [],
   accounts,
   statementUploads,
   ownerUserId,
@@ -64,6 +70,7 @@ export function Accumul8TransactionModal({
   const [form, setForm] = React.useState<Accumul8TransactionModalFormState>(initialForm);
   const isReadOnly = mode === 'view';
   const isEditing = mode === 'edit';
+  const isIouVariant = variant === 'iou';
   const statementLink = React.useMemo(
     () => resolveAccumul8StatementLink(transaction, statementUploads, ownerUserId),
     [ownerUserId, statementUploads, transaction],
@@ -77,14 +84,15 @@ export function Accumul8TransactionModal({
     description: String(form.description || '').trim(),
     memo: String(form.memo || '').trim(),
     amount: Number(form.amount || 0),
-    rta_amount: Number(form.rta_amount || 0),
+    rta_amount: isIouVariant ? 0 : Number(form.rta_amount || 0),
     is_paid: Number(form.is_paid || 0),
-    is_reconciled: Number(form.is_reconciled || 0),
-    is_budget_planner: Number(form.is_budget_planner || 0),
-    entity_id: form.entity_id ? Number(form.entity_id) : null,
+    is_reconciled: isIouVariant ? 0 : Number(form.is_reconciled || 0),
+    is_budget_planner: isIouVariant ? 0 : Number(form.is_budget_planner || 0),
+    entity_id: isIouVariant ? null : (form.entity_id ? Number(form.entity_id) : null),
     account_id: form.account_id ? Number(form.account_id) : null,
-    balance_entity_id: form.balance_entity_id ? Number(form.balance_entity_id) : null,
-  }), [form]);
+    balance_entity_id: isIouVariant ? null : (form.balance_entity_id ? Number(form.balance_entity_id) : null),
+    debtor_id: isIouVariant ? (form.debtor_id ? Number(form.debtor_id) : null) : undefined,
+  }), [form, isIouVariant]);
   const isDirty = React.useMemo(
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       transaction_date: String(initialForm.transaction_date || ''),
@@ -94,20 +102,22 @@ export function Accumul8TransactionModal({
       description: String(initialForm.description || '').trim(),
       memo: String(initialForm.memo || '').trim(),
       amount: Number(initialForm.amount || 0),
-      rta_amount: Number(initialForm.rta_amount || 0),
+      rta_amount: isIouVariant ? 0 : Number(initialForm.rta_amount || 0),
       is_paid: Number(initialForm.is_paid || 0),
-      is_reconciled: Number(initialForm.is_reconciled || 0),
-      is_budget_planner: Number(initialForm.is_budget_planner || 0),
-      entity_id: initialForm.entity_id ? Number(initialForm.entity_id) : null,
+      is_reconciled: isIouVariant ? 0 : Number(initialForm.is_reconciled || 0),
+      is_budget_planner: isIouVariant ? 0 : Number(initialForm.is_budget_planner || 0),
+      entity_id: isIouVariant ? null : (initialForm.entity_id ? Number(initialForm.entity_id) : null),
       account_id: initialForm.account_id ? Number(initialForm.account_id) : null,
-      balance_entity_id: initialForm.balance_entity_id ? Number(initialForm.balance_entity_id) : null,
+      balance_entity_id: isIouVariant ? null : (initialForm.balance_entity_id ? Number(initialForm.balance_entity_id) : null),
+      debtor_id: isIouVariant ? (initialForm.debtor_id ? Number(initialForm.debtor_id) : null) : undefined,
     }),
-    [buildPayload, initialForm],
+    [buildPayload, initialForm, isIouVariant],
   );
   const handleSave = React.useCallback(() => {
     if (isReadOnly || busy || !isDirty || !form.transaction_date || !form.description.trim()) return;
+    if (isIouVariant && !form.debtor_id) return;
     void onSave(buildPayload());
-  }, [buildPayload, busy, form.description, form.transaction_date, isDirty, isReadOnly, onSave]);
+  }, [buildPayload, busy, form.debtor_id, form.description, form.transaction_date, isDirty, isIouVariant, isReadOnly, onSave]);
 
   React.useEffect(() => {
     setForm(initialForm);
@@ -128,7 +138,13 @@ export function Accumul8TransactionModal({
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">{isEditing ? 'Edit Ledger Entry' : isReadOnly ? 'View Ledger Entry' : 'Add Ledger Entry'}</h5>
+            <h5 className="modal-title">
+              {isEditing
+                ? (isIouVariant ? 'Edit IOU Entry' : 'Edit Ledger Entry')
+                : isReadOnly
+                  ? (isIouVariant ? 'View IOU Entry' : 'View Ledger Entry')
+                  : (isIouVariant ? 'Add IOU Entry' : 'Add Ledger Entry')}
+            </h5>
             <div className="d-flex align-items-center gap-2">
               {!isReadOnly ? (
                 <StandardIconButton
@@ -137,7 +153,7 @@ export function Accumul8TransactionModal({
                   title={isDirty ? (isEditing ? 'Save ledger entry changes' : 'Add ledger entry') : 'No changes to save'}
                   className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
                   onClick={handleSave}
-                  disabled={busy || !isDirty || !form.transaction_date || !form.description.trim()}
+                  disabled={busy || !isDirty || !form.transaction_date || !form.description.trim() || (isIouVariant && !form.debtor_id)}
                 />
               ) : null}
               {isReadOnly && onEdit ? (
@@ -212,6 +228,23 @@ export function Accumul8TransactionModal({
                   <option value="bill">Bill</option>
                 </select>
               </div>
+              {isIouVariant ? (
+                <div className="col-md-4">
+                  <label className="form-label" htmlFor="accumul8-transaction-debtor">Person</label>
+                  <select
+                    id="accumul8-transaction-debtor"
+                    className="form-select"
+                    value={form.debtor_id}
+                    onChange={(e) => setForm((prev) => ({ ...prev, debtor_id: e.target.value }))}
+                    disabled={busy || isReadOnly}
+                  >
+                    <option value="">Select a person</option>
+                    {debtors.map((debtor) => (
+                      <option key={debtor.id} value={debtor.id}>{debtor.debtor_name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-transaction-paid-date">Paid Date</label>
                 <input
@@ -247,23 +280,25 @@ export function Accumul8TransactionModal({
                   disabled={busy || isReadOnly || !editPolicy.canEditCoreFields}
                 />
               </div>
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-contact">Entity</label>
-                <select
-                  id="accumul8-transaction-contact"
-                  className="form-select"
-                  value={form.entity_id}
-                  onChange={(e) => setForm((prev) => ({ ...prev, entity_id: e.target.value }))}
-                  disabled={busy || isReadOnly}
-                >
-                  <option value="">Entity</option>
-                  {entities
-                    .filter((entity) => Number(entity.is_balance_person || 0) === 0)
-                    .map((entity) => (
-                    <option key={entity.id} value={entity.id}>{entity.display_name}</option>
-                  ))}
-                </select>
-              </div>
+              {!isIouVariant ? (
+                <div className="col-md-4">
+                  <label className="form-label" htmlFor="accumul8-transaction-contact">Entity</label>
+                  <select
+                    id="accumul8-transaction-contact"
+                    className="form-select"
+                    value={form.entity_id}
+                    onChange={(e) => setForm((prev) => ({ ...prev, entity_id: e.target.value }))}
+                    disabled={busy || isReadOnly}
+                  >
+                    <option value="">Entity</option>
+                    {entities
+                      .filter((entity) => Number(entity.is_balance_person || 0) === 0)
+                      .map((entity) => (
+                        <option key={entity.id} value={entity.id}>{entity.display_name}</option>
+                      ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-transaction-account">Account</label>
                 <select
@@ -279,52 +314,56 @@ export function Accumul8TransactionModal({
                   ))}
                 </select>
               </div>
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-debtor">IOU Person</label>
-                <select
-                  id="accumul8-transaction-debtor"
-                  className="form-select"
-                  value={form.balance_entity_id}
-                  onChange={(e) => setForm((prev) => ({
-                    ...prev,
-                    balance_entity_id: e.target.value,
-                    is_budget_planner: e.target.value ? 0 : prev.is_budget_planner,
-                  }))}
-                  disabled={busy || isReadOnly}
-                >
-                  <option value="">IOU Person</option>
-                  {entities
-                    .filter((entity) => Number(entity.is_balance_person || 0) === 1)
-                    .map((entity) => (
-                    <option key={entity.id} value={entity.id}>{entity.display_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-rta">RTA Amount</label>
-                <input
-                  id="accumul8-transaction-rta"
-                  className="form-control"
-                  type="number"
-                  step="0.01"
-                  value={form.rta_amount}
-                  onChange={(e) => setForm((prev) => ({ ...prev, rta_amount: Number(e.target.value) }))}
-                  disabled={busy || isReadOnly || !editPolicy.canEditCoreFields}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-planner">Budget Planner</label>
-                <select
-                  id="accumul8-transaction-planner"
-                  className="form-select"
-                  value={String(form.is_budget_planner)}
-                  onChange={(e) => setForm((prev) => ({ ...prev, is_budget_planner: Number(e.target.value) }))}
-                  disabled={busy || isReadOnly || Boolean(form.balance_entity_id) || !editPolicy.canEditBudgetPlanner}
-                >
-                  <option value="1">In Budget Planner</option>
-                  <option value="0">Exclude From Planner</option>
-                </select>
-              </div>
+              {!isIouVariant ? (
+                <>
+                  <div className="col-md-4">
+                    <label className="form-label" htmlFor="accumul8-transaction-debtor">IOU Person</label>
+                    <select
+                      id="accumul8-transaction-debtor"
+                      className="form-select"
+                      value={form.balance_entity_id}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        balance_entity_id: e.target.value,
+                        is_budget_planner: e.target.value ? 0 : prev.is_budget_planner,
+                      }))}
+                      disabled={busy || isReadOnly}
+                    >
+                      <option value="">IOU Person</option>
+                      {entities
+                        .filter((entity) => Number(entity.is_balance_person || 0) === 1)
+                        .map((entity) => (
+                          <option key={entity.id} value={entity.id}>{entity.display_name}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label" htmlFor="accumul8-transaction-rta">RTA Amount</label>
+                    <input
+                      id="accumul8-transaction-rta"
+                      className="form-control"
+                      type="number"
+                      step="0.01"
+                      value={form.rta_amount}
+                      onChange={(e) => setForm((prev) => ({ ...prev, rta_amount: Number(e.target.value) }))}
+                      disabled={busy || isReadOnly || !editPolicy.canEditCoreFields}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label" htmlFor="accumul8-transaction-planner">Budget Planner</label>
+                    <select
+                      id="accumul8-transaction-planner"
+                      className="form-select"
+                      value={String(form.is_budget_planner)}
+                      onChange={(e) => setForm((prev) => ({ ...prev, is_budget_planner: Number(e.target.value) }))}
+                      disabled={busy || isReadOnly || Boolean(form.balance_entity_id) || !editPolicy.canEditBudgetPlanner}
+                    >
+                      <option value="1">In Budget Planner</option>
+                      <option value="0">Exclude From Planner</option>
+                    </select>
+                  </div>
+                </>
+              ) : null}
               <div className="col-md-6">
                 <label className="form-label" htmlFor="accumul8-transaction-paid">Paid</label>
                 <select
@@ -338,19 +377,21 @@ export function Accumul8TransactionModal({
                   <option value="1">Yes</option>
                 </select>
               </div>
-              <div className="col-md-6">
-                <label className="form-label" htmlFor="accumul8-transaction-reconciled">Reconciled</label>
-                <select
-                  id="accumul8-transaction-reconciled"
-                  className="form-select"
-                  value={String(form.is_reconciled)}
-                  onChange={(e) => setForm((prev) => ({ ...prev, is_reconciled: Number(e.target.value) }))}
-                  disabled={busy || isReadOnly}
-                >
-                  <option value="0">No</option>
-                  <option value="1">Yes</option>
-                </select>
-              </div>
+              {!isIouVariant ? (
+                <div className="col-md-6">
+                  <label className="form-label" htmlFor="accumul8-transaction-reconciled">Reconciled</label>
+                  <select
+                    id="accumul8-transaction-reconciled"
+                    className="form-select"
+                    value={String(form.is_reconciled)}
+                    onChange={(e) => setForm((prev) => ({ ...prev, is_reconciled: Number(e.target.value) }))}
+                    disabled={busy || isReadOnly}
+                  >
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                  </select>
+                </div>
+              ) : null}
               <div className="col-12">
                 <label className="form-label" htmlFor="accumul8-transaction-memo">Memo</label>
                 <textarea

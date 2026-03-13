@@ -6,6 +6,7 @@ import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
+import { Accumul8CalendarView } from '../accumul8/Accumul8CalendarView';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
@@ -51,7 +52,7 @@ import './Accumul8Page.css';
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-type TabKey = 'ledger' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
+type TabKey = 'ledger' | 'calendar' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
   | 'all'
@@ -109,7 +110,6 @@ type RecurringFormState = {
 };
 type DebtorFormState = {
   debtor_name: string;
-  contact_id: string;
   notes: string;
   is_active: number;
 };
@@ -128,9 +128,10 @@ type LedgerFormState = {
   entity_id: string;
   account_id: string;
   balance_entity_id: string;
+  debtor_id: string;
 };
-type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'account_id' | 'balance_entity_id' | 'balance_entity_name'>>;
-type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'contact_id' | 'contact_name' | 'notes' | 'is_active'>>;
+type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'account_id' | 'balance_entity_id' | 'balance_entity_name' | 'debtor_id' | 'debtor_name'>>;
+type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes' | 'account_id'>>;
 type EntityFormState = {
@@ -204,9 +205,9 @@ const DATE_RANGE_FILTER_OPTIONS: Array<{ value: Exclude<DateRangeFilter, 'all_da
   { value: 'custom', label: 'Custom' },
 ];
 function createDefaultDebtorForm(): DebtorFormState {
-  return { debtor_name: '', contact_id: '', notes: '', is_active: 1 };
+  return { debtor_name: '', notes: '', is_active: 1 };
 }
-function createDefaultLedgerForm(defaults?: { accountId?: string; balanceEntityId?: string }): LedgerFormState {
+function createDefaultLedgerForm(defaults?: { accountId?: string; balanceEntityId?: string; debtorId?: string }): LedgerFormState {
   return {
     transaction_date: new Date().toISOString().slice(0, 10),
     due_date: '',
@@ -222,6 +223,7 @@ function createDefaultLedgerForm(defaults?: { accountId?: string; balanceEntityI
     entity_id: '',
     account_id: defaults?.accountId || '',
     balance_entity_id: defaults?.balanceEntityId || '',
+    debtor_id: defaults?.debtorId || '',
   };
 }
 function buildRecurringPayload(form: RecurringFormState) {
@@ -308,6 +310,7 @@ function buildLedgerFormFromTransaction(tx: Accumul8Transaction): LedgerFormStat
     entity_id: tx.entity_id ? String(tx.entity_id) : '',
     account_id: tx.account_id ? String(tx.account_id) : '',
     balance_entity_id: tx.balance_entity_id ? String(tx.balance_entity_id) : '',
+    debtor_id: tx.debtor_id ? String(tx.debtor_id) : '',
   };
 }
 
@@ -678,6 +681,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [recurringModalOpen, setRecurringModalOpen] = React.useState(false);
   const [transactionModalOpen, setTransactionModalOpen] = React.useState(false);
   const [transactionModalMode, setTransactionModalMode] = React.useState<'create' | 'view' | 'edit'>('create');
+  const [transactionModalVariant, setTransactionModalVariant] = React.useState<'ledger' | 'iou'>('ledger');
   const [entityHistoryEntityId, setEntityHistoryEntityId] = React.useState<number | null>(null);
   const [selectedDebtorId, setSelectedDebtorId] = React.useState<string>('');
   const [selectedBankingOrganizationId, setSelectedBankingOrganizationId] = React.useState<string>('');
@@ -1158,8 +1162,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const debtorRows = React.useMemo(() => (
     debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
       debtor.debtor_name,
-      debtor.contact_name,
-      debtor.entity_name,
       debtor.notes,
       debtor.last_activity_date,
       debtor.total_loaned,
@@ -1181,8 +1183,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
-    { key: 'person', header: 'Person', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '', contentAccessor: (debtor) => debtor.entity_name || debtor.debtor_name || '-' },
-    { key: 'linkedEntity', header: 'Linked Entity', minWidth: 170, maxAutoWidth: 280, priority: 3, sortable: true, sortAccessor: (debtor) => debtor.contact_name || '', contentAccessor: (debtor) => debtor.contact_name || '-' },
+    { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
     { key: 'charges', header: 'Charges', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_loaned || 0), contentAccessor: (debtor) => Number(debtor.total_loaned || 0).toFixed(2) },
     { key: 'credits', header: 'Credits', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_repaid || 0), contentAccessor: (debtor) => Number(debtor.total_repaid || 0).toFixed(2) },
     { key: 'net', header: 'Net IOU', minWidth: 132, maxAutoWidth: 152, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.outstanding_balance || 0), contentAccessor: (debtor) => Number(debtor.outstanding_balance || 0).toFixed(2) },
@@ -1440,6 +1441,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingTransactionId(null);
     setViewingTransactionId(null);
     setTransactionModalMode('create');
+    setTransactionModalVariant('ledger');
     setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId }));
   }, [selectedBankAccountId]);
   const resetBudgetForm = React.useCallback(() => {
@@ -1478,6 +1480,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingTransactionId(tx.id);
     setViewingTransactionId(null);
     setTransactionModalMode('edit');
+    setTransactionModalVariant(Number(tx.debtor_id || 0) > 0 ? 'iou' : 'ledger');
     setLedgerForm(buildLedgerFormFromTransaction(tx));
     setTransactionModalOpen(true);
   }, [transactions]);
@@ -1487,6 +1490,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingTransactionId(null);
     setViewingTransactionId(tx.id);
     setTransactionModalMode('view');
+    setTransactionModalVariant(Number(tx.debtor_id || 0) > 0 ? 'iou' : 'ledger');
     setLedgerForm(buildLedgerFormFromTransaction(tx));
     setTransactionModalOpen(true);
   }, [transactions]);
@@ -1563,12 +1567,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     resetContactForm();
   }, [resetContactForm]);
   const openCreateDebtorModal = React.useCallback(() => {
-    openCreateEntityModal({
-      entity_kind: 'contact',
-      contact_type: 'repayment',
-      is_vendor: 0,
-    });
-  }, [openCreateEntityModal]);
+    setEditingDebtorId(null);
+    setDebtorForm(createDefaultDebtorForm());
+    setDebtorModalOpen(true);
+  }, []);
   const closeDebtorModal = React.useCallback(() => {
     setDebtorModalOpen(false);
     resetDebtorForm();
@@ -1577,11 +1579,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingTransactionId(null);
     setViewingTransactionId(null);
     setTransactionModalMode('create');
+    setTransactionModalVariant('ledger');
     setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, balanceEntityId: defaults?.balanceEntityId || '' }));
+    setTransactionModalOpen(true);
+  }, [selectedBankAccountId]);
+  const openCreateIouTransactionModal = React.useCallback((defaults?: { debtorId?: string }) => {
+    setEditingTransactionId(null);
+    setViewingTransactionId(null);
+    setTransactionModalMode('create');
+    setTransactionModalVariant('iou');
+    setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, debtorId: defaults?.debtorId || '' }));
     setTransactionModalOpen(true);
   }, [selectedBankAccountId]);
   const closeTransactionModal = React.useCallback(() => {
     setTransactionModalOpen(false);
+    setTransactionModalVariant('ledger');
     resetLedgerForm();
   }, [resetLedgerForm]);
   const collectEntityAliasNames = React.useCallback((entityId: number, entityDisplayName: string) => {
@@ -1691,7 +1703,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const closeRecurringModal = React.useCallback(() => {
     resetRecurringEditor();
   }, [resetRecurringEditor]);
-  const submitDebtorModal = React.useCallback(async (form: { debtor_name: string; contact_id?: number | null; notes?: string; is_active?: number }) => {
+  const submitDebtorModal = React.useCallback(async (form: { debtor_name: string; notes?: string; is_active?: number }) => {
     if (editingDebtorId) {
       await updateDebtor(editingDebtorId, form);
     } else {
@@ -1714,6 +1726,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     entity_id?: number | null;
     account_id?: number | null;
     balance_entity_id?: number | null;
+    debtor_id?: number | null;
   }) => {
     if (editingTransactionId) {
       await updateTransaction(editingTransactionId, form);
@@ -2141,7 +2154,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   ]), [entityTransactionSummaryById]);
   const balanceLedgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
-    { key: 'person', header: 'Person', minWidth: 156, maxAutoWidth: 230, priority: 2, sortable: true, sortAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '', contentAccessor: (tx) => tx.balance_entity_name || tx.entity_name || '-' },
+    { key: 'person', header: 'Person', minWidth: 156, maxAutoWidth: 230, priority: 2, sortable: true, sortAccessor: (tx) => tx.debtor_name || '', contentAccessor: (tx) => tx.debtor_name || '-' },
     { key: 'description', header: 'Description', minWidth: 220, maxAutoWidth: 520, priority: 5, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
     { key: 'memo', header: 'Memo', minWidth: 148, maxAutoWidth: 340, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
     { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
@@ -2295,7 +2308,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     await updateDebtor(row.id, {
       debtor_name: draft.debtor_name ?? row.debtor_name,
-      contact_id: draft.contact_id ?? row.contact_id ?? null,
       notes: draft.notes ?? row.notes ?? '',
       is_active: Number(draft.is_active ?? row.is_active ?? 0),
     });
@@ -2540,6 +2552,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         ['debtors', 'IOU'],
                         ['spreadsheet', 'Budget'],
                         ['ledger', 'Ledger'],
+                        ['calendar', 'Calendar'],
                         ['pay_bills', 'Pay Bills'],
                       ].map(([key, label]) => (
                         <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
@@ -2944,7 +2957,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${tx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
                             ) : null}
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateLedgerRow(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
                             {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>
@@ -2961,6 +2974,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          {tab === 'calendar' && (
+            <div className="accumul8-panel accumul8-panel--viewport-fill">
+              <Accumul8CalendarView
+                transactions={filteredTransactions}
+                onTransactionSelect={beginViewTransaction}
+              />
             </div>
           )}
           {tab === 'spreadsheet' && (
@@ -3002,7 +3023,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 >
                   <colgroup>
                     <col style={debtorsTable.getColumnStyle('person')} />
-                    <col style={debtorsTable.getColumnStyle('linkedEntity')} />
                     <col style={debtorsTable.getColumnStyle('charges')} />
                     <col style={debtorsTable.getColumnStyle('credits')} />
                     <col style={debtorsTable.getColumnStyle('net')} />
@@ -3011,7 +3031,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </colgroup>
                   <thead><tr>
                     <Accumul8TableHeaderCell label="Person" columnKey="person" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Linked Entity" columnKey="linkedEntity" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
                     <Accumul8TableHeaderCell label="Charges" columnKey="charges" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
                     <Accumul8TableHeaderCell label="Credits" columnKey="credits" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
                     <Accumul8TableHeaderCell label="Net IOU" columnKey="net" className="text-end" sortState={debtorsTable.sortState} onSort={debtorsTable.requestSort} onResizeStart={debtorsTable.startResize} />
@@ -3025,31 +3044,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {activeDebtorRowId === debtor.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={debtorDraftById[debtor.id]?.debtor_name ?? debtor.debtor_name} onChange={(e) => setDebtorRowDraft(debtor, { debtor_name: e.target.value })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateDebtorRow(debtor.id)} disabled={busy}>{formatInlineText(debtor.entity_name || debtor.debtor_name, '-')}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeDebtorRowId === debtor.id ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={String(debtorDraftById[debtor.id]?.contact_id ?? debtor.contact_id ?? '')}
-                              onChange={(e) => {
-                                const nextEntityId = e.target.value === '' ? null : Number(e.target.value);
-                                const nextEntity = contactEntities.find((entity) => entity.id === nextEntityId) || null;
-                                setDebtorRowDraft(debtor, {
-                                  contact_id: nextEntity?.contact_id ?? null,
-                                  contact_name: nextEntity?.display_name || '',
-                                });
-                              }}
-                              disabled={busy}
-                            >
-                              <option value="">None</option>
-                              {contactEntities.map((entity) => (
-                                <option key={entity.id} value={entity.id}>{entity.display_name}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateDebtorRow(debtor.id)} disabled={busy}>{formatInlineText(debtor.contact_name, '-')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateDebtorRow(debtor.id)} disabled={busy}>{formatInlineText(debtor.debtor_name, '-')}</button>
                           )}
                         </td>
                         <td className="text-end">{Number(debtor.total_loaned || 0).toFixed(2)}</td>
@@ -3093,7 +3088,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                       className="btn btn-sm btn-outline-primary accumul8-iou-ledger-controls__button"
                       onClick={() => {
                         const selectedDebtor = debtors.find((debtor) => String(debtor.id) === selectedDebtorId) || null;
-                        openCreateTransactionModal({ balanceEntityId: selectedDebtor?.entity_id ? String(selectedDebtor.entity_id) : '' });
+                        openCreateIouTransactionModal({ debtorId: selectedDebtor?.id ? String(selectedDebtor.id) : '' });
                       }}
                       disabled={busy}
                     >
@@ -3137,81 +3132,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             ledgerDraftById[tx.id] ? 'has-draft' : '',
                           ].filter(Boolean).join(' ')}
                         >
-                          <td>
-                            {activeLedgerRowId === tx.id ? (
-                              <input
-                                className="form-control form-control-sm accumul8-month-table-input"
-                                type="date"
-                                value={ledgerDraftById[tx.id]?.transaction_date ?? tx.transaction_date}
-                                onChange={(e) => setLedgerRowDraft(tx, { transaction_date: e.target.value })}
-                                disabled={busy}
-                              />
-                            ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineDate(tx.transaction_date)}</button>
-                            )}
-                          </td>
-                          <td>
-                            {activeLedgerRowId === tx.id ? (
-                              <select
-                                className="form-select form-select-sm accumul8-month-table-select"
-                                value={String(ledgerDraftById[tx.id]?.balance_entity_id ?? tx.balance_entity_id ?? '')}
-                                onChange={(e) => {
-                                  const nextEntityId = e.target.value === '' ? null : Number(e.target.value);
-                                  const nextEntity = balanceEntities.find((entity) => entity.id === nextEntityId) || null;
-                                  setLedgerRowDraft(tx, {
-                                    balance_entity_id: nextEntityId,
-                                    balance_entity_name: nextEntity?.display_name || '',
-                                  });
-                                }}
-                                disabled={busy}
-                              >
-                                <option value="">Unassigned</option>
-                                {balanceEntities.map((entity) => (
-                                  <option key={entity.id} value={entity.id}>{entity.display_name}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.balance_entity_name || tx.debtor_name, '-')}</button>
-                            )}
-                          </td>
-                          <td>
-                            {activeLedgerRowId === tx.id ? (
-                              <input
-                                className="form-control form-control-sm accumul8-month-table-input"
-                                value={ledgerDraftById[tx.id]?.description ?? tx.description}
-                                onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })}
-                                disabled={busy}
-                              />
-                            ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{getLedgerDescriptionLabel(tx, ledgerDraftById[tx.id])}</button>
-                            )}
-                          </td>
-                          <td>
-                            {activeLedgerRowId === tx.id ? (
-                              <input
-                                className="form-control form-control-sm accumul8-month-table-input"
-                                value={ledgerDraftById[tx.id]?.memo ?? tx.memo ?? ''}
-                                onChange={(e) => setLedgerRowDraft(tx, { memo: e.target.value })}
-                                disabled={busy}
-                              />
-                            ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button>
-                            )}
-                          </td>
-                          <td className="text-end">
-                            {activeLedgerRowId === tx.id ? (
-                              <input
-                                className="form-control form-control-sm accumul8-month-table-input"
-                                type="number"
-                                step="0.01"
-                                value={ledgerDraftById[tx.id]?.amount ?? tx.amount}
-                                onChange={(e) => setLedgerRowDraft(tx, { amount: Number(e.target.value) })}
-                                disabled={busy}
-                              />
-                            ) : (
-                              <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{Number(tx.amount || 0).toFixed(2)}</button>
-                            )}
-                          </td>
+                          <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineDate(tx.transaction_date)}</button></td>
+                          <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineText(tx.debtor_name, '-')}</button></td>
+                          <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineText(tx.description, '-')}</button></td>
+                          <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button></td>
+                          <td className="text-end"><button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{Number(tx.amount || 0).toFixed(2)}</button></td>
                           <td className="text-end">{Number(tx.running_balance || 0).toFixed(2)}</td>
                           <td className="text-end is-compact-actions">
                             {(() => {
@@ -3222,9 +3147,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                     <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${tx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
                                   ) : null}
                                   <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                                  <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateLedgerRow(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                                  <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditTransaction(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                                   <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy} aria-label={`Delete ${tx.description}`}><i className="bi bi-trash"></i></button>
-                                  {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                                 </div>
                               );
                             })()}
@@ -4271,8 +4195,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             open={debtorModalOpen}
             busy={busy}
             initialForm={debtorForm}
-            editing={false}
-            contacts={contacts}
+            editing={editingDebtorId !== null}
             onClose={closeDebtorModal}
             onSave={submitDebtorModal}
         />
@@ -4290,12 +4213,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             busy={busy}
             initialForm={ledgerForm}
             mode={transactionModalMode}
+            variant={transactionModalVariant}
             transaction={editingTransactionId !== null
               ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
               : viewingTransactionId !== null
                 ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
                 : null}
             entities={entitiesSorted}
+            debtors={debtors}
             accounts={visibleAccounts}
             statementUploads={statementUploads}
             ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}

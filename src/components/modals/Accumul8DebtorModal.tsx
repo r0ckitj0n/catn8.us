@@ -1,12 +1,11 @@
 import React from 'react';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
-import { Accumul8Contact, Accumul8DebtorUpsertRequest } from '../../types/accumul8';
+import { Accumul8DebtorUpsertRequest } from '../../types/accumul8';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { StandardIconButton } from '../common/StandardIconButton';
 
 interface Accumul8DebtorModalFormState {
   debtor_name: string;
-  contact_id: string;
   notes: string;
   is_active: number;
 }
@@ -16,7 +15,6 @@ interface Accumul8DebtorModalProps {
   busy: boolean;
   editing: boolean;
   initialForm: Accumul8DebtorModalFormState;
-  contacts: Accumul8Contact[];
   onClose: () => void;
   onSave: (form: Accumul8DebtorUpsertRequest) => Promise<void>;
 }
@@ -26,7 +24,6 @@ export function Accumul8DebtorModal({
   busy,
   editing,
   initialForm,
-  contacts,
   onClose,
   onSave,
 }: Accumul8DebtorModalProps) {
@@ -35,14 +32,12 @@ export function Accumul8DebtorModal({
 
   const buildPayload = React.useCallback((): Accumul8DebtorUpsertRequest => ({
     debtor_name: String(form.debtor_name || '').trim(),
-    contact_id: form.contact_id ? Number(form.contact_id) : null,
     notes: String(form.notes || '').trim(),
     is_active: Number(form.is_active || 0),
   }), [form]);
   const isDirty = React.useMemo(
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       debtor_name: String(initialForm.debtor_name || '').trim(),
-      contact_id: initialForm.contact_id ? Number(initialForm.contact_id) : null,
       notes: String(initialForm.notes || '').trim(),
       is_active: Number(initialForm.is_active || 0),
     }),
@@ -104,20 +99,6 @@ export function Accumul8DebtorModal({
                 />
               </div>
               <div className="col-12">
-                <label className="form-label" htmlFor="accumul8-debtor-contact">Linked Contact</label>
-                <select
-                  id="accumul8-debtor-contact"
-                  className="form-select"
-                  value={form.contact_id}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contact_id: e.target.value }))}
-                >
-                  <option value="">Link contact (optional)</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>{contact.contact_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-4">
                 <label className="form-label" htmlFor="accumul8-debtor-status">Status</label>
                 <select
                   id="accumul8-debtor-status"

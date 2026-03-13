@@ -6294,14 +6294,19 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
         $statementUploadId = accumul8_parse_statement_upload_id_from_source_ref((string)($r['source_ref'] ?? ''));
         $statementUpload = $statementUploadId !== null ? ($statementUploadLookup[$statementUploadId] ?? null) : null;
         $statementPageNumber = accumul8_statement_guess_page_number($r, $statementUpload);
+        $resolvedEntityName = accumul8_entity_alias_name((string)($r['entity_name'] ?? ''));
+        if ($resolvedEntityName === '') {
+            $resolvedEntityName = accumul8_entity_alias_name((string)($r['description'] ?? ''));
+        }
+        $resolvedBalanceEntityName = accumul8_entity_alias_name((string)($r['balance_entity_name'] ?? ''));
         return [
             'id' => (int)($r['id'] ?? 0),
             'account_id' => isset($r['account_id']) ? (int)$r['account_id'] : null,
             'banking_organization_id' => isset($r['account_group_id']) ? (int)$r['account_group_id'] : null,
             'entity_id' => isset($r['entity_id']) ? (int)$r['entity_id'] : null,
-            'entity_name' => accumul8_entity_alias_name((string)($r['entity_name'] ?? '')),
+            'entity_name' => $resolvedEntityName,
             'balance_entity_id' => isset($r['balance_entity_id']) ? (int)$r['balance_entity_id'] : null,
-            'balance_entity_name' => accumul8_entity_alias_name((string)($r['balance_entity_name'] ?? '')),
+            'balance_entity_name' => $resolvedBalanceEntityName,
             'contact_id' => isset($r['contact_id']) ? (int)$r['contact_id'] : null,
             'debtor_id' => isset($r['debtor_id']) ? (int)$r['debtor_id'] : null,
             'transaction_date' => (string)($r['transaction_date'] ?? ''),

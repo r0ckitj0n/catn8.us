@@ -1,8 +1,9 @@
 import React from 'react';
-import { Accumul8Transaction } from '../../types/accumul8';
+import { Accumul8Account, Accumul8Transaction } from '../../types/accumul8';
 import './Accumul8CalendarView.css';
 
 type Accumul8CalendarViewProps = {
+  accounts: Accumul8Account[];
   transactions: Accumul8Transaction[];
   onTransactionSelect?: (transactionId: number) => void;
 };
@@ -164,7 +165,7 @@ function formatDayLabel(value: string): string {
   });
 }
 
-export function Accumul8CalendarView({ transactions, onTransactionSelect }: Accumul8CalendarViewProps) {
+export function Accumul8CalendarView({ accounts, transactions, onTransactionSelect }: Accumul8CalendarViewProps) {
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [calendarMode, setCalendarMode] = React.useState<CalendarMode>('month');
   const [anchorDate, setAnchorDate] = React.useState<string>(todayDate);
@@ -195,6 +196,41 @@ export function Accumul8CalendarView({ transactions, onTransactionSelect }: Accu
 
     return next;
   }, [transactions]);
+
+  const dayBalanceByDate = React.useMemo(() => {
+    const currentBalance = accounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0);
+    const totalsByDate = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      const date = getTransactionCalendarDate(transaction);
+      if (!date) {
+        return;
+      }
+      totalsByDate.set(date, Number(((totalsByDate.get(date) || 0) + Number(transaction.amount || 0)).toFixed(2)));
+    });
+
+    const allDates = Array.from(totalsByDate.keys()).sort((left, right) => left.localeCompare(right));
+    const balanceByDate = new Map<string, number>();
+
+    const pastDates = allDates.filter((date) => date < todayDate);
+    let cumulativeLater = 0;
+    for (let index = pastDates.length - 1; index >= 0; index -= 1) {
+      const date = pastDates[index];
+      balanceByDate.set(date, Number((currentBalance - cumulativeLater).toFixed(2)));
+      cumulativeLater = Number((cumulativeLater + Number(totalsByDate.get(date) || 0)).toFixed(2));
+    }
+
+    balanceByDate.set(todayDate, Number(currentBalance.toFixed(2)));
+
+    const futureDates = allDates.filter((date) => date > todayDate);
+    let cumulativeFuture = 0;
+    futureDates.forEach((date) => {
+      cumulativeFuture = Number((cumulativeFuture + Number(totalsByDate.get(date) || 0)).toFixed(2));
+      balanceByDate.set(date, Number((currentBalance + cumulativeFuture).toFixed(2)));
+    });
+
+    return balanceByDate;
+  }, [accounts, todayDate, transactions]);
 
   const visibleDays = React.useMemo(
     () => (calendarMode === 'month' ? buildMonthGridDays(anchorDate) : buildWeekDays(anchorDate)),
@@ -283,6 +319,7 @@ export function Accumul8CalendarView({ transactions, onTransactionSelect }: Accu
           {visibleDays.map((day) => {
             const dayTransactions = transactionMap.get(day.isoDate) || [];
             const dayTotal = dayTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+            const dayBalance = dayBalanceByDate.get(day.isoDate);
             const isToday = day.isoDate === todayDate;
 
             return (
@@ -296,11 +333,14 @@ export function Accumul8CalendarView({ transactions, onTransactionSelect }: Accu
                 aria-label={formatDayLabel(day.isoDate)}
               >
                 <header className="accumul8-calendar-day-header">
-                  <div>
+                  <div className="accumul8-calendar-day-header-main">
                     <span className="accumul8-calendar-day-name">{formatDayLabel(day.isoDate)}</span>
-                    <strong className="accumul8-calendar-day-number">{day.dayNumber}</strong>
+                    <div className="accumul8-calendar-day-header-summary">
+                      <strong className="accumul8-calendar-day-number">{day.dayNumber}</strong>
+                      <span className="accumul8-calendar-day-subtotal">{dayTransactions.length > 0 ? formatCurrencyAmount(dayTotal) : ''}</span>
+                    </div>
                   </div>
-                  <span className="accumul8-calendar-day-total">{dayTransactions.length > 0 ? formatCurrencyAmount(dayTotal) : ''}</span>
+                  <span className="accumul8-calendar-day-total">{Number.isFinite(dayBalance) ? formatCurrencyAmount(Number(dayBalance || 0)) : ''}</span>
                 </header>
 
                 <div className="accumul8-calendar-day-body">

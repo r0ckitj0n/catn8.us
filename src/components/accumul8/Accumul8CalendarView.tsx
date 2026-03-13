@@ -68,8 +68,7 @@ function startOfUtcWeek(value: string): string {
     return value;
   }
   const day = parsed.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  parsed.setUTCDate(parsed.getUTCDate() + diff);
+  parsed.setUTCDate(parsed.getUTCDate() - day);
   return formatIsoDate(parsed);
 }
 

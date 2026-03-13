@@ -3177,6 +3177,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 messageBoardPendingCount={messageBoardUnacknowledgedCount}
                 onBalanceBooks={handleBalanceBooks}
                 onRunWatchlist={handleRunAIcountantWatchlist}
+                onOpenMessageBoard={() => setMessageBoardOpen(true)}
                 onToast={onToast}
               />
             </div>

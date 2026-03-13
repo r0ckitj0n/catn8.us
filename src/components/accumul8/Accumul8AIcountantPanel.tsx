@@ -17,6 +17,7 @@ interface Accumul8AIcountantPanelProps {
   messageBoardPendingCount: number;
   onBalanceBooks: () => void;
   onRunWatchlist: () => void;
+  onOpenMessageBoard: () => void;
   onToast?: (payload: ToastPayload) => void;
 }
 
@@ -44,6 +45,7 @@ export function Accumul8AIcountantPanel({
   messageBoardPendingCount,
   onBalanceBooks,
   onRunWatchlist,
+  onOpenMessageBoard,
   onToast,
 }: Accumul8AIcountantPanelProps) {
   const {
@@ -88,6 +90,9 @@ export function Accumul8AIcountantPanel({
       setDraft(normalized);
     }
   }, [activeConversation?.id, draft, sendMessage, sending]);
+
+  const hasActiveConversation = Boolean(activeConversation);
+  const pendingMessageBoardLabel = messageBoardPendingCount === 1 ? '1 new alert' : `${messageBoardPendingCount} new alerts`;
 
   return (
     <div className="accumul8-aicountant">
@@ -144,62 +149,77 @@ export function Accumul8AIcountantPanel({
             </p>
           </div>
           <div className="accumul8-aicountant-header-actions">
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={onBalanceBooks}
-              disabled={balancingBooks || sending || runningWatchlist}
-            >
-              {balancingBooks ? 'Balancing...' : 'Balance the Books'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-sm"
-              onClick={onRunWatchlist}
-              disabled={runningWatchlist || sending || balancingBooks}
-            >
-              {runningWatchlist ? 'Watching...' : 'Run Watchlist'}
-            </button>
-            <div className="accumul8-aicountant-message-board-pill">
-              Board: {messageBoardPendingCount} new
+            <div className="accumul8-aicountant-action-group" aria-label="AIcountant tools">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={onBalanceBooks}
+                disabled={balancingBooks || sending || runningWatchlist}
+              >
+                {balancingBooks ? 'Balancing...' : 'Balance the Books'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={onRunWatchlist}
+                disabled={runningWatchlist || sending || balancingBooks}
+                title="Run an AI review for overdue bills, cash-flow issues, and reminders."
+              >
+                {runningWatchlist ? 'Reviewing...' : 'Review Upcoming Risks'}
+              </button>
+              <button
+                type="button"
+                className={`accumul8-aicountant-message-board-pill${messageBoardPendingCount > 0 ? ' has-alerts' : ''}`}
+                onClick={onOpenMessageBoard}
+                title="Open the message board to read AIcountant alerts and run summaries."
+              >
+                Alerts: {pendingMessageBoardLabel}
+              </button>
             </div>
-            <input
-              type="text"
-              className="form-control form-control-sm"
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              placeholder="Conversation title"
-              disabled={!activeConversation || loading || sending}
-              aria-label="Conversation title"
-            />
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm"
-              onClick={() => {
-                if (activeConversation) {
-                  void renameConversation(activeConversation.id, titleDraft);
-                }
-              }}
-              disabled={!activeConversation || loading || sending || titleDraft.trim() === ''}
-            >
-              Save Title
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-danger btn-sm"
-              onClick={() => {
-                if (!activeConversation) {
-                  return;
-                }
-                if (!window.confirm(`Delete "${activeConversation.title}"?`)) {
-                  return;
-                }
-                void deleteConversation(activeConversation.id);
-              }}
-              disabled={!activeConversation || loading || sending}
-            >
-              Delete
-            </button>
+            {hasActiveConversation ? (
+              <div className="accumul8-aicountant-action-group accumul8-aicountant-action-group--conversation" aria-label="Conversation controls">
+                <label className="accumul8-aicountant-title-field">
+                  <span>Name this chat</span>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={titleDraft}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    placeholder="Conversation title"
+                    disabled={loading || sending}
+                    aria-label="Conversation title"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => {
+                    if (activeConversation) {
+                      void renameConversation(activeConversation.id, titleDraft);
+                    }
+                  }}
+                  disabled={loading || sending || titleDraft.trim() === ''}
+                >
+                  Rename Chat
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => {
+                    if (!activeConversation) {
+                      return;
+                    }
+                    if (!window.confirm(`Delete "${activeConversation.title}"?`)) {
+                      return;
+                    }
+                    void deleteConversation(activeConversation.id);
+                  }}
+                  disabled={loading || sending}
+                >
+                  Delete
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
 

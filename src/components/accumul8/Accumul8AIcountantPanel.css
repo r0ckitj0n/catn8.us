@@ -107,9 +107,22 @@
 
 .accumul8-aicountant-header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  align-items: flex-start;
+  width: min(100%, 720px);
+}
+
+.accumul8-aicountant-action-group {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-  width: min(100%, 430px);
+}
+
+.accumul8-aicountant-action-group--conversation {
+  justify-content: flex-end;
 }
 
 .accumul8-aicountant-message-board-pill {
@@ -121,6 +134,30 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.accumul8-aicountant-message-board-pill.has-alerts {
+  border-color: rgba(240, 217, 141, 0.72);
+  background: rgba(212, 175, 55, 0.2);
+}
+
+.accumul8-aicountant-title-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: min(100%, 220px);
+  flex: 1 1 240px;
+}
+
+.accumul8-aicountant-title-field span {
+  color: var(--accumul8-deco-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accumul8-aicountant-title-field input {
+  min-width: 0;
 }
 
 .accumul8-aicountant-thread {
@@ -265,8 +302,13 @@
 
   .accumul8-aicountant-header,
   .accumul8-aicountant-header-actions,
+  .accumul8-aicountant-action-group,
   .accumul8-aicountant-composer-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .accumul8-aicountant-action-group--conversation {
+    justify-content: stretch;
   }
 }

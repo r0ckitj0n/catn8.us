@@ -1,17 +1,13 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
-import { Accumul8StatementsPanel } from '../accumul8/Accumul8StatementsPanel';
 import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
 import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
 import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
 import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
 import { Accumul8LedgerEntityModal } from '../modals/Accumul8LedgerEntityModal';
 import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
-import { Accumul8CalendarView } from '../accumul8/Accumul8CalendarView';
 import { Accumul8EndexGroupModal } from '../accumul8/Accumul8EndexGroupModal';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
-import { Accumul8SpreadsheetView } from '../accumul8/Accumul8SpreadsheetView';
-import { Accumul8SyncInstitutionsManager } from '../accumul8/Accumul8SyncInstitutionsManager';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
@@ -55,6 +51,29 @@ import {
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import './Accumul8Page.css';
+
+const Accumul8StatementsPanel = React.lazy(async () => {
+  const mod = await import('../accumul8/Accumul8StatementsPanel');
+  return { default: mod.Accumul8StatementsPanel };
+});
+
+const Accumul8CalendarView = React.lazy(async () => {
+  const mod = await import('../accumul8/Accumul8CalendarView');
+  return { default: mod.Accumul8CalendarView };
+});
+
+const Accumul8SpreadsheetView = React.lazy(async () => {
+  const mod = await import('../accumul8/Accumul8SpreadsheetView');
+  return { default: mod.Accumul8SpreadsheetView };
+});
+
+const Accumul8SyncInstitutionsManager = React.lazy(async () => {
+  const mod = await import('../accumul8/Accumul8SyncInstitutionsManager');
+  return { default: mod.Accumul8SyncInstitutionsManager };
+});
+
+const ACCUMUL8_TAB_LOADING_FALLBACK = <div className="accumul8-panel text-muted py-4">Loading view...</div>;
+
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
@@ -608,6 +627,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const {
     busy,
     loaded,
+    statementsLoaded,
     activeOwnerUserId,
     accessibleAccountOwners,
     entities,
@@ -629,6 +649,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     statementAuditRuns,
     syncProvider,
     load,
+    loadStatementWorkspace,
     createEntity,
     updateEntity,
     createEntityAlias,
@@ -856,6 +877,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(activeOwnerUserId));
     }
   }, [activeOwnerUserId]);
+  React.useEffect(() => {
+    if (tab !== 'statements' || statementsLoaded) {
+      return;
+    }
+    void loadStatementWorkspace();
+  }, [loadStatementWorkspace, statementsLoaded, tab]);
   const visibleAccounts = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     if (bankingOrganizationId <= 0) {
@@ -3198,28 +3225,32 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'calendar' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill accumul8-panel--calendar-scroll">
-              <Accumul8CalendarView
-                accounts={scopedAccounts}
-                transactions={filteredTransactions}
-                onTransactionSelect={beginViewTransaction}
-              />
-            </div>
+            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
+              <div className="accumul8-panel accumul8-panel--viewport-fill accumul8-panel--calendar-scroll">
+                <Accumul8CalendarView
+                  accounts={scopedAccounts}
+                  transactions={filteredTransactions}
+                  onTransactionSelect={beginViewTransaction}
+                />
+              </div>
+            </React.Suspense>
           )}
           {tab === 'spreadsheet' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <Accumul8SpreadsheetView
-                busy={busy}
-                selectedMonth={budgetMonth}
-                recurringPayments={budgetPlannerRecurringPayments}
-                entities={contactEntities}
-                accounts={scopedAccounts}
-                onSelectedMonthChange={setBudgetMonth}
-                onUpdateRecurring={updateRecurring}
-                onDeleteRecurring={handleDeleteRecurring}
-                onOpenRecurring={beginEditRecurring}
-              />
-            </div>
+            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
+              <div className="accumul8-panel accumul8-panel--viewport-fill">
+                <Accumul8SpreadsheetView
+                  busy={busy}
+                  selectedMonth={budgetMonth}
+                  recurringPayments={budgetPlannerRecurringPayments}
+                  entities={contactEntities}
+                  accounts={scopedAccounts}
+                  onSelectedMonthChange={setBudgetMonth}
+                  onUpdateRecurring={updateRecurring}
+                  onDeleteRecurring={handleDeleteRecurring}
+                  onOpenRecurring={beginEditRecurring}
+                />
+              </div>
+            </React.Suspense>
           )}
           {tab === 'debtors' && (
             <div className="accumul8-panel">
@@ -4119,109 +4150,113 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'sync' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <h3>Bank Sync Groundwork</h3>
-              <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
-              <div className="d-flex gap-2 flex-wrap mb-3">
-                <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
-                <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
-              </div>
-              <Accumul8SyncInstitutionsManager
-                bankConnections={bankConnections}
-                linkedAccountsByConnectionId={linkedAccountsByConnectionId}
-                busy={busy}
-                syncingConnectionId={syncingConnectionId}
-                onCreate={createBankConnection}
-                onUpdate={updateBankConnection}
-                onDelete={async (id) => {
-                  await deleteBankConnection({ id });
-                }}
-                onSync={runConnectionSync}
-                formatAccountMappingLabel={formatAccountMappingLabel}
-                formatAccountBackfillNote={formatAccountBackfillNote}
-                formatSyncStatusLabel={formatSyncStatusLabel}
-                formatSyncStatusMessage={formatSyncStatusMessage}
-                isTellerRateLimited={isTellerRateLimited}
-              />
-              {lastSyncReport ? (
-                <div className="accumul8-sync-report mt-3">
-                  <div className="accumul8-sync-report__header">
-                    <strong>Last Sync Report:</strong> {lastSyncReport.institutionName} at {lastSyncReport.syncedAt.replace('T', ' ').slice(0, 19)}
-                  </div>
-                  <div className="accumul8-sync-report__summary">
-                    Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, unchanged {lastSyncReport.result.unchanged}, removed {lastSyncReport.result.removed}.
-                  </div>
-                  <div className="accumul8-sync-report__accounts">
-                    {lastSyncReport.result.accounts.length > 0 ? (
-                      lastSyncReport.result.accounts.map((account) => (
-                        <div key={`${account.remote_account_id}-${account.local_account_id}`} className="accumul8-sync-report__account">
-                          <div className="accumul8-sync-report__account-title">
-                            {formatSyncSummaryAccountLabel(account)}
-                          </div>
-                          <div className="accumul8-sync-report__account-meta">
-                            {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {getAccountDisplayName(account.local_account_id, account.local_account_name, '', 'Unnamed local account')}
-                          </div>
-                          {account.history_start_date && account.history_end_date ? (
-                            <div className="accumul8-sync-report__account-meta">
-                              Teller history returned: {account.history_start_date} to {account.history_end_date}.
-                            </div>
-                          ) : null}
-                          <div className="accumul8-sync-report__account-meta">
-                            {formatSyncSummaryBackfillNote(account)}
-                          </div>
-                          {!account.transactions_supported ? (
-                            <div className="accumul8-sync-report__account-meta">
-                              Balance access: {account.balances_supported ? 'available' : 'not available'}; details access: {account.details_supported ? 'available' : 'not available'}.
-                            </div>
-                          ) : null}
-                          <div className="accumul8-sync-report__account-meta">
-                            Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
-                          </div>
-                          <div className="accumul8-sync-report__account-meta">
-                            Cleanup removed {account.stale_teller_removed} stale Teller row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside Teller's returned history window.
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="accumul8-sync-empty">No Teller accounts were returned in the most recent sync.</div>
-                    )}
-                  </div>
+            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
+              <div className="accumul8-panel accumul8-panel--viewport-fill">
+                <h3>Bank Sync Groundwork</h3>
+                <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
+                <div className="d-flex gap-2 flex-wrap mb-3">
+                  <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
                 </div>
-              ) : null}
-              <p className="small text-muted mb-0">Teller accounts are matched by Teller’s stable account IDs and enrollment IDs. On sync, Accumul8 creates or updates a local account record for each returned Teller account and then attaches transactions to that mapped local account.</p>
-            </div>
+                <Accumul8SyncInstitutionsManager
+                  bankConnections={bankConnections}
+                  linkedAccountsByConnectionId={linkedAccountsByConnectionId}
+                  busy={busy}
+                  syncingConnectionId={syncingConnectionId}
+                  onCreate={createBankConnection}
+                  onUpdate={updateBankConnection}
+                  onDelete={async (id) => {
+                    await deleteBankConnection({ id });
+                  }}
+                  onSync={runConnectionSync}
+                  formatAccountMappingLabel={formatAccountMappingLabel}
+                  formatAccountBackfillNote={formatAccountBackfillNote}
+                  formatSyncStatusLabel={formatSyncStatusLabel}
+                  formatSyncStatusMessage={formatSyncStatusMessage}
+                  isTellerRateLimited={isTellerRateLimited}
+                />
+                {lastSyncReport ? (
+                  <div className="accumul8-sync-report mt-3">
+                    <div className="accumul8-sync-report__header">
+                      <strong>Last Sync Report:</strong> {lastSyncReport.institutionName} at {lastSyncReport.syncedAt.replace('T', ' ').slice(0, 19)}
+                    </div>
+                    <div className="accumul8-sync-report__summary">
+                      Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, unchanged {lastSyncReport.result.unchanged}, removed {lastSyncReport.result.removed}.
+                    </div>
+                    <div className="accumul8-sync-report__accounts">
+                      {lastSyncReport.result.accounts.length > 0 ? (
+                        lastSyncReport.result.accounts.map((account) => (
+                          <div key={`${account.remote_account_id}-${account.local_account_id}`} className="accumul8-sync-report__account">
+                            <div className="accumul8-sync-report__account-title">
+                              {formatSyncSummaryAccountLabel(account)}
+                            </div>
+                            <div className="accumul8-sync-report__account-meta">
+                              {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {getAccountDisplayName(account.local_account_id, account.local_account_name, '', 'Unnamed local account')}
+                            </div>
+                            {account.history_start_date && account.history_end_date ? (
+                              <div className="accumul8-sync-report__account-meta">
+                                Teller history returned: {account.history_start_date} to {account.history_end_date}.
+                              </div>
+                            ) : null}
+                            <div className="accumul8-sync-report__account-meta">
+                              {formatSyncSummaryBackfillNote(account)}
+                            </div>
+                            {!account.transactions_supported ? (
+                              <div className="accumul8-sync-report__account-meta">
+                                Balance access: {account.balances_supported ? 'available' : 'not available'}; details access: {account.details_supported ? 'available' : 'not available'}.
+                              </div>
+                            ) : null}
+                            <div className="accumul8-sync-report__account-meta">
+                              Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
+                            </div>
+                            <div className="accumul8-sync-report__account-meta">
+                              Cleanup removed {account.stale_teller_removed} stale Teller row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside Teller's returned history window.
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="accumul8-sync-empty">No Teller accounts were returned in the most recent sync.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+                <p className="small text-muted mb-0">Teller accounts are matched by Teller’s stable account IDs and enrollment IDs. On sync, Accumul8 creates or updates a local account record for each returned Teller account and then attaches transactions to that mapped local account.</p>
+              </div>
+            </React.Suspense>
           )}
           {tab === 'statements' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <Accumul8StatementsPanel
-                busy={busy}
-                accounts={accounts}
-                bankingOrganizations={bankingOrganizations}
-                statementUploads={statementUploads}
-                archivedStatementUploads={archivedStatementUploads}
-                statementAuditRuns={statementAuditRuns}
-                transactions={transactions}
-                ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
-                onUpload={uploadStatement}
-                onRescan={rescanStatementUpload}
-                onUpdateMetadata={updateStatementUploadMetadata}
-                onArchiveStatement={archiveStatementUpload}
-                onRestoreStatement={restoreStatementUpload}
-                onDeleteArchivedStatement={deleteArchivedStatementUpload}
-                onConfirmImport={confirmStatementImport}
-                onReconcile={reconcileStatementUpload}
-                onImportReviewRow={importStatementReviewRow}
-                onLinkReviewRow={linkStatementReviewRow}
-                onSearch={searchStatementUploads}
-                onAuditStatements={auditStatementUploads}
-                onAuditImportedCleanup={auditImportedTransactionCleanup}
-                onPurgeImportedCleanup={purgeImportedTransactionCleanup}
-                onPurgeAllImportedTransactions={purgeAllImportedStatementTransactions}
-                onPurgeAllStatementUploads={purgeAllStatementUploads}
-                onOpenTransaction={beginViewTransaction}
-                onDeleteTransaction={handleDeleteTransaction}
-              />
-            </div>
+            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
+              <div className="accumul8-panel accumul8-panel--viewport-fill">
+                <Accumul8StatementsPanel
+                  busy={busy}
+                  accounts={accounts}
+                  bankingOrganizations={bankingOrganizations}
+                  statementUploads={statementUploads}
+                  archivedStatementUploads={archivedStatementUploads}
+                  statementAuditRuns={statementAuditRuns}
+                  transactions={transactions}
+                  ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
+                  onUpload={uploadStatement}
+                  onRescan={rescanStatementUpload}
+                  onUpdateMetadata={updateStatementUploadMetadata}
+                  onArchiveStatement={archiveStatementUpload}
+                  onRestoreStatement={restoreStatementUpload}
+                  onDeleteArchivedStatement={deleteArchivedStatementUpload}
+                  onConfirmImport={confirmStatementImport}
+                  onReconcile={reconcileStatementUpload}
+                  onImportReviewRow={importStatementReviewRow}
+                  onLinkReviewRow={linkStatementReviewRow}
+                  onSearch={searchStatementUploads}
+                  onAuditStatements={auditStatementUploads}
+                  onAuditImportedCleanup={auditImportedTransactionCleanup}
+                  onPurgeImportedCleanup={purgeImportedTransactionCleanup}
+                  onPurgeAllImportedTransactions={purgeAllImportedStatementTransactions}
+                  onPurgeAllStatementUploads={purgeAllStatementUploads}
+                  onOpenTransaction={beginViewTransaction}
+                  onDeleteTransaction={handleDeleteTransaction}
+                />
+              </div>
+            </React.Suspense>
           )}
           </div>
           {syncHelpOpen && (

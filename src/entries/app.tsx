@@ -7,7 +7,6 @@ import { LoginModal } from '../components/modals/LoginModal';
 import { ToastOverlay } from '../components/modals/ToastOverlay';
 import { AboutPage } from '../components/pages/AboutPage';
 import { ActivitiesPage } from '../components/pages/ActivitiesPage';
-import { Accumul8Page } from '../components/pages/Accumul8Page';
 import { ArcadePage } from '../components/pages/ArcadePage';
 import { AsteroidsPage } from '../components/pages/AsteroidsPage';
 import { BuildWizardPage } from '../components/pages/BuildWizardPage';
@@ -30,6 +29,11 @@ import { UI_STANDARDS_EVENT, applyGlobalUiSettings } from '../core/uiStandards';
 import { catn8LocalStorageGet } from '../utils/storageUtils';
 
 import './app.css';
+
+const Accumul8Page = React.lazy(async () => {
+  const mod = await import('../components/pages/Accumul8Page');
+  return { default: mod.Accumul8Page };
+});
 
 type AppPage =
   | 'home'
@@ -79,7 +83,6 @@ const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>>
   stimul8: GamesPage,
   recre8: ArcadePage,
   activ8: ActivitiesPage,
-  accumul8: Accumul8Page,
   valid8: Valid8Page,
   illumin8: ColoringPage,
   loc8: WordsearchPage,
@@ -271,6 +274,14 @@ function App({ page }: { page: AppPage }) {
   }), [viewer, isAdmin, logout, mysteryTitle]);
 
   const content = React.useMemo(() => {
+    if (page === 'accumul8') {
+      return (
+        <React.Suspense fallback={<div className="container py-4 text-muted">Loading Accumul8...</div>}>
+          <Accumul8Page {...sharedProps} onToast={setToast} />
+        </React.Suspense>
+      );
+    }
+
     const SimplePage = SIMPLE_PAGE_COMPONENTS[page];
     if (SimplePage) {
       return <SimplePage {...sharedProps} onToast={setToast} />;

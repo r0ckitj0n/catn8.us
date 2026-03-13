@@ -40,6 +40,7 @@ import {
   Accumul8StatementAuditRequest,
   Accumul8StatementAuditResponse,
   Accumul8StatementImportResult,
+  Accumul8StatementWorkspaceResponse,
   Accumul8ImportedTransactionCleanupAuditResponse,
   Accumul8ImportedTransactionCleanupPurgeResponse,
   Accumul8StatementSearchResult,
@@ -54,6 +55,7 @@ export function useAccumul8(
 ) {
   const [busy, setBusy] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
+  const [statementsLoaded, setStatementsLoaded] = React.useState(false);
   const [activeOwnerUserId, setActiveOwnerUserId] = React.useState<number>(0);
   const [accessibleAccountOwners, setAccessibleAccountOwners] = React.useState<Accumul8AccessibleOwner[]>([]);
   const [summary, setSummary] = React.useState({ net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
@@ -97,6 +99,25 @@ export function useAccumul8(
     }
     return `/api/accumul8.php?${params.toString()}`;
   }, [selectedOwnerUserId]);
+  const applyStatementWorkspace = React.useCallback((res?: Partial<Accumul8StatementWorkspaceResponse> | null) => {
+    setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
+    setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
+    setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
+    setStatementsLoaded(true);
+  }, []);
+  const loadStatementWorkspace = React.useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.get<Accumul8StatementWorkspaceResponse>(scopedActionUrl('list_statement_workspace'));
+      applyStatementWorkspace(res);
+      return res;
+    } catch (error: any) {
+      handleError(error, 'Failed to load statement workspace');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [applyStatementWorkspace, handleError, scopedActionUrl]);
   const load = React.useCallback(async () => {
     setBusy(true);
     try {
@@ -118,18 +139,23 @@ export function useAccumul8(
       setDebtorLedger(Array.isArray(res?.debtor_ledger) ? res.debtor_ledger : []);
       setBudgetRows(Array.isArray(res?.budget_rows) ? res.budget_rows : []);
       setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
-      setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
-      setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
-      setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
       setSyncProvider(res?.sync_provider || { provider: 'teller', env: 'sandbox', configured: 0 });
       setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
+      if (res?.statement_uploads || res?.archived_statement_uploads || res?.statement_audit_runs) {
+        applyStatementWorkspace(res);
+      } else {
+        setStatementUploads([]);
+        setArchivedStatementUploads([]);
+        setStatementAuditRuns([]);
+        setStatementsLoaded(false);
+      }
       setLoaded(true);
     } catch (error: any) {
       handleError(error, 'Failed to load Accumul8 data');
     } finally {
       setBusy(false);
     }
-  }, [handleError, scopedActionUrl]);
+  }, [applyStatementWorkspace, handleError, scopedActionUrl]);
   const withReload = React.useCallback(async <T,>(action: () => Promise<T>, successMessage?: string): Promise<T> => {
     setBusy(true);
     try {
@@ -493,7 +519,7 @@ export function useAccumul8(
     setBusy(true);
     try {
       const res = await ApiClient.postFormData<{ success: boolean; upload: Accumul8StatementUpload }>(scopedActionUrl('upload_statement'), formData);
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement scanned. Review the import plan before approving.' });
       }
@@ -518,7 +544,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const rescanStatementUpload = React.useCallback(async (id: number, accountId?: number | null) => {
     setBusy(true);
     try {
@@ -526,7 +552,7 @@ export function useAccumul8(
         id,
         account_id: accountId || null,
       });
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement rescanned. Review the refreshed import plan.' });
       }
@@ -537,7 +563,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const updateStatementUploadMetadata = React.useCallback(async (payload: {
     id: number;
     statement_kind?: string;
@@ -550,7 +576,7 @@ export function useAccumul8(
         scopedActionUrl('update_statement_upload_metadata'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement metadata updated.' });
       }
@@ -561,7 +587,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const archiveStatementUpload = React.useCallback(async (payload: Accumul8StatementArchiveRequest) => {
     setBusy(true);
     try {
@@ -569,7 +595,7 @@ export function useAccumul8(
         scopedActionUrl('archive_statement_upload'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement moved to the archive.' });
       }
@@ -580,7 +606,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const restoreStatementUpload = React.useCallback(async (id: number) => {
     setBusy(true);
     try {
@@ -588,7 +614,7 @@ export function useAccumul8(
         scopedActionUrl('restore_statement_upload'),
         { id },
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement restored from the archive.' });
       }
@@ -599,7 +625,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const deleteArchivedStatementUpload = React.useCallback(async (id: number) => {
     setBusy(true);
     try {
@@ -607,7 +633,7 @@ export function useAccumul8(
         scopedActionUrl('delete_archived_statement_upload'),
         { id },
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Archived statement deleted permanently.' });
       }
@@ -618,7 +644,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const confirmStatementImport = React.useCallback(async (payload: {
     id: number;
     account_id?: number | null;
@@ -636,7 +662,7 @@ export function useAccumul8(
         scopedActionUrl('confirm_statement_import'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement import finished. Review imported, skipped, and failed rows below.' });
       }
@@ -647,7 +673,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const reconcileStatementUpload = React.useCallback(async (payload: {
     id: number;
     account_id?: number | null;
@@ -665,7 +691,7 @@ export function useAccumul8(
         scopedActionUrl('reconcile_statement_upload'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement reconciliation finished. Review the reconciliation panel for the action log.' });
       }
@@ -676,7 +702,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const importStatementReviewRow = React.useCallback(async (payload: {
     id: number;
     row_index: number;
@@ -692,7 +718,7 @@ export function useAccumul8(
         scopedActionUrl('import_statement_review_row'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement row accepted into the ledger.' });
       }
@@ -703,7 +729,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const linkStatementReviewRow = React.useCallback(async (payload: {
     id: number;
     row_index: number;
@@ -715,7 +741,7 @@ export function useAccumul8(
         scopedActionUrl('link_statement_review_row'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Ledger entry linked to statement row.' });
       }
@@ -726,7 +752,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const searchStatementUploads = React.useCallback(async (query: string) => {
     const normalized = String(query || '').trim();
     if (!normalized) {
@@ -749,7 +775,7 @@ export function useAccumul8(
         scopedActionUrl('audit_statement_uploads'),
         payload,
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: 'Statement audit finished. Missing catalogs were refreshed and deterministic ledger fixes were applied where possible.' });
       }
@@ -760,7 +786,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const auditImportedTransactionCleanup = React.useCallback(async (payload?: { start_date?: string | null; end_date?: string | null; limit?: number }) => {
     setBusy(true);
     try {
@@ -783,7 +809,7 @@ export function useAccumul8(
         scopedActionUrl('purge_imported_transaction_cleanup'),
         { transaction_ids: transactionIds },
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: `Purged ${Number(res?.deleted_count || 0)} imported transaction${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
       }
@@ -794,7 +820,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const purgeAllImportedStatementTransactions = React.useCallback(async () => {
     setBusy(true);
     try {
@@ -802,7 +828,7 @@ export function useAccumul8(
         scopedActionUrl('purge_all_imported_statement_transactions'),
         {},
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: `Purged ${Number(res?.deleted_count || 0)} bank-statement transaction${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
       }
@@ -813,7 +839,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const purgeAllStatementUploads = React.useCallback(async () => {
     setBusy(true);
     try {
@@ -821,7 +847,7 @@ export function useAccumul8(
         scopedActionUrl('purge_all_statement_uploads'),
         {},
       );
-      await load();
+      await Promise.all([load(), loadStatementWorkspace()]);
       if (onToast) {
         onToast({ tone: 'success', message: `Deleted ${Number(res?.deleted_count || 0)} bank statement file${Number(res?.deleted_count || 0) === 1 ? '' : 's'}.` });
       }
@@ -832,7 +858,7 @@ export function useAccumul8(
     } finally {
       setBusy(false);
     }
-  }, [handleError, load, onToast, scopedActionUrl]);
+  }, [handleError, load, loadStatementWorkspace, onToast, scopedActionUrl]);
   const createBudgetRow = React.useCallback(async (form: Accumul8BudgetRowUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_budget_row'), form),
@@ -857,6 +883,7 @@ export function useAccumul8(
   return {
     busy,
     loaded,
+    statementsLoaded,
     summary,
     activeOwnerUserId,
     accessibleAccountOwners,
@@ -880,6 +907,7 @@ export function useAccumul8(
     statementAuditRuns,
     syncProvider,
     load,
+    loadStatementWorkspace,
     createEntity,
     updateEntity,
     createEntityAlias,

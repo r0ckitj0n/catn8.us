@@ -11175,9 +11175,6 @@ if ($action === 'bootstrap') {
     $budgetRows = accumul8_bootstrap_section('budget_rows', static fn() => accumul8_list_budget_rows($viewerId), [], $warnings);
     $rules = accumul8_bootstrap_section('notification_rules', static fn() => accumul8_list_notification_rules($viewerId), [], $warnings);
     $connections = accumul8_bootstrap_section('bank_connections', static fn() => accumul8_list_bank_connections($viewerId), [], $warnings);
-    $statementUploads = accumul8_bootstrap_section('statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, false), [], $warnings);
-    $archivedStatementUploads = accumul8_bootstrap_section('archived_statement_uploads', static fn() => accumul8_list_statement_uploads($viewerId, true), [], $warnings);
-    $statementAuditRuns = accumul8_bootstrap_section('statement_audit_runs', static fn() => accumul8_list_statement_audit_runs($viewerId, 10), [], $warnings);
     $entityEndexScanLogs = accumul8_bootstrap_section('entity_endex_scan_logs', static fn() => accumul8_list_entity_endex_scan_logs($viewerId, 12), [], $warnings);
     $payBills = accumul8_bootstrap_section('pay_bills', static fn() => accumul8_due_bills($viewerId), [], $warnings);
     $summary = accumul8_bootstrap_section('summary', static fn() => accumul8_summary($viewerId), [
@@ -11209,9 +11206,6 @@ if ($action === 'bootstrap') {
         'notification_rules' => $rules,
         'pay_bills' => $payBills,
         'bank_connections' => $connections,
-        'statement_uploads' => $statementUploads,
-        'archived_statement_uploads' => $archivedStatementUploads,
-        'statement_audit_runs' => $statementAuditRuns,
         'sync_provider' => [
             'provider' => 'teller',
             'env' => accumul8_teller_env(),
@@ -11219,6 +11213,16 @@ if ($action === 'bootstrap') {
         ],
         'summary' => $summary,
         'warnings' => $warnings,
+    ]);
+}
+
+if ($action === 'list_statement_workspace') {
+    catn8_require_method('GET');
+    catn8_json_response([
+        'success' => true,
+        'statement_uploads' => accumul8_list_statement_uploads($viewerId, false),
+        'archived_statement_uploads' => accumul8_list_statement_uploads($viewerId, true),
+        'statement_audit_runs' => accumul8_list_statement_audit_runs($viewerId, 10),
     ]);
 }
 

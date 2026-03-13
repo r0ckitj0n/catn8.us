@@ -921,18 +921,25 @@ export interface Accumul8BootstrapResponse {
   notification_rules: Accumul8NotificationRule[];
   pay_bills: Accumul8BillItem[];
   bank_connections: Accumul8BankConnection[];
-  statement_uploads: Accumul8StatementUpload[];
-  archived_statement_uploads: Accumul8StatementUpload[];
   debtors: Accumul8Debtor[];
   debtor_ledger: Accumul8Transaction[];
   budget_rows: Accumul8BudgetRow[];
-  statement_audit_runs: Accumul8StatementAuditRun[];
   sync_provider: {
     provider: string;
     env: string;
     configured: number;
   };
   summary: Accumul8Summary;
+  statement_uploads?: Accumul8StatementUpload[];
+  archived_statement_uploads?: Accumul8StatementUpload[];
+  statement_audit_runs?: Accumul8StatementAuditRun[];
+}
+
+export interface Accumul8StatementWorkspaceResponse {
+  success: boolean;
+  statement_uploads: Accumul8StatementUpload[];
+  archived_statement_uploads: Accumul8StatementUpload[];
+  statement_audit_runs: Accumul8StatementAuditRun[];
 }
 
 export interface Accumul8TellerConnectTokenResponse {

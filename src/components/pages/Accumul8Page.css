@@ -726,6 +726,10 @@
   min-height: 0;
 }
 
+.accumul8-panel--calendar-scroll {
+  overflow: auto;
+}
+
 .accumul8-panel-toolbar {
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(14rem, 1fr) auto;

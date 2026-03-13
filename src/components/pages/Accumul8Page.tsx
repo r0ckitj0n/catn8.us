@@ -2977,7 +2977,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'calendar' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
+            <div className="accumul8-panel accumul8-panel--viewport-fill accumul8-panel--calendar-scroll">
               <Accumul8CalendarView
                 accounts={scopedAccounts}
                 transactions={filteredTransactions}

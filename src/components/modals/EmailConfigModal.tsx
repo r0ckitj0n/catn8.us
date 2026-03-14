@@ -119,7 +119,7 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
 
   return (
     <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
-      <div className="modal-dialog modal-dialog-centered">
+      <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Email Configuration</h5>
@@ -194,6 +194,14 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
                 <input className="form-control" id="smtp-from-name" value={form.from_name} onChange={setField('from_name')} disabled={busy} autoComplete="name" />
               </div>
             </form>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>
+              Close
+            </button>
+            <button type="button" className="btn btn-primary" onClick={save} disabled={busy || !isDirty}>
+              {busy ? 'Saving...' : 'Save Email Settings'}
+            </button>
           </div>
         </div>
       </div>

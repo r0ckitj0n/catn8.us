@@ -3,6 +3,15 @@ import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { ApiClient } from '../../core/ApiClient';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { IToast } from '../../types/common';
+import {
+  EmailSettingsConfig,
+  EmailSettingsGetResponse,
+  EmailSettingsMeta,
+  EmailSettingsSaveRequest,
+  EmailSettingsSaveResponse,
+  EmailSettingsTestRequest,
+  EmailSettingsTestResponse,
+} from '../../types/emailSettings';
 
 interface EmailConfigModalProps {
   open: boolean;
@@ -18,6 +27,7 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
   const [smtpReady, setSmtpReady] = React.useState(false);
   const [passwordPresent, setPasswordPresent] = React.useState(false);
   const [form, setForm] = React.useState({ host: 'smtp.ionos.com', port: 587, secure: 'tls', user: '', pass: '', from_email: '', from_name: 'catn8.us' });
+  const [testRecipientEmail, setTestRecipientEmail] = React.useState('');
   const cleanFormRef = React.useRef('');
 
   const applyIonosDefaults = React.useCallback(() => {
@@ -42,10 +52,10 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
     setBusy(true);
     setError('');
     setMessage('');
-    ApiClient.get('/api/settings/email.php')
+    ApiClient.get<EmailSettingsGetResponse>('/api/settings/email.php')
       .then((res) => {
-        const cfg = res?.config || {};
-        const meta = res?.meta || {};
+        const cfg: Partial<EmailSettingsConfig> = res?.config || {};
+        const meta: Partial<EmailSettingsMeta> = res?.meta || {};
         setPasswordPresent(Number(meta.password_present || 0) === 1);
         setSmtpReady(Number(meta.smtp_ready || 0) === 1);
         const next = (f: any) => ({
@@ -63,6 +73,7 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
           cleanFormRef.current = JSON.stringify({ ...nf, pass: '' });
           return nf;
         });
+        setTestRecipientEmail(String(cfg.from_email || ''));
       })
       .catch((e) => setError(e?.message || 'Failed to load email settings'))
       .finally(() => setBusy(false));
@@ -91,8 +102,11 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
     setError('');
     setMessage('');
     try {
-      const res = await ApiClient.post('/api/settings/email.php', form);
-      const meta = res?.meta || {};
+      const res = await ApiClient.post<EmailSettingsSaveResponse>('/api/settings/email.php', {
+        action: 'save',
+        ...form,
+      } satisfies EmailSettingsSaveRequest);
+      const meta: Partial<EmailSettingsMeta> = res?.meta || {};
       setPasswordPresent(Number(meta.password_present || 0) === 1);
       setSmtpReady(Number(meta.smtp_ready || 0) === 1);
       setMessage('Saved.');
@@ -100,6 +114,26 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
       cleanFormRef.current = JSON.stringify({ ...form, pass: '' });
     } catch (err: any) {
       setError(err?.message || 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setBusy(true);
+      setError('');
+      setMessage('');
+      try {
+      const res = await ApiClient.post<EmailSettingsTestResponse>('/api/settings/email.php', {
+        action: 'test_send',
+        to_email: String(testRecipientEmail || '').trim(),
+      } satisfies EmailSettingsTestRequest);
+      const meta: Partial<EmailSettingsMeta> = res?.meta || {};
+      setPasswordPresent(Number(meta.password_present || 0) === 1);
+      setSmtpReady(Number(meta.smtp_ready || 0) === 1);
+      setMessage(res?.message || `Test email sent to ${res?.sent_to || testRecipientEmail}.`);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send test email');
     } finally {
       setBusy(false);
     }
@@ -193,11 +227,41 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
                 <label className="form-label" htmlFor="smtp-from-name">From Name</label>
                 <input className="form-control" id="smtp-from-name" value={form.from_name} onChange={setField('from_name')} disabled={busy} autoComplete="name" />
               </div>
+              <div className="mb-0">
+                <label className="form-label" htmlFor="smtp-test-recipient">Test Recipient Email</label>
+                <input
+                  className="form-control"
+                  id="smtp-test-recipient"
+                  type="email"
+                  value={testRecipientEmail}
+                  onChange={(e) => setTestRecipientEmail(e.target.value)}
+                  disabled={busy}
+                  autoComplete="email"
+                />
+                <div className="form-text">Use any email address you want to receive the test message.</div>
+              </div>
             </form>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>
               Close
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={() => void sendTestEmail()}
+              disabled={busy || isDirty || !smtpReady || String(testRecipientEmail || '').trim() === ''}
+              title={
+                isDirty
+                  ? 'Save your changes before sending a test email'
+                  : String(testRecipientEmail || '').trim() === ''
+                    ? 'Enter a test recipient email address first'
+                  : smtpReady
+                    ? 'Send a test email to the configured mailbox'
+                    : 'Save a complete SMTP configuration before sending a test email'
+              }
+            >
+              Send Test Email
             </button>
             <button type="button" className="btn btn-primary" onClick={save} disabled={busy || !isDirty}>
               {busy ? 'Saving...' : 'Save Email Settings'}

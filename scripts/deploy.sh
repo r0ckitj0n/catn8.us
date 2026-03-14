@@ -223,6 +223,9 @@ if [[ -n "${UPLOAD_VENDOR}" ]]; then
   else
     UPLOAD_VENDOR_REASON="explicitly disabled by CATN8_UPLOAD_VENDOR=${UPLOAD_VENDOR}"
   fi
+elif [[ -f "vendor/autoload.php" ]]; then
+  UPLOAD_VENDOR="1"
+  UPLOAD_VENDOR_REASON="auto-enabled because local Composer vendor dependencies are present"
 elif detect_email_related_vendor_upload; then
   UPLOAD_VENDOR="1"
   UPLOAD_VENDOR_REASON="auto-enabled because email-related files or Composer manifests changed"
@@ -402,7 +405,7 @@ set ssl:verify-certificate no
 set cmd:fail-exit no
 ${LFTP_NET_SETTINGS}
 open sftp://$USER:$PASS@$HOST
-rm -r api dist${PURGE_IMAGE_DIRS} includes scripts src documentation Documentation vendor node_modules || true
+rm -r api dist${PURGE_IMAGE_DIRS} includes scripts src documentation Documentation node_modules || true
 rm index.php .htaccess index.html favicon.ico manifest.json package.json package-lock.json || true
 bye
 EOL
@@ -759,10 +762,6 @@ rm -f "${DEPLOY_COMMANDS_FILE}"
 if [ "$MODE" != "env-only" ]; then
   echo -e "${GREEN}🧹 Enforcing production mode on server (remove dev artifacts)...${NC}"
   ARCHIVE_TS="$(date '+%Y%m%d-%H%M%S')"
-  VENDOR_PRUNE_CMD="rm -r vendor || true"
-  if [ "${UPLOAD_VENDOR}" = "1" ]; then
-    VENDOR_PRUNE_CMD=":"
-  fi
   cat > enforce_prod_marker.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
@@ -791,7 +790,6 @@ mkdir -p backups/src-archives
 mv src backups/src-archives/src-${ARCHIVE_TS}
 rm -f hot
 rm -r node_modules || true
-${VENDOR_PRUNE_CMD}
 rm -f dist/.htaccess
 bye
 EOL

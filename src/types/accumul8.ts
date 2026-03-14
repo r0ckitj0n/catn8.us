@@ -515,6 +515,9 @@ export interface Accumul8BankingOrganization {
   routing_number: string;
   mailing_address: string;
   icon_path: string;
+  access_group_id: number | null;
+  access_group_slug: string;
+  access_group_title: string;
   notes: string;
   is_active: number;
 }
@@ -530,6 +533,7 @@ export interface Accumul8BankingOrganizationUpsertRequest {
   routing_number?: string;
   mailing_address?: string;
   icon_path?: string;
+  access_group_id?: number | null;
   notes?: string;
   is_active?: number;
 }

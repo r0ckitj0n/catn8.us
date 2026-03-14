@@ -7,6 +7,8 @@ interface GroupEditSectionProps {
   setEditGroupSlug: (v: string) => void;
   editGroupTitle: string;
   setEditGroupTitle: (v: string) => void;
+  editGroupProtected: boolean;
+  editGroupProtectionReason: string;
   updateGroup: (e: React.FormEvent) => Promise<void>;
   deleteGroup: () => Promise<void>;
 }
@@ -18,6 +20,8 @@ export function GroupEditSection({
   setEditGroupSlug,
   editGroupTitle,
   setEditGroupTitle,
+  editGroupProtected,
+  editGroupProtectionReason,
   updateGroup,
   deleteGroup
 }: GroupEditSectionProps) {
@@ -26,6 +30,11 @@ export function GroupEditSection({
   return (
     <div className="catn8-card p-3 mb-3">
       <div className="fw-bold">Edit Group</div>
+      {editGroupProtected ? (
+        <div className="small text-muted mt-1">
+          Protected: {editGroupProtectionReason || 'This group is referenced by protected data and cannot be deleted.'}
+        </div>
+      ) : null}
       <form onSubmit={updateGroup} className="row g-2 mt-1">
         <div className="col-md-4">
           <label className="form-label" htmlFor="group-edit-slug">Slug</label>
@@ -36,7 +45,7 @@ export function GroupEditSection({
           <input id="group-edit-title" className="form-control" value={editGroupTitle} onChange={(e) => setEditGroupTitle(e.target.value)} disabled={busy} />
         </div>
         <div className="col-md-2 d-flex justify-content-end align-items-end gap-2">
-          <button type="button" className="btn btn-outline-danger" onClick={deleteGroup} disabled={busy || editGroupSlug === 'administrators'}>
+          <button type="button" className="btn btn-outline-danger" onClick={deleteGroup} disabled={busy || editGroupSlug === 'administrators' || editGroupProtected}>
             Delete
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy || !editGroupSlug.trim() || !editGroupTitle.trim()}>

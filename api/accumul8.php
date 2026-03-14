@@ -3008,6 +3008,20 @@ function accumul8_table_add_column_if_missing(string $tableName, string $columnN
     }
 }
 
+function accumul8_slugify_label(string $value, int $maxLength = 64): string
+{
+    $value = strtolower(trim($value));
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+    $value = trim($value, '-');
+    if ($value === '') {
+        $value = 'group';
+    }
+    if ($maxLength > 0 && strlen($value) > $maxLength) {
+        $value = rtrim(substr($value, 0, $maxLength), '-');
+    }
+    return $value !== '' ? $value : 'group';
+}
+
 function accumul8_optional_select(string $tableName, string $columnName, string $presentExpression, string $missingExpression): string
 {
     return accumul8_table_has_column($tableName, $columnName) ? $presentExpression : $missingExpression;
@@ -4897,9 +4911,18 @@ function accumul8_list_accessible_owner_ids(int $actorUserId): array
             WHERE g.grantee_user_id = ?
               AND g.is_active = 1
               AND u.is_active = 1
+            UNION ALL
+            SELECT ag.owner_user_id
+            FROM accumul8_account_groups ag
+            INNER JOIN group_memberships gm
+              ON gm.group_id = ag.access_group_id
+             AND gm.user_id = ?
+            INNER JOIN users u2 ON u2.id = ag.owner_user_id
+            WHERE ag.access_group_id IS NOT NULL
+              AND u2.is_active = 1
          ) access_rows
          ORDER BY owner_user_id ASC',
-        [$actorUserId, $actorUserId]
+        [$actorUserId, $actorUserId, $actorUserId]
     );
     $ids = [];
     foreach ($rows as $row) {
@@ -4913,18 +4936,19 @@ function accumul8_list_accessible_owner_ids(int $actorUserId): array
 
 function accumul8_list_accessible_owners(int $actorUserId): array
 {
+    $ownerIds = accumul8_list_accessible_owner_ids($actorUserId);
+    if ($ownerIds === []) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ownerIds), '?'));
     $rows = Database::queryAll(
-        'SELECT DISTINCT u.id AS owner_user_id, u.username, u.email,
+        'SELECT u.id AS owner_user_id, u.username, u.email,
                 CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_self
          FROM users u
-         LEFT JOIN accumul8_user_access_grants g
-           ON g.owner_user_id = u.id
-          AND g.grantee_user_id = ?
-          AND g.is_active = 1
          WHERE u.is_active = 1
-           AND (u.id = ? OR g.id IS NOT NULL)
+           AND u.id IN (' . $placeholders . ')
          ORDER BY is_self DESC, u.username ASC, u.id ASC',
-        [$actorUserId, $actorUserId, $actorUserId]
+        array_merge([$actorUserId], $ownerIds)
     );
 
     return array_map(static function (array $row): array {
@@ -4935,6 +4959,195 @@ function accumul8_list_accessible_owners(int $actorUserId): array
             'is_self' => (int)($row['is_self'] ?? 0),
         ];
     }, $rows);
+}
+
+function accumul8_account_group_access_group_row(int $groupId): ?array
+{
+    if ($groupId <= 0) {
+        return null;
+    }
+
+    $row = Database::queryOne(
+        'SELECT id, slug, title
+         FROM catn8_groups
+         WHERE id = ?
+         LIMIT 1',
+        [$groupId]
+    );
+
+    return $row ?: null;
+}
+
+function accumul8_account_group_ensure_owner_membership(int $groupId, int $ownerUserId): void
+{
+    if ($groupId <= 0 || $ownerUserId <= 0) {
+        return;
+    }
+
+    $existing = Database::queryOne(
+        'SELECT id
+         FROM group_memberships
+         WHERE group_id = ?
+           AND user_id = ?
+         LIMIT 1',
+        [$groupId, $ownerUserId]
+    );
+    if (!$existing) {
+        Database::execute(
+            'INSERT INTO group_memberships (group_id, user_id) VALUES (?, ?)',
+            [$groupId, $ownerUserId]
+        );
+    }
+}
+
+function accumul8_account_group_resolve_access_group_id(int $ownerUserId, string $groupName, ?int $preferredGroupId = null): ?int
+{
+    catn8_groups_seed_core();
+
+    if ($preferredGroupId !== null && $preferredGroupId > 0) {
+        $row = accumul8_account_group_access_group_row($preferredGroupId);
+        if ($row) {
+            accumul8_account_group_ensure_owner_membership((int)$row['id'], $ownerUserId);
+            return (int)$row['id'];
+        }
+    }
+
+    $ownerLinkedGroup = Database::queryOne(
+        'SELECT access_group_id
+         FROM accumul8_account_groups
+         WHERE owner_user_id = ?
+           AND access_group_id IS NOT NULL
+         ORDER BY id ASC
+         LIMIT 1',
+        [$ownerUserId]
+    );
+    $ownerLinkedGroupId = (int)($ownerLinkedGroup['access_group_id'] ?? 0);
+    if ($ownerLinkedGroupId > 0) {
+        $row = accumul8_account_group_access_group_row($ownerLinkedGroupId);
+        if ($row) {
+            accumul8_account_group_ensure_owner_membership((int)$row['id'], $ownerUserId);
+            return (int)$row['id'];
+        }
+    }
+
+    $baseTitle = trim($groupName) !== '' ? trim($groupName) : ('Accumul8 Owner ' . $ownerUserId);
+    $title = 'Accumul8 Access: ' . $baseTitle;
+    $baseSlug = 'accumul8-owner-' . $ownerUserId . '-' . accumul8_slugify_label($baseTitle, 56);
+    $slug = substr($baseSlug, 0, 96);
+    $suffix = 1;
+
+    while (true) {
+        $existing = Database::queryOne(
+            'SELECT id
+             FROM catn8_groups
+             WHERE slug = ?
+             LIMIT 1',
+            [$slug]
+        );
+        if (!$existing) {
+            Database::execute(
+                'INSERT INTO catn8_groups (slug, title) VALUES (?, ?)',
+                [$slug, $title]
+            );
+            $created = Database::queryOne(
+                'SELECT id
+                 FROM catn8_groups
+                 WHERE slug = ?
+                 LIMIT 1',
+                [$slug]
+            );
+            if ($created) {
+                $groupId = (int)($created['id'] ?? 0);
+                accumul8_account_group_ensure_owner_membership($groupId, $ownerUserId);
+                return $groupId > 0 ? $groupId : null;
+            }
+            break;
+        }
+
+        $existingId = (int)($existing['id'] ?? 0);
+        if ($existingId > 0) {
+            accumul8_account_group_ensure_owner_membership($existingId, $ownerUserId);
+            return $existingId;
+        }
+
+        $suffix++;
+        $slug = substr($baseSlug, 0, max(1, 96 - strlen('-' . $suffix))) . '-' . $suffix;
+    }
+
+    return null;
+}
+
+function accumul8_backfill_account_group_access_groups(int $viewerId): void
+{
+    $rows = Database::queryAll(
+        'SELECT id, group_name, access_group_id
+         FROM accumul8_account_groups
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    );
+
+    foreach ($rows as $row) {
+        $groupId = isset($row['access_group_id']) ? (int)$row['access_group_id'] : 0;
+        if ($groupId > 0 && accumul8_account_group_access_group_row($groupId)) {
+            accumul8_account_group_ensure_owner_membership($groupId, $viewerId);
+            continue;
+        }
+        $resolvedGroupId = accumul8_account_group_resolve_access_group_id(
+            $viewerId,
+            (string)($row['group_name'] ?? ''),
+            null
+        );
+        if ($resolvedGroupId !== null && $resolvedGroupId > 0) {
+            Database::execute(
+                'UPDATE accumul8_account_groups
+                 SET access_group_id = ?
+                 WHERE id = ?
+                   AND owner_user_id = ?',
+                [$resolvedGroupId, (int)($row['id'] ?? 0), $viewerId]
+            );
+        }
+    }
+}
+
+function accumul8_backfill_all_account_group_access_groups(): void
+{
+    if (!accumul8_table_exists('accumul8_account_groups')) {
+        return;
+    }
+
+    $rows = Database::queryAll(
+        'SELECT DISTINCT owner_user_id
+         FROM accumul8_account_groups
+         WHERE owner_user_id > 0
+         ORDER BY owner_user_id ASC'
+    );
+    foreach ($rows as $row) {
+        $ownerUserId = (int)($row['owner_user_id'] ?? 0);
+        if ($ownerUserId > 0) {
+            accumul8_backfill_account_group_access_groups($ownerUserId);
+        }
+    }
+}
+
+function accumul8_owner_linked_access_group_ids(int $viewerId): array
+{
+    $rows = Database::queryAll(
+        'SELECT DISTINCT access_group_id
+         FROM accumul8_account_groups
+         WHERE owner_user_id = ?
+           AND access_group_id IS NOT NULL',
+        [$viewerId]
+    );
+
+    $groupIds = [];
+    foreach ($rows as $row) {
+        $groupId = (int)($row['access_group_id'] ?? 0);
+        if ($groupId > 0) {
+            $groupIds[] = $groupId;
+        }
+    }
+
+    return array_values(array_unique($groupIds));
 }
 
 function accumul8_resolve_scope_owner_user_id(int $actorUserId): int
@@ -8708,6 +8921,7 @@ function accumul8_tables_ensure(): void
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_account_groups (
         id INT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
+        access_group_id INT NULL,
         group_name VARCHAR(191) NOT NULL,
         institution_name VARCHAR(191) NOT NULL DEFAULT '',
         website_url VARCHAR(2048) NOT NULL DEFAULT '',
@@ -8724,6 +8938,8 @@ function accumul8_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_accumul8_account_group_owner_name (owner_user_id, group_name),
         KEY idx_accumul8_account_groups_owner (owner_user_id),
+        KEY idx_accumul8_account_groups_access_group (access_group_id),
+        CONSTRAINT fk_accumul8_account_groups_access_group FOREIGN KEY (access_group_id) REFERENCES catn8_groups(id) ON DELETE SET NULL,
         CONSTRAINT fk_accumul8_account_groups_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
@@ -9264,6 +9480,14 @@ function accumul8_tables_ensure(): void
             Database::execute('ALTER TABLE accumul8_accounts ADD UNIQUE KEY uniq_accumul8_accounts_teller (owner_user_id, provider_name, teller_account_id)');
         }
 
+        accumul8_table_add_column_if_missing('accumul8_account_groups', 'access_group_id', 'INT NULL');
+        if (!accumul8_table_has_index('accumul8_account_groups', 'idx_accumul8_account_groups_access_group')) {
+            Database::execute('ALTER TABLE accumul8_account_groups ADD INDEX idx_accumul8_account_groups_access_group (access_group_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_account_groups', 'fk_accumul8_account_groups_access_group')) {
+            Database::execute('ALTER TABLE accumul8_account_groups ADD CONSTRAINT fk_accumul8_account_groups_access_group FOREIGN KEY (access_group_id) REFERENCES catn8_groups(id) ON DELETE SET NULL');
+        }
+
         accumul8_table_add_column_if_missing('accumul8_contacts', 'phone_number', 'VARCHAR(32) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'street_address', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_contacts', 'city', 'VARCHAR(120) NULL');
@@ -9575,6 +9799,8 @@ function accumul8_list_banking_organizations(int $viewerId): array
         return [];
     }
 
+    accumul8_backfill_account_group_access_groups($viewerId);
+
     $websiteUrlSelect = accumul8_optional_select('accumul8_account_groups', 'website_url', 'website_url', "'' AS website_url");
     $loginUrlSelect = accumul8_optional_select('accumul8_account_groups', 'login_url', 'login_url', "'' AS login_url");
     $supportUrlSelect = accumul8_optional_select('accumul8_account_groups', 'support_url', 'support_url', "'' AS support_url");
@@ -9583,10 +9809,14 @@ function accumul8_list_banking_organizations(int $viewerId): array
     $routingNumberSelect = accumul8_optional_select('accumul8_account_groups', 'routing_number', 'routing_number', "'' AS routing_number");
     $mailingAddressSelect = accumul8_optional_select('accumul8_account_groups', 'mailing_address', 'mailing_address', "'' AS mailing_address");
     $iconPathSelect = accumul8_optional_select('accumul8_account_groups', 'icon_path', 'icon_path', "'' AS icon_path");
+    $accessGroupIdSelect = accumul8_optional_select('accumul8_account_groups', 'access_group_id', 'access_group_id', 'NULL AS access_group_id');
     $rows = Database::queryAll(
-        'SELECT id, group_name, institution_name, ' . $websiteUrlSelect . ', ' . $loginUrlSelect . ', ' . $supportUrlSelect . ', ' . $supportPhoneSelect . ', ' . $supportEmailSelect . ', ' . $routingNumberSelect . ', ' . $mailingAddressSelect . ', ' . $iconPathSelect . ', COALESCE(notes, "") AS notes, is_active
-         FROM accumul8_account_groups
-         WHERE owner_user_id = ?
+        'SELECT ag.id, ag.group_name, ag.institution_name, ' . $websiteUrlSelect . ', ' . $loginUrlSelect . ', ' . $supportUrlSelect . ', ' . $supportPhoneSelect . ', ' . $supportEmailSelect . ', ' . $routingNumberSelect . ', ' . $mailingAddressSelect . ', ' . $iconPathSelect . ', ' . $accessGroupIdSelect . ',
+                COALESCE(ag.notes, "") AS notes, ag.is_active, COALESCE(g.slug, "") AS access_group_slug, COALESCE(g.title, "") AS access_group_title
+         FROM accumul8_account_groups ag
+         LEFT JOIN catn8_groups g
+           ON g.id = ag.access_group_id
+         WHERE ag.owner_user_id = ?
          ORDER BY is_active DESC, group_name ASC, id ASC',
         [$viewerId]
     );
@@ -9604,6 +9834,9 @@ function accumul8_list_banking_organizations(int $viewerId): array
             'routing_number' => (string)($r['routing_number'] ?? ''),
             'mailing_address' => (string)($r['mailing_address'] ?? ''),
             'icon_path' => (string)($r['icon_path'] ?? ''),
+            'access_group_id' => isset($r['access_group_id']) ? (int)$r['access_group_id'] : null,
+            'access_group_slug' => (string)($r['access_group_slug'] ?? ''),
+            'access_group_title' => (string)($r['access_group_title'] ?? ''),
             'notes' => accumul8_filter_note_for_display($r['notes'] ?? '', 1500),
             'is_active' => (int)($r['is_active'] ?? 0),
         ];
@@ -13293,6 +13526,28 @@ function accumul8_notification_recipients_from_rule(int $viewerId, array $rule):
         return $rows;
     }
 
+    $linkedGroupIds = accumul8_owner_linked_access_group_ids($viewerId);
+    if ($linkedGroupIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($linkedGroupIds), '?'));
+        return Database::queryAll(
+            "SELECT DISTINCT u.id, u.username, u.email
+             FROM users u
+             LEFT JOIN group_memberships gm
+               ON gm.user_id = u.id
+              AND gm.group_id IN ($placeholders)
+             WHERE u.is_active = 1
+               AND u.email IS NOT NULL
+               AND u.email <> ''
+               AND (
+                 u.id = ?
+                 OR u.is_admin = 1
+                 OR gm.id IS NOT NULL
+               )
+             ORDER BY u.username ASC, u.id ASC",
+            array_merge($linkedGroupIds, [$viewerId])
+        );
+    }
+
     $rows = Database::queryAll(
         "SELECT DISTINCT u.id, u.username, u.email
          FROM users u
@@ -13305,8 +13560,11 @@ function accumul8_notification_recipients_from_rule(int $viewerId, array $rule):
              u.is_admin = 1
              OR g.slug = 'administrators'
              OR g.slug = 'accumul8-users'
+             OR u.id = ?
            )
          ORDER BY u.username ASC, u.id ASC"
+        ,
+        [$viewerId]
     );
 
     return $rows;
@@ -14455,6 +14713,7 @@ function accumul8_audit_imported_transaction_cleanup(int $viewerId, ?string $sta
 
 try {
     accumul8_tables_ensure();
+    accumul8_backfill_all_account_group_access_groups();
 } catch (Throwable $e) {
     error_log('accumul8 schema ensure failed: ' . $e->getMessage());
 }
@@ -15167,6 +15426,7 @@ if ($action === 'create_banking_organization') {
     $body = catn8_read_json_body();
 
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
+    $preferredAccessGroupId = isset($body['access_group_id']) ? (int)$body['access_group_id'] : 0;
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
     $websiteUrl = accumul8_normalize_optional_url($body['website_url'] ?? '', 2048);
     $loginUrl = accumul8_normalize_optional_url($body['login_url'] ?? '', 2048);
@@ -15186,10 +15446,16 @@ if ($action === 'create_banking_organization') {
         catn8_json_response(['success' => false, 'error' => 'icon_path must be a site-relative asset path'], 400);
     }
 
+    $accessGroupId = accumul8_account_group_resolve_access_group_id(
+        $viewerId,
+        $groupName,
+        $preferredAccessGroupId > 0 ? $preferredAccessGroupId : null
+    );
+
     Database::execute(
-        'INSERT INTO accumul8_account_groups (owner_user_id, group_name, institution_name, website_url, login_url, support_url, support_phone, support_email, routing_number, mailing_address, icon_path, notes, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$viewerId, $groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive]
+        'INSERT INTO accumul8_account_groups (owner_user_id, access_group_id, group_name, institution_name, website_url, login_url, support_url, support_phone, support_email, routing_number, mailing_address, icon_path, notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$viewerId, $accessGroupId, $groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive]
     );
 
     catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
@@ -15201,6 +15467,7 @@ if ($action === 'update_banking_organization') {
 
     $id = (int)($body['id'] ?? 0);
     $groupName = accumul8_normalize_text($body['banking_organization_name'] ?? '', 191);
+    $preferredAccessGroupId = isset($body['access_group_id']) ? (int)$body['access_group_id'] : 0;
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
     $websiteUrl = accumul8_normalize_optional_url($body['website_url'] ?? '', 2048);
     $loginUrl = accumul8_normalize_optional_url($body['login_url'] ?? '', 2048);
@@ -15225,11 +15492,27 @@ if ($action === 'update_banking_organization') {
 
     accumul8_require_owned_id('account_groups', $viewerId, $id);
 
+    $existing = Database::queryOne(
+        'SELECT access_group_id
+         FROM accumul8_account_groups
+         WHERE id = ?
+           AND owner_user_id = ?
+         LIMIT 1',
+        [$id, $viewerId]
+    );
+    $accessGroupId = accumul8_account_group_resolve_access_group_id(
+        $viewerId,
+        $groupName,
+        $preferredAccessGroupId > 0
+            ? $preferredAccessGroupId
+            : ((int)($existing['access_group_id'] ?? 0) > 0 ? (int)$existing['access_group_id'] : null)
+    );
+
     Database::execute(
         'UPDATE accumul8_account_groups
-         SET group_name = ?, institution_name = ?, website_url = ?, login_url = ?, support_url = ?, support_phone = ?, support_email = ?, routing_number = ?, mailing_address = ?, icon_path = ?, notes = ?, is_active = ?
+         SET access_group_id = ?, group_name = ?, institution_name = ?, website_url = ?, login_url = ?, support_url = ?, support_phone = ?, support_email = ?, routing_number = ?, mailing_address = ?, icon_path = ?, notes = ?, is_active = ?
          WHERE id = ? AND owner_user_id = ?',
-        [$groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
+        [$accessGroupId, $groupName, $institutionName, $websiteUrl, $loginUrl, $supportUrl, $supportPhone, $supportEmail, $routingNumber, $mailingAddress, $iconPath, $notes === '' ? null : $notes, $isActive, $id, $viewerId]
     );
 
     catn8_json_response(['success' => true]);

@@ -8,15 +8,63 @@ catn8_session_start();
 catn8_require_admin();
 catn8_groups_seed_core();
 
+function catn8_groups_table_exists(string $tableName): bool
+{
+    $row = Database::queryOne(
+        'SELECT 1
+         FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+         LIMIT 1',
+        [$tableName]
+    );
+    return $row !== null;
+}
+
 $action = trim((string)($_GET['action'] ?? ''));
 
 if ($action === 'list_groups') {
-    $rows = Database::queryAll('SELECT id, slug, title, created_at, updated_at FROM catn8_groups ORDER BY title ASC');
+    $hasAccumul8AccountGroups = catn8_groups_table_exists('accumul8_account_groups');
+    if ($hasAccumul8AccountGroups) {
+        $rows = Database::queryAll(
+            'SELECT g.id, g.slug, g.title, g.created_at, g.updated_at,
+                    CASE
+                        WHEN g.slug = "administrators" THEN 1
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM accumul8_account_groups aag
+                            WHERE aag.access_group_id = g.id
+                        ) THEN 1
+                        ELSE 0
+                    END AS is_protected,
+                    CASE
+                        WHEN g.slug = "administrators" THEN "Core administrators group"
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM accumul8_account_groups aag
+                            WHERE aag.access_group_id = g.id
+                        ) THEN "Linked to Accumul8 account access"
+                        ELSE ""
+                    END AS protection_reason
+             FROM catn8_groups g
+             ORDER BY g.title ASC'
+        );
+    } else {
+        $rows = Database::queryAll(
+            'SELECT g.id, g.slug, g.title, g.created_at, g.updated_at,
+                    CASE WHEN g.slug = "administrators" THEN 1 ELSE 0 END AS is_protected,
+                    CASE WHEN g.slug = "administrators" THEN "Core administrators group" ELSE "" END AS protection_reason
+             FROM catn8_groups g
+             ORDER BY g.title ASC'
+        );
+    }
     $groups = array_map(static function (array $r): array {
         return [
             'id' => (int)($r['id'] ?? 0),
             'slug' => (string)($r['slug'] ?? ''),
             'title' => (string)($r['title'] ?? ''),
+            'is_protected' => (int)($r['is_protected'] ?? 0),
+            'protection_reason' => (string)($r['protection_reason'] ?? ''),
             'created_at' => (string)($r['created_at'] ?? ''),
             'updated_at' => (string)($r['updated_at'] ?? ''),
         ];
@@ -88,6 +136,18 @@ if ($action === 'delete_group') {
     $slug = (string)($g['slug'] ?? '');
     if ($slug === 'administrators') {
         catn8_json_response(['success' => false, 'error' => 'Cannot delete administrators group'], 400);
+    }
+    if (catn8_groups_table_exists('accumul8_account_groups')) {
+        $linkedAccumul8 = Database::queryOne(
+            'SELECT id
+             FROM accumul8_account_groups
+             WHERE access_group_id = ?
+             LIMIT 1',
+            [$id]
+        );
+        if ($linkedAccumul8) {
+            catn8_json_response(['success' => false, 'error' => 'Cannot delete a group that is linked to Accumul8 account access'], 409);
+        }
     }
 
     Database::execute('DELETE FROM catn8_groups WHERE id = ?', [$id]);

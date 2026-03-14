@@ -19,6 +19,8 @@ export function useGroupMemberships(open: boolean, confirm: BrandedConfirmFn, on
   const [editGroupId, setEditGroupId] = useState<number>(0);
   const [editGroupSlug, setEditGroupSlug] = React.useState('');
   const [editGroupTitle, setEditGroupTitle] = React.useState('');
+  const [editGroupProtected, setEditGroupProtected] = React.useState(false);
+  const [editGroupProtectionReason, setEditGroupProtectionReason] = React.useState('');
 
   const loadUsers = async () => {
     const res = await ApiClient.get('/api/settings/users.php?action=list');
@@ -64,6 +66,8 @@ export function useGroupMemberships(open: boolean, confirm: BrandedConfirmFn, on
       setEditGroupId(Number(g?.id || 0));
       setEditGroupSlug(String(g?.slug || ''));
       setEditGroupTitle(String(g?.title || ''));
+      setEditGroupProtected(Number(g?.is_protected || 0) === 1);
+      setEditGroupProtectionReason(String(g?.protection_reason || ''));
     } catch (e: any) {
       setError(e?.message || 'Failed to load group memberships');
     } finally {
@@ -182,6 +186,7 @@ export function useGroupMemberships(open: boolean, confirm: BrandedConfirmFn, on
     busy, groups, groupSlug, setGroupSlug, members, addUserId, setAddUserId,
     newGroupSlug, setNewGroupSlug, newGroupTitle, setNewGroupTitle,
     editGroupId, editGroupSlug, setEditGroupSlug, editGroupTitle, setEditGroupTitle,
+    editGroupProtected, editGroupProtectionReason,
     availableUsers, load, createGroup, updateGroup, deleteGroup, addMember, removeMember
   };
 }

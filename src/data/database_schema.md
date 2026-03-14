@@ -69,6 +69,7 @@ This file serves as the Single Source of Truth for the database structure, deriv
 Business term: Banking Organizations
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `access_group_id` (INT, NULLABLE, FOREIGN KEY -> catn8_groups.id) - Protected site group that shares access to this account set
 - `group_name` (VARCHAR(191)) - Banking Organization name
 - `institution_name` (VARCHAR(191))
 - `website_url` (VARCHAR(2048), DEFAULT `''`)

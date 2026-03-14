@@ -63,6 +63,8 @@ export function GroupMembershipsModal({ open, onClose, onToast }: GroupMembershi
               setEditGroupSlug={state.setEditGroupSlug}
               editGroupTitle={state.editGroupTitle}
               setEditGroupTitle={state.setEditGroupTitle}
+              editGroupProtected={state.editGroupProtected}
+              editGroupProtectionReason={state.editGroupProtectionReason}
               updateGroup={state.updateGroup}
               deleteGroup={state.deleteGroup}
             />

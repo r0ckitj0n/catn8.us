@@ -39,6 +39,7 @@ const DEFAULT_BANKING_ORGANIZATION_FORM: Accumul8BankingOrganizationUpsertReques
   routing_number: '',
   mailing_address: '',
   icon_path: '',
+  access_group_id: null,
   notes: '',
   is_active: 1,
 };
@@ -158,7 +159,7 @@ export function BankingOrganizationManagerModal({
           <div className="modal-body">
             {mode === 'banking_organization' ? (
               <>
-                <p className="text-muted small mb-3">Create, rename, disable, or remove banking organizations. Deletion is blocked while bank accounts still belong to the organization.</p>
+                <p className="text-muted small mb-3">Create, rename, disable, or remove banking organizations. Each one now keeps a protected access group so the right Accumul8 users can share the same account data safely.</p>
                 <form
                   className="row g-2 mb-3"
                   onSubmit={(e) => {
@@ -174,6 +175,7 @@ export function BankingOrganizationManagerModal({
                       routing_number: String(bankingOrganizationForm.routing_number || '').trim(),
                       mailing_address: String(bankingOrganizationForm.mailing_address || '').trim(),
                       icon_path: String(bankingOrganizationForm.icon_path || '').trim(),
+                      access_group_id: Number(bankingOrganizationForm.access_group_id || 0) > 0 ? Number(bankingOrganizationForm.access_group_id) : null,
                       notes: String(bankingOrganizationForm.notes || '').trim(),
                       is_active: Number(bankingOrganizationForm.is_active || 0) ? 1 : 0,
                     };
@@ -299,6 +301,19 @@ export function BankingOrganizationManagerModal({
                       onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, mailing_address: e.target.value }))}
                     />
                   </div>
+                  <div className="col-md-3">
+                    <label className="form-label" htmlFor="accumul8-banking-organization-access-group">Access group ID</label>
+                    <input
+                      id="accumul8-banking-organization-access-group"
+                      className="form-control"
+                      type="number"
+                      min={1}
+                      placeholder="Auto-create"
+                      value={Number(bankingOrganizationForm.access_group_id || 0) > 0 ? String(bankingOrganizationForm.access_group_id) : ''}
+                      onChange={(e) => setBankingOrganizationForm((prev) => ({ ...prev, access_group_id: e.target.value ? Number(e.target.value) : null }))}
+                    />
+                    <div className="form-text">Leave blank to auto-create or keep the linked protected group.</div>
+                  </div>
                   <div className="col-12">
                     <label className="form-label" htmlFor="accumul8-banking-organization-notes">Notes</label>
                     <textarea
@@ -323,6 +338,7 @@ export function BankingOrganizationManagerModal({
                         <th>Institution</th>
                         <th>Web / Launch</th>
                         <th>Support</th>
+                        <th>Access Group</th>
                         <th>Status</th>
                         <th>Notes</th>
                         <th className="text-end catn8-actions-column">Actions</th>
@@ -341,6 +357,10 @@ export function BankingOrganizationManagerModal({
                           <td>
                             <div>{bankingOrganization.support_phone || bankingOrganization.support_email || '-'}</div>
                             <div className="small text-muted">{bankingOrganization.support_url || bankingOrganization.routing_number || bankingOrganization.mailing_address || '-'}</div>
+                          </td>
+                          <td>
+                            <div>{bankingOrganization.access_group_title || '-'}</div>
+                            <div className="small text-muted">{bankingOrganization.access_group_slug || 'Protected group not linked yet'}</div>
                           </td>
                           <td>{bankingOrganization.is_active ? 'Active' : 'Inactive'}</td>
                           <td>{bankingOrganization.notes || '-'}</td>
@@ -362,6 +382,7 @@ export function BankingOrganizationManagerModal({
                                     routing_number: bankingOrganization.routing_number || '',
                                     mailing_address: bankingOrganization.mailing_address || '',
                                     icon_path: bankingOrganization.icon_path || '',
+                                    access_group_id: bankingOrganization.access_group_id ?? null,
                                     notes: bankingOrganization.notes || '',
                                     is_active: Number(bankingOrganization.is_active || 0),
                                   });

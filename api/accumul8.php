@@ -6061,6 +6061,105 @@ function accumul8_message_board_map_row(array $row): array
     ];
 }
 
+function accumul8_array_is_list_compat(array $value): bool
+{
+    if (function_exists('array_is_list')) {
+        return array_is_list($value);
+    }
+
+    $expectedKey = 0;
+    foreach ($value as $key => $_) {
+        if ($key !== $expectedKey) {
+            return false;
+        }
+        $expectedKey++;
+    }
+
+    return true;
+}
+
+function accumul8_message_board_compact_meta_value($value, int $depth = 0)
+{
+    if ($depth >= 2) {
+        if (is_array($value)) {
+            return [
+                '_type' => accumul8_array_is_list_compat($value) ? 'list' : 'object',
+                'count' => count($value),
+            ];
+        }
+        if (is_string($value)) {
+            return accumul8_normalize_text($value, 240);
+        }
+        if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+            return $value;
+        }
+        return accumul8_normalize_text((string)$value, 240);
+    }
+
+    if (is_array($value)) {
+        if (accumul8_array_is_list_compat($value)) {
+            $sample = [];
+            foreach (array_slice($value, 0, 5) as $item) {
+                $sample[] = accumul8_message_board_compact_meta_value($item, $depth + 1);
+            }
+            return [
+                '_type' => 'list',
+                'count' => count($value),
+                'sample' => $sample,
+            ];
+        }
+
+        $summary = [
+            '_type' => 'object',
+            'count' => count($value),
+        ];
+        $added = 0;
+        foreach ($value as $key => $item) {
+            $summary[(string)$key] = accumul8_message_board_compact_meta_value($item, $depth + 1);
+            $added++;
+            if ($added >= 8) {
+                break;
+            }
+        }
+        return $summary;
+    }
+
+    if (is_string($value)) {
+        return accumul8_normalize_text($value, 240);
+    }
+    if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+        return $value;
+    }
+
+    return accumul8_normalize_text((string)$value, 240);
+}
+
+function accumul8_message_board_encode_meta(array $meta, int $maxBytes = 12000): string
+{
+    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
+    if (is_string($metaJson) && strlen($metaJson) <= $maxBytes) {
+        return $metaJson;
+    }
+
+    $summary = [
+        'truncated' => 1,
+        'original_key_count' => count($meta),
+        'summary' => accumul8_message_board_compact_meta_value($meta),
+    ];
+    $summaryJson = json_encode($summary, JSON_UNESCAPED_SLASHES);
+    if (is_string($summaryJson) && strlen($summaryJson) <= $maxBytes) {
+        return $summaryJson;
+    }
+
+    $fallbackJson = json_encode([
+        'truncated' => 1,
+        'original_key_count' => count($meta),
+        'keys' => array_slice(array_map('strval', array_keys($meta)), 0, 20),
+    ], JSON_UNESCAPED_SLASHES);
+
+    return is_string($fallbackJson) ? $fallbackJson : '{}';
+}
+
 function accumul8_message_board_post(int $viewerId, int $actorUserId, string $sourceKind, string $level, string $title, string $bodyText, array $meta = []): int
 {
     $normalizedSource = accumul8_normalize_text($sourceKind, 64);
@@ -6073,10 +6172,7 @@ function accumul8_message_board_post(int $viewerId, int $actorUserId, string $so
     if ($normalizedTitle === '' && $normalizedBody === '') {
         return 0;
     }
-    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
-    if (!is_string($metaJson)) {
-        $metaJson = json_encode(new stdClass(), JSON_UNESCAPED_SLASHES);
-    }
+    $metaJson = accumul8_message_board_encode_meta($meta);
 
     Database::execute(
         'INSERT INTO accumul8_message_board_messages
@@ -6747,8 +6843,10 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
     ];
 }
 
-function accumul8_balance_books(int $viewerId, int $actorUserId): array
+function accumul8_balance_books(int $viewerId, int $actorUserId, array $options = []): array
 {
+    $includeMessages = !array_key_exists('include_messages', $options)
+        || accumul8_normalize_bool($options['include_messages']) === 1;
     $balanceResult = accumul8_balance_books_sync($viewerId, $actorUserId);
     $openingBalanceResult = [
         'reconciled_count' => 0,
@@ -6799,14 +6897,18 @@ function accumul8_balance_books(int $viewerId, int $actorUserId): array
         ]
     );
 
-    return [
+    $result = [
         'synced_connection_count' => (int)($balanceResult['synced_connection_count'] ?? 0),
         'skipped_connection_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
         'error_connection_count' => $errorCount,
         'opening_balance_reconciliation' => $openingBalanceResult,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
     ];
+    if ($includeMessages) {
+        $result['messages'] = accumul8_message_board_list($viewerId);
+        $result['unacknowledged_count'] = accumul8_message_board_unacknowledged_count($viewerId);
+    }
+
+    return $result;
 }
 
 function accumul8_opening_balance_adjustment_anchor_date(int $viewerId, int $accountId): string
@@ -7599,9 +7701,18 @@ function accumul8_aicountant_upsert_bill_watch_rule(int $viewerId): array
     ];
 }
 
-function accumul8_aicountant_run_watchlist(int $viewerId, int $actorUserId, bool $sendEmail = false, bool $createNotificationRule = false): array
+function accumul8_aicountant_run_watchlist(
+    int $viewerId,
+    int $actorUserId,
+    bool $sendEmail = false,
+    bool $createNotificationRule = false,
+    ?array $payloadOverride = null,
+    array $options = []
+): array
 {
-    $payload = accumul8_aicountant_watchlist_payload($viewerId);
+    $includeMessages = !array_key_exists('include_messages', $options)
+        || accumul8_normalize_bool($options['include_messages']) === 1;
+    $payload = is_array($payloadOverride) ? $payloadOverride : accumul8_aicountant_watchlist_payload($viewerId);
     accumul8_message_board_post(
         $viewerId,
         $actorUserId,
@@ -7649,7 +7760,7 @@ function accumul8_aicountant_run_watchlist(int $viewerId, int $actorUserId, bool
         );
     }
 
-    return [
+    $result = [
         'summary_title' => (string)($payload['summary_title'] ?? ''),
         'summary_body' => (string)($payload['summary_body'] ?? ''),
         'overdue_count' => (int)($payload['overdue_count'] ?? 0),
@@ -7658,9 +7769,19 @@ function accumul8_aicountant_run_watchlist(int $viewerId, int $actorUserId, bool
         'sent_email_count' => (int)($emailResult['sent_count'] ?? 0),
         'failed_email_count' => (int)($emailResult['failed_count'] ?? 0),
         'notification_rule_id' => $notificationRuleId,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
     ];
+    if ($includeMessages) {
+        $result['messages'] = accumul8_message_board_list($viewerId);
+        $result['unacknowledged_count'] = accumul8_message_board_unacknowledged_count($viewerId);
+    }
+
+    return $result;
+}
+
+function accumul8_aicountant_compact_result(array $result): array
+{
+    unset($result['messages'], $result['unacknowledged_count']);
+    return $result;
 }
 
 function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, array $options = []): array
@@ -7680,7 +7801,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, watchlist review, and reminder upkeep.'
     );
 
-    $balanceResult = accumul8_balance_books($viewerId, $actorUserId);
+    $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
     $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
         ? $balanceResult['opening_balance_reconciliation']
         : [
@@ -7690,6 +7811,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             'review_needed_accounts' => [],
             'results' => [],
         ];
+    $balanceResult = accumul8_aicountant_compact_result($balanceResult);
 
     $watchlistPreview = accumul8_aicountant_watchlist_payload($viewerId);
     $attentionNeeded = (int)($watchlistPreview['overdue_count'] ?? 0) > 0
@@ -7702,8 +7824,11 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         $viewerId,
         $actorUserId,
         $shouldSendEmail,
-        $createNotificationRule
+        $createNotificationRule,
+        $watchlistPreview,
+        ['include_messages' => 0]
     );
+    $watchlistResult = accumul8_aicountant_compact_result($watchlistResult);
     $entityMaintenanceResult = null;
     $canRunEntityMaintenanceAi = accumul8_aicountant_provider_has_credentials('openai')
         || accumul8_aicountant_provider_has_credentials('google_ai_studio')
@@ -7735,29 +7860,50 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         }
     }
 
-    accumul8_message_board_post(
-        $viewerId,
-        $actorUserId,
-        'aicountant_housekeeping',
-        ((int)($balanceResult['error_connection_count'] ?? 0) > 0 || (int)($watchlistResult['overdue_count'] ?? 0) > 0 || (int)($watchlistPreview['cash_tight'] ?? 0) === 1)
-            ? 'warning'
-            : 'success',
-        'AIcountant housekeeping finished',
-        'Housekeeping finished with '
-            . (int)($balanceResult['synced_connection_count'] ?? 0) . ' bank sync'
-            . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
-            . ', ' . (int)($openingBalanceResult['reconciled_count'] ?? 0) . ' opening-balance adjustment'
-            . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
-            . ', and ' . (int)($watchlistResult['sent_email_count'] ?? 0) . ' email alert'
-            . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
-        [
-            'balance_books' => $balanceResult,
-            'opening_balance_reconciliation' => $openingBalanceResult,
-            'watchlist' => $watchlistResult,
-            'entity_maintenance' => $entityMaintenanceResult,
-            'attention_needed' => $attentionNeeded ? 1 : 0,
-        ]
-    );
+    try {
+        accumul8_message_board_post(
+            $viewerId,
+            $actorUserId,
+            'aicountant_housekeeping',
+            ((int)($balanceResult['error_connection_count'] ?? 0) > 0 || (int)($watchlistResult['overdue_count'] ?? 0) > 0 || (int)($watchlistPreview['cash_tight'] ?? 0) === 1)
+                ? 'warning'
+                : 'success',
+            'AIcountant housekeeping finished',
+            'Housekeeping finished with '
+                . (int)($balanceResult['synced_connection_count'] ?? 0) . ' bank sync'
+                . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+                . ', ' . (int)($openingBalanceResult['reconciled_count'] ?? 0) . ' opening-balance adjustment'
+                . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
+                . ', and ' . (int)($watchlistResult['sent_email_count'] ?? 0) . ' email alert'
+                . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
+            [
+                'balance_books' => $balanceResult,
+                'opening_balance_reconciliation' => $openingBalanceResult,
+                'watchlist' => $watchlistResult,
+                'entity_maintenance' => $entityMaintenanceResult,
+                'attention_needed' => $attentionNeeded ? 1 : 0,
+            ]
+        );
+    } catch (Throwable $housekeepingPostError) {
+        catn8_log_error('AIcountant housekeeping final message post failed', [
+            'viewer_id' => $viewerId,
+            'actor_user_id' => $actorUserId,
+            'error' => $housekeepingPostError->getMessage(),
+        ]);
+    }
+
+    $messages = [];
+    $unacknowledgedCount = 0;
+    try {
+        $messages = accumul8_message_board_list($viewerId);
+        $unacknowledgedCount = accumul8_message_board_unacknowledged_count($viewerId);
+    } catch (Throwable $messageBoardLoadError) {
+        catn8_log_error('AIcountant housekeeping message board refresh failed', [
+            'viewer_id' => $viewerId,
+            'actor_user_id' => $actorUserId,
+            'error' => $messageBoardLoadError->getMessage(),
+        ]);
+    }
 
     return [
         'balance_books' => $balanceResult,
@@ -7765,8 +7911,8 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'watchlist' => $watchlistResult,
         'entity_maintenance' => $entityMaintenanceResult,
         'attention_needed' => $attentionNeeded ? 1 : 0,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+        'messages' => $messages,
+        'unacknowledged_count' => $unacknowledgedCount,
     ];
 }
 

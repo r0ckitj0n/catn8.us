@@ -19,9 +19,9 @@ export interface Valid8VaultEntry {
 }
 
 export interface Valid8VaultEntryCreateRequest {
-  user_id: string;
   title: string;
   url?: string | null;
+  email_address?: string | null;
   username: string;
   password: string;
   notes?: string | null;
@@ -29,6 +29,7 @@ export interface Valid8VaultEntryCreateRequest {
   owner_name?: string;
   is_favorite?: number;
   password_strength?: number;
+  is_active?: number;
   source_tab?: string | null;
   source_document?: string | null;
   last_changed_at?: string;

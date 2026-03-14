@@ -166,6 +166,23 @@ if ($action === 'delete_attachment') {
     ]);
 }
 
+if ($action === 'create_entry') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $userUuid = Valid8VaultEntryModel::userUuidForUserId($actorUserId);
+    try {
+        $entry = Valid8VaultEntryModel::createEntry(array_merge($body, [
+            'user_id' => $userUuid,
+        ]));
+    } catch (Throwable $error) {
+        catn8_json_response(['success' => false, 'error' => $error->getMessage()], 400);
+    }
+    catn8_json_response([
+        'success' => true,
+        'entry' => $entry,
+    ]);
+}
+
 if ($action === 'update_entry') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();

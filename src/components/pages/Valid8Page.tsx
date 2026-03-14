@@ -2,7 +2,7 @@ import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useValid8 } from '../../hooks/useValid8';
-import { Valid8VaultEntryWithSecrets } from '../../types/valid8';
+import { Valid8VaultEntryCreateRequest, Valid8VaultEntryWithSecrets } from '../../types/valid8';
 import { StandardIconButton } from '../common/StandardIconButton';
 import { StandardIcon } from '../common/StandardIcon';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
@@ -48,6 +48,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     refreshLookups,
     uploadAttachment,
     deleteAttachment,
+    createEntry,
     updateEntry,
     archiveEntry,
     deleteEntry,
@@ -71,6 +72,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
   const [drafts, setDrafts] = React.useState<Record<string, EntryDraft>>({});
   const [ownerModalOpen, setOwnerModalOpen] = React.useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = React.useState(false);
+  const [creatingEntry, setCreatingEntry] = React.useState(false);
   const [editingEntryId, setEditingEntryId] = React.useState('');
   const [savingEdit, setSavingEdit] = React.useState(false);
 
@@ -228,6 +230,20 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
     }
   }, [onToast, updateEntry]);
 
+  const addEntry = React.useCallback(async (payload: Valid8VaultEntryCreateRequest) => {
+    setSavingEdit(true);
+    try {
+      await createEntry(payload);
+      setCreatingEntry(false);
+    } catch (error: any) {
+      if (onToast) {
+        onToast({ tone: 'error', message: String(error?.message || 'Failed to add credentials') });
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [createEntry, onToast]);
+
   const confirmArchiveEntry = React.useCallback(async (entry: Valid8VaultEntryWithSecrets) => {
     const ok = await confirm({
       title: 'Archive Entry?',
@@ -272,6 +288,7 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
               <h1 className="section-title mb-0">VALID8 Password Vault</h1>
               {canAccess && (
                 <div className="d-inline-flex gap-2">
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setCreatingEntry(true)}>Add New Credentials</button>
                   <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setOwnerModalOpen(true)}>Owners</button>
                   <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setCategoryModalOpen(true)}>Categories</button>
                 </div>
@@ -517,12 +534,16 @@ export function Valid8Page({ viewer, onLoginClick, onLogout, onAccountClick, mys
         onDelete={deleteCategory}
       />
       <Valid8EntryEditModal
-        open={editingEntryId !== ''}
+        open={creatingEntry || editingEntryId !== ''}
         busy={savingEdit}
-        entry={selectedEntry}
+        entry={creatingEntry ? null : selectedEntry}
         owners={owners}
         categories={categories}
-        onClose={() => setEditingEntryId('')}
+        onClose={() => {
+          setCreatingEntry(false);
+          setEditingEntryId('');
+        }}
+        onCreate={addEntry}
         onSave={saveEntry}
       />
       {confirmDialog}

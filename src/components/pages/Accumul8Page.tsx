@@ -3039,7 +3039,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         ['calendar', 'Calendar'],
                         ['debtors', 'IOU'],
                         ['ledger', 'Ledger'],
-                        ['pay_bills', 'Pay Bills'],
+                        ['pay_bills', 'Bills'],
                       ].map(([key, label]) => (
                         <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
                       ))}
@@ -3508,7 +3508,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   busy={busy}
                   selectedMonth={budgetMonth}
                   recurringPayments={budgetPlannerRecurringPayments}
-                  transactions={transactions}
+                  transactions={filteredTransactions}
                   entities={contactEntities}
                   accounts={scopedAccounts}
                   onSelectedMonthChange={setBudgetMonth}

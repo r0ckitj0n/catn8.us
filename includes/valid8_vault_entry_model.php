@@ -153,7 +153,7 @@ final class Valid8VaultEntryModel
             [$userUuid, $entryFingerprint]
         );
         if ($existing !== null) {
-            $model = self::toEntryModel($existing);
+            $model = array_merge(self::toEntryModel($existing), self::decryptEntry($existing));
             $model['_import_status'] = 'duplicate';
             return $model;
         }
@@ -214,7 +214,7 @@ final class Valid8VaultEntryModel
             }
 
             Database::commit();
-            $model = self::toEntryModel($row);
+            $model = array_merge(self::toEntryModel($row), self::decryptEntry($row));
             $model['_import_status'] = 'inserted';
             return $model;
         } catch (Throwable $error) {

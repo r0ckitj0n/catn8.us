@@ -7,6 +7,7 @@ import {
   Valid8VaultAttachmentUploadResponse,
   Valid8CategoriesListResponse,
   Valid8CategoryMutationResponse,
+  Valid8VaultEntryCreateRequest,
   Valid8VaultEntryWithSecrets,
   Valid8VaultEntryMutationResponse,
   Valid8VaultEntryUpdateRequest,
@@ -139,6 +140,12 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     return next || null;
   }, []);
 
+  const createEntry = React.useCallback(async (payload: Valid8VaultEntryCreateRequest) => {
+    const res = await ApiClient.post<Valid8VaultEntryMutationResponse>('/api/valid8.php?action=create_entry', payload);
+    await load(includeInactive);
+    return res?.entry || null;
+  }, [includeInactive, load]);
+
   const archiveEntry = React.useCallback(async (entryId: string) => {
     await ApiClient.post<Valid8VaultEntryMutationResponse>('/api/valid8.php?action=archive_entry', { entry_id: entryId });
     setEntries((prev) => prev.map((entry) => (entry.id === entryId ? { ...entry, is_active: 0 } : entry)));
@@ -229,6 +236,7 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     refreshLookups,
     uploadAttachment,
     deleteAttachment,
+    createEntry,
     updateEntry,
     archiveEntry,
     deleteEntry,

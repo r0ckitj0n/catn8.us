@@ -1,5 +1,5 @@
 import React from 'react';
-import { Valid8LookupItem, Valid8VaultEntryUpdateRequest, Valid8VaultEntryWithSecrets } from '../../types/valid8';
+import { Valid8LookupItem, Valid8VaultEntryCreateRequest, Valid8VaultEntryUpdateRequest, Valid8VaultEntryWithSecrets } from '../../types/valid8';
 import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
@@ -10,6 +10,7 @@ interface Valid8EntryEditModalProps {
   owners: Valid8LookupItem[];
   categories: Valid8LookupItem[];
   onClose: () => void;
+  onCreate: (payload: Valid8VaultEntryCreateRequest) => Promise<void>;
   onSave: (payload: Valid8VaultEntryUpdateRequest) => Promise<void>;
 }
 
@@ -34,10 +35,12 @@ export function Valid8EntryEditModal({
   owners,
   categories,
   onClose,
+  onCreate,
   onSave,
 }: Valid8EntryEditModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [state, setState] = React.useState<EntryFormState>(() => makeState(entry));
+  const isCreateMode = !entry?.id;
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -87,7 +90,24 @@ export function Valid8EntryEditModal({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!entry?.id || busy) return;
+    if (busy) return;
+    if (isCreateMode) {
+      await onCreate({
+        title: state.title,
+        url: blankToNull(state.url),
+        email_address: blankToNull(state.email_address),
+        username: state.username,
+        password: state.password,
+        notes: blankToNull(state.notes),
+        owner_name: state.owner_name,
+        category: state.category,
+        is_active: Number(state.is_active || 0) ? 1 : 0,
+        source_tab: blankToNull(state.source_tab),
+        source_document: blankToNull(state.source_document),
+      });
+      return;
+    }
+    if (!entry?.id) return;
     await onSave({
       entry_id: entry.id,
       title: state.title,
@@ -109,7 +129,7 @@ export function Valid8EntryEditModal({
       <div className="modal-dialog modal-dialog-centered modal-xl">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">Edit VALID8 Entry</h5>
+            <h5 className="modal-title">{isCreateMode ? 'Add VALID8 Credentials' : 'Edit VALID8 Entry'}</h5>
             <ModalCloseIconButton />
           </div>
           <form className="modal-body d-grid gap-3" onSubmit={(event) => void submit(event)}>
@@ -243,8 +263,8 @@ export function Valid8EntryEditModal({
               <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={busy || !entry?.id}>
-                {busy ? 'Saving...' : 'Save'}
+              <button type="submit" className="btn btn-primary" disabled={busy}>
+                {busy ? (isCreateMode ? 'Creating...' : 'Saving...') : (isCreateMode ? 'Add Credentials' : 'Save')}
               </button>
             </div>
           </form>

@@ -61,7 +61,6 @@ export function Accumul8AIcountantPanel({
     activeConversation,
     messages,
     defaultSystemPrompt,
-    suggestedStarters,
     createConversation,
     openConversation,
     renameConversation,
@@ -123,18 +122,37 @@ export function Accumul8AIcountantPanel({
 
         <div className="accumul8-aicountant-sidebar-list">
           {conversations.map((conversation) => (
-            <button
+            <div
               key={conversation.id}
-              type="button"
               className={`accumul8-aicountant-conversation-card${activeConversation?.id === conversation.id ? ' is-active' : ''}`}
-              onClick={() => {
-                void openConversation(conversation.id);
-              }}
             >
-              <strong>{conversation.title || 'Untitled Chat'}</strong>
-              <span>{conversation.last_message_preview || 'No messages yet.'}</span>
-              <small>{formatConversationTime(conversation.updated_at)}</small>
-            </button>
+              <button
+                type="button"
+                className="accumul8-aicountant-conversation-card-button"
+                onClick={() => {
+                  void openConversation(conversation.id);
+                }}
+              >
+                <strong>{conversation.title || 'Untitled Chat'}</strong>
+                <span>{conversation.last_message_preview || 'No messages yet.'}</span>
+                <small>{formatConversationTime(conversation.updated_at)}</small>
+              </button>
+              <button
+                type="button"
+                className="accumul8-aicountant-conversation-delete"
+                aria-label={`Delete ${conversation.title || 'Untitled Chat'}`}
+                title="Delete this saved chat"
+                onClick={() => {
+                  if (!window.confirm(`Delete "${conversation.title || 'Untitled Chat'}"?`)) {
+                    return;
+                  }
+                  void deleteConversation(conversation.id);
+                }}
+                disabled={loading || sending}
+              >
+                🗑️
+              </button>
+            </div>
           ))}
           {!conversations.length ? (
             <div className="accumul8-aicountant-empty-rail">Start a new chat to create your first saved AIcountant conversation.</div>
@@ -149,12 +167,6 @@ export function Accumul8AIcountantPanel({
 
       <section className="accumul8-aicountant-main">
         <header className="accumul8-aicountant-header">
-          <div>
-            <h3 className="mb-1">AIcountant</h3>
-            <p className="mb-0">
-              Connected to the selected Accumul8 owner data for balances, recent transactions, recurring bills, and budget rows.
-            </p>
-          </div>
           <div className="accumul8-aicountant-header-actions">
             <div className="accumul8-aicountant-action-group" aria-label="AIcountant tools">
               <button
@@ -241,30 +253,7 @@ export function Accumul8AIcountantPanel({
         </header>
 
         <div className="accumul8-aicountant-thread" ref={threadRef}>
-          {!messages.length ? (
-            <div className="accumul8-aicountant-welcome">
-              <div className="accumul8-aicountant-avatar">AI</div>
-              <div className="accumul8-aicountant-welcome-body">
-                <h4>Household finance chat, saved like ChatGPT</h4>
-                <p>
-                  Ask AIcountant to review spending, categorize transactions, flag overdue items, compare your ledger with
-                  budgets, balance synced accounts, review opening balances, or suggest what to pay next.
-                </p>
-                <div className="accumul8-aicountant-starters">
-                  {suggestedStarters.map((starter) => (
-                    <button
-                      key={starter}
-                      type="button"
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => setDraft(starter)}
-                    >
-                      {starter}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
+          {messages.length ? (
             messages.map((message) => (
               <article
                 key={message.id}
@@ -280,7 +269,7 @@ export function Accumul8AIcountantPanel({
                 </div>
               </article>
             ))
-          )}
+          ) : null}
           {sending ? (
             <div className="accumul8-aicountant-message accumul8-aicountant-message--assistant">
               <div className="accumul8-aicountant-avatar">AI</div>

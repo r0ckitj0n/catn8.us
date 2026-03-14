@@ -363,9 +363,21 @@
 }
 
 .accumul8-owner-selector {
-  min-width: 240px;
-  flex: 0 1 240px;
+  min-width: 0;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
   margin-left: auto;
+}
+
+.accumul8-owner-selector .form-select {
+  width: auto;
+  min-width: 0;
+  max-width: min(100%, 18rem);
+  padding-right: 2rem;
+  font-size: clamp(0.72rem, 0.68rem + 0.2vw, 0.92rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accumul8-header-control-deck {
@@ -401,8 +413,7 @@
 }
 
 .accumul8-page-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, clamp(7.5rem, 14vw, 11rem));
+  display: flex;
   align-items: stretch;
   gap: 0.55rem;
   flex: 0 1 auto;
@@ -714,8 +725,8 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  width: 100%;
-  min-width: 0;
+  width: clamp(4rem, 9vw, 5.5rem);
+  min-width: clamp(4rem, 9vw, 5.5rem);
   max-width: 100%;
   min-height: 0;
   align-self: stretch;
@@ -2896,6 +2907,11 @@ button.accumul8-entity-endex-guide-card:focus-visible {
     min-width: 0;
     width: 100%;
     margin-left: 0;
+  }
+
+  .accumul8-owner-selector .form-select {
+    width: 100%;
+    max-width: none;
   }
 
 }

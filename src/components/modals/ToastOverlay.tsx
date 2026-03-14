@@ -21,15 +21,17 @@ export function ToastOverlay({ toast, onClose }: ToastOverlayProps) {
   if (!toast) return null;
 
   const rawTone = String(toast?.tone || '').trim();
-  const tone = (rawTone === 'success' || rawTone === 'error' || rawTone === 'info')
+  const tone = (rawTone === 'success' || rawTone === 'error' || rawTone === 'info' || rawTone === 'warning')
     ? rawTone
     : 'error';
   const title = String(toast?.title || (
     tone === 'success'
       ? 'Success'
-      : (tone === 'info'
-        ? 'Info'
-        : 'Error')
+      : (tone === 'warning'
+        ? 'Warning'
+        : (tone === 'info'
+          ? 'Info'
+          : 'Error'))
   ));
   const message = String(toast?.message || '');
   const extraClassName = String(toast?.className || '').trim();

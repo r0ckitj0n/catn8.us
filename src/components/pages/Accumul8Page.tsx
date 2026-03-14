@@ -1020,6 +1020,24 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setMessageBoardLoading(false);
     }
   }, [onToast, scopedActionUrl]);
+  const acknowledgeAllMessageBoardMessages = React.useCallback(async () => {
+    if (messageBoardUnacknowledgedCount <= 0) {
+      return;
+    }
+    setMessageBoardLoading(true);
+    try {
+      const response = await ApiClient.post<Accumul8MessageBoardResponse>(
+        scopedActionUrl('acknowledge_message_board_messages'),
+        { all: 1 },
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to acknowledge all messages') });
+    } finally {
+      setMessageBoardLoading(false);
+    }
+  }, [messageBoardUnacknowledgedCount, onToast, scopedActionUrl]);
   const handleRunAIcountantHousekeeping = React.useCallback(async () => {
     if (runningAIcountantHousekeeping || balancingBooks || runningAIcountantWatchlist) {
       return;
@@ -4539,6 +4557,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </div>
                   </div>
                   <div className="d-flex align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-success"
+                      onClick={() => { void acknowledgeAllMessageBoardMessages(); }}
+                      disabled={messageBoardLoading || messageBoardUnacknowledgedCount <= 0}
+                    >
+                      Acknowledge All
+                    </button>
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void loadMessageBoard(); }} disabled={messageBoardLoading}>Refresh</button>
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setMessageBoardOpen(false)}>Close</button>
                   </div>
@@ -4546,6 +4572,23 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 <div className="accumul8-message-board-list">
                   {messageBoardMessages.map((message) => {
                     const openingBalanceMeta = getOpeningBalanceMessageMeta(message);
+                    const duplicateCount = Math.max(1, Number(message.duplicate_count || 1));
+                    const sourceEmoji = (() => {
+                      switch (message.source_kind) {
+                        case 'aicountant_housekeeping':
+                          return '🧹';
+                        case 'aicountant_watchlist':
+                          return '👀';
+                        case 'aicountant_balance_books':
+                          return '🏦';
+                        case 'aicountant_opening_balance':
+                          return '⚖️';
+                        case 'aicountant_entity_maintenance':
+                          return '🧠';
+                        default:
+                          return '📌';
+                      }
+                    })();
                     return (
                       <label key={message.id} className={`accumul8-message-board-item is-${message.message_level}${Number(message.is_acknowledged || 0) === 1 ? ' is-acknowledged' : ''}`}>
                         <div className="accumul8-message-board-item-check">
@@ -4562,7 +4605,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </div>
                         <div className="accumul8-message-board-item-body">
                           <div className="accumul8-message-board-item-header">
-                            <strong>{message.title || 'Update'}</strong>
+                            <strong>
+                              <span aria-hidden="true">{sourceEmoji}</span>{' '}
+                              {duplicateCount > 1 ? <span aria-hidden="true">🔁 </span> : null}
+                              {message.title || 'Update'}
+                              {duplicateCount > 1 ? ` x${duplicateCount}` : ''}
+                            </strong>
                             <span>{formatInlineDateTime(message.created_at)}</span>
                           </div>
                           <div className="accumul8-message-board-item-text">{message.body_text}</div>

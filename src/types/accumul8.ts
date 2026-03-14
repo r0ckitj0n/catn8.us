@@ -1005,6 +1005,7 @@ export interface Accumul8MessageBoardMessage {
   meta: Record<string, unknown>;
   is_acknowledged: number;
   acknowledged_at: string;
+  duplicate_count: number;
   created_at: string;
 }
 

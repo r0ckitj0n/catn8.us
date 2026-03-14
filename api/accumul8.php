@@ -6057,6 +6057,7 @@ function accumul8_message_board_map_row(array $row): array
         'meta' => accumul8_aicountant_decode_json_object($row['meta_json'] ?? '{}'),
         'is_acknowledged' => (int)($row['is_acknowledged'] ?? 0),
         'acknowledged_at' => (string)($row['acknowledged_at'] ?? ''),
+        'duplicate_count' => max(1, (int)($row['duplicate_count'] ?? 1)),
         'created_at' => (string)($row['created_at'] ?? ''),
     ];
 }
@@ -6160,7 +6161,43 @@ function accumul8_message_board_encode_meta(array $meta, int $maxBytes = 12000):
     return is_string($fallbackJson) ? $fallbackJson : '{}';
 }
 
-function accumul8_message_board_post(int $viewerId, int $actorUserId, string $sourceKind, string $level, string $title, string $bodyText, array $meta = []): int
+function accumul8_message_board_fingerprint(
+    string $sourceKind,
+    string $title,
+    string $bodyText,
+    array $meta,
+    array $options = []
+): string
+{
+    $dedupeKey = accumul8_normalize_text((string)($options['dedupe_key'] ?? ''), 500);
+    if ($dedupeKey !== '') {
+        return hash('sha256', strtolower($sourceKind) . '|' . $dedupeKey);
+    }
+
+    $metaSummary = accumul8_message_board_compact_meta_value($meta);
+    $metaSummaryJson = json_encode($metaSummary, JSON_UNESCAPED_SLASHES);
+    if (!is_string($metaSummaryJson)) {
+        $metaSummaryJson = '{}';
+    }
+
+    return hash('sha256', implode('|', [
+        strtolower($sourceKind),
+        trim($title),
+        trim($bodyText),
+        $metaSummaryJson,
+    ]));
+}
+
+function accumul8_message_board_upsert(
+    int $viewerId,
+    int $actorUserId,
+    string $sourceKind,
+    string $level,
+    string $title,
+    string $bodyText,
+    array $meta = [],
+    array $options = []
+): array
 {
     $normalizedSource = accumul8_normalize_text($sourceKind, 64);
     $normalizedLevel = strtolower(accumul8_normalize_text($level, 24));
@@ -6170,25 +6207,73 @@ function accumul8_message_board_post(int $viewerId, int $actorUserId, string $so
     $normalizedTitle = accumul8_normalize_text($title, 191);
     $normalizedBody = accumul8_normalize_text($bodyText, 2000);
     if ($normalizedTitle === '' && $normalizedBody === '') {
-        return 0;
+        return ['id' => 0, 'is_new' => false, 'duplicate_count' => 0];
     }
     $metaJson = accumul8_message_board_encode_meta($meta);
+    $fingerprint = accumul8_message_board_fingerprint($normalizedSource, $normalizedTitle, $normalizedBody, $meta, $options);
+    $existing = $fingerprint !== ''
+        ? Database::queryOne(
+            'SELECT id, duplicate_count
+             FROM accumul8_message_board_messages
+             WHERE owner_user_id = ?
+               AND message_fingerprint = ?
+             ORDER BY id DESC
+             LIMIT 1',
+            [$viewerId, $fingerprint]
+        )
+        : null;
+
+    if ($existing) {
+        $id = (int)($existing['id'] ?? 0);
+        Database::execute(
+            'UPDATE accumul8_message_board_messages
+             SET actor_user_id = ?,
+                 source_kind = ?,
+                 message_level = ?,
+                 title = ?,
+                 body_text = ?,
+                 meta_json = ?,
+                 is_acknowledged = 0,
+                 acknowledged_at = NULL,
+                 acknowledged_by_user_id = NULL,
+                 duplicate_count = duplicate_count + 1,
+                 created_at = NOW()
+             WHERE id = ? AND owner_user_id = ?',
+            [$actorUserId, $normalizedSource, $normalizedLevel, $normalizedTitle, $normalizedBody, $metaJson, $id, $viewerId]
+        );
+
+        return [
+            'id' => $id,
+            'is_new' => false,
+            'duplicate_count' => max(2, (int)($existing['duplicate_count'] ?? 1) + 1),
+        ];
+    }
 
     Database::execute(
         'INSERT INTO accumul8_message_board_messages
-            (owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, is_acknowledged)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
-        [$viewerId, $actorUserId, $normalizedSource, $normalizedLevel, $normalizedTitle, $normalizedBody, $metaJson]
+            (owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, message_fingerprint, duplicate_count, is_acknowledged)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)',
+        [$viewerId, $actorUserId, $normalizedSource, $normalizedLevel, $normalizedTitle, $normalizedBody, $metaJson, $fingerprint]
     );
 
-    return (int)Database::lastInsertId();
+    return [
+        'id' => (int)Database::lastInsertId(),
+        'is_new' => true,
+        'duplicate_count' => 1,
+    ];
+}
+
+function accumul8_message_board_post(int $viewerId, int $actorUserId, string $sourceKind, string $level, string $title, string $bodyText, array $meta = [], array $options = []): int
+{
+    $result = accumul8_message_board_upsert($viewerId, $actorUserId, $sourceKind, $level, $title, $bodyText, $meta, $options);
+    return (int)($result['id'] ?? 0);
 }
 
 function accumul8_message_board_list(int $viewerId, int $limit = 150): array
 {
     $limit = max(1, min(250, $limit));
     $rows = Database::queryAll(
-        'SELECT id, owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, is_acknowledged, acknowledged_at, created_at
+        'SELECT id, owner_user_id, actor_user_id, source_kind, message_level, title, body_text, meta_json, is_acknowledged, acknowledged_at, duplicate_count, created_at
          FROM accumul8_message_board_messages
          WHERE owner_user_id = ?
          ORDER BY is_acknowledged ASC, created_at DESC, id DESC
@@ -6207,6 +6292,14 @@ function accumul8_message_board_unacknowledged_count(int $viewerId): int
         [$viewerId]
     );
     return (int)($row['total'] ?? 0);
+}
+
+function accumul8_message_board_response_payload(int $viewerId, int $limit = 75): array
+{
+    return [
+        'messages' => accumul8_message_board_list($viewerId, $limit),
+        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
+    ];
 }
 
 function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $actorUserId, int $connectionId): array
@@ -6904,8 +6997,7 @@ function accumul8_balance_books(int $viewerId, int $actorUserId, array $options 
         'opening_balance_reconciliation' => $openingBalanceResult,
     ];
     if ($includeMessages) {
-        $result['messages'] = accumul8_message_board_list($viewerId);
-        $result['unacknowledged_count'] = accumul8_message_board_unacknowledged_count($viewerId);
+        $result = array_merge($result, accumul8_message_board_response_payload($viewerId));
     }
 
     return $result;
@@ -7133,15 +7225,13 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
         ]
     );
 
-    return [
+    return array_merge([
         'reconciled_count' => count($results),
         'skipped_count' => $skippedCount,
         'review_needed_count' => count($reviewNeeded),
         'review_needed_accounts' => $reviewNeeded,
         'results' => $results,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
-    ];
+    ], accumul8_message_board_response_payload($viewerId));
 }
 
 function accumul8_aicountant_debt_accounts(int $viewerId): array
@@ -7713,13 +7803,26 @@ function accumul8_aicountant_run_watchlist(
     $includeMessages = !array_key_exists('include_messages', $options)
         || accumul8_normalize_bool($options['include_messages']) === 1;
     $payload = is_array($payloadOverride) ? $payloadOverride : accumul8_aicountant_watchlist_payload($viewerId);
-    accumul8_message_board_post(
+    $watchlistPost = accumul8_message_board_upsert(
         $viewerId,
         $actorUserId,
         'aicountant_watchlist',
         (int)($payload['cash_tight'] ?? 0) === 1 || (int)($payload['overdue_count'] ?? 0) > 0 ? 'warning' : 'info',
         (string)($payload['summary_title'] ?? 'AIcountant watchlist'),
-        (string)($payload['summary_body'] ?? '')
+        (string)($payload['summary_body'] ?? ''),
+        [],
+        [
+            'dedupe_key' => implode('|', [
+                'watchlist',
+                (string)($payload['summary_title'] ?? ''),
+                (int)($payload['overdue_count'] ?? 0),
+                (int)($payload['due_soon_count'] ?? 0),
+                (int)($payload['recurring_soon_count'] ?? 0),
+                (int)($payload['cash_tight'] ?? 0),
+                number_format((float)($payload['available_total'] ?? 0), 2, '.', ''),
+                number_format((float)($payload['cash_need_soon'] ?? 0), 2, '.', ''),
+            ]),
+        ]
     );
 
     $notificationRuleId = null;
@@ -7738,7 +7841,7 @@ function accumul8_aicountant_run_watchlist(
     }
 
     $emailResult = ['sent_count' => 0, 'failed_count' => 0];
-    if ($sendEmail) {
+    if ($sendEmail && (bool)($watchlistPost['is_new'] ?? false)) {
         $emailRule = $notificationRuleId !== null
             ? (accumul8_notification_rule_find_by_name($viewerId, 'AIcountant Bill Watch') ?? ['id' => null, 'target_scope' => 'group', 'custom_user_ids' => []])
             : ['id' => null, 'target_scope' => 'group', 'custom_user_ids' => []];
@@ -7770,9 +7873,9 @@ function accumul8_aicountant_run_watchlist(
         'failed_email_count' => (int)($emailResult['failed_count'] ?? 0),
         'notification_rule_id' => $notificationRuleId,
     ];
+    $result['duplicate_count'] = (int)($watchlistPost['duplicate_count'] ?? 1);
     if ($includeMessages) {
-        $result['messages'] = accumul8_message_board_list($viewerId);
-        $result['unacknowledged_count'] = accumul8_message_board_unacknowledged_count($viewerId);
+        $result = array_merge($result, accumul8_message_board_response_payload($viewerId));
     }
 
     return $result;
@@ -7895,8 +7998,9 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     $messages = [];
     $unacknowledgedCount = 0;
     try {
-        $messages = accumul8_message_board_list($viewerId);
-        $unacknowledgedCount = accumul8_message_board_unacknowledged_count($viewerId);
+        $messageBoardPayload = accumul8_message_board_response_payload($viewerId);
+        $messages = $messageBoardPayload['messages'];
+        $unacknowledgedCount = (int)($messageBoardPayload['unacknowledged_count'] ?? 0);
     } catch (Throwable $messageBoardLoadError) {
         catn8_log_error('AIcountant housekeeping message board refresh failed', [
             'viewer_id' => $viewerId,
@@ -9525,11 +9629,14 @@ function accumul8_tables_ensure(): void
         title VARCHAR(191) NOT NULL DEFAULT '',
         body_text TEXT NOT NULL,
         meta_json LONGTEXT NULL,
+        message_fingerprint CHAR(64) NOT NULL DEFAULT '',
+        duplicate_count INT NOT NULL DEFAULT 1,
         is_acknowledged TINYINT(1) NOT NULL DEFAULT 0,
         acknowledged_at DATETIME NULL,
         acknowledged_by_user_id INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_accumul8_message_board_owner_ack (owner_user_id, is_acknowledged, created_at),
+        KEY idx_accumul8_message_board_owner_fingerprint (owner_user_id, message_fingerprint),
         CONSTRAINT fk_accumul8_message_board_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
@@ -9804,11 +9911,16 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'message_level', "VARCHAR(24) NOT NULL DEFAULT 'info'");
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'title', "VARCHAR(191) NOT NULL DEFAULT ''");
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'meta_json', 'LONGTEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'message_fingerprint', "CHAR(64) NOT NULL DEFAULT ''");
+        accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'duplicate_count', 'INT NOT NULL DEFAULT 1');
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'is_acknowledged', 'TINYINT(1) NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'acknowledged_at', 'DATETIME NULL');
         accumul8_table_add_column_if_missing('accumul8_message_board_messages', 'acknowledged_by_user_id', 'INT NULL');
         if (!accumul8_table_has_index('accumul8_message_board_messages', 'idx_accumul8_message_board_owner_ack')) {
             Database::execute('ALTER TABLE accumul8_message_board_messages ADD INDEX idx_accumul8_message_board_owner_ack (owner_user_id, is_acknowledged, created_at)');
+        }
+        if (!accumul8_table_has_index('accumul8_message_board_messages', 'idx_accumul8_message_board_owner_fingerprint')) {
+            Database::execute('ALTER TABLE accumul8_message_board_messages ADD INDEX idx_accumul8_message_board_owner_fingerprint (owner_user_id, message_fingerprint)');
         }
         if (!accumul8_table_has_foreign_key('accumul8_message_board_messages', 'fk_accumul8_message_board_owner')) {
             Database::execute('ALTER TABLE accumul8_message_board_messages ADD CONSTRAINT fk_accumul8_message_board_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE');
@@ -15133,11 +15245,7 @@ if ($action === 'send_aicountant_message') {
 
 if ($action === 'list_message_board_messages') {
     catn8_require_method('GET');
-    catn8_json_response([
-        'success' => true,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
-    ]);
+    catn8_json_response(array_merge(['success' => true], accumul8_message_board_response_payload($viewerId, 150)));
 }
 
 if ($action === 'create_message_board_message') {
@@ -15152,33 +15260,36 @@ if ($action === 'create_message_board_message') {
         catn8_json_response(['success' => false, 'error' => 'title or body_text is required'], 400);
     }
     accumul8_message_board_post($viewerId, $actorUserId, $sourceKind, $messageLevel, $title, $bodyText, $meta);
-    catn8_json_response([
-        'success' => true,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
-    ]);
+    catn8_json_response(array_merge(['success' => true], accumul8_message_board_response_payload($viewerId)));
 }
 
 if ($action === 'acknowledge_message_board_messages') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
     $ids = array_values(array_unique(array_filter(array_map('intval', is_array($body['ids'] ?? null) ? $body['ids'] : []), static fn(int $id): bool => $id > 0)));
-    if ($ids === []) {
+    $acknowledgeAll = accumul8_normalize_bool($body['all'] ?? 0) === 1;
+    if ($ids === [] && !$acknowledgeAll) {
         catn8_json_response(['success' => false, 'error' => 'ids are required'], 400);
     }
-    $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    Database::execute(
-        'UPDATE accumul8_message_board_messages
-         SET is_acknowledged = 1, acknowledged_at = NOW(), acknowledged_by_user_id = ?
-         WHERE owner_user_id = ?
-           AND id IN (' . $placeholders . ')',
-        array_merge([$actorUserId, $viewerId], $ids)
-    );
-    catn8_json_response([
-        'success' => true,
-        'messages' => accumul8_message_board_list($viewerId),
-        'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
-    ]);
+    if ($acknowledgeAll) {
+        Database::execute(
+            'UPDATE accumul8_message_board_messages
+             SET is_acknowledged = 1, acknowledged_at = NOW(), acknowledged_by_user_id = ?
+             WHERE owner_user_id = ?
+               AND is_acknowledged = 0',
+            [$actorUserId, $viewerId]
+        );
+    } else {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        Database::execute(
+            'UPDATE accumul8_message_board_messages
+             SET is_acknowledged = 1, acknowledged_at = NOW(), acknowledged_by_user_id = ?
+             WHERE owner_user_id = ?
+               AND id IN (' . $placeholders . ')',
+            array_merge([$actorUserId, $viewerId], $ids)
+        );
+    }
+    catn8_json_response(array_merge(['success' => true], accumul8_message_board_response_payload($viewerId)));
 }
 
 if ($action === 'balance_books') {

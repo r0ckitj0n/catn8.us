@@ -13954,6 +13954,29 @@ function accumul8_recurring_occurrences_for_month(array $recurring, string $mont
     return array_reverse($dates);
 }
 
+function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $minDate, ?string $maxDate): array
+{
+    $normalizedMin = accumul8_normalize_date($minDate);
+    $normalizedMax = accumul8_normalize_date($maxDate);
+    if ($normalizedMin === null && $normalizedMax === null) {
+        return $occurrenceDates;
+    }
+
+    return array_values(array_filter($occurrenceDates, static function ($dateValue) use ($normalizedMin, $normalizedMax) {
+        $normalizedDate = accumul8_normalize_date($dateValue);
+        if ($normalizedDate === null) {
+            return false;
+        }
+        if ($normalizedMin !== null && strcmp($normalizedDate, $normalizedMin) < 0) {
+            return false;
+        }
+        if ($normalizedMax !== null && strcmp($normalizedDate, $normalizedMax) > 0) {
+            return false;
+        }
+        return true;
+    }));
+}
+
 function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUserId, string $selectedMonth): int
 {
     $normalizedMonth = accumul8_normalize_month_value($selectedMonth);
@@ -13961,7 +13984,14 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
         throw new RuntimeException('Invalid month_value');
     }
 
-    $currentMonth = gmdate('Y-m');
+    $currentDate = gmdate('Y-m-d');
+    $currentMonth = substr($currentDate, 0, 7);
+    $maxAdvanceDate = gmdate('Y-m-d', strtotime($currentDate . ' +90 days'));
+    $maxAdvanceMonth = substr($maxAdvanceDate, 0, 7);
+    if (strcmp($normalizedMonth, $maxAdvanceMonth) > 0) {
+        throw new RuntimeException('Budget planning is limited to 90 days ahead');
+    }
+
     $monthsToEnsure = accumul8_month_range($currentMonth, $normalizedMonth);
     if ($monthsToEnsure === []) {
         $monthsToEnsure = [$normalizedMonth];
@@ -13999,7 +14029,11 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
         }
 
         foreach ($monthsToEnsure as $monthValue) {
-            foreach (accumul8_recurring_occurrences_for_month($row, $monthValue) as $occurrenceDate) {
+            $occurrenceDates = accumul8_recurring_occurrences_for_month($row, $monthValue);
+            if (strcmp($monthValue, $currentMonth) >= 0) {
+                $occurrenceDates = accumul8_limit_recurring_occurrences($occurrenceDates, null, $maxAdvanceDate);
+            }
+            foreach ($occurrenceDates as $occurrenceDate) {
                 $existing = Database::queryOne(
                     'SELECT id
                      FROM accumul8_transactions

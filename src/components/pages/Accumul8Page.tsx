@@ -88,6 +88,7 @@ type TabKey = 'aicountant' | 'ledger' | 'calendar' | 'spreadsheet' | 'debtors' |
 type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
 type LedgerFilterPreset =
   | 'all'
+  | 'planning'
   | 'hide_upcoming_recurring'
   | 'hide_reconciled'
   | 'hide_paid'
@@ -123,8 +124,18 @@ const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
   autopay: 'Auto debit / autopay',
   manual: 'Manual payment',
 };
+
+function formatRecurringTitle(value: string): string {
+  return formatInlineText(value, 'Untitled recurring item');
+}
+
+function formatRecurringAmount(value: number, direction: Accumul8Direction): string {
+  const normalized = Number(value || 0);
+  return `${direction === 'inflow' ? '+' : '-'}${Math.abs(normalized).toFixed(2)}`;
+}
 const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
   { value: 'all', label: 'All transactions' },
+  { value: 'planning', label: 'Planning' },
   { value: 'hide_upcoming_recurring', label: 'Hide upcoming recurring payments' },
   { value: 'hide_reconciled', label: 'Hide reconciled transactions' },
   { value: 'hide_paid', label: 'Hide paid transactions' },
@@ -1234,6 +1245,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         return false;
       }
       switch (ledgerFilterPreset) {
+        case 'all':
+          return !effectiveDate || effectiveDate <= todayDate;
+        case 'planning':
+          return true;
         case 'hide_upcoming_recurring':
           return !isUpcomingRecurring;
         case 'hide_reconciled':
@@ -1252,7 +1267,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           return !isPaid;
         case 'show_upcoming_unpaid':
           return isUpcomingUnpaid;
-        case 'all':
         default:
           return true;
       }
@@ -1531,7 +1545,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName, todayDate]);
   const recurringTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8RecurringPayment>>>(() => ([
-    { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring payment', item.notes || ''] },
+    { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring item', item.notes || ''] },
     { key: 'nextDue', header: 'Next Due', minWidth: 126, maxAutoWidth: 144, sortable: true, sortAccessor: (item) => item.next_due_date || '', contentAccessor: (item) => formatInlineDate(item.next_due_date) },
     { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
     { key: 'frequency', header: 'Frequency', minWidth: 96, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
@@ -2577,7 +2591,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     };
   }, [budgetActualByRowId, budgetRowsSorted]);
   const budgetPlannerRecurringPayments = React.useMemo(() => (
-    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1 && String(rp.direction || 'outflow') === 'outflow')
+    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1)
   ), [filteredRecurringPayments]);
   const selectedDebtorEntries = React.useMemo(() => {
     const debtorId = Number(selectedDebtorId || 0);
@@ -2650,7 +2664,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
   }, [deleteTransaction]);
   const handleDeleteRecurring = React.useCallback((id: number, description: string) => {
-    if (window.confirm(`Delete "${description || 'this recurring payment'}"?`)) {
+    if (window.confirm(`Delete "${description || 'this recurring item'}"?`)) {
       void deleteRecurring(id);
     }
   }, [deleteRecurring]);
@@ -4221,7 +4235,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           {tab === 'recurring' && (
             <div className="accumul8-panel accumul8-panel--viewport-fill">
               <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Recurring Payments</h3>
+                <h3 className="mb-0">Recurring</h3>
                 <div className="accumul8-panel-toolbar-search">
                   <input
                     type="text"
@@ -4229,10 +4243,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     value={listSearchQueryByTab.recurring}
                     onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: e.target.value }))}
                     placeholder="Filter recurring fields"
-                    aria-label="Filter recurring payment fields"
+                    aria-label="Filter recurring fields"
                   />
                 </div>
-                <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Payment</button>
+                <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Item</button>
               </div>
               <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
                 <table
@@ -4253,7 +4267,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     </colgroup>
                   <thead><tr>
                     <Accumul8TableHeaderCell label="Title" columnKey="title" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Next Due" columnKey="nextDue" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
+                    <Accumul8TableHeaderCell label="Next Date" columnKey="nextDue" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
                     <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
@@ -4275,7 +4289,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             </div>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>
-                              {formatInlineText(rp.title, 'Untitled recurring payment')}
+                              {formatRecurringTitle(rp.title)}
                               {rp.notes ? <span className="small text-muted d-block">{rp.notes}</span> : null}
                             </button>
                           )}
@@ -4291,7 +4305,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {activeRecurringRowId === rp.id ? (
                             <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={recurringDraft?.amount ?? rp.amount} onChange={(e) => setRecurringRowDraft(rp, { amount: Number(e.target.value) })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{Number(rp.amount || 0).toFixed(2)}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatRecurringAmount(rp.amount, (rp.direction || 'outflow') as Accumul8Direction)}</button>
                           )}
                         </td>
                         <td>
@@ -4358,7 +4372,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`View ${rp.title}`} title={`View ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateRecurringRow(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring payment?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring item?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
                             {recurringDraft ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy} aria-label={`Save ${rp.title}`} title={`Save ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>
                         </td>
@@ -4366,7 +4380,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     )})}
                     {recurringTable.rows.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="text-center text-muted py-4">No recurring payments matched the current filter.</td>
+                        <td colSpan={9} className="text-center text-muted py-4">No recurring items matched the current filter.</td>
                       </tr>
                     )}
                   </tbody>

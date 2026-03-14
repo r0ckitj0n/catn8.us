@@ -70,6 +70,7 @@ export function Accumul8RecurringModal({
     is_budget_planner: Number(form.is_budget_planner ?? 1),
     notes: String(form.notes || '').trim(),
   }), [form]);
+  const isInflow = form.direction === 'inflow';
   const isDirty = React.useMemo(
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       title: String(initialForm.title || '').trim(),
@@ -118,12 +119,12 @@ export function Accumul8RecurringModal({
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">Edit Recurring Payment</h5>
+            <h5 className="modal-title">{initialForm.title ? 'Edit Recurring Item' : 'Add Recurring Item'}</h5>
             <div className="d-flex align-items-center gap-2">
               <StandardIconButton
                 iconKey="save"
-                ariaLabel="Save recurring payment changes"
-                title={isDirty ? 'Save recurring payment changes' : 'No changes to save'}
+                ariaLabel="Save recurring item changes"
+                title={isDirty ? 'Save recurring item changes' : 'No changes to save'}
                 className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
                 onClick={handleSave}
                 disabled={busy || !isDirty || !form.title.trim() || !form.next_due_date}
@@ -188,16 +189,16 @@ export function Accumul8RecurringModal({
                 </select>
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-recurring-payment-method">Payment Method</label>
+                <label className="form-label" htmlFor="accumul8-recurring-payment-method">{isInflow ? 'Deposit Method' : 'Payment Method'}</label>
                 <select
                   id="accumul8-recurring-payment-method"
                   className="form-select"
                   value={form.payment_method}
                   onChange={(e) => setForm((prev) => ({ ...prev, payment_method: e.target.value as Accumul8PaymentMethod }))}
                 >
-                  <option value="unspecified">Payment Method</option>
-                  <option value="autopay">Auto debit / autopay</option>
-                  <option value="manual">Manual payment</option>
+                  <option value="unspecified">{isInflow ? 'Deposit Method' : 'Payment Method'}</option>
+                  <option value="autopay">{isInflow ? 'Automatic deposit' : 'Auto debit / autopay'}</option>
+                  <option value="manual">{isInflow ? 'Manual deposit' : 'Manual payment'}</option>
                 </select>
               </div>
               <div className="col-md-4">
@@ -213,7 +214,7 @@ export function Accumul8RecurringModal({
                 />
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-recurring-next-due">Next Due</label>
+                <label className="form-label" htmlFor="accumul8-recurring-next-due">Next Date</label>
                 <input
                   id="accumul8-recurring-next-due"
                   className="form-control"
@@ -224,14 +225,14 @@ export function Accumul8RecurringModal({
                 />
               </div>
               <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-recurring-contact">Entity</label>
+                <label className="form-label" htmlFor="accumul8-recurring-contact">{isInflow ? 'Source' : 'Entity'}</label>
                 <select
                   id="accumul8-recurring-contact"
                   className="form-select"
                   value={form.entity_id}
                   onChange={(e) => setForm((prev) => ({ ...prev, entity_id: e.target.value }))}
                 >
-                  <option value="">Entity</option>
+                  <option value="">{isInflow ? 'Source' : 'Entity'}</option>
                   {entities.map((entity) => (
                     <option key={entity.id} value={entity.id}>{entity.display_name}</option>
                   ))}

@@ -391,31 +391,31 @@ export function useAccumul8(
   const createRecurring = React.useCallback(async (form: Accumul8RecurringUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('create_recurring'), form),
-      'Recurring payment saved',
+      'Recurring item saved',
     );
   }, [scopedActionUrl, withReload]);
   const updateRecurring = React.useCallback(async (id: number, form: Accumul8RecurringUpsertRequest) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('update_recurring'), { id, ...form }),
-      'Recurring payment updated',
+      'Recurring item updated',
     );
   }, [scopedActionUrl, withReload]);
   const toggleRecurring = React.useCallback(async (id: number) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('toggle_recurring'), { id }),
-      'Recurring payment updated',
+      'Recurring item updated',
     );
   }, [scopedActionUrl, withReload]);
   const deleteRecurring = React.useCallback(async (id: number) => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('delete_recurring'), { id }),
-      'Recurring payment deleted',
+      'Recurring item deleted',
     );
   }, [scopedActionUrl, withReload]);
   const materializeDueRecurring = React.useCallback(async () => {
     await withReload(
       () => ApiClient.post(scopedActionUrl('materialize_due_recurring'), {}),
-      'Recurring payments posted to ledger',
+      'Recurring items posted to ledger',
     );
   }, [scopedActionUrl, withReload]);
   const ensureBudgetMonth = React.useCallback(async (payload: Accumul8BudgetMonthEnsureRequest) => {

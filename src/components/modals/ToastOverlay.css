@@ -33,6 +33,12 @@
   color: #fff;
 }
 
+.catn8-toast-warning {
+  background: rgba(243, 156, 18, 0.96);
+  color: #1f1300;
+  border-color: rgba(255, 244, 214, 0.7);
+}
+
 .catn8-toast-overlay-mystery {
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(3px);

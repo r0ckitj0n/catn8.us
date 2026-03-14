@@ -60,6 +60,12 @@ function getTodayDateValue(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getPlanningLimitDateValue(): string {
+  const limit = new Date();
+  limit.setUTCDate(limit.getUTCDate() + 90);
+  return limit.toISOString().slice(0, 10);
+}
+
 function formatDateLabel(value: string): string {
   if (!value) {
     return '-';
@@ -153,6 +159,9 @@ export function Accumul8SpreadsheetView({
     [recurringPayments, transactions, visibleMonths],
   );
   const todayDateValue = React.useMemo(() => getTodayDateValue(), []);
+  const planningLimitDateValue = React.useMemo(() => getPlanningLimitDateValue(), []);
+  const planningLimitMonthValue = React.useMemo(() => planningLimitDateValue.slice(0, 7), [planningLimitDateValue]);
+  const isAtPlanningLimit = selectedMonth >= planningLimitMonthValue;
   const balanceBaseByScope = React.useMemo(() => {
     const next: Record<string, number> = { unassigned: NaN };
     accounts.forEach((account) => {
@@ -280,8 +289,13 @@ export function Accumul8SpreadsheetView({
   );
 
   const handleMonthShift = React.useCallback((offset: number) => {
-    onSelectedMonthChange(shiftMonthValue(selectedMonth, offset));
-  }, [onSelectedMonthChange, selectedMonth]);
+    const nextMonth = shiftMonthValue(selectedMonth, offset);
+    if (offset > 0 && nextMonth > planningLimitMonthValue) {
+      onSelectedMonthChange(planningLimitMonthValue);
+      return;
+    }
+    onSelectedMonthChange(nextMonth);
+  }, [onSelectedMonthChange, planningLimitMonthValue, selectedMonth]);
   const selectedPanel = filteredMonthPanels[0] || null;
   const selectedSummary = selectedPanel?.summary || null;
   const budgetTableColumns = React.useMemo<Array<PriorityTableColumn<EditableSpreadsheetRow>>>(() => ([
@@ -398,6 +412,11 @@ export function Accumul8SpreadsheetView({
 
   const lastEnsuredKeyRef = React.useRef<string>('');
   React.useEffect(() => {
+    if (selectedMonth > planningLimitMonthValue) {
+      onSelectedMonthChange(planningLimitMonthValue);
+    }
+  }, [onSelectedMonthChange, planningLimitMonthValue, selectedMonth]);
+  React.useEffect(() => {
     const ensureKey = `${selectedMonth}:${recurringPayments.length}:${transactions.length}`;
     if (lastEnsuredKeyRef.current === ensureKey) {
       return;
@@ -438,13 +457,13 @@ export function Accumul8SpreadsheetView({
             <div className="accumul8-spreadsheet-nav-label">
               {monthOptions.find((option) => option.value === selectedMonth)?.label || selectedMonth}
             </div>
-            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(1)} disabled={busy} aria-label="Next month">
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleMonthShift(1)} disabled={busy || isAtPlanningLimit} aria-label="Next month">
               <i className="bi bi-chevron-right"></i>
             </button>
           </div>
           {selectedSummary ? (
             <div className="accumul8-month-stats">
-              <span>{selectedSummary.recurringCount} recurring</span>
+              <span>{selectedSummary.recurringCount} recurring items</span>
             </div>
           ) : null}
         </div>
@@ -508,7 +527,7 @@ export function Accumul8SpreadsheetView({
                     <tr>
                       <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Paid" columnKey="paidDate" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
-                      <Accumul8TableHeaderCell label="Vendor" columnKey="vendor" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
+                      <Accumul8TableHeaderCell label="Name" columnKey="vendor" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Method" columnKey="method" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
                       <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={budgetTable.sortState} onSort={budgetTable.requestSort} onResizeStart={budgetTable.startResize} />
@@ -727,7 +746,7 @@ export function Accumul8SpreadsheetView({
                       <tr>
                         <td colSpan={11} className="text-center text-muted py-4">
                           {normalizedBudgetFilterQuery === ''
-                            ? 'No budget-planner recurring payments in this month yet.'
+                            ? 'No budget-planner recurring items in this month yet.'
                             : 'No budget items match the current filter.'}
                         </td>
                       </tr>

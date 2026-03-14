@@ -7668,7 +7668,8 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     $sendEmail = !array_key_exists('send_email', $options) || accumul8_normalize_bool($options['send_email']) === 1;
     $createNotificationRule = !array_key_exists('create_notification_rule', $options) || accumul8_normalize_bool($options['create_notification_rule']) === 1;
     $emailOnAttentionOnly = !array_key_exists('email_on_attention_only', $options) || accumul8_normalize_bool($options['email_on_attention_only']) === 1;
-    $runEntityMaintenance = !array_key_exists('run_entity_maintenance', $options) || accumul8_normalize_bool($options['run_entity_maintenance']) === 1;
+    $runEntityMaintenance = array_key_exists('run_entity_maintenance', $options)
+        && accumul8_normalize_bool($options['run_entity_maintenance']) === 1;
 
     accumul8_message_board_post(
         $viewerId,

@@ -12,6 +12,7 @@ $options = getopt('', [
     'send-email::',
     'create-notification-rule::',
     'email-on-attention-only::',
+    'run-entity-maintenance::',
 ]);
 
 $ownerUserId = isset($options['owner-user-id']) ? (int)$options['owner-user-id'] : 0;
@@ -32,6 +33,7 @@ try {
         'send_email' => $options['send-email'] ?? 1,
         'create_notification_rule' => $options['create-notification-rule'] ?? 1,
         'email_on_attention_only' => $options['email-on-attention-only'] ?? 1,
+        'run_entity_maintenance' => $options['run-entity-maintenance'] ?? 0,
     ]);
     fwrite(STDOUT, json_encode([
         'success' => true,

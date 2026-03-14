@@ -5761,6 +5761,7 @@ When you respond:
 - When the user asks for categorization or cleanup help, suggest the most reasonable category based on the available data and clearly say when confidence is low.
 - Use dates, dollar amounts, and account names from the provided data whenever possible.
 - If information is missing or ambiguous, say exactly what is missing instead of inventing details.
+- You can apply supported bookkeeping changes when the user clearly asks for them and the action executor confirms they were applied.
 - Do not claim that you changed ledger records, budgets, categories, balances, reminders, or notifications unless the user explicitly asked for an action and a real tool confirms it happened.
 
 Communication style:
@@ -7995,7 +7996,7 @@ function accumul8_aicountant_extract_actions(int $viewerId, string $userMessage)
         return [];
     }
 
-    if (!preg_match('/\b(rename|update|change|modify|mark|set|balance|reconcile|recategorize|assign|deactivate|activate|sync|synchronize|refresh|download)\b/i', $trimmedMessage)) {
+    if (!preg_match('/\b(rename|update|change|modify|edit|fix|correct|mark|set|balance|reconcile|recategorize|assign|match|delete|remove|clear|deactivate|activate|sync|synchronize|refresh|download)\b/i', $trimmedMessage)) {
         return [];
     }
 
@@ -8008,9 +8009,11 @@ Return JSON only in this shape:
 {"actions":[
   {"type":"rename_entity","entity_id":123,"new_display_name":"..."},
   {"type":"update_recurring_rule","recurring_id":55,"title":"...","amount":100.00,"frequency":"monthly","payment_method":"autopay","next_due_date":"2026-03-20","is_active":1,"account_id":12,"entity_id":8,"notes":"..."},
+  {"type":"update_transaction","transaction_id":999,"transaction_date":"2026-03-13","due_date":"2026-03-20","paid_date":"2026-03-13","entry_type":"bill","description":"...","memo":"...","amount":-452.37,"rta_amount":0,"is_paid":1,"is_reconciled":1,"is_budget_planner":0,"entity_id":8,"account_id":12,"balance_entity_id":0,"debtor_id":0},
   {"type":"update_transaction_entity","transaction_id":999,"entity_id":8},
   {"type":"mark_transaction_paid","transaction_id":999,"is_paid":1,"paid_date":"2026-03-13"},
   {"type":"mark_transaction_reconciled","transaction_id":999,"is_reconciled":1},
+  {"type":"delete_transaction","transaction_id":999},
   {"type":"update_account_balance","account_id":12,"current_balance":1234.56,"available_balance":1200.00},
   {"type":"balance_books"},
   {"type":"reconcile_opening_balances"},
@@ -8021,6 +8024,8 @@ Return JSON only in this shape:
 Rules:
 - Use only the supported action types shown above.
 - Include an action only when the user clearly asked for a real data change.
+- Use {"type":"update_transaction"} when the user clearly asks to fix or edit a specific ledger row and the needed target id/value is available in the snapshot.
+- Use {"type":"delete_transaction"} only when the user clearly asked to delete, remove, or clear a specific ledger row and the target id is unambiguous.
 - Use {"type":"balance_books"} when the user asks you to balance the books, sync connected banks, refresh downloaded bank records, or reconcile balances against the latest bank data.
 - Use {"type":"reconcile_opening_balances"} when the user asks you to fix, infer, or correct opening balances so the ledger matches the bank.
 - Use {"type":"run_watchlist"} when the user asks for proactive monitoring, future-spending watchouts, bill reminders, email alerts, or notification-rule setup. Set send_email to 1 only if the user asked for email. Set create_notification_rule to 1 only if the user asked to save or set up reminders.
@@ -8242,6 +8247,125 @@ function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, arra
                 continue;
             }
 
+            if ($type === 'update_transaction') {
+                $transactionId = (int)($action['transaction_id'] ?? 0);
+                $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if (!$existingTx) {
+                    throw new RuntimeException('Transaction not found');
+                }
+
+                $editPolicy = accumul8_transaction_edit_policy($existingTx);
+                $transactionDate = array_key_exists('transaction_date', $action)
+                    ? accumul8_require_valid_date('transaction_date', $action['transaction_date'])
+                    : accumul8_require_valid_date('transaction_date', $existingTx['transaction_date'] ?? '');
+                $dueDate = array_key_exists('due_date', $action)
+                    ? accumul8_normalize_date($action['due_date'] ?? null)
+                    : accumul8_normalize_date($existingTx['due_date'] ?? null);
+                $paidDate = array_key_exists('paid_date', $action)
+                    ? accumul8_normalize_date($action['paid_date'] ?? null)
+                    : accumul8_normalize_date($existingTx['paid_date'] ?? null);
+                $entryType = array_key_exists('entry_type', $action)
+                    ? accumul8_validate_enum('entry_type', $action['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual')
+                    : accumul8_validate_enum('entry_type', $existingTx['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
+                $description = array_key_exists('description', $action)
+                    ? accumul8_normalize_text($action['description'] ?? '', 255)
+                    : accumul8_normalize_text($existingTx['description'] ?? '', 255);
+                $memo = array_key_exists('memo', $action)
+                    ? accumul8_normalize_text($action['memo'] ?? '', 5000)
+                    : accumul8_normalize_text($existingTx['memo'] ?? '', 5000);
+                $amount = array_key_exists('amount', $action)
+                    ? accumul8_normalize_amount($action['amount'] ?? 0)
+                    : accumul8_normalize_amount($existingTx['amount'] ?? 0);
+                $rtaAmount = array_key_exists('rta_amount', $action)
+                    ? accumul8_normalize_amount($action['rta_amount'] ?? 0)
+                    : accumul8_normalize_amount($existingTx['rta_amount'] ?? 0);
+                $isPaid = array_key_exists('is_paid', $action)
+                    ? accumul8_normalize_bool($action['is_paid'] ?? 0)
+                    : accumul8_normalize_bool($existingTx['is_paid'] ?? 0);
+                $isReconciled = array_key_exists('is_reconciled', $action)
+                    ? accumul8_normalize_bool($action['is_reconciled'] ?? 0)
+                    : accumul8_normalize_bool($existingTx['is_reconciled'] ?? 0);
+                $isBudgetPlanner = array_key_exists('is_budget_planner', $action)
+                    ? accumul8_normalize_bool($action['is_budget_planner'] ?? 0)
+                    : accumul8_normalize_bool($existingTx['is_budget_planner'] ?? 0);
+                $accountId = array_key_exists('account_id', $action)
+                    ? accumul8_owned_id_or_null('accounts', $viewerId, (int)($action['account_id'] ?? 0))
+                    : accumul8_owned_id_or_null('accounts', $viewerId, (int)($existingTx['account_id'] ?? 0));
+                $entityId = array_key_exists('entity_id', $action)
+                    ? accumul8_owned_id_or_null('entities', $viewerId, (int)($action['entity_id'] ?? 0))
+                    : accumul8_owned_id_or_null('entities', $viewerId, (int)($existingTx['entity_id'] ?? 0));
+
+                if ($description === '') {
+                    throw new RuntimeException('Transaction description is required');
+                }
+
+                $existingTransactionDate = accumul8_normalize_date($existingTx['transaction_date'] ?? null);
+                $existingDueDate = accumul8_normalize_date($existingTx['due_date'] ?? null);
+                $existingEntryType = accumul8_validate_enum('entry_type', $existingTx['entry_type'] ?? 'manual', ['manual', 'auto', 'transfer', 'deposit', 'bill'], 'manual');
+                $existingDescription = accumul8_normalize_text($existingTx['description'] ?? '', 255);
+                $existingAmount = accumul8_normalize_amount($existingTx['amount'] ?? 0);
+                $existingRtaAmount = accumul8_normalize_amount($existingTx['rta_amount'] ?? 0);
+                $existingAccountId = accumul8_owned_id_or_null('accounts', $viewerId, (int)($existingTx['account_id'] ?? 0));
+                $coreChanged = $transactionDate !== $existingTransactionDate
+                    || $dueDate !== $existingDueDate
+                    || $entryType !== $existingEntryType
+                    || $description !== $existingDescription
+                    || abs($amount - $existingAmount) > 0.01
+                    || abs($rtaAmount - $existingRtaAmount) > 0.01
+                    || (int)($accountId ?? 0) !== (int)($existingAccountId ?? 0);
+                if ($coreChanged && !$editPolicy['can_edit_core_fields']) {
+                    throw new RuntimeException('Core fields are read-only for this ' . $editPolicy['source_label'] . ' transaction');
+                }
+
+                $existingPaidDate = accumul8_normalize_date($existingTx['paid_date'] ?? null);
+                $existingIsPaid = accumul8_normalize_bool($existingTx['is_paid'] ?? 0);
+                if (($isPaid !== $existingIsPaid || $paidDate !== $existingPaidDate) && !$editPolicy['can_edit_paid_state']) {
+                    throw new RuntimeException('Paid state is read-only for this ' . $editPolicy['source_label'] . ' transaction');
+                }
+
+                $existingIsBudgetPlanner = accumul8_normalize_bool($existingTx['is_budget_planner'] ?? 0);
+                if ($isBudgetPlanner !== $existingIsBudgetPlanner && !$editPolicy['can_edit_budget_planner']) {
+                    throw new RuntimeException('Budget planner state is read-only for this ' . $editPolicy['source_label'] . ' transaction');
+                }
+
+                $contactId = $entityId !== null
+                    ? accumul8_entity_contact_id_or_null($viewerId, $entityId)
+                    : accumul8_owned_id_or_null('contacts', $viewerId, (int)($existingTx['contact_id'] ?? 0));
+
+                Database::execute(
+                    'UPDATE accumul8_transactions
+                     SET account_id = ?, entity_id = ?, contact_id = ?, transaction_date = ?, due_date = ?, entry_type = ?, description = ?,
+                         memo = ?, amount = ?, rta_amount = ?, is_paid = ?, is_reconciled = ?, is_budget_planner = ?, paid_date = ?
+                     WHERE id = ? AND owner_user_id = ?',
+                    [
+                        $accountId,
+                        $entityId,
+                        $contactId,
+                        $transactionDate,
+                        $dueDate,
+                        $entryType,
+                        $description,
+                        $memo === '' ? null : $memo,
+                        $amount,
+                        $rtaAmount,
+                        $isPaid,
+                        $isReconciled,
+                        $isBudgetPlanner,
+                        $paidDate,
+                        $transactionId,
+                        $viewerId,
+                    ]
+                );
+
+                $updatedTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if ($updatedTx) {
+                    accumul8_sync_recurring_template_from_transaction($viewerId, $existingTx, $updatedTx);
+                }
+                accumul8_recompute_running_balance($viewerId);
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Updated transaction #' . $transactionId . ' (' . $description . ').'];
+                continue;
+            }
+
             if ($type === 'mark_transaction_paid') {
                 $transactionId = (int)($action['transaction_id'] ?? 0);
                 $isPaid = accumul8_normalize_bool($action['is_paid'] ?? 1);
@@ -8284,6 +8408,22 @@ function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, arra
                     [$isReconciled, $transactionId, $viewerId]
                 );
                 $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Marked transaction #' . $transactionId . ' as ' . ($isReconciled === 1 ? 'reconciled' : 'unreconciled') . '.'];
+                continue;
+            }
+
+            if ($type === 'delete_transaction') {
+                $transactionId = (int)($action['transaction_id'] ?? 0);
+                $existingTx = accumul8_get_transaction_row($viewerId, $transactionId);
+                if (!$existingTx) {
+                    throw new RuntimeException('Transaction not found');
+                }
+                $editPolicy = accumul8_transaction_edit_policy($existingTx);
+                if (!$editPolicy['can_delete']) {
+                    throw new RuntimeException(ucfirst($editPolicy['source_label']) . ' transactions cannot be deleted here');
+                }
+                Database::execute('DELETE FROM accumul8_transactions WHERE id = ? AND owner_user_id = ?', [$transactionId, $viewerId]);
+                accumul8_recompute_running_balance($viewerId);
+                $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Deleted transaction #' . $transactionId . '.'];
                 continue;
             }
 
@@ -8423,7 +8563,7 @@ function accumul8_aicountant_generate_reply(int $viewerId, array $conversation, 
         . "\nCurrent user request:\n"
         . $userMessage
         . $actionSummaryText
-        . "\n\nAnswer as AIcountant. Be specific about dates, balances, and risks when the data supports it. If the available data is not enough, say what to review next.";
+        . "\n\nAnswer as AIcountant. Be specific about dates, balances, and risks when the data supports it. If bookkeeping actions were executed, report them plainly instead of saying you lack write access. If the available data is not enough, say what to review next.";
 
     $provider = (string)($aiConfig['provider'] ?? 'openai');
     $model = (string)($aiConfig['model'] ?? '');

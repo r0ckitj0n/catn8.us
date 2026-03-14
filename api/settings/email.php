@@ -66,8 +66,16 @@ if ($action === 'test_send') {
     try {
         catn8_send_email($toEmail, $toName, $subject, $html);
     } catch (Throwable $e) {
-        error_log('[settings/email test_send] ' . $e->getMessage());
-        catn8_json_response(['success' => false, 'error' => 'Failed to send test email'], 500);
+        catn8_log_error('[settings/email test_send] failed', [
+            'to_email' => $toEmail,
+            'smtp_host' => (string)($cfg['host'] ?? ''),
+            'smtp_user' => (string)($cfg['user'] ?? ''),
+            'error' => $e->getMessage(),
+        ]);
+        catn8_json_response([
+            'success' => false,
+            'error' => 'Failed to send test email: ' . $e->getMessage(),
+        ], 500);
     }
 
     $payload['message'] = 'Test email sent to ' . $toEmail . '.';

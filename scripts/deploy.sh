@@ -92,7 +92,8 @@ SKIP_BUILD="${CATN8_SKIP_RELEASE_BUILD:-0}"
 SKIP_TYPECHECK="${CATN8_SKIP_TYPECHECK:-0}"
 PURGE="${CATN8_PURGE_REMOTE:-0}"
 STRICT_VERIFY="${CATN8_STRICT_VERIFY:-0}"
-UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-0}"
+UPLOAD_VENDOR="${CATN8_UPLOAD_VENDOR:-}"
+UPLOAD_VENDOR_REASON=""
 # Comma-separated image glob paths under images/ to exclude from uploads in preserve mode.
 # Defaults target directories commonly populated by live AI/user tooling.
 IMAGE_SYNC_EXCLUDE_GLOBS="${CATN8_IMAGE_SYNC_EXCLUDE_GLOBS:-images/mystery/**,images/build-wizard/**,images/wordsearch/**,images/backgrounds/**}"
@@ -108,6 +109,34 @@ PRESERVE_IMAGES=1
 PURGE_IMAGES=0
 CODE_ONLY=0
 BACKUP_LIVE="${CATN8_BACKUP_BEFORE_DEPLOY:-0}"
+
+detect_email_related_vendor_upload() {
+  local email_related_paths=(
+    "api/emailer.php"
+    "api/settings/email.php"
+    "api/auth/register.php"
+    "api/auth/request_password_reset.php"
+    "src/components/modals/EmailConfigModal.tsx"
+    "src/components/pages/SettingsPage.tsx"
+    "src/types/emailSettings.ts"
+    "composer.json"
+    "composer.lock"
+  )
+
+  if ! command -v git >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if git status --short -- "${email_related_paths[@]}" | grep -q .; then
+    return 0
+  fi
+
+  return 1
+}
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -187,6 +216,20 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -n "${UPLOAD_VENDOR}" ]]; then
+  if [[ "${UPLOAD_VENDOR}" == "1" ]]; then
+    UPLOAD_VENDOR_REASON="explicitly enabled by CATN8_UPLOAD_VENDOR=1"
+  else
+    UPLOAD_VENDOR_REASON="explicitly disabled by CATN8_UPLOAD_VENDOR=${UPLOAD_VENDOR}"
+  fi
+elif detect_email_related_vendor_upload; then
+  UPLOAD_VENDOR="1"
+  UPLOAD_VENDOR_REASON="auto-enabled because email-related files or Composer manifests changed"
+else
+  UPLOAD_VENDOR="0"
+  UPLOAD_VENDOR_REASON="no email-related changes detected"
+fi
 
 if [[ "${PULL_MISSING_ENV_REQUESTED}" == "1" && "${PULL_MISSING_EXPLICIT}" != "1" ]]; then
   echo "Info: Ignoring CATN8_PULL_MISSING_FROM_LIVE=1 (requires explicit --pull-missing-from-live flag)."
@@ -525,7 +568,7 @@ EOL
   fi
   # Optional: upload Composer vendor tree (off by default to keep deploys lean).
   if [ "$MODE" != "env-only" ] && [ "${UPLOAD_VENDOR}" = "1" ]; then
-    echo -e "${GREEN}📦 Uploading vendor/ (CATN8_UPLOAD_VENDOR=1)...${NC}"
+    echo -e "${GREEN}📦 Uploading vendor/ (${UPLOAD_VENDOR_REASON})...${NC}"
     cat > deploy_vendor.txt << EOL
 set sftp:auto-confirm yes
 set ssl:verify-certificate no
@@ -545,7 +588,7 @@ EOL
     fi
     rm -f deploy_vendor.txt
   else
-    echo -e "${YELLOW}⏭️  Skipping vendor sync (set CATN8_UPLOAD_VENDOR=1 to enable)${NC}"
+    echo -e "${YELLOW}⏭️  Skipping vendor sync (${UPLOAD_VENDOR_REASON})${NC}"
   fi
   # Optional: Upload maintenance utility (disabled by default to avoid mkdir errors on some hosts)
   if [ "${CATN8_UPLOAD_MAINTENANCE:-0}" = "1" ]; then

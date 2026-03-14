@@ -8,6 +8,8 @@ import {
   Accumul8AccountUpsertRequest,
   Accumul8AccessibleOwner,
   Accumul8BudgetRow,
+  Accumul8BudgetMonthEnsureRequest,
+  Accumul8BudgetMonthEnsureResponse,
   Accumul8BudgetRowUpsertRequest,
   Accumul8BillItem,
   Accumul8BankConnectionDeleteRequest,
@@ -414,6 +416,11 @@ export function useAccumul8(
     await withReload(
       () => ApiClient.post(scopedActionUrl('materialize_due_recurring'), {}),
       'Recurring payments posted to ledger',
+    );
+  }, [scopedActionUrl, withReload]);
+  const ensureBudgetMonth = React.useCallback(async (payload: Accumul8BudgetMonthEnsureRequest) => {
+    return withReload<Accumul8BudgetMonthEnsureResponse>(
+      () => ApiClient.post<Accumul8BudgetMonthEnsureResponse>(scopedActionUrl('ensure_budget_month'), payload),
     );
   }, [scopedActionUrl, withReload]);
   const createTransaction = React.useCallback(async (form: Accumul8TransactionUpsertRequest) => {
@@ -937,6 +944,7 @@ export function useAccumul8(
     toggleRecurring,
     deleteRecurring,
     materializeDueRecurring,
+    ensureBudgetMonth,
     createTransaction,
     updateTransaction,
     deleteTransaction,

@@ -4,7 +4,8 @@ import {
   Accumul8Entity,
   Accumul8PaymentMethod,
   Accumul8RecurringPayment,
-  Accumul8RecurringUpsertRequest,
+  Accumul8Transaction,
+  Accumul8TransactionUpsertRequest,
 } from '../../types/accumul8';
 import {
   Accumul8SpreadsheetMonthRow,
@@ -25,17 +26,18 @@ interface Accumul8SpreadsheetViewProps {
   busy: boolean;
   selectedMonth: string;
   recurringPayments: Accumul8RecurringPayment[];
+  transactions: Accumul8Transaction[];
   entities: Accumul8Entity[];
   accounts: Accumul8Account[];
   onSelectedMonthChange: (monthValue: string) => void;
-  onUpdateRecurring: (id: number, form: Accumul8RecurringUpsertRequest) => Promise<void>;
+  onEnsureBudgetMonth: (monthValue: string) => Promise<void>;
+  onUpdateTransaction: (id: number, form: Accumul8TransactionUpsertRequest) => Promise<void>;
   onDeleteRecurring: (id: number, description: string) => void;
   onOpenRecurring: (id: number) => void;
 }
 
 interface EditableSpreadsheetRow extends Accumul8SpreadsheetMonthRow {
   original_due_date: string;
-  rta: number;
   balance: number;
   vendor_input: string;
 }
@@ -102,10 +104,12 @@ export function Accumul8SpreadsheetView({
   busy,
   selectedMonth,
   recurringPayments,
+  transactions,
   entities,
   accounts,
   onSelectedMonthChange,
-  onUpdateRecurring,
+  onEnsureBudgetMonth,
+  onUpdateTransaction,
   onDeleteRecurring,
   onOpenRecurring,
 }: Accumul8SpreadsheetViewProps) {
@@ -145,8 +149,8 @@ export function Accumul8SpreadsheetView({
   );
 
   const monthPanels = React.useMemo(
-    () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, monthValue)),
-    [recurringPayments, visibleMonths],
+    () => visibleMonths.map((monthValue) => buildSpreadsheetMonthData(recurringPayments, transactions, monthValue)),
+    [recurringPayments, transactions, visibleMonths],
   );
   const todayDateValue = React.useMemo(() => getTodayDateValue(), []);
   const balanceBaseByScope = React.useMemo(() => {
@@ -174,13 +178,12 @@ export function Accumul8SpreadsheetView({
     const allRows: EditableSpreadsheetRow[] = [];
     let cursor = earliestMonth;
     while (cursor <= latestMonth) {
-      buildSpreadsheetMonthData(recurringPayments, cursor).rows.forEach((row) => {
+      buildSpreadsheetMonthData(recurringPayments, transactions, cursor).rows.forEach((row) => {
         const draft = draftRowByKey[row.rowKey] || null;
         allRows.push({
           ...row,
           original_due_date: row.due_date,
           vendor_input: row.entity_name || row.contact_name || row.title || '',
-          rta: Number(rowRtaByKey[row.rowKey] || 0),
           balance: 0,
           ...draft,
         });
@@ -188,7 +191,7 @@ export function Accumul8SpreadsheetView({
       cursor = shiftMonthValue(cursor, 1);
     }
     return allRows.sort(compareRowTimeline);
-  }, [draftRowByKey, recurringPayments, rowRtaByKey, todayDateValue, visibleMonths]);
+  }, [draftRowByKey, recurringPayments, rowRtaByKey, todayDateValue, transactions, visibleMonths]);
   const monthPanelsWithProjection = React.useMemo(
     () => {
       const balanceByRowKey: Record<string, number> = {};
@@ -214,7 +217,7 @@ export function Accumul8SpreadsheetView({
         for (let index = pastRows.length - 1; index >= 0; index -= 1) {
           const row = pastRows[index];
           balanceByRowKey[row.rowKey] = Number((baseBalance - cumulativeLater).toFixed(2));
-          cumulativeLater = Number((cumulativeLater + Number(row.amount || 0) + Number(row.rta || 0)).toFixed(2));
+          cumulativeLater = Number((cumulativeLater + Number(row.amount || 0) + Number(row.rta_amount || 0)).toFixed(2));
         }
 
         const todayRows = scopeRows.filter((row) => row.due_date === todayDateValue).sort(compareRowTimeline);
@@ -225,7 +228,7 @@ export function Accumul8SpreadsheetView({
         const futureRows = scopeRows.filter((row) => row.due_date > todayDateValue).sort(compareRowTimeline);
         let cumulativeFuture = 0;
         futureRows.forEach((row) => {
-          cumulativeFuture = Number((cumulativeFuture + Number(row.amount || 0) + Number(row.rta || 0)).toFixed(2));
+          cumulativeFuture = Number((cumulativeFuture + Number(row.amount || 0) + Number(row.rta_amount || 0)).toFixed(2));
           balanceByRowKey[row.rowKey] = Number((baseBalance + cumulativeFuture).toFixed(2));
         });
       });
@@ -238,7 +241,7 @@ export function Accumul8SpreadsheetView({
             ...row,
             original_due_date: row.due_date,
             vendor_input: row.entity_name || row.contact_name || row.title || '',
-            rta: Number(rowRtaByKey[row.rowKey] || 0),
+            rta_amount: Number(rowRtaByKey[row.rowKey] ?? row.rta_amount ?? 0),
             balance: Number.isFinite(balanceByRowKey[row.rowKey]) ? balanceByRowKey[row.rowKey] : NaN,
             ...draft,
           };
@@ -268,7 +271,7 @@ export function Accumul8SpreadsheetView({
           paymentMethodLabels[row.payment_method] || row.payment_method,
           row.frequency,
           formatCurrency(Number(row.amount || 0)),
-          Number(row.rta || 0).toFixed(2),
+          Number(row.rta_amount || 0).toFixed(2),
           Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '',
           row.notes,
         ].some((value) => String(value || '').toLowerCase().includes(normalizedBudgetFilterQuery))),
@@ -289,7 +292,7 @@ export function Accumul8SpreadsheetView({
     { key: 'method', header: 'Method', minWidth: 90, maxAutoWidth: 126, priority: 3, sortable: true, sortAccessor: (row) => paymentMethodLabels[row.payment_method] || row.payment_method, contentAccessor: (row) => paymentMethodLabels[row.payment_method] || 'Unspecified' },
     { key: 'frequency', header: 'Frequency', minWidth: 92, maxAutoWidth: 114, priority: 3, sortable: true, sortAccessor: (row) => row.frequency, contentAccessor: (row) => formatEditableValue(row.frequency, '-') },
     { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, sortAccessor: (row) => Number(row.amount || 0), contentAccessor: (row) => formatCurrency(Number(row.amount || 0)) },
-    { key: 'rta', header: 'RTA', minWidth: 82, maxAutoWidth: 100, sortable: true, sortAccessor: (row) => Number(row.rta || 0), contentAccessor: (row) => Number(row.rta || 0).toFixed(2) },
+    { key: 'rta', header: 'RTA', minWidth: 82, maxAutoWidth: 100, sortable: true, sortAccessor: (row) => Number(row.rta_amount || 0), contentAccessor: (row) => Number(row.rta_amount || 0).toFixed(2) },
     { key: 'balance', header: 'Bal', minWidth: 104, maxAutoWidth: 132, sortable: true, sortAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0) : Number.NEGATIVE_INFINITY, contentAccessor: (row) => Number.isFinite(row.balance) ? Number(row.balance || 0).toFixed(2) : '-' },
     { key: 'notes', header: 'Notes', minWidth: 180, maxAutoWidth: 300, priority: 4, sortable: true, sortAccessor: (row) => row.notes || '', contentAccessor: (row) => formatEditableValue(row.notes) },
     { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, resizable: true, contentAccessor: () => 'Actions' },
@@ -300,22 +303,20 @@ export function Accumul8SpreadsheetView({
     columns: budgetTableColumns,
   });
 
-  const handleRowRtaChange = React.useCallback((rowKey: string, rawValue: string) => {
+  const handleRowRtaChange = React.useCallback((row: EditableSpreadsheetRow, rawValue: string) => {
     const parsed = rawValue === '' ? 0 : Number(rawValue);
+    const normalized = Number.isFinite(parsed) ? parsed : 0;
     setRowRtaByKey((prev) => ({
       ...prev,
-      [rowKey]: Number.isFinite(parsed) ? parsed : 0,
+      [row.rowKey]: normalized,
     }));
     setDraftRowByKey((prev) => {
-      const existing = prev[rowKey];
-      if (!existing) {
-        return prev;
-      }
       return {
         ...prev,
-        [rowKey]: {
-          ...existing,
-          rta: Number.isFinite(parsed) ? parsed : 0,
+        [row.rowKey]: {
+          ...row,
+          ...prev[row.rowKey],
+          rta_amount: normalized,
         },
       };
     });
@@ -341,8 +342,8 @@ export function Accumul8SpreadsheetView({
     delete inlineRowRefs.current[rowKey];
   }, []);
   const saveRow = React.useCallback(async (row: EditableSpreadsheetRow) => {
-    const recurring = recurringPayments.find((item) => item.id === row.recurring_id);
-    if (!recurring) {
+    const transaction = transactions.find((item) => item.id === row.transaction_id);
+    if (!transaction) {
       return;
     }
 
@@ -366,23 +367,26 @@ export function Accumul8SpreadsheetView({
       return Math.round((next - previous) / 86400000);
     })();
 
-    const nextDueDate = dayDelta === 0
-      ? recurring.next_due_date
-      : shiftDateByDays(recurring.next_due_date, dayDelta);
+    const nextDueDate = dayDelta === 0 ? row.due_date : shiftDateByDays(row.original_due_date, dayDelta);
 
-    await onUpdateRecurring(row.recurring_id, {
-      title: vendorName || row.title || recurring.title,
-      direction: row.direction === 'inflow' ? 'inflow' : 'outflow',
-      amount: Math.abs(Number(row.amount || 0)),
-      frequency: (row.frequency || recurring.frequency) as 'daily' | 'weekly' | 'biweekly' | 'monthly',
-      payment_method: (row.payment_method || recurring.payment_method) as Accumul8PaymentMethod,
-      interval_count: Number(recurring.interval_count || 1),
-      next_due_date: nextDueDate,
+    await onUpdateTransaction(row.transaction_id, {
+      transaction_date: nextDueDate,
+      due_date: nextDueDate,
       paid_date: row.paid_date || '',
+      entry_type: transaction.entry_type,
+      description: vendorName || row.title || transaction.description,
+      memo: row.notes || '',
+      amount: Number(row.amount || 0),
+      rta_amount: Number(row.rta_amount || 0),
+      is_paid: row.paid_date ? 1 : Number(row.is_paid || 0),
+      is_reconciled: Number(transaction.is_reconciled || 0),
+      is_budget_planner: Number(transaction.is_budget_planner || 0),
       entity_id: entityId,
+      balance_entity_id: transaction.balance_entity_id ?? null,
+      contact_id: transaction.contact_id ?? null,
       account_id: row.account_id ?? null,
-      is_budget_planner: Number(recurring.is_budget_planner || 0),
-      notes: row.notes || '',
+      debtor_id: transaction.debtor_id ?? null,
+      skip_recurring_template_sync: 1,
     });
     setDraftRowByKey((prev) => {
       const next = { ...prev };
@@ -390,7 +394,17 @@ export function Accumul8SpreadsheetView({
       return next;
     });
     setActiveRowKey((current) => (current === row.rowKey ? null : current));
-  }, [entities, onUpdateRecurring, recurringPayments]);
+  }, [entities, onUpdateTransaction, transactions]);
+
+  const lastEnsuredKeyRef = React.useRef<string>('');
+  React.useEffect(() => {
+    const ensureKey = `${selectedMonth}:${recurringPayments.length}:${transactions.length}`;
+    if (lastEnsuredKeyRef.current === ensureKey) {
+      return;
+    }
+    lastEnsuredKeyRef.current = ensureKey;
+    void onEnsureBudgetMonth(selectedMonth);
+  }, [onEnsureBudgetMonth, recurringPayments.length, selectedMonth, transactions.length]);
 
   React.useEffect(() => {
     if (!activeRowKey || typeof document === 'undefined') {
@@ -592,35 +606,20 @@ export function Accumul8SpreadsheetView({
                         </td>
                         <td>
                           {activeRowKey === row.rowKey ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={row.payment_method}
-                              onChange={(event) => setRowDraft(row, { payment_method: event.target.value })}
-                              disabled={busy}
-                            >
-                              {Object.entries(paymentMethodLabels).map(([value, label]) => (
-                                <option key={value} value={value}>{label}</option>
-                              ))}
-                            </select>
+                            <span className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--static">
+                              {paymentMethodLabels[row.payment_method as Accumul8PaymentMethod] || 'Unspecified'}
+                            </span>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
-                              {paymentMethodLabels[row.payment_method] || 'Unspecified'}
+                              {paymentMethodLabels[row.payment_method as Accumul8PaymentMethod] || 'Unspecified'}
                             </button>
                           )}
                         </td>
                         <td>
                           {activeRowKey === row.rowKey ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={row.frequency}
-                              onChange={(event) => setRowDraft(row, { frequency: event.target.value })}
-                              disabled={busy}
-                            >
-                              <option value="daily">Daily</option>
-                              <option value="weekly">Weekly</option>
-                              <option value="biweekly">Biweekly</option>
-                              <option value="monthly">Monthly</option>
-                            </select>
+                            <span className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--static">
+                              {formatEditableValue(row.frequency, '-')}
+                            </span>
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRow(row.rowKey)} disabled={busy}>
                               {formatEditableValue(row.frequency, '-')}
@@ -652,14 +651,14 @@ export function Accumul8SpreadsheetView({
                               className="form-control form-control-sm accumul8-month-table-input"
                               type="number"
                               step="0.01"
-                              value={row.rta}
-                              onChange={(event) => handleRowRtaChange(row.rowKey, event.target.value)}
+                              value={row.rta_amount}
+                              onChange={(event) => handleRowRtaChange(row, event.target.value)}
                               disabled={busy}
                               aria-label={`${row.title} real time adjustment`}
                             />
                           ) : (
                             <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRow(row.rowKey)} disabled={busy}>
-                              {Number(row.rta || 0).toFixed(2)}
+                              {Number(row.rta_amount || 0).toFixed(2)}
                             </button>
                           )}
                         </td>
@@ -684,7 +683,7 @@ export function Accumul8SpreadsheetView({
                               type="button"
                               className="btn btn-sm btn-outline-primary accumul8-icon-action"
                               onClick={() => onOpenRecurring(row.recurring_id)}
-                              disabled={busy}
+                              disabled={busy || row.recurring_id <= 0}
                               aria-label={`View ${row.title || 'row'}`}
                               title={`View ${row.title || 'row'}`}
                             >
@@ -704,7 +703,7 @@ export function Accumul8SpreadsheetView({
                               type="button"
                               className="btn btn-sm btn-outline-danger accumul8-icon-action"
                               onClick={() => onDeleteRecurring(row.recurring_id, row.title)}
-                              disabled={busy}
+                              disabled={busy || row.recurring_id <= 0}
                               aria-label={`Delete ${row.title}`}
                             >
                               <i className="bi bi-trash"></i>

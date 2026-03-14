@@ -762,6 +762,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     createTransaction,
     updateTransaction,
     deleteTransaction,
+    ensureBudgetMonth,
     createBudgetRow,
     updateBudgetRow,
     deleteBudgetRow,
@@ -3507,10 +3508,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   busy={busy}
                   selectedMonth={budgetMonth}
                   recurringPayments={budgetPlannerRecurringPayments}
+                  transactions={transactions}
                   entities={contactEntities}
                   accounts={scopedAccounts}
                   onSelectedMonthChange={setBudgetMonth}
-                  onUpdateRecurring={updateRecurring}
+                  onEnsureBudgetMonth={async (monthValue) => { await ensureBudgetMonth({ month_value: monthValue }); }}
+                  onUpdateTransaction={updateTransaction}
                   onDeleteRecurring={handleDeleteRecurring}
                   onOpenRecurring={beginEditRecurring}
                 />

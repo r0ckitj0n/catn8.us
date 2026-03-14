@@ -13332,6 +13332,211 @@ function accumul8_next_due_date(string $currentDate, string $frequency, int $int
     return date('Y-m-d', strtotime('+' . $intervalCount . ' day', $base));
 }
 
+function accumul8_normalize_month_value(?string $monthValue): ?string
+{
+    $normalized = trim((string)$monthValue);
+    if (!preg_match('/^\d{4}-\d{2}$/', $normalized)) {
+        return null;
+    }
+
+    [$year, $month] = array_map('intval', explode('-', $normalized));
+    if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+        return null;
+    }
+
+    return sprintf('%04d-%02d', $year, $month);
+}
+
+function accumul8_month_start(string $monthValue): ?DateTimeImmutable
+{
+    $normalized = accumul8_normalize_month_value($monthValue);
+    if ($normalized === null) {
+        return null;
+    }
+
+    return DateTimeImmutable::createFromFormat('!Y-m-d', $normalized . '-01', new DateTimeZone('UTC')) ?: null;
+}
+
+function accumul8_month_end(string $monthValue): ?DateTimeImmutable
+{
+    $monthStart = accumul8_month_start($monthValue);
+    if (!$monthStart) {
+        return null;
+    }
+
+    return $monthStart->modify('last day of this month');
+}
+
+function accumul8_month_range(string $startMonth, string $endMonth): array
+{
+    $start = accumul8_month_start($startMonth);
+    $end = accumul8_month_start($endMonth);
+    if (!$start || !$end) {
+        return [];
+    }
+
+    if ($start > $end) {
+        [$start, $end] = [$end, $start];
+    }
+
+    $months = [];
+    $cursor = $start;
+    $guard = 0;
+    while ($cursor <= $end && $guard < 240) {
+        $months[] = $cursor->format('Y-m');
+        $cursor = $cursor->modify('+1 month');
+        $guard++;
+    }
+
+    return $months;
+}
+
+function accumul8_shift_occurrence_date(DateTimeImmutable $base, string $frequency, int $intervalCount, int $direction): DateTimeImmutable
+{
+    $safeInterval = max(1, min(365, $intervalCount));
+    $multiplier = $direction >= 0 ? 1 : -1;
+    return match ($frequency) {
+        'daily' => $base->modify(($safeInterval * $multiplier) . ' day'),
+        'weekly' => $base->modify(($safeInterval * 7 * $multiplier) . ' day'),
+        'biweekly' => $base->modify(($safeInterval * 14 * $multiplier) . ' day'),
+        default => $base->modify(($safeInterval * $multiplier) . ' month'),
+    };
+}
+
+function accumul8_recurring_occurrences_for_month(array $recurring, string $monthValue): array
+{
+    $anchor = DateTimeImmutable::createFromFormat('!Y-m-d', (string)($recurring['next_due_date'] ?? ''), new DateTimeZone('UTC'));
+    $monthStart = accumul8_month_start($monthValue);
+    $monthEnd = accumul8_month_end($monthValue);
+    if (!$anchor || !$monthStart || !$monthEnd) {
+        return [];
+    }
+
+    $frequency = (string)($recurring['frequency'] ?? 'monthly');
+    $intervalCount = (int)($recurring['interval_count'] ?? 1);
+    $dates = [];
+    $cursor = $anchor;
+    $guard = 0;
+
+    while ($cursor > $monthEnd && $guard < 240) {
+        $cursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, -1);
+        $guard++;
+    }
+    while (accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, 1) <= $monthEnd && $guard < 480) {
+        $cursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, 1);
+        $guard++;
+    }
+
+    $guard = 0;
+    while ($cursor >= $monthStart && $cursor <= $monthEnd && $guard < 240) {
+        $dates[] = $cursor->format('Y-m-d');
+        $cursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, -1);
+        $guard++;
+    }
+
+    return array_reverse($dates);
+}
+
+function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUserId, string $selectedMonth): int
+{
+    $normalizedMonth = accumul8_normalize_month_value($selectedMonth);
+    if ($normalizedMonth === null) {
+        throw new RuntimeException('Invalid month_value');
+    }
+
+    $currentMonth = gmdate('Y-m');
+    $monthsToEnsure = accumul8_month_range($currentMonth, $normalizedMonth);
+    if ($monthsToEnsure === []) {
+        $monthsToEnsure = [$normalizedMonth];
+    }
+    if (strcmp($normalizedMonth, $currentMonth) < 0) {
+        $monthsToEnsure = [$normalizedMonth];
+    }
+
+    $dueRows = Database::queryAll(
+        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, paid_date, notes, is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'payment_method', "'unspecified' AS payment_method") . '
+         FROM accumul8_recurring_payments
+         WHERE owner_user_id = ?
+           AND is_active = 1
+           AND is_budget_planner = 1
+         ORDER BY id ASC',
+        [$viewerId]
+    );
+
+    $created = 0;
+    foreach ($dueRows as $row) {
+        $rpId = (int)($row['id'] ?? 0);
+        if ($rpId <= 0) {
+            continue;
+        }
+
+        $entityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
+        if ($entityId <= 0) {
+            $entityId = (int)(accumul8_recurring_entity_id_or_create($viewerId, $row) ?? 0);
+        }
+        if ($entityId > 0 && accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
+            Database::execute(
+                'UPDATE accumul8_recurring_payments SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
+                [$entityId, $rpId, $viewerId]
+            );
+        }
+
+        foreach ($monthsToEnsure as $monthValue) {
+            foreach (accumul8_recurring_occurrences_for_month($row, $monthValue) as $occurrenceDate) {
+                $existing = Database::queryOne(
+                    'SELECT id
+                     FROM accumul8_transactions
+                     WHERE owner_user_id = ?
+                       AND recurring_payment_id = ?
+                       AND due_date = ?
+                     LIMIT 1',
+                    [$viewerId, $rpId, $occurrenceDate]
+                );
+                if ($existing) {
+                    continue;
+                }
+
+                $direction = (string)($row['direction'] ?? 'outflow');
+                $baseAmount = (float)($row['amount'] ?? 0);
+                $amount = $direction === 'inflow' ? abs($baseAmount) : -abs($baseAmount);
+                $paidDate = accumul8_normalize_date($row['paid_date'] ?? null);
+                $isPaid = $paidDate === $occurrenceDate ? 1 : 0;
+
+                Database::execute(
+                    'INSERT INTO accumul8_transactions
+                        (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                         is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, 0, 1, 1, ?, ?, ?, ?)',
+                    [
+                        $viewerId,
+                        isset($row['account_id']) ? (int)$row['account_id'] : null,
+                        $entityId > 0 ? $entityId : null,
+                        isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+                        $occurrenceDate,
+                        $occurrenceDate,
+                        $direction === 'inflow' ? 'deposit' : 'bill',
+                        (string)($row['title'] ?? 'Recurring Payment'),
+                        ($row['notes'] ?? '') === '' ? null : (string)$row['notes'],
+                        $amount,
+                        $isPaid,
+                        $rpId,
+                        'recurring',
+                        $isPaid === 1 ? $occurrenceDate : null,
+                        $actorUserId,
+                    ]
+                );
+                $created++;
+            }
+        }
+    }
+
+    if ($created > 0) {
+        accumul8_recompute_running_balance($viewerId);
+    }
+
+    return $created;
+}
+
 function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorUserId, ?string $today = null): int
 {
     $effectiveToday = $today ?: date('Y-m-d');
@@ -15710,6 +15915,18 @@ if ($action === 'materialize_due_recurring') {
     catn8_json_response(['success' => true, 'created' => $created]);
 }
 
+if ($action === 'ensure_budget_month') {
+    catn8_require_method('POST');
+    $body = catn8_read_json_body();
+    $monthValue = accumul8_normalize_month_value($body['month_value'] ?? null);
+    if ($monthValue === null) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid month_value'], 400);
+    }
+
+    $created = accumul8_ensure_budget_month_transactions($viewerId, $actorUserId, $monthValue);
+    catn8_json_response(['success' => true, 'created' => $created]);
+}
+
 if ($action === 'backfill_entities_phase1') {
     catn8_require_method('POST');
     $stats = accumul8_backfill_entities_for_owner($viewerId);
@@ -15926,6 +16143,7 @@ if ($action === 'update_transaction') {
     $existingAccountId = isset($existingTx['account_id']) ? (int)$existingTx['account_id'] : 0;
     $existingIsPaid = accumul8_normalize_bool($existingTx['is_paid'] ?? 0);
     $existingIsBudgetPlanner = accumul8_normalize_bool($existingTx['is_budget_planner'] ?? 0);
+    $skipRecurringTemplateSync = accumul8_normalize_bool($body['skip_recurring_template_sync'] ?? 0);
 
     if (!$editPolicy['can_edit_core_fields']) {
         $coreChanged = $transactionDate !== $existingTransactionDate
@@ -16005,21 +16223,23 @@ if ($action === 'update_transaction') {
         );
     }
 
-    accumul8_sync_recurring_template_from_transaction($viewerId, $existingTx, [
-        'recurring_payment_id' => isset($existingTx['recurring_payment_id']) ? (int)$existingTx['recurring_payment_id'] : 0,
-        'source_kind' => $existingTx['source_kind'] ?? 'manual',
-        'entity_id' => $entityIdOrNull,
-        'contact_id' => $contactIdOrNull,
-        'account_id' => $accountIdOrNull,
-        'transaction_date' => $transactionDate,
-        'due_date' => $dueDate,
-        'paid_date' => $paidDate,
-        'description' => $description,
-        'memo' => $memo,
-        'amount' => $amount,
-        'is_paid' => $isPaid,
-        'is_budget_planner' => $isBudgetPlanner,
-    ]);
+    if (!$skipRecurringTemplateSync) {
+        accumul8_sync_recurring_template_from_transaction($viewerId, $existingTx, [
+            'recurring_payment_id' => isset($existingTx['recurring_payment_id']) ? (int)$existingTx['recurring_payment_id'] : 0,
+            'source_kind' => $existingTx['source_kind'] ?? 'manual',
+            'entity_id' => $entityIdOrNull,
+            'contact_id' => $contactIdOrNull,
+            'account_id' => $accountIdOrNull,
+            'transaction_date' => $transactionDate,
+            'due_date' => $dueDate,
+            'paid_date' => $paidDate,
+            'description' => $description,
+            'memo' => $memo,
+            'amount' => $amount,
+            'is_paid' => $isPaid,
+            'is_budget_planner' => $isBudgetPlanner,
+        ]);
+    }
     accumul8_recompute_running_balance($viewerId);
 
     catn8_json_response(['success' => true]);

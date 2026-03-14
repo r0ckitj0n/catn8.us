@@ -185,7 +185,7 @@ export function Accumul8AIcountantPanel({
                 disabled={runningHousekeeping || balancingBooks || sending || runningWatchlist}
                 title="Manual-only tool: sync connected banks and reconcile opening balances without running the risk review."
               >
-                {balancingBooks ? 'Balancing...' : 'Balance Only'}
+                {balancingBooks ? 'Syncing Banks + Balancing...' : 'Sync Banks + Balance Books'}
               </button>
               <button
                 type="button"

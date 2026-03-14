@@ -551,11 +551,21 @@ export interface Accumul8TransactionUpsertRequest {
   contact_id?: number | null;
   account_id?: number | null;
   debtor_id?: number | null;
+  skip_recurring_template_sync?: number;
 }
 
 export interface Accumul8TransactionMoveRequest {
   transaction_ids: number[];
   account_id: number;
+}
+
+export interface Accumul8BudgetMonthEnsureRequest {
+  month_value: string;
+}
+
+export interface Accumul8BudgetMonthEnsureResponse {
+  success: boolean;
+  created: number;
 }
 
 export interface Accumul8Account {

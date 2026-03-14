@@ -1,4 +1,4 @@
-import { Accumul8RecurringPayment } from '../types/accumul8';
+import { Accumul8RecurringPayment, Accumul8Transaction } from '../types/accumul8';
 
 export interface Accumul8SpreadsheetMonthOption {
   value: string;
@@ -14,6 +14,7 @@ export interface Accumul8SpreadsheetMonthSummary {
 
 export interface Accumul8SpreadsheetMonthRow {
   rowKey: string;
+  transaction_id: number;
   recurring_id: number;
   entity_id: number | null;
   entity_name: string;
@@ -22,10 +23,13 @@ export interface Accumul8SpreadsheetMonthRow {
   account_id: number | null;
   banking_organization_id: number | null;
   title: string;
+  transaction_date: string;
   due_date: string;
   paid_date: string;
   dueDayLabel: string;
   amount: number;
+  rta_amount: number;
+  is_paid: number;
   direction: string;
   frequency: string;
   payment_method: string;
@@ -183,40 +187,51 @@ export function buildSpreadsheetMonthOptions(
 
 export function buildSpreadsheetMonthData(
   recurringPayments: Accumul8RecurringPayment[],
+  transactions: Accumul8Transaction[],
   monthValue: string,
 ): Accumul8SpreadsheetMonthData {
   const normalizedMonth = normalizeMonthValue(monthValue);
   const rows: Accumul8SpreadsheetMonthRow[] = [];
+  const recurringById = new Map<number, Accumul8RecurringPayment>();
 
   recurringPayments.forEach((recurring) => {
-    if (!Number(recurring.is_active || 0) || !Number(recurring.is_budget_planner || 0)) {
+    recurringById.set(recurring.id, recurring);
+  });
+
+  transactions.forEach((transaction) => {
+    const recurringId = Number(transaction.recurring_payment_id || 0);
+    if (recurringId <= 0 || Number(transaction.is_budget_planner || 0) !== 1) {
       return;
     }
-    buildOccurrencesForMonth(recurring, normalizedMonth).forEach((occurrenceDate) => {
-      const signedAmount = recurring.direction === 'inflow'
-        ? Math.abs(Number(recurring.amount || 0))
-        : -Math.abs(Number(recurring.amount || 0));
-      rows.push({
-        rowKey: `${recurring.id}:${occurrenceDate}`,
-        recurring_id: recurring.id,
-        entity_id: recurring.entity_id ?? null,
-        entity_name: recurring.entity_name || '',
-        contact_id: recurring.contact_id ?? null,
-        contact_name: recurring.contact_name || '',
-        account_id: recurring.account_id ?? null,
-        banking_organization_id: recurring.banking_organization_id ?? null,
-        title: recurring.title || 'Recurring Payment',
-        due_date: occurrenceDate,
-        paid_date: recurring.paid_date || '',
-        dueDayLabel: formatDayLabel(occurrenceDate),
-        amount: Number(signedAmount.toFixed(2)),
-        direction: recurring.direction || 'outflow',
-        frequency: recurring.frequency || 'monthly',
-        payment_method: recurring.payment_method || 'unspecified',
-        account_name: recurring.account_name || '',
-        banking_organization_name: recurring.banking_organization_name || '',
-        notes: recurring.notes || '',
-      });
+    const dueDate = String(transaction.due_date || transaction.transaction_date || '');
+    if (dueDate.slice(0, 7) !== normalizedMonth) {
+      return;
+    }
+    const recurring = recurringById.get(recurringId);
+    rows.push({
+      rowKey: `tx:${transaction.id}`,
+      transaction_id: transaction.id,
+      recurring_id: recurringId,
+      entity_id: transaction.entity_id ?? recurring?.entity_id ?? null,
+      entity_name: transaction.entity_name || recurring?.entity_name || '',
+      contact_id: transaction.contact_id ?? recurring?.contact_id ?? null,
+      contact_name: transaction.contact_name || recurring?.contact_name || '',
+      account_id: transaction.account_id ?? recurring?.account_id ?? null,
+      banking_organization_id: transaction.banking_organization_id ?? recurring?.banking_organization_id ?? null,
+      title: transaction.description || recurring?.title || 'Recurring Payment',
+      transaction_date: String(transaction.transaction_date || dueDate),
+      due_date: dueDate,
+      paid_date: transaction.paid_date || '',
+      dueDayLabel: formatDayLabel(dueDate),
+      amount: Number(Number(transaction.amount || 0).toFixed(2)),
+      rta_amount: Number(Number(transaction.rta_amount || 0).toFixed(2)),
+      is_paid: Number(transaction.is_paid || 0),
+      direction: Number(transaction.amount || 0) >= 0 ? 'inflow' : 'outflow',
+      frequency: recurring?.frequency || 'monthly',
+      payment_method: recurring?.payment_method || 'unspecified',
+      account_name: transaction.account_name || recurring?.account_name || '',
+      banking_organization_name: transaction.banking_organization_name || recurring?.banking_organization_name || '',
+      notes: transaction.memo || recurring?.notes || '',
     });
   });
 

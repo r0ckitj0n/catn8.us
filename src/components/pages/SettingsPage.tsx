@@ -17,6 +17,7 @@ import { Accumul8AccessModal } from '../modals/Accumul8AccessModal';
 import { Accumul8OcrConfigModal } from '../modals/Accumul8OcrConfigModal';
 import { IToast } from '../../types/common';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
+import { ApiClient } from '../../core/ApiClient';
 
 interface SettingsPageProps extends AppShellPageProps {
   onOpenAiImageConfig: () => void;
@@ -53,7 +54,34 @@ export function SettingsPage({
   const [tellerConfigOpen, setTellerConfigOpen] = React.useState(false);
   const [accumul8AccessOpen, setAccumul8AccessOpen] = React.useState(false);
   const [accumul8OcrOpen, setAccumul8OcrOpen] = React.useState(false);
+  const [emailStatus, setEmailStatus] = React.useState<'loading' | 'ready' | 'partial' | 'missing'>('loading');
   const isAdmin = Number(viewer?.is_admin || 0) === 1;
+
+  React.useEffect(() => {
+    let cancelled = false;
+    ApiClient.get('/api/settings/email.php')
+      .then((res) => {
+        if (cancelled) return;
+        const meta = res?.meta || {};
+        const config = res?.config || {};
+        if (Number(meta.smtp_ready || 0) === 1) {
+          setEmailStatus('ready');
+          return;
+        }
+        const hasHost = String(config.host || '').trim() !== '';
+        const hasFromEmail = String(config.from_email || '').trim() !== '';
+        const hasPassword = Number(meta.password_present || 0) === 1;
+        setEmailStatus(hasHost || hasFromEmail || hasPassword ? 'partial' : 'missing');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEmailStatus('missing');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <>
@@ -88,9 +116,23 @@ export function SettingsPage({
                 <div className="card h-100 shadow-sm">
                   <div className="card-body">
                     <h2 className="h5 mb-3">Communication & AI</h2>
+                    <p className="text-muted small mb-3">
+                      Email notifications use the same IONOS-style SMTP pattern as WhimsicalFrog.
+                      {' '}Current status:{' '}
+                      <strong>
+                        {emailStatus === 'ready'
+                          ? 'ready'
+                          : emailStatus === 'partial'
+                            ? 'partially configured'
+                            : emailStatus === 'loading'
+                              ? 'checking'
+                              : 'not configured'}
+                      </strong>
+                      .
+                    </p>
                     <div className="d-flex flex-wrap gap-2">
                       <button type="button" className="btn btn-primary" onClick={() => setEmailOpen(true)}>
-                        Email Configuration
+                        Email Notifications
                       </button>
                       <button type="button" className="btn btn-primary" onClick={() => {
                         if (typeof onOpenAiConfig === 'function') onOpenAiConfig();

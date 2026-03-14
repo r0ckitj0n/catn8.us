@@ -10,12 +10,6 @@ $fail = static function (string $eventKey, int $status, string $error, array $me
     catn8_json_response(['success' => false, 'error' => $error], $status);
 };
 
-$expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
-$got = (string)($_GET['admin_token'] ?? '');
-if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
-    $fail('accumul8_housekeeping', 403, 'Invalid admin token');
-}
-
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if (!in_array($method, ['GET', 'POST'], true)) {
     $fail('accumul8_housekeeping', 405, 'Method not allowed');
@@ -33,6 +27,22 @@ if ($method === 'POST') {
     }
 } else {
     $body = $_GET;
+}
+
+$authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+$headerToken = '';
+if (preg_match('/^\s*Bearer\s+(.+)\s*$/i', $authHeader, $matches)) {
+    $headerToken = trim((string)($matches[1] ?? ''));
+}
+
+$expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
+$got = (string)($body['admin_token'] ?? $_GET['admin_token'] ?? $headerToken);
+if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
+    $fail('accumul8_housekeeping', 403, 'Invalid admin token');
+}
+
+if ($method === 'GET') {
+    header('Warning: 299 - "Deprecated: use POST with JSON body or Authorization header for accumul8_housekeeping."');
 }
 
 $ownerUserId = (int)($body['owner_user_id'] ?? 0);
@@ -53,6 +63,7 @@ try {
     catn8_diagnostics_log_event('accumul8_housekeeping', true, 200, 'AIcountant housekeeping completed', [
         'owner_user_id' => $ownerUserId,
         'attention_needed' => (int)($result['attention_needed'] ?? 0),
+        'request_method' => $method,
     ]);
     catn8_json_response(array_merge(['success' => true], $result));
 } catch (Throwable $exception) {

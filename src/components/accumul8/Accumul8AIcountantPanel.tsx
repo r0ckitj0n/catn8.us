@@ -12,9 +12,11 @@ type ToastPayload = {
 interface Accumul8AIcountantPanelProps {
   ownerUserId: number;
   ownerUsername: string;
+  runningHousekeeping: boolean;
   balancingBooks: boolean;
   runningWatchlist: boolean;
   messageBoardPendingCount: number;
+  onRunHousekeeping: () => void;
   onBalanceBooks: () => void;
   onRunWatchlist: () => void;
   onOpenMessageBoard: () => void;
@@ -40,9 +42,11 @@ function formatConversationTime(value: string): string {
 export function Accumul8AIcountantPanel({
   ownerUserId,
   ownerUsername,
+  runningHousekeeping,
   balancingBooks,
   runningWatchlist,
   messageBoardPendingCount,
+  onRunHousekeeping,
   onBalanceBooks,
   onRunWatchlist,
   onOpenMessageBoard,
@@ -153,19 +157,29 @@ export function Accumul8AIcountantPanel({
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                onClick={onBalanceBooks}
-                disabled={balancingBooks || sending || runningWatchlist}
+                onClick={onRunHousekeeping}
+                disabled={runningHousekeeping || sending || balancingBooks || runningWatchlist}
+                title="Run the full AIcountant housekeeping workflow: bank sync, opening-balance review, and risk review."
               >
-                {balancingBooks ? 'Balancing...' : 'Balance the Books'}
+                {runningHousekeeping ? 'Running Housekeeping...' : 'Run Full Housekeeping'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={onBalanceBooks}
+                disabled={runningHousekeeping || balancingBooks || sending || runningWatchlist}
+                title="Manual-only tool: sync connected banks and reconcile opening balances without running the risk review."
+              >
+                {balancingBooks ? 'Balancing...' : 'Balance Only'}
               </button>
               <button
                 type="button"
                 className="btn btn-outline-secondary btn-sm"
                 onClick={onRunWatchlist}
-                disabled={runningWatchlist || sending || balancingBooks}
-                title="Run an AI review for overdue bills, cash-flow issues, and reminders."
+                disabled={runningHousekeeping || runningWatchlist || sending || balancingBooks}
+                title="Manual-only tool: run just the AI risk review for overdue bills, cash-flow issues, and reminders."
               >
-                {runningWatchlist ? 'Reviewing...' : 'Review Upcoming Risks'}
+                {runningWatchlist ? 'Reviewing...' : 'Review Risks Only'}
               </button>
               <button
                 type="button"

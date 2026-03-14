@@ -30,12 +30,21 @@ php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php 
 Run from cron with `curl` when you prefer an HTTP trigger:
 
 ```bash
-curl -sS -X POST "https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN" \
+curl -sS -X POST "https://catn8.us/api/accumul8_housekeeping.php" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   --data '{"owner_user_id":OWNER_USER_ID,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
 ```
 
-If your IONOS control-panel scheduler only accepts a URL, use the GET form:
+If you cannot send headers, you may send the token in the JSON body instead:
+
+```bash
+curl -sS -X POST "https://catn8.us/api/accumul8_housekeeping.php" \
+  -H "Content-Type: application/json" \
+  --data '{"admin_token":"YOUR_ADMIN_TOKEN","owner_user_id":OWNER_USER_ID,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
+```
+
+Legacy GET still works for now, but it is deprecated because it exposes the token in URLs, logs, and scheduler history:
 
 ```text
 https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN&owner_user_id=OWNER_USER_ID&send_email=1&create_notification_rule=1&email_on_attention_only=1
@@ -62,4 +71,4 @@ If `php` is not at `/usr/bin/php`, run `which php` over SSH and replace it.
 - The housekeeping run writes bookkeeping actions into live MySQL through the same Accumul8 code paths used by the app.
 - No new schema change is required for this cron setup.
 - The script assumes Teller credentials, AI provider settings, SMTP settings, and `CATN8_ADMIN_TOKEN` are already configured on live.
-- If you use the API endpoint from cron, prefer a server-side cron command that runs `curl -X POST` instead of a plain URL cron.
+- If you use the API endpoint from cron, prefer a server-side cron command that runs `curl -X POST` with an `Authorization: Bearer ...` header instead of a plain URL cron.

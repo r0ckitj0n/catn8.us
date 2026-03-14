@@ -15,8 +15,20 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
+  const [smtpReady, setSmtpReady] = React.useState(false);
+  const [passwordPresent, setPasswordPresent] = React.useState(false);
   const [form, setForm] = React.useState({ host: 'smtp.ionos.com', port: 587, secure: 'tls', user: '', pass: '', from_email: '', from_name: 'catn8.us' });
   const cleanFormRef = React.useRef('');
+
+  const applyIonosDefaults = React.useCallback(() => {
+    setForm((current) => ({
+      ...current,
+      host: current.host || 'smtp.ionos.com',
+      port: Number(current.port || 587),
+      secure: current.secure || 'tls',
+      from_name: current.from_name || 'catn8.us',
+    }));
+  }, []);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -33,6 +45,9 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
     ApiClient.get('/api/settings/email.php')
       .then((res) => {
         const cfg = res?.config || {};
+        const meta = res?.meta || {};
+        setPasswordPresent(Number(meta.password_present || 0) === 1);
+        setSmtpReady(Number(meta.smtp_ready || 0) === 1);
         const next = (f: any) => ({
           ...f,
           host: cfg.host || f.host,
@@ -76,7 +91,10 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
     setError('');
     setMessage('');
     try {
-      await ApiClient.post('/api/settings/email.php', form);
+      const res = await ApiClient.post('/api/settings/email.php', form);
+      const meta = res?.meta || {};
+      setPasswordPresent(Number(meta.password_present || 0) === 1);
+      setSmtpReady(Number(meta.smtp_ready || 0) === 1);
       setMessage('Saved.');
       setForm((f) => ({ ...f, pass: '' }));
       cleanFormRef.current = JSON.stringify({ ...form, pass: '' });
@@ -122,6 +140,21 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
           </div>
           <div className="modal-body">
             <form onSubmit={save}>
+              <div className={`alert ${smtpReady ? 'alert-success' : 'alert-warning'} py-2`} role="status">
+                <div><strong>{smtpReady ? 'Email notifications are ready.' : 'Email notifications still need setup.'}</strong></div>
+                <div className="small mb-0">
+                  Using the same IONOS-style SMTP pattern as WhimsicalFrog: `smtp.ionos.com`, port `587`, `TLS`.
+                  {passwordPresent ? ' A password is already stored.' : ' Add your mailbox password when you are ready.'}
+                </div>
+              </div>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div className="text-muted small">
+                  Save the sending mailbox details here, then AIcountant notifications, password resets, and other site emails will use them.
+                </div>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={applyIonosDefaults} disabled={busy}>
+                  Use IONOS Defaults
+                </button>
+              </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-host">SMTP Host</label>
                 <input className="form-control" id="smtp-host" value={form.host} onChange={setField('host')} disabled={busy} autoComplete="off" />
@@ -147,11 +180,14 @@ export function EmailConfigModal({ open, onClose, onToast }: EmailConfigModalPro
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-pass">SMTP Password</label>
                 <input className="form-control" id="smtp-pass" type="password" value={form.pass} onChange={setField('pass')} disabled={busy} autoComplete="current-password" />
-                <div className="form-text">Leave blank to keep the existing password.</div>
+                <div className="form-text">
+                  Leave blank to keep the existing password. If you have not saved one yet, this must be the mailbox password for your catn8.us sending address.
+                </div>
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-from-email">From Email</label>
                 <input className="form-control" id="smtp-from-email" type="email" value={form.from_email} onChange={setField('from_email')} disabled={busy} autoComplete="email" />
+                <div className="form-text">Example: `notifications@catn8.us` or whichever mailbox you create on your IONOS hosting account.</div>
               </div>
               <div className="mb-3">
                 <label className="form-label" htmlFor="smtp-from-name">From Name</label>

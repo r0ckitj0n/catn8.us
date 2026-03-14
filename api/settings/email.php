@@ -12,7 +12,15 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
 if ($method === 'GET') {
     $cfg = catn8_get_smtp_config_safe();
-    catn8_json_response(['success' => true, 'config' => $cfg]);
+    $passwordPresent = trim((string)(secret_get(catn8_secret_key('smtp.pass')) ?? '')) !== '';
+    catn8_json_response([
+        'success' => true,
+        'config' => $cfg,
+        'meta' => [
+            'password_present' => $passwordPresent ? 1 : 0,
+            'smtp_ready' => ($cfg['configured'] ?? false) && $passwordPresent ? 1 : 0,
+        ],
+    ]);
 }
 
 if ($method !== 'POST') {
@@ -44,4 +52,12 @@ secret_set(catn8_secret_key('smtp.from_email'), $fromEmail);
 secret_set(catn8_secret_key('smtp.from_name'), $fromName);
 
 $cfg = catn8_get_smtp_config_safe();
-catn8_json_response(['success' => true, 'config' => $cfg]);
+$passwordPresent = trim((string)(secret_get(catn8_secret_key('smtp.pass')) ?? '')) !== '';
+catn8_json_response([
+    'success' => true,
+    'config' => $cfg,
+    'meta' => [
+        'password_present' => $passwordPresent ? 1 : 0,
+        'smtp_ready' => ($cfg['configured'] ?? false) && $passwordPresent ? 1 : 0,
+    ],
+]);

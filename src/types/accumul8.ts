@@ -1000,12 +1000,15 @@ export interface Accumul8MessageBoardResponse {
   unacknowledged_count: number;
 }
 
-export interface Accumul8BalanceBooksResponse {
-  success: boolean;
+export interface Accumul8BalanceBooksResponseCore {
   synced_connection_count: number;
   skipped_connection_count: number;
   error_connection_count: number;
   opening_balance_reconciliation: Accumul8OpeningBalanceReconciliationResponseCore;
+}
+
+export interface Accumul8BalanceBooksResponse extends Accumul8BalanceBooksResponseCore {
+  success: boolean;
   messages: Accumul8MessageBoardMessage[];
   unacknowledged_count: number;
 }
@@ -1041,8 +1044,7 @@ export interface Accumul8OpeningBalanceReconciliationResponse extends Accumul8Op
   unacknowledged_count: number;
 }
 
-export interface Accumul8AIcountantWatchlistResponse {
-  success: boolean;
+export interface Accumul8AIcountantWatchlistResponseCore {
   summary_title: string;
   summary_body: string;
   overdue_count: number;
@@ -1051,6 +1053,20 @@ export interface Accumul8AIcountantWatchlistResponse {
   sent_email_count: number;
   failed_email_count: number;
   notification_rule_id: number | null;
+}
+
+export interface Accumul8AIcountantWatchlistResponse extends Accumul8AIcountantWatchlistResponseCore {
+  success: boolean;
+  messages: Accumul8MessageBoardMessage[];
+  unacknowledged_count: number;
+}
+
+export interface Accumul8AIcountantHousekeepingResponse {
+  success: boolean;
+  balance_books: Accumul8BalanceBooksResponseCore;
+  opening_balance_reconciliation: Accumul8OpeningBalanceReconciliationResponseCore;
+  watchlist: Accumul8AIcountantWatchlistResponseCore;
+  attention_needed: number;
   messages: Accumul8MessageBoardMessage[];
   unacknowledged_count: number;
 }

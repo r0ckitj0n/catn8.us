@@ -6811,6 +6811,254 @@ function accumul8_reconcile_opening_balances(int $viewerId, int $actorUserId): a
     ];
 }
 
+function accumul8_aicountant_debt_accounts(int $viewerId): array
+{
+    $rows = Database::queryAll(
+        'SELECT account_name, institution_name, account_type, current_balance, credit_limit, interest_rate, minimum_payment
+         FROM accumul8_accounts
+         WHERE owner_user_id = ?
+           AND is_active = 1
+         ORDER BY institution_name ASC, account_name ASC',
+        [$viewerId]
+    );
+
+    $debtAccounts = [];
+    foreach ($rows as $row) {
+        $accountType = strtolower(accumul8_normalize_text((string)($row['account_type'] ?? ''), 40));
+        $balance = round((float)($row['current_balance'] ?? 0), 2);
+        $creditLimit = round((float)($row['credit_limit'] ?? 0), 2);
+        $isDebtType = in_array($accountType, ['credit_card', 'loan', 'line_of_credit', 'mortgage'], true)
+            || ($creditLimit > 0 && $balance > 0);
+        if (!$isDebtType || $balance <= 0.009) {
+            continue;
+        }
+
+        $debtAccounts[] = [
+            'account_name' => accumul8_normalize_text((string)($row['account_name'] ?? 'Debt Account'), 191),
+            'institution_name' => accumul8_normalize_text((string)($row['institution_name'] ?? ''), 191),
+            'account_type' => $accountType,
+            'balance' => $balance,
+            'interest_rate' => round((float)($row['interest_rate'] ?? 0), 4),
+            'minimum_payment' => round((float)($row['minimum_payment'] ?? 0), 2),
+        ];
+    }
+
+    usort($debtAccounts, static function (array $left, array $right): int {
+        $interestCompare = ((float)($right['interest_rate'] ?? 0)) <=> ((float)($left['interest_rate'] ?? 0));
+        if ($interestCompare !== 0) {
+            return $interestCompare;
+        }
+        return ((float)($left['balance'] ?? 0)) <=> ((float)($right['balance'] ?? 0));
+    });
+
+    return $debtAccounts;
+}
+
+function accumul8_aicountant_average_monthly_cashflow(int $viewerId, string $startDate, string $endDate): array
+{
+    $row = Database::queryOne(
+        "SELECT
+            COALESCE(AVG(month_inflow), 0.00) AS avg_inflow,
+            COALESCE(AVG(month_outflow), 0.00) AS avg_outflow,
+            COALESCE(AVG(net_total), 0.00) AS avg_net
+         FROM (
+            SELECT DATE_FORMAT(transaction_date, '%Y-%m') AS month_key,
+                   SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS month_inflow,
+                   SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS month_outflow,
+                   SUM(amount) AS net_total
+            FROM accumul8_transactions
+            WHERE owner_user_id = ?
+              AND transaction_date BETWEEN ? AND ?
+            GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
+         ) monthly_rollup",
+        [$viewerId, $startDate, $endDate]
+    ) ?: [];
+
+    return [
+        'avg_inflow' => round((float)($row['avg_inflow'] ?? 0), 2),
+        'avg_outflow' => round((float)($row['avg_outflow'] ?? 0), 2),
+        'avg_net' => round((float)($row['avg_net'] ?? 0), 2),
+    ];
+}
+
+function accumul8_aicountant_build_coaching_note(array $input): string
+{
+    $overdueCount = (int)($input['overdue_count'] ?? 0);
+    $dueSoonCount = (int)($input['due_soon_count'] ?? 0);
+    $recurringSoonCount = (int)($input['recurring_soon_count'] ?? 0);
+    $cashTight = (int)($input['cash_tight'] ?? 0) === 1;
+    $averageMonthlyNet = round((float)($input['average_monthly_net'] ?? 0), 2);
+    $topSpendingLabels = is_array($input['top_spending_labels'] ?? null) ? array_values(array_map('strval', $input['top_spending_labels'])) : [];
+    $debtAccounts = is_array($input['debt_accounts'] ?? null) ? $input['debt_accounts'] : [];
+    $budgetRowCount = (int)($input['budget_row_count'] ?? 0);
+
+    $lines = [];
+    if ($overdueCount > 0 || $cashTight) {
+        $lines[] = 'Right now, protect cash first: clear overdue bills and keep minimum debt payments current before making aggressive extra payments.';
+    } elseif ($dueSoonCount > 0 || $recurringSoonCount > 0) {
+        $lines[] = 'Keep the next two weeks funded first, then use any remaining margin for debt payoff.';
+    }
+
+    if ($debtAccounts !== []) {
+        $totalDebt = 0.0;
+        $totalMinimums = 0.0;
+        $smallestBalanceAccount = null;
+        $highestInterestAccount = null;
+        foreach ($debtAccounts as $account) {
+            $balance = round((float)($account['balance'] ?? 0), 2);
+            $minimumPayment = round((float)($account['minimum_payment'] ?? 0), 2);
+            $interestRate = round((float)($account['interest_rate'] ?? 0), 4);
+            $totalDebt += $balance;
+            $totalMinimums += $minimumPayment;
+            if ($smallestBalanceAccount === null || $balance < (float)($smallestBalanceAccount['balance'] ?? INF)) {
+                $smallestBalanceAccount = $account;
+            }
+            if ($highestInterestAccount === null || $interestRate > (float)($highestInterestAccount['interest_rate'] ?? 0)) {
+                $highestInterestAccount = $account;
+            }
+        }
+
+        $lines[] = 'Tracked debt totals ' . number_format($totalDebt, 2) . ' across ' . count($debtAccounts) . ' account'
+            . (count($debtAccounts) === 1 ? '' : 's')
+            . ' with minimum payments of ' . number_format($totalMinimums, 2) . ' per month.';
+
+        if ($highestInterestAccount !== null && (float)($highestInterestAccount['interest_rate'] ?? 0) > 0) {
+            $lines[] = 'Best payoff target for lowest long-term cost: '
+                . (string)($highestInterestAccount['account_name'] ?? 'the highest-rate account')
+                . ' at ' . number_format((float)($highestInterestAccount['interest_rate'] ?? 0), 2) . '% interest with a balance of '
+                . number_format((float)($highestInterestAccount['balance'] ?? 0), 2) . '.';
+        } elseif ($smallestBalanceAccount !== null) {
+            $lines[] = 'Because interest-rate data is incomplete, the safest simple strategy is a snowball: wipe out '
+                . (string)($smallestBalanceAccount['account_name'] ?? 'the smallest balance')
+                . ' first at ' . number_format((float)($smallestBalanceAccount['balance'] ?? 0), 2) . ' while paying minimums on the rest.';
+        }
+
+        if ($averageMonthlyNet > 0) {
+            $gentleExtra = max(25, min(250, (int)(round(($averageMonthlyNet * 0.15) / 25) * 25)));
+            $lines[] = 'Low-friction move: redirect about ' . number_format((float)$gentleExtra, 2)
+                . ' per month of your average cash surplus toward your payoff target so progress builds without hitting lifestyle too hard.';
+        } elseif ($topSpendingLabels !== []) {
+            $lines[] = 'To create extra payoff room without a sharp lifestyle cut, trim one of your biggest recent spending areas first: '
+                . implode(', ', array_slice($topSpendingLabels, 0, 2)) . '.';
+        }
+    } elseif ($averageMonthlyNet > 0) {
+        $lines[] = 'You appear to have a positive average monthly cash cushion of ' . number_format($averageMonthlyNet, 2)
+            . '. Use part of that buffer to build an emergency reserve or prepare for future debt payoff.';
+    }
+
+    if ($budgetRowCount <= 0) {
+        $lines[] = 'No active budget rows are set up yet. Add a few core spending categories so AIcountant can coach tradeoffs more precisely.';
+    } elseif ($topSpendingLabels !== []) {
+        $lines[] = 'Review these recent spending leaders for lighter-touch cuts before making bigger lifestyle changes: '
+            . implode(', ', array_slice($topSpendingLabels, 0, 3)) . '.';
+    }
+
+    return implode("\n", array_slice($lines, 0, 5));
+}
+
+function accumul8_aicountant_generate_personalized_coach_note(int $viewerId, array $focusContext, string $fallback): string
+{
+    $fallback = trim($fallback);
+    try {
+        $aiConfig = accumul8_aicountant_effective_ai_config();
+        $provider = (string)($aiConfig['provider'] ?? 'openai');
+        $model = (string)($aiConfig['model'] ?? '');
+        $temperature = min(0.4, max(0.0, (float)($aiConfig['temperature'] ?? 0.2)));
+        $baseUrl = (string)($aiConfig['base_url'] ?? '');
+        $location = (string)($aiConfig['location'] ?? '');
+
+        $systemPrompt = <<<TXT
+You are AIcountant, a practical household finance coach.
+Write a short personalized coach note for an email.
+Goals:
+- Help the user make better money decisions without sounding judgmental.
+- Emphasize cash protection, debt payoff, and low-friction budget changes.
+- Keep the note concrete and specific to the provided numbers.
+- Suggest only realistic steps that would not disrupt lifestyle too sharply.
+- Do not claim anything was changed automatically.
+
+Style:
+- 1 short paragraph plus 2-4 short bullet points.
+- Under 170 words total.
+- No greeting or sign-off.
+TXT;
+
+        $userPrompt = "Financial snapshot for the coach note (JSON):\n"
+            . json_encode($focusContext, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            . "\n\nWrite the personalized coach note now.";
+
+        if ($provider === 'google_vertex_ai') {
+            $saJson = secret_get(catn8_settings_ai_secret_key($provider, 'service_account_json'));
+            if (!is_string($saJson) || trim($saJson) === '') {
+                throw new RuntimeException('Missing AI service account JSON (google_vertex_ai)');
+            }
+            $sa = json_decode((string)$saJson, true);
+            if (!is_array($sa)) {
+                throw new RuntimeException('AI Vertex service account JSON is invalid');
+            }
+            $content = catn8_vertex_ai_gemini_generate_text([
+                'service_account_json' => $saJson,
+                'project_id' => trim((string)($sa['project_id'] ?? '')),
+                'location' => $location !== '' ? $location : 'us-central1',
+                'model' => $model !== '' ? $model : 'gemini-1.5-pro',
+                'system_prompt' => $systemPrompt,
+                'user_prompt' => $userPrompt,
+                'temperature' => $temperature,
+                'max_output_tokens' => 700,
+            ]);
+            $note = trim((string)$content);
+        } elseif ($provider === 'google_ai_studio') {
+            $apiKey = secret_get(catn8_settings_ai_secret_key($provider, 'api_key'));
+            if (!is_string($apiKey) || trim($apiKey) === '') {
+                throw new RuntimeException('Missing AI API key (google_ai_studio)');
+            }
+            $resolvedModel = $model !== '' ? $model : 'gemini-1.5-pro';
+            $resp = catn8_http_json_with_status(
+                'POST',
+                'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($resolvedModel) . ':generateContent',
+                ['x-goog-api-key' => trim($apiKey)],
+                [
+                    'contents' => [['role' => 'user', 'parts' => [['text' => $userPrompt]]]],
+                    'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+                    'generationConfig' => ['temperature' => $temperature],
+                ],
+                10,
+                45
+            );
+            $note = trim((string)($resp['json']['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+        } else {
+            $resolvedModel = $model !== '' ? $model : 'gpt-4o-mini';
+            $result = accumul8_openai_responses_text(
+                $resolvedModel,
+                [[
+                    'role' => 'system',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $systemPrompt],
+                    ],
+                ], [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $userPrompt],
+                    ],
+                ]],
+                $baseUrl,
+                $temperature,
+                700,
+                45
+            );
+            $note = trim((string)($result['content'] ?? ''));
+        }
+
+        $note = trim((string)$note);
+        if (strlen($note) > 2000) {
+            $note = substr($note, 0, 2000);
+        }
+        return $note !== '' ? $note : $fallback;
+    } catch (Throwable $exception) {
+        return $fallback;
+    }
+}
+
 function accumul8_aicountant_watchlist_payload(int $viewerId): array
 {
     $today = gmdate('Y-m-d');
@@ -6874,6 +7122,15 @@ function accumul8_aicountant_watchlist_payload(int $viewerId): array
            AND is_active = 1',
         [$viewerId]
     ) ?: [];
+    $budgetCountRow = Database::queryOne(
+        'SELECT COUNT(*) AS total
+         FROM accumul8_budget_rows
+         WHERE owner_user_id = ?
+           AND is_active = 1',
+        [$viewerId]
+    ) ?: [];
+    $monthlyCashflow = accumul8_aicountant_average_monthly_cashflow($viewerId, $ninetyDaysAgo, $today);
+    $debtAccounts = accumul8_aicountant_debt_accounts($viewerId);
 
     $dueSoonTotal = 0.0;
     foreach ($dueSoonRows as $row) {
@@ -6924,6 +7181,34 @@ function accumul8_aicountant_watchlist_payload(int $viewerId): array
     if ($topSpendingLabels !== []) {
         $summaryBody .= ' Top recent spending: ' . implode('; ', $topSpendingLabels) . '.';
     }
+    $coachingText = accumul8_aicountant_build_coaching_note([
+        'overdue_count' => count($overdueRows),
+        'due_soon_count' => count($dueSoonRows),
+        'recurring_soon_count' => count($recurringSoonRows),
+        'cash_tight' => $cashTight ? 1 : 0,
+        'average_monthly_net' => (float)($monthlyCashflow['avg_net'] ?? 0),
+        'top_spending_labels' => $topSpendingLabels,
+        'debt_accounts' => $debtAccounts,
+        'budget_row_count' => (int)($budgetCountRow['total'] ?? 0),
+    ]);
+    $personalizedCoachingText = accumul8_aicountant_generate_personalized_coach_note($viewerId, [
+        'today' => $today,
+        'summary_title' => $summaryTitle,
+        'overdue_count' => count($overdueRows),
+        'due_soon_count' => count($dueSoonRows),
+        'recurring_soon_count' => count($recurringSoonRows),
+        'available_total' => $availableTotal,
+        'cash_need_soon' => $cashNeedSoon,
+        'average_monthly_spend' => $averageMonthlySpend,
+        'average_monthly_net' => (float)($monthlyCashflow['avg_net'] ?? 0),
+        'cash_tight' => $cashTight ? 1 : 0,
+        'budget_row_count' => (int)($budgetCountRow['total'] ?? 0),
+        'top_spending_labels' => $topSpendingLabels,
+        'debt_accounts' => $debtAccounts,
+    ], $coachingText);
+    if ($personalizedCoachingText !== '') {
+        $summaryBody .= "\n\nAIcountant coaching:\n" . $personalizedCoachingText;
+    }
 
     return [
         'summary_title' => $summaryTitle,
@@ -6934,7 +7219,10 @@ function accumul8_aicountant_watchlist_payload(int $viewerId): array
         'available_total' => $availableTotal,
         'cash_need_soon' => $cashNeedSoon,
         'average_monthly_spend' => $averageMonthlySpend,
+        'average_monthly_net' => (float)($monthlyCashflow['avg_net'] ?? 0),
         'cash_tight' => $cashTight ? 1 : 0,
+        'budget_row_count' => (int)($budgetCountRow['total'] ?? 0),
+        'coaching_text' => $personalizedCoachingText,
     ];
 }
 
@@ -7149,6 +7437,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     $sendEmail = !array_key_exists('send_email', $options) || accumul8_normalize_bool($options['send_email']) === 1;
     $createNotificationRule = !array_key_exists('create_notification_rule', $options) || accumul8_normalize_bool($options['create_notification_rule']) === 1;
     $emailOnAttentionOnly = !array_key_exists('email_on_attention_only', $options) || accumul8_normalize_bool($options['email_on_attention_only']) === 1;
+    $runEntityMaintenance = !array_key_exists('run_entity_maintenance', $options) || accumul8_normalize_bool($options['run_entity_maintenance']) === 1;
 
     accumul8_message_board_post(
         $viewerId,
@@ -7183,6 +7472,36 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         $shouldSendEmail,
         $createNotificationRule
     );
+    $entityMaintenanceResult = null;
+    $canRunEntityMaintenanceAi = accumul8_aicountant_provider_has_credentials('openai')
+        || accumul8_aicountant_provider_has_credentials('google_ai_studio')
+        || accumul8_aicountant_provider_has_credentials('google_vertex_ai');
+    if ($runEntityMaintenance && $canRunEntityMaintenanceAi && accumul8_table_exists('accumul8_entity_aliases')) {
+        try {
+            $entityMaintenanceResult = accumul8_scan_all_entity_aliases($viewerId);
+            $entityMaintenanceTitle = (int)($entityMaintenanceResult['created_count'] ?? 0) + (int)($entityMaintenanceResult['updated_count'] ?? 0) > 0
+                ? 'Entity name maintenance updated aliases'
+                : 'Entity name maintenance checked aliases';
+            accumul8_message_board_post(
+                $viewerId,
+                $actorUserId,
+                'aicountant_entity_maintenance',
+                (int)($entityMaintenanceResult['conflict_count'] ?? 0) > 0 ? 'warning' : 'info',
+                $entityMaintenanceTitle,
+                (string)($entityMaintenanceResult['summary_text'] ?? 'Entity alias scan completed.'),
+                $entityMaintenanceResult
+            );
+        } catch (Throwable $entityMaintenanceError) {
+            accumul8_message_board_post(
+                $viewerId,
+                $actorUserId,
+                'aicountant_entity_maintenance',
+                'warning',
+                'Entity name maintenance skipped',
+                accumul8_normalize_text($entityMaintenanceError->getMessage(), 240)
+            );
+        }
+    }
 
     accumul8_message_board_post(
         $viewerId,
@@ -7203,6 +7522,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             'balance_books' => $balanceResult,
             'opening_balance_reconciliation' => $openingBalanceResult,
             'watchlist' => $watchlistResult,
+            'entity_maintenance' => $entityMaintenanceResult,
             'attention_needed' => $attentionNeeded ? 1 : 0,
         ]
     );
@@ -7211,6 +7531,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'balance_books' => $balanceResult,
         'opening_balance_reconciliation' => $openingBalanceResult,
         'watchlist' => $watchlistResult,
+        'entity_maintenance' => $entityMaintenanceResult,
         'attention_needed' => $attentionNeeded ? 1 : 0,
         'messages' => accumul8_message_board_list($viewerId),
         'unacknowledged_count' => accumul8_message_board_unacknowledged_count($viewerId),
@@ -7272,13 +7593,14 @@ function accumul8_aicountant_build_financial_context(int $viewerId): array
             'current_balance' => round((float)($row['current_balance'] ?? 0), 2),
             'available_balance' => round((float)($row['available_balance'] ?? 0), 2),
             'credit_limit' => round((float)($row['credit_limit'] ?? 0), 2),
+            'interest_rate' => round((float)($row['interest_rate'] ?? 0), 4),
             'minimum_payment' => round((float)($row['minimum_payment'] ?? 0), 2),
             'payment_due_day_of_month' => isset($row['payment_due_day_of_month']) ? (int)$row['payment_due_day_of_month'] : null,
             'autopay_enabled' => (int)($row['autopay_enabled'] ?? 0),
         ];
     }, Database::queryAll(
         "SELECT id, account_name, institution_name, account_type, current_balance, available_balance,
-                credit_limit, minimum_payment, payment_due_day_of_month, autopay_enabled
+                credit_limit, interest_rate, minimum_payment, payment_due_day_of_month, autopay_enabled
          FROM accumul8_accounts
          WHERE owner_user_id = ? AND is_active = 1
          ORDER BY institution_name ASC, account_name ASC",

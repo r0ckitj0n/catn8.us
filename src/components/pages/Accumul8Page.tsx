@@ -31,6 +31,7 @@ import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
+  Accumul8AIcountantHousekeepingResponse,
   Accumul8AIcountantWatchlistResponse,
   Accumul8BalanceBooksResponse,
   Accumul8TellerConnectTokenResponse,
@@ -833,6 +834,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [messageBoardLoading, setMessageBoardLoading] = React.useState(false);
   const [messageBoardMessages, setMessageBoardMessages] = React.useState<Accumul8MessageBoardMessage[]>([]);
   const [messageBoardUnacknowledgedCount, setMessageBoardUnacknowledgedCount] = React.useState(0);
+  const [runningAIcountantHousekeeping, setRunningAIcountantHousekeeping] = React.useState(false);
   const [balancingBooks, setBalancingBooks] = React.useState(false);
   const [runningAIcountantWatchlist, setRunningAIcountantWatchlist] = React.useState(false);
   const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
@@ -991,8 +993,53 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setMessageBoardLoading(false);
     }
   }, [onToast, scopedActionUrl]);
+  const handleRunAIcountantHousekeeping = React.useCallback(async () => {
+    if (runningAIcountantHousekeeping || balancingBooks || runningAIcountantWatchlist) {
+      return;
+    }
+    setRunningAIcountantHousekeeping(true);
+    try {
+      const response = await ApiClient.post<Accumul8AIcountantHousekeepingResponse>(
+        scopedActionUrl('run_aicountant_housekeeping'),
+        {
+          send_email: 0,
+          create_notification_rule: 1,
+          email_on_attention_only: 1,
+        },
+      );
+      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
+      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
+      await load();
+      const balanceResult = response?.balance_books;
+      const openingBalanceResult = response?.opening_balance_reconciliation;
+      const watchlistResult = response?.watchlist;
+      const reconciledCount = Number(openingBalanceResult?.reconciled_count || 0);
+      const overdueCount = Number(watchlistResult?.overdue_count || 0);
+      const dueSoonCount = Number(watchlistResult?.due_soon_count || 0);
+      const recurringSoonCount = Number(watchlistResult?.recurring_soon_count || 0);
+      const tone = Number(balanceResult?.error_connection_count || 0) > 0 || Number(response?.attention_needed || 0) === 1
+        ? 'warning'
+        : 'success';
+      const summaryParts = [
+        `Synced ${Number(balanceResult?.synced_connection_count || 0)} bank connection${Number(balanceResult?.synced_connection_count || 0) === 1 ? '' : 's'}`,
+        reconciledCount > 0
+          ? `adjusted ${reconciledCount} opening balance${reconciledCount === 1 ? '' : 's'}`
+          : 'did not need opening-balance adjustments',
+        `flagged ${overdueCount + dueSoonCount + recurringSoonCount} upcoming risk${overdueCount + dueSoonCount + recurringSoonCount === 1 ? '' : 's'}`,
+      ];
+      onToast?.({
+        tone,
+        message: `AIcountant housekeeping finished: ${summaryParts.join(', ')}. Check Alerts for the full run log.`,
+      });
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: String(error?.message || 'AIcountant housekeeping failed') });
+    } finally {
+      setRunningAIcountantHousekeeping(false);
+    }
+  }, [balancingBooks, load, onToast, runningAIcountantHousekeeping, runningAIcountantWatchlist, scopedActionUrl]);
+
   const handleBalanceBooks = React.useCallback(async () => {
-    if (balancingBooks) {
+    if (balancingBooks || runningAIcountantHousekeeping) {
       return;
     }
     setBalancingBooks(true);
@@ -1020,9 +1067,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     } finally {
       setBalancingBooks(false);
     }
-  }, [balancingBooks, load, onToast, scopedActionUrl]);
+  }, [balancingBooks, load, onToast, runningAIcountantHousekeeping, scopedActionUrl]);
   const handleRunAIcountantWatchlist = React.useCallback(async () => {
-    if (runningAIcountantWatchlist) {
+    if (runningAIcountantWatchlist || runningAIcountantHousekeeping) {
       return;
     }
     setRunningAIcountantWatchlist(true);
@@ -1042,7 +1089,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     } finally {
       setRunningAIcountantWatchlist(false);
     }
-  }, [onToast, runningAIcountantWatchlist, scopedActionUrl]);
+  }, [onToast, runningAIcountantHousekeeping, runningAIcountantWatchlist, scopedActionUrl]);
   const visibleAccounts = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     if (bankingOrganizationId <= 0) {
@@ -3172,9 +3219,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
               <Accumul8AIcountantPanel
                 ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
                 ownerUsername={selectedOwnerProfile?.username || viewer?.username || 'You'}
+                runningHousekeeping={runningAIcountantHousekeeping}
                 balancingBooks={balancingBooks}
                 runningWatchlist={runningAIcountantWatchlist}
                 messageBoardPendingCount={messageBoardUnacknowledgedCount}
+                onRunHousekeeping={handleRunAIcountantHousekeeping}
                 onBalanceBooks={handleBalanceBooks}
                 onRunWatchlist={handleRunAIcountantWatchlist}
                 onOpenMessageBoard={() => setMessageBoardOpen(true)}

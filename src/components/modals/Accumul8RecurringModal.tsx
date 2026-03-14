@@ -8,6 +8,7 @@ import {
   Accumul8PaymentMethod,
   Accumul8RecurringUpsertRequest,
 } from '../../types/accumul8';
+import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 import { StandardIconButton } from '../common/StandardIconButton';
 import './Accumul8RecurringModal.css';
@@ -34,6 +35,14 @@ interface Accumul8RecurringModalProps {
   accounts: Accumul8Account[];
   onClose: () => void;
   onSave: (form: Accumul8RecurringUpsertRequest) => Promise<void>;
+}
+
+function formatRecurringAccountOptionLabel(account: Pick<Accumul8Account, 'account_name' | 'account_nickname'>): string {
+  const displayName = getAccumul8AccountDisplayName(account);
+  const accountName = String(account.account_name || '').trim();
+  return displayName !== accountName && accountName
+    ? `${displayName} (${accountName})`
+    : displayName;
 }
 
 export function Accumul8RecurringModal({
@@ -238,7 +247,7 @@ export function Accumul8RecurringModal({
                 >
                   <option value="">Account</option>
                   {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>{account.account_name}</option>
+                    <option key={account.id} value={account.id}>{formatRecurringAccountOptionLabel(account)}</option>
                   ))}
                 </select>
               </div>

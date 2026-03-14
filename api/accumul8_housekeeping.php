@@ -59,6 +59,7 @@ try {
         'send_email' => $body['send_email'] ?? 1,
         'create_notification_rule' => $body['create_notification_rule'] ?? 1,
         'email_on_attention_only' => $body['email_on_attention_only'] ?? 1,
+        'run_entity_maintenance' => $body['run_entity_maintenance'] ?? 1,
     ]);
     catn8_diagnostics_log_event('accumul8_housekeeping', true, 200, 'AIcountant housekeeping completed', [
         'owner_user_id' => $ownerUserId,

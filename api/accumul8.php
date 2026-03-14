@@ -14614,6 +14614,7 @@ if ($action === 'run_aicountant_housekeeping') {
             'send_email' => $body['send_email'] ?? 1,
             'create_notification_rule' => $body['create_notification_rule'] ?? 1,
             'email_on_attention_only' => $body['email_on_attention_only'] ?? 1,
+            'run_entity_maintenance' => $body['run_entity_maintenance'] ?? 0,
         ]);
         catn8_json_response(array_merge(['success' => true], $result));
     } catch (Throwable $exception) {

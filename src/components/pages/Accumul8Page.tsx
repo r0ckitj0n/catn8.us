@@ -858,7 +858,12 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [runningAIcountantHousekeeping, setRunningAIcountantHousekeeping] = React.useState(false);
   const [balancingBooks, setBalancingBooks] = React.useState(false);
   const [runningAIcountantWatchlist, setRunningAIcountantWatchlist] = React.useState(false);
-  const isHeaderLogoSpinning = busy || syncingConnectionId !== null || entityEndexFindingAll;
+  const isHeaderLogoSpinning = busy
+    || syncingConnectionId !== null
+    || entityEndexFindingAll
+    || runningAIcountantHousekeeping
+    || balancingBooks
+    || runningAIcountantWatchlist;
   const launchableBankingOrganizations = React.useMemo(() => {
     const filtered = bankingOrganizations.filter((organization) => isLaunchableHttpUrl(organization.login_url));
     if (!selectedBankingOrganizationId) {
@@ -1026,6 +1031,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
           send_email: 0,
           create_notification_rule: 1,
           email_on_attention_only: 1,
+          run_entity_maintenance: 0,
         },
       );
       setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
@@ -2810,7 +2816,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEditingEntityEndexGuideId(null);
     setEntityEndexGuideModalOpen(false);
   }, []);
-  const runEntityEndexFinder = React.useCallback(async () => {
+  const runEntityMaintenanceAliasScan = React.useCallback(async () => {
     setEntityEndexFindingAll(true);
     try {
       await findAllEntityAliases();
@@ -4081,10 +4087,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-primary"
-                      onClick={() => void runEntityEndexFinder()}
+                      onClick={() => void runEntityMaintenanceAliasScan()}
                       disabled={busy}
+                      title="Run the full Entity Endex alias maintenance scan across all parent entities."
                     >
-                      {entityEndexFindingAll ? 'Searching All...' : 'Find Related Names'}
+                      {entityEndexFindingAll ? 'Running Alias Scan...' : 'Entity Maintenance (Alias Scan)'}
                     </button>
                     <button
                       type="button"

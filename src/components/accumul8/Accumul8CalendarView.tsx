@@ -169,6 +169,20 @@ export function Accumul8CalendarView({ accounts, transactions, onTransactionSele
   const [calendarMode, setCalendarMode] = React.useState<CalendarMode>('month');
   const [anchorDate, setAnchorDate] = React.useState<string>(todayDate);
 
+  const dayTotalsByDate = React.useMemo(() => {
+    const totals = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      const date = getTransactionCalendarDate(transaction);
+      if (!date) {
+        return;
+      }
+      totals.set(date, Number(((totals.get(date) || 0) + Number(transaction.amount || 0)).toFixed(2)));
+    });
+
+    return totals;
+  }, [transactions]);
+
   const transactionMap = React.useMemo(() => {
     const next = new Map<string, Accumul8Transaction[]>();
 
@@ -196,45 +210,36 @@ export function Accumul8CalendarView({ accounts, transactions, onTransactionSele
     return next;
   }, [transactions]);
 
-  const dayBalanceByDate = React.useMemo(() => {
-    const currentBalance = accounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0);
-    const totalsByDate = new Map<string, number>();
-
-    transactions.forEach((transaction) => {
-      const date = getTransactionCalendarDate(transaction);
-      if (!date) {
-        return;
-      }
-      totalsByDate.set(date, Number(((totalsByDate.get(date) || 0) + Number(transaction.amount || 0)).toFixed(2)));
-    });
-
-    const allDates = Array.from(totalsByDate.keys()).sort((left, right) => left.localeCompare(right));
-    const balanceByDate = new Map<string, number>();
-
-    const pastDates = allDates.filter((date) => date < todayDate);
-    let cumulativeLater = 0;
-    for (let index = pastDates.length - 1; index >= 0; index -= 1) {
-      const date = pastDates[index];
-      balanceByDate.set(date, Number((currentBalance - cumulativeLater).toFixed(2)));
-      cumulativeLater = Number((cumulativeLater + Number(totalsByDate.get(date) || 0)).toFixed(2));
-    }
-
-    balanceByDate.set(todayDate, Number(currentBalance.toFixed(2)));
-
-    const futureDates = allDates.filter((date) => date > todayDate);
-    let cumulativeFuture = 0;
-    futureDates.forEach((date) => {
-      cumulativeFuture = Number((cumulativeFuture + Number(totalsByDate.get(date) || 0)).toFixed(2));
-      balanceByDate.set(date, Number((currentBalance + cumulativeFuture).toFixed(2)));
-    });
-
-    return balanceByDate;
-  }, [accounts, todayDate, transactions]);
-
   const visibleDays = React.useMemo(
     () => (calendarMode === 'month' ? buildMonthGridDays(anchorDate) : buildWeekDays(anchorDate)),
     [anchorDate, calendarMode],
   );
+
+  const dayBalanceByDate = React.useMemo(() => {
+    const currentBalance = accounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0);
+    const relevantDates = Array.from(new Set([
+      todayDate,
+      ...visibleDays.map((day) => day.isoDate),
+      ...dayTotalsByDate.keys(),
+    ])).sort((left, right) => left.localeCompare(right));
+    const prefixTotalsByDate = new Map<string, number>();
+    let runningTotal = 0;
+
+    relevantDates.forEach((date) => {
+      runningTotal = Number((runningTotal + Number(dayTotalsByDate.get(date) || 0)).toFixed(2));
+      prefixTotalsByDate.set(date, runningTotal);
+    });
+
+    const todayPrefix = Number(prefixTotalsByDate.get(todayDate) || 0);
+    const balanceByDate = new Map<string, number>();
+
+    relevantDates.forEach((date) => {
+      const prefixTotal = Number(prefixTotalsByDate.get(date) || 0);
+      balanceByDate.set(date, Number((currentBalance + (prefixTotal - todayPrefix)).toFixed(2)));
+    });
+
+    return balanceByDate;
+  }, [accounts, dayTotalsByDate, todayDate, visibleDays]);
 
   const monthValue = React.useMemo(() => startOfUtcMonth(anchorDate).slice(0, 7), [anchorDate]);
   const yearOptions = React.useMemo(() => {
@@ -317,7 +322,7 @@ export function Accumul8CalendarView({ accounts, transactions, onTransactionSele
         <div className={`accumul8-calendar-grid accumul8-calendar-grid--${calendarMode}`}>
           {visibleDays.map((day) => {
             const dayTransactions = transactionMap.get(day.isoDate) || [];
-            const dayTotal = dayTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+            const dayTotal = Number(dayTotalsByDate.get(day.isoDate) || 0);
             const dayBalance = dayBalanceByDate.get(day.isoDate);
             const isToday = day.isoDate === todayDate;
 

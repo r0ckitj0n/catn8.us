@@ -216,30 +216,78 @@ export function Accumul8CalendarView({ accounts, transactions, onTransactionSele
   );
 
   const dayBalanceByDate = React.useMemo(() => {
-    const currentBalance = accounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0);
     const relevantDates = Array.from(new Set([
       todayDate,
       ...visibleDays.map((day) => day.isoDate),
       ...dayTotalsByDate.keys(),
     ])).sort((left, right) => left.localeCompare(right));
-    const prefixTotalsByDate = new Map<string, number>();
-    let runningTotal = 0;
+    const balancesByDate = new Map<string, number>(relevantDates.map((date) => [date, 0]));
+    const transactionsByAccount = new Map<number, Accumul8Transaction[]>();
+    const accountIds = new Set<number>();
 
-    relevantDates.forEach((date) => {
-      runningTotal = Number((runningTotal + Number(dayTotalsByDate.get(date) || 0)).toFixed(2));
-      prefixTotalsByDate.set(date, runningTotal);
+    accounts.forEach((account) => {
+      accountIds.add(Number(account.id || 0));
     });
 
-    const todayPrefix = Number(prefixTotalsByDate.get(todayDate) || 0);
-    const balanceByDate = new Map<string, number>();
-
-    relevantDates.forEach((date) => {
-      const prefixTotal = Number(prefixTotalsByDate.get(date) || 0);
-      balanceByDate.set(date, Number((currentBalance + (prefixTotal - todayPrefix)).toFixed(2)));
+    transactions.forEach((transaction) => {
+      const accountId = Number(transaction.account_id || 0);
+      accountIds.add(accountId);
+      const existing = transactionsByAccount.get(accountId) || [];
+      existing.push(transaction);
+      transactionsByAccount.set(accountId, existing);
     });
 
-    return balanceByDate;
-  }, [accounts, dayTotalsByDate, todayDate, visibleDays]);
+    accountIds.forEach((accountId) => {
+      const accountTransactions = (transactionsByAccount.get(accountId) || []).slice().sort((left, right) => {
+        const leftDate = getTransactionCalendarDate(left);
+        const rightDate = getTransactionCalendarDate(right);
+        return leftDate.localeCompare(rightDate) || left.id - right.id;
+      });
+      const accountRecord = accounts.find((account) => Number(account.id || 0) === accountId) || null;
+
+      if (accountTransactions.length === 0) {
+        const staticBalance = Number(accountRecord?.current_balance || 0);
+        relevantDates.forEach((date) => {
+          balancesByDate.set(date, Number(((balancesByDate.get(date) || 0) + staticBalance).toFixed(2)));
+        });
+        return;
+      }
+
+      const accountDayTotals = new Map<string, number>();
+      accountTransactions.forEach((transaction) => {
+        const date = getTransactionCalendarDate(transaction);
+        if (!date) {
+          return;
+        }
+        accountDayTotals.set(date, Number(((accountDayTotals.get(date) || 0) + Number(transaction.amount || 0)).toFixed(2)));
+      });
+
+      const anchorTransaction = accountTransactions[accountTransactions.length - 1];
+      const anchorDate = getTransactionCalendarDate(anchorTransaction);
+      const anchorRunningBalance = Number(anchorTransaction.running_balance || 0);
+      const anchorBalance = Number.isFinite(anchorRunningBalance)
+        ? anchorRunningBalance
+        : Number(accountRecord?.current_balance || 0);
+
+      const prefixTotalsByDate = new Map<string, number>();
+      let runningTotal = 0;
+
+      relevantDates.forEach((date) => {
+        runningTotal = Number((runningTotal + Number(accountDayTotals.get(date) || 0)).toFixed(2));
+        prefixTotalsByDate.set(date, runningTotal);
+      });
+
+      const anchorPrefix = Number(prefixTotalsByDate.get(anchorDate) || 0);
+
+      relevantDates.forEach((date) => {
+        const prefixTotal = Number(prefixTotalsByDate.get(date) || 0);
+        const accountBalanceForDate = Number((anchorBalance + (prefixTotal - anchorPrefix)).toFixed(2));
+        balancesByDate.set(date, Number(((balancesByDate.get(date) || 0) + accountBalanceForDate).toFixed(2)));
+      });
+    });
+
+    return balancesByDate;
+  }, [accounts, dayTotalsByDate, todayDate, transactions, visibleDays]);
 
   const monthValue = React.useMemo(() => startOfUtcMonth(anchorDate).slice(0, 7), [anchorDate]);
   const yearOptions = React.useMemo(() => {

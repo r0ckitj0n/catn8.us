@@ -404,11 +404,32 @@ function normalizeSearchQuery(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function buildSearchTokens(field: string | number | null | undefined): string[] {
+  if (field === null || field === undefined) {
+    return [];
+  }
+
+  if (typeof field === 'number' && Number.isFinite(field)) {
+    const fixed = field.toFixed(2);
+    const normalizedFixed = fixed.replace(/[^0-9.-]+/g, '');
+    return Array.from(new Set([
+      String(field).toLowerCase(),
+      fixed.toLowerCase(),
+      normalizedFixed.toLowerCase(),
+    ].filter(Boolean)));
+  }
+
+  const raw = String(field).toLowerCase();
+  const normalized = raw.replace(/[$,\s]+/g, '');
+  return Array.from(new Set([raw, normalized].filter(Boolean)));
+}
+
 function matchesSearchQuery(query: string, fields: Array<string | number | null | undefined>): boolean {
   if (!query) {
     return true;
   }
-  return fields.some((field) => String(field || '').toLowerCase().includes(query));
+  const normalizedQuery = query.replace(/[$,\s]+/g, '');
+  return fields.some((field) => buildSearchTokens(field).some((token) => token.includes(query) || token.includes(normalizedQuery)));
 }
 
 function normalizeEntityAliasKey(value: string | null | undefined): string {
@@ -3227,6 +3248,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 onBalanceBooks={handleBalanceBooks}
                 onRunWatchlist={handleRunAIcountantWatchlist}
                 onOpenMessageBoard={() => setMessageBoardOpen(true)}
+                onDataChanged={load}
                 onToast={onToast}
               />
             </div>

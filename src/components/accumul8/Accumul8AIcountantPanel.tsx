@@ -20,6 +20,7 @@ interface Accumul8AIcountantPanelProps {
   onBalanceBooks: () => void;
   onRunWatchlist: () => void;
   onOpenMessageBoard: () => void;
+  onDataChanged?: () => Promise<void> | void;
   onToast?: (payload: ToastPayload) => void;
 }
 
@@ -50,6 +51,7 @@ export function Accumul8AIcountantPanel({
   onBalanceBooks,
   onRunWatchlist,
   onOpenMessageBoard,
+  onDataChanged,
   onToast,
 }: Accumul8AIcountantPanelProps) {
   const {
@@ -90,10 +92,11 @@ export function Accumul8AIcountantPanel({
     setDraft('');
     try {
       await sendMessage(normalized, activeConversation?.id || null);
+      await onDataChanged?.();
     } catch (error) {
       setDraft(normalized);
     }
-  }, [activeConversation?.id, draft, sendMessage, sending]);
+  }, [activeConversation?.id, draft, onDataChanged, sendMessage, sending]);
 
   const hasActiveConversation = Boolean(activeConversation);
   const pendingMessageBoardLabel = messageBoardPendingCount === 1 ? '1 new alert' : `${messageBoardPendingCount} new alerts`;

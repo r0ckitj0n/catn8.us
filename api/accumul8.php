@@ -5771,6 +5771,23 @@ Communication style:
 PROMPT;
 }
 
+function accumul8_aicountant_effective_conversation_system_prompt(array $conversation): string
+{
+    $defaultPrompt = accumul8_aicountant_default_system_prompt();
+    $savedPrompt = trim((string)($conversation['system_prompt'] ?? ''));
+    if ($savedPrompt === '' || $savedPrompt === $defaultPrompt) {
+        return $defaultPrompt;
+    }
+
+    if (strpos($savedPrompt, 'You can apply supported bookkeeping changes when the user clearly asks for them and the action executor confirms they were applied.') !== false) {
+        return $savedPrompt;
+    }
+
+    return $defaultPrompt
+        . "\n\nAdditional conversation-specific instructions:\n"
+        . $savedPrompt;
+}
+
 function accumul8_aicountant_suggested_starters(): array
 {
     return [
@@ -8009,6 +8026,7 @@ Return JSON only in this shape:
 {"actions":[
   {"type":"rename_entity","entity_id":123,"new_display_name":"..."},
   {"type":"update_recurring_rule","recurring_id":55,"title":"...","amount":100.00,"frequency":"monthly","payment_method":"autopay","next_due_date":"2026-03-20","is_active":1,"account_id":12,"entity_id":8,"notes":"..."},
+  {"type":"delete_recurring_rule","recurring_id":55},
   {"type":"update_transaction","transaction_id":999,"transaction_date":"2026-03-13","due_date":"2026-03-20","paid_date":"2026-03-13","entry_type":"bill","description":"...","memo":"...","amount":-452.37,"rta_amount":0,"is_paid":1,"is_reconciled":1,"is_budget_planner":0,"entity_id":8,"account_id":12,"balance_entity_id":0,"debtor_id":0},
   {"type":"update_transaction_entity","transaction_id":999,"entity_id":8},
   {"type":"mark_transaction_paid","transaction_id":999,"is_paid":1,"paid_date":"2026-03-13"},
@@ -8024,6 +8042,7 @@ Return JSON only in this shape:
 Rules:
 - Use only the supported action types shown above.
 - Include an action only when the user clearly asked for a real data change.
+- Use {"type":"delete_recurring_rule"} only when the user clearly asked to delete, remove, or stop a specific recurring payment and the target id is unambiguous.
 - Use {"type":"update_transaction"} when the user clearly asks to fix or edit a specific ledger row and the needed target id/value is available in the snapshot.
 - Use {"type":"delete_transaction"} only when the user clearly asked to delete, remove, or clear a specific ledger row and the target id is unambiguous.
 - Use {"type":"balance_books"} when the user asks you to balance the books, sync connected banks, refresh downloaded bank records, or reconcile balances against the latest bank data.
@@ -8226,6 +8245,22 @@ function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, arra
                     accumul8_recompute_running_balance($viewerId);
                 }
                 $results[] = ['type' => $type, 'status' => 'applied', 'summary' => 'Updated recurring rule #' . $recurringId . ' (' . $title . ').'];
+                continue;
+            }
+
+            if ($type === 'delete_recurring_rule') {
+                $recurringId = (int)($action['recurring_id'] ?? 0);
+                $existing = Database::queryOne('SELECT id, title FROM accumul8_recurring_payments WHERE id = ? AND owner_user_id = ? LIMIT 1', [$recurringId, $viewerId]);
+                if (!$existing) {
+                    throw new RuntimeException('Recurring rule not found');
+                }
+
+                Database::execute('DELETE FROM accumul8_recurring_payments WHERE id = ? AND owner_user_id = ?', [$recurringId, $viewerId]);
+                $results[] = [
+                    'type' => $type,
+                    'status' => 'applied',
+                    'summary' => 'Deleted recurring rule #' . $recurringId . ' (' . accumul8_normalize_text($existing['title'] ?? 'Untitled recurring payment', 191) . ').',
+                ];
                 continue;
             }
 
@@ -8537,10 +8572,7 @@ function accumul8_aicountant_apply_actions(int $viewerId, int $actorUserId, arra
 function accumul8_aicountant_generate_reply(int $viewerId, array $conversation, string $userMessage, array $actionResults = []): array
 {
     $aiConfig = accumul8_aicountant_effective_ai_config();
-    $systemPrompt = trim((string)($conversation['system_prompt'] ?? ''));
-    if ($systemPrompt === '') {
-        $systemPrompt = accumul8_aicountant_default_system_prompt();
-    }
+    $systemPrompt = accumul8_aicountant_effective_conversation_system_prompt($conversation);
 
     $context = accumul8_aicountant_build_financial_context($viewerId);
     $history = accumul8_aicountant_recent_transcript($viewerId, (int)($conversation['id'] ?? 0), 24);

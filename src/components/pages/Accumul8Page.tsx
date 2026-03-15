@@ -13,6 +13,7 @@ import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
+  ACCUMUL8_MAP_BUTTON_EMOJI,
   ACCUMUL8_SAVE_BUTTON_EMOJI,
   ACCUMUL8_STATEMENT_BUTTON_EMOJI,
   ACCUMUL8_VIEW_BUTTON_EMOJI,
@@ -516,6 +517,150 @@ function buildEntityGuideRule(description: string, entityName: string): string {
     return 'Contains approved entity-name variants';
   }
   return `Contains approved variants of "${normalizedEntityName}" based on "${normalizedDescription}"`;
+}
+
+function normalizeRecurringText(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function recurringTextMatchScore(left: string | null | undefined, right: string | null | undefined): number {
+  const leftText = normalizeRecurringText(left);
+  const rightText = normalizeRecurringText(right);
+  if (!leftText || !rightText) {
+    return 0;
+  }
+
+  const leftKey = normalizeEntityAliasKey(leftText);
+  const rightKey = normalizeEntityAliasKey(rightText);
+  if (leftKey && rightKey && leftKey === rightKey) {
+    return 12;
+  }
+  if (leftText === rightText) {
+    return 11;
+  }
+  if (leftText.includes(rightText) || rightText.includes(leftText)) {
+    return 8;
+  }
+  if (leftKey && rightKey && (leftKey.includes(rightKey) || rightKey.includes(leftKey))) {
+    return 7;
+  }
+
+  const leftTokens = Array.from(new Set(leftText.split(/[^a-z0-9]+/i).filter((token) => token.length >= 3)));
+  const rightTokens = Array.from(new Set(rightText.split(/[^a-z0-9]+/i).filter((token) => token.length >= 3)));
+  if (leftTokens.length === 0 || rightTokens.length === 0) {
+    return 0;
+  }
+
+  let shared = 0;
+  leftTokens.forEach((leftToken) => {
+    if (rightTokens.some((rightToken) => (
+      rightToken === leftToken
+      || (leftToken.length >= 5 && rightToken.length >= 5 && (leftToken.startsWith(rightToken) || rightToken.startsWith(leftToken)))
+    ))) {
+      shared += 1;
+    }
+  });
+
+  const coverage = shared / Math.max(1, Math.min(leftTokens.length, rightTokens.length));
+  if (coverage >= 1) {
+    return 8;
+  }
+  if (coverage >= 0.5) {
+    return 5;
+  }
+  if (coverage >= 0.34) {
+    return 3;
+  }
+  return 0;
+}
+
+function recurringAmountMatchScore(expectedAmount: number, actualAmount: number): number {
+  const difference = Math.abs(Number(expectedAmount || 0) - Number(actualAmount || 0));
+  if (difference <= 0.01) {
+    return 10;
+  }
+  if (difference <= 1.0) {
+    return 8;
+  }
+  const maxMagnitude = Math.max(Math.abs(expectedAmount), Math.abs(actualAmount));
+  const relativeDifference = maxMagnitude > 0.009 ? (difference / maxMagnitude) : 0;
+  if (difference <= 5.0 && relativeDifference <= 0.05) {
+    return 6;
+  }
+  if (difference <= 25.0 && relativeDifference <= 0.1) {
+    return 4;
+  }
+  return -1;
+}
+
+function findRecurringRuleForTransactionMapping(
+  transaction: Accumul8Transaction,
+  recurringPayments: Accumul8RecurringPayment[],
+  targetEntityId: number,
+): Accumul8RecurringPayment | null {
+  if (Number(transaction.recurring_payment_id || 0) > 0) {
+    return recurringPayments.find((item) => item.id === Number(transaction.recurring_payment_id)) || null;
+  }
+
+  const transactionAmount = Number(transaction.amount || 0);
+  const transactionDirection: Accumul8Direction = transactionAmount >= 0 ? 'inflow' : 'outflow';
+  const transactionDescription = String(transaction.description || '').trim();
+  const scored = recurringPayments.map((recurring) => {
+    if (Number(recurring.is_active || 0) !== 1) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+    if ((recurring.direction || 'outflow') !== transactionDirection) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+    if (Number(transaction.account_id || 0) > 0 && Number(recurring.account_id || 0) > 0 && Number(recurring.account_id) !== Number(transaction.account_id)) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+    if (Number(recurring.entity_id || 0) > 0 && Number(recurring.entity_id) !== targetEntityId) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+
+    const amountScore = recurringAmountMatchScore(Math.abs(transactionAmount), Math.abs(Number(recurring.amount || 0)));
+    if (amountScore < 0) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+
+    const textCandidates = [
+      recurring.title,
+      recurring.entity_name,
+      recurring.contact_name,
+      ...(recurring.recurring_bank_aliases || []),
+    ];
+    const bestTextScore = textCandidates.reduce(
+      (best, candidate) => Math.max(best, recurringTextMatchScore(transactionDescription, candidate)),
+      0,
+    );
+    if (bestTextScore < 5) {
+      return { recurring, score: Number.NEGATIVE_INFINITY };
+    }
+
+    let score = amountScore + bestTextScore;
+    if (Number(recurring.account_id || 0) > 0 && Number(recurring.account_id) === Number(transaction.account_id || 0)) {
+      score += 5;
+    }
+    if (Number(recurring.entity_id || 0) === targetEntityId) {
+      score += 5;
+    }
+    if (normalizeEntityAliasKey(recurring.title) === normalizeEntityAliasKey(transactionDescription)) {
+      score += 4;
+    }
+    return { recurring, score };
+  }).filter((item) => Number.isFinite(item.score));
+
+  scored.sort((left, right) => right.score - left.score);
+  const best = scored[0] || null;
+  const runnerUp = scored[1] || null;
+  if (!best || best.score < 14) {
+    return null;
+  }
+  if (runnerUp && (best.score - runnerUp.score) < 3) {
+    return null;
+  }
+  return best.recurring;
 }
 
 function normalizeEntityKind(value: string | null | undefined, isVendor = 0): 'business' | 'contact' {
@@ -1951,6 +2096,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setTransactionModalVariant('ledger');
     resetLedgerForm();
   }, [resetLedgerForm]);
+  const openLedgerEntityModal = React.useCallback((transactionId: number) => {
+    const transaction = transactions.find((row) => row.id === transactionId) || null;
+    if (!transaction || Number(transaction.debtor_id || 0) > 0) {
+      return;
+    }
+    setLedgerEntityModalTransactionId(transaction.id);
+  }, [transactions]);
   const closeLedgerEntityModal = React.useCallback(() => {
     setLedgerEntityModalTransactionId(null);
   }, []);
@@ -2123,6 +2275,31 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         await ApiClient.post(accumul8ActionUrl('create_entity_endex_guide'), guidePayload);
       }
 
+      const recurringRule = findRecurringRuleForTransactionMapping(transaction, recurringPayments, targetEntityId);
+      if (recurringRule) {
+        await ApiClient.post(accumul8ActionUrl('update_recurring'), {
+          id: recurringRule.id,
+          title: recurringRule.title,
+          direction: recurringRule.direction,
+          amount: Number(recurringRule.amount || 0),
+          frequency: recurringRule.frequency,
+          payment_method: recurringRule.payment_method,
+          interval_count: Number(recurringRule.interval_count || 1),
+          next_due_date: recurringRule.next_due_date,
+          paid_date: recurringRule.paid_date || '',
+          entity_id: targetEntityId,
+          account_id: recurringRule.account_id ?? null,
+          is_budget_planner: Number(recurringRule.is_budget_planner ?? 1),
+          notes: recurringRule.notes || '',
+          recurring_bank_aliases: uniqueTextValues([
+            ...(recurringRule.recurring_bank_aliases || []),
+            description,
+            transaction.entity_name || '',
+            targetEntityName,
+          ], normalizeEntityAliasKey),
+        });
+      }
+
       await ApiClient.post(accumul8ActionUrl('update_transaction'), {
         id: transaction.id,
         transaction_date: transaction.transaction_date,
@@ -2145,6 +2322,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         await ApiClient.post(accumul8ActionUrl('scan_entity_aliases'), { entity_id: targetEntityId });
       } catch (_error) {
         aliasScanWarning = true;
+      }
+      if (recurringRule) {
+        try {
+          await ApiClient.post(accumul8ActionUrl('materialize_due_recurring'), {});
+        } catch (_error) {
+          aliasScanWarning = true;
+        }
       }
       await load();
       closeLedgerEntityModal();
@@ -2169,6 +2353,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     entityEndexGuides,
     entities,
     ledgerEntityModalTransactionId,
+    recurringPayments,
     load,
     onToast,
     transactions,
@@ -3519,6 +3704,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <div className="accumul8-row-actions">
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                            {Number(tx.debtor_id || 0) <= 0 ? <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button> : null}
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><span aria-hidden="true">🗑️</span></button>
                             {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>
@@ -3716,6 +3902,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                   ) : null}
                                   <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                                   <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditTransaction(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                                  <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
                                   <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy} aria-label={`Delete ${tx.description}`}><i className="bi bi-trash"></i></button>
                                 </div>
                               );
@@ -3881,6 +4068,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${billTx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
                             ) : null}
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(billTx.id)} disabled={busy} aria-label={`View ${billTx.description}`} title={`View ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(billTx.id)} disabled={busy} aria-label={`Map ${billTx.description} to an entity alias`} title={`Map ${billTx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activatePayBillRow(billTx.id)} disabled={busy} aria-label={`Edit ${billTx.description}`} title={`Edit ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this bill item?')) { void deleteTransaction(billTx.id); } }} disabled={busy || !billEditPolicy.canDelete} aria-label={`Delete ${billTx.description}`} title={billEditPolicy.canDelete ? `Delete ${billTx.description}` : `${billEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
                             {payBillDraftById[billTx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `paybill-${billTx.id}` ? ' is-flashing' : ''}`} onClick={() => void savePayBillRow(billTx)} disabled={busy} aria-label={`Save ${billTx.description}`} title={`Save ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}

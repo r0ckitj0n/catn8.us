@@ -336,12 +336,17 @@ export function Accumul8SpreadsheetView({
     });
   }, []);
   const setRowDraft = React.useCallback((row: EditableSpreadsheetRow, patch: Partial<EditableSpreadsheetRow>) => {
+    const normalizedPatch: Partial<EditableSpreadsheetRow> = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(patch, 'paid_date')) {
+      normalizedPatch.paid_date = String(patch.paid_date || '').trim();
+      normalizedPatch.is_paid = normalizedPatch.paid_date !== '' ? 1 : 0;
+    }
     setDraftRowByKey((prev) => ({
       ...prev,
       [row.rowKey]: {
         ...row,
         ...prev[row.rowKey],
-        ...patch,
+        ...normalizedPatch,
       },
     }));
   }, []);
@@ -392,7 +397,7 @@ export function Accumul8SpreadsheetView({
       memo: row.notes || '',
       amount: Number(row.amount || 0),
       rta_amount: Number(row.rta_amount || 0),
-      is_paid: row.paid_date ? 1 : Number(row.is_paid || 0),
+      is_paid: String(row.paid_date || '').trim() ? 1 : 0,
       is_reconciled: Number(transaction.is_reconciled || 0),
       is_budget_planner: Number(transaction.is_budget_planner || 0),
       entity_id: entityId,

@@ -13,7 +13,6 @@ import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
-  ACCUMUL8_MOVE_BUTTON_EMOJI,
   ACCUMUL8_SAVE_BUTTON_EMOJI,
   ACCUMUL8_STATEMENT_BUTTON_EMOJI,
   ACCUMUL8_VIEW_BUTTON_EMOJI,
@@ -29,6 +28,7 @@ import { isWatchedTellerInstitution, logTellerDiagnostic } from '../../core/tell
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
+import { buildSpreadsheetMonthData } from '../../utils/accumul8Spreadsheet';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   Accumul8AIcountantHousekeepingResponse,
@@ -326,6 +326,34 @@ function parseFiniteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizePaidStateDraft(
+  current: Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'is_paid'>,
+  existingDraft: LedgerInlineDraft | undefined,
+  patch: LedgerInlineDraft,
+): LedgerInlineDraft {
+  const normalizedPatch: LedgerInlineDraft = { ...patch };
+  const currentPaidDate = String(existingDraft?.paid_date ?? current.paid_date ?? '').trim();
+  const currentDueDate = String(existingDraft?.due_date ?? current.due_date ?? '').trim();
+  const currentTransactionDate = String(existingDraft?.transaction_date ?? current.transaction_date ?? '').trim();
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'paid_date')) {
+    const nextPaidDate = String(patch.paid_date || '').trim();
+    normalizedPatch.paid_date = nextPaidDate;
+    normalizedPatch.is_paid = nextPaidDate !== '' ? 1 : 0;
+    return normalizedPatch;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'is_paid')) {
+    const nextIsPaid = Number(patch.is_paid || 0) === 1 ? 1 : 0;
+    normalizedPatch.is_paid = nextIsPaid;
+    normalizedPatch.paid_date = nextIsPaid === 1
+      ? (currentPaidDate || currentDueDate || currentTransactionDate)
+      : '';
+  }
+
+  return normalizedPatch;
+}
+
 function getOpeningBalanceMessageMeta(message: Accumul8MessageBoardMessage): OpeningBalanceMessageMeta | null {
   if (String(message.source_kind || '') !== 'aicountant_opening_balance') {
     return null;
@@ -377,8 +405,9 @@ function getLedgerDescriptionLabel(
   transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
   draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
 ): string {
-  const fallbackDescription = draft?.description ?? transaction.description;
-  return formatInlineText(fallbackDescription, '-');
+  const entityName = String(draft?.entity_name ?? transaction.entity_name ?? '').trim();
+  const fallbackDescription = String(draft?.description ?? transaction.description ?? '').trim();
+  return formatInlineText(entityName || fallbackDescription, '-');
 }
 
 function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean {
@@ -1449,22 +1478,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return Number(tx.is_paid || 0) === 0;
     })
   ), [filteredTransactions, payBillsDateRange]);
-  const budgetPlannerSummaryPayments = React.useMemo(() => (
-    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1)
-  ), [filteredRecurringPayments]);
   const spreadsheetProjectedSummary = React.useMemo(() => {
-    const monthRows = budgetPlannerSummaryPayments.filter((payment) => String(payment.next_due_date || '').slice(0, 7) === budgetMonth);
+    const monthRows = buildSpreadsheetMonthData(
+      filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1),
+      filteredTransactions,
+      budgetMonth,
+    ).rows;
     let projectedDelta = 0;
     let unpaidBills = 0;
     let upcomingWindfalls = 0;
-    monthRows.forEach((payment) => {
-      const amount = Number(payment.amount || 0);
-      const normalizedAmount = String(payment.direction || 'outflow') === 'inflow' ? Math.abs(amount) : -Math.abs(amount);
-      projectedDelta += normalizedAmount;
-      if (normalizedAmount < 0) {
-        unpaidBills += Math.abs(normalizedAmount);
-      } else if (normalizedAmount > 0) {
-        upcomingWindfalls += normalizedAmount;
+    monthRows.forEach((row) => {
+      if (Number(row.is_paid || 0) === 1) {
+        return;
+      }
+      const amount = Number(row.amount || 0);
+      projectedDelta += amount;
+      if (amount < 0) {
+        unpaidBills += Math.abs(amount);
+      } else if (amount > 0) {
+        upcomingWindfalls += amount;
       }
     });
     return {
@@ -1472,7 +1504,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       unpaidBills: roundCurrency(unpaidBills),
       upcomingWindfalls: roundCurrency(upcomingWindfalls),
     };
-  }, [budgetMonth, budgetPlannerSummaryPayments]);
+  }, [budgetMonth, filteredRecurringPayments, filteredTransactions]);
   const headerSummary = React.useMemo<Accumul8HeaderSummary>(() => {
     if (tab === 'spreadsheet') {
       return {
@@ -1521,13 +1553,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
     { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
     { key: 'account', header: 'Acct', minWidth: 138, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
-    { key: 'description', header: 'Payee', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
+    { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
     { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
     { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
     { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
+    { key: 'actions', header: 'Actions', minWidth: 122, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
@@ -1919,9 +1951,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setTransactionModalVariant('ledger');
     resetLedgerForm();
   }, [resetLedgerForm]);
-  const openLedgerEntityModal = React.useCallback((transactionId: number) => {
-    setLedgerEntityModalTransactionId(transactionId);
-  }, []);
   const closeLedgerEntityModal = React.useCallback(() => {
     setLedgerEntityModalTransactionId(null);
   }, []);
@@ -2686,14 +2715,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setActiveRecurringRowId(id);
   }, []);
   const setLedgerRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
+    const normalizedPatch = normalizePaidStateDraft(tx, ledgerDraftById[tx.id], patch);
     setLedgerDraftById((prev) => ({
       ...prev,
       [tx.id]: {
         ...prev[tx.id],
-        ...patch,
+        ...normalizedPatch,
       },
     }));
-  }, []);
+  }, [ledgerDraftById]);
   const setDebtorRowDraft = React.useCallback((row: Accumul8Debtor, patch: DebtorInlineDraft) => {
     setDebtorDraftById((prev) => ({
       ...prev,
@@ -2713,10 +2743,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }));
   }, []);
   const setPayBillRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
-    const normalizedPatch: LedgerInlineDraft = { ...patch };
-    if (Object.prototype.hasOwnProperty.call(patch, 'paid_date')) {
-      normalizedPatch.is_paid = String(patch.paid_date || '').trim() ? 1 : 0;
-    }
+    const normalizedPatch = normalizePaidStateDraft(tx, payBillDraftById[tx.id], patch);
     setPayBillDraftById((prev) => ({
       ...prev,
       [tx.id]: {
@@ -2724,7 +2751,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         ...normalizedPatch,
       },
     }));
-  }, []);
+  }, [payBillDraftById]);
   const setRecurringRowDraft = React.useCallback((row: Accumul8RecurringPayment, patch: RecurringInlineDraft) => {
     setRecurringDraftById((prev) => ({
       ...prev,
@@ -3407,7 +3434,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     {ledgerPagination.rows.map((tx) => (
                       (() => {
                         const txEditPolicy = getAccumul8TransactionEditPolicy(tx);
-                        const statementLink = resolveAccumul8StatementLink(tx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
                         return (
                       <tr
                         key={tx.id}
@@ -3491,22 +3517,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                         </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
-                              onClick={() => openLedgerEntityModal(tx.id)}
-                              disabled={busy}
-                              aria-label={`Assign entity for ${tx.description}`}
-                              title={tx.entity_name ? `Assign entity for ${tx.description} (current: ${tx.entity_name})` : `Assign entity for ${tx.description}`}
-                            >
-                              <span aria-hidden="true">{ACCUMUL8_MOVE_BUTTON_EMOJI}</span>
-                            </button>
-                            {statementLink ? (
-                              <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${tx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
-                            ) : null}
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><span aria-hidden="true">🗑️</span></button>
                             {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>
                         </td>

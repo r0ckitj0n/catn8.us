@@ -14343,10 +14343,6 @@ function accumul8_sync_recurring_template_from_transaction(int $viewerId, array 
         accumul8_normalize_date($recurring['next_due_date'] ?? null) ?? $newDueDate,
         accumul8_date_delta_days($oldDueDate, $newDueDate)
     );
-    $paidDate = (int)($updatedTx['is_paid'] ?? 0) === 1
-        ? (accumul8_normalize_date($updatedTx['paid_date'] ?? null) ?? $newDueDate)
-        : null;
-
     Database::execute(
         'UPDATE accumul8_recurring_payments
          SET entity_id = ?,
@@ -14369,7 +14365,7 @@ function accumul8_sync_recurring_template_from_transaction(int $viewerId, array 
             $direction,
             abs($amount),
             $nextDueDate,
-            $paidDate,
+            accumul8_normalize_date($recurring['paid_date'] ?? null),
             accumul8_normalize_text($updatedTx['memo'] ?? $recurring['notes'] ?? '', 1500) ?: null,
             (int)($updatedTx['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
             $recurringPaymentId,
@@ -16687,6 +16683,12 @@ if ($action === 'update_transaction') {
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $debtorId = isset($body['debtor_id']) ? (int)$body['debtor_id'] : 0;
     $balanceEntityId = isset($body['balance_entity_id']) ? (int)$body['balance_entity_id'] : 0;
+    if ($isPaid === 1 && $paidDate === null) {
+        $paidDate = $dueDate ?? $transactionDate;
+    }
+    if ($isPaid === 0) {
+        $paidDate = null;
+    }
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
     $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);

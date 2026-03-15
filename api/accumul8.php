@@ -7901,8 +7901,10 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'aicountant_housekeeping',
         'info',
         'AIcountant housekeeping started',
-        'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, watchlist review, and reminder upkeep.'
+        'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, recurring ledger refresh, watchlist review, and reminder upkeep.'
     );
+
+    $ledgerSyncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
 
     $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
     $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
@@ -7975,11 +7977,15 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             'Housekeeping finished with '
                 . (int)($balanceResult['synced_connection_count'] ?? 0) . ' bank sync'
                 . ((int)($balanceResult['synced_connection_count'] ?? 0) === 1 ? '' : 's')
+                . ', ' . (int)($ledgerSyncResult['created'] ?? 0) . ' recurring ledger item'
+                . ((int)($ledgerSyncResult['created'] ?? 0) === 1 ? '' : 's')
+                . ' created through ' . (string)($ledgerSyncResult['window_end'] ?? '')
                 . ', ' . (int)($openingBalanceResult['reconciled_count'] ?? 0) . ' opening-balance adjustment'
                 . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
                 . ', and ' . (int)($watchlistResult['sent_email_count'] ?? 0) . ' email alert'
                 . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
             [
+                'ledger_sync' => $ledgerSyncResult,
                 'balance_books' => $balanceResult,
                 'opening_balance_reconciliation' => $openingBalanceResult,
                 'watchlist' => $watchlistResult,
@@ -8010,6 +8016,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     }
 
     return [
+        'ledger_sync' => $ledgerSyncResult,
         'balance_books' => $balanceResult,
         'opening_balance_reconciliation' => $openingBalanceResult,
         'watchlist' => $watchlistResult,
@@ -13977,43 +13984,32 @@ function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $m
     }));
 }
 
-function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUserId, string $selectedMonth): int
+function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, ?string $today = null, int $daysAhead = 90): array
 {
-    $normalizedMonth = accumul8_normalize_month_value($selectedMonth);
-    if ($normalizedMonth === null) {
-        throw new RuntimeException('Invalid month_value');
-    }
-
-    $currentDate = gmdate('Y-m-d');
-    $currentMonth = substr($currentDate, 0, 7);
-    $maxAdvanceDate = gmdate('Y-m-d', strtotime($currentDate . ' +90 days'));
-    $maxAdvanceMonth = substr($maxAdvanceDate, 0, 7);
-    if (strcmp($normalizedMonth, $maxAdvanceMonth) > 0) {
-        throw new RuntimeException('Budget planning is limited to 90 days ahead');
-    }
-
-    $monthsToEnsure = accumul8_month_range($currentMonth, $normalizedMonth);
+    $effectiveToday = accumul8_normalize_date($today) ?? date('Y-m-d');
+    $normalizedDaysAhead = max(0, min(90, $daysAhead));
+    $windowEndDate = accumul8_shift_date_by_days($effectiveToday, $normalizedDaysAhead) ?? $effectiveToday;
+    $startMonth = substr($effectiveToday, 0, 7);
+    $endMonth = substr($windowEndDate, 0, 7);
+    $monthsToEnsure = accumul8_month_range($startMonth, $endMonth);
     if ($monthsToEnsure === []) {
-        $monthsToEnsure = [$normalizedMonth];
-    }
-    if (strcmp($normalizedMonth, $currentMonth) < 0) {
-        $monthsToEnsure = [$normalizedMonth];
+        $monthsToEnsure = [$startMonth];
     }
 
-    $dueRows = Database::queryAll(
+    $recurringRows = Database::queryAll(
         'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, paid_date, notes, is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'payment_method', "'unspecified' AS payment_method") . '
          FROM accumul8_recurring_payments
          WHERE owner_user_id = ?
            AND is_active = 1
-           AND is_budget_planner = 1
          ORDER BY id ASC',
         [$viewerId]
     );
 
     $created = 0;
-    foreach ($dueRows as $row) {
-        $rpId = (int)($row['id'] ?? 0);
-        if ($rpId <= 0) {
+    $normalizedTemplateCount = 0;
+    foreach ($recurringRows as $row) {
+        $recurringId = (int)($row['id'] ?? 0);
+        if ($recurringId <= 0) {
             continue;
         }
 
@@ -14024,15 +14020,40 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
         if ($entityId > 0 && accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
             Database::execute(
                 'UPDATE accumul8_recurring_payments SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
-                [$entityId, $rpId, $viewerId]
+                [$entityId, $recurringId, $viewerId]
             );
+        }
+
+        $anchorDate = accumul8_normalize_date($row['next_due_date'] ?? null);
+        if ($anchorDate === null) {
+            continue;
+        }
+
+        $frequency = (string)($row['frequency'] ?? 'monthly');
+        $intervalCount = (int)($row['interval_count'] ?? 1);
+        $guard = 0;
+        while (strcmp($anchorDate, $effectiveToday) < 0 && $guard < 480) {
+            $nextAnchor = accumul8_next_due_date($anchorDate, $frequency, $intervalCount);
+            if ($nextAnchor === $anchorDate) {
+                break;
+            }
+            $anchorDate = $nextAnchor;
+            $guard++;
+        }
+        if ($anchorDate !== (string)($row['next_due_date'] ?? '')) {
+            Database::execute(
+                'UPDATE accumul8_recurring_payments
+                 SET next_due_date = ?
+                 WHERE id = ? AND owner_user_id = ?',
+                [$anchorDate, $recurringId, $viewerId]
+            );
+            $row['next_due_date'] = $anchorDate;
+            $normalizedTemplateCount++;
         }
 
         foreach ($monthsToEnsure as $monthValue) {
             $occurrenceDates = accumul8_recurring_occurrences_for_month($row, $monthValue);
-            if (strcmp($monthValue, $currentMonth) >= 0) {
-                $occurrenceDates = accumul8_limit_recurring_occurrences($occurrenceDates, null, $maxAdvanceDate);
-            }
+            $occurrenceDates = accumul8_limit_recurring_occurrences($occurrenceDates, $effectiveToday, $windowEndDate);
             foreach ($occurrenceDates as $occurrenceDate) {
                 $existing = Database::queryOne(
                     'SELECT id
@@ -14041,7 +14062,7 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
                        AND recurring_payment_id = ?
                        AND due_date = ?
                      LIMIT 1',
-                    [$viewerId, $rpId, $occurrenceDate]
+                    [$viewerId, $recurringId, $occurrenceDate]
                 );
                 if ($existing) {
                     continue;
@@ -14057,7 +14078,7 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
                     'INSERT INTO accumul8_transactions
                         (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
                          is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, 0, 1, 1, ?, ?, ?, ?)',
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, 0, ?, 1, ?, ?, ?, ?)',
                     [
                         $viewerId,
                         isset($row['account_id']) ? (int)$row['account_id'] : null,
@@ -14070,7 +14091,8 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
                         ($row['notes'] ?? '') === '' ? null : (string)$row['notes'],
                         $amount,
                         $isPaid,
-                        $rpId,
+                        (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+                        $recurringId,
                         'recurring',
                         $isPaid === 1 ? $occurrenceDate : null,
                         $actorUserId,
@@ -14085,93 +14107,37 @@ function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUser
         accumul8_recompute_running_balance($viewerId);
     }
 
-    return $created;
+    return [
+        'created' => $created,
+        'window_start' => $effectiveToday,
+        'window_end' => $windowEndDate,
+        'normalized_template_count' => $normalizedTemplateCount,
+    ];
+}
+
+function accumul8_ensure_budget_month_transactions(int $viewerId, int $actorUserId, string $selectedMonth): int
+{
+    $normalizedMonth = accumul8_normalize_month_value($selectedMonth);
+    if ($normalizedMonth === null) {
+        throw new RuntimeException('Invalid month_value');
+    }
+
+    $currentDate = gmdate('Y-m-d');
+    $currentMonth = substr($currentDate, 0, 7);
+    $maxAdvanceDate = gmdate('Y-m-d', strtotime($currentDate . ' +90 days'));
+    $maxAdvanceMonth = substr($maxAdvanceDate, 0, 7);
+    if (strcmp($normalizedMonth, $maxAdvanceMonth) > 0) {
+        throw new RuntimeException('Budget planning is limited to 90 days ahead');
+    }
+
+    $syncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId, $currentDate, 90);
+    return (int)($syncResult['created'] ?? 0);
 }
 
 function accumul8_materialize_due_recurring_for_owner(int $viewerId, int $actorUserId, ?string $today = null): int
 {
-    $effectiveToday = $today ?: date('Y-m-d');
-    $dueRows = Database::queryAll(
-        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'payment_method', "'unspecified' AS payment_method") . '
-         FROM accumul8_recurring_payments
-         WHERE owner_user_id = ?
-           AND is_active = 1
-           AND next_due_date <= ?
-         ORDER BY next_due_date ASC, id ASC',
-        [$viewerId, $effectiveToday]
-    );
-
-    $created = 0;
-    foreach ($dueRows as $row) {
-        $rpId = (int)($row['id'] ?? 0);
-        $nextDue = (string)($row['next_due_date'] ?? $effectiveToday);
-        $description = (string)($row['title'] ?? 'Recurring Payment');
-        $direction = (string)($row['direction'] ?? 'outflow');
-        $baseAmount = (float)($row['amount'] ?? 0);
-        $amount = $direction === 'outflow' ? -abs($baseAmount) : abs($baseAmount);
-        $frequency = (string)($row['frequency'] ?? 'monthly');
-        $paymentMethod = (string)($row['payment_method'] ?? 'unspecified');
-        $intervalCount = (int)($row['interval_count'] ?? 1);
-        $isBudgetPlanner = (int)($row['is_budget_planner'] ?? 1) === 1 ? 1 : 0;
-        $entityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
-        if ($entityId <= 0) {
-            $entityId = (int)(accumul8_recurring_entity_id_or_create($viewerId, $row) ?? 0);
-        }
-        if ($entityId > 0 && accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
-            Database::execute(
-                'UPDATE accumul8_recurring_payments SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
-                [$entityId, $rpId, $viewerId]
-            );
-        }
-
-        $existing = Database::queryOne(
-            'SELECT id FROM accumul8_transactions
-             WHERE owner_user_id = ?
-               AND recurring_payment_id = ?
-               AND due_date = ?
-             LIMIT 1',
-            [$viewerId, $rpId, $nextDue]
-        );
-        if (!$existing) {
-            Database::execute(
-                'INSERT INTO accumul8_transactions
-                    (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, amount, rta_amount,
-                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0, 0, ?, 1, ?, ?, ?, ?)',
-                [
-                    $viewerId,
-                    isset($row['account_id']) ? (int)$row['account_id'] : null,
-                    $entityId > 0 ? $entityId : null,
-                    isset($row['contact_id']) ? (int)$row['contact_id'] : null,
-                    $nextDue,
-                    $nextDue,
-                    'bill',
-                    $description,
-                    $amount,
-                    $isBudgetPlanner,
-                    $rpId,
-                    'recurring',
-                    $paymentMethod === 'autopay' ? $nextDue : null,
-                    $actorUserId,
-                ]
-            );
-            $created++;
-        }
-
-        $nextGenerated = accumul8_next_due_date($nextDue, $frequency, $intervalCount);
-        Database::execute(
-            'UPDATE accumul8_recurring_payments
-             SET next_due_date = ?
-             WHERE id = ? AND owner_user_id = ?',
-            [$nextGenerated, $rpId, $viewerId]
-        );
-    }
-
-    if ($created > 0) {
-        accumul8_recompute_running_balance($viewerId);
-    }
-
-    return $created;
+    $syncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId, $today, 90);
+    return (int)($syncResult['created'] ?? 0);
 }
 
 function accumul8_shift_date_by_days(?string $dateValue, int $dayDelta): ?string
@@ -15034,7 +15000,7 @@ if ($action === 'bootstrap') {
     catn8_require_method('GET');
 
     $warnings = [];
-    accumul8_bootstrap_section('materialize_due_recurring', static fn() => accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId), 0, $warnings);
+    accumul8_bootstrap_section('sync_recurring_ledger_window', static fn() => accumul8_sync_recurring_ledger_window($viewerId, $actorUserId), [], $warnings);
     $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
     $entities = accumul8_bootstrap_section('entities', static fn() => accumul8_list_entities($viewerId), [], $warnings);
     $entityAliases = accumul8_bootstrap_section('entity_aliases', static fn() => accumul8_list_entity_aliases($viewerId), [], $warnings);
@@ -16486,8 +16452,8 @@ if ($action === 'delete_recurring') {
 
 if ($action === 'materialize_due_recurring') {
     catn8_require_method('POST');
-    $created = accumul8_materialize_due_recurring_for_owner($viewerId, $actorUserId);
-    catn8_json_response(['success' => true, 'created' => $created]);
+    $result = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
+    catn8_json_response(array_merge(['success' => true], $result));
 }
 
 if ($action === 'ensure_budget_month') {

@@ -1067,9 +1067,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
       setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
       await load();
+      const ledgerSyncResult = response?.ledger_sync;
       const balanceResult = response?.balance_books;
       const openingBalanceResult = response?.opening_balance_reconciliation;
       const watchlistResult = response?.watchlist;
+      const createdLedgerRows = Number(ledgerSyncResult?.created || 0);
       const reconciledCount = Number(openingBalanceResult?.reconciled_count || 0);
       const overdueCount = Number(watchlistResult?.overdue_count || 0);
       const dueSoonCount = Number(watchlistResult?.due_soon_count || 0);
@@ -1079,6 +1081,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         : 'success';
       const summaryParts = [
         `Synced ${Number(balanceResult?.synced_connection_count || 0)} bank connection${Number(balanceResult?.synced_connection_count || 0) === 1 ? '' : 's'}`,
+        `created ${createdLedgerRows} recurring ledger item${createdLedgerRows === 1 ? '' : 's'} through ${String(ledgerSyncResult?.window_end || '').trim() || 'the 90-day window'}`,
         reconciledCount > 0
           ? `adjusted ${reconciledCount} opening balance${reconciledCount === 1 ? '' : 's'}`
           : 'did not need opening-balance adjustments',
@@ -4288,7 +4291,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={recurringDraft?.notes ?? rp.notes ?? ''} onChange={(e) => setRecurringRowDraft(rp, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
                             </div>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>
                               {formatRecurringTitle(rp.title)}
                               {rp.notes ? <span className="small text-muted d-block">{rp.notes}</span> : null}
                             </button>
@@ -4298,14 +4301,14 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {activeRecurringRowId === rp.id ? (
                             <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--date" type="date" value={recurringDraft?.next_due_date ?? rp.next_due_date} onChange={(e) => setRecurringRowDraft(rp, { next_due_date: e.target.value })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineDate(rp.next_due_date)}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatInlineDate(rp.next_due_date)}</button>
                           )}
                         </td>
                         <td className="text-end">
                           {activeRecurringRowId === rp.id ? (
                             <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={recurringDraft?.amount ?? rp.amount} onChange={(e) => setRecurringRowDraft(rp, { amount: Number(e.target.value) })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatRecurringAmount(rp.amount, (rp.direction || 'outflow') as Accumul8Direction)}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatRecurringAmount(rp.amount, (rp.direction || 'outflow') as Accumul8Direction)}</button>
                           )}
                         </td>
                         <td>
@@ -4317,7 +4320,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <option value="monthly">Monthly</option>
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{formatInlineText(rp.frequency)}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatInlineText(rp.frequency)}</button>
                           )}
                         </td>
                         <td>
@@ -4334,7 +4337,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               ))}
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{getAccountDisplayName(rp.account_id, rp.account_name, '', 'No account')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{getAccountDisplayName(rp.account_id, rp.account_name, '', 'No account')}</button>
                           )}
                         </td>
                         <td>
@@ -4345,7 +4348,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               ))}
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</button>
                           )}
                         </td>
                         <td>
@@ -4355,7 +4358,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <option value="0">Hidden</option>
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</button>
                           )}
                         </td>
                         <td>
@@ -4365,13 +4368,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                               <option value="0">Paused</option>
                             </select>
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateRecurringRow(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button>
                           )}
                         </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`View ${rp.title}`} title={`View ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateRecurringRow(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring item?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
                             {recurringDraft ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy} aria-label={`Save ${rp.title}`} title={`Save ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
                           </div>

@@ -572,6 +572,14 @@ export interface Accumul8BudgetMonthEnsureResponse {
   created: number;
 }
 
+export interface Accumul8RecurringLedgerSyncResponse {
+  success: boolean;
+  created: number;
+  window_start: string;
+  window_end: string;
+  normalized_template_count: number;
+}
+
 export interface Accumul8Account {
   id: number;
   banking_organization_id: number | null;
@@ -1078,6 +1086,7 @@ export interface Accumul8AIcountantWatchlistResponse extends Accumul8AIcountantW
 
 export interface Accumul8AIcountantHousekeepingResponse {
   success: boolean;
+  ledger_sync: Accumul8RecurringLedgerSyncResponse;
   balance_books: Accumul8BalanceBooksResponseCore;
   opening_balance_reconciliation: Accumul8OpeningBalanceReconciliationResponseCore;
   watchlist: Accumul8AIcountantWatchlistResponseCore;

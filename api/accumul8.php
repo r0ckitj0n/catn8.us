@@ -6302,6 +6302,122 @@ function accumul8_message_board_response_payload(int $viewerId, int $limit = 75)
     ];
 }
 
+function accumul8_teller_absorb_matching_recurring_placeholder(
+    int $viewerId,
+    int $transactionId,
+    int $accountId,
+    string $transactionDate,
+    float $amount,
+    string $description
+): bool {
+    if ($transactionId <= 0 || $accountId <= 0) {
+        return false;
+    }
+
+    $current = accumul8_get_transaction_row($viewerId, $transactionId);
+    if (!$current) {
+        return false;
+    }
+    $currentRecurringId = (int)($current['recurring_payment_id'] ?? 0);
+    $currentRecurringEntityId = isset($current['entity_id']) ? (int)$current['entity_id'] : 0;
+
+    $candidate = accumul8_find_best_transaction_for_recurring_occurrence(
+        $viewerId,
+        $currentRecurringId,
+        $accountId,
+        $amount,
+        $transactionDate,
+        $description,
+        [
+            'allowed_source_kinds' => ['recurring'],
+            'window_days' => 7,
+            'min_score' => 15,
+            'min_margin' => 2,
+            'expected_entity_id' => $currentRecurringEntityId > 0 ? $currentRecurringEntityId : null,
+            'exclude_ids' => [$transactionId],
+        ]
+    );
+    if (!$candidate) {
+        return false;
+    }
+
+    $occurrenceDate = accumul8_normalize_date($candidate['due_date'] ?? null)
+        ?? accumul8_normalize_date($candidate['transaction_date'] ?? null)
+        ?? $transactionDate;
+    if ($currentRecurringId <= 0) {
+        accumul8_link_transaction_to_recurring_occurrence(
+            $viewerId,
+            $transactionId,
+            (int)($candidate['recurring_payment_id'] ?? 0),
+            $occurrenceDate,
+            [
+                'account_id' => $accountId,
+                'entity_id' => isset($candidate['entity_id']) ? (int)$candidate['entity_id'] : null,
+                'contact_id' => isset($candidate['contact_id']) ? (int)$candidate['contact_id'] : null,
+                'is_budget_planner' => (int)($candidate['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+            ]
+        );
+    }
+    accumul8_enrich_recurring_match_learning(
+        $viewerId,
+        (int)($candidate['recurring_payment_id'] ?? 0),
+        $currentRecurringId > 0 ? $currentRecurringEntityId : (isset($candidate['entity_id']) ? (int)$candidate['entity_id'] : 0),
+        $description,
+        $currentRecurringId > 0 ? $currentRecurringEntityId : (isset($current['entity_id']) ? (int)$current['entity_id'] : 0)
+    );
+
+    Database::execute(
+        'DELETE FROM accumul8_transactions
+         WHERE id = ?
+           AND owner_user_id = ?
+           AND COALESCE(source_kind, "") = "recurring"',
+        [(int)($candidate['id'] ?? 0), $viewerId]
+    );
+
+    return true;
+}
+
+function accumul8_resolve_bank_transaction_entity_id(int $viewerId, string $description, float $amount = 0.0): ?int
+{
+    $description = accumul8_normalize_text($description, 255);
+    if ($description === '') {
+        return null;
+    }
+
+    $existingId = accumul8_find_matching_entity_id($viewerId, $description);
+    if ($existingId !== null && $existingId > 0) {
+        return $existingId;
+    }
+
+    return accumul8_statement_resolve_entity_id($viewerId, $description)
+        ?? accumul8_transaction_entity_id_or_create($viewerId, [
+            'description' => $description,
+            'amount' => $amount,
+        ]);
+}
+
+function accumul8_learn_entity_alias_from_description(int $viewerId, ?int $entityId, string $description): void
+{
+    $entityId = $entityId !== null ? (int)$entityId : 0;
+    $description = accumul8_normalize_text($description, 255);
+    if ($entityId <= 0 || $description === '' || !accumul8_table_exists('accumul8_entity_aliases')) {
+        return;
+    }
+
+    $result = accumul8_assign_entity_alias($viewerId, $entityId, $description, true, false);
+    if (in_array((string)($result['status'] ?? ''), ['created', 'updated', 'reassigned'], true)) {
+        accumul8_upsert_entity_alias_review(
+            $viewerId,
+            $entityId,
+            $description,
+            'approved',
+            'system',
+            false,
+            ACCUMUL8_ENTITY_ALIAS_REVIEW_VERSION
+        );
+    }
+}
+
 function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $actorUserId, int $connectionId): array
 {
     $connection = Database::queryOne(
@@ -6532,8 +6648,10 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
                         $fetchedHistoryEndDate = $date;
                     }
 
+                    $resolvedEntityId = (int)(accumul8_resolve_bank_transaction_entity_id($viewerId, $description, $amount) ?? 0);
+
                     $existingTx = Database::queryOne(
-                        'SELECT id, account_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref
+                        'SELECT id, account_id, entity_id, transaction_date, due_date, paid_date, description, amount, pending_status, source_ref, recurring_payment_id
                          FROM accumul8_transactions
                          WHERE owner_user_id = ? AND source_kind = ? AND external_id = ?
                          LIMIT 1',
@@ -6542,10 +6660,14 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
 
                     if ($existingTx) {
                         $nextPaidDate = $pending ? null : $date;
+                        $nextDueDate = (int)($existingTx['recurring_payment_id'] ?? 0) > 0
+                            ? (accumul8_normalize_date($existingTx['due_date'] ?? null) ?? $date)
+                            : $date;
                         $hasChanges =
                             (int)($existingTx['account_id'] ?? 0) !== $localAccountId
+                            || (int)($existingTx['entity_id'] ?? 0) !== $resolvedEntityId
                             || (string)($existingTx['transaction_date'] ?? '') !== $date
-                            || (string)($existingTx['due_date'] ?? '') !== $date
+                            || (string)($existingTx['due_date'] ?? '') !== $nextDueDate
                             || (string)($existingTx['paid_date'] ?? '') !== (string)($nextPaidDate ?? '')
                             || (string)($existingTx['description'] ?? '') !== $description
                             || round((float)($existingTx['amount'] ?? 0), 2) !== $amount
@@ -6555,12 +6677,13 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
                         if ($hasChanges) {
                             Database::execute(
                                 'UPDATE accumul8_transactions
-                                 SET account_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
+                                 SET account_id = ?, entity_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?, pending_status = ?, source_ref = ?, updated_at = NOW()
                                  WHERE id = ? AND owner_user_id = ?',
                                 [
                                     $localAccountId,
+                                    $resolvedEntityId > 0 ? $resolvedEntityId : null,
                                     $date,
-                                    $date,
+                                    $nextDueDate,
                                     $nextPaidDate,
                                     $description,
                                     $amount,
@@ -6576,17 +6699,78 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
                             $unchangedTotal++;
                             $accountUnchanged++;
                         }
+                        accumul8_teller_absorb_matching_recurring_placeholder(
+                            $viewerId,
+                            (int)($existingTx['id'] ?? 0),
+                            $localAccountId,
+                            $date,
+                            $amount,
+                            $description
+                        );
+                        continue;
+                    }
+
+                    $recurringPlaceholder = accumul8_find_best_transaction_for_recurring_occurrence(
+                        $viewerId,
+                        0,
+                        $localAccountId,
+                        $amount,
+                        $date,
+                        $description,
+                        [
+                            'allowed_source_kinds' => ['recurring'],
+                            'window_days' => 7,
+                            'min_score' => 15,
+                            'min_margin' => 2,
+                            'expected_entity_id' => $resolvedEntityId > 0 ? $resolvedEntityId : null,
+                        ]
+                    );
+                    if ($recurringPlaceholder) {
+                        $occurrenceDate = accumul8_normalize_date($recurringPlaceholder['due_date'] ?? null)
+                            ?? accumul8_normalize_date($recurringPlaceholder['transaction_date'] ?? null)
+                            ?? $date;
+                        Database::execute(
+                            'UPDATE accumul8_transactions
+                             SET account_id = ?, entity_id = ?, transaction_date = ?, due_date = ?, paid_date = ?, description = ?, amount = ?,
+                                 is_paid = 1, is_reconciled = 1, source_kind = ?, source_ref = ?, external_id = ?, pending_status = ?, updated_at = NOW()
+                             WHERE id = ? AND owner_user_id = ?',
+                            [
+                                $localAccountId,
+                                $resolvedEntityId > 0 ? $resolvedEntityId : (isset($recurringPlaceholder['entity_id']) ? (int)$recurringPlaceholder['entity_id'] : null),
+                                $date,
+                                $occurrenceDate,
+                                $pending ? null : $date,
+                                $description,
+                                $amount,
+                                'teller',
+                                $remoteAccountId,
+                                $externalId,
+                                $pending,
+                                (int)($recurringPlaceholder['id'] ?? 0),
+                                $viewerId,
+                            ]
+                        );
+                        accumul8_enrich_recurring_match_learning(
+                            $viewerId,
+                            (int)($recurringPlaceholder['recurring_payment_id'] ?? 0),
+                            isset($recurringPlaceholder['entity_id']) ? (int)$recurringPlaceholder['entity_id'] : null,
+                            $description,
+                            $resolvedEntityId > 0 ? $resolvedEntityId : null
+                        );
+                        $modifiedTotal++;
+                        $accountModified++;
                         continue;
                     }
 
                     Database::execute(
                         'INSERT INTO accumul8_transactions
-                            (owner_user_id, account_id, transaction_date, due_date, entry_type, description, amount,
+                            (owner_user_id, account_id, entity_id, transaction_date, due_date, entry_type, description, amount,
                              is_paid, is_reconciled, is_budget_planner, source_kind, source_ref, external_id, pending_status, paid_date, created_by_user_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         [
                             $viewerId,
                             $localAccountId,
+                            $resolvedEntityId > 0 ? $resolvedEntityId : null,
                             $date,
                             $date,
                             'manual',
@@ -6602,6 +6786,15 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
                             $pending ? null : $date,
                             $actorUserId,
                         ]
+                    );
+                    $insertedId = (int)Database::lastInsertId();
+                    accumul8_teller_absorb_matching_recurring_placeholder(
+                        $viewerId,
+                        $insertedId,
+                        $localAccountId,
+                        $date,
+                        $amount,
+                        $description
                     );
                     $addedTotal++;
                     $accountAdded++;
@@ -7904,8 +8097,6 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, recurring ledger refresh, watchlist review, and reminder upkeep.'
     );
 
-    $ledgerSyncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
-
     $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
     $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
         ? $balanceResult['opening_balance_reconciliation']
@@ -7917,6 +8108,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             'results' => [],
         ];
     $balanceResult = accumul8_aicountant_compact_result($balanceResult);
+    $ledgerSyncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
 
     $watchlistPreview = accumul8_aicountant_watchlist_payload($viewerId);
     $attentionNeeded = (int)($watchlistPreview['overdue_count'] ?? 0) > 0
@@ -9422,6 +9614,25 @@ function accumul8_tables_ensure(): void
         CONSTRAINT fk_accumul8_recurring_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    Database::execute("CREATE TABLE IF NOT EXISTS accumul8_recurring_bank_aliases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_user_id INT NOT NULL,
+        recurring_payment_id INT NOT NULL,
+        entity_id INT NULL,
+        alias_name VARCHAR(255) NOT NULL,
+        alias_key VARCHAR(191) NOT NULL,
+        source_kind VARCHAR(24) NOT NULL DEFAULT 'system',
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_accumul8_recurring_bank_alias (owner_user_id, recurring_payment_id, alias_key),
+        KEY idx_accumul8_recurring_bank_alias_recurring (recurring_payment_id),
+        KEY idx_accumul8_recurring_bank_alias_entity (entity_id),
+        CONSTRAINT fk_accumul8_recurring_bank_alias_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_recurring_bank_alias_recurring FOREIGN KEY (recurring_payment_id) REFERENCES accumul8_recurring_payments(id) ON DELETE CASCADE,
+        CONSTRAINT fk_accumul8_recurring_bank_alias_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     Database::execute("CREATE TABLE IF NOT EXISTS accumul8_transactions (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         owner_user_id INT NOT NULL,
@@ -9786,6 +9997,9 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'notes', 'TEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
         accumul8_table_add_column_if_missing('accumul8_recurring_payments', 'is_budget_planner', 'TINYINT(1) NOT NULL DEFAULT 1');
+        accumul8_table_add_column_if_missing('accumul8_recurring_bank_aliases', 'entity_id', 'INT NULL');
+        accumul8_table_add_column_if_missing('accumul8_recurring_bank_aliases', 'source_kind', "VARCHAR(24) NOT NULL DEFAULT 'system'");
+        accumul8_table_add_column_if_missing('accumul8_recurring_bank_aliases', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
 
         accumul8_table_add_column_if_missing('accumul8_transactions', 'due_date', 'DATE NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'paid_date', 'DATE NULL');
@@ -9849,6 +10063,21 @@ function accumul8_tables_ensure(): void
         }
         if (!accumul8_table_has_index('accumul8_recurring_payments', 'idx_accumul8_recurring_owner_active_due')) {
             Database::execute('ALTER TABLE accumul8_recurring_payments ADD INDEX idx_accumul8_recurring_owner_active_due (owner_user_id, is_active, next_due_date)');
+        }
+        if (!accumul8_table_has_index('accumul8_recurring_bank_aliases', 'uniq_accumul8_recurring_bank_alias')) {
+            Database::execute('ALTER TABLE accumul8_recurring_bank_aliases ADD UNIQUE KEY uniq_accumul8_recurring_bank_alias (owner_user_id, recurring_payment_id, alias_key)');
+        }
+        if (!accumul8_table_has_index('accumul8_recurring_bank_aliases', 'idx_accumul8_recurring_bank_alias_recurring')) {
+            Database::execute('ALTER TABLE accumul8_recurring_bank_aliases ADD INDEX idx_accumul8_recurring_bank_alias_recurring (recurring_payment_id)');
+        }
+        if (!accumul8_table_has_index('accumul8_recurring_bank_aliases', 'idx_accumul8_recurring_bank_alias_entity')) {
+            Database::execute('ALTER TABLE accumul8_recurring_bank_aliases ADD INDEX idx_accumul8_recurring_bank_alias_entity (entity_id)');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_recurring_bank_aliases', 'fk_accumul8_recurring_bank_alias_recurring')) {
+            Database::execute('ALTER TABLE accumul8_recurring_bank_aliases ADD CONSTRAINT fk_accumul8_recurring_bank_alias_recurring FOREIGN KEY (recurring_payment_id) REFERENCES accumul8_recurring_payments(id) ON DELETE CASCADE');
+        }
+        if (!accumul8_table_has_foreign_key('accumul8_recurring_bank_aliases', 'fk_accumul8_recurring_bank_alias_entity')) {
+            Database::execute('ALTER TABLE accumul8_recurring_bank_aliases ADD CONSTRAINT fk_accumul8_recurring_bank_alias_entity FOREIGN KEY (entity_id) REFERENCES accumul8_entities(id) ON DELETE SET NULL');
         }
 
         accumul8_table_add_column_if_missing('accumul8_notification_rules', 'custom_user_ids_json', 'LONGTEXT NULL');
@@ -10306,8 +10535,178 @@ function accumul8_list_entities(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_normalize_recurring_bank_alias(string $value): array
+{
+    $aliasName = accumul8_entity_alias_display_name($value);
+    $aliasKey = accumul8_entity_match_key($aliasName);
+    return [
+        'alias_name' => $aliasName,
+        'alias_key' => $aliasKey,
+    ];
+}
+
+function accumul8_normalize_recurring_bank_alias_list($value): array
+{
+    $items = is_array($value) ? $value : [];
+    $normalized = [];
+    foreach ($items as $item) {
+        $alias = accumul8_normalize_recurring_bank_alias((string)$item);
+        if ($alias['alias_name'] === '' || $alias['alias_key'] === '') {
+            continue;
+        }
+        $normalized[$alias['alias_key']] = $alias['alias_name'];
+    }
+
+    return array_values($normalized);
+}
+
+function accumul8_list_recurring_bank_aliases_by_recurring_ids(int $viewerId, ?array $recurringIds = null): array
+{
+    if (!accumul8_table_exists('accumul8_recurring_bank_aliases')) {
+        return [];
+    }
+
+    $sql = 'SELECT recurring_payment_id, alias_name
+            FROM accumul8_recurring_bank_aliases
+            WHERE owner_user_id = ?
+              AND is_active = 1';
+    $params = [$viewerId];
+
+    if (is_array($recurringIds)) {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn($value): int => (int)$value, $recurringIds),
+            static fn(int $value): bool => $value > 0
+        )));
+        if ($ids === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql .= ' AND recurring_payment_id IN (' . $placeholders . ')';
+        array_push($params, ...$ids);
+    }
+
+    $sql .= ' ORDER BY recurring_payment_id ASC, alias_name ASC, id ASC';
+    $rows = Database::queryAll($sql, $params);
+    $map = [];
+    foreach ($rows as $row) {
+        $recurringId = (int)($row['recurring_payment_id'] ?? 0);
+        if ($recurringId <= 0) {
+            continue;
+        }
+        if (!isset($map[$recurringId])) {
+            $map[$recurringId] = [];
+        }
+        $aliasName = accumul8_normalize_text((string)($row['alias_name'] ?? ''), 255);
+        if ($aliasName !== '') {
+            $map[$recurringId][] = $aliasName;
+        }
+    }
+
+    return $map;
+}
+
+function accumul8_upsert_recurring_bank_alias(
+    int $viewerId,
+    int $recurringId,
+    string $aliasName,
+    array $options = []
+): ?int {
+    if ($recurringId <= 0 || !accumul8_table_exists('accumul8_recurring_bank_aliases')) {
+        return null;
+    }
+
+    $normalized = accumul8_normalize_recurring_bank_alias($aliasName);
+    if ($normalized['alias_name'] === '' || $normalized['alias_key'] === '') {
+        return null;
+    }
+
+    $entityId = isset($options['entity_id']) ? (int)$options['entity_id'] : 0;
+    $sourceKind = accumul8_normalize_text((string)($options['source_kind'] ?? 'system'), 24);
+    if ($sourceKind === '') {
+        $sourceKind = 'system';
+    }
+
+    Database::execute(
+        'INSERT INTO accumul8_recurring_bank_aliases
+            (owner_user_id, recurring_payment_id, entity_id, alias_name, alias_key, source_kind, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+            entity_id = VALUES(entity_id),
+            alias_name = VALUES(alias_name),
+            source_kind = VALUES(source_kind),
+            is_active = 1,
+            updated_at = CURRENT_TIMESTAMP',
+        [
+            $viewerId,
+            $recurringId,
+            $entityId > 0 ? $entityId : null,
+            $normalized['alias_name'],
+            $normalized['alias_key'],
+            $sourceKind,
+        ]
+    );
+
+    $row = Database::queryOne(
+        'SELECT id
+         FROM accumul8_recurring_bank_aliases
+         WHERE owner_user_id = ?
+           AND recurring_payment_id = ?
+           AND alias_key = ?
+         LIMIT 1',
+        [$viewerId, $recurringId, $normalized['alias_key']]
+    );
+
+    return $row ? (int)($row['id'] ?? 0) : null;
+}
+
+function accumul8_replace_recurring_bank_aliases(
+    int $viewerId,
+    int $recurringId,
+    array $aliases,
+    ?int $entityId = null,
+    string $sourceKind = 'manual'
+): void {
+    if ($recurringId <= 0 || !accumul8_table_exists('accumul8_recurring_bank_aliases')) {
+        return;
+    }
+
+    $normalizedAliases = accumul8_normalize_recurring_bank_alias_list($aliases);
+    $normalizedKeys = [];
+    foreach ($normalizedAliases as $aliasName) {
+        $alias = accumul8_normalize_recurring_bank_alias($aliasName);
+        if ($alias['alias_key'] === '') {
+            continue;
+        }
+        $normalizedKeys[] = $alias['alias_key'];
+        accumul8_upsert_recurring_bank_alias($viewerId, $recurringId, $alias['alias_name'], [
+            'entity_id' => $entityId,
+            'source_kind' => $sourceKind,
+        ]);
+    }
+
+    if ($normalizedKeys === []) {
+        Database::execute(
+            'DELETE FROM accumul8_recurring_bank_aliases
+             WHERE owner_user_id = ?
+               AND recurring_payment_id = ?',
+            [$viewerId, $recurringId]
+        );
+        return;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($normalizedKeys), '?'));
+    Database::execute(
+        'DELETE FROM accumul8_recurring_bank_aliases
+         WHERE owner_user_id = ?
+           AND recurring_payment_id = ?
+           AND alias_key NOT IN (' . $placeholders . ')',
+        array_merge([$viewerId, $recurringId], $normalizedKeys)
+    );
+}
+
 function accumul8_list_recurring(int $viewerId): array
 {
+    $aliasMap = accumul8_list_recurring_bank_aliases_by_recurring_ids($viewerId);
     $entityIdSelect = accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'rp.entity_id', 'NULL AS entity_id');
     $accountIdSelect = accumul8_optional_select('accumul8_recurring_payments', 'account_id', 'rp.account_id', 'NULL AS account_id');
     $intervalCountSelect = accumul8_optional_select('accumul8_recurring_payments', 'interval_count', 'rp.interval_count', '1 AS interval_count');
@@ -10366,6 +10765,7 @@ function accumul8_list_recurring(int $viewerId): array
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'account_name' => (string)($r['account_name'] ?? ''),
             'banking_organization_name' => (string)($r['banking_organization_name'] ?? ''),
+            'recurring_bank_aliases' => $aliasMap[(int)($r['id'] ?? 0)] ?? [],
         ];
     }, $rows);
 }
@@ -14040,6 +14440,454 @@ function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $m
     }));
 }
 
+function accumul8_recurring_match_tokens(string $value): array
+{
+    $normalized = accumul8_normalize_locator_text($value);
+    if ($normalized === '') {
+        return [];
+    }
+
+    $tokens = preg_split('/\s+/', $normalized) ?: [];
+    $stopWords = [
+        'ach' => true,
+        'auto' => true,
+        'bill' => true,
+        'card' => true,
+        'check' => true,
+        'debit' => true,
+        'deposit' => true,
+        'online' => true,
+        'payment' => true,
+        'pending' => true,
+        'pos' => true,
+        'purchase' => true,
+        'transfer' => true,
+        'transaction' => true,
+        'withdrawal' => true,
+    ];
+
+    $result = [];
+    foreach ($tokens as $token) {
+        $token = trim((string)$token);
+        if ($token === '' || isset($stopWords[$token])) {
+            continue;
+        }
+        if (strlen($token) > 4 && str_ends_with($token, 'ies')) {
+            $token = substr($token, 0, -3) . 'y';
+        } elseif (strlen($token) > 4 && str_ends_with($token, 's')) {
+            $token = substr($token, 0, -1);
+        }
+        if (strlen($token) < 3 || isset($stopWords[$token])) {
+            continue;
+        }
+        $result[$token] = true;
+    }
+
+    return array_keys($result);
+}
+
+function accumul8_recurring_description_match_score(string $left, string $right): int
+{
+    $leftNormalized = accumul8_normalize_locator_text($left);
+    $rightNormalized = accumul8_normalize_locator_text($right);
+    if ($leftNormalized === '' || $rightNormalized === '') {
+        return 0;
+    }
+    if ($leftNormalized === $rightNormalized) {
+        return 12;
+    }
+
+    $leftCollapsed = str_replace(' ', '', $leftNormalized);
+    $rightCollapsed = str_replace(' ', '', $rightNormalized);
+    if ($leftCollapsed !== '' && $leftCollapsed === $rightCollapsed) {
+        return 11;
+    }
+    if (str_contains($leftNormalized, $rightNormalized) || str_contains($rightNormalized, $leftNormalized)) {
+        return 9;
+    }
+    if ($leftCollapsed !== '' && $rightCollapsed !== '' && (str_contains($leftCollapsed, $rightCollapsed) || str_contains($rightCollapsed, $leftCollapsed))) {
+        return 8;
+    }
+
+    $leftTokens = accumul8_recurring_match_tokens($leftNormalized);
+    $rightTokens = accumul8_recurring_match_tokens($rightNormalized);
+    if ($leftTokens === [] || $rightTokens === []) {
+        return 0;
+    }
+
+    $shared = 0;
+    foreach ($leftTokens as $leftToken) {
+        foreach ($rightTokens as $rightToken) {
+            if ($leftToken === $rightToken) {
+                $shared++;
+                break;
+            }
+            if (strlen($leftToken) >= 5 && strlen($rightToken) >= 5) {
+                if (str_starts_with($leftToken, $rightToken) || str_starts_with($rightToken, $leftToken)) {
+                    $shared++;
+                    break;
+                }
+            }
+        }
+    }
+
+    if ($shared <= 0) {
+        return 0;
+    }
+
+    $coverage = $shared / max(1, min(count($leftTokens), count($rightTokens)));
+    if ($coverage >= 1.0) {
+        return 8;
+    }
+    if ($coverage >= 0.5) {
+        return 6;
+    }
+    return 4;
+}
+
+function accumul8_recurring_occurrence_match_score(array $candidate, int $recurringId, string $occurrenceDate, string $description, int $windowDays): int
+{
+    $candidateRecurringId = (int)($candidate['recurring_payment_id'] ?? 0);
+    if ($recurringId > 0 && $candidateRecurringId > 0 && $candidateRecurringId !== $recurringId) {
+        return -1;
+    }
+
+    $candidateDates = array_values(array_unique(array_filter([
+        accumul8_normalize_date($candidate['due_date'] ?? null),
+        accumul8_normalize_date($candidate['transaction_date'] ?? null),
+        accumul8_normalize_date($candidate['paid_date'] ?? null),
+    ])));
+    if ($candidateDates === []) {
+        return -1;
+    }
+
+    $bestDelta = null;
+    foreach ($candidateDates as $candidateDate) {
+        $delta = abs(accumul8_date_delta_days($occurrenceDate, $candidateDate));
+        if ($bestDelta === null || $delta < $bestDelta) {
+            $bestDelta = $delta;
+        }
+    }
+    if ($bestDelta === null || $bestDelta > $windowDays) {
+        return -1;
+    }
+
+    $dateScore = match (true) {
+        $bestDelta === 0 => 12,
+        $bestDelta === 1 => 10,
+        $bestDelta <= 3 => 8,
+        $bestDelta <= 5 => 6,
+        default => 4,
+    };
+    $descriptionScore = accumul8_recurring_description_match_score($description, (string)($candidate['description'] ?? ''));
+    if ($descriptionScore <= 0) {
+        return -1;
+    }
+
+    $sourceKind = accumul8_transaction_source_kind($candidate['source_kind'] ?? '');
+    $score = $dateScore + $descriptionScore;
+    if ($sourceKind === 'recurring') {
+        $score += 3;
+    }
+    if ((int)($candidate['is_reconciled'] ?? 0) === 1) {
+        $score += 1;
+    }
+    if ((int)($candidate['is_paid'] ?? 0) === 1) {
+        $score += 1;
+    }
+    if ((int)($candidate['pending_status'] ?? 0) === 1) {
+        $score -= 1;
+    }
+
+    return $score;
+}
+
+function accumul8_recurring_amount_match_score(float $expectedAmount, float $actualAmount, bool $entityMatched, int $descriptionScore): int
+{
+    $difference = abs(round($expectedAmount - $actualAmount, 2));
+    if ($difference <= 0.01) {
+        return 12;
+    }
+    if ($difference <= 1.00) {
+        return 10;
+    }
+
+    $maxMagnitude = max(abs($expectedAmount), abs($actualAmount));
+    $relativeDifference = $maxMagnitude > 0.009 ? ($difference / $maxMagnitude) : 0.0;
+    if ($difference <= 5.00 && $relativeDifference <= 0.05) {
+        return 8;
+    }
+    if ($difference <= 25.00 && $relativeDifference <= 0.10) {
+        return 6;
+    }
+    if ($entityMatched && $difference <= 250.00 && $relativeDifference <= 0.35) {
+        return 5;
+    }
+    if ($entityMatched && $maxMagnitude >= 500.00 && $difference <= 1500.00 && $relativeDifference <= 0.50) {
+        return 4;
+    }
+    if ($descriptionScore >= 9 && $difference <= 150.00 && $relativeDifference <= 0.25) {
+        return 4;
+    }
+
+    return -1;
+}
+
+function accumul8_find_best_transaction_for_recurring_occurrence(
+    int $viewerId,
+    int $recurringId,
+    ?int $accountId,
+    float $amount,
+    string $occurrenceDate,
+    string $description,
+    array $options = []
+): ?array {
+    if ($accountId === null || $accountId <= 0 || $occurrenceDate === '' || $description === '') {
+        return null;
+    }
+
+    $windowDays = max(0, min(10, (int)($options['window_days'] ?? 5)));
+    $minScore = max(1, (int)($options['min_score'] ?? 14));
+    $minMargin = max(1, (int)($options['min_margin'] ?? 2));
+    $expectedEntityId = isset($options['expected_entity_id']) ? (int)$options['expected_entity_id'] : 0;
+    $comparisonDescriptions = accumul8_normalize_recurring_bank_alias_list($options['candidate_descriptions'] ?? []);
+    if ($comparisonDescriptions === []) {
+        $comparisonDescriptions = [$description];
+    }
+    $allowedSourceKinds = array_values(array_filter(array_map(
+        static fn($value): string => accumul8_transaction_source_kind($value),
+        is_array($options['allowed_source_kinds'] ?? null) ? $options['allowed_source_kinds'] : ['manual', 'teller', 'statement_upload', 'statement_pdf', 'recurring']
+    )));
+    if ($allowedSourceKinds === []) {
+        return null;
+    }
+
+    $excludeIds = array_values(array_unique(array_filter(
+        array_map(static fn($value): int => (int)$value, is_array($options['exclude_ids'] ?? null) ? $options['exclude_ids'] : []),
+        static fn(int $value): bool => $value > 0
+    )));
+    $startDate = accumul8_shift_date_by_days($occurrenceDate, -$windowDays) ?? $occurrenceDate;
+    $endDate = accumul8_shift_date_by_days($occurrenceDate, $windowDays) ?? $occurrenceDate;
+
+    $placeholders = implode(',', array_fill(0, count($allowedSourceKinds), '?'));
+    $sql = 'SELECT id,
+                   account_id,
+                   entity_id,
+                   contact_id,
+                   transaction_date,
+                   due_date,
+                   paid_date,
+                   description,
+                   memo,
+                   amount,
+                   is_paid,
+                   is_reconciled,
+                   is_budget_planner,
+                   is_recurring_instance,
+                   recurring_payment_id,
+                   COALESCE(source_kind, "manual") AS source_kind,
+                   COALESCE(source_ref, "") AS source_ref,
+                   COALESCE(external_id, "") AS external_id,
+                   COALESCE(pending_status, 0) AS pending_status
+            FROM accumul8_transactions
+            WHERE owner_user_id = ?
+              AND COALESCE(account_id, 0) = ?
+              AND COALESCE(source_kind, "manual") IN (' . $placeholders . ')
+              AND (
+                   transaction_date BETWEEN ? AND ?
+                   OR (COALESCE(due_date, "") <> "" AND due_date BETWEEN ? AND ?)
+              )';
+    $params = array_merge(
+        [$viewerId, $accountId],
+        $allowedSourceKinds,
+        [$startDate, $endDate, $startDate, $endDate]
+    );
+    if ($excludeIds !== []) {
+        $excludePlaceholders = implode(',', array_fill(0, count($excludeIds), '?'));
+        $sql .= ' AND id NOT IN (' . $excludePlaceholders . ')';
+        array_push($params, ...$excludeIds);
+    }
+
+    $rows = Database::queryAll($sql, $params);
+    if ($rows === []) {
+        return null;
+    }
+    $candidateRecurringAliasMap = accumul8_list_recurring_bank_aliases_by_recurring_ids(
+        $viewerId,
+        array_values(array_unique(array_filter(
+            array_map(static fn(array $row): int => (int)($row['recurring_payment_id'] ?? 0), $rows),
+            static fn(int $value): bool => $value > 0
+        )))
+    );
+
+    $scored = [];
+    foreach ($rows as $row) {
+        $candidateDescriptions = [(string)($row['description'] ?? '')];
+        $candidateRecurringId = (int)($row['recurring_payment_id'] ?? 0);
+        if ($candidateRecurringId > 0 && isset($candidateRecurringAliasMap[$candidateRecurringId])) {
+            $candidateDescriptions = array_merge($candidateDescriptions, $candidateRecurringAliasMap[$candidateRecurringId]);
+        }
+
+        $bestDescriptionScore = -1;
+        $seedDescription = (string)($comparisonDescriptions[0] ?? $description);
+        foreach ($comparisonDescriptions as $comparisonDescription) {
+            foreach ($candidateDescriptions as $candidateDescription) {
+                $comparisonScore = accumul8_recurring_description_match_score($comparisonDescription, $candidateDescription);
+                if ($comparisonScore > $bestDescriptionScore) {
+                    $bestDescriptionScore = $comparisonScore;
+                    $seedDescription = $comparisonDescription;
+                }
+            }
+        }
+        if ($bestDescriptionScore <= 0) {
+            continue;
+        }
+
+        $baseScore = accumul8_recurring_occurrence_match_score($row, $recurringId, $occurrenceDate, $seedDescription, $windowDays);
+        if ($baseScore < 0) {
+            continue;
+        }
+        $rowDescriptionScore = accumul8_recurring_description_match_score($seedDescription, (string)($row['description'] ?? ''));
+        $baseScore = ($baseScore - max(0, $rowDescriptionScore)) + $bestDescriptionScore;
+
+        $candidateEntityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
+        if ($candidateEntityId <= 0) {
+            $candidateEntityId = (int)(accumul8_find_matching_entity_id($viewerId, (string)($row['description'] ?? '')) ?? 0);
+        }
+        $entityMatched = $expectedEntityId > 0 && $candidateEntityId > 0 && $candidateEntityId === $expectedEntityId;
+        $amountScore = accumul8_recurring_amount_match_score($amount, (float)($row['amount'] ?? 0), $entityMatched, $bestDescriptionScore);
+        if ($amountScore < 0) {
+            continue;
+        }
+        $score = $baseScore + $amountScore + ($entityMatched ? 6 : 0);
+        if ($score < $minScore) {
+            continue;
+        }
+        $row['match_score'] = $score;
+        $row['matched_entity_id'] = $candidateEntityId > 0 ? $candidateEntityId : null;
+        $scored[] = $row;
+    }
+    if ($scored === []) {
+        return null;
+    }
+
+    usort($scored, static function (array $left, array $right): int {
+        $scoreCompare = (int)($right['match_score'] ?? 0) <=> (int)($left['match_score'] ?? 0);
+        if ($scoreCompare !== 0) {
+            return $scoreCompare;
+        }
+        return (int)($right['id'] ?? 0) <=> (int)($left['id'] ?? 0);
+    });
+
+    $best = $scored[0] ?? null;
+    $runnerUp = $scored[1] ?? null;
+    if (!$best) {
+        return null;
+    }
+    if ($runnerUp && ((int)($best['match_score'] ?? 0) - (int)($runnerUp['match_score'] ?? 0)) < $minMargin) {
+        return null;
+    }
+
+    return $best;
+}
+
+function accumul8_link_transaction_to_recurring_occurrence(
+    int $viewerId,
+    int $transactionId,
+    int $recurringId,
+    string $occurrenceDate,
+    array $template
+): bool {
+    if ($transactionId <= 0 || $recurringId <= 0 || $occurrenceDate === '') {
+        return false;
+    }
+
+    $transaction = accumul8_get_transaction_row($viewerId, $transactionId);
+    if (!$transaction) {
+        return false;
+    }
+
+    $updates = [];
+    $params = [];
+    if ((int)($transaction['recurring_payment_id'] ?? 0) !== $recurringId) {
+        $updates[] = 'recurring_payment_id = ?';
+        $params[] = $recurringId;
+    }
+    if ((int)($transaction['is_recurring_instance'] ?? 0) !== 1) {
+        $updates[] = 'is_recurring_instance = 1';
+    }
+    if (accumul8_normalize_date($transaction['due_date'] ?? null) !== $occurrenceDate) {
+        $updates[] = 'due_date = ?';
+        $params[] = $occurrenceDate;
+    }
+    if ((int)($transaction['is_budget_planner'] ?? 0) !== 1 && (int)($template['is_budget_planner'] ?? 0) === 1) {
+        $updates[] = 'is_budget_planner = 1';
+    }
+    if ((int)($transaction['entity_id'] ?? 0) <= 0 && (int)($template['entity_id'] ?? 0) > 0) {
+        $updates[] = 'entity_id = ?';
+        $params[] = (int)$template['entity_id'];
+    }
+    if ((int)($transaction['contact_id'] ?? 0) <= 0 && (int)($template['contact_id'] ?? 0) > 0) {
+        $updates[] = 'contact_id = ?';
+        $params[] = (int)$template['contact_id'];
+    }
+    if ((int)($transaction['account_id'] ?? 0) <= 0 && (int)($template['account_id'] ?? 0) > 0) {
+        $updates[] = 'account_id = ?';
+        $params[] = (int)$template['account_id'];
+    }
+
+    if ($updates === []) {
+        return false;
+    }
+
+    $params[] = $transactionId;
+    $params[] = $viewerId;
+    Database::execute(
+        'UPDATE accumul8_transactions
+         SET ' . implode(', ', $updates) . '
+         WHERE id = ? AND owner_user_id = ?',
+        $params
+    );
+
+    return true;
+}
+
+function accumul8_enrich_recurring_match_learning(
+    int $viewerId,
+    int $recurringId,
+    ?int $recurringEntityId,
+    string $matchedDescription,
+    ?int $matchedEntityId = null
+): void {
+    $matchedDescription = accumul8_normalize_text($matchedDescription, 255);
+    if ($matchedDescription === '') {
+        return;
+    }
+
+    $recurringEntityId = $recurringEntityId !== null ? (int)$recurringEntityId : 0;
+    $matchedEntityId = $matchedEntityId !== null ? (int)$matchedEntityId : 0;
+
+    if ($recurringEntityId <= 0 && $matchedEntityId > 0 && accumul8_table_has_column('accumul8_recurring_payments', 'entity_id')) {
+        Database::execute(
+            'UPDATE accumul8_recurring_payments
+             SET entity_id = ?
+             WHERE id = ?
+               AND owner_user_id = ?
+               AND (entity_id IS NULL OR entity_id = 0)',
+            [$matchedEntityId, $recurringId, $viewerId]
+        );
+        $recurringEntityId = $matchedEntityId;
+    }
+
+    if ($recurringEntityId > 0) {
+        accumul8_learn_entity_alias_from_description($viewerId, $recurringEntityId, $matchedDescription);
+    }
+    accumul8_upsert_recurring_bank_alias($viewerId, $recurringId, $matchedDescription, [
+        'entity_id' => $recurringEntityId > 0 ? $recurringEntityId : $matchedEntityId,
+        'source_kind' => 'system',
+    ]);
+}
+
 function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, ?string $today = null, int $daysAhead = 90): array
 {
     $effectiveToday = accumul8_normalize_date($today) ?? date('Y-m-d');
@@ -14058,6 +14906,10 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
            AND is_active = 1
          ORDER BY id ASC',
         [$viewerId]
+    );
+    $recurringAliasMap = accumul8_list_recurring_bank_aliases_by_recurring_ids(
+        $viewerId,
+        array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $recurringRows)
     );
 
     $created = 0;
@@ -14115,9 +14967,9 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                      FROM accumul8_transactions
                      WHERE owner_user_id = ?
                        AND recurring_payment_id = ?
-                       AND due_date = ?
+                       AND (due_date = ? OR transaction_date = ?)
                      LIMIT 1',
-                    [$viewerId, $recurringId, $occurrenceDate]
+                    [$viewerId, $recurringId, $occurrenceDate, $occurrenceDate]
                 );
                 if ($existing) {
                     continue;
@@ -14126,6 +14978,48 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                 $direction = (string)($row['direction'] ?? 'outflow');
                 $baseAmount = (float)($row['amount'] ?? 0);
                 $amount = $direction === 'inflow' ? abs($baseAmount) : -abs($baseAmount);
+                $linkedExisting = accumul8_find_best_transaction_for_recurring_occurrence(
+                    $viewerId,
+                    $recurringId,
+                    isset($row['account_id']) ? (int)$row['account_id'] : null,
+                    $amount,
+                    $occurrenceDate,
+                    (string)($row['title'] ?? 'Recurring Payment'),
+                    [
+                        'allowed_source_kinds' => ['manual', 'teller', 'statement_upload', 'statement_pdf'],
+                        'window_days' => 7,
+                        'min_score' => 14,
+                        'min_margin' => 2,
+                        'expected_entity_id' => $entityId > 0 ? $entityId : null,
+                        'candidate_descriptions' => array_merge(
+                            [(string)($row['title'] ?? 'Recurring Payment')],
+                            $recurringAliasMap[$recurringId] ?? []
+                        ),
+                    ]
+                );
+                if ($linkedExisting) {
+                    accumul8_link_transaction_to_recurring_occurrence(
+                        $viewerId,
+                        (int)($linkedExisting['id'] ?? 0),
+                        $recurringId,
+                        $occurrenceDate,
+                        [
+                            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+                            'entity_id' => $entityId > 0 ? $entityId : null,
+                            'contact_id' => isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+                            'is_budget_planner' => (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+                        ]
+                    );
+                    accumul8_enrich_recurring_match_learning(
+                        $viewerId,
+                        $recurringId,
+                        $entityId > 0 ? $entityId : null,
+                        (string)($linkedExisting['description'] ?? ''),
+                        isset($linkedExisting['matched_entity_id']) ? (int)$linkedExisting['matched_entity_id'] : null
+                    );
+                    continue;
+                }
+
                 $paidDate = accumul8_normalize_date($row['paid_date'] ?? null);
                 $isPaid = $paidDate === $occurrenceDate ? 1 : 0;
 
@@ -16320,6 +17214,7 @@ if ($action === 'create_recurring') {
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $dayOfMonth = isset($body['day_of_month']) && $body['day_of_month'] !== '' ? (int)$body['day_of_month'] : null;
     $dayOfWeek = isset($body['day_of_week']) && $body['day_of_week'] !== '' ? (int)$body['day_of_week'] : null;
+    $recurringBankAliases = accumul8_normalize_recurring_bank_alias_list($body['recurring_bank_aliases'] ?? []);
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
     $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
@@ -16366,7 +17261,10 @@ if ($action === 'create_recurring') {
         ]
     );
 
-    catn8_json_response(['success' => true, 'id' => (int)Database::lastInsertId()]);
+    $recurringId = (int)Database::lastInsertId();
+    accumul8_replace_recurring_bank_aliases($viewerId, $recurringId, $recurringBankAliases, $entityIdOrNull, 'manual');
+
+    catn8_json_response(['success' => true, 'id' => $recurringId]);
 }
 
 if ($action === 'update_recurring') {
@@ -16390,6 +17288,10 @@ if ($action === 'update_recurring') {
     $accountId = isset($body['account_id']) ? (int)$body['account_id'] : 0;
     $dayOfMonth = isset($body['day_of_month']) && $body['day_of_month'] !== '' ? (int)$body['day_of_month'] : null;
     $dayOfWeek = isset($body['day_of_week']) && $body['day_of_week'] !== '' ? (int)$body['day_of_week'] : null;
+    $hasRecurringBankAliases = array_key_exists('recurring_bank_aliases', $body);
+    $recurringBankAliases = $hasRecurringBankAliases
+        ? accumul8_normalize_recurring_bank_alias_list($body['recurring_bank_aliases'])
+        : [];
     $contactIdOrNull = accumul8_owned_id_or_null('contacts', $viewerId, $contactId);
     $requestedEntityIdOrNull = accumul8_owned_id_or_null('entities', $viewerId, $entityId);
     $accountIdOrNull = accumul8_owned_id_or_null('accounts', $viewerId, $accountId);
@@ -16451,6 +17353,9 @@ if ($action === 'update_recurring') {
             $viewerId,
         ]
     );
+    if ($hasRecurringBankAliases) {
+        accumul8_replace_recurring_bank_aliases($viewerId, $id, $recurringBankAliases, $entityIdOrNull, 'manual');
+    }
 
     $syncedLinkedRows = accumul8_sync_open_recurring_transactions_from_template($viewerId, $id, $existingRecurring, [
         'entity_id' => $entityIdOrNull,

@@ -260,6 +260,18 @@ Business term: Banking Organizations
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
+### accumul8_recurring_bank_aliases
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `owner_user_id` (INT, FOREIGN KEY -> users.id)
+- `recurring_payment_id` (INT, FOREIGN KEY -> accumul8_recurring_payments.id)
+- `entity_id` (INT, NULLABLE, FOREIGN KEY -> accumul8_entities.id)
+- `alias_name` (VARCHAR(255))
+- `alias_key` (VARCHAR(191))
+- `source_kind` (VARCHAR(24), e.g. `manual`/`system`/`ai`)
+- `is_active` (TINYINT(1), DEFAULT 1)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
 ### accumul8_transactions
 - `id` (BIGINT, PRIMARY KEY, AUTO_INCREMENT)
 - `owner_user_id` (INT, FOREIGN KEY -> users.id)

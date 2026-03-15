@@ -451,6 +451,7 @@ export interface Accumul8RecurringPayment {
   contact_name: string;
   account_name: string;
   banking_organization_name: string;
+  recurring_bank_aliases: string[];
 }
 
 export interface Accumul8RecurringUpsertRequest {
@@ -467,6 +468,7 @@ export interface Accumul8RecurringUpsertRequest {
   account_id?: number | null;
   is_budget_planner?: number;
   notes?: string;
+  recurring_bank_aliases?: string[];
 }
 
 export interface Accumul8Transaction {

@@ -60,6 +60,9 @@ try {
         'create_notification_rule' => $body['create_notification_rule'] ?? 1,
         'email_on_attention_only' => $body['email_on_attention_only'] ?? 1,
         'run_entity_maintenance' => $body['run_entity_maintenance'] ?? 0,
+        'skip_recurring_sync' => $body['skip_recurring_sync'] ?? 0,
+        'skip_balance_books' => $body['skip_balance_books'] ?? 0,
+        'skip_watchlist' => $body['skip_watchlist'] ?? 0,
     ]);
     catn8_diagnostics_log_event('accumul8_housekeeping', true, 200, 'AIcountant housekeeping completed', [
         'owner_user_id' => $ownerUserId,

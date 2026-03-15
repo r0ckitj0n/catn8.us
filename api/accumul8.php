@@ -7040,6 +7040,7 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
     $syncedCount = 0;
     $errorCount = 0;
     $skippedCount = 0;
+    $connectionErrors = [];
 
     foreach ($eligibleConnections as $connection) {
         $connectionId = (int)($connection['id'] ?? 0);
@@ -7083,6 +7084,12 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
             );
         } catch (Throwable $exception) {
             $errorCount++;
+            $connectionErrors[] = [
+                'connection_id' => $connectionId,
+                'institution_name' => $institutionName,
+                'error' => accumul8_normalize_text($exception->getMessage(), 2000),
+                'trace' => accumul8_normalize_text($exception->getTraceAsString(), 8000),
+            ];
             accumul8_message_board_post(
                 $viewerId,
                 $actorUserId,
@@ -7126,6 +7133,7 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
         'skipped_connection_count' => $skippedCount,
         'error_connection_count' => $errorCount,
         'changed_accounts' => $changedAccounts,
+        'connection_errors' => $connectionErrors,
     ];
 }
 
@@ -7188,6 +7196,7 @@ function accumul8_balance_books(int $viewerId, int $actorUserId, array $options 
         'skipped_connection_count' => (int)($balanceResult['skipped_connection_count'] ?? 0),
         'error_connection_count' => $errorCount,
         'opening_balance_reconciliation' => $openingBalanceResult,
+        'connection_errors' => is_array($balanceResult['connection_errors'] ?? null) ? $balanceResult['connection_errors'] : [],
     ];
     if ($includeMessages) {
         $result = array_merge($result, accumul8_message_board_response_payload($viewerId));
@@ -8087,6 +8096,12 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     $emailOnAttentionOnly = !array_key_exists('email_on_attention_only', $options) || accumul8_normalize_bool($options['email_on_attention_only']) === 1;
     $runEntityMaintenance = array_key_exists('run_entity_maintenance', $options)
         && accumul8_normalize_bool($options['run_entity_maintenance']) === 1;
+    $skipRecurringSync = array_key_exists('skip_recurring_sync', $options)
+        && accumul8_normalize_bool($options['skip_recurring_sync']) === 1;
+    $skipBalanceBooks = array_key_exists('skip_balance_books', $options)
+        && accumul8_normalize_bool($options['skip_balance_books']) === 1;
+    $skipWatchlist = array_key_exists('skip_watchlist', $options)
+        && accumul8_normalize_bool($options['skip_watchlist']) === 1;
 
     accumul8_message_board_post(
         $viewerId,
@@ -8097,7 +8112,22 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'Starting scheduled AIcountant housekeeping: bank sync, opening-balance reconciliation, recurring ledger refresh, watchlist review, and reminder upkeep.'
     );
 
-    $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
+    $balanceResult = [
+        'synced_connection_count' => 0,
+        'skipped_connection_count' => 0,
+        'error_connection_count' => 0,
+        'opening_balance_reconciliation' => [
+            'reconciled_count' => 0,
+            'skipped_count' => 0,
+            'review_needed_count' => 0,
+            'review_needed_accounts' => [],
+            'results' => [],
+        ],
+        'connection_errors' => [],
+    ];
+    if (!$skipBalanceBooks) {
+        $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
+    }
     $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
         ? $balanceResult['opening_balance_reconciliation']
         : [
@@ -8108,24 +8138,35 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             'results' => [],
         ];
     $balanceResult = accumul8_aicountant_compact_result($balanceResult);
-    $ledgerSyncResult = accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
+    if (isset($balanceResult['connection_errors']) && is_array($balanceResult['connection_errors'])) {
+        $balanceResult['connection_errors'] = $balanceResult['connection_errors'];
+    }
+    $ledgerSyncResult = $skipRecurringSync
+        ? ['created' => 0, 'window_start' => accumul8_normalize_date(gmdate('Y-m-d')), 'window_end' => accumul8_recurring_window_end_date(gmdate('Y-m-d'), 90), 'normalized_template_count' => 0]
+        : accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
 
-    $watchlistPreview = accumul8_aicountant_watchlist_payload($viewerId);
+    $watchlistPreview = $skipWatchlist ? [
+        'overdue_count' => 0,
+        'due_soon_count' => 0,
+        'recurring_soon_count' => 0,
+        'cash_tight' => 0,
+    ] : accumul8_aicountant_watchlist_payload($viewerId);
     $attentionNeeded = (int)($watchlistPreview['overdue_count'] ?? 0) > 0
         || (int)($watchlistPreview['due_soon_count'] ?? 0) > 0
         || (int)($watchlistPreview['recurring_soon_count'] ?? 0) > 0
         || (int)($watchlistPreview['cash_tight'] ?? 0) === 1;
     $shouldSendEmail = $sendEmail && (!$emailOnAttentionOnly || $attentionNeeded);
 
-    $watchlistResult = accumul8_aicountant_run_watchlist(
-        $viewerId,
-        $actorUserId,
-        $shouldSendEmail,
-        $createNotificationRule,
-        $watchlistPreview,
-        ['include_messages' => 0]
-    );
-    $watchlistResult = accumul8_aicountant_compact_result($watchlistResult);
+    $watchlistResult = $skipWatchlist
+        ? ['overdue_count' => 0, 'due_soon_count' => 0, 'recurring_soon_count' => 0, 'sent_email_count' => 0, 'failed_email_count' => 0]
+        : accumul8_aicountant_compact_result(accumul8_aicountant_run_watchlist(
+            $viewerId,
+            $actorUserId,
+            $shouldSendEmail,
+            $createNotificationRule,
+            $watchlistPreview,
+            ['include_messages' => 0]
+        ));
     $entityMaintenanceResult = null;
     $canRunEntityMaintenanceAi = accumul8_aicountant_provider_has_credentials('openai')
         || accumul8_aicountant_provider_has_credentials('google_ai_studio')
@@ -10416,6 +10457,48 @@ function accumul8_list_entity_aliases(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_list_entity_alias_names_by_entity_ids(int $viewerId, ?array $entityIds = null): array
+{
+    if (!accumul8_table_exists('accumul8_entity_aliases')) {
+        return [];
+    }
+
+    $sql = 'SELECT entity_id, alias_name
+            FROM accumul8_entity_aliases
+            WHERE owner_user_id = ?';
+    $params = [$viewerId];
+
+    if (is_array($entityIds)) {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn($value): int => (int)$value, $entityIds),
+            static fn(int $value): bool => $value > 0
+        )));
+        if ($ids === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql .= ' AND entity_id IN (' . $placeholders . ')';
+        array_push($params, ...$ids);
+    }
+
+    $sql .= ' ORDER BY entity_id ASC, alias_name ASC, id ASC';
+    $rows = Database::queryAll($sql, $params);
+    $map = [];
+    foreach ($rows as $row) {
+        $entityId = (int)($row['entity_id'] ?? 0);
+        $aliasName = accumul8_normalize_text((string)($row['alias_name'] ?? ''), 255);
+        if ($entityId <= 0 || $aliasName === '') {
+            continue;
+        }
+        if (!isset($map[$entityId])) {
+            $map[$entityId] = [];
+        }
+        $map[$entityId][] = $aliasName;
+    }
+
+    return $map;
+}
+
 function accumul8_list_entity_endex_scan_logs(int $viewerId, int $limit = 12): array
 {
     if (!accumul8_table_exists('accumul8_entity_endex_scan_logs')) {
@@ -12202,9 +12285,9 @@ function accumul8_parse_statement_upload_id_from_source_ref(string $sourceRef): 
     return null;
 }
 
-function accumul8_normalize_locator_text(string $value): string
+function accumul8_normalize_locator_text($value): string
 {
-    $value = strtolower(trim($value));
+    $value = strtolower(trim((string)$value));
     $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
     return trim($value);
 }
@@ -14440,7 +14523,7 @@ function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $m
     }));
 }
 
-function accumul8_recurring_match_tokens(string $value): array
+function accumul8_recurring_match_tokens($value): array
 {
     $normalized = accumul8_normalize_locator_text($value);
     if ($normalized === '') {
@@ -14486,7 +14569,7 @@ function accumul8_recurring_match_tokens(string $value): array
     return array_keys($result);
 }
 
-function accumul8_recurring_description_match_score(string $left, string $right): int
+function accumul8_recurring_description_match_score($left, $right): int
 {
     $leftNormalized = accumul8_normalize_locator_text($left);
     $rightNormalized = accumul8_normalize_locator_text($right);
@@ -14517,7 +14600,9 @@ function accumul8_recurring_description_match_score(string $left, string $right)
 
     $shared = 0;
     foreach ($leftTokens as $leftToken) {
+        $leftToken = (string)$leftToken;
         foreach ($rightTokens as $rightToken) {
+            $rightToken = (string)$rightToken;
             if ($leftToken === $rightToken) {
                 $shared++;
                 break;
@@ -14888,6 +14973,77 @@ function accumul8_enrich_recurring_match_learning(
     ]);
 }
 
+function accumul8_reconcile_existing_recurring_placeholder(
+    int $viewerId,
+    int $recurringId,
+    array $recurringRow,
+    array $placeholderRow,
+    string $occurrenceDate,
+    array $matchingDescriptions = []
+): bool {
+    $placeholderId = (int)($placeholderRow['id'] ?? 0);
+    $accountId = isset($recurringRow['account_id']) ? (int)$recurringRow['account_id'] : 0;
+    if ($placeholderId <= 0 || $recurringId <= 0 || $accountId <= 0) {
+        return false;
+    }
+
+    $direction = (string)($recurringRow['direction'] ?? 'outflow');
+    $baseAmount = (float)($recurringRow['amount'] ?? 0);
+    $amount = $direction === 'inflow' ? abs($baseAmount) : -abs($baseAmount);
+    $entityId = isset($recurringRow['entity_id']) ? (int)$recurringRow['entity_id'] : 0;
+
+    $linkedExisting = accumul8_find_best_transaction_for_recurring_occurrence(
+        $viewerId,
+        $recurringId,
+        $accountId,
+        $amount,
+        $occurrenceDate,
+        (string)($recurringRow['title'] ?? 'Recurring Payment'),
+        [
+            'allowed_source_kinds' => ['manual', 'teller', 'statement_upload', 'statement_pdf'],
+            'window_days' => 7,
+            'min_score' => 14,
+            'min_margin' => 2,
+            'expected_entity_id' => $entityId > 0 ? $entityId : null,
+            'candidate_descriptions' => $matchingDescriptions,
+            'exclude_ids' => [$placeholderId],
+        ]
+    );
+    if (!$linkedExisting) {
+        return false;
+    }
+
+    accumul8_link_transaction_to_recurring_occurrence(
+        $viewerId,
+        (int)($linkedExisting['id'] ?? 0),
+        $recurringId,
+        $occurrenceDate,
+        [
+            'account_id' => $accountId,
+            'entity_id' => $entityId > 0 ? $entityId : null,
+            'contact_id' => isset($recurringRow['contact_id']) ? (int)$recurringRow['contact_id'] : null,
+            'is_budget_planner' => (int)($recurringRow['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+        ]
+    );
+    accumul8_enrich_recurring_match_learning(
+        $viewerId,
+        $recurringId,
+        $entityId > 0 ? $entityId : null,
+        (string)($linkedExisting['description'] ?? ''),
+        isset($linkedExisting['matched_entity_id']) ? (int)$linkedExisting['matched_entity_id'] : null
+    );
+
+    Database::execute(
+        'DELETE FROM accumul8_transactions
+         WHERE id = ?
+           AND owner_user_id = ?
+           AND COALESCE(source_kind, "") = "recurring"',
+        [$placeholderId, $viewerId]
+    );
+
+    return true;
+}
+
 function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, ?string $today = null, int $daysAhead = 90): array
 {
     $effectiveToday = accumul8_normalize_date($today) ?? date('Y-m-d');
@@ -14900,19 +15056,28 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
     }
 
     $recurringRows = Database::queryAll(
-        'SELECT id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'entity_id', 'NULL AS entity_id') . ', contact_id, account_id, title, direction, amount, frequency, interval_count, next_due_date, paid_date, notes, is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'payment_method', "'unspecified' AS payment_method") . '
-         FROM accumul8_recurring_payments
-         WHERE owner_user_id = ?
-           AND is_active = 1
-         ORDER BY id ASC',
+        'SELECT rp.id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'rp.entity_id', 'NULL AS entity_id') . ', rp.contact_id, rp.account_id, rp.title, rp.direction, rp.amount, rp.frequency, rp.interval_count, rp.next_due_date, rp.paid_date, rp.notes, rp.is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'rp.payment_method', "'unspecified' AS payment_method") . ',
+                COALESCE(e.display_name, "") AS entity_name,
+                COALESCE(c.contact_name, "") AS contact_name
+         FROM accumul8_recurring_payments rp
+         LEFT JOIN accumul8_entities e ON e.id = rp.entity_id
+         LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
+         WHERE rp.owner_user_id = ?
+           AND rp.is_active = 1
+         ORDER BY rp.id ASC',
         [$viewerId]
     );
     $recurringAliasMap = accumul8_list_recurring_bank_aliases_by_recurring_ids(
         $viewerId,
         array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $recurringRows)
     );
+    $entityAliasMap = accumul8_list_entity_alias_names_by_entity_ids(
+        $viewerId,
+        array_map(static fn(array $row): int => (int)($row['entity_id'] ?? 0), $recurringRows)
+    );
 
     $created = 0;
+    $linkedExistingCount = 0;
     $normalizedTemplateCount = 0;
     foreach ($recurringRows as $row) {
         $recurringId = (int)($row['id'] ?? 0);
@@ -14929,6 +15094,16 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                 'UPDATE accumul8_recurring_payments SET entity_id = ? WHERE id = ? AND owner_user_id = ?',
                 [$entityId, $recurringId, $viewerId]
             );
+        }
+
+        $matchingDescriptions = accumul8_normalize_recurring_bank_alias_list(array_merge(
+            [(string)($row['title'] ?? 'Recurring Payment')],
+            $recurringAliasMap[$recurringId] ?? [],
+            [(string)($row['entity_name'] ?? ''), (string)($row['contact_name'] ?? '')],
+            $entityAliasMap[$entityId] ?? []
+        ));
+        if ($matchingDescriptions === []) {
+            $matchingDescriptions = [(string)($row['title'] ?? 'Recurring Payment')];
         }
 
         $anchorDate = accumul8_normalize_date($row['next_due_date'] ?? null);
@@ -14963,7 +15138,14 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
             $occurrenceDates = accumul8_limit_recurring_occurrences($occurrenceDates, $effectiveToday, $windowEndDate);
             foreach ($occurrenceDates as $occurrenceDate) {
                 $existing = Database::queryOne(
-                    'SELECT id
+                    'SELECT id,
+                            source_kind,
+                            entity_id,
+                            contact_id,
+                            account_id,
+                            is_budget_planner,
+                            due_date,
+                            transaction_date
                      FROM accumul8_transactions
                      WHERE owner_user_id = ?
                        AND recurring_payment_id = ?
@@ -14972,6 +15154,19 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                     [$viewerId, $recurringId, $occurrenceDate, $occurrenceDate]
                 );
                 if ($existing) {
+                    if (accumul8_transaction_source_kind($existing['source_kind'] ?? '') === 'recurring') {
+                        $reconciled = accumul8_reconcile_existing_recurring_placeholder(
+                        $viewerId,
+                        $recurringId,
+                        $row,
+                        $existing,
+                        $occurrenceDate,
+                        $matchingDescriptions
+                    );
+                        if ($reconciled) {
+                            $linkedExistingCount++;
+                        }
+                    }
                     continue;
                 }
 
@@ -14991,10 +15186,7 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                         'min_score' => 14,
                         'min_margin' => 2,
                         'expected_entity_id' => $entityId > 0 ? $entityId : null,
-                        'candidate_descriptions' => array_merge(
-                            [(string)($row['title'] ?? 'Recurring Payment')],
-                            $recurringAliasMap[$recurringId] ?? []
-                        ),
+                        'candidate_descriptions' => $matchingDescriptions,
                     ]
                 );
                 if ($linkedExisting) {
@@ -15058,6 +15250,7 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
 
     return [
         'created' => $created,
+        'linked_existing_count' => $linkedExistingCount,
         'window_start' => $effectiveToday,
         'window_end' => $windowEndDate,
         'normalized_template_count' => $normalizedTemplateCount,
@@ -16282,6 +16475,9 @@ if ($action === 'run_aicountant_housekeeping') {
             'create_notification_rule' => $body['create_notification_rule'] ?? 1,
             'email_on_attention_only' => $body['email_on_attention_only'] ?? 1,
             'run_entity_maintenance' => $body['run_entity_maintenance'] ?? 0,
+            'skip_recurring_sync' => $body['skip_recurring_sync'] ?? 0,
+            'skip_balance_books' => $body['skip_balance_books'] ?? 0,
+            'skip_watchlist' => $body['skip_watchlist'] ?? 0,
         ]);
         catn8_json_response(array_merge(['success' => true], $result));
     } catch (Throwable $exception) {

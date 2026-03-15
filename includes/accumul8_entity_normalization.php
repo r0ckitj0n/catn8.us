@@ -758,14 +758,14 @@ if (!function_exists('accumul8_find_entity_family_definition')) {
             $score = PHP_INT_MIN;
             $parentKey = accumul8_entity_match_key((string)($definition['parent_name'] ?? ''));
             if ($parentKey !== '' && $parentKey === $matchKey) {
-                $score = 100000 + strlen($parentKey);
+                $score = 100000 + strlen((string)$parentKey);
             }
 
             $contains = is_array($definition['match_contains'] ?? null) ? $definition['match_contains'] : [];
             foreach ($contains as $fragment) {
                 $needle = strtolower(accumul8_entity_normalize_text((string)$fragment, 191));
                 if ($needle !== '' && $normalizedText !== '' && strpos($normalizedText, $needle) !== false) {
-                    $score = max($score, 30000 + strlen($needle));
+                    $score = max($score, 30000 + strlen((string)$needle));
                 }
             }
 
@@ -773,7 +773,7 @@ if (!function_exists('accumul8_find_entity_family_definition')) {
             foreach ($regexes as $regex) {
                 $pattern = is_string($regex) ? $regex : '';
                 if ($pattern !== '' && $normalizedText !== '' && @preg_match($pattern, $normalizedText) === 1) {
-                    $score = max($score, 40000 + strlen($pattern));
+                    $score = max($score, 40000 + strlen((string)$pattern));
                 }
             }
 
@@ -781,7 +781,7 @@ if (!function_exists('accumul8_find_entity_family_definition')) {
             foreach ($fragments as $fragment) {
                 $needle = strtolower((string)$fragment);
                 if ($needle !== '' && strpos($matchKey, $needle) !== false) {
-                    $score = max($score, 20000 + strlen($needle));
+                    $score = max($score, 20000 + strlen((string)$needle));
                 }
             }
 

@@ -377,9 +377,8 @@ function getLedgerDescriptionLabel(
   transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
   draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
 ): string {
-  const preferredEntityName = formatInlineText(draft?.entity_name ?? transaction.entity_name, '');
   const fallbackDescription = draft?.description ?? transaction.description;
-  return formatInlineText(preferredEntityName || fallbackDescription, '-');
+  return formatInlineText(fallbackDescription, '-');
 }
 
 function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean {
@@ -3459,7 +3458,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           {activeLedgerRowId === tx.id ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.memo ?? tx.memo} onChange={(e) => setLedgerRowDraft(tx, { memo: e.target.value })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo || tx.contact_name || tx.entity_name, '-')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button>
                           )}
                         </td>
                         <td className="text-end">

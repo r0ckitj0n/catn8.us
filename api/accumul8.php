@@ -9416,6 +9416,7 @@ function accumul8_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_recurring_owner (owner_user_id),
         KEY idx_accumul8_recurring_next_due (next_due_date),
+        KEY idx_accumul8_recurring_owner_active_due (owner_user_id, is_active, next_due_date),
         CONSTRAINT fk_accumul8_recurring_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_accumul8_recurring_contact FOREIGN KEY (contact_id) REFERENCES accumul8_contacts(id) ON DELETE SET NULL,
         CONSTRAINT fk_accumul8_recurring_account FOREIGN KEY (account_id) REFERENCES accumul8_accounts(id) ON DELETE SET NULL
@@ -9450,6 +9451,11 @@ function accumul8_tables_ensure(): void
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_tx_owner_date (owner_user_id, transaction_date),
+        KEY idx_accumul8_tx_owner_date_id (owner_user_id, transaction_date, id),
+        KEY idx_accumul8_tx_owner_account_date (owner_user_id, account_id, transaction_date, id),
+        KEY idx_accumul8_tx_owner_recurring_due (owner_user_id, recurring_payment_id, due_date),
+        KEY idx_accumul8_tx_owner_paid_due (owner_user_id, is_paid, due_date),
+        KEY idx_accumul8_tx_owner_reconciled (owner_user_id, is_reconciled),
         KEY idx_accumul8_tx_due (due_date),
         KEY idx_accumul8_tx_paid_date (paid_date),
         KEY idx_accumul8_tx_paid (is_paid),
@@ -9826,6 +9832,24 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_transactions', 'external_id', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'pending_status', 'TINYINT(1) NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'created_by_user_id', 'INT NOT NULL DEFAULT 0');
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_owner_date_id')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_owner_date_id (owner_user_id, transaction_date, id)');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_owner_account_date')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_owner_account_date (owner_user_id, account_id, transaction_date, id)');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_owner_recurring_due')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_owner_recurring_due (owner_user_id, recurring_payment_id, due_date)');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_owner_paid_due')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_owner_paid_due (owner_user_id, is_paid, due_date)');
+        }
+        if (!accumul8_table_has_index('accumul8_transactions', 'idx_accumul8_tx_owner_reconciled')) {
+            Database::execute('ALTER TABLE accumul8_transactions ADD INDEX idx_accumul8_tx_owner_reconciled (owner_user_id, is_reconciled)');
+        }
+        if (!accumul8_table_has_index('accumul8_recurring_payments', 'idx_accumul8_recurring_owner_active_due')) {
+            Database::execute('ALTER TABLE accumul8_recurring_payments ADD INDEX idx_accumul8_recurring_owner_active_due (owner_user_id, is_active, next_due_date)');
+        }
 
         accumul8_table_add_column_if_missing('accumul8_notification_rules', 'custom_user_ids_json', 'LONGTEXT NULL');
         accumul8_table_add_column_if_missing('accumul8_notification_rules', 'last_triggered_at', 'DATETIME NULL');
@@ -10523,9 +10547,14 @@ function accumul8_recompute_running_balance(int $viewerId): void
         }
         $balances[$accountId] = (float)($balances[$accountId] ?? 0);
         $balances[$accountId] += (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
+        $nextRunningBalance = round($balances[$accountId], 2);
+        $currentRunningBalance = round((float)($row['running_balance'] ?? 0), 2);
+        if ($nextRunningBalance === $currentRunningBalance) {
+            continue;
+        }
         Database::execute(
             'UPDATE accumul8_transactions SET running_balance = ? WHERE id = ? AND owner_user_id = ?',
-            [round($balances[$accountId], 2), (int)($row['id'] ?? 0), $viewerId]
+            [$nextRunningBalance, (int)($row['id'] ?? 0), $viewerId]
         );
     }
 
@@ -13838,22 +13867,10 @@ function accumul8_notification_recipients_from_rule(int $viewerId, array $rule):
 
 function accumul8_next_due_date(string $currentDate, string $frequency, int $intervalCount): string
 {
-    $base = strtotime($currentDate);
-    if ($base === false) {
-        $base = time();
-    }
     $intervalCount = max(1, min(365, $intervalCount));
-
-    if ($frequency === 'weekly') {
-        return date('Y-m-d', strtotime('+' . $intervalCount . ' week', $base));
-    }
-    if ($frequency === 'biweekly') {
-        return date('Y-m-d', strtotime('+' . ($intervalCount * 2) . ' week', $base));
-    }
-    if ($frequency === 'monthly') {
-        return date('Y-m-d', strtotime('+' . $intervalCount . ' month', $base));
-    }
-    return date('Y-m-d', strtotime('+' . $intervalCount . ' day', $base));
+    $base = DateTimeImmutable::createFromFormat('!Y-m-d', $currentDate, new DateTimeZone('UTC'))
+        ?: new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    return accumul8_shift_occurrence_date($base, $frequency, $intervalCount, 1)->format('Y-m-d');
 }
 
 function accumul8_normalize_month_value(?string $monthValue): ?string
@@ -13923,8 +13940,47 @@ function accumul8_shift_occurrence_date(DateTimeImmutable $base, string $frequen
         'daily' => $base->modify(($safeInterval * $multiplier) . ' day'),
         'weekly' => $base->modify(($safeInterval * 7 * $multiplier) . ' day'),
         'biweekly' => $base->modify(($safeInterval * 14 * $multiplier) . ' day'),
-        default => $base->modify(($safeInterval * $multiplier) . ' month'),
+        default => accumul8_shift_occurrence_months($base, $safeInterval * $multiplier),
     };
+}
+
+function accumul8_shift_occurrence_months(DateTimeImmutable $base, int $monthDelta): DateTimeImmutable
+{
+    if ($monthDelta === 0) {
+        return $base;
+    }
+
+    $baseYear = (int)$base->format('Y');
+    $baseMonth = (int)$base->format('n');
+    $baseDay = (int)$base->format('j');
+    $targetMonthIndex = ($baseYear * 12 + ($baseMonth - 1)) + $monthDelta;
+    $targetYear = (int)floor($targetMonthIndex / 12);
+    $targetMonth = ($targetMonthIndex % 12) + 1;
+    if ($targetMonth <= 0) {
+        $targetMonth += 12;
+        $targetYear--;
+    }
+
+    $targetMonthStart = DateTimeImmutable::createFromFormat(
+        '!Y-m-d',
+        sprintf('%04d-%02d-01', $targetYear, $targetMonth),
+        new DateTimeZone('UTC')
+    );
+    if (!$targetMonthStart) {
+        return $base;
+    }
+
+    $lastDay = (int)$targetMonthStart->modify('last day of this month')->format('j');
+    return $targetMonthStart->setDate($targetYear, $targetMonth, min($baseDay, $lastDay));
+}
+
+function accumul8_recurring_window_end_date(string $today, int $daysAhead = 90): string
+{
+    $normalizedToday = accumul8_normalize_date($today) ?? date('Y-m-d');
+    $normalizedDaysAhead = max(0, min(90, $daysAhead));
+    $baseWindowEnd = accumul8_shift_date_by_days($normalizedToday, $normalizedDaysAhead) ?? $normalizedToday;
+    $monthEnd = accumul8_month_end(substr($baseWindowEnd, 0, 7));
+    return $monthEnd ? $monthEnd->format('Y-m-d') : $baseWindowEnd;
 }
 
 function accumul8_recurring_occurrences_for_month(array $recurring, string $monthValue): array
@@ -13987,8 +14043,7 @@ function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $m
 function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, ?string $today = null, int $daysAhead = 90): array
 {
     $effectiveToday = accumul8_normalize_date($today) ?? date('Y-m-d');
-    $normalizedDaysAhead = max(0, min(90, $daysAhead));
-    $windowEndDate = accumul8_shift_date_by_days($effectiveToday, $normalizedDaysAhead) ?? $effectiveToday;
+    $windowEndDate = accumul8_recurring_window_end_date($effectiveToday, $daysAhead);
     $startMonth = substr($effectiveToday, 0, 7);
     $endMonth = substr($windowEndDate, 0, 7);
     $monthsToEnsure = accumul8_month_range($startMonth, $endMonth);

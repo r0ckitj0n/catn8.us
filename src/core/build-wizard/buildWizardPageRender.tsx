@@ -208,6 +208,7 @@ type BuildWizardTaskType = StepType | 'quote';
 
 type BuildWizardTaskMeta = {
   task_type: BuildWizardTaskType;
+  manual_date_override: boolean;
   permit_document_id: number | null;
   permit_name: string | null;
   permit_authority: string | null;
@@ -232,6 +233,7 @@ const TEXT_PREVIEW_EXTENSIONS = new Set(['TXT', 'MD', 'JSON', 'CSV', 'LOG', 'XML
 
 const TASK_META_FIELD_LABELS: Record<keyof BuildWizardTaskMeta, string> = {
   task_type: 'Task Type',
+  manual_date_override: 'Manual Date Override',
   permit_document_id: 'Permit Document',
   permit_name: 'Permit Name',
   permit_authority: 'Permit Authority',
@@ -260,6 +262,7 @@ TASK_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sen
 
 const defaultTaskMeta = (taskType: BuildWizardTaskType = 'construction'): BuildWizardTaskMeta => ({
   task_type: taskType,
+  manual_date_override: false,
   permit_document_id: null,
   permit_name: null,
   permit_authority: null,
@@ -316,6 +319,60 @@ const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, plainNot
   const json = JSON.stringify(taskMeta);
   const notes = plainNotes.trim();
   return notes ? `${BUILD_WIZARD_TASK_META_PREFIX}${json}\n${notes}` : `${BUILD_WIZARD_TASK_META_PREFIX}${json}`;
+};
+
+const isLegacyAutoStampedTaskDate = (
+  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
+  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
+): boolean => {
+  if (String(doc.kind || '').trim() !== 'receipt') {
+    return false;
+  }
+  if (taskMeta?.manual_date_override === true) {
+    return false;
+  }
+  const taskDate = toStringOrNull(doc.receipt_date || '');
+  const uploadedDate = toStringOrNull(String(doc.uploaded_at || '').slice(0, 10));
+  return Boolean(taskDate && uploadedDate && taskDate === uploadedDate);
+};
+
+const taskUsesManualDateOverride = (
+  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
+  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
+): boolean => {
+  const taskDate = toStringOrNull(doc.receipt_date || '');
+  if (!taskDate || String(doc.kind || '').trim() !== 'receipt') {
+    return false;
+  }
+  if (taskMeta?.manual_date_override === true) {
+    return true;
+  }
+  return !isLegacyAutoStampedTaskDate(doc, taskMeta);
+};
+
+const getTaskEffectiveDate = (
+  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
+  step?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'> | null,
+  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
+): string | null => {
+  if (taskUsesManualDateOverride(doc, taskMeta)) {
+    return toStringOrNull(doc.receipt_date || '');
+  }
+  return toStringOrNull(step?.expected_start_date || '') || toStringOrNull(step?.expected_end_date || '');
+};
+
+const setTaskDateOverrideInReceiptNotes = (
+  notes: string | null | undefined,
+  taskDate: string | null | undefined,
+): string => {
+  const parsed = parseTaskMetaFromReceiptNotes(notes);
+  return composeReceiptNotesWithTaskMeta(
+    {
+      ...parsed.taskMeta,
+      manual_date_override: Boolean(toStringOrNull(taskDate || '')),
+    },
+    parsed.plainNotes,
+  );
 };
 
 const isTextLikeMime = (mime: string): boolean => {
@@ -653,9 +710,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const receiptEditorRefByStepId = React.useRef<Record<number, HTMLDivElement | null>>({});
   const receiptRowRefByDocId = React.useRef<Record<number, HTMLDivElement | null>>({});
-  const timelineReconciledProjectIdsRef = React.useRef<Set<number>>(new Set());
+  const clearedLegacyTaskDatesByProjectRef = React.useRef<Set<number>>(new Set());
   const stickyHeadRef = React.useRef<HTMLDivElement | null>(null);
+  const phaseTaskListCardRef = React.useRef<HTMLDivElement | null>(null);
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
+  const previousActiveTabRef = React.useRef<BuildTabId>('start');
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
   const [confirmState, setConfirmState] = React.useState<BuildWizardConfirmState | null>(null);
 
@@ -740,6 +799,29 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [openProject, projectId]);
+
+  React.useEffect(() => {
+    const previousActiveTab = previousActiveTabRef.current;
+    previousActiveTabRef.current = activeTab;
+    if (previousActiveTab === activeTab || !PHASE_PROGRESS_ORDER.includes(activeTab)) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const node = phaseTaskListCardRef.current;
+    if (!node) {
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      const nextTop = window.scrollY + node.getBoundingClientRect().top - stickyTopOffset - stickyHeadHeight - 12;
+      window.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: 'smooth',
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeTab, stickyHeadHeight, stickyTopOffset]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1660,7 +1742,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (outOfRangeStep) {
       onToast?.({
         tone: 'error',
-        message: `Phase date range cannot exclude step "${outOfRangeStep.title}". Update that step or its task dates first.`,
+        message: `Phase date range cannot exclude step "${outOfRangeStep.title}". Update that step's date range first.`,
       });
       return;
     }
@@ -2185,7 +2267,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           : '',
         receipt_title: doc.receipt_title || '',
         receipt_vendor: doc.receipt_vendor || '',
-        receipt_date: doc.receipt_date || '',
+        receipt_date: taskUsesManualDateOverride(doc, parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta) ? (doc.receipt_date || '') : '',
         receipt_notes: doc.receipt_notes || '',
       };
     });
@@ -3208,63 +3290,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     await savePhaseDateRange(projectId, tabId as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart || null, nextEnd || null);
   }, [projectId, resolvePhaseDateRange, savePhaseDateRange]);
 
-  const reconcileStepFromTaskDates = React.useCallback(async (
-    stepId: number,
-    documentOverrides?: Map<number, IBuildWizardDocument>,
-  ) => {
-    const step = stepById.get(stepId);
-    if (!step || stepId <= 0) {
-      return;
-    }
-    const mergedDocuments = documents.map((doc) => documentOverrides?.get(doc.id) || doc);
-    if (documentOverrides && documentOverrides.size > 0) {
-      documentOverrides.forEach((doc, id) => {
-        if (!mergedDocuments.some((existing) => existing.id === id)) {
-          mergedDocuments.push(doc);
-        }
-      });
-    }
-    const receiptsForStep = mergedDocuments
-      .filter((doc) => String(doc.kind || '').trim() === 'receipt' && Number(doc.step_id || 0) === stepId);
-    const taskDates = receiptsForStep
-      .map((doc) => toStringOrNull(doc.receipt_date || ''))
-      .filter((value): value is string => Boolean(value))
-      .sort((a, b) => a.localeCompare(b));
-
-    let nextStart = toStringOrNull(step.expected_start_date || '');
-    let nextEnd = toStringOrNull(step.expected_end_date || '');
-    if (taskDates.length > 0) {
-      nextStart = taskDates[0];
-      nextEnd = taskDates[taskDates.length - 1];
-    }
-    if (nextStart && nextEnd && nextEnd < nextStart) {
-      nextEnd = nextStart;
-    }
-    const nextDuration = calculateDurationDays(nextStart, nextEnd);
-    const startChanged = nextStart !== toStringOrNull(step.expected_start_date || '');
-    const endChanged = nextEnd !== toStringOrNull(step.expected_end_date || '');
-    const durationChanged = nextDuration !== (step.expected_duration_days ?? null);
-    if (!startChanged && !endChanged && !durationChanged) {
-      if (taskDates.length > 0) {
-        await expandPhaseRangeForStep(step, { expected_start_date: nextStart, expected_end_date: nextEnd });
-      }
-      return;
-    }
-
-    const patch: Partial<IBuildWizardStep> = {};
-    if (startChanged) {
-      patch.expected_start_date = nextStart;
-    }
-    if (endChanged) {
-      patch.expected_end_date = nextEnd;
-    }
-    if (durationChanged) {
-      patch.expected_duration_days = nextDuration;
-    }
-    await updateStep(stepId, patch);
-    await expandPhaseRangeForStep(step, { expected_start_date: nextStart, expected_end_date: nextEnd });
-  }, [documents, expandPhaseRangeForStep, stepById, updateStep]);
-
   const onSaveDocument = async (
     documentId: number,
     patch: {
@@ -3282,37 +3307,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     if (documentSavingId === documentId) {
       return null;
     }
-    const previousDocument = documents.find((doc) => doc.id === documentId) || null;
     setDocumentSavingId(documentId);
     try {
       const savedDocument = await updateDocument(documentId, patch);
-      if (savedDocument) {
-        const touchesTaskDateAuthority = Object.prototype.hasOwnProperty.call(patch, 'receipt_date')
-          || Object.prototype.hasOwnProperty.call(patch, 'step_id')
-          || Object.prototype.hasOwnProperty.call(patch, 'kind');
-        const previousWasTask = String(previousDocument?.kind || '').trim() === 'receipt';
-        const currentIsTask = String(savedDocument.kind || '').trim() === 'receipt';
-        if (touchesTaskDateAuthority && (previousWasTask || currentIsTask)) {
-          const impactedStepIds = new Set<number>();
-          if (previousWasTask) {
-            const previousStepId = Number(previousDocument?.step_id || 0);
-            if (previousStepId > 0) {
-              impactedStepIds.add(previousStepId);
-            }
-          }
-          if (currentIsTask) {
-            const currentStepId = Number(savedDocument.step_id || 0);
-            if (currentStepId > 0) {
-              impactedStepIds.add(currentStepId);
-            }
-          }
-          const overrides = new Map<number, IBuildWizardDocument>();
-          overrides.set(savedDocument.id, savedDocument);
-          for (const stepId of impactedStepIds) {
-            await reconcileStepFromTaskDates(stepId, overrides);
-          }
-        }
-      }
       return savedDocument;
     } finally {
       setDocumentSavingId(0);
@@ -3374,7 +3371,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       ...prev,
       [doc.id]: {
         vendor: doc.receipt_vendor || '',
-        date: doc.receipt_date || '',
+        date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
         amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
         taskType: parsed.taskMeta.task_type,
         plainNotes: parsed.plainNotes || '',
@@ -3412,6 +3409,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       patch.receipt_vendor = toStringOrNull(draft.vendor);
     } else if (field === 'date') {
       patch.receipt_date = toStringOrNull(draft.date);
+      patch.receipt_notes = toStringOrNull(composeReceiptNotesWithTaskMeta({
+        ...draft.taskMeta,
+        manual_date_override: Boolean(toStringOrNull(draft.date)),
+      }, draft.plainNotes));
     } else if (field === 'amount') {
       patch.receipt_amount = toNumberOrNull(draft.amount);
     } else if (field === 'type') {
@@ -3464,7 +3465,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         : '',
       receipt_title: doc.receipt_title || '',
       receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: doc.receipt_date || '',
+      receipt_date: taskUsesManualDateOverride(doc, parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta) ? (doc.receipt_date || '') : '',
       receipt_notes: doc.receipt_notes || '',
     };
   }, [documentDrafts]);
@@ -3479,7 +3480,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       receipt_title: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_title) : null,
       receipt_vendor: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_vendor) : null,
       receipt_date: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_date) : null,
-      receipt_notes: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_notes) : null,
+      receipt_notes: draft.kind === 'receipt'
+        ? toStringOrNull(setTaskDateOverrideInReceiptNotes(draft.receipt_notes, draft.receipt_date))
+        : null,
     });
   };
 
@@ -3511,7 +3514,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         receipt_vendor: toStringOrNull(draft.receipt_vendor),
         receipt_date: toStringOrNull(draft.receipt_date),
         receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta(draft.task_meta, draft.receipt_notes)),
+        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
+          ...draft.task_meta,
+          manual_date_override: Boolean(toStringOrNull(draft.receipt_date)),
+        }, draft.receipt_notes)),
       });
       if (!updated) {
         return;
@@ -3525,16 +3531,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         receipt_vendor: toStringOrNull(draft.receipt_vendor),
         receipt_date: toStringOrNull(draft.receipt_date),
         receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta(draft.task_meta, draft.receipt_notes)),
+        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
+          ...draft.task_meta,
+          manual_date_override: Boolean(toStringOrNull(draft.receipt_date)),
+        }, draft.receipt_notes)),
         caption: toStringOrNull(draft.receipt_title || step.title),
       });
       if (!created?.id) {
         return;
       }
       receiptId = created.id;
-      const overrides = new Map<number, IBuildWizardDocument>();
-      overrides.set(created.id, created);
-      await reconcileStepFromTaskDates(step.id, overrides);
     }
 
     const files = receiptAttachmentDraftByStep[step.id] || [];
@@ -3569,6 +3575,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     step: IBuildWizardStep,
     patch: {
       receipt_date?: string | null;
+      receipt_notes?: string | null;
     },
   ) => {
     const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
@@ -3584,7 +3591,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
       receipt_title: doc.receipt_title || '',
       receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: doc.receipt_date || '',
+      receipt_date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
       receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
         ? String(doc.receipt_amount)
         : '',
@@ -3963,76 +3970,63 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [compareStepsByTimeline, reorderSteps, steps]);
 
   React.useEffect(() => {
-    if (projectId <= 0 || steps.length === 0) {
+    if (projectId <= 0) {
       return;
     }
-    if (timelineReconciledProjectIdsRef.current.has(projectId)) {
+    if (clearedLegacyTaskDatesByProjectRef.current.has(projectId)) {
       return;
     }
-    timelineReconciledProjectIdsRef.current.add(projectId);
+    const legacyTaskDocs = documents.filter((doc) => {
+      const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
+      return isLegacyAutoStampedTaskDate(doc, parsed.taskMeta);
+    });
+    if (legacyTaskDocs.length === 0) {
+      clearedLegacyTaskDatesByProjectRef.current.add(projectId);
+      return;
+    }
+
+    clearedLegacyTaskDatesByProjectRef.current.add(projectId);
+    let cancelled = false;
 
     void (async () => {
-      const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
-      const fixes: Array<{ stepId: number; patch: Partial<IBuildWizardStep> }> = [];
-
-      steps.forEach((step) => {
-        let start = toStringOrNull(step.expected_start_date || '');
-        let end = toStringOrNull(step.expected_end_date || '');
-        const taskDates = documents
-          .filter((doc) => String(doc.kind || '').trim() === 'receipt' && Number(doc.step_id || 0) === step.id)
-          .map((doc) => toStringOrNull(doc.receipt_date || ''))
-          .filter((value): value is string => Boolean(value))
-          .sort((a, b) => a.localeCompare(b));
-        if (taskDates.length > 0) {
-          const minTaskDate = taskDates[0];
-          const maxTaskDate = taskDates[taskDates.length - 1];
-          if (!start || start > minTaskDate) {
-            start = minTaskDate;
+      try {
+        for (const doc of legacyTaskDocs) {
+          if (cancelled) {
+            return;
           }
-          if (!end || end < maxTaskDate) {
-            end = maxTaskDate;
-          }
+          await ApiClient.post<{ document?: IBuildWizardDocument; documents?: IBuildWizardDocument[] }>(
+            '/api/build_wizard.php?action=update_document',
+            {
+              document_id: doc.id,
+              receipt_date: null,
+              receipt_notes: setTaskDateOverrideInReceiptNotes(doc.receipt_notes, null),
+            },
+          );
         }
-        if (start && end && end < start) {
-          end = start;
+        if (!cancelled) {
+          await openProject(projectId);
+          onToast?.({
+            tone: 'info',
+            message: legacyTaskDocs.length === 1
+              ? 'Cleared one legacy task date. Tasks now follow the step date unless you set an override.'
+              : `Cleared ${legacyTaskDocs.length} legacy task dates. Tasks now follow the step date unless you set an override.`,
+          });
         }
-        const duration = calculateDurationDays(start, end);
-        const startChanged = start !== toStringOrNull(step.expected_start_date || '');
-        const currentDuration = step.expected_duration_days ?? null;
-        const endChanged = end !== toStringOrNull(step.expected_end_date || '');
-        const durationChanged = duration !== currentDuration;
-        if (!startChanged && !endChanged && !durationChanged) {
-          return;
+      } catch (error: any) {
+        clearedLegacyTaskDatesByProjectRef.current.delete(projectId);
+        if (!cancelled) {
+          onToast?.({
+            tone: 'warning',
+            message: error?.message || 'Failed to clear legacy task dates automatically.',
+          });
         }
-        const patch: Partial<IBuildWizardStep> = {};
-        if (startChanged) {
-          patch.expected_start_date = start;
-        }
-        if (endChanged) {
-          patch.expected_end_date = end;
-        }
-        if (durationChanged) {
-          patch.expected_duration_days = duration;
-        }
-        timelineOverrides.set(step.id, {
-          expected_start_date: start,
-          expected_end_date: end,
-        });
-        fixes.push({ stepId: step.id, patch });
-      });
-
-      for (const fix of fixes) {
-        await updateStep(fix.stepId, fix.patch);
-      }
-
-      const phaseKeys = Array.from(new Set(
-        steps.map((step) => String(step.phase_key || '').trim().toLowerCase() || 'general'),
-      ));
-      for (const phaseKey of phaseKeys) {
-        await autoReorderPhaseByTimeline(phaseKey, timelineOverrides);
       }
     })();
-  }, [autoReorderPhaseByTimeline, documents, projectId, steps, updateStep]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documents, onToast, openProject, projectId]);
 
   React.useEffect(() => {
     if (projectId <= 0 || steps.length === 0) {
@@ -4957,7 +4951,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         />
                       </label>
                       <label>
-                        Date
+                        Task Date Override
                         <input
                           type="date"
                           value={receiptDraft.receipt_date}
@@ -4966,8 +4960,13 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             [step.id]: { ...receiptDraft, receipt_date: e.target.value },
                           }))}
                           onBlur={() => {
+                            const activeDraft = receiptDraftByStep[step.id] ?? receiptDraft;
                             void autosaveExistingReceiptDraftForStep(step, {
-                              receipt_date: toStringOrNull((receiptDraftByStep[step.id]?.receipt_date ?? receiptDraft.receipt_date) || ''),
+                              receipt_date: toStringOrNull(activeDraft.receipt_date || ''),
+                              receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
+                                ...activeDraft.task_meta,
+                                manual_date_override: Boolean(toStringOrNull(activeDraft.receipt_date || '')),
+                              }, activeDraft.receipt_notes)),
                             });
                           }}
                         />
@@ -5309,7 +5308,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       const inlineEditingField = inlineEditingReceiptFieldByDocId[doc.id] || null;
                       const inlineDraft = inlineReceiptDraftByDocId[doc.id] || {
                         vendor: doc.receipt_vendor || '',
-                        date: doc.receipt_date || '',
+                        date: taskUsesManualDateOverride(doc, parsedTask.taskMeta) ? (doc.receipt_date || '') : '',
                         amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
                         taskType: parsedTask.taskMeta.task_type,
                         plainNotes: parsedTask.plainNotes || '',
@@ -5386,7 +5385,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   className="build-wizard-inline-edit-trigger"
                                   onClick={() => startInlineReceiptEdit(doc, parsedTask, 'date')}
                                 >
-                                  {doc.receipt_date || '-'}
+                                  {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'}
                                 </button>
                               )}
                               {' '}| Amount:{' '}
@@ -6435,7 +6434,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         ) : null}
 
         {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
-          <div className="build-wizard-card">
+          <div className="build-wizard-card" ref={phaseTaskListCardRef}>
             {activeTab === 'desk' ? (
               <div className="build-wizard-desk-grid">
                 <div>
@@ -6751,7 +6750,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                     />
                                   </label>
                                   <label>
-                                    Receipt Date
+                                    Task Date Override
                                     <input
                                       type="date"
                                       value={draft.receipt_date}

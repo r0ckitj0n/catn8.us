@@ -1,0 +1,10 @@
+set sftp:auto-confirm yes
+set ssl:verify-certificate no
+set cmd:fail-exit yes
+set net:timeout 30
+set net:max-retries 1
+set net:reconnect-interval-base 5
+set net:reconnect-interval-max 15
+open sftp://acc133498969:Palz2516!@home419172903.1and1-data.host
+mirror --reverse --delete --verbose --only-newer --no-perms   vendor vendor
+bye

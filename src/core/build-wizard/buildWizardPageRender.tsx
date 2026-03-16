@@ -532,11 +532,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [dependencyCandidateByStepId, setDependencyCandidateByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByReceiptId, setAttachExistingDocByReceiptId] = React.useState<Record<number, string>>({});
-  const [moveReceiptStepByDocId, setMoveReceiptStepByDocId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByStepId, setAttachExistingDocFilterByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByReceiptId, setAttachExistingDocFilterByReceiptId] = React.useState<Record<number, string>>({});
   const [attachExistingPickerOpenByStepId, setAttachExistingPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
-  const [attachExistingPickerOpenByReceiptId, setAttachExistingPickerOpenByReceiptId] = React.useState<Record<number, boolean>>({});
   const [noteEditorOpenByStep, setNoteEditorOpenByStep] = React.useState<Record<number, boolean>>({});
   const [footerRange, setFooterRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' });
   const [lightboxDoc, setLightboxDoc] = React.useState<LightboxPreview | null>(null);
@@ -644,6 +642,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [moveStepModalStepId, setMoveStepModalStepId] = React.useState<number>(0);
   const [moveStepModalTargetTab, setMoveStepModalTargetTab] = React.useState<BuildTabId>('land');
   const [movingStep, setMovingStep] = React.useState<boolean>(false);
+  const [moveTaskModalDocId, setMoveTaskModalDocId] = React.useState<number>(0);
+  const [moveTaskModalTargetStepId, setMoveTaskModalTargetStepId] = React.useState<number>(0);
+  const [taskAttachmentsModalDocId, setTaskAttachmentsModalDocId] = React.useState<number>(0);
   const [stepContactPickerOpenByStepId, setStepContactPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
   const [stepContactCandidateByStepId, setStepContactCandidateByStepId] = React.useState<Record<number, string>>({});
   const [currencyInputByKey, setCurrencyInputByKey] = React.useState<Record<string, string>>({});
@@ -913,17 +914,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
       return next;
     });
-    setAttachExistingPickerOpenByReceiptId((prev) => {
-      const next: typeof prev = {};
-      Object.keys(prev).forEach((idText) => {
-        const documentId = Number(idText);
-        if (validDocumentIds.has(documentId) && prev[documentId]) {
-          next[documentId] = true;
-        }
-      });
-      return next;
-    });
-  }, [documents]);
+    if (moveTaskModalDocId > 0 && !validDocumentIds.has(moveTaskModalDocId)) {
+      setMoveTaskModalDocId(0);
+      setMoveTaskModalTargetStepId(0);
+    }
+    if (taskAttachmentsModalDocId > 0 && !validDocumentIds.has(taskAttachmentsModalDocId)) {
+      setTaskAttachmentsModalDocId(0);
+    }
+  }, [documents, moveTaskModalDocId, taskAttachmentsModalDocId]);
 
   React.useEffect(() => {
     if (!topbarSearchOpen) {
@@ -1908,6 +1906,64 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return a.id - b.id;
     });
   }, [documents]);
+
+  const moveTaskModalDoc = React.useMemo(() => {
+    if (moveTaskModalDocId <= 0) {
+      return null;
+    }
+    const doc = documents.find((candidate) => candidate.id === moveTaskModalDocId) || null;
+    return doc && String(doc.kind || '').trim() === 'receipt' ? doc : null;
+  }, [documents, moveTaskModalDocId]);
+
+  const taskAttachmentsModalDoc = React.useMemo(() => {
+    if (taskAttachmentsModalDocId <= 0) {
+      return null;
+    }
+    const doc = documents.find((candidate) => candidate.id === taskAttachmentsModalDocId) || null;
+    return doc && String(doc.kind || '').trim() === 'receipt' ? doc : null;
+  }, [documents, taskAttachmentsModalDocId]);
+
+  const moveTaskStepOptions = React.useMemo(() => {
+    if (!moveTaskModalDoc) {
+      return [] as Array<{ step: IBuildWizardStep; displayNumber: number; sortKey: string; label: string }>;
+    }
+    return linkedStepOptions.filter((option) => option.step.id !== Number(moveTaskModalDoc.step_id || 0));
+  }, [linkedStepOptions, moveTaskModalDoc]);
+
+  const taskAttachmentsModalStep = React.useMemo(() => {
+    if (!taskAttachmentsModalDoc) {
+      return null;
+    }
+    return stepByIdMap.get(Number(taskAttachmentsModalDoc.step_id || 0)) || null;
+  }, [stepByIdMap, taskAttachmentsModalDoc]);
+
+  const taskAttachmentsModalAttachableDocuments = React.useMemo(() => {
+    if (!taskAttachmentsModalDoc) {
+      return [] as IBuildWizardDocument[];
+    }
+    const receiptId = taskAttachmentsModalDoc.id;
+    const receiptFilter = String(attachExistingDocFilterByReceiptId[receiptId] || '').trim().toLowerCase();
+    return attachableProjectDocuments
+      .filter((candidate) => {
+        if (candidate.id === receiptId) {
+          return false;
+        }
+        if (String(candidate.kind || '').trim() === 'receipt') {
+          return false;
+        }
+        const isAlreadyAttached = String(candidate.kind || '').trim() === 'receipt_attachment'
+          && Number(candidate.receipt_parent_document_id || 0) === receiptId;
+        if (isAlreadyAttached) {
+          return false;
+        }
+        if (!receiptFilter) {
+          return true;
+        }
+        const haystack = `${candidate.original_name} ${buildWizardTokenLabel(candidate.kind, 'Other')}`.toLowerCase();
+        return haystack.includes(receiptFilter);
+      })
+      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
+  }, [attachExistingDocFilterByReceiptId, attachableProjectDocuments, taskAttachmentsModalDoc]);
 
   const documentManagerKindOptions = React.useMemo(() => {
     const fromDocs = documents
@@ -3566,22 +3622,38 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
   };
 
-  const onMoveReceiptToStep = async (currentStep: IBuildWizardStep, receiptDoc: IBuildWizardDocument) => {
-    const targetStepId = Number(moveReceiptStepByDocId[receiptDoc.id] || 0);
-    if (targetStepId <= 0 || targetStepId === currentStep.id) {
+  const openMoveTaskModal = (receiptDoc: IBuildWizardDocument) => {
+    setMoveTaskModalDocId(receiptDoc.id);
+    setMoveTaskModalTargetStepId(0);
+  };
+
+  const openTaskAttachmentsModal = (receiptDoc: IBuildWizardDocument) => {
+    setTaskAttachmentsModalDocId(receiptDoc.id);
+    setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
+    setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
+  };
+
+  const onMoveReceiptToStep = async () => {
+    if (!moveTaskModalDoc) {
       return;
     }
-    const targetStep = steps.find((candidate) => candidate.id === targetStepId) || null;
+    const currentStepId = Number(moveTaskModalDoc.step_id || 0);
+    const targetStepId = Number(moveTaskModalTargetStepId || 0);
+    if (targetStepId <= 0 || targetStepId === currentStepId) {
+      return;
+    }
+    const targetStep = stepByIdMap.get(targetStepId) || null;
     if (!targetStep) {
       onToast?.({ tone: 'warning', message: 'That destination step is no longer available. Refresh and try again.' });
       return;
     }
-    const movedDocument = await onSaveDocument(receiptDoc.id, { step_id: targetStepId });
+    const movedDocument = await onSaveDocument(moveTaskModalDoc.id, { step_id: targetStepId });
     if (!movedDocument) {
       return;
     }
-    setMoveReceiptStepByDocId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
-    setPendingScrollReceiptId(receiptDoc.id);
+    setMoveTaskModalDocId(0);
+    setMoveTaskModalTargetStepId(0);
+    setPendingScrollReceiptId(moveTaskModalDoc.id);
   };
 
   const onUploadReceiptAttachments = (receiptDoc: IBuildWizardDocument, files: FileList | null) => {
@@ -5231,26 +5303,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                         plainNotes: parsedTask.plainNotes || '',
                         taskMeta: parsedTask.taskMeta,
                       };
-                      const attachableTaskDocuments = attachableProjectDocuments.filter((candidate) => {
-                        if (candidate.id === doc.id) {
-                          return false;
-                        }
-                        if (String(candidate.kind || '').trim() === 'receipt') {
-                          return false;
-                        }
-                        const isAlreadyAttached = String(candidate.kind || '').trim() === 'receipt_attachment'
-                          && Number(candidate.receipt_parent_document_id || 0) === doc.id;
-                        return !isAlreadyAttached;
-                      });
-                      const receiptAttachmentFilter = String(attachExistingDocFilterByReceiptId[doc.id] || '').trim().toLowerCase();
-                      const filteredAttachableTaskDocuments = receiptAttachmentFilter
-                        ? attachableTaskDocuments.filter((candidate) => {
-                          const haystack = `${candidate.original_name} ${buildWizardTokenLabel(candidate.kind, 'Other')}`.toLowerCase();
-                          return haystack.includes(receiptAttachmentFilter);
-                        })
-                        : attachableTaskDocuments;
-                      const moveTargetStepOptions = steps.filter((candidate) => candidate.id !== step.id);
-                      const selectedMoveTargetStepId = moveReceiptStepByDocId[doc.id] || '';
                       return (
                         <div
                           className="build-wizard-step-receipt-row"
@@ -5408,65 +5460,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                 ))}
                               </div>
                             ) : null}
-                            {attachableTaskDocuments.length > 0 ? (
-                              <div className="build-wizard-step-attach-existing">
-                                {attachExistingPickerOpenByReceiptId[doc.id] ? (
-                                  <input
-                                    type="text"
-                                    className="build-wizard-attach-filter-input"
-                                    placeholder="Filter attachments..."
-                                    value={attachExistingDocFilterByReceiptId[doc.id] || ''}
-                                    onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                                  />
-                                ) : null}
-                                <select
-                                  value={attachExistingDocByReceiptId[doc.id] || ''}
-                                  onFocus={() => setAttachExistingPickerOpenByReceiptId((prev) => ({ ...prev, [doc.id]: true }))}
-                                  onMouseDown={() => setAttachExistingPickerOpenByReceiptId((prev) => ({ ...prev, [doc.id]: true }))}
-                                  onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                                >
-                                  <option value="">Attach existing document...</option>
-                                  {filteredAttachableTaskDocuments.map((candidate) => (
-                                    <option key={`task-attach-${doc.id}-${candidate.id}`} value={String(candidate.id)}>
-                                      {candidate.original_name} ({buildWizardTokenLabel(candidate.kind, 'Other')})
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-primary btn-sm"
-                                  onClick={() => void onAttachExistingDocumentToReceipt(step, doc)}
-                                  disabled={!attachExistingDocByReceiptId[doc.id]}
-                                >
-                                  Attach
-                                </button>
-                              </div>
-                            ) : null}
-                            {moveTargetStepOptions.length > 0 ? (
-                              <div className="build-wizard-step-task-move">
-                                <select
-                                  aria-label={`Move ${doc.receipt_title?.trim() || doc.original_name} to another step`}
-                                  value={selectedMoveTargetStepId}
-                                  onChange={(e) => setMoveReceiptStepByDocId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                                  disabled={stepReadOnly || documentSavingId === doc.id}
-                                >
-                                  <option value="">Move task to...</option>
-                                  {moveTargetStepOptions.map((candidate) => (
-                                    <option key={`move-task-${doc.id}-${candidate.id}`} value={String(candidate.id)}>
-                                      {candidate.step_order}. {candidate.title}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-secondary btn-sm"
-                                  onClick={() => { void onMoveReceiptToStep(step, doc); }}
-                                  disabled={stepReadOnly || documentSavingId === doc.id || !selectedMoveTargetStepId}
-                                >
-                                  {documentSavingId === doc.id ? 'Moving...' : 'Move'}
-                                </button>
-                              </div>
-                            ) : null}
                           </div>
                           <div className="build-wizard-step-receipt-actions">
                             <button
@@ -5477,18 +5470,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             >
                               Edit
                             </button>
-                            <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
-                              Upload Attachment
-                              <input
-                                type="file"
-                                accept="image/*,.pdf"
-                                multiple
-                                onChange={(e) => {
-                                  onUploadReceiptAttachments(doc, e.target.files);
-                                  e.currentTarget.value = '';
-                                }}
-                              />
-                            </label>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => openMoveTaskModal(doc)}
+                              disabled={stepReadOnly}
+                            >
+                              Move
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => openTaskAttachmentsModal(doc)}
+                            >
+                              Attachments
+                            </button>
                             <button
                               type="button"
                               className="btn btn-outline-danger btn-sm"
@@ -7782,6 +7778,168 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               >
                 {movingStep ? 'Moving...' : 'Move Step'}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {moveTaskModalDoc ? (
+        <div className="build-wizard-doc-manager" onClick={() => documentSavingId !== moveTaskModalDoc.id && setMoveTaskModalDocId(0)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Move Task</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close move task dialog"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => {
+                    if (documentSavingId !== moveTaskModalDoc.id) {
+                      setMoveTaskModalDocId(0);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <p className="build-wizard-confirm-message">
+              {`Where do you want to move "${moveTaskModalDoc.receipt_title?.trim() || moveTaskModalDoc.original_name}"?`}
+            </p>
+            <label className="build-wizard-move-modal-field">
+              Target step
+              <select
+                value={moveTaskModalTargetStepId > 0 ? String(moveTaskModalTargetStepId) : ''}
+                onChange={(e) => setMoveTaskModalTargetStepId(Number(e.target.value || '0'))}
+                disabled={documentSavingId === moveTaskModalDoc.id}
+              >
+                <option value="">Choose a step...</option>
+                {moveTaskStepOptions.map((option) => (
+                  <option key={`move-task-modal-${option.step.id}`} value={option.step.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="build-wizard-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setMoveTaskModalDocId(0)}
+                disabled={documentSavingId === moveTaskModalDoc.id}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => { void onMoveReceiptToStep(); }}
+                disabled={documentSavingId === moveTaskModalDoc.id || moveTaskModalTargetStepId <= 0}
+              >
+                {documentSavingId === moveTaskModalDoc.id ? 'Moving...' : 'Move Task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {taskAttachmentsModalDoc ? (
+        <div className="build-wizard-doc-manager" onClick={() => setTaskAttachmentsModalDocId(0)}>
+          <div className="build-wizard-doc-manager-inner build-wizard-task-attachments-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Task Attachments</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close attachments dialog"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => setTaskAttachmentsModalDocId(0)}
+                />
+              </div>
+            </div>
+            <p className="build-wizard-confirm-message">
+              {`Manage attachments for "${taskAttachmentsModalDoc.receipt_title?.trim() || taskAttachmentsModalDoc.original_name}".`}
+            </p>
+            <div className="build-wizard-task-attachments-grid">
+              <section className="build-wizard-task-attachments-card">
+                <h4>Upload New Attachment</h4>
+                <label className="btn btn-outline-primary btn-sm build-wizard-upload-btn">
+                  Choose Files
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    multiple
+                    onChange={(e) => {
+                      onUploadReceiptAttachments(taskAttachmentsModalDoc, e.target.files);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                <div className="build-wizard-muted">Accepted: images and PDF files.</div>
+              </section>
+              <section className="build-wizard-task-attachments-card">
+                <h4>Attach Existing Document</h4>
+                <label className="build-wizard-move-modal-field">
+                  Filter documents
+                  <input
+                    type="text"
+                    className="build-wizard-attach-filter-input"
+                    placeholder="Filter attachments..."
+                    value={attachExistingDocFilterByReceiptId[taskAttachmentsModalDoc.id] || ''}
+                    onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [taskAttachmentsModalDoc.id]: e.target.value }))}
+                  />
+                </label>
+                <label className="build-wizard-move-modal-field">
+                  Existing document
+                  <select
+                    value={attachExistingDocByReceiptId[taskAttachmentsModalDoc.id] || ''}
+                    onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [taskAttachmentsModalDoc.id]: e.target.value }))}
+                  >
+                    <option value="">Choose a document...</option>
+                    {taskAttachmentsModalAttachableDocuments.map((candidate) => (
+                      <option key={`task-modal-attach-${taskAttachmentsModalDoc.id}-${candidate.id}`} value={String(candidate.id)}>
+                        {candidate.original_name} ({buildWizardTokenLabel(candidate.kind, 'Other')})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="build-wizard-doc-manager-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => {
+                      if (taskAttachmentsModalStep) {
+                        void onAttachExistingDocumentToReceipt(taskAttachmentsModalStep, taskAttachmentsModalDoc);
+                      }
+                    }}
+                    disabled={!taskAttachmentsModalStep || !attachExistingDocByReceiptId[taskAttachmentsModalDoc.id]}
+                  >
+                    Attach Existing
+                  </button>
+                </div>
+              </section>
+              <section className="build-wizard-task-attachments-card is-wide">
+                <h4>Current Attachments</h4>
+                {documents.filter((doc) => Number(doc.receipt_parent_document_id || 0) === taskAttachmentsModalDoc.id).length > 0 ? (
+                  <div className="build-wizard-step-receipt-attachments-list">
+                    {documents
+                      .filter((doc) => Number(doc.receipt_parent_document_id || 0) === taskAttachmentsModalDoc.id)
+                      .map((attachment) => (
+                        <button
+                          key={`task-modal-current-attachment-${attachment.id}`}
+                          type="button"
+                          className="build-wizard-step-receipt-link"
+                          onClick={() => void openDocumentPreview(attachment)}
+                          title={attachment.original_name}
+                        >
+                          {attachment.original_name}
+                        </button>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="build-wizard-muted">No attachments yet.</div>
+                )}
+              </section>
             </div>
           </div>
         </div>

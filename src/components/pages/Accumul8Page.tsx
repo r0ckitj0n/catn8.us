@@ -1467,20 +1467,25 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     ]))
   ), [getAccountDisplayName, ledgerRowsBase, ledgerSearchQuery]);
   const ledgerDisplayBalanceById = React.useMemo(() => {
-    const includePlannerOnly = ledgerFilterPreset === 'planning';
+    if (ledgerFilterPreset === 'planning') {
+      return new Map<number, number>();
+    }
+
     const sortedTransactions = filteredTransactions.slice().sort((a, b) => {
       const accountDelta = Number(a.account_id || 0) - Number(b.account_id || 0);
       if (accountDelta !== 0) {
         return accountDelta;
       }
-      const dateDelta = String(a.transaction_date || '').localeCompare(String(b.transaction_date || ''));
+      const dateDelta = String(b.transaction_date || '').localeCompare(String(a.transaction_date || ''));
       if (dateDelta !== 0) {
         return dateDelta;
       }
-      return Number(a.id || 0) - Number(b.id || 0);
+      return Number(b.id || 0) - Number(a.id || 0);
     });
 
-    const runningByAccount = new Map<number, number>();
+    const runningByAccount = new Map<number, number>(
+      scopedAccounts.map((account) => [Number(account.id || 0), roundCurrency(Number(account.current_balance || 0))])
+    );
     const balancesById = new Map<number, number>();
 
     sortedTransactions.forEach((tx) => {
@@ -1495,28 +1500,21 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
         return;
       }
 
-      if (String(tx.source_kind || '') === 'statement_pdf') {
-        const statementBalance = roundCurrency(Number(tx.running_balance || 0));
-        runningByAccount.set(accountId, statementBalance);
-        balancesById.set(txId, statementBalance);
-        return;
-      }
-
       const currentBalance = roundCurrency(runningByAccount.get(accountId) || 0);
       const isPlannerOnly = Number(tx.is_budget_planner || 0) === 1 && String(tx.source_kind || '') !== 'teller';
-      if (!includePlannerOnly && isPlannerOnly) {
+      const isFutureDated = String(tx.transaction_date || '') > todayDate;
+      if (isPlannerOnly || isFutureDated || String(tx.source_kind || '') === 'statement_pdf') {
         balancesById.set(txId, currentBalance);
         return;
       }
 
       const delta = roundCurrency(Number(tx.amount || 0) + Number(tx.rta_amount || 0));
-      const nextBalance = roundCurrency(currentBalance + delta);
-      runningByAccount.set(accountId, nextBalance);
-      balancesById.set(txId, nextBalance);
+      balancesById.set(txId, currentBalance);
+      runningByAccount.set(accountId, roundCurrency(currentBalance - delta));
     });
 
     return balancesById;
-  }, [filteredTransactions, ledgerFilterPreset]);
+  }, [filteredTransactions, ledgerFilterPreset, scopedAccounts, todayDate]);
   const payBillsAccountOptions = React.useMemo(() => (
     accounts
       .filter((account) => Number(account.is_active || 0) === 1)

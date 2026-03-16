@@ -49,6 +49,8 @@ $ownerUserId = (int)($body['owner_user_id'] ?? 0);
 if ($ownerUserId <= 0) {
     $fail('accumul8_housekeeping', 400, 'owner_user_id is required');
 }
+$daysAhead = (int)($body['days_ahead'] ?? 90);
+$daysAhead = max(0, min(90, $daysAhead));
 
 define('CATN8_ACCUMUL8_LIBRARY_ONLY', true);
 require_once __DIR__ . '/accumul8.php';
@@ -63,6 +65,7 @@ try {
         'skip_recurring_sync' => $body['skip_recurring_sync'] ?? 0,
         'skip_balance_books' => $body['skip_balance_books'] ?? 0,
         'skip_watchlist' => $body['skip_watchlist'] ?? 0,
+        'days_ahead' => $daysAhead,
     ]);
     catn8_diagnostics_log_event('accumul8_housekeeping', true, 200, 'AIcountant housekeeping completed', [
         'owner_user_id' => $ownerUserId,

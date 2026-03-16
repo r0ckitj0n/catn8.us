@@ -6,6 +6,7 @@ Use this when you want AIcountant to run unattended on live and keep Accumul8 cu
 
 - Syncs all Teller-backed bank connections.
 - Reconciles opening balances when the bank balance and Accumul8 ledger are still offset.
+- Materializes recurring ledger transactions through the next 90 days by default.
 - Runs the AIcountant watchlist over overdue bills, bills due soon, recurring outflows, and near-term cash-flow pressure.
 - Posts start, progress, anomalies, and summary messages to the Accumul8 message board.
 - Sends email only when attention is needed by default.
@@ -20,6 +21,7 @@ Run on the live host with PHP CLI:
 ```bash
 php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php \
   --owner-user-id=OWNER_USER_ID \
+  --days-ahead=90 \
   --send-email=1 \
   --create-notification-rule=1 \
   --email-on-attention-only=1
@@ -33,7 +35,7 @@ Run from cron with `curl` when you prefer an HTTP trigger:
 curl -sS -X POST "https://catn8.us/api/accumul8_housekeeping.php" \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  --data '{"owner_user_id":OWNER_USER_ID,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
+  --data '{"owner_user_id":OWNER_USER_ID,"days_ahead":90,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
 ```
 
 If you cannot send headers, you may send the token in the JSON body instead:
@@ -41,13 +43,13 @@ If you cannot send headers, you may send the token in the JSON body instead:
 ```bash
 curl -sS -X POST "https://catn8.us/api/accumul8_housekeeping.php" \
   -H "Content-Type: application/json" \
-  --data '{"admin_token":"YOUR_ADMIN_TOKEN","owner_user_id":OWNER_USER_ID,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
+  --data '{"admin_token":"YOUR_ADMIN_TOKEN","owner_user_id":OWNER_USER_ID,"days_ahead":90,"send_email":1,"create_notification_rule":1,"email_on_attention_only":1}'
 ```
 
 Legacy GET still works for now, but it is deprecated because it exposes the token in URLs, logs, and scheduler history:
 
 ```text
-https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN&owner_user_id=OWNER_USER_ID&send_email=1&create_notification_rule=1&email_on_attention_only=1
+https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN&owner_user_id=OWNER_USER_ID&days_ahead=90&send_email=1&create_notification_rule=1&email_on_attention_only=1
 ```
 
 ## Recommended IONOS cron setup
@@ -60,8 +62,8 @@ Recommended crontab:
 MAILTO=your-email@example.com
 TZ=America/New_York
 
-0 10 * * * /usr/bin/php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=OWNER_USER_ID --send-email=1 --create-notification-rule=1 --email-on-attention-only=1 >> /ABSOLUTE/PATH/TO/catn8.us/.local/state/aicountant-housekeeping.log 2>&1
-0 15 * * * /usr/bin/php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=OWNER_USER_ID --send-email=1 --create-notification-rule=1 --email-on-attention-only=1 >> /ABSOLUTE/PATH/TO/catn8.us/.local/state/aicountant-housekeeping.log 2>&1
+0 10 * * * /usr/bin/php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=OWNER_USER_ID --days-ahead=90 --send-email=1 --create-notification-rule=1 --email-on-attention-only=1 >> /ABSOLUTE/PATH/TO/catn8.us/.local/state/aicountant-housekeeping.log 2>&1
+0 15 * * * /usr/bin/php /ABSOLUTE/PATH/TO/catn8.us/scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=OWNER_USER_ID --days-ahead=90 --send-email=1 --create-notification-rule=1 --email-on-attention-only=1 >> /ABSOLUTE/PATH/TO/catn8.us/.local/state/aicountant-housekeeping.log 2>&1
 ```
 
 If `php` is not at `/usr/bin/php`, run `which php` over SSH and replace it.

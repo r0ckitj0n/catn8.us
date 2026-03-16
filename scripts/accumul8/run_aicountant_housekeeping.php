@@ -13,11 +13,12 @@ $options = getopt('', [
     'create-notification-rule::',
     'email-on-attention-only::',
     'run-entity-maintenance::',
+    'days-ahead::',
 ]);
 
 $ownerUserId = isset($options['owner-user-id']) ? (int)$options['owner-user-id'] : 0;
 if ($ownerUserId <= 0) {
-    fwrite(STDERR, "Usage: php scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=<id> [--send-email=1] [--create-notification-rule=1] [--email-on-attention-only=1]\n");
+    fwrite(STDERR, "Usage: php scripts/accumul8/run_aicountant_housekeeping.php --owner-user-id=<id> [--days-ahead=90] [--send-email=1] [--create-notification-rule=1] [--email-on-attention-only=1]\n");
     exit(1);
 }
 
@@ -34,6 +35,7 @@ try {
         'create_notification_rule' => $options['create-notification-rule'] ?? 1,
         'email_on_attention_only' => $options['email-on-attention-only'] ?? 1,
         'run_entity_maintenance' => $options['run-entity-maintenance'] ?? 0,
+        'days_ahead' => $options['days-ahead'] ?? 90,
     ]);
     fwrite(STDOUT, json_encode([
         'success' => true,

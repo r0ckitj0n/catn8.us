@@ -8102,6 +8102,8 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         && accumul8_normalize_bool($options['skip_balance_books']) === 1;
     $skipWatchlist = array_key_exists('skip_watchlist', $options)
         && accumul8_normalize_bool($options['skip_watchlist']) === 1;
+    $daysAhead = array_key_exists('days_ahead', $options) ? (int)$options['days_ahead'] : 90;
+    $daysAhead = max(0, min(90, $daysAhead));
 
     accumul8_message_board_post(
         $viewerId,
@@ -8142,8 +8144,8 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         $balanceResult['connection_errors'] = $balanceResult['connection_errors'];
     }
     $ledgerSyncResult = $skipRecurringSync
-        ? ['created' => 0, 'window_start' => accumul8_normalize_date(gmdate('Y-m-d')), 'window_end' => accumul8_recurring_window_end_date(gmdate('Y-m-d'), 90), 'normalized_template_count' => 0]
-        : accumul8_sync_recurring_ledger_window($viewerId, $actorUserId);
+        ? ['created' => 0, 'window_start' => accumul8_normalize_date(gmdate('Y-m-d')), 'window_end' => accumul8_recurring_window_end_date(gmdate('Y-m-d'), $daysAhead), 'normalized_template_count' => 0]
+        : accumul8_sync_recurring_ledger_window($viewerId, $actorUserId, null, $daysAhead);
 
     $watchlistPreview = $skipWatchlist ? [
         'overdue_count' => 0,
@@ -14520,6 +14522,59 @@ function accumul8_recurring_occurrences_for_month(array $recurring, string $mont
     return array_reverse($dates);
 }
 
+function accumul8_recurring_occurrences_in_range(array $recurring, string $minDate, string $maxDate): array
+{
+    $normalizedMin = accumul8_normalize_date($minDate);
+    $normalizedMax = accumul8_normalize_date($maxDate);
+    $anchor = DateTimeImmutable::createFromFormat('!Y-m-d', (string)($recurring['next_due_date'] ?? ''), new DateTimeZone('UTC'));
+    if (!$anchor || $normalizedMin === null || $normalizedMax === null || strcmp($normalizedMin, $normalizedMax) > 0) {
+        return [];
+    }
+
+    $rangeStart = DateTimeImmutable::createFromFormat('!Y-m-d', $normalizedMin, new DateTimeZone('UTC'));
+    $rangeEnd = DateTimeImmutable::createFromFormat('!Y-m-d', $normalizedMax, new DateTimeZone('UTC'));
+    if (!$rangeStart || !$rangeEnd) {
+        return [];
+    }
+
+    $frequency = (string)($recurring['frequency'] ?? 'monthly');
+    $intervalCount = (int)($recurring['interval_count'] ?? 1);
+    $cursor = $anchor;
+    $guard = 0;
+
+    while ($cursor > $rangeEnd && $guard < 480) {
+        $cursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, -1);
+        $guard++;
+    }
+    while ($cursor < $rangeStart && $guard < 960) {
+        $nextCursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, 1);
+        if ($nextCursor <= $cursor) {
+            break;
+        }
+        $cursor = $nextCursor;
+        $guard++;
+    }
+
+    $dates = [];
+    $seen = [];
+    $guard = 0;
+    while ($cursor >= $rangeStart && $cursor <= $rangeEnd && $guard < 480) {
+        $dateValue = $cursor->format('Y-m-d');
+        if (!isset($seen[$dateValue])) {
+            $dates[] = $dateValue;
+            $seen[$dateValue] = true;
+        }
+        $nextCursor = accumul8_shift_occurrence_date($cursor, $frequency, $intervalCount, 1);
+        if ($nextCursor <= $cursor) {
+            break;
+        }
+        $cursor = $nextCursor;
+        $guard++;
+    }
+
+    return $dates;
+}
+
 function accumul8_limit_recurring_occurrences(array $occurrenceDates, ?string $minDate, ?string $maxDate): array
 {
     $normalizedMin = accumul8_normalize_date($minDate);
@@ -15068,12 +15123,6 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
 {
     $effectiveToday = accumul8_normalize_date($today) ?? date('Y-m-d');
     $windowEndDate = accumul8_recurring_window_end_date($effectiveToday, $daysAhead);
-    $startMonth = substr($effectiveToday, 0, 7);
-    $endMonth = substr($windowEndDate, 0, 7);
-    $monthsToEnsure = accumul8_month_range($startMonth, $endMonth);
-    if ($monthsToEnsure === []) {
-        $monthsToEnsure = [$startMonth];
-    }
 
     $recurringRows = Database::queryAll(
         'SELECT rp.id, ' . accumul8_optional_select('accumul8_recurring_payments', 'entity_id', 'rp.entity_id', 'NULL AS entity_id') . ', rp.contact_id, rp.account_id, rp.title, rp.direction, rp.amount, rp.frequency, rp.interval_count, rp.next_due_date, rp.paid_date, rp.notes, rp.is_budget_planner, ' . accumul8_optional_select('accumul8_recurring_payments', 'payment_method', 'rp.payment_method', "'unspecified' AS payment_method") . ',
@@ -15153,29 +15202,27 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
             $normalizedTemplateCount++;
         }
 
-        foreach ($monthsToEnsure as $monthValue) {
-            $occurrenceDates = accumul8_recurring_occurrences_for_month($row, $monthValue);
-            $occurrenceDates = accumul8_limit_recurring_occurrences($occurrenceDates, $effectiveToday, $windowEndDate);
-            foreach ($occurrenceDates as $occurrenceDate) {
-                $existing = Database::queryOne(
-                    'SELECT id,
-                            source_kind,
-                            entity_id,
-                            contact_id,
-                            account_id,
-                            is_budget_planner,
-                            due_date,
-                            transaction_date
-                     FROM accumul8_transactions
-                     WHERE owner_user_id = ?
-                       AND recurring_payment_id = ?
-                       AND (due_date = ? OR transaction_date = ?)
-                     LIMIT 1',
-                    [$viewerId, $recurringId, $occurrenceDate, $occurrenceDate]
-                );
-                if ($existing) {
-                    if (accumul8_transaction_source_kind($existing['source_kind'] ?? '') === 'recurring') {
-                        $reconciled = accumul8_reconcile_existing_recurring_placeholder(
+        $occurrenceDates = accumul8_recurring_occurrences_in_range($row, $effectiveToday, $windowEndDate);
+        foreach ($occurrenceDates as $occurrenceDate) {
+            $existing = Database::queryOne(
+                'SELECT id,
+                        source_kind,
+                        entity_id,
+                        contact_id,
+                        account_id,
+                        is_budget_planner,
+                        due_date,
+                        transaction_date
+                 FROM accumul8_transactions
+                 WHERE owner_user_id = ?
+                   AND recurring_payment_id = ?
+                   AND (due_date = ? OR transaction_date = ?)
+                 LIMIT 1',
+                [$viewerId, $recurringId, $occurrenceDate, $occurrenceDate]
+            );
+            if ($existing) {
+                if (accumul8_transaction_source_kind($existing['source_kind'] ?? '') === 'recurring') {
+                    $reconciled = accumul8_reconcile_existing_recurring_placeholder(
                         $viewerId,
                         $recurringId,
                         $row,
@@ -15183,84 +15230,83 @@ function accumul8_sync_recurring_ledger_window(int $viewerId, int $actorUserId, 
                         $occurrenceDate,
                         $matchingDescriptions
                     );
-                        if ($reconciled) {
-                            $linkedExistingCount++;
-                        }
+                    if ($reconciled) {
+                        $linkedExistingCount++;
                     }
-                    continue;
                 }
+                continue;
+            }
 
-                $direction = (string)($row['direction'] ?? 'outflow');
-                $baseAmount = (float)($row['amount'] ?? 0);
-                $amount = $direction === 'inflow' ? abs($baseAmount) : -abs($baseAmount);
-                $linkedExisting = accumul8_find_best_transaction_for_recurring_occurrence(
+            $direction = (string)($row['direction'] ?? 'outflow');
+            $baseAmount = (float)($row['amount'] ?? 0);
+            $amount = $direction === 'inflow' ? abs($baseAmount) : -abs($baseAmount);
+            $linkedExisting = accumul8_find_best_transaction_for_recurring_occurrence(
+                $viewerId,
+                $recurringId,
+                isset($row['account_id']) ? (int)$row['account_id'] : null,
+                $amount,
+                $occurrenceDate,
+                (string)($row['title'] ?? 'Recurring Payment'),
+                [
+                    'allowed_source_kinds' => ['manual', 'teller', 'statement_upload', 'statement_pdf'],
+                    'window_days' => 7,
+                    'min_score' => 14,
+                    'min_margin' => 2,
+                    'expected_entity_id' => $entityId > 0 ? $entityId : null,
+                    'candidate_descriptions' => $matchingDescriptions,
+                ]
+            );
+            if ($linkedExisting) {
+                accumul8_link_transaction_to_recurring_occurrence(
+                    $viewerId,
+                    (int)($linkedExisting['id'] ?? 0),
+                    $recurringId,
+                    $occurrenceDate,
+                    [
+                        'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
+                        'entity_id' => $entityId > 0 ? $entityId : null,
+                        'contact_id' => isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+                        'is_budget_planner' => (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+                    ]
+                );
+                accumul8_enrich_recurring_match_learning(
                     $viewerId,
                     $recurringId,
-                    isset($row['account_id']) ? (int)$row['account_id'] : null,
-                    $amount,
-                    $occurrenceDate,
-                    (string)($row['title'] ?? 'Recurring Payment'),
-                    [
-                        'allowed_source_kinds' => ['manual', 'teller', 'statement_upload', 'statement_pdf'],
-                        'window_days' => 7,
-                        'min_score' => 14,
-                        'min_margin' => 2,
-                        'expected_entity_id' => $entityId > 0 ? $entityId : null,
-                        'candidate_descriptions' => $matchingDescriptions,
-                    ]
+                    $entityId > 0 ? $entityId : null,
+                    (string)($linkedExisting['description'] ?? ''),
+                    isset($linkedExisting['matched_entity_id']) ? (int)$linkedExisting['matched_entity_id'] : null
                 );
-                if ($linkedExisting) {
-                    accumul8_link_transaction_to_recurring_occurrence(
-                        $viewerId,
-                        (int)($linkedExisting['id'] ?? 0),
-                        $recurringId,
-                        $occurrenceDate,
-                        [
-                            'account_id' => isset($row['account_id']) ? (int)$row['account_id'] : null,
-                            'entity_id' => $entityId > 0 ? $entityId : null,
-                            'contact_id' => isset($row['contact_id']) ? (int)$row['contact_id'] : null,
-                            'is_budget_planner' => (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
-                        ]
-                    );
-                    accumul8_enrich_recurring_match_learning(
-                        $viewerId,
-                        $recurringId,
-                        $entityId > 0 ? $entityId : null,
-                        (string)($linkedExisting['description'] ?? ''),
-                        isset($linkedExisting['matched_entity_id']) ? (int)$linkedExisting['matched_entity_id'] : null
-                    );
-                    continue;
-                }
-
-                $paidDate = accumul8_normalize_date($row['paid_date'] ?? null);
-                $isPaid = $paidDate === $occurrenceDate ? 1 : 0;
-
-                Database::execute(
-                    'INSERT INTO accumul8_transactions
-                        (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
-                         is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, 0, ?, 1, ?, ?, ?, ?)',
-                    [
-                        $viewerId,
-                        isset($row['account_id']) ? (int)$row['account_id'] : null,
-                        $entityId > 0 ? $entityId : null,
-                        isset($row['contact_id']) ? (int)$row['contact_id'] : null,
-                        $occurrenceDate,
-                        $occurrenceDate,
-                        $direction === 'inflow' ? 'deposit' : 'bill',
-                        (string)($row['title'] ?? 'Recurring Payment'),
-                        ($row['notes'] ?? '') === '' ? null : (string)$row['notes'],
-                        $amount,
-                        $isPaid,
-                        (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
-                        $recurringId,
-                        'recurring',
-                        $isPaid === 1 ? $occurrenceDate : null,
-                        $actorUserId,
-                    ]
-                );
-                $created++;
+                continue;
             }
+
+            $paidDate = accumul8_normalize_date($row['paid_date'] ?? null);
+            $isPaid = $paidDate === $occurrenceDate ? 1 : 0;
+
+            Database::execute(
+                'INSERT INTO accumul8_transactions
+                    (owner_user_id, account_id, entity_id, contact_id, transaction_date, due_date, entry_type, description, memo, amount, rta_amount,
+                     is_paid, is_reconciled, is_budget_planner, is_recurring_instance, recurring_payment_id, source_kind, paid_date, created_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, 0, ?, 1, ?, ?, ?, ?)',
+                [
+                    $viewerId,
+                    isset($row['account_id']) ? (int)$row['account_id'] : null,
+                    $entityId > 0 ? $entityId : null,
+                    isset($row['contact_id']) ? (int)$row['contact_id'] : null,
+                    $occurrenceDate,
+                    $occurrenceDate,
+                    $direction === 'inflow' ? 'deposit' : 'bill',
+                    (string)($row['title'] ?? 'Recurring Payment'),
+                    ($row['notes'] ?? '') === '' ? null : (string)$row['notes'],
+                    $amount,
+                    $isPaid,
+                    (int)($row['is_budget_planner'] ?? 0) === 1 ? 1 : 0,
+                    $recurringId,
+                    'recurring',
+                    $isPaid === 1 ? $occurrenceDate : null,
+                    $actorUserId,
+                ]
+            );
+            $created++;
         }
     }
 

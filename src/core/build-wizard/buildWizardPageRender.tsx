@@ -3234,14 +3234,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     let nextStart = toStringOrNull(step.expected_start_date || '');
     let nextEnd = toStringOrNull(step.expected_end_date || '');
     if (taskDates.length > 0) {
-      const minTaskDate = taskDates[0];
-      const maxTaskDate = taskDates[taskDates.length - 1];
-      if (!nextStart || nextStart > minTaskDate) {
-        nextStart = minTaskDate;
-      }
-      if (!nextEnd || nextEnd < maxTaskDate) {
-        nextEnd = maxTaskDate;
-      }
+      nextStart = taskDates[0];
+      nextEnd = taskDates[taskDates.length - 1];
     }
     if (nextStart && nextEnd && nextEnd < nextStart) {
       nextEnd = nextStart;

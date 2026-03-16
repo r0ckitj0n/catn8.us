@@ -1660,6 +1660,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       };
     }
 
+    const showPlanningTotals = tab === 'pay_bills' || (tab === 'ledger' && ledgerFilterPreset === 'planning');
+    if (!showPlanningTotals) {
+      return {
+        currentBalance: currentVisibleBalance,
+        projectedBalance: currentVisibleBalance,
+        unpaidBills: 0,
+        upcomingWindfalls: 0,
+      };
+    }
+
     const projectedTransactions = tab === 'pay_bills' ? payBillsProjectedTransactions : defaultProjectedTransactions;
     let projectedDelta = 0;
     let unpaidBills = 0;
@@ -1681,7 +1691,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       unpaidBills: roundCurrency(unpaidBills),
       upcomingWindfalls: roundCurrency(upcomingWindfalls),
     };
-  }, [currentVisibleBalance, defaultProjectedTransactions, payBillsProjectedTransactions, spreadsheetProjectedSummary, tab]);
+  }, [currentVisibleBalance, defaultProjectedTransactions, ledgerFilterPreset, payBillsProjectedTransactions, spreadsheetProjectedSummary, tab]);
   const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
   const debtorRows = React.useMemo(() => (
     debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [

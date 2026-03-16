@@ -11012,15 +11012,17 @@ function accumul8_recompute_running_balance(int $viewerId): void
 {
     $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 'rta_amount', '0.00 AS rta_amount');
     $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 'source_kind', "'manual' AS source_kind");
+    $today = date('Y-m-d');
     $rows = Database::queryAll(
-        'SELECT id, account_id, amount, running_balance, ' . $rtaSelect . ', ' . $sourceKindSelect . '
+        'SELECT id, account_id, amount, running_balance, transaction_date, ' . $rtaSelect . ', ' . $sourceKindSelect . '
          FROM accumul8_transactions
          WHERE owner_user_id = ?
          ORDER BY account_id ASC, transaction_date ASC, id ASC',
         [$viewerId]
     );
 
-    $balances = [];
+    $runningBalances = [];
+    $currentBalances = [];
     $statementBalances = [];
     foreach ($rows as $row) {
         $accountId = isset($row['account_id']) ? (int)$row['account_id'] : 0;
@@ -11028,9 +11030,13 @@ function accumul8_recompute_running_balance(int $viewerId): void
             $statementBalances[$accountId] = (float)($row['running_balance'] ?? 0);
             continue;
         }
-        $balances[$accountId] = (float)($balances[$accountId] ?? 0);
-        $balances[$accountId] += (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
-        $nextRunningBalance = round($balances[$accountId], 2);
+        $amountDelta = (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
+        $runningBalances[$accountId] = (float)($runningBalances[$accountId] ?? 0);
+        $runningBalances[$accountId] += $amountDelta;
+        if ((string)($row['transaction_date'] ?? '') <= $today) {
+            $currentBalances[$accountId] = (float)($currentBalances[$accountId] ?? 0) + $amountDelta;
+        }
+        $nextRunningBalance = round($runningBalances[$accountId], 2);
         $currentRunningBalance = round((float)($row['running_balance'] ?? 0), 2);
         if ($nextRunningBalance === $currentRunningBalance) {
             continue;
@@ -11045,7 +11051,7 @@ function accumul8_recompute_running_balance(int $viewerId): void
         'UPDATE accumul8_accounts SET current_balance = 0.00 WHERE owner_user_id = ?',
         [$viewerId]
     );
-    foreach ($balances as $accountId => $balance) {
+    foreach ($currentBalances as $accountId => $balance) {
         if ($accountId <= 0) {
             continue;
         }
@@ -14250,6 +14256,7 @@ function accumul8_summary(int $viewerId): array
         ];
     }
 
+    $today = date('Y-m-d');
     $isPaidExpr = accumul8_table_has_column('accumul8_transactions', 'is_paid')
         ? 'CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END'
         : '0';
@@ -14261,8 +14268,9 @@ function accumul8_summary(int $viewerId): array
             COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) AS outflow_total,
             COALESCE(SUM(' . $isPaidExpr . '), 0) AS unpaid_outflow_total
          FROM accumul8_transactions
-         WHERE owner_user_id = ?',
-        [$viewerId]
+         WHERE owner_user_id = ?
+           AND transaction_date <= ?',
+        [$viewerId, $today]
     ) ?: [];
 
     return [

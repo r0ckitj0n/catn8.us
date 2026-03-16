@@ -3571,6 +3571,19 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
+  const autosaveExistingReceiptDraftForStep = async (
+    step: IBuildWizardStep,
+    patch: {
+      receipt_date?: string | null;
+    },
+  ) => {
+    const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
+    if (editingReceiptDocumentId <= 0) {
+      return;
+    }
+    await onSaveDocument(editingReceiptDocumentId, patch);
+  };
+
   const onStartEditReceiptForStep = (step: IBuildWizardStep, doc: IBuildWizardDocument) => {
     const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
     setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: doc.id }));
@@ -4958,6 +4971,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             ...prev,
                             [step.id]: { ...receiptDraft, receipt_date: e.target.value },
                           }))}
+                          onBlur={() => {
+                            void autosaveExistingReceiptDraftForStep(step, {
+                              receipt_date: toStringOrNull((receiptDraftByStep[step.id]?.receipt_date ?? receiptDraft.receipt_date) || ''),
+                            });
+                          }}
                         />
                       </label>
                       <label>

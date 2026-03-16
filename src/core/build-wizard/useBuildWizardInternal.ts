@@ -73,6 +73,7 @@ type DeleteDocumentResponse = {
   success: boolean;
   deleted_document_id: number;
   documents: IBuildWizardDocument[];
+  steps?: IBuildWizardStep[];
 };
 
 type DeleteProjectResponse = {
@@ -699,6 +700,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       } else {
         setDocuments((prev) => prev.filter((d) => d.id !== documentId));
       }
+      applyStepUpdatesFromDocumentResponse(res);
       onToast?.({ tone: 'success', message: 'Document deleted.' });
       return true;
     } catch (err: any) {
@@ -706,7 +708,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
       await refreshCurrentProject();
       return false;
     }
-  }, [onToast, refreshCurrentProject]);
+  }, [onToast, refreshCurrentProject, applyStepUpdatesFromDocumentResponse]);
 
   const replaceDocument = React.useCallback(async (documentId: number, file: File) => {
     if (documentId <= 0 || !file) {

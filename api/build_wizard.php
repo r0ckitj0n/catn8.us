@@ -2157,19 +2157,12 @@ function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId, ?fl
     }
     $receiptTotal = catn8_build_wizard_receipt_total_for_step($stepId);
     $actualCost = $stepRow['actual_cost'] !== null ? (float)$stepRow['actual_cost'] : null;
+    $nextActualCost = $receiptTotal > 0 ? $receiptTotal : null;
     $shouldSync = false;
-    $nextActualCost = $actualCost;
-    if ($receiptTotal > 0 && ($actualCost === null || $actualCost < $receiptTotal)) {
-        $nextActualCost = $receiptTotal;
-        $shouldSync = true;
-    } elseif (
-        $previousReceiptTotal !== null
-        && $actualCost !== null
-        && abs($actualCost - $previousReceiptTotal) < 0.005
-        && abs($receiptTotal - $previousReceiptTotal) >= 0.005
-    ) {
-        $nextActualCost = $receiptTotal > 0 ? $receiptTotal : null;
-        $shouldSync = true;
+    if ($nextActualCost === null) {
+        $shouldSync = $actualCost !== null;
+    } else {
+        $shouldSync = $actualCost === null || abs($actualCost - $nextActualCost) >= 0.005;
     }
     if ($shouldSync) {
         Database::execute(
@@ -7242,6 +7235,7 @@ try {
 
         $projectId = (int)($doc['project_id'] ?? 0);
         $docKind = strtolower(trim((string)($doc['kind'] ?? '')));
+        $beforeStepId = isset($doc['step_id']) ? (int)$doc['step_id'] : 0;
         $storagePath = trim((string)($doc['storage_path'] ?? ''));
         if ($docKind === 'receipt') {
             $childRows = Database::queryAll(
@@ -7294,10 +7288,20 @@ try {
             }
         }
 
+        $updatedSteps = [];
+        if ($docKind === 'receipt' && $beforeStepId > 0) {
+            catn8_build_wizard_sync_step_actual_cost_from_receipts($beforeStepId);
+            $syncedStep = catn8_build_wizard_step_by_id($beforeStepId);
+            if ($syncedStep) {
+                $updatedSteps[] = $syncedStep;
+            }
+        }
+
         catn8_json_response([
             'success' => true,
             'deleted_document_id' => $documentId,
             'documents' => ($projectId > 0 ? catn8_build_wizard_documents_for_project($projectId) : []),
+            'steps' => $updatedSteps,
         ]);
     }
 

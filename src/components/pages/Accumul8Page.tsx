@@ -327,6 +327,25 @@ function formatSummaryWindowLabel(window: SummaryWindowOption): string {
   return window === 'current' ? 'Current' : `${window} days`;
 }
 
+function isProjectedPlanningTransaction(
+  transaction: Pick<Accumul8Transaction, 'due_date' | 'transaction_date' | 'is_budget_planner' | 'source_kind'>,
+  todayDate: string,
+): boolean {
+  const effectiveDate = getLedgerEffectiveDate(transaction);
+  const sourceKind = String(transaction.source_kind || '');
+  const isPlannerOnly = Number(transaction.is_budget_planner || 0) === 1 && sourceKind !== 'teller';
+
+  if (isPlannerOnly) {
+    return true;
+  }
+
+  if (!effectiveDate || sourceKind === 'statement_pdf') {
+    return false;
+  }
+
+  return effectiveDate > todayDate;
+}
+
 function parseFiniteNumber(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -1667,6 +1686,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       if (Number(tx.is_paid || 0) === 1) {
         return sum;
       }
+      if (!isProjectedPlanningTransaction(tx, todayDate)) {
+        return sum;
+      }
 
       return sum + Number(tx.amount || 0);
     }, 0);
@@ -1679,7 +1701,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
 
     filteredTransactions.forEach((tx) => {
       const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate || effectiveDate > summaryWindowEndDate) {
+      if (!effectiveDate || effectiveDate < todayDate || effectiveDate > summaryWindowEndDate) {
+        return;
+      }
+      if (!isProjectedPlanningTransaction(tx, todayDate)) {
         return;
       }
 

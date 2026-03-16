@@ -85,6 +85,7 @@ type DeleteProjectResponse = {
 type UpdateDocumentResponse = {
   success: boolean;
   document: IBuildWizardDocument;
+  documents?: IBuildWizardDocument[];
   step?: IBuildWizardStep | null;
   steps?: IBuildWizardStep[];
 };
@@ -781,7 +782,13 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
 
     try {
       const res = await ApiClient.post<UpdateDocumentResponse>('/api/build_wizard.php?action=update_document', body);
-      if (res?.document) {
+      if (Array.isArray(res?.documents) && res.documents.length > 0) {
+        const replacements = new Map<number, IBuildWizardDocument>();
+        res.documents.forEach((doc) => {
+          replacements.set(doc.id, doc);
+        });
+        setDocuments((prev) => prev.map((doc) => replacements.get(doc.id) || doc));
+      } else if (res?.document) {
         setDocuments((prev) => prev.map((doc) => (doc.id === documentId ? res.document : doc)));
       }
       applyStepUpdatesFromDocumentResponse(res);

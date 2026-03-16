@@ -3706,7 +3706,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             {Number(tx.debtor_id || 0) <= 0 ? <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button> : null}
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><span aria-hidden="true">🗑️</span></button>
-                            {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy || !ledgerDraftById[tx.id]} aria-label={`Save ${tx.description}`} title={ledgerDraftById[tx.id] ? `Save ${tx.description}` : `No changes to save for ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                           </div>
                         </td>
                       </tr>
@@ -3816,7 +3816,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => setSelectedDebtorId(String(debtor.id))} disabled={busy} aria-label={`View ledger for ${debtor.debtor_name}`} title={`View ledger for ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateDebtorRow(debtor.id)} disabled={busy} aria-label={`Edit ${debtor.debtor_name}`} title={`Edit ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this debtor? Linked ledger rows will remain but be unassigned.')) { void deleteDebtor(debtor.id); if (selectedDebtorId === String(debtor.id)) setSelectedDebtorId(''); } }} disabled={busy} aria-label={`Delete ${debtor.debtor_name}`}><i className="bi bi-trash"></i></button>
-                            {debtorDraftById[debtor.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `debtor-${debtor.id}` ? ' is-flashing' : ''}`} onClick={() => void saveDebtorRow(debtor)} disabled={busy} aria-label={`Save ${debtor.debtor_name}`} title={`Save ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `debtor-${debtor.id}` ? ' is-flashing' : ''}`} onClick={() => void saveDebtorRow(debtor)} disabled={busy || !debtorDraftById[debtor.id]} aria-label={`Save ${debtor.debtor_name}`} title={debtorDraftById[debtor.id] ? `Save ${debtor.debtor_name}` : `No changes to save for ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                           </div>
                         </td>
                       </tr>
@@ -3904,7 +3904,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                                   <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditTransaction(tx.id)} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                                   <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
                                   <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy} aria-label={`Delete ${tx.description}`}><i className="bi bi-trash"></i></button>
-                                  {ledgerDraftById[tx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy} aria-label={`Save ${tx.description}`} title={`Save ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
+                                  <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy || !ledgerDraftById[tx.id]} aria-label={`Save ${tx.description}`} title={ledgerDraftById[tx.id] ? `Save ${tx.description}` : `No changes to save for ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                                 </div>
                               );
                             })()}
@@ -4072,7 +4072,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(billTx.id)} disabled={busy} aria-label={`Map ${billTx.description} to an entity alias`} title={`Map ${billTx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activatePayBillRow(billTx.id)} disabled={busy} aria-label={`Edit ${billTx.description}`} title={`Edit ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this bill item?')) { void deleteTransaction(billTx.id); } }} disabled={busy || !billEditPolicy.canDelete} aria-label={`Delete ${billTx.description}`} title={billEditPolicy.canDelete ? `Delete ${billTx.description}` : `${billEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
-                            {payBillDraftById[billTx.id] ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `paybill-${billTx.id}` ? ' is-flashing' : ''}`} onClick={() => void savePayBillRow(billTx)} disabled={busy} aria-label={`Save ${billTx.description}`} title={`Save ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `paybill-${billTx.id}` ? ' is-flashing' : ''}`} onClick={() => void savePayBillRow(billTx)} disabled={busy || !payBillDraftById[billTx.id]} aria-label={`Save ${billTx.description}`} title={payBillDraftById[billTx.id] ? `Save ${billTx.description}` : `No changes to save for ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                           </div>
                         </td>
                       </tr>
@@ -4273,18 +4273,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             >
                               <span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span>
                             </button>
-                            {entityDraft ? (
-                              <button
-                                type="button"
-                                className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `entity-${entity.id}` ? ' is-flashing' : ''}`}
-                                onClick={() => void saveEntityRow(entity)}
-                                disabled={busy}
-                                aria-label={`Save ${entity.display_name}`}
-                                title={`Save ${entity.display_name}`}
-                              >
-                                <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
-                              </button>
-                            ) : null}
+                            <button
+                              type="button"
+                              className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `entity-${entity.id}` ? ' is-flashing' : ''}`}
+                              onClick={() => void saveEntityRow(entity)}
+                              disabled={busy || !entityDraft}
+                              aria-label={`Save ${entity.display_name}`}
+                              title={entityDraft ? `Save ${entity.display_name}` : `No changes to save for ${entity.display_name}`}
+                            >
+                              <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -4577,7 +4575,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`View ${rp.title}`} title={`View ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                             <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring item?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
-                            {recurringDraft ? <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy} aria-label={`Save ${rp.title}`} title={`Save ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button> : null}
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy || !recurringDraft} aria-label={`Save ${rp.title}`} title={recurringDraft ? `Save ${rp.title}` : `No changes to save for ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                           </div>
                         </td>
                       </tr>

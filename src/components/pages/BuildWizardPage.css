@@ -1337,6 +1337,21 @@
   grid-area: button;
 }
 
+.build-wizard-step-task-move {
+  display: grid;
+  grid-template-columns: minmax(260px, 520px) auto;
+  align-items: end;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.build-wizard-step-task-move select {
+  min-width: 260px;
+  width: min(520px, 100%);
+  max-width: 100%;
+}
+
 .build-wizard-note-editor {
   margin-top: 10px;
   border: 1px solid var(--catn8-bw-border-soft);
@@ -3180,8 +3195,14 @@
     width: 100%;
   }
 
+  .build-wizard-step-task-move {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
   .build-wizard-attach-filter-input,
-  .build-wizard-step-attach-existing select {
+  .build-wizard-step-attach-existing select,
+  .build-wizard-step-task-move select {
     min-width: 0;
     width: 100%;
   }

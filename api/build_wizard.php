@@ -7015,6 +7015,27 @@ try {
         $updated['receipt_notes'] = $updated['receipt_notes'] !== null ? (string)$updated['receipt_notes'] : null;
         $afterStepId = $updated['step_id'] !== null ? (int)$updated['step_id'] : 0;
         $afterKind = strtolower(trim((string)($updated['kind'] ?? '')));
+        $updatedDocuments = [$updated];
+        if ($beforeKind === 'receipt' && $afterKind === 'receipt' && $beforeStepId !== $afterStepId) {
+            Database::execute(
+                'UPDATE build_wizard_documents
+                 SET step_id = ?
+                 WHERE project_id = ? AND receipt_parent_document_id = ?',
+                [$updated['step_id'], $projectId, $documentId]
+            );
+            $projectDocuments = catn8_build_wizard_documents_for_project($projectId);
+            $updatedDocuments = array_values(array_filter(
+                $projectDocuments,
+                static fn(array $projectDoc): bool => (int)($projectDoc['id'] ?? 0) === $documentId
+                    || (int)($projectDoc['receipt_parent_document_id'] ?? 0) === $documentId
+            ));
+            foreach ($updatedDocuments as $docRow) {
+                if ((int)($docRow['id'] ?? 0) === $documentId) {
+                    $updated = $docRow;
+                    break;
+                }
+            }
+        }
         $stepIdsToSync = [];
         if ($beforeKind === 'receipt' && $beforeStepId > 0) {
             $stepIdsToSync[] = $beforeStepId;
@@ -7036,7 +7057,7 @@ try {
             }
         }
 
-        catn8_json_response(['success' => true, 'document' => $updated, 'steps' => $updatedSteps]);
+        catn8_json_response(['success' => true, 'document' => $updated, 'documents' => $updatedDocuments, 'steps' => $updatedSteps]);
     }
 
     if ($action === 'replace_document') {

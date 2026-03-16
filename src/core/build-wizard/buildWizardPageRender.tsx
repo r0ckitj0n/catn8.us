@@ -532,6 +532,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [dependencyCandidateByStepId, setDependencyCandidateByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByStepId, setAttachExistingDocByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocByReceiptId, setAttachExistingDocByReceiptId] = React.useState<Record<number, string>>({});
+  const [moveReceiptStepByDocId, setMoveReceiptStepByDocId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByStepId, setAttachExistingDocFilterByStepId] = React.useState<Record<number, string>>({});
   const [attachExistingDocFilterByReceiptId, setAttachExistingDocFilterByReceiptId] = React.useState<Record<number, string>>({});
   const [attachExistingPickerOpenByStepId, setAttachExistingPickerOpenByStepId] = React.useState<Record<number, boolean>>({});
@@ -3565,6 +3566,24 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
   };
 
+  const onMoveReceiptToStep = async (currentStep: IBuildWizardStep, receiptDoc: IBuildWizardDocument) => {
+    const targetStepId = Number(moveReceiptStepByDocId[receiptDoc.id] || 0);
+    if (targetStepId <= 0 || targetStepId === currentStep.id) {
+      return;
+    }
+    const targetStep = steps.find((candidate) => candidate.id === targetStepId) || null;
+    if (!targetStep) {
+      onToast?.({ tone: 'warning', message: 'That destination step is no longer available. Refresh and try again.' });
+      return;
+    }
+    const movedDocument = await onSaveDocument(receiptDoc.id, { step_id: targetStepId });
+    if (!movedDocument) {
+      return;
+    }
+    setMoveReceiptStepByDocId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
+    setPendingScrollReceiptId(receiptDoc.id);
+  };
+
   const onUploadReceiptAttachments = (receiptDoc: IBuildWizardDocument, files: FileList | null) => {
     if (!files || files.length === 0) {
       return;
@@ -5230,6 +5249,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                           return haystack.includes(receiptAttachmentFilter);
                         })
                         : attachableTaskDocuments;
+                      const moveTargetStepOptions = steps.filter((candidate) => candidate.id !== step.id);
+                      const selectedMoveTargetStepId = moveReceiptStepByDocId[doc.id] || '';
                       return (
                         <div
                           className="build-wizard-step-receipt-row"
@@ -5418,6 +5439,31 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                                   disabled={!attachExistingDocByReceiptId[doc.id]}
                                 >
                                   Attach
+                                </button>
+                              </div>
+                            ) : null}
+                            {moveTargetStepOptions.length > 0 ? (
+                              <div className="build-wizard-step-task-move">
+                                <select
+                                  aria-label={`Move ${doc.receipt_title?.trim() || doc.original_name} to another step`}
+                                  value={selectedMoveTargetStepId}
+                                  onChange={(e) => setMoveReceiptStepByDocId((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                                  disabled={stepReadOnly || documentSavingId === doc.id}
+                                >
+                                  <option value="">Move task to...</option>
+                                  {moveTargetStepOptions.map((candidate) => (
+                                    <option key={`move-task-${doc.id}-${candidate.id}`} value={String(candidate.id)}>
+                                      {candidate.step_order}. {candidate.title}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm"
+                                  onClick={() => { void onMoveReceiptToStep(step, doc); }}
+                                  disabled={stepReadOnly || documentSavingId === doc.id || !selectedMoveTargetStepId}
+                                >
+                                  {documentSavingId === doc.id ? 'Moving...' : 'Move'}
                                 </button>
                               </div>
                             ) : null}

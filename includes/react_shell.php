@@ -30,6 +30,13 @@ function catn8_render_react_shell(string $page, string $title): void
     echo "  <link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/favicon-16x16.png\">\n";
     echo "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">\n";
     echo "  <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n";
+    echo "  <script async src=\"https://www.googletagmanager.com/gtag/js?id=G-C3772BPC1N\"></script>\n";
+    echo "  <script>\n";
+    echo "    window.dataLayer = window.dataLayer || [];\n";
+    echo "    function gtag() { dataLayer.push(arguments); }\n";
+    echo "    gtag('js', new Date());\n";
+    echo "    gtag('config', 'G-C3772BPC1N');\n";
+    echo "  </script>\n";
     echo "  <link rel=\"stylesheet\" href=\"/api/appearance.css.php\">\n";
     echo "  <link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css\" rel=\"stylesheet\">\n";
     echo "  <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css\">\n";

@@ -2140,7 +2140,7 @@ function catn8_build_wizard_receipt_total_for_step(int $stepId): float
     return (float)($row['receipt_total'] ?? 0);
 }
 
-function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId): void
+function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId, ?float $previousReceiptTotal = null): void
 {
     if ($stepId <= 0) {
         return;
@@ -2157,12 +2157,26 @@ function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId): vo
     }
     $receiptTotal = catn8_build_wizard_receipt_total_for_step($stepId);
     $actualCost = $stepRow['actual_cost'] !== null ? (float)$stepRow['actual_cost'] : null;
+    $shouldSync = false;
+    $nextActualCost = $actualCost;
     if ($receiptTotal > 0 && ($actualCost === null || $actualCost < $receiptTotal)) {
+        $nextActualCost = $receiptTotal;
+        $shouldSync = true;
+    } elseif (
+        $previousReceiptTotal !== null
+        && $actualCost !== null
+        && abs($actualCost - $previousReceiptTotal) < 0.005
+        && abs($receiptTotal - $previousReceiptTotal) >= 0.005
+    ) {
+        $nextActualCost = $receiptTotal > 0 ? $receiptTotal : null;
+        $shouldSync = true;
+    }
+    if ($shouldSync) {
         Database::execute(
             'UPDATE build_wizard_steps
              SET actual_cost = ?
              WHERE id = ?',
-            [$receiptTotal, $stepId]
+            [$nextActualCost, $stepId]
         );
     }
 }
@@ -6967,6 +6981,7 @@ try {
             $params[] = catn8_build_wizard_text_or_null($body['receipt_notes'] ?? null, 4000);
         }
 
+        $nextStepId = isset($doc['step_id']) ? (int)$doc['step_id'] : 0;
         if (array_key_exists('step_id', $body)) {
             $nextStepId = (int)($body['step_id'] ?? 0);
             if ($nextStepId > 0) {
@@ -6990,6 +7005,13 @@ try {
 
         $beforeStepId = (int)($doc['step_id'] ?? 0);
         $beforeKind = strtolower(trim((string)($doc['kind'] ?? '')));
+        $previousReceiptTotalsByStepId = [];
+        if ($beforeKind === 'receipt' && $beforeStepId > 0) {
+            $previousReceiptTotalsByStepId[$beforeStepId] = catn8_build_wizard_receipt_total_for_step($beforeStepId);
+        }
+        if ($nextKind === 'receipt' && $nextStepId > 0 && !array_key_exists($nextStepId, $previousReceiptTotalsByStepId)) {
+            $previousReceiptTotalsByStepId[$nextStepId] = catn8_build_wizard_receipt_total_for_step($nextStepId);
+        }
         $params[] = $documentId;
         Database::execute('UPDATE build_wizard_documents SET ' . implode(', ', $updates) . ' WHERE id = ?', $params);
 
@@ -7050,7 +7072,7 @@ try {
             if ($syncStepId <= 0) {
                 continue;
             }
-            catn8_build_wizard_sync_step_actual_cost_from_receipts($syncStepId);
+            catn8_build_wizard_sync_step_actual_cost_from_receipts($syncStepId, $previousReceiptTotalsByStepId[$syncStepId] ?? null);
             $syncedStep = catn8_build_wizard_step_by_id($syncStepId);
             if ($syncedStep) {
                 $updatedSteps[] = $syncedStep;

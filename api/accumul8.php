@@ -11012,9 +11012,10 @@ function accumul8_recompute_running_balance(int $viewerId): void
 {
     $rtaSelect = accumul8_optional_select('accumul8_transactions', 'rta_amount', 'rta_amount', '0.00 AS rta_amount');
     $sourceKindSelect = accumul8_optional_select('accumul8_transactions', 'source_kind', 'source_kind', "'manual' AS source_kind");
+    $isBudgetPlannerSelect = accumul8_optional_select('accumul8_transactions', 'is_budget_planner', 'is_budget_planner', '0 AS is_budget_planner');
     $today = date('Y-m-d');
     $rows = Database::queryAll(
-        'SELECT id, account_id, amount, running_balance, transaction_date, ' . $rtaSelect . ', ' . $sourceKindSelect . '
+        'SELECT id, account_id, amount, running_balance, transaction_date, ' . $rtaSelect . ', ' . $sourceKindSelect . ', ' . $isBudgetPlannerSelect . '
          FROM accumul8_transactions
          WHERE owner_user_id = ?
          ORDER BY account_id ASC, transaction_date ASC, id ASC',
@@ -11033,7 +11034,9 @@ function accumul8_recompute_running_balance(int $viewerId): void
         $amountDelta = (float)($row['amount'] ?? 0) + (float)($row['rta_amount'] ?? 0);
         $runningBalances[$accountId] = (float)($runningBalances[$accountId] ?? 0);
         $runningBalances[$accountId] += $amountDelta;
-        if ((string)($row['transaction_date'] ?? '') <= $today) {
+        $isPlannerOnly = (int)($row['is_budget_planner'] ?? 0) === 1
+            && (string)($row['source_kind'] ?? '') !== 'teller';
+        if (!$isPlannerOnly && (string)($row['transaction_date'] ?? '') <= $today) {
             $currentBalances[$accountId] = (float)($currentBalances[$accountId] ?? 0) + $amountDelta;
         }
         $nextRunningBalance = round($runningBalances[$accountId], 2);
@@ -14260,6 +14263,14 @@ function accumul8_summary(int $viewerId): array
     $isPaidExpr = accumul8_table_has_column('accumul8_transactions', 'is_paid')
         ? 'CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END'
         : '0';
+    $hasBudgetPlanner = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
+    $hasSourceKind = accumul8_table_has_column('accumul8_transactions', 'source_kind');
+    $budgetPlannerClause = '';
+    if ($hasBudgetPlanner && $hasSourceKind) {
+        $budgetPlannerClause = "AND (COALESCE(is_budget_planner, 0) <> 1 OR COALESCE(source_kind, 'manual') = 'teller')";
+    } elseif ($hasBudgetPlanner) {
+        $budgetPlannerClause = 'AND COALESCE(is_budget_planner, 0) <> 1';
+    }
 
     $row = Database::queryOne(
         'SELECT
@@ -14269,7 +14280,8 @@ function accumul8_summary(int $viewerId): array
             COALESCE(SUM(' . $isPaidExpr . '), 0) AS unpaid_outflow_total
          FROM accumul8_transactions
          WHERE owner_user_id = ?
-           AND transaction_date <= ?',
+           AND transaction_date <= ?
+           ' . $budgetPlannerClause,
         [$viewerId, $today]
     ) ?: [];
 

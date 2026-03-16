@@ -1466,6 +1466,57 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
     ]))
   ), [getAccountDisplayName, ledgerRowsBase, ledgerSearchQuery]);
+  const ledgerDisplayBalanceById = React.useMemo(() => {
+    const includePlannerOnly = ledgerFilterPreset === 'planning';
+    const sortedTransactions = filteredTransactions.slice().sort((a, b) => {
+      const accountDelta = Number(a.account_id || 0) - Number(b.account_id || 0);
+      if (accountDelta !== 0) {
+        return accountDelta;
+      }
+      const dateDelta = String(a.transaction_date || '').localeCompare(String(b.transaction_date || ''));
+      if (dateDelta !== 0) {
+        return dateDelta;
+      }
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+    const runningByAccount = new Map<number, number>();
+    const balancesById = new Map<number, number>();
+
+    sortedTransactions.forEach((tx) => {
+      const txId = Number(tx.id || 0);
+      if (txId <= 0) {
+        return;
+      }
+
+      const accountId = Number(tx.account_id || 0);
+      if (accountId <= 0) {
+        balancesById.set(txId, roundCurrency(Number(tx.running_balance || 0)));
+        return;
+      }
+
+      if (String(tx.source_kind || '') === 'statement_pdf') {
+        const statementBalance = roundCurrency(Number(tx.running_balance || 0));
+        runningByAccount.set(accountId, statementBalance);
+        balancesById.set(txId, statementBalance);
+        return;
+      }
+
+      const currentBalance = roundCurrency(runningByAccount.get(accountId) || 0);
+      const isPlannerOnly = Number(tx.is_budget_planner || 0) === 1 && String(tx.source_kind || '') !== 'teller';
+      if (!includePlannerOnly && isPlannerOnly) {
+        balancesById.set(txId, currentBalance);
+        return;
+      }
+
+      const delta = roundCurrency(Number(tx.amount || 0) + Number(tx.rta_amount || 0));
+      const nextBalance = roundCurrency(currentBalance + delta);
+      runningByAccount.set(accountId, nextBalance);
+      balancesById.set(txId, nextBalance);
+    });
+
+    return balancesById;
+  }, [filteredTransactions, ledgerFilterPreset]);
   const payBillsAccountOptions = React.useMemo(() => (
     accounts
       .filter((account) => Number(account.is_active || 0) === 1)
@@ -1711,11 +1762,11 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
     { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
     { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
+    { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0), contentAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
     { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
     { key: 'actions', header: 'Actions', minWidth: 122, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [getAccountDisplayName]);
+  ]), [getAccountDisplayName, ledgerDisplayBalanceById]);
   const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
     { key: 'charges', header: 'Charges', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_loaned || 0), contentAccessor: (debtor) => Number(debtor.total_loaned || 0).toFixed(2) },
@@ -3689,7 +3740,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                             <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.amount.toFixed(2)}</button>
                           )}
                         </td>
-                        <td className="text-end">{tx.running_balance.toFixed(2)}</td>
+                        <td className="text-end">{Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2)}</td>
                         <td className="text-center accumul8-ledger-toggle-cell">
                           <input
                             className="form-check-input accumul8-ledger-checkbox"

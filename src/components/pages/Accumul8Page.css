@@ -490,6 +490,18 @@
   max-width: 100%;
 }
 
+.accumul8-summary-card--button {
+  appearance: none;
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accumul8-summary-card--button:focus-visible {
+  outline: 2px solid rgba(113, 87, 28, 0.72);
+  outline-offset: 2px;
+}
+
 .accumul8-summary-card::before,
 .accumul8-summary-card::after,
 .accumul8-panel::before,

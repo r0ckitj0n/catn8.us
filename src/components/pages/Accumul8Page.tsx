@@ -29,7 +29,6 @@ import { isWatchedTellerInstitution, logTellerDiagnostic } from '../../core/tell
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
-import { buildSpreadsheetMonthData } from '../../utils/accumul8Spreadsheet';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   Accumul8AIcountantHousekeepingResponse,
@@ -101,9 +100,8 @@ type LedgerFilterPreset =
   | 'show_upcoming_unpaid';
 type Accumul8HeaderSummary = {
   currentBalance: number;
-  projectedBalance: number;
   unpaidBills: number;
-  upcomingWindfalls: number;
+  windfalls: number;
 };
 type Accumul8SyncReport = {
   connectionId: number;
@@ -256,6 +254,9 @@ const DATE_RANGE_FILTER_OPTIONS: Array<{ value: Exclude<DateRangeFilter, 'all_da
   { value: 'eoy', label: 'EOY' },
   { value: 'custom', label: 'Custom' },
 ];
+const SUMMARY_WINDOW_OPTIONS = ['current', 7, 30, 60, 90] as const;
+type SummaryWindowOption = typeof SUMMARY_WINDOW_OPTIONS[number];
+
 function createDefaultDebtorForm(): DebtorFormState {
   return { debtor_name: '', notes: '', is_active: 1 };
 }
@@ -320,6 +321,10 @@ function formatInlineDateTime(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatSummaryWindowLabel(window: SummaryWindowOption): string {
+  return window === 'current' ? 'Current' : `${window} days`;
 }
 
 function parseFiniteNumber(value: unknown): number | null {
@@ -1029,6 +1034,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
+  const [summaryWindow, setSummaryWindow] = React.useState<SummaryWindowOption>(90);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
   const [entityEndexQuery, setEntityEndexQuery] = React.useState('');
@@ -1648,99 +1654,70 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const currentVisibleBalance = React.useMemo(() => (
     roundCurrency(scopedAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
   ), [scopedAccounts]);
-  const defaultProjectedTransactions = React.useMemo(() => (
-    filteredTransactions.filter((tx) => {
+  const summaryWindowEndDate = React.useMemo(
+    () => (summaryWindow === 'current' ? todayDate : addUtcDays(todayDate, summaryWindow)),
+    [summaryWindow, todayDate],
+  );
+  const projectedBalanceForWindow = React.useMemo(() => {
+    const projectedDelta = filteredTransactions.reduce((sum, tx) => {
       const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate || effectiveDate < todayDate) {
-        return false;
+      if (!effectiveDate || effectiveDate < todayDate || effectiveDate > summaryWindowEndDate) {
+        return sum;
       }
-      return Number(tx.is_paid || 0) === 0;
-    })
-  ), [filteredTransactions, todayDate]);
-  const payBillsProjectedTransactions = React.useMemo(() => (
-    filteredTransactions.filter((tx) => {
-      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate) {
-        return false;
+      if (Number(tx.is_paid || 0) === 1) {
+        return sum;
       }
-      if (payBillsDateRange.startDate && effectiveDate < payBillsDateRange.startDate) {
-        return false;
-      }
-      if (payBillsDateRange.endDate && effectiveDate > payBillsDateRange.endDate) {
-        return false;
-      }
-      return Number(tx.is_paid || 0) === 0;
-    })
-  ), [filteredTransactions, payBillsDateRange]);
-  const spreadsheetProjectedSummary = React.useMemo(() => {
-    const monthRows = buildSpreadsheetMonthData(
-      filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1),
-      filteredTransactions,
-      budgetMonth,
-    ).rows;
-    let projectedDelta = 0;
+
+      return sum + Number(tx.amount || 0);
+    }, 0);
+
+    return roundCurrency(currentVisibleBalance + projectedDelta);
+  }, [currentVisibleBalance, filteredTransactions, summaryWindowEndDate, todayDate]);
+  const summaryWindowTotals = React.useMemo(() => {
     let unpaidBills = 0;
-    let upcomingWindfalls = 0;
-    monthRows.forEach((row) => {
-      if (Number(row.is_paid || 0) === 1) {
+    let windfalls = 0;
+
+    filteredTransactions.forEach((tx) => {
+      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
+      if (!effectiveDate || effectiveDate > summaryWindowEndDate) {
         return;
       }
-      const amount = Number(row.amount || 0);
-      projectedDelta += amount;
-      if (amount < 0) {
-        unpaidBills += Math.abs(amount);
-      } else if (amount > 0) {
-        upcomingWindfalls += amount;
-      }
-    });
-    return {
-      projectedDelta: roundCurrency(projectedDelta),
-      unpaidBills: roundCurrency(unpaidBills),
-      upcomingWindfalls: roundCurrency(upcomingWindfalls),
-    };
-  }, [budgetMonth, filteredRecurringPayments, filteredTransactions]);
-  const headerSummary = React.useMemo<Accumul8HeaderSummary>(() => {
-    if (tab === 'spreadsheet') {
-      return {
-        currentBalance: currentVisibleBalance,
-        projectedBalance: roundCurrency(currentVisibleBalance + spreadsheetProjectedSummary.projectedDelta),
-        unpaidBills: spreadsheetProjectedSummary.unpaidBills,
-        upcomingWindfalls: spreadsheetProjectedSummary.upcomingWindfalls,
-      };
-    }
 
-    const showPlanningTotals = tab === 'pay_bills' || (tab === 'ledger' && ledgerFilterPreset === 'planning');
-    if (!showPlanningTotals) {
-      return {
-        currentBalance: currentVisibleBalance,
-        projectedBalance: currentVisibleBalance,
-        unpaidBills: 0,
-        upcomingWindfalls: 0,
-      };
-    }
-
-    const projectedTransactions = tab === 'pay_bills' ? payBillsProjectedTransactions : defaultProjectedTransactions;
-    let projectedDelta = 0;
-    let unpaidBills = 0;
-    let upcomingWindfalls = 0;
-
-    projectedTransactions.forEach((tx) => {
       const amount = Number(tx.amount || 0);
-      projectedDelta += amount;
-      if (amount < 0) {
+      const isPaid = Number(tx.is_paid || 0) === 1;
+      const isNonRecurringDeposit = tx.entry_type === 'deposit' && String(tx.source_kind || '') !== 'recurring';
+
+      if (!isPaid && amount < 0) {
         unpaidBills += Math.abs(amount);
-      } else if (amount > 0) {
-        upcomingWindfalls += amount;
+      }
+
+      if (isNonRecurringDeposit && amount > 0) {
+        windfalls += amount;
       }
     });
 
+    return {
+      unpaidBills: roundCurrency(unpaidBills),
+      windfalls: roundCurrency(windfalls),
+    };
+  }, [filteredTransactions, summaryWindowEndDate]);
+  const headerSummary = React.useMemo<Accumul8HeaderSummary>(() => {
     return {
       currentBalance: currentVisibleBalance,
-      projectedBalance: roundCurrency(currentVisibleBalance + projectedDelta),
-      unpaidBills: roundCurrency(unpaidBills),
-      upcomingWindfalls: roundCurrency(upcomingWindfalls),
+      unpaidBills: summaryWindowTotals.unpaidBills,
+      windfalls: summaryWindowTotals.windfalls,
     };
-  }, [currentVisibleBalance, defaultProjectedTransactions, ledgerFilterPreset, payBillsProjectedTransactions, spreadsheetProjectedSummary, tab]);
+  }, [currentVisibleBalance, summaryWindowTotals]);
+  const handleProjectedBalanceCardClick = React.useCallback(() => {
+    setSummaryWindow((currentWindow) => {
+      const currentIndex = SUMMARY_WINDOW_OPTIONS.indexOf(currentWindow);
+      const nextIndex = currentIndex >= 0
+        ? (currentIndex + 1) % SUMMARY_WINDOW_OPTIONS.length
+        : SUMMARY_WINDOW_OPTIONS.length - 1;
+
+      return SUMMARY_WINDOW_OPTIONS[nextIndex];
+    });
+  }, []);
   const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
   const debtorRows = React.useMemo(() => (
     debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
@@ -3531,9 +3508,36 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   </div>
                   <div className="accumul8-summary-grid">
                     <div className="accumul8-summary-card"><span>Current Balance</span><strong>{formatCurrencyAmount(headerSummary.currentBalance)}</strong></div>
-                    <div className="accumul8-summary-card"><span>Projected Balance</span><strong>{formatCurrencyAmount(headerSummary.projectedBalance)}</strong></div>
-                    <div className="accumul8-summary-card"><span>Unpaid Bills</span><strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong></div>
-                    <div className="accumul8-summary-card"><span>Upcoming Windfalls</span><strong>{formatCurrencyAmount(headerSummary.upcomingWindfalls)}</strong></div>
+                    <button
+                      type="button"
+                      className="accumul8-summary-card accumul8-summary-card--button"
+                      onClick={handleProjectedBalanceCardClick}
+                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} projected balance. Click to change summary window.`}
+                      title={`Showing selected-account balance for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
+                    >
+                      <span>{`Balance (${formatSummaryWindowLabel(summaryWindow)})`}</span>
+                      <strong>{formatCurrencyAmount(projectedBalanceForWindow)}</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className="accumul8-summary-card accumul8-summary-card--button"
+                      onClick={handleProjectedBalanceCardClick}
+                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} unpaid bills. Click to change summary window.`}
+                      title={`Showing unpaid bills for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
+                    >
+                      <span>{`Unpaid Bills (${formatSummaryWindowLabel(summaryWindow)})`}</span>
+                      <strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className="accumul8-summary-card accumul8-summary-card--button"
+                      onClick={handleProjectedBalanceCardClick}
+                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} windfalls. Click to change summary window.`}
+                      title={`Showing non-recurring deposits for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
+                    >
+                      <span>{`Windfalls (${formatSummaryWindowLabel(summaryWindow)})`}</span>
+                      <strong>{formatCurrencyAmount(headerSummary.windfalls)}</strong>
+                    </button>
                   </div>
                 </div>
               </div>

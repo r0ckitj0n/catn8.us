@@ -175,6 +175,14 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .build-wizard-inline-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .build-wizard-title-inline-compact {
+    grid-template-columns: 1fr;
+  }
 }
 
 .build-wizard-launch-card-with-delete {
@@ -600,6 +608,26 @@
   background: #f9fcff;
 }
 
+.build-wizard-overview-metric-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.build-wizard-overview-metric-button:hover {
+  background: #f1f7ff;
+  border-color: #b8cbe6;
+  box-shadow: 0 6px 18px rgba(31, 42, 55, 0.08);
+  transform: translateY(-1px);
+}
+
+.build-wizard-overview-metric-button:focus-visible {
+  outline: 2px solid #4f86d9;
+  outline-offset: 2px;
+}
+
 .build-wizard-overview-label {
   font-size: 0.8rem;
   color: #4b5f79;
@@ -885,6 +913,7 @@
   align-items: flex-start;
   gap: 4px;
   margin: 0;
+  flex: 0 0 auto;
 }
 
 .build-wizard-inline-check label.build-wizard-inline-complete-toggle {
@@ -961,19 +990,36 @@
   min-width: 0;
 }
 
+.build-wizard-step-metrics-panel {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 820px;
+  min-width: min(100%, 520px);
+}
+
+.build-wizard-inline-field-label {
+  font-weight: 600;
+  color: #32465f;
+  white-space: nowrap;
+}
+
+.build-wizard-title-inline-compact {
+  display: grid;
+  grid-template-columns: auto minmax(320px, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
 .build-wizard-inline-metrics {
   display: grid;
   grid-template-columns:
-    minmax(180px, 2.1fr)
-    minmax(105px, 0.9fr)
-    minmax(76px, 0.55fr)
-    minmax(106px, 0.8fr)
-    minmax(106px, 0.8fr)
-    minmax(106px, 0.8fr)
-    minmax(106px, 0.8fr);
+    minmax(130px, 0.8fr)
+    minmax(170px, 1fr)
+    minmax(170px, 1fr)
+    minmax(190px, 1fr)
+    minmax(210px, 1.1fr);
   align-items: flex-end;
   gap: 8px;
-  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -985,6 +1031,13 @@
   min-width: 0;
   width: 100%;
   font-size: 0.85rem;
+}
+
+.build-wizard-inline-metrics input,
+.build-wizard-inline-metrics select,
+.build-wizard-title-inline-compact input {
+  width: 100%;
+  min-width: 0;
 }
 
 .build-wizard-cost-label-row {
@@ -1505,6 +1558,31 @@
 .build-wizard-step-receipt-file select {
   font-size: 0.78rem;
   max-width: 170px;
+}
+
+.build-wizard-step-receipt-notes {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.build-wizard-step-receipt-notes-label {
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #536a84;
+}
+
+.build-wizard-step-receipt-notes-body {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #2f4258;
+  white-space: pre-wrap;
 }
 
 .build-wizard-inline-edit-trigger {
@@ -3241,8 +3319,19 @@
     flex-direction: column;
   }
 
+  .build-wizard-step-metrics-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .build-wizard-title-inline-compact {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
   .build-wizard-inline-metrics {
     width: 100%;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 
   .build-wizard-step-grid {

@@ -2,96 +2,19 @@ import React from 'react';
 
 import { ApiClient } from '../core/ApiClient';
 import { COLORING_PAGES, COLORING_THEME_LABELS, COLORING_THEMES } from '../data/coloringPages';
-import { ColoringDifficulty, ColoringMode, ColoringPageDefinition, ColoringRegion, ColoringThemeId } from '../types/coloring';
+import { ColoringDifficulty, ColoringMode, ColoringPageDefinition, ColoringThemeId } from '../types/coloring';
+import { DbPageResponse, firstUnfilledTargetColor, getRegion, mapDbPageToDefinition } from './coloringBookUtils';
 
 type DifficultyFilter = ColoringDifficulty | 'all';
 type ThemeFilter = ColoringThemeId | 'all';
 
 type FillMap = Record<string, string>;
 
-interface DbPageResponse {
-  id: number;
-  title: string;
-  description: string;
-  theme_slug: string;
-  theme_name: string;
-  difficulty_slug: string;
-  difficulty_name: string;
-  palette: any[];
-  regions: any[];
-}
-
 const MODE_DEFAULTS: Record<ColoringMode, string> = {
   professional: 'Choose a color, then click any area to fill it.',
   beginner: 'Click any area and it will auto-fill with the suggested color.',
   novice: 'Follow the highlighted color target and click matching areas only.',
 };
-
-function firstUnfilledTargetColor(page: ColoringPageDefinition, fills: FillMap): string | null {
-  for (const color of page.palette) {
-    const pending = page.regions.some((region) => region.targetColorId === color.id && fills[region.id] !== color.id);
-    if (pending) {
-      return color.id;
-    }
-  }
-  return null;
-}
-
-function getRegion(page: ColoringPageDefinition, regionId: string): ColoringRegion | null {
-  return page.regions.find((region) => region.id === regionId) || null;
-}
-
-function normalizeDifficulty(value: string): ColoringDifficulty {
-  const v = String(value || '').toLowerCase();
-  if (v === 'simple' || v === 'medium' || v === 'difficult') return v;
-  return 'medium';
-}
-
-function mapDbPageToDefinition(page: DbPageResponse): ColoringPageDefinition | null {
-  if (!Array.isArray(page.palette) || !Array.isArray(page.regions) || !page.title) {
-    return null;
-  }
-
-  const palette = page.palette
-    .map((color) => ({
-      id: String(color?.id || ''),
-      name: String(color?.name || ''),
-      hex: String(color?.hex || ''),
-    }))
-    .filter((color) => color.id !== '' && color.name !== '' && color.hex !== '');
-
-  const regions = page.regions
-    .map((region, idx) => ({
-      id: String(region?.id || `db-${page.id}-r${idx + 1}`),
-      label: String(region?.label || `Region ${idx + 1}`),
-      targetColorId: String(region?.targetColorId || ''),
-      shapeType: (['rect', 'circle', 'diamond', 'hexagon', 'triangle'].includes(String(region?.shapeType || ''))
-        ? String(region.shapeType)
-        : 'rect') as ColoringRegion['shapeType'],
-      cx: Number(region?.cx || 500),
-      cy: Number(region?.cy || 350),
-      width: Number(region?.width || 120),
-      height: Number(region?.height || 120),
-    }))
-    .filter((region) => region.targetColorId !== '');
-
-  if (!palette.length || !regions.length) {
-    return null;
-  }
-
-  const themeSlug = String(page.theme_slug || 'custom');
-  const difficulty = normalizeDifficulty(String(page.difficulty_slug || 'medium'));
-  return {
-    id: `db-${page.id}`,
-    title: String(page.title),
-    theme: themeSlug,
-    difficulty,
-    previewEmoji: '🖍️',
-    description: String(page.description || ''),
-    palette,
-    regions,
-  };
-}
 
 export function useColoringBook() {
   const [mode, setMode] = React.useState<ColoringMode>('professional');

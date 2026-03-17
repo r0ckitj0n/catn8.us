@@ -2,63 +2,30 @@ import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/storageUtils';
 import { formatTestResult, normalizeText } from '../../../utils/textUtils';
-import { aiImageGetModelChoices, aiImageParamOptions, aiImageDefaultParams } from '../../../utils/aiImageUtils';
+import { aiImageGetModelChoices, aiImageParamOptions } from '../../../utils/aiImageUtils';
 import { IToast, AiLooseObject } from '../../../types/common';
 import { IAiImageDraftTestRequest, IAiModelChoice, IAiModelsRequest, IAiModelsResponse } from '../../../types/aiSettings';
-
-export type AIImageConfigState = {
-  provider: string;
-  model: string;
-  base_url: string;
-  params: AiLooseObject;
-  provider_config: AiLooseObject;
-};
-
-export type AIImageSavePayload = {
-  provider: string;
-  model: string;
-  base_url: string;
-  params: AiLooseObject;
-  provider_config: AiLooseObject;
-  secrets?: AiLooseObject;
-};
-
-const LS_AI_IMAGE_PROVIDER_TEST = 'catn8.last_test.ai_image.provider';
-const LS_AI_IMAGE_LOCATION_REF_TEST = 'catn8.last_test.ai_image.location_ref';
+import { AIImageConfigState, AIImageSavePayload } from './aiImageConfigTypes';
+import { buildAIImageConfigSnapshot, createDefaultAIImageConfigState, getInitialAIImageModelChoices, LS_AI_IMAGE_LOCATION_REF_TEST, LS_AI_IMAGE_PROVIDER_TEST, normalizeAIImageConfigState } from './aiImageConfigUtils';
 
 export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => void) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [message, setMessage] = React.useState('');
   const cleanSnapshotRef = React.useRef('');
-
   const [lastAiImageProviderTest, setLastAiImageProviderTest] = React.useState('');
   const [lastAiImageLocationRefTest, setLastAiImageLocationRefTest] = React.useState('');
-
-  const [config, setConfig] = useState<AIImageConfigState>({
-    provider: 'openai',
-    model: 'gpt-image-1',
-    base_url: '',
-    params: {},
-    provider_config: {},
-  });
+  const [config, setConfig] = useState<AIImageConfigState>(createDefaultAIImageConfigState);
   const [hasSecrets, setHasSecrets] = useState<Record<string, AiLooseObject>>({});
   const [secretsByProvider, setSecretsByProvider] = useState<Record<string, AiLooseObject>>({});
 
   const providerKey = normalizeText(config.provider);
-  const [modelChoices, setModelChoices] = React.useState<IAiModelChoice[]>(() => aiImageGetModelChoices('openai'));
+  const [modelChoices, setModelChoices] = React.useState<IAiModelChoice[]>(getInitialAIImageModelChoices);
   const [isRefreshingModels, setIsRefreshingModels] = React.useState(false);
   const [modelChoicesSource, setModelChoicesSource] = React.useState<'catalog' | 'live'>('catalog');
   const paramOptions = React.useMemo(() => aiImageParamOptions(config.provider), [config.provider]);
 
-  const buildSnapshot = React.useCallback(() => {
-    const cfg = (config && typeof config === 'object') ? (config as any) : {};
-    const providerNorm = normalizeText(cfg.provider);
-    const secrets = (secretsByProvider && typeof secretsByProvider === 'object' && providerNorm && secretsByProvider[providerNorm] && typeof secretsByProvider[providerNorm] === 'object')
-      ? secretsByProvider[providerNorm]
-      : {};
-    return JSON.stringify({ cfg, secrets });
-  }, [config, secretsByProvider]);
+  const buildSnapshot = React.useCallback(() => buildAIImageConfigSnapshot(config, secretsByProvider), [config, secretsByProvider]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -70,16 +37,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
 
     ApiClient.get('/api/settings/ai_image.php')
       .then((res) => {
-        const cfg = res?.config || {};
-        const params = (cfg && typeof cfg === 'object' && cfg.params && typeof cfg.params === 'object') ? cfg.params : {};
-        const providerConfig = (cfg && typeof cfg === 'object' && cfg.provider_config && typeof cfg.provider_config === 'object') ? cfg.provider_config : {};
-        const nextConfig = {
-          provider: String(cfg.provider || 'openai'),
-          model: String(cfg.model || 'gpt-image-1'),
-          base_url: String(cfg.base_url || ''),
-          params,
-          provider_config: providerConfig,
-        };
+        const nextConfig = normalizeAIImageConfigState(res?.config);
         setConfig(nextConfig);
         setModelChoices(aiImageGetModelChoices(nextConfig.provider));
         setModelChoicesSource('catalog');
@@ -92,8 +50,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
 
   React.useEffect(() => {
     if (!open) return;
-    if (!config || typeof config !== 'object') return;
-    if (!config.provider) return;
+    if (!config || typeof config !== 'object' || !config.provider) return;
     const choices = modelChoices.length ? modelChoices : aiImageGetModelChoices(config.provider);
     if (!choices.length) return;
     const current = String(config.model || '');
@@ -109,17 +66,26 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
 
   React.useEffect(() => {
     if (!error) return;
-    if (typeof onToast === 'function') onToast({ tone: 'error', message: String(error) });
+    onToast?.({ tone: 'error', message: String(error) });
     setError('');
   }, [error, onToast]);
 
   React.useEffect(() => {
     if (!message) return;
-    if (typeof onToast === 'function') onToast({ tone: 'success', message: String(message) });
+    onToast?.({ tone: 'success', message: String(message) });
     setMessage('');
   }, [message, onToast]);
 
   const isDirty = String(cleanSnapshotRef.current || '') !== buildSnapshot();
+
+  const applyAiImageProviderTestResult = React.useCallback((response: any) => {
+    const provider = String(response?.ai_image?.provider || '').trim();
+    const model = String(response?.ai_image?.model || '').trim();
+    const sample = String(response?.sample || '').trim();
+    const details = `${provider}${model ? ` / ${model}` : ''}${sample ? ` — ${sample}` : ''}`;
+    const next = formatTestResult('success', details); setLastAiImageProviderTest(next); catn8LocalStorageSet(LS_AI_IMAGE_PROVIDER_TEST, next);
+    setMessage(`Test OK: ${details}`);
+  }, []);
 
   const testAiImageProvider = async () => {
     if (busy) return;
@@ -128,15 +94,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
     setError('');
     setMessage('');
     try {
-      const res = await ApiClient.get('/api/settings/ai_image_test.php');
-      const provider = String(res?.ai_image?.provider || '').trim();
-      const model = String(res?.ai_image?.model || '').trim();
-      const sample = String(res?.sample || '').trim();
-      const details = `${provider}${model ? ` / ${model}` : ''}${sample ? ` — ${sample}` : ''}`;
-      const next = formatTestResult('success', details);
-      setLastAiImageProviderTest(next);
-      catn8LocalStorageSet(LS_AI_IMAGE_PROVIDER_TEST, next);
-      setMessage(`Test OK: ${details}`);
+      applyAiImageProviderTestResult(await ApiClient.get('/api/settings/ai_image_test.php'));
     } catch (e: any) {
       const next = formatTestResult('failure', String(e?.message || e || 'Failed'));
       setLastAiImageProviderTest(next);
@@ -154,9 +112,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
     setError('');
     setMessage('');
     try {
-      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
-        ? secretsByProvider[providerKey]
-        : {};
+      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object' ? secretsByProvider[providerKey] : {};
       const req: IAiImageDraftTestRequest = {
         provider: config.provider,
         model: config.model,
@@ -165,15 +121,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
         params: config.params || {},
         secrets: providerSecrets,
       };
-      const res = await ApiClient.post('/api/settings/ai_image_test.php', req);
-      const provider = String(res?.ai_image?.provider || '').trim();
-      const model = String(res?.ai_image?.model || '').trim();
-      const sample = String(res?.sample || '').trim();
-      const details = `${provider}${model ? ` / ${model}` : ''}${sample ? ` — ${sample}` : ''}`;
-      const next = formatTestResult('success', details);
-      setLastAiImageProviderTest(next);
-      catn8LocalStorageSet(LS_AI_IMAGE_PROVIDER_TEST, next);
-      setMessage(`Test OK: ${details}`);
+      applyAiImageProviderTestResult(await ApiClient.post('/api/settings/ai_image_test.php', req));
     } catch (e: any) {
       const next = formatTestResult('failure', String(e?.message || e || 'Failed'));
       setLastAiImageProviderTest(next);
@@ -189,9 +137,7 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
     setIsRefreshingModels(true);
     setError('');
     try {
-      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object'
-        ? secretsByProvider[providerKey]
-        : {};
+      const providerSecrets = secretsByProvider[providerKey] && typeof secretsByProvider[providerKey] === 'object' ? secretsByProvider[providerKey] : {};
       const req: IAiModelsRequest = {
         mode: 'image',
         provider: config.provider,
@@ -244,21 +190,9 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
       };
       const providerNorm = normalizeText(config.provider);
       const providerSecrets = secretsByProvider[providerNorm] && typeof secretsByProvider[providerNorm] === 'object' ? secretsByProvider[providerNorm] : null;
-      if (providerSecrets) {
-        payload.secrets = providerSecrets;
-      }
-
+      if (providerSecrets) payload.secrets = providerSecrets;
       const res = await ApiClient.post('/api/settings/ai_image.php', payload);
-      const cfg = res?.config || {};
-      const nextParams = (cfg && typeof cfg === 'object' && cfg.params && typeof cfg.params === 'object') ? cfg.params : {};
-      const nextProviderConfig = (cfg && typeof cfg === 'object' && cfg.provider_config && typeof cfg.provider_config === 'object') ? cfg.provider_config : {};
-      const nextConfig = {
-        provider: String(cfg.provider || payload.provider || 'openai'),
-        model: String(cfg.model || payload.model || 'gpt-image-1'),
-        base_url: String(cfg.base_url || payload.base_url || ''),
-        params: nextParams,
-        provider_config: nextProviderConfig,
-      };
+      const nextConfig = normalizeAIImageConfigState(res?.config, payload);
       setConfig(nextConfig);
       setHasSecrets((res && typeof res === 'object' && res.has_secrets && typeof res.has_secrets === 'object') ? res.has_secrets : {});
       setSecretsByProvider((all) => {
@@ -276,21 +210,9 @@ export function useAIImageConfig(open: boolean, onToast?: (toast: IToast) => voi
   };
 
   return {
-    busy, setBusy,
-    config, setConfig,
-    hasSecrets, setHasSecrets,
-    secretsByProvider, setSecretsByProvider,
-    lastAiImageProviderTest, setLastAiImageProviderTest,
-    lastAiImageLocationRefTest, setLastAiImageLocationRefTest,
-    providerKey,
-    modelChoices,
-    modelChoicesSource,
-    isRefreshingModels,
-    paramOptions,
-    isDirty,
-    testAiImageProvider,
-    testAiImageProviderDraft,
-    refreshModelChoices,
-    save
+    busy, setBusy, config, setConfig, hasSecrets, setHasSecrets, secretsByProvider, setSecretsByProvider,
+    lastAiImageProviderTest, setLastAiImageProviderTest, lastAiImageLocationRefTest, setLastAiImageLocationRefTest,
+    providerKey, modelChoices, modelChoicesSource, isRefreshingModels, paramOptions, isDirty,
+    testAiImageProvider, testAiImageProviderDraft, refreshModelChoices, save,
   };
 }

@@ -1,20 +1,16 @@
 import React from 'react';
 import { ApiClient } from '../core/ApiClient';
 import { IToast } from '../types/common';
+import { useValid8Lookups } from './valid8/useValid8Lookups';
 import {
   Valid8VaultAttachment,
   Valid8VaultAttachmentListResponse,
   Valid8VaultAttachmentUploadResponse,
-  Valid8CategoriesListResponse,
-  Valid8CategoryMutationResponse,
   Valid8VaultEntryCreateRequest,
   Valid8VaultEntryWithSecrets,
   Valid8VaultEntryMutationResponse,
   Valid8VaultEntryUpdateRequest,
   Valid8VaultListResponse,
-  Valid8LookupItem,
-  Valid8OwnerMutationResponse,
-  Valid8OwnersListResponse,
 } from '../types/valid8';
 
 export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
@@ -23,8 +19,6 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
   const [includeInactive, setIncludeInactive] = React.useState(false);
   const [entries, setEntries] = React.useState<Valid8VaultEntryWithSecrets[]>([]);
   const [attachmentsByEntryId, setAttachmentsByEntryId] = React.useState<Record<string, Valid8VaultAttachment[]>>({});
-  const [owners, setOwners] = React.useState<Valid8LookupItem[]>([]);
-  const [categories, setCategories] = React.useState<Valid8LookupItem[]>([]);
 
   const loadAttachments = React.useCallback(async (entryId?: string) => {
     const suffix = entryId ? `&entry_id=${encodeURIComponent(entryId)}` : '';
@@ -45,15 +39,43 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
     setAttachmentsByEntryId(grouped);
   }, []);
 
-  const loadOwners = React.useCallback(async () => {
-    const res = await ApiClient.get<Valid8OwnersListResponse>('/api/valid8.php?action=list_owners&include_archived=1');
-    setOwners(Array.isArray(res?.owners) ? res.owners : []);
-  }, []);
+  const uploadAttachment = React.useCallback(async (entryId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('entry_id', entryId);
+    fd.append('image', file);
+    try {
+      await ApiClient.postFormData<Valid8VaultAttachmentUploadResponse>('/api/valid8.php?action=upload_attachment', fd);
+      await loadAttachments(entryId);
+      if (onToast) {
+        onToast({ tone: 'success', message: 'Attachment uploaded.' });
+      }
+    } catch (error: any) {
+      const message = String(error?.message || 'Failed to upload attachment');
+      if (onToast) {
+        onToast({ tone: 'error', message });
+      }
+    }
+  }, [loadAttachments, onToast]);
 
-  const loadCategories = React.useCallback(async () => {
-    const res = await ApiClient.get<Valid8CategoriesListResponse>('/api/valid8.php?action=list_categories&include_archived=1');
-    setCategories(Array.isArray(res?.categories) ? res.categories : []);
-  }, []);
+  const {
+    owners,
+    categories,
+    setOwners,
+    setCategories,
+    loadOwners,
+    loadCategories,
+    refreshLookups,
+    createOwner,
+    updateOwner,
+    archiveOwner,
+    setOwnerArchived,
+    deleteOwner,
+    createCategory,
+    updateCategory,
+    archiveCategory,
+    setCategoryArchived,
+    deleteCategory,
+  } = useValid8Lookups(includeInactive, () => load(includeInactive), onToast);
 
   const load = React.useCallback(async (nextIncludeInactive: boolean = includeInactive) => {
     setBusy(true);
@@ -87,34 +109,6 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
       setBusy(false);
     }
   }, [includeInactive, loadAttachments, loadCategories, loadOwners, onToast]);
-
-  const refreshLookups = React.useCallback(async () => {
-    try {
-      await Promise.all([loadOwners(), loadCategories()]);
-    } catch (error: any) {
-      if (onToast) {
-        onToast({ tone: 'error', message: String(error?.message || 'Failed to refresh owners/categories') });
-      }
-    }
-  }, [loadCategories, loadOwners, onToast]);
-
-  const uploadAttachment = React.useCallback(async (entryId: string, file: File) => {
-    const fd = new FormData();
-    fd.append('entry_id', entryId);
-    fd.append('image', file);
-    try {
-      await ApiClient.postFormData<Valid8VaultAttachmentUploadResponse>('/api/valid8.php?action=upload_attachment', fd);
-      await loadAttachments(entryId);
-      if (onToast) {
-        onToast({ tone: 'success', message: 'Attachment uploaded.' });
-      }
-    } catch (error: any) {
-      const message = String(error?.message || 'Failed to upload attachment');
-      if (onToast) {
-        onToast({ tone: 'error', message });
-      }
-    }
-  }, [loadAttachments, onToast]);
 
   const deleteAttachment = React.useCallback(async (entryId: string, attachmentId: string) => {
     try {
@@ -160,56 +154,6 @@ export function useValid8(enabled: boolean, onToast?: (toast: IToast) => void) {
       return next;
     });
   }, []);
-
-  const createOwner = React.useCallback(async (name: string) => {
-    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=create_owner', { name });
-    await loadOwners();
-  }, [loadOwners]);
-
-  const updateOwner = React.useCallback(async (ownerId: string, name: string) => {
-    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=update_owner', { owner_id: ownerId, name });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const archiveOwner = React.useCallback(async (ownerId: string) => {
-    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=archive_owner', { owner_id: ownerId });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const setOwnerArchived = React.useCallback(async (ownerId: string, isArchived: number) => {
-    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=set_owner_archived', { owner_id: ownerId, is_archived: isArchived ? 1 : 0 });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const deleteOwner = React.useCallback(async (ownerId: string) => {
-    await ApiClient.post<Valid8OwnerMutationResponse>('/api/valid8.php?action=delete_owner', { owner_id: ownerId });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const createCategory = React.useCallback(async (name: string) => {
-    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=create_category', { name });
-    await loadCategories();
-  }, [loadCategories]);
-
-  const updateCategory = React.useCallback(async (categoryId: string, name: string) => {
-    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=update_category', { category_id: categoryId, name });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const archiveCategory = React.useCallback(async (categoryId: string) => {
-    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=archive_category', { category_id: categoryId });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const setCategoryArchived = React.useCallback(async (categoryId: string, isArchived: number) => {
-    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=set_category_archived', { category_id: categoryId, is_archived: isArchived ? 1 : 0 });
-    await load(includeInactive);
-  }, [includeInactive, load]);
-
-  const deleteCategory = React.useCallback(async (categoryId: string) => {
-    await ApiClient.post<Valid8CategoryMutationResponse>('/api/valid8.php?action=delete_category', { category_id: categoryId });
-    await load(includeInactive);
-  }, [includeInactive, load]);
 
   React.useEffect(() => {
     if (!enabled) {

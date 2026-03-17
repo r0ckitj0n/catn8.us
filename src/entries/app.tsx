@@ -26,6 +26,8 @@ import { VerifyPage } from '../components/pages/VerifyPage';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
 import { ApiClient } from '../core/ApiClient';
 import { UI_STANDARDS_EVENT, applyGlobalUiSettings } from '../core/uiStandards';
+import { AppPage, BACKGROUND_LAYER_STYLE, getLoginRedirectTarget, SharedLayoutProps, Viewer, SIMPLE_PAGE_COMPONENTS } from './appConfig';
+import { useModalBackdropCleanup } from './useModalBackdropCleanup';
 import { catn8LocalStorageGet } from '../utils/storageUtils';
 
 import './app.css';
@@ -35,75 +37,7 @@ const Accumul8Page = React.lazy(async () => {
   return { default: mod.Accumul8Page };
 });
 
-type AppPage =
-  | 'home'
-  | 'elucid8'
-  | 'narr8'
-  | 'stimul8'
-  | 'recre8'
-  | 'activ8'
-  | 'accumul8'
-  | 'valid8'
-  | 'illumin8'
-  | 'fabric8'
-  | 'login'
-  | 'investig8'
-  | 'photo_m8'
-  | 'sheriff_station'
-  | 'settings'
-  | 'loc8'
-  | 'frogger'
-  | 'asteroids'
-  | 'tetris'
-  | 'verify'
-  | 'reset';
-
 type Toast = { tone: 'success' | 'error' | 'info' | 'warning'; message: string } | null;
-
-type Viewer = any;
-
-type SharedLayoutProps = {
-  viewer: Viewer;
-  isAdmin: boolean;
-  onLoginClick: () => void;
-  onLogout: () => void;
-  onAccountClick: () => void;
-  mysteryTitle: string;
-};
-
-const BACKGROUND_LAYER_STYLE: React.CSSProperties = {
-  background: 'url("/images/homepage_friends.png") center / cover no-repeat fixed',
-  backgroundImage: 'image-set(url("/images/homepage_friends.webp") type("image/webp"), url("/images/homepage_friends.png") type("image/png"))',
-};
-
-const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>> = {
-  home: HomePage,
-  elucid8: AboutPage,
-  narr8: StoriesPage,
-  stimul8: GamesPage,
-  recre8: ArcadePage,
-  activ8: ActivitiesPage,
-  valid8: Valid8Page,
-  illumin8: ColoringPage,
-  loc8: WordsearchPage,
-  photo_m8: PhotoAlbumsPage,
-  frogger: FroggerPage,
-  asteroids: AsteroidsPage,
-  tetris: TetrisPage,
-};
-
-function getLoginRedirectTarget(): string | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const raw = new URLSearchParams(window.location.search).get('redirect') || '';
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) {
-    return null;
-  }
-
-  return raw;
-}
 
 function App({ page }: { page: AppPage }) {
   const [loginOpen, setLoginOpen] = React.useState(page === 'login');
@@ -139,84 +73,7 @@ function App({ page }: { page: AppPage }) {
     return () => window.removeEventListener(UI_STANDARDS_EVENT, onUiStandardsChange);
   }, [page]);
 
-  React.useEffect(() => {
-    const clearOrphanedBackdrops = () => {
-      const openModals = document.querySelectorAll('.modal.show, .modal.showing');
-      if (openModals.length > 0) {
-        return;
-      }
-
-      const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
-      if (backdrops.length === 0) {
-        return;
-      }
-
-      backdrops.forEach((el) => el.remove());
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('padding-right');
-    };
-
-    clearOrphanedBackdrops();
-
-    const onBackdropClickCapture = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target?.classList) {
-        return;
-      }
-
-      const isBackdrop = target.classList.contains('modal-backdrop');
-      const modalTarget = target.closest('.modal') as HTMLElement | null;
-      const clickedInsideDialog = Boolean(target.closest('.modal-dialog'));
-      const isModalOverlayClick = Boolean(
-        !isBackdrop
-        && modalTarget
-        && (modalTarget.classList.contains('show') || modalTarget.classList.contains('showing'))
-        && !clickedInsideDialog,
-      );
-
-      if (!isBackdrop && !isModalOverlayClick) {
-        return;
-      }
-
-      const openModals = Array.from(document.querySelectorAll('.modal.show, .modal.showing')) as HTMLElement[];
-      if (!openModals.length) {
-        if (isBackdrop) {
-          target.remove();
-          document.body.classList.remove('modal-open');
-          document.body.style.removeProperty('overflow');
-          document.body.style.removeProperty('padding-right');
-        }
-        return;
-      }
-
-      const topModal = openModals
-        .slice()
-        .sort((a, b) => Number(getComputedStyle(a).zIndex || 0) - Number(getComputedStyle(b).zIndex || 0))
-        .pop();
-
-      if (!topModal) {
-        return;
-      }
-
-      const modalClass = (window as any).bootstrap?.Modal;
-      const instance = modalClass?.getInstance(topModal);
-      if (instance && typeof instance.hide === 'function') {
-        instance.hide();
-        return;
-      }
-
-      topModal.classList.remove('show');
-    };
-
-    const observer = new MutationObserver(() => clearOrphanedBackdrops());
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    document.addEventListener('click', onBackdropClickCapture, true);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('click', onBackdropClickCapture, true);
-    };
-  }, []);
+  useModalBackdropCleanup();
 
   const refreshViewer = React.useCallback(async () => {
     try {

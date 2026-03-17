@@ -1,15 +1,9 @@
 import React from 'react';
 import { ApiClient } from '../../../core/ApiClient';
-import { openTellerConnect } from '../../../core/tellerConnect';
-import { isWatchedTellerInstitution, logTellerDiagnostic } from '../../../core/tellerDiagnostics';
+import { logTellerDiagnostic } from '../../../core/tellerDiagnostics';
 import { catn8LocalStorageGet, catn8LocalStorageSet } from '../../../utils/storageUtils';
 import { formatTestResult } from '../../../utils/textUtils';
 import { IToast } from '../../../types/common';
-import {
-  Accumul8TellerConnectTokenResponse,
-  Accumul8TellerEnrollmentResponse,
-  Accumul8TellerSyncResponse,
-} from '../../../types/accumul8';
 import {
   ITellerSettingsDeleteRequest,
   ITellerSettingsGetResponse,
@@ -17,36 +11,9 @@ import {
   ITellerSettingsSaveRequest,
   ITellerSettingsTestRequest,
   ITellerSettingsTestResponse,
-  TellerEnvironment,
 } from '../../../types/tellerSettings';
-
-const LS_TELLER_TEST = 'catn8.last_test.settings.teller';
-
-interface TellerFormState {
-  env: TellerEnvironment;
-  application_id: string;
-  certificate: string;
-  private_key: string;
-}
-
-interface TellerStatusState {
-  has_application_id: boolean;
-  has_certificate: boolean;
-  has_private_key: boolean;
-}
-
-const defaultFormState: TellerFormState = {
-  env: 'sandbox',
-  application_id: '',
-  certificate: '',
-  private_key: '',
-};
-
-const defaultStatusState: TellerStatusState = {
-  has_application_id: false,
-  has_certificate: false,
-  has_private_key: false,
-};
+import { connectTellerBank } from './tellerConnectBank';
+import { defaultFormState, defaultStatusState, LS_TELLER_TEST, mapTellerFormState, mapTellerStatusState, TellerFormState, TellerStatusState } from './tellerConfigUtils';
 
 export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void) {
   const [busy, setBusy] = React.useState(false);
@@ -64,18 +31,9 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
     setMessage('');
     try {
       const res = await ApiClient.get<ITellerSettingsGetResponse>('/api/settings/teller.php?action=get');
-      const next: TellerFormState = {
-        env: (res?.config?.env || 'sandbox') as TellerEnvironment,
-        application_id: String(res?.config?.application_id || ''),
-        certificate: '',
-        private_key: '',
-      };
+      const next = mapTellerFormState(res?.config);
       setForm(next);
-      setStatus({
-        has_application_id: Boolean(res?.status?.has_application_id),
-        has_certificate: Boolean(res?.status?.has_certificate),
-        has_private_key: Boolean(res?.status?.has_private_key),
-      });
+      setStatus(mapTellerStatusState(res?.status));
       setSource(String(res?.source || 'secret_store'));
       cleanFormRef.current = JSON.stringify({ ...next, certificate: '', private_key: '' });
     } catch (e: any) {
@@ -101,18 +59,9 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
       private_key: form.private_key,
     };
     const res = await ApiClient.post<ITellerSettingsMutationResponse>('/api/settings/teller.php?action=save', req);
-    const next: TellerFormState = {
-      env: (res?.config?.env || form.env) as TellerEnvironment,
-      application_id: String(res?.config?.application_id || ''),
-      certificate: '',
-      private_key: '',
-    };
+    const next = mapTellerFormState(res?.config, form.env);
     setForm(next);
-    const nextStatus = {
-      has_application_id: Boolean(res?.status?.has_application_id),
-      has_certificate: Boolean(res?.status?.has_certificate),
-      has_private_key: Boolean(res?.status?.has_private_key),
-    };
+    const nextStatus = mapTellerStatusState(res?.status);
     setStatus(nextStatus);
     cleanFormRef.current = JSON.stringify(next);
     return {
@@ -144,18 +93,9 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
     setMessage('');
     try {
       const res = await ApiClient.post<ITellerSettingsMutationResponse>('/api/settings/teller.php?action=delete', { field });
-      const next: TellerFormState = {
-        env: (res?.config?.env || form.env) as TellerEnvironment,
-        application_id: String(res?.config?.application_id || ''),
-        certificate: '',
-        private_key: '',
-      };
+      const next = mapTellerFormState(res?.config, form.env);
       setForm(next);
-      setStatus({
-        has_application_id: Boolean(res?.status?.has_application_id),
-        has_certificate: Boolean(res?.status?.has_certificate),
-        has_private_key: Boolean(res?.status?.has_private_key),
-      });
+      setStatus(mapTellerStatusState(res?.status));
       cleanFormRef.current = JSON.stringify(next);
       setMessage(String(res?.message || 'Credential deleted'));
     } catch (err: any) {
@@ -215,121 +155,7 @@ export function useTellerConfig(open: boolean, onToast?: (toast: IToast) => void
           env: saved.env,
         };
       }
-
-      if (!effective.status.has_application_id || !effective.status.has_certificate || !effective.status.has_private_key) {
-        throw new Error('Teller application id, certificate, and private key are required before connecting.');
-      }
-
-      const tokenRes = await ApiClient.post<Accumul8TellerConnectTokenResponse>('/api/accumul8.php?action=teller_connect_token', {});
-      const applicationId = String(tokenRes?.application_id || effective.applicationId || '');
-      const environment = (String(tokenRes?.environment || effective.env || 'sandbox') || 'sandbox') as TellerEnvironment;
-      if (applicationId === '') {
-        throw new Error('No Teller application id is available');
-      }
-
-      let connectedInstitutionId = '';
-      let connectedInstitutionName = '';
-      let connectedEnrollmentId = '';
-      void logTellerDiagnostic({
-        source: 'teller-settings-modal',
-        event_name: 'open_requested',
-        message: 'Teller Connect requested from Teller settings modal',
-        meta: {
-          environment,
-          application_id_prefix: applicationId.slice(0, 12),
-          select_account: 'disabled',
-        },
-      });
-
-      const connectResult = await openTellerConnect(applicationId, environment, {
-        selectAccount: 'disabled',
-        onEvent: (event) => {
-          if (event.name === 'open') {
-            return;
-          }
-          const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
-          const detectedInstitutionId = String((payload as any)?.institution_id || '');
-          const institutionId = String((payload as any)?.enrollment?.institution?.id || detectedInstitutionId || connectedInstitutionId || '');
-          const institutionName = String((payload as any)?.enrollment?.institution?.name || connectedInstitutionName || '');
-          const enrollmentId = String((payload as any)?.enrollment?.id || connectedEnrollmentId || '');
-          const failureMessage = String((payload as any)?.message || (payload as any)?.code || '');
-          void logTellerDiagnostic({
-            source: 'teller-settings-modal',
-            event_name: event.name === 'failure'
-                ? 'failure'
-                : event.name,
-            institution_id: institutionId || undefined,
-            institution_name: institutionName || undefined,
-            enrollment_id: enrollmentId || undefined,
-            message: failureMessage || `Teller Connect ${event.name}`,
-            meta: {
-              select_account: 'disabled',
-              event_payload: payload,
-              watched_institution: isWatchedTellerInstitution(institutionId, institutionName) ? 1 : 0,
-            },
-          });
-        },
-      });
-      if (connectResult.outcome === 'cancelled') {
-        setMessage('Teller Connect was closed before connecting an account.');
-        return;
-      }
-
-      connectedInstitutionId = String(connectResult.payload?.enrollment?.institution?.id || '');
-      connectedInstitutionName = String(connectResult.payload?.enrollment?.institution?.name || '');
-      connectedEnrollmentId = String(connectResult.payload?.enrollment?.id || '');
-
-      const exchangeRes = await ApiClient.post<Accumul8TellerEnrollmentResponse>('/api/accumul8.php?action=teller_enroll', {
-        access_token: String(connectResult.payload?.accessToken || ''),
-        enrollment_id: String(connectResult.payload?.enrollment?.id || ''),
-        institution_id: String(connectResult.payload?.enrollment?.institution?.id || ''),
-        institution_name: String(connectResult.payload?.enrollment?.institution?.name || ''),
-        user_id: String(connectResult.payload?.user?.id || ''),
-      });
-      const connectionId = Number(exchangeRes?.connection_id || 0);
-      if (connectionId <= 0) {
-        throw new Error('Teller enrollment did not return a valid connection id');
-      }
-      void logTellerDiagnostic({
-        source: 'teller-settings-modal',
-        event_name: 'enroll_success',
-        institution_id: connectedInstitutionId || undefined,
-        institution_name: connectedInstitutionName || undefined,
-        enrollment_id: connectedEnrollmentId || undefined,
-        connection_id: connectionId,
-        message: 'Teller enrollment persisted successfully',
-        meta: {
-          select_account: 'disabled',
-          watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0,
-        },
-      });
-
-      const syncRes = await ApiClient.post<Accumul8TellerSyncResponse>('/api/accumul8.php?action=teller_sync_transactions', {
-        connection_id: connectionId,
-      });
-      void logTellerDiagnostic({
-        source: 'teller-settings-modal',
-        event_name: 'sync_success',
-        institution_id: connectedInstitutionId || undefined,
-        institution_name: connectedInstitutionName || undefined,
-        enrollment_id: connectedEnrollmentId || undefined,
-        connection_id: connectionId,
-        message: 'Teller sync completed successfully',
-        meta: {
-          select_account: 'disabled',
-          watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0,
-          added: Number(syncRes?.added || 0),
-          modified: Number(syncRes?.modified || 0),
-          unchanged: Number(syncRes?.unchanged || 0),
-          removed: Number(syncRes?.removed || 0),
-          account_count: Array.isArray(syncRes?.accounts) ? syncRes.accounts.length : 0,
-        },
-      });
-      const added = Number(syncRes?.added || 0);
-      const modified = Number(syncRes?.modified || 0);
-      const removed = Number(syncRes?.removed || 0);
-      setMessage(`Teller connected and synced (${added} added, ${modified} modified, ${removed} removed).`);
-      await load();
+      setMessage(await connectTellerBank(effective, load));
     } catch (err: any) {
       void logTellerDiagnostic({
         source: 'teller-settings-modal',

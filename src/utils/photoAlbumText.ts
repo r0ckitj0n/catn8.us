@@ -1,3 +1,5 @@
+import { AlbumTheme, inferAlbumThemeFromCorpus } from './photoAlbumThemes';
+
 const JUNK_TOKENS = /(streamtyped|NSMutableAttributedString|NSAttributedString|NSObject|NSMutableString|NSString|NSDictionary|NSNumber|NSValue|NSMutableData|NSData|CF\$UID|NSInlineData)/gi;
 const JUNK_IM_TOKENS = /\bkIM[A-Za-z0-9_]+\b/g;
 const JUNK_LABELS = /\b(iI|typedstream)\b/gi;
@@ -198,23 +200,6 @@ export function formatAlbumCaption(value: unknown, maxLines = 4): string {
   return lines.slice(0, Math.max(1, maxLines)).join('\n');
 }
 
-export interface AlbumTheme {
-  name: 'warm' | 'celebration' | 'calm' | 'support';
-  emojis: string[];
-  borderColor: string;
-  accentColor: string;
-}
-
 export function inferAlbumTheme(value: unknown): AlbumTheme {
-  const corpus = sanitizeAlbumMessageText(value).toLowerCase();
-  if (/(birthday|party|celebrate|graduation|holiday|christmas|halloween)/.test(corpus)) {
-    return { name: 'celebration', emojis: ['🎉', '🎈', '✨', '🥳'], borderColor: '#a54c1f', accentColor: '#ffe6b7' };
-  }
-  if (/(hospital|medicine|sick|weak|help|covered|plan|work)/.test(corpus)) {
-    return { name: 'support', emojis: ['💪', '🤍', '🫶', '🙏'], borderColor: '#3d5f7e', accentColor: '#dcecff' };
-  }
-  if (/(baby|newborn|sleep|tiny|family|grandma|mom|dad)/.test(corpus)) {
-    return { name: 'warm', emojis: ['🍼', '💛', '🧸', '📸'], borderColor: '#8a4d2e', accentColor: '#ffe8cf' };
-  }
-  return { name: 'calm', emojis: ['🌿', '☁️', '📷', '💌'], borderColor: '#3f5f48', accentColor: '#dff5df' };
+  return inferAlbumThemeFromCorpus(sanitizeAlbumMessageText(value).toLowerCase());
 }

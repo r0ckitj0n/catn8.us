@@ -1,17 +1,14 @@
 import React from 'react';
 import {
-  BASE_SPEEDS,
   COLORS,
-  FROG_START_X,
-  FROG_START_Y,
   GAME_HEIGHT,
   GAME_WIDTH,
   GRID_SIZE,
   LEVEL_TIME,
   STARTING_LIVES,
-  VEHICLE_TYPES,
   isColliding,
 } from './games/froggerConfig';
+import { createFrog, createInitialFroggerState, setupFroggerLevel } from './games/froggerEngine';
 
 export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
   const [level, setLevel] = React.useState(1);
@@ -22,61 +19,14 @@ export function useFrogger(canvasRef: React.RefObject<HTMLCanvasElement>) {
   const [paused, setPaused] = React.useState(false);
   const [gameOver, setGameOver] = React.useState(false);
 
-  const gameState = React.useRef({
-    frog: { x: FROG_START_X, y: FROG_START_Y, width: GRID_SIZE - 10, height: GRID_SIZE - 10, speed: GRID_SIZE },
-    cars: [] as any[],
-    logs: [] as any[],
-    turtles: [] as any[],
-    lilyPads: [] as any[],
-    showCongratulations: false,
-    congratulationsTimer: 0,
-    levelTimer: LEVEL_TIME,
-    lastTime: 0
-  });
+  const gameState = React.useRef(createInitialFroggerState());
 
   const resetFrog = React.useCallback(() => {
-    gameState.current.frog = { x: FROG_START_X, y: FROG_START_Y, width: GRID_SIZE - 10, height: GRID_SIZE - 10, speed: GRID_SIZE };
+    gameState.current.frog = createFrog();
   }, []);
 
   const setupLevel = React.useCallback((lvl: number) => {
-    const gs = gameState.current;
-    gs.lilyPads = [];
-    for (let i = 0; i < 9; i++) {
-      gs.lilyPads.push({ x: i * (GAME_WIDTH / 9) + (GAME_WIDTH / 18), y: 40, width: 40, height: 40, reached: false });
-    }
-
-    const carCount = Math.min(4, Math.floor(1 + Math.floor(lvl / 2)));
-    const logCount = Math.max(4, Math.floor(12 - (lvl * 2)));
-
-    gs.cars = [];
-    gs.logs = [];
-    gs.turtles = [];
-
-    const createCarRow = (y: number, count: number, carType: string, direction: boolean) => {
-      const vt = VEHICLE_TYPES[carType];
-      const spacing = GAME_WIDTH / count;
-      for (let i = 0; i < count; i++) {
-        const x = i * spacing + (Math.random() - 0.5) * (spacing * 0.3);
-        gs.cars.push({ x, y, width: vt.width, height: vt.height, speed: direction ? -BASE_SPEEDS[vt.speed] : BASE_SPEEDS[vt.speed], color: vt.color, type: carType });
-      }
-    };
-
-    const createLogRow = (y: number, count: number, logType: string, direction: boolean) => {
-      const spacing = GAME_WIDTH / count;
-      for (let i = 0; i < count; i++) {
-        const x = i * spacing + (Math.random() - 0.5) * (spacing * 0.3);
-        gs.logs.push({ x, y, width: GRID_SIZE, height: GRID_SIZE - 10, speed: direction ? -BASE_SPEEDS[logType] : BASE_SPEEDS[logType], logType });
-      }
-    };
-
-    createCarRow(GAME_HEIGHT - 2 * GRID_SIZE, carCount, 'smallCar', true);
-    createCarRow(GAME_HEIGHT - 3 * GRID_SIZE, carCount, 'mediumCar', false);
-    createCarRow(GAME_HEIGHT - 4 * GRID_SIZE, carCount, 'largeCar', true);
-    createCarRow(GAME_HEIGHT - 5 * GRID_SIZE, carCount, 'truck', false);
-
-    createLogRow(GAME_HEIGHT - 7 * GRID_SIZE, logCount, 'log1', true);
-    createLogRow(GAME_HEIGHT - 9 * GRID_SIZE, logCount, 'log2', true);
-    createLogRow(GAME_HEIGHT - 11 * GRID_SIZE, logCount, 'log1', true);
+    setupFroggerLevel(gameState.current, lvl);
   }, []);
 
   const startGame = React.useCallback(() => {

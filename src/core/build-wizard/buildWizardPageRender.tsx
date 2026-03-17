@@ -4643,7 +4643,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 	                  </div>
                   <div className="build-wizard-step-metrics-panel">
                     <label className="build-wizard-title-inline build-wizard-title-inline-compact">
-                      <span className="build-wizard-inline-field-label">Step Title</span>
                       <input
                         type="text"
                         value={draft.title || ''}

@@ -4869,6 +4869,38 @@ function accumul8_sync_debtor_from_entity(int $viewerId, int $entityId): ?int
         return null;
     }
 
+    $matchingDebtorId = accumul8_find_duplicate_debtor_id($viewerId, (string)($entity['display_name'] ?? ''));
+    if ($matchingDebtorId !== null) {
+        Database::execute(
+            'UPDATE accumul8_debtors
+             SET entity_id = ?, contact_id = ?, debtor_name = ?, notes = ?, is_active = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [
+                $entityId,
+                $contactId,
+                (string)($entity['display_name'] ?? ''),
+                (string)($entity['notes'] ?? '') === '' ? null : (string)$entity['notes'],
+                $isActive,
+                $matchingDebtorId,
+                $viewerId,
+            ]
+        );
+        Database::execute(
+            'UPDATE accumul8_entities
+             SET legacy_debtor_id = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [$matchingDebtorId, $entityId, $viewerId]
+        );
+        Database::execute(
+            'UPDATE accumul8_transactions
+             SET debtor_id = COALESCE(debtor_id, ?), balance_entity_id = COALESCE(balance_entity_id, ?)
+             WHERE owner_user_id = ? AND balance_entity_id = ?',
+            [$matchingDebtorId, $entityId, $viewerId, $entityId]
+        );
+
+        return $matchingDebtorId;
+    }
+
     Database::execute(
         'INSERT INTO accumul8_debtors (owner_user_id, entity_id, contact_id, debtor_name, notes, is_active)
          VALUES (?, ?, ?, ?, ?, ?)',
@@ -5261,6 +5293,33 @@ function accumul8_validate_account_type($value): string
         catn8_json_response(['success' => false, 'error' => 'Invalid account_type'], 400);
     }
     return $type;
+}
+
+function accumul8_find_duplicate_debtor_id(int $viewerId, string $debtorName, ?int $excludeId = null): ?int
+{
+    $normalizedName = accumul8_normalize_text($debtorName, 191);
+    if ($normalizedName === '') {
+        return null;
+    }
+
+    $sql = 'SELECT id
+            FROM accumul8_debtors
+            WHERE owner_user_id = ?
+              AND LOWER(TRIM(debtor_name)) = LOWER(TRIM(?))';
+    $params = [$viewerId, $normalizedName];
+    if (($excludeId ?? 0) > 0) {
+        $sql .= ' AND id <> ?';
+        $params[] = (int)$excludeId;
+    }
+    $sql .= ' ORDER BY id ASC LIMIT 1';
+
+    $row = Database::queryOne($sql, $params);
+    if (!$row) {
+        return null;
+    }
+
+    $id = (int)($row['id'] ?? 0);
+    return $id > 0 ? $id : null;
 }
 
 function accumul8_validate_bank_connection_provider($value): string
@@ -17330,6 +17389,9 @@ if ($action === 'create_debtor') {
     if ($debtorName === '') {
         catn8_json_response(['success' => false, 'error' => 'debtor_name is required'], 400);
     }
+    if (accumul8_find_duplicate_debtor_id($viewerId, $debtorName) !== null) {
+        catn8_json_response(['success' => false, 'error' => 'That IOU person already exists'], 409);
+    }
 
     Database::execute(
         'INSERT INTO accumul8_debtors (owner_user_id, contact_id, debtor_name, notes, is_active)
@@ -17365,6 +17427,9 @@ if ($action === 'update_debtor') {
     }
     if ($debtorName === '') {
         catn8_json_response(['success' => false, 'error' => 'debtor_name is required'], 400);
+    }
+    if (accumul8_find_duplicate_debtor_id($viewerId, $debtorName, $id) !== null) {
+        catn8_json_response(['success' => false, 'error' => 'That IOU person already exists'], 409);
     }
 
     Database::execute(

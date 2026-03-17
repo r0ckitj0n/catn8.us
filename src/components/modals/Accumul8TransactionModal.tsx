@@ -79,13 +79,13 @@ export function Accumul8TransactionModal({
   const buildPayload = React.useCallback((): Accumul8TransactionUpsertRequest => ({
     transaction_date: String(form.transaction_date || ''),
     due_date: String(form.due_date || ''),
-    paid_date: String(form.paid_date || ''),
+    paid_date: isIouVariant ? '' : String(form.paid_date || ''),
     entry_type: (form.entry_type || 'manual') as Accumul8EntryType,
     description: String(form.description || '').trim(),
     memo: String(form.memo || '').trim(),
     amount: Number(form.amount || 0),
     rta_amount: isIouVariant ? 0 : Number(form.rta_amount || 0),
-    is_paid: Number(form.is_paid || 0),
+    is_paid: isIouVariant ? 0 : Number(form.is_paid || 0),
     is_reconciled: isIouVariant ? 0 : Number(form.is_reconciled || 0),
     is_budget_planner: isIouVariant ? 0 : Number(form.is_budget_planner || 0),
     entity_id: isIouVariant ? null : (form.entity_id ? Number(form.entity_id) : null),
@@ -97,13 +97,13 @@ export function Accumul8TransactionModal({
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       transaction_date: String(initialForm.transaction_date || ''),
       due_date: String(initialForm.due_date || ''),
-      paid_date: String(initialForm.paid_date || ''),
+      paid_date: isIouVariant ? '' : String(initialForm.paid_date || ''),
       entry_type: (initialForm.entry_type || 'manual') as Accumul8EntryType,
       description: String(initialForm.description || '').trim(),
       memo: String(initialForm.memo || '').trim(),
       amount: Number(initialForm.amount || 0),
       rta_amount: isIouVariant ? 0 : Number(initialForm.rta_amount || 0),
-      is_paid: Number(initialForm.is_paid || 0),
+      is_paid: isIouVariant ? 0 : Number(initialForm.is_paid || 0),
       is_reconciled: isIouVariant ? 0 : Number(initialForm.is_reconciled || 0),
       is_budget_planner: isIouVariant ? 0 : Number(initialForm.is_budget_planner || 0),
       entity_id: isIouVariant ? null : (initialForm.entity_id ? Number(initialForm.entity_id) : null),
@@ -245,17 +245,19 @@ export function Accumul8TransactionModal({
                   </select>
                 </div>
               ) : null}
-              <div className="col-md-4">
-                <label className="form-label" htmlFor="accumul8-transaction-paid-date">Paid Date</label>
-                <input
-                  id="accumul8-transaction-paid-date"
-                  className="form-control"
-                  type="date"
-                  value={form.paid_date}
-                  onChange={(e) => setForm((prev) => ({ ...prev, paid_date: e.target.value }))}
-                  disabled={busy || isReadOnly || !editPolicy.canEditPaidState}
-                />
-              </div>
+              {!isIouVariant ? (
+                <div className="col-md-4">
+                  <label className="form-label" htmlFor="accumul8-transaction-paid-date">Paid Date</label>
+                  <input
+                    id="accumul8-transaction-paid-date"
+                    className="form-control"
+                    type="date"
+                    value={form.paid_date}
+                    onChange={(e) => setForm((prev) => ({ ...prev, paid_date: e.target.value }))}
+                    disabled={busy || isReadOnly || !editPolicy.canEditPaidState}
+                  />
+                </div>
+              ) : null}
               <div className="col-md-8">
                 <label className="form-label" htmlFor="accumul8-transaction-description">Description</label>
                 <input
@@ -364,33 +366,35 @@ export function Accumul8TransactionModal({
                   </div>
                 </>
               ) : null}
-              <div className="col-md-6">
-                <label className="form-label" htmlFor="accumul8-transaction-paid">Paid</label>
-                <select
-                  id="accumul8-transaction-paid"
-                  className="form-select"
-                  value={String(form.is_paid)}
-                  onChange={(e) => setForm((prev) => ({ ...prev, is_paid: Number(e.target.value) }))}
-                  disabled={busy || isReadOnly || !editPolicy.canEditPaidState}
-                >
-                  <option value="0">No</option>
-                  <option value="1">Yes</option>
-                </select>
-              </div>
               {!isIouVariant ? (
-                <div className="col-md-6">
-                  <label className="form-label" htmlFor="accumul8-transaction-reconciled">Reconciled</label>
-                  <select
-                    id="accumul8-transaction-reconciled"
-                    className="form-select"
-                    value={String(form.is_reconciled)}
-                    onChange={(e) => setForm((prev) => ({ ...prev, is_reconciled: Number(e.target.value) }))}
-                    disabled={busy || isReadOnly}
-                  >
-                    <option value="0">No</option>
-                    <option value="1">Yes</option>
-                  </select>
-                </div>
+                <>
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="accumul8-transaction-paid">Paid</label>
+                    <select
+                      id="accumul8-transaction-paid"
+                      className="form-select"
+                      value={String(form.is_paid)}
+                      onChange={(e) => setForm((prev) => ({ ...prev, is_paid: Number(e.target.value) }))}
+                      disabled={busy || isReadOnly || !editPolicy.canEditPaidState}
+                    >
+                      <option value="0">No</option>
+                      <option value="1">Yes</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="accumul8-transaction-reconciled">Reconciled</label>
+                    <select
+                      id="accumul8-transaction-reconciled"
+                      className="form-select"
+                      value={String(form.is_reconciled)}
+                      onChange={(e) => setForm((prev) => ({ ...prev, is_reconciled: Number(e.target.value) }))}
+                      disabled={busy || isReadOnly}
+                    >
+                      <option value="0">No</option>
+                      <option value="1">Yes</option>
+                    </select>
+                  </div>
+                </>
               ) : null}
               <div className="col-12">
                 <label className="form-label" htmlFor="accumul8-transaction-memo">Memo</label>

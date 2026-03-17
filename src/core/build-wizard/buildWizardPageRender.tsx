@@ -521,6 +521,84 @@ const buildSearchText = (...values: unknown[]): string => {
   return parts.join(' ').toLowerCase();
 };
 
+const STEP_COST_VERIFICATION_FIELDS: Array<keyof IBuildWizardStep> = [
+  'phase_key',
+  'parent_step_id',
+  'depends_on_step_ids',
+  'step_type',
+  'title',
+  'description',
+  'permit_required',
+  'permit_document_id',
+  'permit_name',
+  'permit_authority',
+  'permit_status',
+  'permit_application_url',
+  'purchase_category',
+  'purchase_brand',
+  'purchase_model',
+  'purchase_sku',
+  'purchase_unit',
+  'purchase_qty',
+  'purchase_unit_price',
+  'purchase_vendor',
+  'purchase_url',
+  'expected_start_date',
+  'expected_end_date',
+  'expected_duration_days',
+  'estimated_cost',
+  'actual_cost',
+  'is_completed',
+  'source_ref',
+];
+
+const buildStepCostVerificationSignature = (
+  step: IBuildWizardStep,
+  draft: Partial<IBuildWizardStep> | undefined,
+  stepDocuments: IBuildWizardDocument[],
+  effectiveActualCost: number | null,
+): string => {
+  const stepState: Record<string, unknown> = {};
+  STEP_COST_VERIFICATION_FIELDS.forEach((field) => {
+    if (field === 'actual_cost') {
+      stepState.actual_cost = effectiveActualCost;
+      return;
+    }
+    const draftValue = draft && Object.prototype.hasOwnProperty.call(draft, field) ? draft[field] : undefined;
+    const stepValue = draftValue !== undefined ? draftValue : step[field];
+    stepState[field] = field === 'depends_on_step_ids'
+      ? Array.isArray(stepValue) ? [...stepValue].map((id) => Number(id || 0)).sort((a, b) => a - b) : []
+      : stepValue ?? null;
+  });
+
+  const documentState = [...stepDocuments]
+    .sort((a, b) => {
+      const kindCmp = String(a.kind || '').localeCompare(String(b.kind || ''));
+      if (kindCmp !== 0) {
+        return kindCmp;
+      }
+      return a.id - b.id;
+    })
+    .map((doc) => ({
+      id: doc.id,
+      step_id: doc.step_id ?? null,
+      receipt_parent_document_id: doc.receipt_parent_document_id ?? null,
+      kind: doc.kind ?? '',
+      caption: doc.caption ?? null,
+      receipt_amount: doc.receipt_amount ?? null,
+      receipt_title: doc.receipt_title ?? null,
+      receipt_vendor: doc.receipt_vendor ?? null,
+      receipt_date: doc.receipt_date ?? null,
+      receipt_notes: doc.receipt_notes ?? null,
+      original_name: doc.original_name ?? '',
+    }));
+
+  return JSON.stringify({
+    step: stepState,
+    documents: documentState,
+  });
+};
+
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
     saving,
@@ -706,6 +784,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [stepContactCandidateByStepId, setStepContactCandidateByStepId] = React.useState<Record<number, string>>({});
   const [currencyInputByKey, setCurrencyInputByKey] = React.useState<Record<string, string>>({});
   const [activeCurrencyInputKey, setActiveCurrencyInputKey] = React.useState<string>('');
+  const [verifiedActualCostSignatureByStepId, setVerifiedActualCostSignatureByStepId] = React.useState<Record<number, string>>({});
+  const [refreshingActualCostByStepId, setRefreshingActualCostByStepId] = React.useState<Record<number, boolean>>({});
   const recoveryUploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceFileInputByDocId = React.useRef<Record<number, HTMLInputElement | null>>({});
   const receiptEditorRefByStepId = React.useRef<Record<number, HTMLDivElement | null>>({});
@@ -738,6 +818,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       setActiveTab('overview');
     }
   }, [initialUrlState.view, initialUrlState.projectId, projectId, openProject]);
+
+  React.useEffect(() => {
+    setVerifiedActualCostSignatureByStepId({});
+    setRefreshingActualCostByStepId({});
+  }, [projectId]);
 
   React.useEffect(() => {
     const updateStickyOffset = () => {
@@ -1946,28 +2031,62 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   }, [steps, docPhaseKey]);
 
   const linkedStepOptions = React.useMemo(() => {
-    const ordered = [...steps].sort((a, b) => {
-      const aRawOrder = Number(a.step_order) || 0;
-      const bRawOrder = Number(b.step_order) || 0;
-      const aHasOrder = aRawOrder > 0;
-      const bHasOrder = bRawOrder > 0;
-      if (aHasOrder && bHasOrder && aRawOrder !== bRawOrder) {
-        return aRawOrder - bRawOrder;
-      }
-      if (aHasOrder !== bHasOrder) {
-        return aHasOrder ? -1 : 1;
-      }
-      return a.id - b.id;
+    const tabOrder = new Map<BuildTabId, number>();
+    PROJECT_OVERVIEW_TAB_ORDER.forEach((tabId, index) => {
+      tabOrder.set(tabId, index);
     });
 
-    const numberWidth = Math.max(2, String(ordered.length).length);
-    return ordered.map((step, index) => ({
-      step,
-      displayNumber: index + 1,
-      sortKey: `#${String(index + 1).padStart(numberWidth, '0')} ${String(step.title || '')}`.trim(),
-      label: `#${index + 1} ${String(step.title || '').trim()} (${prettyPhaseLabel(step.phase_key)})`.trim(),
-    })).sort((a, b) => sortAlpha(a.sortKey, b.sortKey));
-  }, [steps]);
+    const stepsByTab = new Map<BuildTabId, IBuildWizardStep[]>();
+    steps.forEach((step) => {
+      const tabId = stepPhaseBucket(step);
+      const bucket = stepsByTab.get(tabId) || [];
+      bucket.push(step);
+      stepsByTab.set(tabId, bucket);
+    });
+
+    const options: Array<{ step: IBuildWizardStep; displayNumber: number; sortKey: string; label: string }> = [];
+    Array.from(stepsByTab.entries())
+      .sort((a, b) => {
+        const aOrder = tabOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = tabOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
+        return sortAlpha(tabLabelShort(a[0]), tabLabelShort(b[0]));
+      })
+      .forEach(([tabId, tabSteps]) => {
+        const ordered = [...tabSteps].sort((a, b) => {
+          const aRawOrder = Number(a.step_order) || 0;
+          const bRawOrder = Number(b.step_order) || 0;
+          const aHasOrder = aRawOrder > 0;
+          const bHasOrder = bRawOrder > 0;
+          if (aHasOrder && bHasOrder && aRawOrder !== bRawOrder) {
+            return aRawOrder - bRawOrder;
+          }
+          if (aHasOrder !== bHasOrder) {
+            return aHasOrder ? -1 : 1;
+          }
+          return a.id - b.id;
+        });
+
+        const tabLabel = BUILD_TABS.find((candidate) => candidate.id === tabId)?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId);
+        const phaseNumberMatch = tabLabel.match(/^(\d+)\./);
+        const phasePrefix = phaseNumberMatch
+          ? `Phase ${phaseNumberMatch[1]}`
+          : (tabId === 'desk' ? 'Project Desk' : tabLabel);
+
+        ordered.forEach((step, index) => {
+          options.push({
+            step,
+            displayNumber: index + 1,
+            sortKey: `${String(tabOrder.get(tabId) ?? Number.MAX_SAFE_INTEGER).padStart(2, '0')}-${String(index + 1).padStart(3, '0')}`,
+            label: `${phasePrefix}, Step ${index + 1}: ${String(step.title || '').trim()}`.trim(),
+          });
+        });
+      });
+
+    return options;
+  }, [stepPhaseBucket, steps]);
 
   const linkedStepDisplayNumberById = React.useMemo(() => {
     const map = new Map<number, number>();
@@ -2493,6 +2612,52 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const commitStep = async (stepId: number, patch: Partial<IBuildWizardStep>) => {
     await updateStep(stepId, patch);
+  };
+
+  const clearCurrencyEdit = (key: string): void => {
+    if (activeCurrencyInputKey === key) {
+      setActiveCurrencyInputKey('');
+    }
+    setCurrencyInputByKey((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, key)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const markStepActualCostVerified = (stepId: number, signature: string) => {
+    setVerifiedActualCostSignatureByStepId((prev) => ({ ...prev, [stepId]: signature }));
+  };
+
+  const onRefreshStepActualCost = async (
+    step: IBuildWizardStep,
+    signature: string,
+    nextActualCost: number | null,
+  ) => {
+    const stepId = step.id;
+    if (stepId <= 0) {
+      return;
+    }
+    setRefreshingActualCostByStepId((prev) => ({ ...prev, [stepId]: true }));
+    try {
+      const nextStep = await updateStep(stepId, { actual_cost: nextActualCost });
+      if (!nextStep) {
+        return;
+      }
+      updateStepDraft(stepId, { actual_cost: nextActualCost });
+      clearCurrencyEdit(`step-${stepId}-actual_cost`);
+      markStepActualCostVerified(stepId, signature);
+      onToast?.({ tone: 'success', message: 'Actual cost refreshed from task totals.' });
+    } finally {
+      setRefreshingActualCostByStepId((prev) => {
+        const next = { ...prev };
+        delete next[stepId];
+        return next;
+      });
+    }
   };
 
   const onTimelineStepChange = React.useCallback((stepId: number, patch: {
@@ -4328,6 +4493,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             });
           const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
           const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
+          const stepDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id);
           const stepReceiptMetrics = receiptMetricsByStepId.get(step.id) || {
             allCount: stepReceiptDocuments.length,
             nonQuoteCount: stepReceiptDocuments.length,
@@ -4344,6 +4510,11 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const effectiveActualCost = draftActualCost === null
             ? (actualCostFloor > 0 ? actualCostFloor : null)
             : Math.max(draftActualCost, actualCostFloor);
+          const recalculatedActualCost = actualCostFloor > 0 ? actualCostFloor : null;
+          const actualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, effectiveActualCost);
+          const refreshedActualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, recalculatedActualCost);
+          const isActualCostVerified = verifiedActualCostSignatureByStepId[step.id] === actualCostVerificationSignature;
+          const isRefreshingActualCost = refreshingActualCostByStepId[step.id] === true;
           const receiptDraft = receiptDraftByStep[step.id] || {
             receipt_title: '',
             receipt_vendor: '',
@@ -4570,7 +4741,30 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       />
                     </label>
                     <label className="build-wizard-date-inline">
-                      Actual Cost
+                      <span className="build-wizard-cost-label-row">
+                        <span>Actual Cost</span>
+                        <span className="build-wizard-cost-actions">
+                          <button
+                            type="button"
+                            className="build-wizard-actual-cost-refresh-btn"
+                            disabled={stepReadOnly || isRefreshingActualCost}
+                            aria-label="Recalculate actual cost from tasks"
+                            title="Recalculate actual cost from tasks"
+                            onClick={() => void onRefreshStepActualCost(step, refreshedActualCostVerificationSignature, recalculatedActualCost)}
+                          >
+                            {isRefreshingActualCost ? '⏳' : '🔄'}
+                          </button>
+                          {isActualCostVerified ? (
+                            <span
+                              className="build-wizard-actual-cost-check"
+                              aria-label="Actual cost is up to date"
+                              title="Actual cost is up to date"
+                            >
+                              ✓
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
                       <input
                         type="text"
                         inputMode="decimal"

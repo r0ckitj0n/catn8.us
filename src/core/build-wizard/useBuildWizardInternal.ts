@@ -315,7 +315,7 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
 
   const updateStep = React.useCallback(async (stepId: number, patch: Partial<IBuildWizardStep>) => {
     if (stepId <= 0) {
-      return;
+      return null;
     }
     const body: Record<string, unknown> = { step_id: stepId };
     const acceptedFields = [
@@ -357,20 +357,24 @@ export function useBuildWizardInternal(onToast?: (t: { tone: 'success' | 'error'
     });
 
     if (Object.keys(body).length <= 1) {
-      return;
+      return null;
     }
 
     try {
       const res = await ApiClient.post<{ success: boolean; step: IBuildWizardStep; steps?: IBuildWizardStep[] }>('/api/build_wizard.php?action=update_step', body);
       if (Array.isArray(res?.steps)) {
-        setSteps(normalizeBuildWizardSteps(res.steps));
+        const normalizedSteps = normalizeBuildWizardSteps(res.steps);
+        setSteps(normalizedSteps);
+        return normalizedSteps.find((s) => s.id === stepId) || null;
       } else {
         const next = res?.step ? normalizeBuildWizardStep(res.step) : null;
         setSteps((prev) => prev.map((s) => (s.id === stepId ? (next || s) : s)));
+        return next;
       }
     } catch (err: any) {
       onToast?.({ tone: 'error', message: err?.message || 'Failed to update step' });
       await refreshCurrentProject();
+      return null;
     }
   }, [onToast, refreshCurrentProject]);
 

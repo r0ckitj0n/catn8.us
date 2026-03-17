@@ -184,6 +184,11 @@ type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes' | 'account_id'>>;
+type Accumul8DebtorGroupRow = Accumul8Debtor & {
+  group_key: string;
+  member_ids: number[];
+  has_duplicate_members: boolean;
+};
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
@@ -416,6 +421,16 @@ function formatAccountOptionLabel(account: Pick<Accumul8Account, 'account_name' 
   const bankingName = formatInlineText(account.banking_organization_name, '');
   const maskLast4 = formatInlineText(account.mask_last4, '');
   return [primaryName, bankingName, maskLast4 ? `••••${maskLast4}` : ''].filter(Boolean).join(' • ');
+}
+
+function normalizeDebtorGroupKey(value: string | null | undefined): string {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function isIouAccount(account: Pick<Accumul8Account, 'account_type' | 'account_name'>): boolean {
+  const accountType = String(account.account_type || '').trim().toLowerCase();
+  const accountName = String(account.account_name || '').trim().toLowerCase();
+  return accountType.includes('iou') || /\biou\b/.test(accountName);
 }
 
 function getActiveFilterClass(baseClassName: string, isActive: boolean): string {
@@ -1744,8 +1759,71 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
   }, []);
   const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
+  const groupedDebtors = React.useMemo<Accumul8DebtorGroupRow[]>(() => {
+    const grouped = new Map<string, Accumul8DebtorGroupRow>();
+    debtors.forEach((debtor) => {
+      const normalizedName = normalizeDebtorGroupKey(debtor.debtor_name);
+      const groupKey = normalizedName || `debtor:${debtor.id}`;
+      const existing = grouped.get(groupKey);
+      if (!existing) {
+        grouped.set(groupKey, {
+          ...debtor,
+          group_key: groupKey,
+          member_ids: [debtor.id],
+          has_duplicate_members: false,
+        });
+        return;
+      }
+
+      existing.total_loaned = roundCurrency(Number(existing.total_loaned || 0) + Number(debtor.total_loaned || 0));
+      existing.total_repaid = roundCurrency(Number(existing.total_repaid || 0) + Number(debtor.total_repaid || 0));
+      existing.outstanding_balance = roundCurrency(Number(existing.outstanding_balance || 0) + Number(debtor.outstanding_balance || 0));
+      existing.transaction_count = Number(existing.transaction_count || 0) + Number(debtor.transaction_count || 0);
+      existing.last_activity_date = [existing.last_activity_date, debtor.last_activity_date].filter(Boolean).sort().at(-1) || '';
+      existing.notes = existing.notes || debtor.notes;
+      existing.contact_name = existing.contact_name || debtor.contact_name;
+      existing.entity_name = existing.entity_name || debtor.entity_name;
+      existing.entity_id = existing.entity_id ?? debtor.entity_id;
+      existing.contact_id = existing.contact_id ?? debtor.contact_id;
+      existing.is_active = Number(existing.is_active || 0) === 1 || Number(debtor.is_active || 0) === 1 ? 1 : 0;
+      existing.member_ids.push(debtor.id);
+      existing.has_duplicate_members = existing.member_ids.length > 1;
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => (
+      a.debtor_name.localeCompare(b.debtor_name, undefined, { sensitivity: 'base' }) || a.id - b.id
+    ));
+  }, [debtors]);
+  const debtorGroupKeyByDebtorId = React.useMemo(() => {
+    const next = new Map<number, string>();
+    groupedDebtors.forEach((debtor) => {
+      debtor.member_ids.forEach((memberId) => {
+        next.set(memberId, debtor.group_key);
+      });
+    });
+    return next;
+  }, [groupedDebtors]);
+  const debtorRunningBalanceByTxId = React.useMemo(() => {
+    const runningByGroupKey = new Map<string, number>();
+    const next = new Map<number, number>();
+    const chronologicalRows = [...debtorLedger].sort((a, b) => (
+      String(a.transaction_date || '').localeCompare(String(b.transaction_date || ''))
+      || a.id - b.id
+    ));
+
+    chronologicalRows.forEach((tx) => {
+      const debtorId = Number(tx.debtor_id || 0);
+      const fallbackKey = debtorId > 0 ? `debtor:${debtorId}` : normalizeDebtorGroupKey(tx.debtor_name);
+      const groupKey = debtorGroupKeyByDebtorId.get(debtorId) || fallbackKey || `tx:${tx.id}`;
+      const runningBalance = roundCurrency((runningByGroupKey.get(groupKey) || 0) + Number(tx.amount || 0));
+      runningByGroupKey.set(groupKey, runningBalance);
+      next.set(tx.id, runningBalance);
+    });
+
+    return next;
+  }, [debtorGroupKeyByDebtorId, debtorLedger]);
   const debtorRows = React.useMemo(() => (
-    debtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
+    groupedDebtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
       debtor.debtor_name,
       debtor.notes,
       debtor.last_activity_date,
@@ -1754,7 +1832,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       debtor.outstanding_balance,
       Number(debtor.is_active || 0) === 1 ? 'active' : 'paused',
     ]))
-  ), [debtors, debtorsSearchQuery]);
+  ), [debtorsSearchQuery, groupedDebtors]);
   const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
     { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
@@ -1767,7 +1845,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
     { key: 'actions', header: 'Actions', minWidth: 122, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName, ledgerDisplayBalanceById]);
-  const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Debtor>>>(() => ([
+  const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8DebtorGroupRow>>>(() => ([
     { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
     { key: 'charges', header: 'Charges', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_loaned || 0), contentAccessor: (debtor) => Number(debtor.total_loaned || 0).toFixed(2) },
     { key: 'credits', header: 'Credits', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_repaid || 0), contentAccessor: (debtor) => Number(debtor.total_repaid || 0).toFixed(2) },
@@ -2831,6 +2909,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const balanceEntities = React.useMemo(() => (
     entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1)
   ), [entitiesSorted]);
+  const iouVisibleAccounts = React.useMemo(() => (
+    visibleAccounts.filter((account) => isIouAccount(account))
+  ), [visibleAccounts]);
   const ledgerRowsForBudgetMonth = React.useMemo(() => (
     filteredTransactions.filter((tx) => String(tx.transaction_date || '').slice(0, 7) === budgetMonth)
   ), [budgetMonth, filteredTransactions]);
@@ -2871,12 +2952,16 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1)
   ), [filteredRecurringPayments]);
   const selectedDebtorEntries = React.useMemo(() => {
-    const debtorId = Number(selectedDebtorId || 0);
-    if (debtorId <= 0) {
+    if (!selectedDebtorId) {
       return debtorLedger;
     }
-    return debtorLedger.filter((tx) => Number(tx.debtor_id || 0) === debtorId);
-  }, [debtorLedger, selectedDebtorId]);
+    const selectedDebtor = groupedDebtors.find((debtor) => debtor.group_key === selectedDebtorId) || null;
+    if (!selectedDebtor) {
+      return debtorLedger;
+    }
+    const memberIds = new Set(selectedDebtor.member_ids);
+    return debtorLedger.filter((tx) => memberIds.has(Number(tx.debtor_id || 0)));
+  }, [debtorLedger, groupedDebtors, selectedDebtorId]);
   const entitiesTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Entity>>>(() => ([
     {
       key: 'name',
@@ -2922,9 +3007,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     { key: 'description', header: 'Description', minWidth: 220, maxAutoWidth: 520, priority: 5, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
     { key: 'memo', header: 'Memo', minWidth: 148, maxAutoWidth: 340, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
     { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'running', header: 'Running IOU', minWidth: 166, maxAutoWidth: 196, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.running_balance || 0), contentAccessor: (tx) => Number(tx.running_balance || 0).toFixed(2) },
+    { key: 'running', header: 'Running IOU', minWidth: 166, maxAutoWidth: 196, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(debtorRunningBalanceByTxId.get(tx.id) || 0), contentAccessor: (tx) => Number(debtorRunningBalanceByTxId.get(tx.id) || 0).toFixed(2) },
     { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), []);
+  ]), [debtorRunningBalanceByTxId]);
   const entitiesTable = usePriorityTableLayout({
     tableRef: entitiesTableRef,
     rows: entityRows,
@@ -3883,28 +3968,28 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                     {debtorsTable.rows.map((debtor) => (
                       <tr ref={(node) => setInlineRowRef(`debtor-${debtor.id}`, node)} key={debtor.id} className={['accumul8-list-item', activeDebtorRowId === debtor.id ? 'is-editing' : '', debtorDraftById[debtor.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
                         <td>
-                          {activeDebtorRowId === debtor.id ? (
+                          {activeDebtorRowId === debtor.id && !debtor.has_duplicate_members ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={debtorDraftById[debtor.id]?.debtor_name ?? debtor.debtor_name} onChange={(e) => setDebtorRowDraft(debtor, { debtor_name: e.target.value })} disabled={busy} />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateDebtorRow(debtor.id)} disabled={busy}>{formatInlineText(debtor.debtor_name, '-')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => { if (!debtor.has_duplicate_members) { activateDebtorRow(debtor.id); } }} disabled={busy || debtor.has_duplicate_members} title={debtor.has_duplicate_members ? 'Grouped duplicate people are shown together here to avoid duplicate IOU rows.' : undefined}>{formatInlineText(debtor.debtor_name, '-')}</button>
                           )}
                         </td>
                         <td className="text-end">{Number(debtor.total_loaned || 0).toFixed(2)}</td>
                         <td className="text-end">{Number(debtor.total_repaid || 0).toFixed(2)}</td>
                         <td className="text-end">{Number(debtor.outstanding_balance || 0).toFixed(2)}</td>
                         <td>
-                          {activeDebtorRowId === debtor.id ? (
+                          {activeDebtorRowId === debtor.id && !debtor.has_duplicate_members ? (
                             <input className="form-control form-control-sm accumul8-month-table-input" value={debtorDraftById[debtor.id]?.notes ?? debtor.notes ?? ''} onChange={(e) => setDebtorRowDraft(debtor, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
                           ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateDebtorRow(debtor.id)} disabled={busy}>{formatInlineText(debtor.last_activity_date, '-')}</button>
+                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => { if (!debtor.has_duplicate_members) { activateDebtorRow(debtor.id); } }} disabled={busy || debtor.has_duplicate_members} title={debtor.has_duplicate_members ? 'Grouped duplicate people are shown together here to avoid duplicate IOU rows.' : undefined}>{formatInlineText(debtor.last_activity_date, '-')}</button>
                           )}
                         </td>
                         <td className="text-end is-compact-actions">
                           <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => setSelectedDebtorId(String(debtor.id))} disabled={busy} aria-label={`View ledger for ${debtor.debtor_name}`} title={`View ledger for ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateDebtorRow(debtor.id)} disabled={busy} aria-label={`Edit ${debtor.debtor_name}`} title={`Edit ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this debtor? Linked ledger rows will remain but be unassigned.')) { void deleteDebtor(debtor.id); if (selectedDebtorId === String(debtor.id)) setSelectedDebtorId(''); } }} disabled={busy} aria-label={`Delete ${debtor.debtor_name}`}><i className="bi bi-trash"></i></button>
-                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `debtor-${debtor.id}` ? ' is-flashing' : ''}`} onClick={() => void saveDebtorRow(debtor)} disabled={busy || !debtorDraftById[debtor.id]} aria-label={`Save ${debtor.debtor_name}`} title={debtorDraftById[debtor.id] ? `Save ${debtor.debtor_name}` : `No changes to save for ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => setSelectedDebtorId(debtor.group_key)} disabled={busy} aria-label={`View ledger for ${debtor.debtor_name}`} title={`View ledger for ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateDebtorRow(debtor.id)} disabled={busy || debtor.has_duplicate_members} aria-label={`Edit ${debtor.debtor_name}`} title={debtor.has_duplicate_members ? 'Edit duplicate debtor records individually before changing the grouped row.' : `Edit ${debtor.debtor_name}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this debtor? Linked ledger rows will remain but be unassigned.')) { void deleteDebtor(debtor.id); if (selectedDebtorId === debtor.group_key) setSelectedDebtorId(''); } }} disabled={busy || debtor.has_duplicate_members} aria-label={`Delete ${debtor.debtor_name}`} title={debtor.has_duplicate_members ? 'Grouped duplicate debtors are hidden together here and cannot be deleted from the merged row.' : undefined}><i className="bi bi-trash"></i></button>
+                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `debtor-${debtor.id}` ? ' is-flashing' : ''}`} onClick={() => void saveDebtorRow(debtor)} disabled={busy || debtor.has_duplicate_members || !debtorDraftById[debtor.id]} aria-label={`Save ${debtor.debtor_name}`} title={debtor.has_duplicate_members ? 'Grouped duplicate debtors are read-only from the merged row.' : (debtorDraftById[debtor.id] ? `Save ${debtor.debtor_name}` : `No changes to save for ${debtor.debtor_name}`)}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                           </div>
                         </td>
                       </tr>
@@ -3923,13 +4008,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                   <div className="d-flex gap-2 accumul8-iou-ledger-controls">
                     <select className="form-select form-select-sm accumul8-iou-ledger-controls__select" value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)}>
                       <option value="">All People</option>
-                      {debtors.map((debtor) => <option key={debtor.id} value={debtor.id}>{debtor.debtor_name}</option>)}
+                      {groupedDebtors.map((debtor) => <option key={debtor.group_key} value={debtor.group_key}>{debtor.debtor_name}</option>)}
                     </select>
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-primary accumul8-iou-ledger-controls__button"
                       onClick={() => {
-                        const selectedDebtor = debtors.find((debtor) => String(debtor.id) === selectedDebtorId) || null;
+                        const selectedDebtor = groupedDebtors.find((debtor) => debtor.group_key === selectedDebtorId) || null;
                         openCreateIouTransactionModal({ debtorId: selectedDebtor?.id ? String(selectedDebtor.id) : '' });
                       }}
                       disabled={busy}
@@ -3979,7 +4064,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                           <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineText(tx.description, '-')}</button></td>
                           <td><button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button></td>
                           <td className="text-end"><button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => beginViewTransaction(tx.id)} disabled={busy}>{Number(tx.amount || 0).toFixed(2)}</button></td>
-                          <td className="text-end">{Number(tx.running_balance || 0).toFixed(2)}</td>
+                          <td className="text-end">{Number(debtorRunningBalanceByTxId.get(tx.id) || 0).toFixed(2)}</td>
                           <td className="text-end is-compact-actions">
                             {(() => {
                               const statementLink = resolveAccumul8StatementLink(tx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
@@ -5176,8 +5261,8 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
                 ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
                 : null}
             entities={entitiesSorted}
-            debtors={debtors}
-            accounts={visibleAccounts}
+            debtors={groupedDebtors}
+            accounts={transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts}
             statementUploads={statementUploads}
             ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
             onClose={closeTransactionModal}

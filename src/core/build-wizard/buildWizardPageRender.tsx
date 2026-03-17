@@ -1940,7 +1940,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     const endDate = projectEnd || timelineEnd;
     const endCountdownDays = endDate ? Math.round((endDate.getTime() - parseDate(todayIso)!.getTime()) / 86400000) : null;
 
-    const nextStep = steps
+    const nextStepBase = steps
       .filter((s) => Number(s.is_completed) !== 1)
       .map((s) => ({ step: s, start: parseDate(s.expected_start_date), end: parseDate(s.expected_end_date) }))
       .filter((r) => r.start || r.end)
@@ -1949,6 +1949,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         const bStart = (b.start || b.end)!.getTime();
         return aStart - bStart;
       })[0] || null;
+    const nextStep = nextStepBase
+      ? (() => {
+          const phaseTabId = stepPhaseBucket(nextStepBase.step);
+          const phaseLabel = BUILD_TABS.find((tab) => tab.id === phaseTabId)?.label || tabLabelShort(phaseTabId);
+          const phaseStepNumber = steps
+            .filter((step) => stepPhaseBucket(step) === phaseTabId)
+            .sort((a, b) => Number(a.step_order) - Number(b.step_order))
+            .findIndex((step) => step.id === nextStepBase.step.id) + 1;
+          return {
+            ...nextStepBase,
+            phaseLabel,
+            phaseStepNumber: phaseStepNumber > 0 ? phaseStepNumber : null,
+          };
+        })()
+      : null;
 
     const spentActual = steps.reduce((sum, s) => sum + getStepActualExcludingQuotes(s), 0);
     const projectedTotal = steps.reduce((sum, s) => {
@@ -1977,7 +1992,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       missingEstimateCount,
       missingTimelineCount,
     };
-  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, project?.target_completion_date, project?.target_start_date, steps]);
+  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, project?.target_completion_date, project?.target_start_date, stepPhaseBucket, steps]);
 
   const projectDocuments = React.useMemo(() => {
     return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
@@ -6365,7 +6380,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               <div className="build-wizard-overview-metric">
                 <div className="build-wizard-overview-label">Next Looming Step</div>
                 <div className="build-wizard-overview-value">
-                  {overviewMetrics.nextStep ? `#${overviewMetrics.nextStep.step.step_order} ${overviewMetrics.nextStep.step.title}` : 'No upcoming step dates'}
+                  {overviewMetrics.nextStep
+                    ? `${overviewMetrics.nextStep.phaseLabel}${overviewMetrics.nextStep.phaseStepNumber ? `, Step ${overviewMetrics.nextStep.phaseStepNumber}` : ''}: ${overviewMetrics.nextStep.step.title}`
+                    : 'No upcoming step dates'}
                 </div>
                 <div className="build-wizard-overview-sub">
                   {overviewMetrics.nextStep

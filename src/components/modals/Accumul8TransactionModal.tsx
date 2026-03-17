@@ -33,6 +33,8 @@ interface Accumul8TransactionModalFormState {
   debtor_id: string;
 }
 
+type Accumul8IouDirection = 'charge' | 'credit';
+
 interface Accumul8TransactionModalProps {
   open: boolean;
   busy: boolean;
@@ -68,6 +70,7 @@ export function Accumul8TransactionModal({
 }: Accumul8TransactionModalProps) {
   const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [form, setForm] = React.useState<Accumul8TransactionModalFormState>(initialForm);
+  const [iouDirection, setIouDirection] = React.useState<Accumul8IouDirection>(initialForm.amount < 0 ? 'credit' : 'charge');
   const isReadOnly = mode === 'view';
   const isEditing = mode === 'edit';
   const isIouVariant = variant === 'iou';
@@ -76,6 +79,13 @@ export function Accumul8TransactionModal({
     [ownerUserId, statementUploads, transaction],
   );
   const editPolicy = React.useMemo(() => getAccumul8TransactionEditPolicy(transaction), [transaction]);
+  const signedAmount = React.useMemo(() => {
+    const normalizedAmount = Math.abs(Number(form.amount || 0));
+    if (!isIouVariant) {
+      return Number(form.amount || 0);
+    }
+    return iouDirection === 'credit' ? -normalizedAmount : normalizedAmount;
+  }, [form.amount, iouDirection, isIouVariant]);
   const buildPayload = React.useCallback((): Accumul8TransactionUpsertRequest => ({
     transaction_date: String(form.transaction_date || ''),
     due_date: String(form.due_date || ''),
@@ -83,7 +93,7 @@ export function Accumul8TransactionModal({
     entry_type: (form.entry_type || 'manual') as Accumul8EntryType,
     description: String(form.description || '').trim(),
     memo: String(form.memo || '').trim(),
-    amount: Number(form.amount || 0),
+    amount: signedAmount,
     rta_amount: isIouVariant ? 0 : Number(form.rta_amount || 0),
     is_paid: isIouVariant ? 0 : Number(form.is_paid || 0),
     is_reconciled: isIouVariant ? 0 : Number(form.is_reconciled || 0),
@@ -92,7 +102,7 @@ export function Accumul8TransactionModal({
     account_id: form.account_id ? Number(form.account_id) : null,
     balance_entity_id: isIouVariant ? null : (form.balance_entity_id ? Number(form.balance_entity_id) : null),
     debtor_id: isIouVariant ? (form.debtor_id ? Number(form.debtor_id) : null) : undefined,
-  }), [form, isIouVariant]);
+  }), [form, isIouVariant, signedAmount]);
   const isDirty = React.useMemo(
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       transaction_date: String(initialForm.transaction_date || ''),
@@ -120,8 +130,12 @@ export function Accumul8TransactionModal({
   }, [buildPayload, busy, form.debtor_id, form.description, form.transaction_date, isDirty, isIouVariant, isReadOnly, onSave]);
 
   React.useEffect(() => {
-    setForm(initialForm);
-  }, [initialForm]);
+    setForm({
+      ...initialForm,
+      amount: isIouVariant ? Math.abs(Number(initialForm.amount || 0)) : Number(initialForm.amount || 0),
+    });
+    setIouDirection(Number(initialForm.amount || 0) < 0 ? 'credit' : 'charge');
+  }, [initialForm, isIouVariant]);
 
   React.useEffect(() => {
     const modal = modalApiRef.current;
@@ -245,6 +259,21 @@ export function Accumul8TransactionModal({
                   </select>
                 </div>
               ) : null}
+              {isIouVariant ? (
+                <div className="col-md-4">
+                  <label className="form-label" htmlFor="accumul8-transaction-iou-direction">Direction</label>
+                  <select
+                    id="accumul8-transaction-iou-direction"
+                    className="form-select"
+                    value={iouDirection}
+                    onChange={(e) => setIouDirection(e.target.value as Accumul8IouDirection)}
+                    disabled={busy || isReadOnly || !editPolicy.canEditCoreFields}
+                  >
+                    <option value="charge">Charge (increase IOU)</option>
+                    <option value="credit">Credit / Payment (decrease IOU)</option>
+                  </select>
+                </div>
+              ) : null}
               {!isIouVariant ? (
                 <div className="col-md-4">
                   <label className="form-label" htmlFor="accumul8-transaction-paid-date">Paid Date</label>
@@ -277,10 +306,15 @@ export function Accumul8TransactionModal({
                   type="number"
                   step="0.01"
                   value={form.amount}
-                  onChange={(e) => setForm((prev) => ({ ...prev, amount: Number(e.target.value) }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: isIouVariant ? Math.abs(Number(e.target.value)) : Number(e.target.value) }))}
                   required
                   disabled={busy || isReadOnly || !editPolicy.canEditCoreFields}
                 />
+                {isIouVariant ? (
+                  <div className="form-text">
+                    {iouDirection === 'credit' ? 'Credits and payments are saved as negative amounts.' : 'Charges are saved as positive amounts.'}
+                  </div>
+                ) : null}
               </div>
               {!isIouVariant ? (
                 <div className="col-md-4">

@@ -14,8 +14,6 @@ import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { PriorityTableColumn, usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
 import { ApiClient } from '../../core/ApiClient';
-import { openTellerConnect } from '../../core/tellerConnect';
-import { isWatchedTellerInstitution, logTellerDiagnostic } from '../../core/tellerDiagnostics';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
@@ -79,16 +77,12 @@ import {
   formatSyncStatusMessage,
   formatSyncSummaryAccountLabel,
   formatSyncSummaryBackfillNote,
-  formatTellerConnectError,
-  isTellerEligibilityFailure,
   isTellerRateLimited,
 } from './accumul8/accumul8PageRecurringSyncUtils';
 import {
   Accumul8AIcountantHousekeepingResponse,
   Accumul8AIcountantWatchlistResponse,
   Accumul8BalanceBooksResponse,
-  Accumul8TellerConnectTokenResponse,
-  Accumul8TellerEnrollmentResponse,
   Accumul8TellerSyncResponse,
   Accumul8TellerSyncAccountSummary,
   Accumul8Account,
@@ -112,7 +106,10 @@ import {
 } from '../../types/accumul8';
 import { Accumul8PageHeader } from './accumul8/Accumul8PageHeader';
 import { useAccumul8EntityEndexActions } from './accumul8/useAccumul8EntityEndexActions';
+import { useAccumul8ModalEditorActions } from './accumul8/useAccumul8ModalEditorActions';
+import { useAccumul8ModalResetActions } from './accumul8/useAccumul8ModalResetActions';
 import { DebtorInlineDraft, EntityInlineDraft, RecurringInlineDraft, useAccumul8InlineRowActions } from './accumul8/useAccumul8InlineRowActions';
+import { useAccumul8SyncActions } from './accumul8/useAccumul8SyncActions';
 import { Accumul8PageModalAssembly } from './accumul8/Accumul8PageModalAssembly';
 import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
 import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
@@ -1302,23 +1299,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
     return next;
   }, [accounts]);
-  const runConnectionSync = React.useCallback(async (connectionId: number, institutionName: string) => {
-    setSyncingConnectionId(connectionId);
-    try {
-      const result = await syncBankConnection(connectionId);
-      if (!result || !result.success) {
-        return;
-      }
-      setLastSyncReport({
-        connectionId,
-        institutionName,
-        syncedAt: new Date().toISOString(),
-        result,
-      });
-    } finally {
-      setSyncingConnectionId((current) => (current === connectionId ? null : current));
-    }
-  }, [syncBankConnection]);
   const renderDateRangeControls = React.useCallback((
     prefix: 'ledger' | 'pay-bills',
     filter: DateRangeFilter,
@@ -1373,47 +1353,51 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       )}
     </div>
   ), []);
-  const openSyncHelp = React.useCallback((opts?: { token?: string; error?: string }) => {
-    setSyncHelpToken(String(opts?.token || ''));
-    setSyncHelpError(String(opts?.error || ''));
-    setSyncHelpOpen(true);
-  }, []);
-  const openStatementImportFallback = React.useCallback(() => {
-    setSyncHelpOpen(false);
-    setTab('statements');
-  }, []);
-  const resetContactForm = React.useCallback(() => {
-    setEditingContactId(null);
-    setContactForm(DEFAULT_CONTACT_FORM);
-  }, []);
-  const resetEntityForm = React.useCallback(() => {
-    setEditingEntityId(null);
-    setEntityForm(DEFAULT_ENTITY_FORM);
-  }, []);
-  const resetDebtorForm = React.useCallback(() => {
-    setEditingDebtorId(null);
-    setDebtorForm(createDefaultDebtorForm());
-  }, []);
-  const resetRecurringEditor = React.useCallback(() => {
-    setEditingRecurringId(null);
-    setEditingRecurringForm(DEFAULT_RECURRING_FORM);
-    setRecurringModalOpen(false);
-  }, []);
-  const resetLedgerForm = React.useCallback(() => {
-    setEditingTransactionId(null);
-    setViewingTransactionId(null);
-    setTransactionModalMode('create');
-    setTransactionModalVariant('ledger');
-    setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId }));
-  }, [selectedBankAccountId]);
-  const resetBudgetForm = React.useCallback(() => {
-    setEditingBudgetRowId(null);
-    setBudgetForm({ category_name: '', monthly_budget: 0, match_pattern: '', row_order: 0, is_active: 1 });
-  }, []);
-  const resetNotificationForm = React.useCallback(() => {
-    setEditingNotificationRuleId(null);
-    setNotificationForm({ rule_name: '', trigger_type: 'upcoming_due', days_before_due: 3, target_scope: 'group', custom_user_ids: '', email_subject_template: '', email_body_template: '' });
-  }, []);
+  const { openStatementImportFallback, openSyncHelp, runConnectionSync, runTellerConnect } = useAccumul8SyncActions({
+    load,
+    onToast,
+    scopedActionUrl,
+    setLastSyncReport,
+    setSyncHelpError,
+    setSyncHelpOpen,
+    setSyncHelpToken,
+    setSyncingConnectionId,
+    setTab,
+    syncBankConnection,
+    syncProvider,
+  });
+  const {
+    resetBudgetForm,
+    resetContactForm,
+    resetDebtorForm,
+    resetEntityForm,
+    resetLedgerForm,
+    resetNotificationForm,
+    resetRecurringEditor,
+  } = useAccumul8ModalResetActions({
+    DEFAULT_CONTACT_FORM,
+    DEFAULT_ENTITY_FORM,
+    DEFAULT_RECURRING_FORM,
+    selectedBankAccountId,
+    setBudgetForm,
+    setContactForm,
+    setDebtorForm,
+    setEditingBudgetRowId,
+    setEditingContactId,
+    setEditingDebtorId,
+    setEditingEntityId,
+    setEditingNotificationRuleId,
+    setEditingRecurringForm,
+    setEditingRecurringId,
+    setEditingTransactionId,
+    setEntityForm,
+    setLedgerForm,
+    setNotificationForm,
+    setRecurringModalOpen,
+    setTransactionModalMode,
+    setTransactionModalVariant,
+    setViewingTransactionId,
+  });
   const setInlineRowRef = React.useCallback((key: string, node: HTMLTableRowElement | null) => {
     if (node) {
       inlineRowRefs.current[key] = node;
@@ -1436,83 +1420,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const parseCustomUserIds = React.useCallback((raw: string): number[] => (
     raw.split(',').map((v) => Number(v.trim())).filter((n) => Number.isFinite(n) && n > 0)
   ), []);
-  const beginEditTransaction = React.useCallback((id: number) => {
-    const tx = transactions.find((v) => v.id === id);
-    if (!tx) return;
-    setEditingTransactionId(tx.id);
-    setViewingTransactionId(null);
-    setTransactionModalMode('edit');
-    setTransactionModalVariant(Number(tx.debtor_id || 0) > 0 ? 'iou' : 'ledger');
-    setLedgerForm(buildLedgerFormFromTransaction(tx));
-    setTransactionModalOpen(true);
-  }, [transactions]);
-  const beginViewTransaction = React.useCallback((id: number) => {
-    const tx = transactions.find((v) => v.id === id);
-    if (!tx) return;
-    setEditingTransactionId(null);
-    setViewingTransactionId(tx.id);
-    setTransactionModalMode('view');
-    setTransactionModalVariant(Number(tx.debtor_id || 0) > 0 ? 'iou' : 'ledger');
-    setLedgerForm(buildLedgerFormFromTransaction(tx));
-    setTransactionModalOpen(true);
-  }, [transactions]);
-  const beginEditContact = React.useCallback((id: number) => {
-    const contact = contacts.find((v) => v.id === id);
-    if (!contact) return;
-    setEditingContactId(contact.id);
-    setContactForm({
-      contact_name: contact.contact_name || '',
-      contact_type: ((String(contact.contact_type || '').trim().toLowerCase() === 'payer'
-        ? 'payer'
-        : String(contact.contact_type || '').trim().toLowerCase() === 'repayment'
-          ? 'repayment'
-          : 'payee') as Accumul8ContactType),
-      default_amount: Number(contact.default_amount || 0),
-      email: contact.email || '',
-      phone_number: contact.phone_number || '',
-      street_address: contact.street_address || '',
-      city: contact.city || '',
-      state: contact.state || '',
-      zip: contact.zip || '',
-      notes: contact.notes || '',
-    });
-    setContactModalOpen(true);
-  }, [contacts]);
-  const beginEditEntity = React.useCallback((id: number) => {
-    const entity = entities.find((v) => v.id === id);
-    if (!entity) return;
-    setEditingEntityId(entity.id);
-    setEntityAliasDraftById((prev) => ({
-      ...prev,
-      [entity.id]: DEFAULT_ENTITY_ALIAS_DRAFT,
-    }));
-    setEntityForm({
-      display_name: entity.display_name || '',
-      entity_kind: normalizeEntityKind(entity.entity_kind, entity.is_vendor),
-      contact_type: normalizeEntityContactType(entity),
-      is_vendor: normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business' ? 1 : 0,
-      default_amount: Number(entity.default_amount || 0),
-      email: entity.email || '',
-      phone_number: entity.phone_number || '',
-      street_address: entity.street_address || '',
-      city: entity.city || '',
-      state: entity.state || '',
-      zip: entity.zip || '',
-      notes: entity.notes || '',
-      is_active: Number(entity.is_active || 0),
-    });
-    setEntityModalOpen(true);
-  }, [entities]);
-  const openCreateEntityModal = React.useCallback((defaults?: Partial<EntityFormState>) => {
-    setEditingEntityId(null);
-    setEntityForm({ ...DEFAULT_ENTITY_FORM, ...defaults });
-    setEntityModalOpen(true);
-  }, []);
+  const closeContactModal = React.useCallback(() => {
+    setContactModalOpen(false);
+    resetContactForm();
+  }, [resetContactForm]);
+  const closeDebtorModal = React.useCallback(() => {
+    setDebtorModalOpen(false);
+    resetDebtorForm();
+  }, [resetDebtorForm]);
+  const closeTransactionModal = React.useCallback(() => {
+    setTransactionModalOpen(false);
+    setTransactionModalVariant('ledger');
+    resetLedgerForm();
+  }, [resetLedgerForm]);
   const closeEntityModal = React.useCallback(() => {
     setEntityAliasDraftById((prev) => {
-      if (editingEntityId === null || !prev[editingEntityId]) {
-        return prev;
-      }
+      if (editingEntityId === null || !prev[editingEntityId]) return prev;
       const next = { ...prev };
       delete next[editingEntityId];
       return next;
@@ -1520,51 +1443,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setEntityModalOpen(false);
     resetEntityForm();
   }, [editingEntityId, resetEntityForm]);
-  const openCreateContactModal = React.useCallback(() => {
-    resetContactForm();
-    setContactModalOpen(true);
-  }, [resetContactForm]);
-  const closeContactModal = React.useCallback(() => {
-    setContactModalOpen(false);
-    resetContactForm();
-  }, [resetContactForm]);
-  const openCreateDebtorModal = React.useCallback(() => {
-    setEditingDebtorId(null);
-    setDebtorForm(createDefaultDebtorForm());
-    setDebtorModalOpen(true);
-  }, []);
-  const closeDebtorModal = React.useCallback(() => {
-    setDebtorModalOpen(false);
-    resetDebtorForm();
-  }, [resetDebtorForm]);
-  const openCreateTransactionModal = React.useCallback((defaults?: { balanceEntityId?: string }) => {
-    setEditingTransactionId(null);
-    setViewingTransactionId(null);
-    setTransactionModalMode('create');
-    setTransactionModalVariant('ledger');
-    setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, balanceEntityId: defaults?.balanceEntityId || '' }));
-    setTransactionModalOpen(true);
-  }, [selectedBankAccountId]);
-  const openCreateIouTransactionModal = React.useCallback((defaults?: { debtorId?: string }) => {
-    setEditingTransactionId(null);
-    setViewingTransactionId(null);
-    setTransactionModalMode('create');
-    setTransactionModalVariant('iou');
-    setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, debtorId: defaults?.debtorId || '' }));
-    setTransactionModalOpen(true);
-  }, [selectedBankAccountId]);
-  const closeTransactionModal = React.useCallback(() => {
-    setTransactionModalOpen(false);
-    setTransactionModalVariant('ledger');
-    resetLedgerForm();
-  }, [resetLedgerForm]);
-  const openLedgerEntityModal = React.useCallback((transactionId: number) => {
-    const transaction = transactions.find((row) => row.id === transactionId) || null;
-    if (!transaction || Number(transaction.debtor_id || 0) > 0) {
-      return;
-    }
-    setLedgerEntityModalTransactionId(transaction.id);
-  }, [transactions]);
   const closeLedgerEntityModal = React.useCallback(() => {
     setLedgerEntityModalTransactionId(null);
   }, []);
@@ -1611,43 +1489,84 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return next;
     });
   }, [collectEntityAliasNames, createEntityAlias]);
-  const submitContactForm = React.useCallback(async (form: typeof DEFAULT_CONTACT_FORM) => {
-    const payload = { ...form, default_amount: Number(form.default_amount) };
-    if (editingContactId) {
-      await updateContact(editingContactId, payload);
-    } else {
-      await createContact(payload);
-    }
-    closeContactModal();
-  }, [closeContactModal, createContact, editingContactId, updateContact]);
-  const submitEntityForm = React.useCallback(async (form: Accumul8EntityUpsertRequest) => {
-    const payload = {
-      display_name: form.display_name,
-      entity_kind: form.entity_kind || 'business',
-      contact_type: form.contact_type,
-      is_payee: form.contact_type === 'payee' ? 1 : 0,
-      is_payer: form.contact_type === 'payer' ? 1 : 0,
-      is_vendor: (form.entity_kind || 'business') === 'business' ? 1 : 0,
-      is_balance_person: form.contact_type === 'repayment' ? 1 : 0,
-      default_amount: Number(form.default_amount || 0),
-      email: form.email || '',
-      phone_number: form.phone_number || '',
-      street_address: form.street_address || '',
-      city: form.city || '',
-      state: form.state || '',
-      zip: form.zip || '',
-      notes: form.notes || '',
-      is_active: Number(form.is_active ?? 1),
-    };
-    if (editingEntityId) {
-      const aliasNames = collectEntityAliasNames(editingEntityId, payload.display_name);
-      await updateEntity(editingEntityId, payload);
-      await persistEntityAliases(editingEntityId, payload.display_name, aliasNames);
-    } else {
-      await createEntity(payload);
-    }
-    closeEntityModal();
-  }, [closeEntityModal, collectEntityAliasNames, createEntity, editingEntityId, persistEntityAliases, updateEntity]);
+  const {
+    beginEditBudgetRow,
+    beginEditContact,
+    beginEditEntity,
+    beginEditNotificationRule,
+    beginEditRecurring,
+    beginEditTransaction,
+    beginViewTransaction,
+    openCreateContactModal,
+    openCreateDebtorModal,
+    openCreateEntityModal,
+    openCreateIouTransactionModal,
+    openCreateRecurringModal,
+    openCreateTransactionModal,
+    openLedgerEntityModal,
+    submitContactForm,
+    submitDebtorModal,
+    submitEntityForm,
+    submitRecurringModal,
+    submitTransactionModal,
+  } = useAccumul8ModalEditorActions({
+    closeContactModal,
+    closeDebtorModal,
+    closeEntityModal,
+    closeRecurringModal: React.useCallback(() => { resetRecurringEditor(); }, [resetRecurringEditor]),
+    closeTransactionModal,
+    collectEntityAliasNames,
+    contacts,
+    createContact,
+    createDebtor,
+    createEntity,
+    createRecurring,
+    createTransaction,
+    DEFAULT_CONTACT_FORM,
+    DEFAULT_ENTITY_ALIAS_DRAFT,
+    DEFAULT_ENTITY_FORM,
+    DEFAULT_RECURRING_FORM,
+    editingContactId,
+    editingDebtorId,
+    editingEntityId,
+    editingRecurringId,
+    editingTransactionId,
+    entities,
+    notificationRules,
+    persistEntityAliases,
+    recurringPayments,
+    selectedBankAccountId,
+    setBudgetForm,
+    setContactForm,
+    setContactModalOpen,
+    setDebtorForm,
+    setDebtorModalOpen,
+    setEditingBudgetRowId,
+    setEditingContactId,
+    setEditingDebtorId,
+    setEditingEntityId,
+    setEditingNotificationRuleId,
+    setEditingRecurringForm,
+    setEditingRecurringId,
+    setEditingTransactionId,
+    setEntityAliasDraftById,
+    setEntityForm,
+    setEntityModalOpen,
+    setLedgerEntityModalTransactionId,
+    setLedgerForm,
+    setNotificationForm,
+    setRecurringModalOpen,
+    setTransactionModalMode,
+    setTransactionModalOpen,
+    setTransactionModalVariant,
+    setViewingTransactionId,
+    transactions,
+    updateContact,
+    updateDebtor,
+    updateEntity,
+    updateRecurring,
+    updateTransaction,
+  });
   const saveLedgerEntityRule = React.useCallback(async (payload: { mode: 'existing' | 'new'; entityId: number | null; newEntityName: string }) => {
     const transaction = transactions.find((row) => row.id === ledgerEntityModalTransactionId) || null;
     if (!transaction) {
@@ -1820,245 +1739,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     onToast,
     transactions,
   ]);
-  const beginEditRecurring = React.useCallback((id: number) => {
-    const recurring = recurringPayments.find((v) => v.id === id);
-    if (!recurring) return;
-    setEditingRecurringId(recurring.id);
-    setEditingRecurringForm({
-      title: recurring.title || '',
-      direction: (recurring.direction || 'outflow') as Accumul8Direction,
-      amount: Number(recurring.amount || 0),
-      frequency: (recurring.frequency || 'monthly') as Accumul8Frequency,
-      payment_method: (recurring.payment_method || 'unspecified') as Accumul8PaymentMethod,
-      interval_count: Number(recurring.interval_count || 1),
-      next_due_date: recurring.next_due_date || '',
-      entity_id: recurring.entity_id ? String(recurring.entity_id) : '',
-      account_id: recurring.account_id ? String(recurring.account_id) : '',
-      is_budget_planner: Number(recurring.is_budget_planner || 0),
-      notes: recurring.notes || '',
-    });
-    setRecurringModalOpen(true);
-  }, [recurringPayments]);
-  const openCreateRecurringModal = React.useCallback(() => {
-    setEditingRecurringId(null);
-    setEditingRecurringForm(DEFAULT_RECURRING_FORM);
-    setRecurringModalOpen(true);
-  }, []);
   const closeRecurringModal = React.useCallback(() => {
     resetRecurringEditor();
   }, [resetRecurringEditor]);
-  const submitDebtorModal = React.useCallback(async (form: { debtor_name: string; notes?: string; is_active?: number }) => {
-    if (editingDebtorId) {
-      await updateDebtor(editingDebtorId, form);
-    } else {
-      await createDebtor(form);
-    }
-    closeDebtorModal();
-  }, [closeDebtorModal, createDebtor, editingDebtorId, updateDebtor]);
-  const submitTransactionModal = React.useCallback(async (form: {
-    transaction_date: string;
-    due_date?: string;
-    paid_date?: string;
-    entry_type: Accumul8EntryType;
-    description: string;
-    memo?: string;
-    amount: number;
-    rta_amount: number;
-    is_paid: number;
-    is_reconciled: number;
-    is_budget_planner: number;
-    entity_id?: number | null;
-    account_id?: number | null;
-    balance_entity_id?: number | null;
-    debtor_id?: number | null;
-  }) => {
-    if (editingTransactionId) {
-      await updateTransaction(editingTransactionId, form);
-    } else {
-      await createTransaction(form);
-    }
-    closeTransactionModal();
-  }, [closeTransactionModal, createTransaction, editingTransactionId, updateTransaction]);
-  const submitRecurringModal = React.useCallback(async (form: ReturnType<typeof buildRecurringPayload>) => {
-    if (editingRecurringId) {
-      await updateRecurring(editingRecurringId, form);
-    } else {
-      await createRecurring(form);
-    }
-    closeRecurringModal();
-  }, [closeRecurringModal, createRecurring, editingRecurringId, updateRecurring]);
-  const beginEditBudgetRow = React.useCallback((id: number) => {
-    const row = budgetRows.find((v) => v.id === id);
-    if (!row) return;
-    setEditingBudgetRowId(row.id);
-    setBudgetForm({
-      category_name: row.category_name || '',
-      monthly_budget: Number(row.monthly_budget || 0),
-      match_pattern: row.match_pattern || '',
-      row_order: Number(row.row_order || 0),
-      is_active: Number(row.is_active || 0),
-    });
-  }, [budgetRows]);
-  const beginEditNotificationRule = React.useCallback((id: number) => {
-    const rule = notificationRules.find((v) => v.id === id);
-    if (!rule) return;
-    setEditingNotificationRuleId(rule.id);
-    setNotificationForm({
-      rule_name: rule.rule_name || '',
-      trigger_type: rule.trigger_type || 'upcoming_due',
-      days_before_due: Number(rule.days_before_due || 0),
-      target_scope: rule.target_scope === 'custom' ? 'custom' : 'group',
-      custom_user_ids: Array.isArray(rule.custom_user_ids) ? rule.custom_user_ids.join(',') : '',
-      email_subject_template: rule.email_subject_template || '',
-      email_body_template: rule.email_body_template || '',
-    });
-  }, [notificationRules]);
-  const runTellerConnect = React.useCallback(async () => {
-    if (!onToast) return;
-    if (!syncProvider.configured) {
-      onToast({ tone: 'error', message: 'Teller is not configured. Save credentials in Settings first.' });
-      return;
-    }
-
-    let connectedInstitutionName = '';
-    let connectedInstitutionId = '';
-    let connectedEnrollmentId = '';
-    try {
-      const tokenRes = await ApiClient.post<Accumul8TellerConnectTokenResponse>(scopedActionUrl('teller_connect_token'), {});
-      const applicationId = String(tokenRes?.application_id || '');
-      const environment = String(tokenRes?.environment || syncProvider.env || 'sandbox') as 'sandbox' | 'development' | 'production';
-      if (!applicationId) {
-        throw new Error('No Teller application id returned');
-      }
-
-      void logTellerDiagnostic({
-        source: 'accumul8-sync-page',
-        event_name: 'open_requested',
-        message: 'Teller Connect requested from Accumul8 sync page',
-        meta: {
-          environment,
-          application_id_prefix: applicationId.slice(0, 12),
-          select_account: 'disabled',
-        },
-      });
-
-      setSyncHelpError('');
-      setSyncHelpToken(applicationId);
-
-      const linkResult = await openTellerConnect(applicationId, environment, {
-        selectAccount: 'disabled',
-        onEvent: (event) => {
-          if (event.name === 'open') {
-            return;
-          }
-          const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
-          const detectedInstitutionId = String((payload as any)?.institution_id || '');
-          const institutionId = String((payload as any)?.enrollment?.institution?.id || detectedInstitutionId || connectedInstitutionId || '');
-          const institutionName = String((payload as any)?.enrollment?.institution?.name || connectedInstitutionName || '');
-          const enrollmentId = String((payload as any)?.enrollment?.id || connectedEnrollmentId || '');
-          const failureMessage = String((payload as any)?.message || (payload as any)?.code || '');
-          void logTellerDiagnostic({
-            source: 'accumul8-sync-page',
-            event_name: event.name === 'failure'
-                ? 'failure'
-                : event.name,
-            institution_id: institutionId || undefined,
-            institution_name: institutionName || undefined,
-            enrollment_id: enrollmentId || undefined,
-            message: failureMessage || `Teller Connect ${event.name}`,
-            meta: {
-              select_account: 'disabled',
-              event_payload: payload,
-              watched_institution: isWatchedTellerInstitution(institutionId, institutionName) ? 1 : 0,
-            },
-          });
-        },
-      });
-
-      if (linkResult.outcome === 'cancelled') {
-        const exitMessage = 'Teller Connect closed without linking an account. If Teller showed "no suitable accounts," that means the bank/login is not exposing any eligible accounts for sync right now. Use the Bank Statements tab as the fallback import path.';
-        openSyncHelp({ error: exitMessage });
-        onToast({ tone: 'info', message: exitMessage });
-        return;
-      }
-
-      connectedInstitutionId = String(linkResult.payload?.enrollment?.institution?.id || '');
-      connectedInstitutionName = String(linkResult.payload?.enrollment?.institution?.name || '');
-      connectedEnrollmentId = String(linkResult.payload?.enrollment?.id || '');
-
-      const exchangeRes = await ApiClient.post<Accumul8TellerEnrollmentResponse>(scopedActionUrl('teller_enroll'), {
-        access_token: String(linkResult.payload?.accessToken || ''),
-        enrollment_id: String(linkResult.payload?.enrollment?.id || ''),
-        user_id: String(linkResult.payload?.user?.id || ''),
-        institution_id: String(linkResult.payload?.enrollment?.institution?.id || ''),
-        institution_name: String(linkResult.payload?.enrollment?.institution?.name || ''),
-      });
-      const connectionId = Number(exchangeRes?.connection_id || 0);
-      if (connectionId <= 0) {
-        throw new Error('Teller enrollment did not return a valid connection id');
-      }
-      void logTellerDiagnostic({
-        source: 'accumul8-sync-page',
-        event_name: 'enroll_success',
-        institution_id: connectedInstitutionId || undefined,
-        institution_name: connectedInstitutionName || undefined,
-        enrollment_id: connectedEnrollmentId || undefined,
-        connection_id: connectionId,
-        message: 'Teller enrollment persisted successfully',
-        meta: {
-          select_account: 'disabled',
-          watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0,
-        },
-      });
-      const syncRes = await ApiClient.post<Accumul8TellerSyncResponse>(scopedActionUrl('teller_sync_transactions'), {
-        connection_id: connectionId,
-      });
-      void logTellerDiagnostic({
-        source: 'accumul8-sync-page',
-        event_name: 'sync_success',
-        institution_id: connectedInstitutionId || undefined,
-        institution_name: connectedInstitutionName || undefined,
-        enrollment_id: connectedEnrollmentId || undefined,
-        connection_id: connectionId,
-        message: 'Teller sync completed successfully',
-        meta: {
-          select_account: 'disabled',
-          watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0,
-          added: Number(syncRes?.added || 0),
-          modified: Number(syncRes?.modified || 0),
-          unchanged: Number(syncRes?.unchanged || 0),
-          removed: Number(syncRes?.removed || 0),
-          account_count: Array.isArray(syncRes?.accounts) ? syncRes.accounts.length : 0,
-        },
-      });
-      setLastSyncReport({
-        connectionId,
-        institutionName: String(linkResult.payload?.enrollment?.institution?.name || 'Connected institution'),
-        syncedAt: new Date().toISOString(),
-        result: syncRes,
-      });
-      const added = Number(syncRes?.added || 0);
-      onToast({ tone: 'success', message: `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
-      await load();
-    } catch (error: any) {
-      const rawMessage = String(error?.message || 'Failed to start Teller Connect');
-      void logTellerDiagnostic({
-        source: 'accumul8-sync-page',
-        event_name: connectedInstitutionId || connectedInstitutionName ? 'sync_error' : 'error',
-        institution_id: connectedInstitutionId || undefined,
-        institution_name: connectedInstitutionName || undefined,
-        enrollment_id: connectedEnrollmentId || undefined,
-        message: rawMessage,
-        meta: {
-          select_account: 'disabled',
-          watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0,
-        },
-      });
-      const message = formatTellerConnectError(rawMessage, connectedInstitutionName);
-      openSyncHelp({ error: message });
-      onToast({ tone: isTellerEligibilityFailure(rawMessage) ? 'warning' : 'error', message });
-    }
-  }, [load, onToast, openSyncHelp, scopedActionUrl, syncProvider.configured, syncProvider.env]);
   const budgetRowsSorted = React.useMemo(() => (
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);

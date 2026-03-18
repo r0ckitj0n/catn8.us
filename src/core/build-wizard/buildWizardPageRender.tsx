@@ -100,6 +100,9 @@ import { BuildWizardStepReceiptEditor } from './buildWizardStepReceiptEditor';
 import { BuildWizardStepReceiptsList } from './buildWizardStepReceiptsList';
 import { BuildWizardWorkspaceMain } from './buildWizardWorkspaceMain';
 import { BuildWizardWorkspaceModals } from './buildWizardWorkspaceModals';
+import { useBuildWizardDocumentDraftActions } from './useBuildWizardDocumentDraftActions';
+import { useBuildWizardReceiptActions } from './useBuildWizardReceiptActions';
+import { useBuildWizardStepEditActions } from './useBuildWizardStepEditActions';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
@@ -3127,371 +3130,65 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [contacts, documents]);
 
-  React.useEffect(() => {
-    if (pendingScrollReceiptId <= 0) {
-      return;
-    }
-    const rowEl = receiptRowRefByDocId.current[pendingScrollReceiptId];
-    if (rowEl) {
-      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setPendingScrollReceiptId(0);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      const delayedEl = receiptRowRefByDocId.current[pendingScrollReceiptId];
-      if (delayedEl) {
-        delayedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      setPendingScrollReceiptId(0);
-    }, 120);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [documents, pendingScrollReceiptId]);
-
-  const startInlineReceiptEdit = (
-    doc: IBuildWizardDocument,
-    parsed: { taskMeta: BuildWizardTaskMeta; plainNotes: string },
-    field: InlineReceiptField,
-  ) => {
-    setInlineReceiptDraftByDocId((prev) => ({
-      ...prev,
-      [doc.id]: {
-        vendor: doc.receipt_vendor || '',
-        date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
-        amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
-        taskType: parsed.taskMeta.task_type,
-        plainNotes: parsed.plainNotes || '',
-        taskMeta: parsed.taskMeta,
-      },
-    }));
-    setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: field }));
-  };
-
-  const saveInlineReceiptEdit = async (
-    doc: IBuildWizardDocument,
-    field: InlineReceiptField,
-    overrides?: Partial<{
-      vendor: string;
-      date: string;
-      amount: string;
-      taskType: BuildWizardTaskType;
-    }>,
-  ) => {
-    const baseDraft = inlineReceiptDraftByDocId[doc.id];
-    const draft = baseDraft ? { ...baseDraft, ...(overrides || {}) } : null;
-    if (!draft) {
-      setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: null }));
-      return;
-    }
-
-    const patch: {
-      receipt_vendor?: string | null;
-      receipt_date?: string | null;
-      receipt_amount?: number | null;
-      receipt_notes?: string | null;
-    } = {};
-
-    if (field === 'vendor') {
-      patch.receipt_vendor = toStringOrNull(draft.vendor);
-    } else if (field === 'date') {
-      patch.receipt_date = toStringOrNull(draft.date);
-      patch.receipt_notes = toStringOrNull(composeReceiptNotesWithTaskMeta({
-        ...draft.taskMeta,
-        manual_date_override: Boolean(toStringOrNull(draft.date)),
-      }, draft.plainNotes));
-    } else if (field === 'amount') {
-      patch.receipt_amount = toNumberOrNull(draft.amount);
-    } else if (field === 'type') {
-      const nextMeta: BuildWizardTaskMeta = {
-        ...draft.taskMeta,
-        task_type: draft.taskType,
-      };
-      patch.receipt_notes = toStringOrNull(composeReceiptNotesWithTaskMeta(nextMeta, draft.plainNotes));
-    }
-
-    await onSaveDocument(doc.id, patch);
-    setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: null }));
-  };
-
-  const updateDocumentDraft = (
-    documentId: number,
-    patch: Partial<{
-      kind: string;
-      caption: string;
-      step_id: number;
-      receipt_amount: string;
-      receipt_title: string;
-      receipt_vendor: string;
-      receipt_date: string;
-      receipt_notes: string;
-    }>,
-  ) => {
-    setDocumentDrafts((prev) => ({
-      ...prev,
-      [documentId]: {
-        kind: patch.kind ?? (prev[documentId]?.kind || 'other'),
-        caption: patch.caption ?? (prev[documentId]?.caption || ''),
-        step_id: patch.step_id ?? (prev[documentId]?.step_id || 0),
-        receipt_amount: patch.receipt_amount ?? (prev[documentId]?.receipt_amount || ''),
-        receipt_title: patch.receipt_title ?? (prev[documentId]?.receipt_title || ''),
-        receipt_vendor: patch.receipt_vendor ?? (prev[documentId]?.receipt_vendor || ''),
-        receipt_date: patch.receipt_date ?? (prev[documentId]?.receipt_date || ''),
-        receipt_notes: patch.receipt_notes ?? (prev[documentId]?.receipt_notes || ''),
-      },
-    }));
-  };
-
-  const buildDocumentDraft = React.useCallback((doc: IBuildWizardDocument) => {
-    return documentDrafts[doc.id] || {
-      kind: doc.kind || 'other',
-      caption: doc.caption || '',
-      step_id: Number(doc.step_id || 0),
-      receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
-        ? String(doc.receipt_amount)
-        : '',
-      receipt_title: doc.receipt_title || '',
-      receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: taskUsesManualDateOverride(doc, parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta) ? (doc.receipt_date || '') : '',
-      receipt_notes: doc.receipt_notes || '',
-    };
-  }, [documentDrafts]);
-
-  const onSaveDocumentDraft = async (doc: IBuildWizardDocument) => {
-    const draft = buildDocumentDraft(doc);
-    await onSaveDocument(doc.id, {
-      kind: draft.kind,
-      caption: draft.caption.trim() || null,
-      step_id: draft.step_id > 0 ? draft.step_id : null,
-      receipt_amount: draft.kind === 'receipt' ? toNumberOrNull(draft.receipt_amount) : null,
-      receipt_title: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_title) : null,
-      receipt_vendor: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_vendor) : null,
-      receipt_date: draft.kind === 'receipt' ? toStringOrNull(draft.receipt_date) : null,
-      receipt_notes: draft.kind === 'receipt'
-        ? toStringOrNull(setTaskDateOverrideInReceiptNotes(draft.receipt_notes, draft.receipt_date))
-        : null,
-    });
-  };
-
-  const onSaveReceiptForStep = async (step: IBuildWizardStep) => {
-    if (projectId <= 0) {
-      return;
-    }
-    const draft = receiptDraftByStep[step.id] || {
-      receipt_title: '',
-      receipt_vendor: '',
-      receipt_date: '',
-      receipt_amount: '',
-      receipt_notes: '',
-      task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
-    };
-    const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
-    const existingReceipt = editingReceiptDocumentId > 0
-      ? documents.find((doc) => doc.id === editingReceiptDocumentId)
-      : null;
-    const shouldScrollBackToReceipt = existingReceipt !== null;
-    let receiptId = 0;
-
-    if (existingReceipt) {
-      const updated = await onSaveDocument(existingReceipt.id, {
-        kind: 'receipt',
-        step_id: step.id,
-        caption: toStringOrNull(draft.receipt_title || step.title),
-        receipt_title: toStringOrNull(draft.receipt_title),
-        receipt_vendor: toStringOrNull(draft.receipt_vendor),
-        receipt_date: toStringOrNull(draft.receipt_date),
-        receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
-          ...draft.task_meta,
-          manual_date_override: Boolean(toStringOrNull(draft.receipt_date)),
-        }, draft.receipt_notes)),
-      });
-      if (!updated) {
-        return;
-      }
-      receiptId = existingReceipt.id;
-    } else {
-      const created = await createStepReceipt({
-        project_id: projectId,
-        step_id: step.id,
-        receipt_title: toStringOrNull(draft.receipt_title),
-        receipt_vendor: toStringOrNull(draft.receipt_vendor),
-        receipt_date: toStringOrNull(draft.receipt_date),
-        receipt_amount: toNumberOrNull(draft.receipt_amount),
-        receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
-          ...draft.task_meta,
-          manual_date_override: Boolean(toStringOrNull(draft.receipt_date)),
-        }, draft.receipt_notes)),
-        caption: toStringOrNull(draft.receipt_title || step.title),
-      });
-      if (!created?.id) {
-        return;
-      }
-      receiptId = created.id;
-    }
-
-    const files = receiptAttachmentDraftByStep[step.id] || [];
-    for (const file of files) {
-      await uploadDocument(
-        'receipt_attachment',
-        file,
-        step.id,
-        `Attachment: ${draft.receipt_title || step.title}`,
-        step.phase_key,
-        undefined,
-        { receipt_parent_document_id: receiptId },
-      );
-    }
-    setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
-      receipt_title: '',
-      receipt_vendor: '',
-      receipt_date: '',
-      receipt_amount: '',
-      receipt_notes: '',
-      task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
-    } }));
-    setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
-    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
-    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
-    if (shouldScrollBackToReceipt && receiptId > 0) {
-      setPendingScrollReceiptId(receiptId);
-    }
-  };
-
-  const autosaveExistingReceiptDraftForStep = async (
-    step: IBuildWizardStep,
-    patch: {
-      receipt_date?: string | null;
-      receipt_notes?: string | null;
-    },
-  ) => {
-    const editingReceiptDocumentId = Number(editingReceiptDocumentIdByStep[step.id] || 0);
-    if (editingReceiptDocumentId <= 0) {
-      return;
-    }
-    await onSaveDocument(editingReceiptDocumentId, patch);
-  };
-
-  const onStartEditReceiptForStep = (step: IBuildWizardStep, doc: IBuildWizardDocument) => {
-    const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
-    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: doc.id }));
-    setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
-      receipt_title: doc.receipt_title || '',
-      receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
-      receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount))
-        ? String(doc.receipt_amount)
-        : '',
-      receipt_notes: parsed.plainNotes || '',
-      task_meta: parsed.taskMeta,
-    } }));
-    setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: [] }));
-    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: true }));
-    window.setTimeout(() => {
-      const editorEl = receiptEditorRefByStepId.current[step.id];
-      if (editorEl) {
-        editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 80);
-  };
-
-  const onAttachExistingDocumentToReceipt = async (step: IBuildWizardStep, receiptDoc: IBuildWizardDocument) => {
-    const selectedDocumentId = Number(attachExistingDocByReceiptId[receiptDoc.id] || 0);
-    if (selectedDocumentId <= 0) {
-      return;
-    }
-    if (selectedDocumentId === receiptDoc.id) {
-      onToast?.({ tone: 'warning', message: 'A task cannot attach itself.' });
-      return;
-    }
-    const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId);
-    if (!selectedDocument) {
-      onToast?.({ tone: 'warning', message: 'Selected document is no longer available. Refresh and try again.' });
-      return;
-    }
-    const alreadyAttachedToThisTask = String(selectedDocument.kind || '').trim() === 'receipt_attachment'
-      && Number(selectedDocument.receipt_parent_document_id || 0) === receiptDoc.id;
-    if (alreadyAttachedToThisTask) {
-      onToast?.({ tone: 'info', message: 'Document is already attached to this task.' });
-      return;
-    }
-    await onSaveDocument(selectedDocumentId, {
-      kind: 'receipt_attachment',
-      step_id: step.id,
-      receipt_parent_document_id: receiptDoc.id,
-    });
-    setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
-  };
-
-  const openMoveTaskModal = (receiptDoc: IBuildWizardDocument) => {
-    setMoveTaskModalDocId(receiptDoc.id);
-    setMoveTaskModalTargetStepId(0);
-  };
-
-  const openTaskAttachmentsModal = (receiptDoc: IBuildWizardDocument) => {
-    setTaskAttachmentsModalDocId(receiptDoc.id);
-    setAttachExistingDocByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
-    setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [receiptDoc.id]: '' }));
-  };
-
-  const onMoveReceiptToStep = async () => {
-    if (!moveTaskModalDoc) {
-      return;
-    }
-    const currentStepId = Number(moveTaskModalDoc.step_id || 0);
-    const targetStepId = Number(moveTaskModalTargetStepId || 0);
-    if (targetStepId <= 0 || targetStepId === currentStepId) {
-      return;
-    }
-    const targetStep = stepByIdMap.get(targetStepId) || null;
-    if (!targetStep) {
-      onToast?.({ tone: 'warning', message: 'That destination step is no longer available. Refresh and try again.' });
-      return;
-    }
-    const movedDocument = await onSaveDocument(moveTaskModalDoc.id, { step_id: targetStepId });
-    if (!movedDocument) {
-      return;
-    }
-    setMoveTaskModalDocId(0);
-    setMoveTaskModalTargetStepId(0);
-    setPendingScrollReceiptId(moveTaskModalDoc.id);
-  };
-
-  const onUploadReceiptAttachments = (receiptDoc: IBuildWizardDocument, files: FileList | null) => {
-    if (!files || files.length === 0) {
-      return;
-    }
-    const stepId = Number(receiptDoc.step_id || 0);
-    Array.from(files).forEach((file) => {
-      void uploadDocument(
-        'receipt_attachment',
-        file,
-        stepId > 0 ? stepId : undefined,
-        `Attachment: ${receiptDoc.receipt_title || receiptDoc.original_name}`,
-        receiptDoc.step_phase_key || undefined,
-        undefined,
-        { receipt_parent_document_id: receiptDoc.id },
-      );
-    });
-  };
-
-  const onAttachExistingDocumentToStep = async (step: IBuildWizardStep) => {
-    const selectedDocumentId = Number(attachExistingDocByStepId[step.id] || 0);
-    if (selectedDocumentId <= 0) {
-      return;
-    }
-    const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId);
-    if (!selectedDocument) {
-      onToast?.({ tone: 'warning', message: 'Selected document is no longer available. Refresh and try again.' });
-      return;
-    }
-    if (Number(selectedDocument.step_id || 0) === step.id) {
-      onToast?.({ tone: 'info', message: 'Document is already linked to this step.' });
-      return;
-    }
-    await onSaveDocument(selectedDocumentId, { step_id: step.id });
-    setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: '' }));
-  };
+  const {
+    buildDocumentDraft,
+    onAttachExistingDocumentToReceipt,
+    onAttachExistingDocumentToStep,
+    onMoveReceiptToStep,
+    onSaveDocumentDraft,
+    onUploadReceiptAttachments,
+    openMoveTaskModal,
+    openTaskAttachmentsModal,
+    updateDocumentDraft,
+  } = useBuildWizardDocumentDraftActions({
+    attachExistingDocByReceiptId,
+    attachExistingDocByStepId,
+    buildDocumentDraftDeps: { documentDrafts, parseTaskMetaFromReceiptNotes, setTaskDateOverrideInReceiptNotes, taskUsesManualDateOverride },
+    documents,
+    moveTaskModalDoc,
+    moveTaskModalTargetStepId,
+    onSaveDocument,
+    onToast,
+    setAttachExistingDocByReceiptId,
+    setAttachExistingDocByStepId,
+    setAttachExistingDocFilterByReceiptId,
+    setDocumentDrafts,
+    setMoveTaskModalDocId,
+    setMoveTaskModalTargetStepId,
+    setPendingScrollReceiptId,
+    setTaskAttachmentsModalDocId,
+    stepByIdMap,
+    uploadDocument,
+  });
+  const {
+    autosaveExistingReceiptDraftForStep,
+    onSaveReceiptForStep,
+    onStartEditReceiptForStep,
+    saveInlineReceiptEdit,
+    startInlineReceiptEdit,
+  } = useBuildWizardReceiptActions({
+    createStepReceipt,
+    documents,
+    editingReceiptDocumentIdByStep,
+    inlineReceiptDraftByDocId,
+    onSaveDocument,
+    parseTaskMetaFromReceiptNotes,
+    pendingScrollReceiptId,
+    projectId,
+    receiptAttachmentDraftByStep,
+    receiptDraftByStep,
+    receiptEditorRefByStepId,
+    receiptRowRefByDocId,
+    setEditingReceiptDocumentIdByStep,
+    setInlineEditingReceiptFieldByDocId,
+    setInlineReceiptDraftByDocId,
+    setPendingScrollReceiptId,
+    setReceiptAttachmentDraftByStep,
+    setReceiptDraftByStep,
+    setReceiptEditorOpenByStep,
+    taskUsesManualDateOverride,
+    uploadDocument,
+  });
 
   const onEstimateMissingWithAi = async () => {
     const confirmed = await requestConfirmation({
@@ -3685,158 +3382,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return [...preferredUnique, ...missing];
   };
 
-  const timelineAnchorForStep = (
-    step: IBuildWizardStep,
-    overrides?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
-  ): { anchor: string | null; start: string | null; end: string | null } => {
-    const start = toStringOrNull((overrides?.expected_start_date ?? step.expected_start_date) || '');
-    const end = toStringOrNull((overrides?.expected_end_date ?? step.expected_end_date) || '');
-    return {
-      anchor: start || end,
-      start,
-      end,
-    };
-  };
-
-  const compareStepsByTimeline = React.useCallback((
-    left: IBuildWizardStep,
-    right: IBuildWizardStep,
-    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
-  ): number => {
-    const leftTimeline = timelineAnchorForStep(left, overridesByStepId?.get(left.id));
-    const rightTimeline = timelineAnchorForStep(right, overridesByStepId?.get(right.id));
-
-    if (leftTimeline.anchor === null && rightTimeline.anchor !== null) {
-      return 1;
-    }
-    if (leftTimeline.anchor !== null && rightTimeline.anchor === null) {
-      return -1;
-    }
-    if (leftTimeline.anchor !== null && rightTimeline.anchor !== null && leftTimeline.anchor !== rightTimeline.anchor) {
-      return leftTimeline.anchor.localeCompare(rightTimeline.anchor);
-    }
-
-    if (leftTimeline.start === null && rightTimeline.start !== null) {
-      return 1;
-    }
-    if (leftTimeline.start !== null && rightTimeline.start === null) {
-      return -1;
-    }
-    if (leftTimeline.start !== null && rightTimeline.start !== null && leftTimeline.start !== rightTimeline.start) {
-      return leftTimeline.start.localeCompare(rightTimeline.start);
-    }
-
-    if (leftTimeline.end === null && rightTimeline.end !== null) {
-      return 1;
-    }
-    if (leftTimeline.end !== null && rightTimeline.end === null) {
-      return -1;
-    }
-    if (leftTimeline.end !== null && rightTimeline.end !== null && leftTimeline.end !== rightTimeline.end) {
-      return leftTimeline.end.localeCompare(rightTimeline.end);
-    }
-
-    if (left.step_order !== right.step_order) {
-      return left.step_order - right.step_order;
-    }
-    return left.id - right.id;
-  }, []);
-
-  const autoReorderPhaseByTimeline = React.useCallback(async (
-    phaseKey: string,
-    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
-  ) => {
-    const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
-    const phaseSteps = steps
-      .filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase)
-      .sort((a, b) => compareStepsByTimeline(a, b, overridesByStepId));
-    const orderedIds = phaseSteps.map((candidate) => candidate.id);
-    if (orderedIds.length > 1) {
-      await reorderSteps(normalizedPhase, orderedIds);
-    }
-  }, [compareStepsByTimeline, reorderSteps, steps]);
-
-  const saveStepEditModal = React.useCallback(async () => {
-    if (!stepEditModalStep || stepEditSaving) {
-      return;
-    }
-
-    const step = stepEditModalStep;
-    const draft = stepDrafts[step.id] || step;
-    const nextTitle = String(draft.title || '').trim();
-    if (!nextTitle) {
-      onToast?.({ tone: 'warning', message: 'Step title is required.' });
-      return;
-    }
-
-    const nextStartDate = toStringOrNull(draft.expected_start_date || '');
-    const requestedEndDate = toStringOrNull(draft.expected_end_date || '');
-    const nextEndDate = nextStartDate && requestedEndDate && requestedEndDate < nextStartDate
-      ? nextStartDate
-      : requestedEndDate;
-    const nextDurationDays = calculateDurationDays(nextStartDate, nextEndDate) ?? (draft.expected_duration_days ?? null);
-    const nextDependencyIds = Array.from(
-      new Set(
-        (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
-          .map((rawId) => Number(rawId || 0))
-          .filter((id) => id > 0 && id !== step.id),
-      ),
-    );
-    const actualCostFloor = documents.reduce((sum, doc) => {
-      if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') {
-        return sum;
-      }
-      const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
-      if (parsed.taskMeta.task_type === 'quote') {
-        return sum;
-      }
-      return sum + Number(doc.receipt_amount || 0);
-    }, 0);
-    const requestedActualCost = draft.actual_cost ?? null;
-    const nextActualCost = requestedActualCost === null
-      ? (actualCostFloor > 0 ? actualCostFloor : null)
-      : Math.max(Number(requestedActualCost), actualCostFloor);
-    const patch: Partial<IBuildWizardStep> = {
-      title: nextTitle,
-      description: String(draft.description || '').trim(),
-      expected_start_date: nextStartDate,
-      expected_end_date: nextEndDate,
-      expected_duration_days: nextDurationDays,
-      estimated_cost: draft.estimated_cost ?? null,
-      actual_cost: nextActualCost,
-      depends_on_step_ids: nextDependencyIds,
-    };
-
-    setStepEditSaving(true);
-    try {
-      const nextStep = await updateStep(step.id, patch);
-      if (!nextStep) {
-        return;
-      }
-      const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
-      timelineOverrides.set(step.id, {
-        expected_start_date: nextStartDate,
-        expected_end_date: nextEndDate,
-      });
-      await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
-      await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
-      clearStepDraft(step.id);
-      setStepEditModalStepId(0);
-      onToast?.({ tone: 'success', message: 'Step updated.' });
-    } finally {
-      setStepEditSaving(false);
-    }
-  }, [
-    autoReorderPhaseByTimeline,
+  const { autoReorderPhaseByTimeline, compareStepsByTimeline, saveStepEditModal } = useBuildWizardStepEditActions({
     clearStepDraft,
     documents,
     expandPhaseRangeForStep,
     onToast,
+    parseTaskMetaFromReceiptNotes,
+    reorderSteps,
+    setStepEditModalStepId,
+    setStepEditSaving,
     stepDrafts,
     stepEditModalStep,
     stepEditSaving,
+    steps,
     updateStep,
-  ]);
+  });
 
   React.useEffect(() => {
     if (projectId <= 0) {

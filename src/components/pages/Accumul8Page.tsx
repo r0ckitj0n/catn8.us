@@ -1,7 +1,6 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
 import { Accumul8AIcountantPanel } from '../accumul8/Accumul8AIcountantPanel';
-import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
@@ -11,7 +10,6 @@ import {
   ACCUMUL8_VIEW_BUTTON_EMOJI,
 } from '../accumul8/accumul8Ui';
 import { WebpImage } from '../common/WebpImage';
-import { StandardIconButton } from '../common/StandardIconButton';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
 import { PriorityTableColumn, usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
@@ -32,8 +30,6 @@ import {
   formatInlineDateTime,
   formatInlineText,
   formatPayBillStatusLabel,
-  formatRecurringAmount,
-  formatRecurringTitle,
   formatSummaryWindowLabel,
   getLedgerEffectiveDate,
   getOpeningBalanceMessageMeta,
@@ -115,9 +111,14 @@ import {
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import { Accumul8NotificationsTab } from './accumul8/Accumul8NotificationsTab';
+import { Accumul8ContactsTab } from './accumul8/Accumul8ContactsTab';
+import { Accumul8EntityEndexTab } from './accumul8/Accumul8EntityEndexTab';
+import { Accumul8LedgerTab } from './accumul8/Accumul8LedgerTab';
+import { Accumul8PayBillsTab } from './accumul8/Accumul8PayBillsTab';
 import { Accumul8SyncTab } from './accumul8/Accumul8SyncTab';
 import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
 import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
+import { Accumul8RecurringTab } from './accumul8/Accumul8RecurringTab';
 import './Accumul8Page.css';
 
 const Accumul8StatementsPanel = React.lazy(async () => {
@@ -3024,221 +3025,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'ledger' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar accumul8-panel-toolbar--ledger">
-                <h3 className="mb-0">Ledger</h3>
-                <div className="accumul8-panel-toolbar-controls accumul8-panel-toolbar-controls--ledger">
-                  {renderDateRangeControls(
-                    'ledger',
-                    ledgerDateFilter,
-                    setLedgerDateFilter,
-                    customLedgerStartDate,
-                    setCustomLedgerStartDate,
-                    customLedgerEndDate,
-                    setCustomLedgerEndDate,
-                    true,
-                  )}
-                  <div className="accumul8-panel-toolbar-search">
-                    <select
-                      className={getActiveFilterClass('form-select form-select-sm', ledgerFilterPreset !== 'all')}
-                      value={ledgerFilterPreset}
-                      onChange={(e) => setLedgerFilterPreset(e.target.value as LedgerFilterPreset)}
-                      aria-label="Ledger quick filter"
-                    >
-                      {LEDGER_FILTER_PRESET_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.ledger.trim() !== '')}
-                      value={listSearchQueryByTab.ledger}
-                      onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: e.target.value }))}
-                      placeholder="Search visible ledger rows"
-                      aria-label="Search visible ledger rows"
-                    />
-                  </div>
-                  <div className="accumul8-ledger-pagination-toolbar" aria-label="Ledger pagination controls">
-                    <label className="visually-hidden" htmlFor="accumul8-ledger-page-mode">Ledger page size</label>
-                    <select
-                      id="accumul8-ledger-page-mode"
-                      className={getActiveFilterClass('form-select form-select-sm', ledgerPaginationMode !== '100')}
-                      value={ledgerPaginationMode}
-                      onChange={(e) => setLedgerPaginationMode(e.target.value as LedgerPaginationMode)}
-                      aria-label="Ledger page size"
-                    >
-                      <option value="100">100 older rows per page</option>
-                      <option value="all">Show all on one page</option>
-                    </select>
-                    {ledgerPaginationMode !== 'all' && ledgerPagination.archivedCount > 0 ? (
-                      <div className="accumul8-ledger-pagination-nav">
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary btn-sm"
-                          onClick={() => setLedgerArchivePage((current) => Math.max(current - 1, 1))}
-                          disabled={ledgerPagination.currentPage <= 1}
-                        >
-                          Prev
-                        </button>
-                        <span className="accumul8-ledger-pagination-status">
-                          Older pages {ledgerPagination.currentPage} / {ledgerPagination.totalPages}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary btn-sm"
-                          onClick={() => setLedgerArchivePage((current) => Math.min(current + 1, ledgerPagination.totalPages))}
-                          disabled={ledgerPagination.currentPage >= ledgerPagination.totalPages}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateTransactionModal()} disabled={busy}>Add Ledger Entry</button>
-              </div>
-              <div className="accumul8-ledger-pagination-summary">
-                {ledgerPaginationMode === 'all'
-                  ? `Showing all ${ledgerPagination.totalRows} filtered ledger transaction${ledgerPagination.totalRows === 1 ? '' : 's'} on one page.`
-                  : `Showing ${ledgerPagination.rows.length} filtered ledger transaction${ledgerPagination.rows.length === 1 ? '' : 's'} on this page, including ${ledgerPagination.recentCount} from the last 60 days and ${ledgerPagination.archivedCount} older transaction${ledgerPagination.archivedCount === 1 ? '' : 's'} split into ${ledgerPagination.totalPages} page${ledgerPagination.totalPages === 1 ? '' : 's'}.`}
-              </div>
-              <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
-                <table
-                  ref={ledgerTableRef}
-                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head"
-                  style={ledgerTable.tableStyle}
-                >
-                  <colgroup>
-                    <col style={ledgerTable.getColumnStyle('date')} />
-                    <col style={ledgerTable.getColumnStyle('due')} />
-                    <col style={ledgerTable.getColumnStyle('account')} />
-                    <col style={ledgerTable.getColumnStyle('description')} />
-                    <col style={ledgerTable.getColumnStyle('memo')} />
-                    <col style={ledgerTable.getColumnStyle('amount')} />
-                    <col style={ledgerTable.getColumnStyle('balance')} />
-                    <col style={ledgerTable.getColumnStyle('paid')} />
-                    <col style={ledgerTable.getColumnStyle('reconciled')} />
-                    <col style={ledgerTable.getColumnStyle('actions')} />
-                  </colgroup>
-                  <thead><tr>
-                    <Accumul8TableHeaderCell label="Date" columnKey="date" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Memo" columnKey="memo" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Bal" columnKey="balance" className="text-end" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Paid" columnKey="paid" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Rec'd" columnKey="reconciled" className="text-center" sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={ledgerTable.sortState} onSort={ledgerTable.requestSort} onResizeStart={ledgerTable.startResize} />
-                  </tr></thead>
-                  <tbody>
-                    {ledgerPagination.rows.map((tx) => (
-                      (() => {
-                        const txEditPolicy = getAccumul8TransactionEditPolicy(tx);
-                        return (
-                      <tr
-                        key={tx.id}
-                        ref={(node) => setInlineRowRef(`ledger-${tx.id}`, node)}
-                        className={[
-                          'accumul8-list-item',
-                          tx.amount < 0 ? 'is-outflow' : 'is-inflow',
-                          isOpeningBalanceTransaction(tx) ? 'is-opening-balance' : '',
-                          activeLedgerRowId === tx.id ? 'is-editing' : '',
-                          ledgerDraftById[tx.id] ? 'has-draft' : '',
-                        ].filter(Boolean).join(' ')}
-                      >
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.transaction_date ?? tx.transaction_date} onChange={(e) => setLedgerRowDraft(tx, { transaction_date: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineDate(tx.transaction_date)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="date" value={ledgerDraftById[tx.id]?.due_date ?? tx.due_date ?? ''} onChange={(e) => setLedgerRowDraft(tx, { due_date: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineDate(tx.due_date)}</button>
-                          )}
-                        </td>
-                        <td>
-                          <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name)}</button>
-                        </td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.description ?? tx.description} onChange={(e) => setLedgerRowDraft(tx, { description: e.target.value })} disabled={busy || !txEditPolicy.canEditCoreFields} />
-                          ) : (
-                            <button
-                              type="button"
-                              className={`accumul8-inline-cell-trigger${isOpeningBalanceTransaction(tx) ? ' accumul8-inline-cell-trigger--ledger-description' : ''}`}
-                              onClick={() => activateLedgerRow(tx.id)}
-                              disabled={busy}
-                            >
-                              {isOpeningBalanceTransaction(tx) && (
-                                <span className="accumul8-opening-balance-pin">Pinned</span>
-                              )}
-                              <span>{getLedgerDescriptionLabel(tx, ledgerDraftById[tx.id])}</span>
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.memo ?? tx.memo} onChange={(e) => setLedgerRowDraft(tx, { memo: e.target.value })} disabled={busy} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          {activeLedgerRowId === tx.id ? (
-                            <input className="form-control form-control-sm accumul8-month-table-input" type="number" step="0.01" value={ledgerDraftById[tx.id]?.amount ?? tx.amount} onChange={(e) => setLedgerRowDraft(tx, { amount: Number(e.target.value) })} disabled={busy || !txEditPolicy.canEditCoreFields} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.amount.toFixed(2)}</button>
-                          )}
-                        </td>
-                        <td className="text-end">{Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2)}</td>
-                        <td className="text-center accumul8-ledger-toggle-cell">
-                          <input
-                            className="form-check-input accumul8-ledger-checkbox"
-                            type="checkbox"
-                            checked={Number(ledgerDraftById[tx.id]?.is_paid ?? tx.is_paid) === 1}
-                            onChange={(e) => setLedgerRowDraft(tx, { is_paid: e.target.checked ? 1 : 0 })}
-                            disabled={busy || !txEditPolicy.canEditPaidState}
-                            aria-label={`Mark ${tx.description} as paid`}
-                          />
-                        </td>
-                        <td className="text-center accumul8-ledger-toggle-cell">
-                          <input
-                            className="form-check-input accumul8-ledger-checkbox"
-                            type="checkbox"
-                            checked={Number(ledgerDraftById[tx.id]?.is_reconciled ?? tx.is_reconciled) === 1}
-                            onChange={(e) => setLedgerRowDraft(tx, { is_reconciled: e.target.checked ? 1 : 0 })}
-                            disabled={busy}
-                            aria-label={`Mark ${tx.description} as reconciled`}
-                          />
-                        </td>
-                        <td className="text-end is-compact-actions">
-                          <div className="accumul8-row-actions">
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            {Number(tx.debtor_id || 0) <= 0 ? <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button> : null}
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => handleDeleteTransaction(tx.id, tx.description)} disabled={busy || !txEditPolicy.canDelete} aria-label={`Delete ${tx.description}`} title={txEditPolicy.canDelete ? `Delete ${tx.description}` : `${txEditPolicy.sourceLabel} transactions cannot be deleted here`}><span aria-hidden="true">🗑️</span></button>
-                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `ledger-${tx.id}` ? ' is-flashing' : ''}`} onClick={() => void saveLedgerRow(tx)} disabled={busy || !ledgerDraftById[tx.id]} aria-label={`Save ${tx.description}`} title={ledgerDraftById[tx.id] ? `Save ${tx.description}` : `No changes to save for ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
-                          </div>
-                        </td>
-                      </tr>
-                        );
-                      })()
-                    ))}
-                    {ledgerPagination.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={10} className="text-center text-muted py-4">No ledger entries matched the current filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <Accumul8LedgerTab
+              activeLedgerRowId={activeLedgerRowId}
+              activateLedgerRow={activateLedgerRow}
+              beginEditTransaction={beginEditTransaction}
+              beginViewTransaction={beginViewTransaction}
+              busy={busy}
+              customLedgerEndDate={customLedgerEndDate}
+              customLedgerStartDate={customLedgerStartDate}
+              filterPresetOptions={LEDGER_FILTER_PRESET_OPTIONS}
+              flashingSaveButtonKey={flashingSaveButtonKey}
+              getAccountDisplayName={getAccountDisplayName}
+              handleDeleteTransaction={handleDeleteTransaction}
+              ledgerDateFilter={ledgerDateFilter}
+              ledgerDisplayBalanceById={ledgerDisplayBalanceById}
+              ledgerDraftById={ledgerDraftById}
+              ledgerFilterPreset={ledgerFilterPreset}
+              ledgerPagination={ledgerPagination}
+              ledgerPaginationMode={ledgerPaginationMode}
+              ledgerTable={ledgerTable}
+              ledgerTableRef={ledgerTableRef}
+              listSearchQuery={listSearchQueryByTab.ledger}
+              openCreateTransactionModal={openCreateTransactionModal}
+              openLedgerEntityModal={openLedgerEntityModal}
+              renderDateRangeControls={renderDateRangeControls}
+              saveLedgerRow={saveLedgerRow}
+              setCustomLedgerEndDate={setCustomLedgerEndDate}
+              setCustomLedgerStartDate={setCustomLedgerStartDate}
+              setInlineRowRef={setInlineRowRef}
+              setLedgerArchivePage={setLedgerArchivePage}
+              setLedgerDateFilter={(value) => setLedgerDateFilter(value as DateRangeFilter)}
+              setLedgerFilterPreset={(value) => setLedgerFilterPreset(value as LedgerFilterPreset)}
+              setLedgerPaginationMode={setLedgerPaginationMode}
+              setLedgerRowDraft={setLedgerRowDraft}
+              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: value }))}
+            />
           )}
           {tab === 'calendar' && (
             <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
@@ -3435,677 +3256,99 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'pay_bills' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Pay Bills</h3>
-                {renderDateRangeControls(
-                  'pay-bills',
-                  payBillsDateFilter,
-                  setPayBillsDateFilter,
-                  customPayBillsStartDate,
-                  setCustomPayBillsStartDate,
-                  customPayBillsEndDate,
-                  setCustomPayBillsEndDate,
-                )}
-                <div className="accumul8-panel-toolbar-search">
-                  <input
-                    type="text"
-                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.pay_bills.trim() !== '')}
-                    value={listSearchQueryByTab.pay_bills}
-                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: e.target.value }))}
-                    placeholder="Filter bill fields"
-                    aria-label="Filter pay bills fields"
-                  />
-                </div>
-              </div>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--bills">
-                <table
-                  ref={payBillsTableRef}
-                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--pay-bills accumul8-sticky-head"
-                  style={payBillsTable.tableStyle}
-                >
-                  <colgroup>
-                    <col style={payBillsTable.getColumnStyle('due')} />
-                    <col style={payBillsTable.getColumnStyle('paidDate')} />
-                    <col style={payBillsTable.getColumnStyle('description')} />
-                    <col style={payBillsTable.getColumnStyle('account')} />
-                    <col style={payBillsTable.getColumnStyle('amount')} />
-                    <col style={payBillsTable.getColumnStyle('status')} />
-                    <col style={payBillsTable.getColumnStyle('actions')} />
-                  </colgroup>
-                  <thead><tr>
-                    <Accumul8TableHeaderCell label="Due" columnKey="due" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Paid" columnKey="paidDate" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Description" columnKey="description" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={payBillsTable.sortState} onSort={payBillsTable.requestSort} onResizeStart={payBillsTable.startResize} />
-                  </tr></thead>
-                  <tbody>
-                    {payBillsTable.rows.map((billTx) => (
-                      (() => {
-                        const billEditPolicy = getAccumul8TransactionEditPolicy(billTx);
-                        const statementLink = resolveAccumul8StatementLink(billTx, statementUploads, selectedOwnerUserId || activeOwnerUserId || 0);
-                        return (
-                      <tr ref={(node) => setInlineRowRef(`paybill-${billTx.id}`, node)} key={billTx.id} className={['accumul8-list-item', activePayBillRowId === billTx.id ? 'is-editing' : '', payBillDraftById[billTx.id] ? 'has-draft' : ''].filter(Boolean).join(' ')}>
-                        <td>
-                          {activePayBillRowId === billTx.id ? (
-                            <input
-                              className="form-control form-control-sm accumul8-month-table-input"
-                              type="date"
-                              value={payBillDraftById[billTx.id]?.due_date ?? billTx.due_date ?? billTx.transaction_date}
-                              onChange={(e) => setPayBillRowDraft(billTx, { due_date: e.target.value })}
-                              disabled={busy || !billEditPolicy.canEditCoreFields}
-                            />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineDate(billTx.due_date || billTx.transaction_date)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activePayBillRowId === billTx.id ? (
-                            <input
-                              className="form-control form-control-sm accumul8-month-table-input"
-                              type="date"
-                              value={payBillDraftById[billTx.id]?.paid_date ?? billTx.paid_date ?? ''}
-                              onChange={(e) => setPayBillRowDraft(billTx, { paid_date: e.target.value })}
-                              disabled={busy || !billEditPolicy.canEditPaidState}
-                            />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineDate(billTx.paid_date)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activePayBillRowId === billTx.id ? (
-                            <input
-                              className="form-control form-control-sm accumul8-month-table-input"
-                              value={payBillDraftById[billTx.id]?.description ?? billTx.description}
-                              onChange={(e) => setPayBillRowDraft(billTx, { description: e.target.value })}
-                              disabled={busy || !billEditPolicy.canEditCoreFields}
-                            />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{formatInlineText(billTx.description, '-')}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activePayBillRowId === billTx.id ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={String(payBillDraftById[billTx.id]?.account_id ?? billTx.account_id ?? '')}
-                              onChange={(e) => setPayBillRowDraft(billTx, { account_id: e.target.value ? Number(e.target.value) : null })}
-                              disabled={busy || !billEditPolicy.canEditCoreFields}
-                            >
-                              <option value="">No account</option>
-                              {payBillsAccountOptions.map((account) => (
-                                <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{getAccountDisplayName(billTx.account_id, billTx.account_name, '', 'No account')}</button>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          {activePayBillRowId === billTx.id ? (
-                            <input
-                              className="form-control form-control-sm accumul8-month-table-input"
-                              type="number"
-                              step="0.01"
-                              value={payBillDraftById[billTx.id]?.amount ?? billTx.amount}
-                              onChange={(e) => setPayBillRowDraft(billTx, { amount: Number(e.target.value) })}
-                              disabled={busy || !billEditPolicy.canEditCoreFields}
-                            />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activatePayBillRow(billTx.id)} disabled={busy}>{Number(billTx.amount || 0).toFixed(2)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activePayBillRowId === billTx.id ? (
-                            <select
-                              className="form-select form-select-sm accumul8-month-table-select"
-                              value={String(payBillDraftById[billTx.id]?.is_paid ?? billTx.is_paid)}
-                              onChange={(e) => setPayBillRowDraft(billTx, { is_paid: Number(e.target.value) })}
-                              disabled={busy || !billEditPolicy.canEditPaidState}
-                            >
-                              <option value="0">Upcoming</option>
-                              <option value="1">Paid</option>
-                            </select>
-                          ) : (
-                            <button
-                              type="button"
-                              className={`accumul8-inline-cell-trigger${Number(billTx.is_paid || 0) !== 1 && (billTx.due_date || billTx.transaction_date) < todayDate ? ' accumul8-inline-cell-trigger--past-due' : ''}`}
-                              onClick={() => activatePayBillRow(billTx.id)}
-                              disabled={busy}
-                            >
-                              {Number(billTx.is_paid || 0) === 1 ? 'Paid' : ((billTx.due_date || billTx.transaction_date) < todayDate ? 'Past due' : 'Upcoming')}
-                            </button>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          <div className="accumul8-row-actions">
-                            {statementLink ? (
-                              <a className="btn btn-sm btn-outline-primary accumul8-icon-action" href={statementLink.href} target="_blank" rel="noreferrer" aria-label={`Open statement for ${billTx.description}`} title={statementLink.label}><span aria-hidden="true">{ACCUMUL8_STATEMENT_BUTTON_EMOJI}</span></a>
-                            ) : null}
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(billTx.id)} disabled={busy} aria-label={`View ${billTx.description}`} title={`View ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(billTx.id)} disabled={busy} aria-label={`Map ${billTx.description} to an entity alias`} title={`Map ${billTx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activatePayBillRow(billTx.id)} disabled={busy} aria-label={`Edit ${billTx.description}`} title={`Edit ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this bill item?')) { void deleteTransaction(billTx.id); } }} disabled={busy || !billEditPolicy.canDelete} aria-label={`Delete ${billTx.description}`} title={billEditPolicy.canDelete ? `Delete ${billTx.description}` : `${billEditPolicy.sourceLabel} transactions cannot be deleted here`}><i className="bi bi-trash"></i></button>
-                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `paybill-${billTx.id}` ? ' is-flashing' : ''}`} onClick={() => void savePayBillRow(billTx)} disabled={busy || !payBillDraftById[billTx.id]} aria-label={`Save ${billTx.description}`} title={payBillDraftById[billTx.id] ? `Save ${billTx.description}` : `No changes to save for ${billTx.description}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
-                          </div>
-                        </td>
-                      </tr>
-                        );
-                      })()
-                    ))}
-                    {payBillsTable.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="text-center text-muted py-4">No unpaid upcoming or past-due bills matched the current filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <Accumul8PayBillsTab
+              activatePayBillRow={activatePayBillRow}
+              activeOwnerUserId={activeOwnerUserId}
+              activePayBillRowId={activePayBillRowId}
+              beginViewTransaction={beginViewTransaction}
+              busy={busy}
+              customPayBillsEndDate={customPayBillsEndDate}
+              customPayBillsStartDate={customPayBillsStartDate}
+              deleteTransaction={deleteTransaction}
+              flashingSaveButtonKey={flashingSaveButtonKey}
+              getAccountDisplayName={getAccountDisplayName}
+              listSearchQuery={listSearchQueryByTab.pay_bills}
+              openLedgerEntityModal={openLedgerEntityModal}
+              payBillsAccountOptions={payBillsAccountOptions}
+              payBillsDateFilter={payBillsDateFilter}
+              payBillsTable={payBillsTable}
+              payBillsTableRef={payBillsTableRef}
+              payBillDraftById={payBillDraftById}
+              renderDateRangeControls={renderDateRangeControls}
+              savePayBillRow={savePayBillRow}
+              selectedOwnerUserId={selectedOwnerUserId}
+              setCustomPayBillsEndDate={setCustomPayBillsEndDate}
+              setCustomPayBillsStartDate={setCustomPayBillsStartDate}
+              setInlineRowRef={setInlineRowRef}
+              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: value }))}
+              setPayBillRowDraft={setPayBillRowDraft}
+              setPayBillsDateFilter={(value) => setPayBillsDateFilter(value as DateRangeFilter)}
+              statementUploads={statementUploads}
+              todayDate={todayDate}
+            />
           )}
           {tab === 'contacts' && (
-            <div className="accumul8-panel accumul8-panel--entity-manager accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Entity Manager</h3>
-                <div className="accumul8-panel-toolbar-search">
-                  <input
-                    type="text"
-                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.contacts.trim() !== '')}
-                    value={listSearchQueryByTab.contacts}
-                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: e.target.value }))}
-                    placeholder="Filter entity fields"
-                    aria-label="Filter entity fields"
-                  />
-                </div>
-                <button type="button" className="btn btn-success btn-sm" onClick={() => openCreateEntityModal()} disabled={busy}>Add Entity</button>
-              </div>
-              <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
-                <table
-                  ref={entitiesTableRef}
-                  className={[
-                    'table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head',
-                    activeEntityRowId !== null ? 'has-active-inline-edit' : '',
-                  ].filter(Boolean).join(' ')}
-                  style={entitiesTable.tableStyle}
-                >
-                  <colgroup>
-                    <col style={entitiesTable.getColumnStyle('name')} />
-                    <col style={entitiesTable.getColumnStyle('roles')} />
-                    <col style={entitiesTable.getColumnStyle('contactInfo')} />
-                    <col style={entitiesTable.getColumnStyle('lastTransaction')} />
-                    <col style={entitiesTable.getColumnStyle('status')} />
-                    <col style={entitiesTable.getColumnStyle('actions')} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <Accumul8TableHeaderCell label="Name" columnKey="name" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                      <Accumul8TableHeaderCell label="Roles" columnKey="roles" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                      <Accumul8TableHeaderCell label="Contact Info" columnKey="contactInfo" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                      <Accumul8TableHeaderCell label="Last Transaction" columnKey="lastTransaction" className="text-end" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                      <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                      <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={entitiesTable.sortState} onSort={entitiesTable.requestSort} onResizeStart={entitiesTable.startResize} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entitiesTable.rows.map((entity) => {
-                      const entityDraft = entityDraftById[entity.id];
-                      const entitySummary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
-                      const entityContactSummary = formatEntityContactSummary({
-                        phone_number: entityDraft?.phone_number ?? entity.phone_number,
-                        email: entityDraft?.email ?? entity.email,
-                        street_address: entityDraft?.street_address ?? entity.street_address,
-                        city: entityDraft?.city ?? entity.city,
-                        state: entityDraft?.state ?? entity.state,
-                        zip: entityDraft?.zip ?? entity.zip,
-                      });
-                      return (
-                      <tr
-                        key={entity.id}
-                        ref={(node) => setInlineRowRef(`entity-${entity.id}`, node)}
-                        className={[
-                          'accumul8-list-item',
-                          activeEntityRowId === entity.id ? 'is-editing' : '',
-                          entityDraft ? 'has-draft' : '',
-                        ].filter(Boolean).join(' ')}
-                      >
-                        <td>
-                          {activeEntityRowId === entity.id ? (
-                            <div className="accumul8-inline-stack">
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={entityDraft?.display_name ?? entity.display_name} onChange={(e) => setEntityRowDraft(entity, { display_name: e.target.value })} disabled={busy} />
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.notes ?? entity.notes ?? ''} onChange={(e) => setEntityRowDraft(entity, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
-                              <Accumul8EntityAliasEditor
-                                entity={entity}
-                                entities={entities}
-                                draft={entityAliasDraftById[entity.id] || DEFAULT_ENTITY_ALIAS_DRAFT}
-                                busy={busy}
-                                onDraftChange={(draft) => setEntityAliasDraftById((prev) => ({ ...prev, [entity.id]: draft }))}
-                                onAddAlias={() => saveEntityAlias(entity)}
-                                onRemoveAlias={removeEntityAlias}
-                              />
-                            </div>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
-                              <span>{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
-                              {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
-                              {entity.aliases.length > 0 ? (
-                                <span className="small text-muted d-block accumul8-entity-alias-summary">
-                                  Aliases: {entity.aliases.map((alias) => alias.alias_name).join(' | ')}
-                                </span>
-                              ) : null}
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          {activeEntityRowId === entity.id ? (
-                            <div className="accumul8-inline-stack">
-                              <select
-                                className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select"
-                                value={entityDraft?.contact_type ?? normalizeEntityContactType(entity)}
-                                onChange={(e) => setEntityRowDraft(entity, { contact_type: e.target.value as Accumul8ContactType })}
-                                disabled={busy}
-                              >
-                                <option value="payee">Payee</option>
-                                <option value="payer">Payer</option>
-                                <option value="repayment">Repayment</option>
-                              </select>
-                              <div className="accumul8-inline-check-grid">
-                                <label className="accumul8-inline-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={normalizeEntityKind(entityDraft?.entity_kind ?? entity.entity_kind, entityDraft?.is_vendor ?? entity.is_vendor) === 'business'}
-                                    onChange={(e) => setEntityRowDraft(entity, {
-                                      entity_kind: e.target.checked ? 'business' : 'contact',
-                                      is_vendor: e.target.checked ? 1 : 0,
-                                    })}
-                                    disabled={busy}
-                                  />
-                                  <span>Business</span>
-                                </label>
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeEntityRowId === entity.id ? (
-                            <div className="accumul8-inline-stack">
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.phone_number ?? entity.phone_number ?? ''} onChange={(e) => setEntityRowDraft(entity, { phone_number: e.target.value })} disabled={busy} placeholder="Phone" />
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.email ?? entity.email ?? ''} onChange={(e) => setEntityRowDraft(entity, { email: e.target.value })} disabled={busy} placeholder="Email" />
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.street_address ?? entity.street_address ?? ''} onChange={(e) => setEntityRowDraft(entity, { street_address: e.target.value })} disabled={busy} placeholder="Street address" />
-                              <div className="accumul8-inline-grid accumul8-inline-grid--triple">
-                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.city ?? entity.city ?? ''} onChange={(e) => setEntityRowDraft(entity, { city: e.target.value })} disabled={busy} placeholder="City" />
-                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.state ?? entity.state ?? ''} onChange={(e) => setEntityRowDraft(entity, { state: e.target.value })} disabled={busy} placeholder="State" />
-                                <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.zip ?? entity.zip ?? ''} onChange={(e) => setEntityRowDraft(entity, { zip: e.target.value })} disabled={busy} placeholder="ZIP" />
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
-                              {entityContactSummary.length > 0 ? entityContactSummary.map((line) => (
-                                <span key={line} className="small text-muted d-block">{line}</span>
-                              )) : <span className="small text-muted">No phone or email</span>}
-                            </button>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => setEntityHistoryEntityId(entity.id)} disabled={busy}>
-                            {entitySummary.lastAmount === null ? '-' : Number(entitySummary.lastAmount || 0).toFixed(2)}
-                            <span className="small text-muted d-block accumul8-inline-cell-meta">
-                              {entitySummary.lastDate ? `${formatInlineDate(entitySummary.lastDate)} · ${entitySummary.count} tx` : `${entitySummary.count} tx`}
-                            </span>
-                          </button>
-                        </td>
-                        <td>
-                          {activeEntityRowId === entity.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(entityDraft?.is_active ?? entity.is_active)} onChange={(e) => setEntityRowDraft(entity, { is_active: Number(e.target.value) })} disabled={busy}>
-                              <option value="1">Active</option>
-                              <option value="0">Paused</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused'}</button>
-                          )}
-                        </td>
-                        <td className="text-end is-compact-actions">
-                          <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
-                              onClick={() => setEntityHistoryEntityId(entity.id)}
-                              disabled={busy}
-                              aria-label={`View transactions for ${entity.display_name}`}
-                              title={`View transactions for ${entity.display_name}`}
-                            >
-                              <span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-primary accumul8-icon-action"
-                              onClick={() => activateEntityRow(entity.id)}
-                              disabled={busy}
-                              aria-label={`Edit ${entity.display_name}`}
-                              title={`Edit ${entity.display_name}`}
-                            >
-                              <span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `entity-${entity.id}` ? ' is-flashing' : ''}`}
-                              onClick={() => void saveEntityRow(entity)}
-                              disabled={busy || !entityDraft}
-                              aria-label={`Save ${entity.display_name}`}
-                              title={entityDraft ? `Save ${entity.display_name}` : `No changes to save for ${entity.display_name}`}
-                            >
-                              <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )})}
-                    {entitiesTable.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">No entities matched the current filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-	          )}
-	          {tab === 'entity_endex' && (
-	            <div className="accumul8-panel accumul8-panel--entity-endex accumul8-panel--viewport-fill">
-	              <div className="accumul8-panel-toolbar mb-3">
-	                <div>
-	                  <h3 className="mb-0">Entity Endex</h3>
-	                  <p className="small text-muted mb-0">Search parent entities, inspect aliases, and jump straight into cleanup.</p>
-	                </div>
-	                <div className="accumul8-entity-endex-search">
-	                  <input
-	                    className="form-control form-control-sm"
-	                    value={entityEndexQuery}
-	                    onChange={(event) => setEntityEndexQuery(event.target.value)}
-	                    placeholder="Search parents or aliases"
-	                  />
-	                </div>
-                  <div className="accumul8-entity-endex-toolbar-actions">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => openEntityEndexGuideModal()}
-                      disabled={busy}
-                    >
-                      New Group
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => void runEntityMaintenanceAliasScan()}
-                      disabled={busy}
-                      title="Run the full Entity Endex alias maintenance scan across all parent entities."
-                    >
-                      {entityEndexFindingAll ? 'Running Alias Scan...' : 'Entity Maintenance (Alias Scan)'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-secondary accumul8-icon-action"
-                      onClick={() => setEntityEndexLogOpen(true)}
-                      disabled={busy && entityEndexScanLogs.length === 0}
-                      aria-label="View Entity Endex scan history"
-                      title="View Entity Endex scan history"
-                    >
-                      <span aria-hidden="true">i</span>
-                    </button>
-                  </div>
-	              </div>
-                <div className="accumul8-entity-endex-scroll">
-	                <div className="accumul8-entity-endex-guide mb-3">
-	                  <div className="accumul8-entity-endex-guide-head">
-	                    <h4>Grouping Guide</h4>
-	                    <span className="small text-muted">Use these parent names when new statement imports create messy merchant variants.</span>
-	                  </div>
-	                  <div className="accumul8-entity-endex-guide-grid">
-	                    {entityEndexGuides.map((guide) => (
-	                      <button
-                          key={guide.id || guide.parent_name}
-                          type="button"
-                          className="accumul8-entity-endex-guide-card"
-                          onClick={() => openEntityEndexGuideModal(guide.id || null)}
-                          disabled={busy}
-                        >
-	                        <strong>{guide.parent_name}</strong>
-	                        <div className="accumul8-entity-endex-guide-rule">{guide.match_rule}</div>
-	                        <div className="accumul8-entity-endex-guide-examples">
-	                          {guide.examples.map((example) => (
-	                            <span key={example} className="accumul8-entity-endex-chip">{example}</span>
-	                          ))}
-	                        </div>
-	                      </button>
-	                    ))}
-	                  </div>
-	                </div>
-	                <div className="accumul8-entity-endex-grid">
-	                {entityEndexParents.map((entity) => {
-	                  const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
-	                  const summary = entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' };
-	                  const matchingGuide = entityEndexGuides.find((guide) => (
-                        Number(guide.parent_entity_id || 0) === entity.id
-                        || normalizeEntityAliasKey(guide.parent_name) === normalizeEntityAliasKey(entity.display_name)
-                      )) || entityEndexGuideByParentKey[normalizeEntityAliasKey(entity.display_name)] || null;
-	                  return (
-	                    <article key={entity.id} className="accumul8-entity-endex-card">
-	                      <div className="accumul8-entity-endex-card-head">
-	                        <div>
-	                          <h4>{entity.display_name}</h4>
-	                          <div className="accumul8-entity-endex-meta">
-	                            {Number(entity.legacy_contact_id || 0) > 0 || Number(entity.legacy_debtor_id || 0) > 0 ? 'Budget parent' : 'Alias parent'}
-	                            {summary.count > 0 ? ` · ${summary.count} tx` : ''}
-	                            {summary.lastDate ? ` · ${formatInlineDate(summary.lastDate)}` : ''}
-	                          </div>
-	                        </div>
-                          <div className="accumul8-entity-endex-card-actions">
-	                          <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditEntity(entity.id)} disabled={busy}>Edit</button>
-                          </div>
-	                      </div>
-	                      <div className="accumul8-entity-endex-section">
-	                        <span className="accumul8-entity-endex-label">Aliases</span>
-	                        <div className="accumul8-entity-endex-chip-row">
-	                          {entity.aliases.length > 0 ? entity.aliases.map((alias) => (
-	                            <span key={alias.id} className="accumul8-entity-endex-chip">{alias.alias_name}</span>
-	                          )) : <span className="small text-muted">No aliases yet.</span>}
-	                        </div>
-	                      </div>
-	                      {matchingGuide ? (
-	                        <div className="accumul8-entity-endex-section">
-	                          <span className="accumul8-entity-endex-label">Import Rule</span>
-	                          <div className="small text-muted mb-2">{matchingGuide.match_rule}</div>
-	                          <div className="accumul8-entity-endex-chip-row">
-	                            {matchingGuide.examples.map((example) => (
-	                              <span key={example} className="accumul8-entity-endex-chip">{example}</span>
-	                            ))}
-	                          </div>
-	                        </div>
-	                      ) : null}
-	                      <div className="accumul8-entity-endex-section">
-	                        <span className="accumul8-entity-endex-label">Hidden Linked Records</span>
-	                        <div className="accumul8-entity-endex-linked-list">
-	                          {linkedChildren.length > 0 ? linkedChildren.map((child) => {
-	                            const childSummary = entityTransactionSummaryById[child.id] || { count: 0, lastAmount: null, lastDate: '' };
-	                            return (
-	                              <button key={child.id} type="button" className="accumul8-entity-endex-linked-item" onClick={() => beginEditEntity(child.id)} disabled={busy}>
-	                                <span>{child.display_name}</span>
-	                                <span className="small text-muted">{childSummary.count} tx</span>
-	                              </button>
-	                            );
-	                          }) : <span className="small text-muted">No hidden linked records.</span>}
-	                        </div>
-	                      </div>
-	                    </article>
-	                  );
-	                })}
-	                {entityEndexParents.length === 0 ? (
-	                  <div className="text-muted">No parent entities matched the current search.</div>
-	                ) : null}
-	                </div>
-                </div>
-	            </div>
-	          )}
+            <Accumul8ContactsTab
+              activeEntityRowId={activeEntityRowId}
+              activateEntityRow={activateEntityRow}
+              busy={busy}
+              defaultEntityAliasDraft={DEFAULT_ENTITY_ALIAS_DRAFT}
+              entities={entities}
+              entitiesTable={entitiesTable}
+              entitiesTableRef={entitiesTableRef}
+              entityAliasDraftById={entityAliasDraftById}
+              entityDraftById={entityDraftById}
+              entityTransactionSummaryById={entityTransactionSummaryById}
+              flashingSaveButtonKey={flashingSaveButtonKey}
+              listSearchQuery={listSearchQueryByTab.contacts}
+              openCreateEntityModal={openCreateEntityModal}
+              removeEntityAlias={removeEntityAlias}
+              saveEntityAlias={saveEntityAlias}
+              saveEntityRow={saveEntityRow}
+              setEntityAliasDraftById={setEntityAliasDraftById}
+              setEntityHistoryEntityId={setEntityHistoryEntityId}
+              setEntityRowDraft={setEntityRowDraft}
+              setInlineRowRef={setInlineRowRef}
+              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: value }))}
+            />
+          )}
+          {tab === 'entity_endex' && (
+            <Accumul8EntityEndexTab
+              beginEditEntity={beginEditEntity}
+              busy={busy}
+              entityEndexFindingAll={entityEndexFindingAll}
+              entityEndexGuideByParentKey={entityEndexGuideByParentKey}
+              entityEndexGuides={entityEndexGuides}
+              entityEndexParents={entityEndexParents}
+              entityEndexQuery={entityEndexQuery}
+              entityEndexScanLogs={entityEndexScanLogs}
+              entityTransactionSummaryById={entityTransactionSummaryById}
+              linkedAliasEntitiesByParentId={linkedAliasEntitiesByParentId}
+              openEntityEndexGuideModal={openEntityEndexGuideModal}
+              runEntityMaintenanceAliasScan={runEntityMaintenanceAliasScan}
+              setEntityEndexLogOpen={setEntityEndexLogOpen}
+              setEntityEndexQuery={setEntityEndexQuery}
+            />
+          )}
           {tab === 'recurring' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar mb-3">
-                <h3 className="mb-0">Recurring</h3>
-                <div className="accumul8-panel-toolbar-search">
-                  <input
-                    type="text"
-                    className={getActiveFilterClass('form-control form-control-sm', listSearchQueryByTab.recurring.trim() !== '')}
-                    value={listSearchQueryByTab.recurring}
-                    onChange={(e) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: e.target.value }))}
-                    placeholder="Filter recurring fields"
-                    aria-label="Filter recurring fields"
-                  />
-                </div>
-                <button type="button" className="btn btn-success btn-sm" onClick={openCreateRecurringModal} disabled={busy}>Add Recurring Item</button>
-              </div>
-              <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--recurring">
-                <table
-                  ref={recurringTableRef}
-                  className="table table-sm accumul8-table accumul8-table--measured accumul8-table--recurring accumul8-sticky-head"
-                  style={recurringTable.tableStyle}
-                >
-                    <colgroup>
-                      <col style={recurringTable.getColumnStyle('title')} />
-                      <col style={recurringTable.getColumnStyle('nextDue')} />
-                      <col style={recurringTable.getColumnStyle('amount')} />
-                      <col style={recurringTable.getColumnStyle('frequency')} />
-                      <col style={recurringTable.getColumnStyle('account')} />
-                      <col style={recurringTable.getColumnStyle('paymentMethod')} />
-                      <col style={recurringTable.getColumnStyle('planner')} />
-                      <col style={recurringTable.getColumnStyle('status')} />
-                      <col style={recurringTable.getColumnStyle('actions')} />
-                    </colgroup>
-                  <thead><tr>
-                    <Accumul8TableHeaderCell label="Title" columnKey="title" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Next Date" columnKey="nextDue" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Amt" columnKey="amount" className="text-end" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Frequency" columnKey="frequency" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Acct" columnKey="account" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Method" columnKey="paymentMethod" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Planner" columnKey="planner" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Status" columnKey="status" sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                    <Accumul8TableHeaderCell label="Actions" columnKey="actions" className="text-end" sortable={false} sortState={recurringTable.sortState} onSort={recurringTable.requestSort} onResizeStart={recurringTable.startResize} />
-                  </tr></thead>
-                  <tbody>
-                    {recurringTable.rows.map((rp) => {
-                      const recurringDraft = recurringDraftById[rp.id];
-                      return (
-                      <tr ref={(node) => setInlineRowRef(`recurring-${rp.id}`, node)} key={rp.id} className={['accumul8-list-item', activeRecurringRowId === rp.id ? 'is-editing' : '', recurringDraft ? 'has-draft' : ''].filter(Boolean).join(' ')}>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <div className="accumul8-inline-stack">
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={recurringDraft?.title ?? rp.title} onChange={(e) => setRecurringRowDraft(rp, { title: e.target.value })} disabled={busy} />
-                              <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={recurringDraft?.notes ?? rp.notes ?? ''} onChange={(e) => setRecurringRowDraft(rp, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
-                            </div>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>
-                              {formatRecurringTitle(rp.title)}
-                              {rp.notes ? <span className="small text-muted d-block">{rp.notes}</span> : null}
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--date" type="date" value={recurringDraft?.next_due_date ?? rp.next_due_date} onChange={(e) => setRecurringRowDraft(rp, { next_due_date: e.target.value })} disabled={busy} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatInlineDate(rp.next_due_date)}</button>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          {activeRecurringRowId === rp.id ? (
-                            <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--numeric" type="number" step="0.01" value={recurringDraft?.amount ?? rp.amount} onChange={(e) => setRecurringRowDraft(rp, { amount: Number(e.target.value) })} disabled={busy} />
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatRecurringAmount(rp.amount, (rp.direction || 'outflow') as Accumul8Direction)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={recurringDraft?.frequency ?? rp.frequency} onChange={(e) => setRecurringRowDraft(rp, { frequency: e.target.value as Accumul8Frequency })} disabled={busy}>
-                              <option value="daily">Daily</option>
-                              <option value="weekly">Weekly</option>
-                              <option value="biweekly">Biweekly</option>
-                              <option value="monthly">Monthly</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{formatInlineText(rp.frequency)}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <select
-                              className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select"
-                              value={String(recurringDraft?.account_id ?? rp.account_id ?? '')}
-                              onChange={(e) => setRecurringRowDraft(rp, { account_id: e.target.value ? Number(e.target.value) : null })}
-                              disabled={busy}
-                            >
-                              <option value="">No account</option>
-                              {payBillsAccountOptions.map((account) => (
-                                <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{getAccountDisplayName(rp.account_id, rp.account_name, '', 'No account')}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={recurringDraft?.payment_method ?? rp.payment_method} onChange={(e) => setRecurringRowDraft(rp, { payment_method: e.target.value as Accumul8PaymentMethod })} disabled={busy}>
-                              {Object.entries(RECURRING_PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                                <option key={value} value={value}>{label}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{RECURRING_PAYMENT_METHOD_LABELS[(rp.payment_method || 'unspecified') as Accumul8PaymentMethod]}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(recurringDraft?.is_budget_planner ?? rp.is_budget_planner)} onChange={(e) => setRecurringRowDraft(rp, { is_budget_planner: Number(e.target.value) })} disabled={busy}>
-                              <option value="1">Shown</option>
-                              <option value="0">Hidden</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{rp.is_budget_planner ? 'Shown' : 'Hidden'}</button>
-                          )}
-                        </td>
-                        <td>
-                          {activeRecurringRowId === rp.id ? (
-                            <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(recurringDraft?.is_active ?? rp.is_active)} onChange={(e) => setRecurringRowDraft(rp, { is_active: Number(e.target.value) })} disabled={busy}>
-                              <option value="1">Active</option>
-                              <option value="0">Paused</option>
-                            </select>
-                          ) : (
-                            <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditRecurring(rp.id)} disabled={busy}>{rp.is_active ? 'Active' : 'Paused'}</button>
-                          )}
-                        </td>
-                        <td className="text-end is-compact-actions">
-                          <div className="accumul8-row-actions accumul8-row-actions--always-on">
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`View ${rp.title}`} title={`View ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
-                            <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring item?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
-                            <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy || !recurringDraft} aria-label={`Save ${rp.title}`} title={recurringDraft ? `Save ${rp.title}` : `No changes to save for ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
-                          </div>
-                        </td>
-                      </tr>
-                    )})}
-                    {recurringTable.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="text-center text-muted py-4">No recurring items matched the current filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <Accumul8RecurringTab
+              activeRecurringRowId={activeRecurringRowId}
+              beginEditRecurring={beginEditRecurring}
+              busy={busy}
+              deleteRecurring={deleteRecurring}
+              flashingSaveButtonKey={flashingSaveButtonKey}
+              getAccountDisplayName={getAccountDisplayName}
+              listSearchQuery={listSearchQueryByTab.recurring}
+              openCreateRecurringModal={openCreateRecurringModal}
+              payBillsAccountOptions={payBillsAccountOptions}
+              recurringDraftById={recurringDraftById}
+              recurringTable={recurringTable}
+              recurringTableRef={recurringTableRef}
+              saveRecurringRow={saveRecurringRow}
+              setInlineRowRef={setInlineRowRef}
+              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: value }))}
+              setRecurringRowDraft={setRecurringRowDraft}
+            />
           )}
           {tab === 'notifications' && (
             <Accumul8NotificationsTab
@@ -4190,8 +3433,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             entityEndexLogOpen={entityEndexLogOpen}
             entityEndexScanLogs={entityEndexScanLogs}
             formatAccountDisplayName={getAccountDisplayName}
-            formatInlineDate={formatInlineDate}
-            formatInlineDateTime={formatInlineDateTime}
             loadMessageBoard={loadMessageBoard}
             messageBoardLoading={messageBoardLoading}
             messageBoardMessages={messageBoardMessages}

@@ -1,0 +1,118 @@
+import React from 'react';
+
+import { ApiClient } from '../../core/ApiClient';
+import { PhotoAlbumMutationResponse } from '../../types/photoAlbums';
+import { DeleteAlbumArgs, PhotoAlbumsMutationsArgs } from './photoAlbumMutationTypes';
+
+export function usePhotoAlbumsCrudMutations(args: PhotoAlbumsMutationsArgs) {
+  const {
+    isAdmin,
+    createForm,
+    defaultCreateForm,
+    adminDraft,
+    selectedAlbum,
+    setBusy,
+    setShowCreateModal,
+    setCreateForm,
+    setSelectedId,
+    setShowAdminModal,
+    setAdminDraft,
+    setShowAlbumViewer,
+    loadAlbums,
+    toast,
+  } = args;
+
+  const createWithAi = React.useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=create_with_ai', createForm);
+      const created = res?.album;
+      if (created?.id) {
+        toast('success', 'Photo album created with AI design');
+      }
+      setShowCreateModal(false);
+      setCreateForm(defaultCreateForm);
+      await loadAlbums();
+      if (created?.id) {
+        setSelectedId(created.id);
+      }
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to create album');
+    } finally {
+      setBusy(false);
+    }
+  }, [createForm, defaultCreateForm, isAdmin, loadAlbums, setBusy, setCreateForm, setSelectedId, setShowCreateModal, toast]);
+
+  const saveAdminEdits = React.useCallback(async () => {
+    if (!isAdmin || !adminDraft) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<PhotoAlbumMutationResponse>('/api/photo_albums.php?action=update', {
+        id: adminDraft.id,
+        title: adminDraft.title,
+        summary: adminDraft.summary,
+        cover_image_url: adminDraft.cover_image_url,
+        cover_prompt: adminDraft.cover_prompt,
+        is_active: adminDraft.is_active,
+        spec: adminDraft.spec,
+      });
+      if (res?.album) {
+        setAdminDraft(res.album);
+      }
+      toast('success', 'Photo album updated');
+      await loadAlbums();
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to update album');
+    } finally {
+      setBusy(false);
+    }
+  }, [adminDraft, isAdmin, loadAlbums, setAdminDraft, setBusy, toast]);
+
+  const deleteAlbumById = React.useCallback(async ({ id, title }: DeleteAlbumArgs) => {
+    if (!isAdmin || !id) {
+      return;
+    }
+
+    const label = (title || 'this album').trim();
+    const proceed = window.confirm(`Delete album "${label}"?`);
+    if (!proceed) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await ApiClient.post('/api/photo_albums.php?action=delete', { id });
+      toast('success', 'Photo album deleted');
+      setShowAdminModal(false);
+      setAdminDraft(null);
+      setShowAlbumViewer(false);
+      await loadAlbums();
+    } catch (error: any) {
+      toast('error', error?.message || 'Failed to delete album');
+    } finally {
+      setBusy(false);
+    }
+  }, [isAdmin, loadAlbums, setAdminDraft, setBusy, setShowAdminModal, setShowAlbumViewer, toast]);
+
+  const deleteSelectedAlbum = React.useCallback(async () => {
+    const album = adminDraft || selectedAlbum;
+    if (!album) {
+      return;
+    }
+    await deleteAlbumById({ id: album.id, title: album.title });
+  }, [adminDraft, deleteAlbumById, selectedAlbum]);
+
+  return {
+    createWithAi,
+    saveAdminEdits,
+    deleteSelectedAlbum,
+    deleteAlbumById,
+  };
+}

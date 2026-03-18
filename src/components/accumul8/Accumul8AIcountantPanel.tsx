@@ -1,6 +1,10 @@
 import React from 'react';
 
 import { useAccumul8AIcountant } from '../../hooks/useAccumul8AIcountant';
+import {
+  Accumul8AIcountantSidebar,
+  Accumul8AIcountantThread,
+} from './accumul8AIcountantViews';
 
 import './Accumul8AIcountantPanel.css';
 
@@ -22,22 +26,6 @@ interface Accumul8AIcountantPanelProps {
   onOpenMessageBoard: () => void;
   onDataChanged?: () => Promise<void> | void;
   onToast?: (payload: ToastPayload) => void;
-}
-
-function formatConversationTime(value: string): string {
-  if (!value) {
-    return '';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
 }
 
 export function Accumul8AIcountantPanel({
@@ -102,68 +90,26 @@ export function Accumul8AIcountantPanel({
 
   return (
     <div className="accumul8-aicountant">
-      <aside className="accumul8-aicountant-sidebar">
-        <div className="accumul8-aicountant-sidebar-top">
-          <button
-            type="button"
-            className="btn btn-primary accumul8-aicountant-new-chat"
-            onClick={() => {
-              void createConversation();
-            }}
-            disabled={loading || sending}
-          >
-            New Chat
-          </button>
-          <div className="accumul8-aicountant-note">
-            <strong>AIcountant</strong>
-            <span>ChatGPT-style bookkeeping assistant for {ownerUsername || 'this owner'}.</span>
-          </div>
-        </div>
-
-        <div className="accumul8-aicountant-sidebar-list">
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              className={`accumul8-aicountant-conversation-card${activeConversation?.id === conversation.id ? ' is-active' : ''}`}
-            >
-              <button
-                type="button"
-                className="accumul8-aicountant-conversation-card-button"
-                onClick={() => {
-                  void openConversation(conversation.id);
-                }}
-              >
-                <strong>{conversation.title || 'Untitled Chat'}</strong>
-                <span>{conversation.last_message_preview || 'No messages yet.'}</span>
-                <small>{formatConversationTime(conversation.updated_at)}</small>
-              </button>
-              <button
-                type="button"
-                className="accumul8-aicountant-conversation-delete"
-                aria-label={`Delete ${conversation.title || 'Untitled Chat'}`}
-                title="Delete this saved chat"
-                onClick={() => {
-                  if (!window.confirm(`Delete "${conversation.title || 'Untitled Chat'}"?`)) {
-                    return;
-                  }
-                  void deleteConversation(conversation.id);
-                }}
-                disabled={loading || sending}
-              >
-                🗑️
-              </button>
-            </div>
-          ))}
-          {!conversations.length ? (
-            <div className="accumul8-aicountant-empty-rail">Start a new chat to create your first saved AIcountant conversation.</div>
-          ) : null}
-        </div>
-
-        <details className="accumul8-aicountant-system-prompt">
-          <summary>Prompt Template</summary>
-          <textarea className="form-control" value={defaultSystemPrompt} readOnly rows={12} />
-        </details>
-      </aside>
+      <Accumul8AIcountantSidebar
+        loading={loading}
+        sending={sending}
+        ownerUsername={ownerUsername}
+        activeConversationId={activeConversation?.id || null}
+        conversations={conversations}
+        defaultSystemPrompt={defaultSystemPrompt}
+        onCreateConversation={() => {
+          void createConversation();
+        }}
+        onOpenConversation={(conversationId) => {
+          void openConversation(conversationId);
+        }}
+        onDeleteConversation={(conversationId, title) => {
+          if (!window.confirm(`Delete "${title}"?`)) {
+            return;
+          }
+          void deleteConversation(conversationId);
+        }}
+      />
 
       <section className="accumul8-aicountant-main">
         <header className="accumul8-aicountant-header">
@@ -252,37 +198,7 @@ export function Accumul8AIcountantPanel({
           </div>
         </header>
 
-        <div className="accumul8-aicountant-thread" ref={threadRef}>
-          {messages.length ? (
-            messages.map((message) => (
-              <article
-                key={message.id}
-                className={`accumul8-aicountant-message accumul8-aicountant-message--${message.role === 'assistant' ? 'assistant' : 'user'}`}
-              >
-                <div className="accumul8-aicountant-avatar">{message.role === 'assistant' ? 'AI' : 'You'}</div>
-                <div className="accumul8-aicountant-bubble">
-                  <div className="accumul8-aicountant-bubble-meta">
-                    <strong>{message.role === 'assistant' ? 'AIcountant' : 'You'}</strong>
-                    <span>{formatConversationTime(message.created_at)}</span>
-                  </div>
-                  <div className="accumul8-aicountant-bubble-text">{message.content_text}</div>
-                </div>
-              </article>
-            ))
-          ) : null}
-          {sending ? (
-            <div className="accumul8-aicountant-message accumul8-aicountant-message--assistant">
-              <div className="accumul8-aicountant-avatar">AI</div>
-              <div className="accumul8-aicountant-bubble">
-                <div className="accumul8-aicountant-typing">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
+        <Accumul8AIcountantThread messages={messages} sending={sending} threadRef={threadRef} />
 
         <footer className="accumul8-aicountant-composer">
           <textarea

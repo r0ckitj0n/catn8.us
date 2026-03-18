@@ -58,111 +58,48 @@ import {
   withDownloadFlag,
 } from '../../components/pages/build-wizard/buildWizardUtils';
 import { DateRangeChart, FooterPhaseTimeline } from '../../components/pages/build-wizard/BuildWizardTimeline';
+import {
+  BuildWizardConfirmState,
+  BuildWizardContactType,
+  BuildWizardSearchResult,
+  BuildWizardTaskMeta,
+  BuildWizardTaskType,
+  InlineReceiptField,
+  LightboxPreview,
+  PhaseDateRange,
+  ProjectOverviewPhaseSection,
+  ProjectOverviewStepRow,
+  SpreadsheetPreviewSheet,
+  TaskDocumentField,
+  TaskDocumentPreview,
+  contactTypeChipClass,
+  contactTypeLabel,
+  normalizeContactType,
+} from './buildWizardPageRenderTypes';
+import {
+  BUILD_WIZARD_TASK_META_PREFIX,
+  composeReceiptNotesWithTaskMeta,
+  defaultTaskMeta,
+  getTaskEffectiveDate,
+  isLegacyAutoStampedTaskDate,
+  parseTaskDocumentPreview as parseTaskDocumentPreviewBase,
+  parseTaskMetaFromReceiptNotes as parseTaskMetaFromReceiptNotesBase,
+  setTaskDateOverrideInReceiptNotes as setTaskDateOverrideInReceiptNotesBase,
+  taskUsesManualDateOverride,
+} from './buildWizardTaskMetaUtils';
+import { buildSearchText, buildStepCostVerificationSignature, isTextLikeMime } from './buildWizardSearchCostUtils';
+import {
+  BuildWizardDocumentGallery,
+  BuildWizardLauncher,
+  BuildWizardProjectPhotosSection,
+  BuildWizardTemplateEditor,
+} from './buildWizardRenderSections';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
   isAdmin?: boolean;
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-
-type SpreadsheetPreviewSheet = {
-  name: string;
-  rows: string[][];
-};
-
-type TaskDocumentField = {
-  label: string;
-  value: string;
-};
-
-type TaskDocumentPreview = {
-  summaryFields: TaskDocumentField[];
-  noteLines: string[];
-  metaFields: TaskDocumentField[];
-  systemLines: string[];
-};
-
-type LightboxPreview =
-  | { mode: 'image'; src: string; title: string }
-  | { mode: 'embed'; src: string; title: string }
-  | { mode: 'loading'; src: string; title: string }
-  | { mode: 'spreadsheet'; src: string; title: string; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
-  | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean; format: 'text' | 'hex' }
-  | { mode: 'text'; src: string; title: string; text: string; truncated: boolean; taskPreview: TaskDocumentPreview | null }
-  | { mode: 'error'; src: string; title: string; message: string };
-
-type BuildWizardSearchResult =
-  | {
-      id: string;
-      score: number;
-      kind: 'phase';
-      title: string;
-      subtitle: string;
-      phaseId: BuildTabId;
-    }
-  | {
-      id: string;
-      score: number;
-      kind: 'step';
-      title: string;
-      subtitle: string;
-      stepId: number;
-      phaseId: BuildTabId;
-    }
-  | {
-      id: string;
-      score: number;
-      kind: 'document';
-      title: string;
-      subtitle: string;
-      document: IBuildWizardDocument;
-      linkedStepId: number;
-      linkedPhaseId: BuildTabId | null;
-    };
-
-type BuildWizardConfirmState = {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  confirmButtonClass: string;
-  resolve: (confirmed: boolean) => void;
-};
-
-type PhaseDateRange = {
-  start: string | null;
-  end: string | null;
-};
-
-type ProjectOverviewStepRow = {
-  stepId: number;
-  displayOrder: number;
-  title: string;
-  stepType: StepType;
-  startIso: string | null;
-  endIso: string | null;
-  durationDays: number | null;
-  totalCost: number;
-  costMode: 'actual' | 'estimated' | 'missing';
-  assigneeCount: number;
-  documentCount: number;
-  isCompleted: boolean;
-  hasTimeline: boolean;
-  leftPercent: number;
-  widthPercent: number;
-};
-
-type ProjectOverviewPhaseSection = {
-  tabId: BuildTabId;
-  label: string;
-  phaseColor: string;
-  stepCount: number;
-  completedCount: number;
-  totalCost: number;
-  startIso: string | null;
-  endIso: string | null;
-  rows: ProjectOverviewStepRow[];
-};
 
 const LIGHTBOX_ZOOM_MIN = 0.5;
 const LIGHTBOX_ZOOM_MAX = 3;
@@ -174,60 +111,6 @@ const clampLightboxZoom = (value: number): number => {
   return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
 };
 
-type BuildWizardContactType = 'contact' | 'vendor' | 'authority';
-
-const normalizeContactType = (contact: Pick<IBuildWizardContact, 'contact_type' | 'is_vendor'>): BuildWizardContactType => {
-  const raw = String(contact.contact_type || '').trim().toLowerCase();
-  if (raw === 'vendor' || raw === 'authority' || raw === 'contact') {
-    return raw;
-  }
-  return Number(contact.is_vendor) === 1 ? 'vendor' : 'contact';
-};
-
-const contactTypeLabel = (contactType: BuildWizardContactType): string => {
-  if (contactType === 'vendor') {
-    return 'Vendor';
-  }
-  if (contactType === 'authority') {
-    return 'Authority';
-  }
-  return 'Contact';
-};
-
-const contactTypeChipClass = (contactType: BuildWizardContactType): string => {
-  if (contactType === 'vendor') {
-    return 'is-vendor';
-  }
-  if (contactType === 'authority') {
-    return 'is-authority';
-  }
-  return 'is-contact';
-};
-
-type BuildWizardTaskType = StepType | 'quote';
-
-type BuildWizardTaskMeta = {
-  task_type: BuildWizardTaskType;
-  manual_date_override: boolean;
-  permit_document_id: number | null;
-  permit_name: string | null;
-  permit_authority: string | null;
-  permit_status: string | null;
-  permit_application_url: string | null;
-  purchase_category: string | null;
-  purchase_brand: string | null;
-  purchase_model: string | null;
-  purchase_sku: string | null;
-  purchase_unit: string | null;
-  purchase_qty: number | null;
-  purchase_unit_price: number | null;
-  purchase_vendor: string | null;
-  purchase_url: string | null;
-  source_ref: string | null;
-};
-type InlineReceiptField = 'vendor' | 'type' | 'date' | 'amount';
-
-const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
 const LIGHTBOX_TEXT_PREVIEW_MAX_CHARS = 120000;
 const TEXT_PREVIEW_EXTENSIONS = new Set(['TXT', 'MD', 'JSON', 'CSV', 'LOG', 'XML', 'YAML', 'YML']);
 
@@ -259,345 +142,10 @@ const TASK_TYPE_OPTIONS: Array<{ value: BuildWizardTaskType; label: string }> = 
   { value: 'quote', label: 'Quote' },
 ];
 TASK_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-
-const defaultTaskMeta = (taskType: BuildWizardTaskType = 'construction'): BuildWizardTaskMeta => ({
-  task_type: taskType,
-  manual_date_override: false,
-  permit_document_id: null,
-  permit_name: null,
-  permit_authority: null,
-  permit_status: null,
-  permit_application_url: null,
-  purchase_category: null,
-  purchase_brand: null,
-  purchase_model: null,
-  purchase_sku: null,
-  purchase_unit: null,
-  purchase_qty: null,
-  purchase_unit_price: null,
-  purchase_vendor: null,
-  purchase_url: null,
-  source_ref: null,
-});
-
-const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined): { taskMeta: BuildWizardTaskMeta; plainNotes: string } => {
-  const raw = String(notes || '');
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith(BUILD_WIZARD_TASK_META_PREFIX)) {
-    return {
-      taskMeta: defaultTaskMeta(),
-      plainNotes: raw,
-    };
-  }
-  const newlineIndex = trimmed.indexOf('\n');
-  const jsonPart = (newlineIndex >= 0 ? trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length, newlineIndex) : trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length)).trim();
-  const plainNotes = newlineIndex >= 0 ? trimmed.slice(newlineIndex + 1) : '';
-  try {
-    const decoded = JSON.parse(jsonPart);
-    const seed = defaultTaskMeta();
-    if (!decoded || typeof decoded !== 'object') {
-      return { taskMeta: seed, plainNotes };
-    }
-    const taskType = String((decoded as Record<string, unknown>).task_type || '').trim() as BuildWizardTaskType;
-    return {
-      taskMeta: {
-        ...seed,
-        ...(decoded as Partial<BuildWizardTaskMeta>),
-        task_type: (TASK_TYPE_OPTIONS.some((option) => option.value === taskType) ? taskType : 'construction'),
-      },
-      plainNotes,
-    };
-  } catch (_err) {
-    return {
-      taskMeta: defaultTaskMeta(),
-      plainNotes: raw,
-    };
-  }
-};
-
-const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, plainNotes: string): string => {
-  const json = JSON.stringify(taskMeta);
-  const notes = plainNotes.trim();
-  return notes ? `${BUILD_WIZARD_TASK_META_PREFIX}${json}\n${notes}` : `${BUILD_WIZARD_TASK_META_PREFIX}${json}`;
-};
-
-const isLegacyAutoStampedTaskDate = (
-  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
-  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
-): boolean => {
-  if (String(doc.kind || '').trim() !== 'receipt') {
-    return false;
-  }
-  if (taskMeta?.manual_date_override === true) {
-    return false;
-  }
-  const taskDate = toStringOrNull(doc.receipt_date || '');
-  const uploadedDate = toStringOrNull(String(doc.uploaded_at || '').slice(0, 10));
-  return Boolean(taskDate && uploadedDate && taskDate === uploadedDate);
-};
-
-const taskUsesManualDateOverride = (
-  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
-  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
-): boolean => {
-  const taskDate = toStringOrNull(doc.receipt_date || '');
-  if (!taskDate || String(doc.kind || '').trim() !== 'receipt') {
-    return false;
-  }
-  if (taskMeta?.manual_date_override === true) {
-    return true;
-  }
-  return !isLegacyAutoStampedTaskDate(doc, taskMeta);
-};
-
-const getTaskEffectiveDate = (
-  doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>,
-  step?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'> | null,
-  taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null,
-): string | null => {
-  if (taskUsesManualDateOverride(doc, taskMeta)) {
-    return toStringOrNull(doc.receipt_date || '');
-  }
-  return toStringOrNull(step?.expected_start_date || '') || toStringOrNull(step?.expected_end_date || '');
-};
-
-const setTaskDateOverrideInReceiptNotes = (
-  notes: string | null | undefined,
-  taskDate: string | null | undefined,
-): string => {
-  const parsed = parseTaskMetaFromReceiptNotes(notes);
-  return composeReceiptNotesWithTaskMeta(
-    {
-      ...parsed.taskMeta,
-      manual_date_override: Boolean(toStringOrNull(taskDate || '')),
-    },
-    parsed.plainNotes,
-  );
-};
-
-const isTextLikeMime = (mime: string): boolean => {
-  const normalized = String(mime || '').trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  return normalized.startsWith('text/')
-    || normalized.includes('json')
-    || normalized.includes('xml')
-    || normalized.includes('yaml')
-    || normalized.includes('csv')
-    || normalized.includes('javascript');
-};
-
-const normalizeTaskMetaValue = (value: unknown): string => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  if (typeof value === 'string') {
-    return value.trim();
-  }
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : '';
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No';
-  }
-  return '';
-};
-
-const parseTaskDocumentPreview = (text: string): TaskDocumentPreview | null => {
-  const normalized = String(text || '').replace(/\r\n?/g, '\n');
-  if (!normalized.trim()) {
-    return null;
-  }
-
-  const lines = normalized.split('\n');
-  const summaryFields: TaskDocumentField[] = [];
-  const summaryPrefixes: Array<{ label: string; regex: RegExp }> = [
-    { label: 'Task', regex: /^Task:\s*(.+)\s*$/i },
-    { label: 'Vendor', regex: /^Vendor:\s*(.+)\s*$/i },
-    { label: 'Date', regex: /^Date:\s*(.+)\s*$/i },
-    { label: 'Amount', regex: /^Amount:\s*(.+)\s*$/i },
-  ];
-  summaryPrefixes.forEach(({ label, regex }) => {
-    const match = lines.find((line) => regex.test(line));
-    if (!match) {
-      return;
-    }
-    const value = (match.match(regex)?.[1] || '').trim();
-    if (value) {
-      summaryFields.push({ label, value });
-    }
-  });
-
-  const notesStart = lines.findIndex((line) => /^Notes:\s*$/i.test(line.trim()));
-  const trailingLines = notesStart >= 0 ? lines.slice(notesStart + 1) : [];
-  const noteLines: string[] = [];
-  const systemLines: string[] = [];
-  let decodedMeta: Partial<BuildWizardTaskMeta> | null = null;
-
-  trailingLines.forEach((line) => {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (trimmed.startsWith(BUILD_WIZARD_TASK_META_PREFIX)) {
-      const metaJson = trimmed.slice(BUILD_WIZARD_TASK_META_PREFIX.length).trim();
-      if (!metaJson) {
-        return;
-      }
-      try {
-        const parsed = JSON.parse(metaJson);
-        if (parsed && typeof parsed === 'object') {
-          decodedMeta = parsed as Partial<BuildWizardTaskMeta>;
-        }
-      } catch {
-        noteLines.push(trimmed);
-      }
-      return;
-    }
-    if (/^Imported from mapped note\b/i.test(trimmed) || /^Generated repair document\b/i.test(trimmed)) {
-      systemLines.push(trimmed);
-      return;
-    }
-    noteLines.push(trimmed);
-  });
-
-  const metaFields: TaskDocumentField[] = decodedMeta
-    ? (Object.keys(TASK_META_FIELD_LABELS) as Array<keyof BuildWizardTaskMeta>)
-      .map((fieldKey): TaskDocumentField | null => {
-        const rawValue = normalizeTaskMetaValue(decodedMeta?.[fieldKey]);
-        if (!rawValue) {
-          return null;
-        }
-        return {
-          label: TASK_META_FIELD_LABELS[fieldKey],
-          value: rawValue,
-        };
-      })
-      .filter((entry): entry is TaskDocumentField => entry !== null)
-    : [];
-
-  if (!summaryFields.length && !noteLines.length && !metaFields.length && !systemLines.length) {
-    return null;
-  }
-  return {
-    summaryFields,
-    noteLines,
-    metaFields,
-    systemLines,
-  };
-};
-
-const appendSearchTextParts = (
-  target: string[],
-  value: unknown,
-  seen: WeakSet<object>,
-): void => {
-  if (value === null || typeof value === 'undefined') {
-    return;
-  }
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    target.push(String(value));
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry) => appendSearchTextParts(target, entry, seen));
-    return;
-  }
-  if (typeof value === 'object') {
-    const objectValue = value as Record<string, unknown>;
-    if (seen.has(objectValue)) {
-      return;
-    }
-    seen.add(objectValue);
-    Object.values(objectValue).forEach((entry) => appendSearchTextParts(target, entry, seen));
-  }
-};
-
-const buildSearchText = (...values: unknown[]): string => {
-  const parts: string[] = [];
-  const seen = new WeakSet<object>();
-  values.forEach((value) => appendSearchTextParts(parts, value, seen));
-  return parts.join(' ').toLowerCase();
-};
-
-const STEP_COST_VERIFICATION_FIELDS: Array<keyof IBuildWizardStep> = [
-  'phase_key',
-  'parent_step_id',
-  'depends_on_step_ids',
-  'step_type',
-  'title',
-  'description',
-  'permit_required',
-  'permit_document_id',
-  'permit_name',
-  'permit_authority',
-  'permit_status',
-  'permit_application_url',
-  'purchase_category',
-  'purchase_brand',
-  'purchase_model',
-  'purchase_sku',
-  'purchase_unit',
-  'purchase_qty',
-  'purchase_unit_price',
-  'purchase_vendor',
-  'purchase_url',
-  'expected_start_date',
-  'expected_end_date',
-  'expected_duration_days',
-  'estimated_cost',
-  'actual_cost',
-  'is_completed',
-  'source_ref',
-];
-
-const buildStepCostVerificationSignature = (
-  step: IBuildWizardStep,
-  draft: Partial<IBuildWizardStep> | undefined,
-  stepDocuments: IBuildWizardDocument[],
-  effectiveActualCost: number | null,
-): string => {
-  const stepState: Record<string, unknown> = {};
-  STEP_COST_VERIFICATION_FIELDS.forEach((field) => {
-    if (field === 'actual_cost') {
-      stepState.actual_cost = effectiveActualCost;
-      return;
-    }
-    const draftValue = draft && Object.prototype.hasOwnProperty.call(draft, field) ? draft[field] : undefined;
-    const stepValue = draftValue !== undefined ? draftValue : step[field];
-    stepState[field] = field === 'depends_on_step_ids'
-      ? Array.isArray(stepValue) ? [...stepValue].map((id) => Number(id || 0)).sort((a, b) => a - b) : []
-      : stepValue ?? null;
-  });
-
-  const documentState = [...stepDocuments]
-    .sort((a, b) => {
-      const kindCmp = String(a.kind || '').localeCompare(String(b.kind || ''));
-      if (kindCmp !== 0) {
-        return kindCmp;
-      }
-      return a.id - b.id;
-    })
-    .map((doc) => ({
-      id: doc.id,
-      step_id: doc.step_id ?? null,
-      receipt_parent_document_id: doc.receipt_parent_document_id ?? null,
-      kind: doc.kind ?? '',
-      caption: doc.caption ?? null,
-      receipt_amount: doc.receipt_amount ?? null,
-      receipt_title: doc.receipt_title ?? null,
-      receipt_vendor: doc.receipt_vendor ?? null,
-      receipt_date: doc.receipt_date ?? null,
-      receipt_notes: doc.receipt_notes ?? null,
-      original_name: doc.original_name ?? '',
-    }));
-
-  return JSON.stringify({
-    step: stepState,
-    documents: documentState,
-  });
-};
+const allowedTaskTypes = TASK_TYPE_OPTIONS.map((option) => option.value);
+const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined) => parseTaskMetaFromReceiptNotesBase(notes, allowedTaskTypes);
+const setTaskDateOverrideInReceiptNotes = (notes: string | null | undefined, taskDate: string | null | undefined) => setTaskDateOverrideInReceiptNotesBase(notes, taskDate, allowedTaskTypes);
+const parseTaskDocumentPreview = (text: string): TaskDocumentPreview | null => parseTaskDocumentPreviewBase(text, TASK_META_FIELD_LABELS);
 
 export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps) {
   const {
@@ -5814,332 +5362,68 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const renderDocumentGallery = (items: typeof documents, emptyText: string, readOnly: boolean = false) => {
-    if (!items.length) {
-      return <div className="build-wizard-muted">{emptyText}</div>;
-    }
-
     return (
-      <div className="build-wizard-doc-gallery">
-        {items.map((doc) => (
-          <div className="build-wizard-doc-card" key={doc.id}>
-            {Number(doc.is_image) === 1 ? (
-              <button
-                className="build-wizard-doc-thumb-btn"
-                onClick={() => void openDocumentPreview(doc)}
-                title="Click to enlarge"
-              >
-                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
-              </button>
-            ) : isPdfDocument(doc) ? (
-              <button type="button" className="build-wizard-doc-thumb-link" onClick={() => void openDocumentPreview(doc)} title="Open preview">
-                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
-              </button>
-            ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
-              <button
-                type="button"
-                className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
-                onClick={() => void openDocumentPreview(doc)}
-                title="Open preview"
-              >
-                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                    <path d="M9 13h6M9 16h6" />
-                  </svg>
-                </span>
-                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                <span className="build-wizard-doc-file-open">Open preview</span>
-              </button>
-            ) : (
-              <button type="button" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich" onClick={() => void openDocumentPreview(doc)}>
-                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                    <path d="M9 13h6M9 16h6" />
-                  </svg>
-                </span>
-                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                <span className="build-wizard-doc-file-open">Open file</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className="build-wizard-doc-delete-btn"
-              title={unlinkingDocumentId === doc.id ? 'Removing...' : 'Remove from step'}
-              aria-label={unlinkingDocumentId === doc.id ? `Removing ${doc.original_name} from step` : `Remove ${doc.original_name} from step`}
-              onClick={() => void onRemoveDocumentFromStep(doc.id, doc.original_name)}
-              disabled={readOnly || unlinkingDocumentId === doc.id}
-            >
-              <svg viewBox="0 0 24 24" className="build-wizard-doc-delete-icon" aria-hidden="true">
-                <path d="M9 3h6a1 1 0 0 1 1 1v1h4v2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7H4V5h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-3 2v12h10V7H7Zm2 2h2v8H9V9Zm4 0h2v8h-2V9Z" />
-              </svg>
-            </button>
-            <div className="build-wizard-doc-name">{doc.original_name}</div>
-            <div className="build-wizard-doc-meta">
-              <span>{doc.kind}</span>
-              <span>{prettyPhaseLabel(doc.step_phase_key)}</span>
-              <span>{doc.step_title || 'No Step Linked'}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <BuildWizardDocumentGallery
+        emptyText={emptyText}
+        isPlanPreviewDoc={isPlanPreviewDoc}
+        isSpreadsheetPreviewDoc={isSpreadsheetPreviewDoc}
+        items={items}
+        openDocumentPreview={(doc) => { void openDocumentPreview(doc); }}
+        onRemoveDocumentFromStep={(id, originalName) => onRemoveDocumentFromStep(id, originalName)}
+        readOnly={readOnly}
+        unlinkingDocumentId={unlinkingDocumentId}
+      />
     );
   };
 
   const renderProjectPhotosAndKeyPaperwork = () => (
-    <>
-      <div className="build-wizard-section-divider" />
-      <h3>Project Photos & Key Paperwork</h3>
-      <div className="build-wizard-upload-row">
-        <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-          {docKindOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
-          {phaseOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
-          <option value="">Auto-link by phase</option>
-          {selectableDocSteps.map((step) => (
-            <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
-          ))}
-        </select>
-        <input
-          type="file"
-          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-          onChange={(e) => {
-            const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-            if (file) {
-              void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
-            }
-            e.currentTarget.value = '';
-          }}
-        />
-      </div>
-      <div className="build-wizard-upload-row build-wizard-primary-row">
-        <label>
-          Primary Project Photo
-          <select
-            value={Number(project?.primary_photo_document_id || 0) > 0 ? String(project?.primary_photo_document_id) : ''}
-            onChange={(e) => {
-              const nextId = Number(e.target.value || '0');
-              void updateProject({ primary_photo_document_id: nextId > 0 ? nextId : null });
-            }}
-          >
-            <option value="">No primary photo</option>
-            {primaryPhotoChoices.map((doc) => (
-              <option key={doc.id} value={doc.id}>{doc.original_name}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Primary Blueprint
-          <select
-            value={Number(project?.blueprint_document_id || 0) > 0 ? String(project?.blueprint_document_id) : ''}
-            onChange={(e) => {
-              const nextId = Number(e.target.value || '0');
-              void updateProject({ blueprint_document_id: nextId > 0 ? nextId : null });
-            }}
-          >
-            <option value="">No primary blueprint</option>
-            {primaryBlueprintChoices.map((doc) => (
-              <option key={doc.id} value={doc.id}>{doc.original_name}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {renderDocumentGallery(projectDocuments, 'No project media yet.')}
-    </>
+    <BuildWizardProjectPhotosSection
+      docKind={docKind}
+      docKindOptions={docKindOptions}
+      docPhaseKey={docPhaseKey}
+      docStepId={docStepId}
+      phaseOptions={phaseOptions}
+      primaryBlueprintChoices={primaryBlueprintChoices}
+      primaryPhotoChoices={primaryPhotoChoices}
+      project={project}
+      projectDocuments={projectDocuments}
+      renderDocumentGallery={renderDocumentGallery}
+      selectableDocSteps={selectableDocSteps}
+      setDocKind={setDocKind}
+      setDocPhaseKey={setDocPhaseKey}
+      setDocStepId={setDocStepId}
+      updateProject={updateProject}
+      uploadDocument={uploadDocument}
+    />
   );
 
   const renderLauncher = () => (
-    <div className="build-wizard-shell">
-      <div className="build-wizard-launcher">
-        <div className="build-wizard-page-close">
-          <button
-            type="button"
-            className="btn btn-outline-primary btn-sm"
-            onClick={onOpenTemplateEditor}
-          >
-            Template Editor
-          </button>
-          <StandardIconButton
-            iconKey="close"
-            ariaLabel="Close FABRIC8"
-            title="Close FABRIC8"
-            className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-            onClick={onCloseWizard}
-          />
-        </div>
-        <h1>FABRIC8</h1>
-        <p>Choose an existing build or start a new build.</p>
-        <div className="build-wizard-launcher-grid">
-          <div className="build-wizard-launch-card is-new">
-            <button
-              type="button"
-              className="build-wizard-launch-icon-btn"
-              onClick={() => void onCreateNewBuild()}
-              aria-label="Create a new home build project"
-              title="Create a new home build project"
-            >
-              <div className="build-wizard-thumb">
-                <div className="build-wizard-thumb-roof" />
-                <div className="build-wizard-thumb-body" />
-              </div>
-            </button>
-            <span className="build-wizard-launch-title">Build a New Home</span>
-            <div className="build-wizard-launcher-template-picker">
-              <label htmlFor="build-wizard-template-wastewater-kind">Wastewater setup</label>
-              <select
-                id="build-wizard-template-wastewater-kind"
-                className="form-select form-select-sm"
-                value={newHomeWastewaterKind}
-                onChange={(e) => {
-                  const next = String(e.target.value || '').trim();
-                  setNewHomeWastewaterKind(next === 'public_sewer' ? 'public_sewer' : 'septic');
-                }}
-              >
-                <option value="septic">Dawson County Home - Septic</option>
-                <option value="public_sewer">Dawson County Home - Public Sewer</option>
-              </select>
-            </div>
-            <div className="build-wizard-launcher-template-picker">
-              <label htmlFor="build-wizard-template-water-kind">Water source</label>
-              <select
-                id="build-wizard-template-water-kind"
-                className="form-select form-select-sm"
-                value={newHomeWaterKind}
-                onChange={(e) => {
-                  const next = String(e.target.value || '').trim();
-                  setNewHomeWaterKind(next === 'private_well' ? 'private_well' : 'county_water');
-                }}
-              >
-                <option value="county_water">County Water (Etowah Water &amp; Sewer)</option>
-                <option value="private_well">Private Well</option>
-              </select>
-            </div>
-          </div>
-
-          {launcherProjects.map((p) => (
-            <div
-              key={p.id}
-              className="build-wizard-launch-card build-wizard-launch-card-with-delete"
-              style={{ ['--thumb-tone' as any]: `${(p.id * 37) % 360}deg` }}
-            >
-              <button
-                type="button"
-                className="build-wizard-launch-card-open"
-                onClick={() => void openBuild(p.id, 'launcher')}
-                title={`Open ${p.title}`}
-              >
-                <div className="build-wizard-thumb build-wizard-thumb-media">
-                  <div className="build-wizard-thumb-media-main">
-                    {p.primary_photo_thumbnail_url ? (
-                      <WebpImage src={p.primary_photo_thumbnail_url} alt={`${p.title} primary photo`} className="build-wizard-thumb-media-image" />
-                    ) : (
-                      <div className="build-wizard-thumb-fallback">Photo</div>
-                    )}
-                  </div>
-                  <div className="build-wizard-thumb-media-overlay">
-                    {p.primary_blueprint_thumbnail_url ? (
-                      <WebpImage src={p.primary_blueprint_thumbnail_url} alt={`${p.title} primary blueprint`} className="build-wizard-thumb-media-image" />
-                    ) : (
-                      <div className="build-wizard-thumb-fallback is-blueprint">Blueprint</div>
-                    )}
-                  </div>
-                </div>
-                <span className="build-wizard-launch-title">{p.title}</span>
-              </button>
-              <button
-                type="button"
-                className="build-wizard-launch-card-delete"
-                aria-label={`Delete ${p.title}`}
-                title={`Delete ${p.title}`}
-                onClick={() => void onDeleteProject({ id: p.id, title: p.title })}
-                disabled={deletingProjectId === p.id}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
-              </button>
-            </div>
-          ))}
-          {launcherProjects.length === 0 ? (
-            <div className="build-wizard-launch-empty">
-              No home builds yet. Use <strong>Build a New Home</strong> to create your first project.
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
+    <BuildWizardLauncher
+      deletingProjectId={deletingProjectId}
+      launcherProjects={launcherProjects}
+      newHomeWastewaterKind={newHomeWastewaterKind}
+      newHomeWaterKind={newHomeWaterKind}
+      onCloseWizard={onCloseWizard}
+      onCreateNewBuild={onCreateNewBuild}
+      onDeleteProject={onDeleteProject}
+      onOpenTemplateEditor={onOpenTemplateEditor}
+      openBuild={openBuild}
+      setNewHomeWastewaterKind={setNewHomeWastewaterKind}
+      setNewHomeWaterKind={setNewHomeWaterKind}
+    />
   );
 
   const renderTemplateEditor = () => (
-    <div className="build-wizard-shell">
-      <div className="build-wizard-launcher">
-        <div className="build-wizard-page-close">
-          <button
-            type="button"
-            className="btn btn-outline-secondary btn-sm"
-            onClick={onBackToLauncher}
-          >
-            Back to Launcher
-          </button>
-          <StandardIconButton
-            iconKey="close"
-            ariaLabel="Close FABRIC8"
-            title="Close FABRIC8"
-            className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-            onClick={onCloseWizard}
-          />
-        </div>
-        <div className="build-wizard-template-editor-head">
-          <h1>Template Editor</h1>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void onCreateTemplate()}>
-            Create Template
-          </button>
-        </div>
-        <p>Manage reusable Build Wizard templates.</p>
-        <div className="build-wizard-template-editor-list">
-          {templateProjects.length === 0 ? (
-            <div className="build-wizard-template-editor-empty">No templates yet. Create your first template to get started.</div>
-          ) : (
-            templateProjects.map((template) => (
-              <div key={template.id} className="build-wizard-template-editor-row">
-                <div className="build-wizard-template-editor-meta">
-                  <div className="build-wizard-template-editor-title">{template.title}</div>
-                  <div className="build-wizard-template-editor-sub">
-                    {template.step_count} step{template.step_count === 1 ? '' : 's'} | Updated {formatDate(template.updated_at)}
-                  </div>
-                </div>
-                <div className="build-wizard-template-editor-actions">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => void openBuild(template.id, 'template_editor')}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => void onDeleteProject({ id: template.id, title: template.title })}
-                    disabled={deletingProjectId === template.id}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+    <BuildWizardTemplateEditor
+      deletingProjectId={deletingProjectId}
+      formatDate={formatDate}
+      onBackToLauncher={onBackToLauncher}
+      onCloseWizard={onCloseWizard}
+      onCreateTemplate={onCreateTemplate}
+      onDeleteProject={onDeleteProject}
+      openBuild={openBuild}
+      templateProjects={templateProjects}
+    />
   );
 
   const renderBuildWorkspace = () => (

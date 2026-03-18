@@ -1,16 +1,8 @@
 import React from 'react';
 import { PageLayout } from '../layout/PageLayout';
-import { BankingOrganizationManagerModal } from '../modals/BankingOrganizationManagerModal';
-import { Accumul8ContactModal } from '../modals/Accumul8ContactModal';
-import { Accumul8DebtorModal } from '../modals/Accumul8DebtorModal';
-import { Accumul8EntityModal } from '../modals/Accumul8EntityModal';
-import { Accumul8LedgerEntityModal } from '../modals/Accumul8LedgerEntityModal';
-import { Accumul8RecurringModal } from '../modals/Accumul8RecurringModal';
-import { Accumul8EndexGroupModal } from '../accumul8/Accumul8EndexGroupModal';
 import { Accumul8AIcountantPanel } from '../accumul8/Accumul8AIcountantPanel';
 import { Accumul8EntityAliasEditor } from '../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8TableHeaderCell } from '../accumul8/Accumul8TableHeaderCell';
-import { Accumul8TransactionModal } from '../modals/Accumul8TransactionModal';
 import {
   ACCUMUL8_EDIT_BUTTON_EMOJI,
   ACCUMUL8_MAP_BUTTON_EMOJI,
@@ -30,6 +22,71 @@ import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink'
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
 import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
+import {
+  OpeningBalanceMessageMeta,
+  RECURRING_PAYMENT_METHOD_LABELS,
+  addUtcDays,
+  formatAccountOptionLabel,
+  formatCurrencyAmount,
+  formatInlineDate,
+  formatInlineDateTime,
+  formatInlineText,
+  formatPayBillStatusLabel,
+  formatRecurringAmount,
+  formatRecurringTitle,
+  formatSummaryWindowLabel,
+  getLedgerEffectiveDate,
+  getOpeningBalanceMessageMeta,
+  isDateInRange,
+  matchesSearchQuery,
+  normalizeSearchQuery,
+  roundCurrency,
+} from './accumul8/accumul8PageDateSearchUtils';
+import {
+  Accumul8DebtorGroupRow,
+  EntityTransactionSummary,
+  buildEntityGuideRule,
+  formatEntityContactSummary,
+  formatEntityRoles,
+  formatEntityTransactionSummaryLabel,
+  getActiveFilterClass,
+  getLedgerDescriptionLabel,
+  inferEntityContactTypeForAmount,
+  isIouAccount,
+  isLaunchableHttpUrl,
+  isOpeningBalanceTransaction,
+  normalizeDebtorGroupKey,
+  normalizeEntityAliasKey,
+  normalizeEntityContactType,
+  normalizeEntityKind,
+  toEntityEndexGuideKey,
+  uniqueTextValues,
+} from './accumul8/accumul8PageEntityUtils';
+import {
+  DebtorFormState,
+  LedgerFormState,
+  LedgerInlineDraft,
+  RecurringFormState,
+  buildLedgerFormFromTransaction,
+  buildRecurringPayload,
+  createDefaultDebtorForm,
+  createDefaultLedgerForm,
+  isProjectedPlanningTransaction,
+  normalizePaidStateDraft,
+} from './accumul8/accumul8PageFormUtils';
+import {
+  findRecurringRuleForTransactionMapping,
+  formatAccountBackfillNote,
+  formatAccountMappingLabel,
+  formatSyncConnectionStatus,
+  formatSyncStatusLabel,
+  formatSyncStatusMessage,
+  formatSyncSummaryAccountLabel,
+  formatSyncSummaryBackfillNote,
+  formatTellerConnectError,
+  isTellerEligibilityFailure,
+  isTellerRateLimited,
+} from './accumul8/accumul8PageRecurringSyncUtils';
 import {
   Accumul8AIcountantHousekeepingResponse,
   Accumul8AIcountantWatchlistResponse,
@@ -57,6 +114,10 @@ import {
   Accumul8IdResponse,
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
+import { Accumul8NotificationsTab } from './accumul8/Accumul8NotificationsTab';
+import { Accumul8SyncTab } from './accumul8/Accumul8SyncTab';
+import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
+import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
 import './Accumul8Page.css';
 
 const Accumul8StatementsPanel = React.lazy(async () => {
@@ -72,11 +133,6 @@ const Accumul8CalendarView = React.lazy(async () => {
 const Accumul8SpreadsheetView = React.lazy(async () => {
   const mod = await import('../accumul8/Accumul8SpreadsheetView');
   return { default: mod.Accumul8SpreadsheetView };
-});
-
-const Accumul8SyncInstitutionsManager = React.lazy(async () => {
-  const mod = await import('../accumul8/Accumul8SyncInstitutionsManager');
-  return { default: mod.Accumul8SyncInstitutionsManager };
 });
 
 const ACCUMUL8_TAB_LOADING_FALLBACK = <div className="accumul8-panel text-muted py-4">Loading view...</div>;
@@ -109,29 +165,7 @@ type Accumul8SyncReport = {
   syncedAt: string;
   result: Accumul8TellerSyncResponse;
 };
-type OpeningBalanceMessageMeta = {
-  accountName: string;
-  adjustmentAmount: number | null;
-  bankBalance: number | null;
-  priorLedgerBalance: number | null;
-  transactionDate: string;
-  transactionId: number | null;
-};
 const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
-const RECURRING_PAYMENT_METHOD_LABELS: Record<Accumul8PaymentMethod, string> = {
-  unspecified: 'Unspecified',
-  autopay: 'Auto debit / autopay',
-  manual: 'Manual payment',
-};
-
-function formatRecurringTitle(value: string): string {
-  return formatInlineText(value, 'Untitled recurring item');
-}
-
-function formatRecurringAmount(value: number, direction: Accumul8Direction): string {
-  const normalized = Number(value || 0);
-  return `${direction === 'inflow' ? '+' : '-'}${Math.abs(normalized).toFixed(2)}`;
-}
 const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
   { value: 'all', label: 'All transactions' },
   { value: 'planning', label: 'Planning' },
@@ -145,50 +179,9 @@ const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: st
   { value: 'show_unpaid_only', label: 'Show unpaid only' },
   { value: 'show_upcoming_unpaid', label: 'Show upcoming unpaid' },
 ];
-type RecurringFormState = {
-  title: string;
-  direction: Accumul8Direction;
-  amount: number;
-  frequency: Accumul8Frequency;
-  payment_method: Accumul8PaymentMethod;
-  interval_count: number;
-  next_due_date: string;
-  entity_id: string;
-  account_id: string;
-  is_budget_planner: number;
-  notes: string;
-};
-type DebtorFormState = {
-  debtor_name: string;
-  notes: string;
-  is_active: number;
-};
-type LedgerFormState = {
-  transaction_date: string;
-  due_date: string;
-  paid_date: string;
-  entry_type: Accumul8EntryType;
-  description: string;
-  memo: string;
-  amount: number;
-  rta_amount: number;
-  is_paid: number;
-  is_reconciled: number;
-  is_budget_planner: number;
-  entity_id: string;
-  account_id: string;
-  balance_entity_id: string;
-  debtor_id: string;
-};
-type LedgerInlineDraft = Partial<Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'description' | 'memo' | 'amount' | 'rta_amount' | 'is_paid' | 'is_reconciled' | 'is_budget_planner' | 'entity_id' | 'entity_name' | 'account_id' | 'balance_entity_id' | 'balance_entity_name' | 'debtor_id' | 'debtor_name'>>;
 type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'notes' | 'is_active'>>;
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes' | 'account_id'>>;
-type Accumul8DebtorGroupRow = Accumul8Debtor & {
-  group_key: string;
-  member_ids: number[];
-  has_duplicate_members: boolean;
-};
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
@@ -261,655 +254,6 @@ const DATE_RANGE_FILTER_OPTIONS: Array<{ value: Exclude<DateRangeFilter, 'all_da
 ];
 const SUMMARY_WINDOW_OPTIONS = ['current', 7, 30, 60, 90] as const;
 type SummaryWindowOption = typeof SUMMARY_WINDOW_OPTIONS[number];
-
-function createDefaultDebtorForm(): DebtorFormState {
-  return { debtor_name: '', notes: '', is_active: 1 };
-}
-function createDefaultLedgerForm(defaults?: { accountId?: string; balanceEntityId?: string; debtorId?: string }): LedgerFormState {
-  return {
-    transaction_date: new Date().toISOString().slice(0, 10),
-    due_date: '',
-    paid_date: '',
-    entry_type: 'manual',
-    description: '',
-    memo: '',
-    amount: 0,
-    rta_amount: 0,
-    is_paid: 0,
-    is_reconciled: 0,
-    is_budget_planner: defaults?.balanceEntityId ? 0 : 1,
-    entity_id: '',
-    account_id: defaults?.accountId || '',
-    balance_entity_id: defaults?.balanceEntityId || '',
-    debtor_id: defaults?.debtorId || '',
-  };
-}
-function buildRecurringPayload(form: RecurringFormState) {
-  return {
-    ...form,
-    amount: Number(form.amount),
-    interval_count: Number(form.interval_count),
-    entity_id: form.entity_id ? Number(form.entity_id) : null,
-    account_id: form.account_id ? Number(form.account_id) : null,
-    is_budget_planner: Number(form.is_budget_planner),
-  };
-}
-
-function formatInlineDate(value: string): string {
-  if (!value) {
-    return '-';
-  }
-  const parsed = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit',
-  });
-}
-
-function formatInlineDateTime(value: string): string {
-  if (!value) {
-    return '-';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function formatSummaryWindowLabel(window: SummaryWindowOption): string {
-  return window === 'current' ? 'Current' : `${window} days`;
-}
-
-function isProjectedPlanningTransaction(
-  transaction: Pick<Accumul8Transaction, 'due_date' | 'transaction_date' | 'is_budget_planner' | 'source_kind'>,
-  todayDate: string,
-): boolean {
-  const effectiveDate = getLedgerEffectiveDate(transaction);
-  const sourceKind = String(transaction.source_kind || '');
-  const isPlannerOnly = Number(transaction.is_budget_planner || 0) === 1 && sourceKind !== 'teller';
-
-  if (isPlannerOnly) {
-    return true;
-  }
-
-  if (!effectiveDate || sourceKind === 'statement_pdf') {
-    return false;
-  }
-
-  return effectiveDate > todayDate;
-}
-
-function parseFiniteNumber(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizePaidStateDraft(
-  current: Pick<Accumul8Transaction, 'transaction_date' | 'due_date' | 'paid_date' | 'is_paid'>,
-  existingDraft: LedgerInlineDraft | undefined,
-  patch: LedgerInlineDraft,
-): LedgerInlineDraft {
-  const normalizedPatch: LedgerInlineDraft = { ...patch };
-  const currentPaidDate = String(existingDraft?.paid_date ?? current.paid_date ?? '').trim();
-  const currentDueDate = String(existingDraft?.due_date ?? current.due_date ?? '').trim();
-  const currentTransactionDate = String(existingDraft?.transaction_date ?? current.transaction_date ?? '').trim();
-
-  if (Object.prototype.hasOwnProperty.call(patch, 'paid_date')) {
-    const nextPaidDate = String(patch.paid_date || '').trim();
-    normalizedPatch.paid_date = nextPaidDate;
-    normalizedPatch.is_paid = nextPaidDate !== '' ? 1 : 0;
-    return normalizedPatch;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(patch, 'is_paid')) {
-    const nextIsPaid = Number(patch.is_paid || 0) === 1 ? 1 : 0;
-    normalizedPatch.is_paid = nextIsPaid;
-    normalizedPatch.paid_date = nextIsPaid === 1
-      ? (currentPaidDate || currentDueDate || currentTransactionDate)
-      : '';
-  }
-
-  return normalizedPatch;
-}
-
-function getOpeningBalanceMessageMeta(message: Accumul8MessageBoardMessage): OpeningBalanceMessageMeta | null {
-  if (String(message.source_kind || '') !== 'aicountant_opening_balance') {
-    return null;
-  }
-  const meta = message.meta && typeof message.meta === 'object' ? message.meta : {};
-  const safeMeta = meta as Record<string, unknown>;
-  const accountName = String(safeMeta.account_name || '').trim();
-  const transactionDate = String(safeMeta.transaction_date || '').trim();
-  const transactionId = Number(safeMeta.transaction_id || 0);
-  const adjustmentAmount = parseFiniteNumber(safeMeta.adjustment_amount);
-  const bankBalance = parseFiniteNumber(safeMeta.bank_balance);
-  const priorLedgerBalance = parseFiniteNumber(safeMeta.prior_ledger_balance);
-  if (!accountName && !transactionDate && transactionId <= 0 && adjustmentAmount === null && bankBalance === null && priorLedgerBalance === null) {
-    return null;
-  }
-  return {
-    accountName,
-    adjustmentAmount,
-    bankBalance,
-    priorLedgerBalance,
-    transactionDate,
-    transactionId: transactionId > 0 ? transactionId : null,
-  };
-}
-
-function formatInlineText(value: string | number | null | undefined, fallback = '-'): string {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : fallback;
-  }
-  return String(value || '').trim() || fallback;
-}
-
-function formatAccountOptionLabel(account: Pick<Accumul8Account, 'account_name' | 'account_nickname' | 'banking_organization_name' | 'mask_last4'>): string {
-  const primaryName = formatInlineText(getAccumul8AccountDisplayName(account), 'Unnamed account');
-  const bankingName = formatInlineText(account.banking_organization_name, '');
-  const maskLast4 = formatInlineText(account.mask_last4, '');
-  return [primaryName, bankingName, maskLast4 ? `••••${maskLast4}` : ''].filter(Boolean).join(' • ');
-}
-
-function normalizeDebtorGroupKey(value: string | null | undefined): string {
-  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
-function isIouAccount(account: Pick<Accumul8Account, 'account_type' | 'account_name'>): boolean {
-  const accountType = String(account.account_type || '').trim().toLowerCase();
-  const accountName = String(account.account_name || '').trim().toLowerCase();
-  return accountType.includes('iou') || /\biou\b/.test(accountName);
-}
-
-function getActiveFilterClass(baseClassName: string, isActive: boolean): string {
-  return isActive ? `${baseClassName} accumul8-filter-control--active` : baseClassName;
-}
-
-function isLaunchableHttpUrl(value: string | null | undefined): boolean {
-  return /^https?:\/\//i.test(String(value || '').trim());
-}
-
-function getLedgerDescriptionLabel(
-  transaction: Pick<Accumul8Transaction, 'description' | 'entity_name'>,
-  draft?: Pick<LedgerInlineDraft, 'description' | 'entity_name'>,
-): string {
-  const entityName = String(draft?.entity_name ?? transaction.entity_name ?? '').trim();
-  const fallbackDescription = String(draft?.description ?? transaction.description ?? '').trim();
-  return formatInlineText(entityName || fallbackDescription, '-');
-}
-
-function isOpeningBalanceTransaction(transaction: Accumul8Transaction): boolean {
-  const normalizedDescription = String(transaction.description || '').trim().toLowerCase();
-  const normalizedMemo = String(transaction.memo || '').trim().toLowerCase();
-  return (
-    normalizedDescription === 'opening balance'
-    && (normalizedMemo === '' || normalizedMemo.includes('opening balance'))
-  );
-}
-
-function buildLedgerFormFromTransaction(tx: Accumul8Transaction): LedgerFormState {
-  return {
-    transaction_date: tx.transaction_date || new Date().toISOString().slice(0, 10),
-    due_date: tx.due_date || '',
-    paid_date: tx.paid_date || '',
-    entry_type: (tx.entry_type || 'manual') as Accumul8EntryType,
-    description: tx.description || '',
-    memo: tx.memo || '',
-    amount: Number(tx.amount || 0),
-    rta_amount: Number(tx.rta_amount || 0),
-    is_paid: Number(tx.is_paid || 0),
-    is_reconciled: Number(tx.is_reconciled || 0),
-    is_budget_planner: Number(tx.is_budget_planner || 0),
-    entity_id: tx.entity_id ? String(tx.entity_id) : '',
-    account_id: tx.account_id ? String(tx.account_id) : '',
-    balance_entity_id: tx.balance_entity_id ? String(tx.balance_entity_id) : '',
-    debtor_id: tx.debtor_id ? String(tx.debtor_id) : '',
-  };
-}
-
-function normalizeSearchQuery(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function buildSearchTokens(field: string | number | null | undefined): string[] {
-  if (field === null || field === undefined) {
-    return [];
-  }
-
-  if (typeof field === 'number' && Number.isFinite(field)) {
-    const fixed = field.toFixed(2);
-    const normalizedFixed = fixed.replace(/[^0-9.-]+/g, '');
-    return Array.from(new Set([
-      String(field).toLowerCase(),
-      fixed.toLowerCase(),
-      normalizedFixed.toLowerCase(),
-    ].filter(Boolean)));
-  }
-
-  const raw = String(field).toLowerCase();
-  const normalized = raw.replace(/[$,\s]+/g, '');
-  return Array.from(new Set([raw, normalized].filter(Boolean)));
-}
-
-function matchesSearchQuery(query: string, fields: Array<string | number | null | undefined>): boolean {
-  if (!query) {
-    return true;
-  }
-  const normalizedQuery = query.replace(/[$,\s]+/g, '');
-  return fields.some((field) => buildSearchTokens(field).some((token) => token.includes(query) || token.includes(normalizedQuery)));
-}
-
-function normalizeEntityAliasKey(value: string | null | undefined): string {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-function toEntityEndexGuideKey(guide: Pick<Accumul8EntityEndexGuide, 'parent_name'>): string {
-  return normalizeEntityAliasKey(guide.parent_name);
-}
-
-function normalizeEntityContactType(entity: Pick<Accumul8Entity, 'contact_type' | 'is_payee' | 'is_payer' | 'is_balance_person'>): Accumul8ContactType {
-  const raw = String(entity.contact_type || '').trim().toLowerCase();
-  if (raw === 'repayment' || Number(entity.is_balance_person || 0) === 1) {
-    return 'repayment';
-  }
-  if (raw === 'payer' || (Number(entity.is_payer || 0) === 1 && Number(entity.is_payee || 0) === 0)) {
-    return 'payer';
-  }
-  return 'payee';
-}
-
-function inferEntityContactTypeForAmount(amount: number): Accumul8ContactType {
-  return amount > 0 ? 'payer' : 'payee';
-}
-
-function uniqueTextValues(values: Array<string | null | undefined>, normalize: (value: string) => string): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  values.forEach((value) => {
-    const display = String(value || '').trim();
-    const key = normalize(display);
-    if (!display || !key || seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    result.push(display);
-  });
-  return result;
-}
-
-function buildEntityGuideRule(description: string, entityName: string): string {
-  const normalizedDescription = String(description || '').trim();
-  const normalizedEntityName = String(entityName || '').trim();
-  if (!normalizedDescription || !normalizedEntityName) {
-    return 'Contains approved entity-name variants';
-  }
-  return `Contains approved variants of "${normalizedEntityName}" based on "${normalizedDescription}"`;
-}
-
-function normalizeRecurringText(value: string | null | undefined): string {
-  return String(value || '').trim().toLowerCase();
-}
-
-function recurringTextMatchScore(left: string | null | undefined, right: string | null | undefined): number {
-  const leftText = normalizeRecurringText(left);
-  const rightText = normalizeRecurringText(right);
-  if (!leftText || !rightText) {
-    return 0;
-  }
-
-  const leftKey = normalizeEntityAliasKey(leftText);
-  const rightKey = normalizeEntityAliasKey(rightText);
-  if (leftKey && rightKey && leftKey === rightKey) {
-    return 12;
-  }
-  if (leftText === rightText) {
-    return 11;
-  }
-  if (leftText.includes(rightText) || rightText.includes(leftText)) {
-    return 8;
-  }
-  if (leftKey && rightKey && (leftKey.includes(rightKey) || rightKey.includes(leftKey))) {
-    return 7;
-  }
-
-  const leftTokens = Array.from(new Set(leftText.split(/[^a-z0-9]+/i).filter((token) => token.length >= 3)));
-  const rightTokens = Array.from(new Set(rightText.split(/[^a-z0-9]+/i).filter((token) => token.length >= 3)));
-  if (leftTokens.length === 0 || rightTokens.length === 0) {
-    return 0;
-  }
-
-  let shared = 0;
-  leftTokens.forEach((leftToken) => {
-    if (rightTokens.some((rightToken) => (
-      rightToken === leftToken
-      || (leftToken.length >= 5 && rightToken.length >= 5 && (leftToken.startsWith(rightToken) || rightToken.startsWith(leftToken)))
-    ))) {
-      shared += 1;
-    }
-  });
-
-  const coverage = shared / Math.max(1, Math.min(leftTokens.length, rightTokens.length));
-  if (coverage >= 1) {
-    return 8;
-  }
-  if (coverage >= 0.5) {
-    return 5;
-  }
-  if (coverage >= 0.34) {
-    return 3;
-  }
-  return 0;
-}
-
-function recurringAmountMatchScore(expectedAmount: number, actualAmount: number): number {
-  const difference = Math.abs(Number(expectedAmount || 0) - Number(actualAmount || 0));
-  if (difference <= 0.01) {
-    return 10;
-  }
-  if (difference <= 1.0) {
-    return 8;
-  }
-  const maxMagnitude = Math.max(Math.abs(expectedAmount), Math.abs(actualAmount));
-  const relativeDifference = maxMagnitude > 0.009 ? (difference / maxMagnitude) : 0;
-  if (difference <= 5.0 && relativeDifference <= 0.05) {
-    return 6;
-  }
-  if (difference <= 25.0 && relativeDifference <= 0.1) {
-    return 4;
-  }
-  return -1;
-}
-
-function findRecurringRuleForTransactionMapping(
-  transaction: Accumul8Transaction,
-  recurringPayments: Accumul8RecurringPayment[],
-  targetEntityId: number,
-): Accumul8RecurringPayment | null {
-  if (Number(transaction.recurring_payment_id || 0) > 0) {
-    return recurringPayments.find((item) => item.id === Number(transaction.recurring_payment_id)) || null;
-  }
-
-  const transactionAmount = Number(transaction.amount || 0);
-  const transactionDirection: Accumul8Direction = transactionAmount >= 0 ? 'inflow' : 'outflow';
-  const transactionDescription = String(transaction.description || '').trim();
-  const scored = recurringPayments.map((recurring) => {
-    if (Number(recurring.is_active || 0) !== 1) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-    if ((recurring.direction || 'outflow') !== transactionDirection) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-    if (Number(transaction.account_id || 0) > 0 && Number(recurring.account_id || 0) > 0 && Number(recurring.account_id) !== Number(transaction.account_id)) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-    if (Number(recurring.entity_id || 0) > 0 && Number(recurring.entity_id) !== targetEntityId) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-
-    const amountScore = recurringAmountMatchScore(Math.abs(transactionAmount), Math.abs(Number(recurring.amount || 0)));
-    if (amountScore < 0) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-
-    const textCandidates = [
-      recurring.title,
-      recurring.entity_name,
-      recurring.contact_name,
-      ...(recurring.recurring_bank_aliases || []),
-    ];
-    const bestTextScore = textCandidates.reduce(
-      (best, candidate) => Math.max(best, recurringTextMatchScore(transactionDescription, candidate)),
-      0,
-    );
-    if (bestTextScore < 5) {
-      return { recurring, score: Number.NEGATIVE_INFINITY };
-    }
-
-    let score = amountScore + bestTextScore;
-    if (Number(recurring.account_id || 0) > 0 && Number(recurring.account_id) === Number(transaction.account_id || 0)) {
-      score += 5;
-    }
-    if (Number(recurring.entity_id || 0) === targetEntityId) {
-      score += 5;
-    }
-    if (normalizeEntityAliasKey(recurring.title) === normalizeEntityAliasKey(transactionDescription)) {
-      score += 4;
-    }
-    return { recurring, score };
-  }).filter((item) => Number.isFinite(item.score));
-
-  scored.sort((left, right) => right.score - left.score);
-  const best = scored[0] || null;
-  const runnerUp = scored[1] || null;
-  if (!best || best.score < 14) {
-    return null;
-  }
-  if (runnerUp && (best.score - runnerUp.score) < 3) {
-    return null;
-  }
-  return best.recurring;
-}
-
-function normalizeEntityKind(value: string | null | undefined, isVendor = 0): 'business' | 'contact' {
-  return String(value || '').trim().toLowerCase() === 'business' || Number(isVendor || 0) === 1 ? 'business' : 'contact';
-}
-
-function formatEntityTypeLabel(contactType: Accumul8ContactType): string {
-  if (contactType === 'repayment') {
-    return 'Repayment';
-  }
-  return contactType === 'payer' ? 'Payer' : 'Payee';
-}
-
-function formatEntityRoles(entity: Pick<Accumul8Entity, 'contact_type' | 'entity_kind' | 'is_payee' | 'is_payer' | 'is_vendor' | 'is_balance_person'>): string {
-  const roles: string[] = [];
-  roles.push(formatEntityTypeLabel(normalizeEntityContactType(entity)));
-  if (normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business') {
-    roles.push('Business');
-  }
-  return roles.join(' • ') || 'Unassigned';
-}
-
-function formatEntityContactSummary(entity: Pick<Accumul8Entity, 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip'>): string[] {
-  const lines: string[] = [];
-  const primary = [entity.phone_number || '', entity.email || ''].filter(Boolean).join(' | ');
-  if (primary) {
-    lines.push(primary);
-  }
-  if (entity.street_address) {
-    lines.push(entity.street_address);
-  }
-  const locality = [entity.city || '', entity.state || '', entity.zip || ''].filter(Boolean).join(', ');
-  if (locality) {
-    lines.push(locality);
-  }
-  return lines;
-}
-
-function addUtcDays(baseDate: string, days: number): string {
-  const parsed = new Date(`${baseDate}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return baseDate;
-  }
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function endOfUtcMonth(baseDate: string): string {
-  const parsed = new Date(`${baseDate}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return baseDate;
-  }
-  parsed.setUTCMonth(parsed.getUTCMonth() + 1, 0);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function isDateInRange(value: string, range: { startDate: string; endDate: string }): boolean {
-  if (!value) {
-    return false;
-  }
-  if (range.startDate && value < range.startDate) {
-    return false;
-  }
-  if (range.endDate && value > range.endDate) {
-    return false;
-  }
-  return true;
-}
-
-function getLedgerEffectiveDate(transaction: Pick<Accumul8Transaction, 'transaction_date' | 'due_date'>): string {
-  return String(transaction.due_date || transaction.transaction_date || '');
-}
-
-function roundCurrency(value: number): number {
-  return Number(value.toFixed(2));
-}
-
-function formatCurrencyAmount(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(value);
-}
-
-type EntityTransactionSummary = {
-  count: number;
-  lastAmount: number | null;
-  lastDate: string;
-};
-
-function formatSyncConnectionStatus(status: string): string {
-  const normalized = String(status || '').trim().toLowerCase();
-  if (normalized === 'connected') return 'Connected';
-  if (normalized === 'setup_pending') return 'Setup Pending';
-  if (normalized === 'sync_error') return 'Sync Error';
-  if (normalized === '') return 'Unknown';
-  return normalized.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-function isTellerRateLimited(message: string): boolean {
-  const normalized = String(message || '').trim().toLowerCase();
-  return normalized.includes('too_many_requests')
-    || normalized.includes('request rate limit exceeded')
-    || normalized.includes('http 429')
-    || normalized.includes('status of 429');
-}
-
-function formatSyncStatusLabel(status: string, lastError: string): string {
-  if (isTellerRateLimited(lastError)) return 'Wait And Retry';
-  return formatSyncConnectionStatus(status);
-}
-
-function formatSyncStatusMessage(lastError: string): string {
-  if (!String(lastError || '').trim()) return '';
-  if (isTellerRateLimited(lastError)) {
-    return 'Teller asked us to pause before the next sync. Give it a little time, then retry.';
-  }
-  return String(lastError);
-}
-
-function formatAccountMappingLabel(account: Accumul8Account): string {
-  const parts = [
-    getAccumul8AccountDisplayName(account),
-    account.account_subtype || account.account_type || '',
-    account.mask_last4 ? `...${account.mask_last4}` : (account.account_number_mask || ''),
-  ].filter(Boolean);
-  return parts.join(' | ');
-}
-
-function formatSyncSummaryAccountLabel(account: Accumul8TellerSyncAccountSummary): string {
-  const parts = [
-    account.remote_account_name || 'Unnamed account',
-    account.remote_account_subtype || account.remote_account_type || '',
-    account.mask_last4 ? `...${account.mask_last4}` : '',
-  ].filter(Boolean);
-  return parts.join(' | ');
-}
-
-function formatTellerCoverageLabel(startDate: string, endDate: string): string {
-  if (startDate && endDate) {
-    return `${startDate} to ${endDate}`;
-  }
-  if (endDate) {
-    return `through ${endDate}`;
-  }
-  if (startDate) {
-    return `starting ${startDate}`;
-  }
-  return 'No Teller history saved yet';
-}
-
-function formatAccountBackfillNote(account: Accumul8Account): string {
-  const coverage = formatTellerCoverageLabel(account.teller_history_start_date, account.teller_history_end_date);
-  if (account.teller_backfill_complete) {
-    return `Backfill complete. Coverage: ${coverage}.`;
-  }
-  if (account.teller_backfill_cursor_id || account.teller_history_start_date || account.teller_history_end_date) {
-    return `Backfill in progress. Coverage so far: ${coverage}.`;
-  }
-  if (account.teller_sync_anchor_date) {
-    return `Recent sync checkpoint saved at ${account.teller_sync_anchor_date}. Historical backfill starts on the next sync.`;
-  }
-  return 'Waiting for first Teller sync.';
-}
-
-function formatSyncSummaryBackfillNote(account: Accumul8TellerSyncAccountSummary): string {
-  if (!account.transactions_supported) {
-    return account.sync_skipped_reason || 'Teller did not expose transaction access for this account.';
-  }
-  const coverage = formatTellerCoverageLabel(account.history_start_date, account.history_end_date);
-  if (account.backfill_complete) {
-    return `Backfill complete. Coverage: ${coverage}.`;
-  }
-  if (account.backfill_pages_fetched > 0) {
-    return `Backfill in progress. Coverage so far: ${coverage}. Pulled ${account.backfill_pages_fetched} older page${account.backfill_pages_fetched === 1 ? '' : 's'} this sync and will resume next time.`;
-  }
-  return `Backfill not finished yet. Recent refresh window: ${account.recent_window_start_date} to ${account.recent_window_end_date}. Coverage so far: ${coverage}.`;
-}
-
-function isTellerEligibilityFailure(message: string): boolean {
-  const normalized = String(message || '').toLowerCase();
-  return normalized.includes('suitable account')
-    || normalized.includes('suitable accounts')
-    || normalized.includes('unable to link your account')
-    || normalized.includes('unable to link account');
-}
-
-function formatTellerConnectError(message: string, institutionName: string): string {
-  if (!isTellerEligibilityFailure(message)) {
-    return message;
-  }
-
-  const label = institutionName.trim() || 'this bank';
-  return `${label} connected through Teller, but Teller says none of the accounts under this login are eligible for Accumul8 sync. Try another ${label} login/account, or use the Bank Statements tab to import statements instead.`;
-}
-
-function formatEntityTransactionSummaryLabel(summary: EntityTransactionSummary): string {
-  if (!summary.lastDate) {
-    return `${summary.count} tx`;
-  }
-  const amountLabel = summary.lastAmount === null ? '-' : Number(summary.lastAmount || 0).toFixed(2);
-  return `${amountLabel} ${formatInlineDate(summary.lastDate)} ${summary.count} tx`;
-}
-
-function formatPayBillStatusLabel(transaction: Pick<Accumul8Transaction, 'is_paid' | 'due_date' | 'transaction_date'>, todayDate: string): string {
-  if (Number(transaction.is_paid || 0) === 1) {
-    return 'Paid';
-  }
-  return ((transaction.due_date || transaction.transaction_date) < todayDate) ? 'Past due' : 'Upcoming';
-}
 
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
   const isAuthed = Boolean(viewer?.id);
@@ -4764,141 +4108,44 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </div>
           )}
           {tab === 'notifications' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <div className="accumul8-panel-toolbar">
-                <div>
-                  <h3 className="mb-1">Notification Rules</h3>
-                  <p className="small text-muted mb-0">Build due-date alerts with the same ledger styling as the rest of Accumul8.</p>
-                </div>
-              </div>
-              <form className="row g-2 accumul8-notification-form" onSubmit={(e) => {
-                e.preventDefault();
-                const payload = {
-                  ...notificationForm,
-                  days_before_due: Number(notificationForm.days_before_due),
-                  custom_user_ids: parseCustomUserIds(notificationForm.custom_user_ids),
-                };
-                if (editingNotificationRuleId) {
-                  void updateNotificationRule(editingNotificationRuleId, payload).then(() => resetNotificationForm());
-                  return;
-                }
-                void createNotificationRule(payload).then(() => resetNotificationForm());
-              }}>
-                <div className="col-md-3"><input className="form-control" placeholder="Rule Name" value={notificationForm.rule_name} onChange={(e) => setNotificationForm((v) => ({ ...v, rule_name: e.target.value }))} required /></div>
-                <div className="col-md-2"><select className="form-select" value={notificationForm.target_scope} onChange={(e) => setNotificationForm((v) => ({ ...v, target_scope: e.target.value as 'group' | 'custom' }))}><option value="group">Linked access groups + admins</option><option value="custom">Custom user IDs</option></select></div>
-                <div className="col-md-1"><input className="form-control" type="number" min={0} max={90} value={notificationForm.days_before_due} onChange={(e) => setNotificationForm((v) => ({ ...v, days_before_due: Number(e.target.value) }))} /></div>
-                <div className="col-md-2"><input className="form-control" placeholder="User IDs (1,2,3)" value={notificationForm.custom_user_ids} onChange={(e) => setNotificationForm((v) => ({ ...v, custom_user_ids: e.target.value }))} /></div>
-                <div className="col-md-4"><input className="form-control" placeholder="Email Subject" value={notificationForm.email_subject_template} onChange={(e) => setNotificationForm((v) => ({ ...v, email_subject_template: e.target.value }))} required /></div>
-                <div className="col-md-10"><textarea className="form-control" rows={2} placeholder="Email Body" value={notificationForm.email_body_template} onChange={(e) => setNotificationForm((v) => ({ ...v, email_body_template: e.target.value }))} required /></div>
-                <div className="col-md-2">
-                  <div className="accumul8-notification-actions">
-                    <button
-                      className="btn btn-success flex-fill"
-                      type="submit"
-                      disabled={busy}
-                      aria-label={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
-                      title={editingNotificationRuleId ? 'Save notification rule' : 'Create notification rule'}
-                    >
-                      <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
-                    </button>
-                  </div>
-                </div>
-                {editingNotificationRuleId ? <div className="col-md-2"><div className="accumul8-notification-actions"><button className="btn btn-outline-secondary flex-fill" type="button" onClick={resetNotificationForm} disabled={busy}>Cancel</button></div></div> : null}
-              </form>
-              <div className="mt-3 d-flex flex-column gap-2 accumul8-scroll-area accumul8-scroll-area--cards">
-                {notificationRules.map((r) => (
-                  <div key={r.id} className="catn8-card d-flex justify-content-between align-items-center gap-2 accumul8-list-item accumul8-notification-card">
-                    <div>
-                      <div className="fw-bold">{r.rule_name}</div>
-                      <div className="text-muted small">{r.target_scope === 'group' ? 'Group recipients' : 'Custom recipients'} | {r.days_before_due} day lead</div>
-                    </div>
-                    <div className="d-flex gap-2">
-                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void sendNotification({ rule_id: r.id })} disabled={busy}>Send Now</button>
-                      <button type="button" className={`btn btn-sm ${r.is_active ? 'btn-success' : 'btn-outline-secondary'}`} onClick={() => void toggleNotificationRule(r.id)}>{r.is_active ? 'Active' : 'Paused'}</button>
-                      <div className="accumul8-row-actions">
-                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => beginEditNotificationRule(r.id)} disabled={busy} aria-label={`Edit ${r.rule_name}`}><i className="bi bi-pencil"></i></button>
-                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { if (window.confirm('Delete this notification rule?')) { void deleteNotificationRule(r.id); } }} disabled={busy} aria-label={`Delete ${r.rule_name}`}><i className="bi bi-trash"></i></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Accumul8NotificationsTab
+              beginEditNotificationRule={beginEditNotificationRule}
+              busy={busy}
+              createNotificationRule={createNotificationRule}
+              deleteNotificationRule={deleteNotificationRule}
+              editingNotificationRuleId={editingNotificationRuleId}
+              notificationForm={notificationForm}
+              notificationRules={notificationRules}
+              parseCustomUserIds={parseCustomUserIds}
+              resetNotificationForm={resetNotificationForm}
+              sendNotification={sendNotification}
+              setNotificationForm={setNotificationForm}
+              toggleNotificationRule={toggleNotificationRule}
+              updateNotificationRule={updateNotificationRule}
+            />
           )}
           {tab === 'sync' && (
-            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
-              <div className="accumul8-panel accumul8-panel--viewport-fill">
-                <h3>Bank Sync Groundwork</h3>
-                <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
-                <div className="d-flex gap-2 flex-wrap mb-3">
-                  <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
-                  <button type="button" className="btn btn-outline-secondary" onClick={() => openSyncHelp()}>Show Setup Guide</button>
-                </div>
-                <Accumul8SyncInstitutionsManager
-                  bankConnections={bankConnections}
-                  linkedAccountsByConnectionId={linkedAccountsByConnectionId}
-                  busy={busy}
-                  syncingConnectionId={syncingConnectionId}
-                  onCreate={createBankConnection}
-                  onUpdate={updateBankConnection}
-                  onDelete={async (id) => {
-                    await deleteBankConnection({ id });
-                  }}
-                  onSync={runConnectionSync}
-                  formatAccountMappingLabel={formatAccountMappingLabel}
-                  formatAccountBackfillNote={formatAccountBackfillNote}
-                  formatSyncStatusLabel={formatSyncStatusLabel}
-                  formatSyncStatusMessage={formatSyncStatusMessage}
-                  isTellerRateLimited={isTellerRateLimited}
-                />
-                {lastSyncReport ? (
-                  <div className="accumul8-sync-report mt-3">
-                    <div className="accumul8-sync-report__header">
-                      <strong>Last Sync Report:</strong> {lastSyncReport.institutionName} at {lastSyncReport.syncedAt.replace('T', ' ').slice(0, 19)}
-                    </div>
-                    <div className="accumul8-sync-report__summary">
-                      Added {lastSyncReport.result.added}, modified {lastSyncReport.result.modified}, unchanged {lastSyncReport.result.unchanged}, removed {lastSyncReport.result.removed}.
-                    </div>
-                    <div className="accumul8-sync-report__accounts">
-                      {lastSyncReport.result.accounts.length > 0 ? (
-                        lastSyncReport.result.accounts.map((account) => (
-                          <div key={`${account.remote_account_id}-${account.local_account_id}`} className="accumul8-sync-report__account">
-                            <div className="accumul8-sync-report__account-title">
-                              {formatSyncSummaryAccountLabel(account)}
-                            </div>
-                            <div className="accumul8-sync-report__account-meta">
-                              {account.mapping_action === 'created' ? 'Created' : 'Updated'} local account #{account.local_account_id}: {getAccountDisplayName(account.local_account_id, account.local_account_name, '', 'Unnamed local account')}
-                            </div>
-                            {account.history_start_date && account.history_end_date ? (
-                              <div className="accumul8-sync-report__account-meta">
-                                Teller history returned: {account.history_start_date} to {account.history_end_date}.
-                              </div>
-                            ) : null}
-                            <div className="accumul8-sync-report__account-meta">
-                              {formatSyncSummaryBackfillNote(account)}
-                            </div>
-                            {!account.transactions_supported ? (
-                              <div className="accumul8-sync-report__account-meta">
-                                Balance access: {account.balances_supported ? 'available' : 'not available'}; details access: {account.details_supported ? 'available' : 'not available'}.
-                              </div>
-                            ) : null}
-                            <div className="accumul8-sync-report__account-meta">
-                              Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
-                            </div>
-                            <div className="accumul8-sync-report__account-meta">
-                              Cleanup removed {account.stale_teller_removed} stale Teller row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside Teller's returned history window.
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="accumul8-sync-empty">No Teller accounts were returned in the most recent sync.</div>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-                <p className="small text-muted mb-0">Teller accounts are matched by Teller’s stable account IDs and enrollment IDs. On sync, Accumul8 creates or updates a local account record for each returned Teller account and then attaches transactions to that mapped local account.</p>
-              </div>
-            </React.Suspense>
+            <Accumul8SyncTab
+              bankConnections={bankConnections}
+              busy={busy}
+              createBankConnection={createBankConnection}
+              deleteBankConnection={deleteBankConnection}
+              formatAccountBackfillNote={formatAccountBackfillNote}
+              formatAccountMappingLabel={formatAccountMappingLabel}
+              formatSyncStatusLabel={formatSyncStatusLabel}
+              formatSyncStatusMessage={formatSyncStatusMessage}
+              isTellerRateLimited={isTellerRateLimited}
+              lastSyncReport={lastSyncReport}
+              linkedAccountsByConnectionId={linkedAccountsByConnectionId}
+              openSyncHelp={openSyncHelp}
+              runConnectionSync={runConnectionSync}
+              runTellerConnect={runTellerConnect}
+              summaryFormatAccountBackfillNote={formatSyncSummaryBackfillNote}
+              summaryFormatAccountLabel={formatSyncSummaryAccountLabel}
+              syncProvider={syncProvider}
+              syncingConnectionId={syncingConnectionId}
+              updateBankConnection={updateBankConnection}
+            />
           )}
           {tab === 'statements' && (
             <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
@@ -4935,367 +4182,162 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             </React.Suspense>
           )}
           </div>
-          {messageBoardOpen && (
-            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="AIcountant message board" onClick={() => setMessageBoardOpen(false)}>
-              <div className="accumul8-help-modal accumul8-message-board-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="accumul8-settings-modal-header">
-                  <div>
-                    <h2 className="accumul8-settings-modal-title mb-0">AIcountant Message Board</h2>
-                    <div className="small text-muted">
-                      {messageBoardUnacknowledgedCount} unacknowledged message{messageBoardUnacknowledgedCount === 1 ? '' : 's'}
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-success"
-                      onClick={() => { void acknowledgeAllMessageBoardMessages(); }}
-                      disabled={messageBoardLoading || messageBoardUnacknowledgedCount <= 0}
-                    >
-                      Acknowledge All
-                    </button>
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { void loadMessageBoard(); }} disabled={messageBoardLoading}>Refresh</button>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setMessageBoardOpen(false)}>Close</button>
-                  </div>
-                </div>
-                <div className="accumul8-message-board-list">
-                  {messageBoardMessages.map((message) => {
-                    const openingBalanceMeta = getOpeningBalanceMessageMeta(message);
-                    const duplicateCount = Math.max(1, Number(message.duplicate_count || 1));
-                    const sourceEmoji = (() => {
-                      switch (message.source_kind) {
-                        case 'aicountant_housekeeping':
-                          return '🧹';
-                        case 'aicountant_watchlist':
-                          return '👀';
-                        case 'aicountant_balance_books':
-                          return '🏦';
-                        case 'aicountant_opening_balance':
-                          return '⚖️';
-                        case 'aicountant_entity_maintenance':
-                          return '🧠';
-                        default:
-                          return '📌';
-                      }
-                    })();
-                    return (
-                      <label key={message.id} className={`accumul8-message-board-item is-${message.message_level}${Number(message.is_acknowledged || 0) === 1 ? ' is-acknowledged' : ''}`}>
-                        <div className="accumul8-message-board-item-check">
-                          <input
-                            type="checkbox"
-                            className="form-check-input"
-                            checked={Number(message.is_acknowledged || 0) === 1}
-                            disabled={Number(message.is_acknowledged || 0) === 1 || messageBoardLoading}
-                            onChange={() => {
-                              void acknowledgeMessageBoardMessage(message.id);
-                            }}
-                            aria-label={`Acknowledge ${message.title || 'message'}`}
-                          />
-                        </div>
-                        <div className="accumul8-message-board-item-body">
-                          <div className="accumul8-message-board-item-header">
-                            <strong>
-                              <span aria-hidden="true">{sourceEmoji}</span>{' '}
-                              {duplicateCount > 1 ? <span aria-hidden="true">🔁 </span> : null}
-                              {message.title || 'Update'}
-                              {duplicateCount > 1 ? ` x${duplicateCount}` : ''}
-                            </strong>
-                            <span>{formatInlineDateTime(message.created_at)}</span>
-                          </div>
-                          <div className="accumul8-message-board-item-text">{message.body_text}</div>
-                          {openingBalanceMeta ? (
-                            <div className="accumul8-message-board-item-meta">
-                              {openingBalanceMeta.accountName ? <span>Account: {openingBalanceMeta.accountName}</span> : null}
-                              {openingBalanceMeta.transactionDate ? <span>Adjustment date: {formatInlineDate(openingBalanceMeta.transactionDate)}</span> : null}
-                              {openingBalanceMeta.adjustmentAmount !== null ? <span>Adjustment: {formatCurrencyAmount(openingBalanceMeta.adjustmentAmount)}</span> : null}
-                              {openingBalanceMeta.priorLedgerBalance !== null ? <span>Ledger before: {formatCurrencyAmount(openingBalanceMeta.priorLedgerBalance)}</span> : null}
-                              {openingBalanceMeta.bankBalance !== null ? <span>Bank target: {formatCurrencyAmount(openingBalanceMeta.bankBalance)}</span> : null}
-                            </div>
-                          ) : null}
-                          {openingBalanceMeta?.transactionId ? (
-                            <div className="accumul8-message-board-item-actions">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-primary"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  setTab('ledger');
-                                  beginViewTransaction(openingBalanceMeta.transactionId || 0);
-                                  setMessageBoardOpen(false);
-                                }}
-                              >
-                                Open ledger entry
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </label>
-                    );
-                  })}
-                  {!messageBoardMessages.length ? (
-                    <div className="text-muted">No message board items yet.</div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          )}
-          {syncHelpOpen && (
-            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Teller setup guide">
-              <div className="accumul8-help-modal">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h4 className="h6 mb-0">Teller Sync Setup Guide</h4>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSyncHelpOpen(false)}>Close</button>
-                </div>
-                {syncHelpError ? <div className="alert alert-warning py-2"><strong>Current error:</strong> {syncHelpError}</div> : null}
-                {syncHelpToken ? <div className="alert alert-success py-2"><strong>Teller application loaded:</strong> <code>{syncHelpToken.slice(0, 40)}...</code></div> : null}
-                <ol className="mb-2 ps-3">
-                  <li>Create your Teller application credentials in <a href="https://teller.io/dashboard" target="_blank" rel="noreferrer">Teller Dashboard</a>.</li>
-                  <li>Save your Teller Application ID, certificate PEM, private key PEM, and environment in Settings.</li>
-                  <li>Click <strong>Connect Bank via Teller</strong> in this tab.</li>
-                  <li>Complete Teller Connect and authorize your institution.</li>
-                  <li>Accumul8 will automatically exchange token, save the connection, and sync transactions.</li>
-                </ol>
-                <div className="alert alert-info py-2">
-                  If Teller shows a message like &quot;no suitable accounts,&quot; the institution/login did not expose any eligible accounts for Teller sync. Accumul8 cannot force that connection, so import those accounts from the Bank Statements tab instead.
-                  <div className="mt-2">
-                    <strong>Fifth Third / Truist guidance:</strong> Chase credit cards can sync through Teller, but some Fifth Third and Truist credit-card logins are still getting rejected inside Teller Connect before Accumul8 receives any account metadata. When that happens, statement import is the reliable fallback path.
-                  </div>
-                  <div className="mt-2">
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={openStatementImportFallback}>Go To Bank Statements</button>
-                  </div>
-                </div>
-                <div className="small">
-                  Quick references: <a href="https://teller.io/docs/connect" target="_blank" rel="noreferrer">Teller Connect</a> | <a href="https://teller.io/docs/api" target="_blank" rel="noreferrer">Teller API</a>
-                </div>
-              </div>
-            </div>
-          )}
-          {selectedEntityHistory && (
-            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label={`${selectedEntityHistory.display_name} transactions`} onClick={() => setEntityHistoryEntityId(null)}>
-              <div className="accumul8-help-modal accumul8-entity-history-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="accumul8-settings-modal-header">
-                  <div>
-                    <h2 className="accumul8-settings-modal-title mb-0">{selectedEntityHistory.display_name}</h2>
-                    <div className="small text-muted">
-                      {selectedEntityTransactions.length} linked transaction{selectedEntityTransactions.length === 1 ? '' : 's'}
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center gap-2">
-                    <StandardIconButton
-                      iconKey="edit"
-                      ariaLabel={`Edit ${selectedEntityHistory.display_name}`}
-                      title={`Edit ${selectedEntityHistory.display_name}`}
-                      className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                      onClick={() => {
-                        setEntityHistoryEntityId(null);
-                        beginEditEntity(selectedEntityHistory.id);
-                      }}
-                    />
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityHistoryEntityId(null)}>Close</button>
-                  </div>
-                </div>
-                <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--cards">
-                  <table className="table table-sm accumul8-table accumul8-entity-history-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Memo</th>
-                        <th>Account</th>
-                        <th className="text-end">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedEntityTransactions.map((tx) => (
-                        <tr key={tx.id} className={Number(tx.amount || 0) < 0 ? 'is-outflow' : 'is-inflow'}>
-                          <td>{formatInlineDate(tx.transaction_date || tx.due_date)}</td>
-                          <td>{getLedgerDescriptionLabel(tx)}</td>
-                          <td>{formatInlineText(tx.memo, '-')}</td>
-                          <td>{getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name)}</td>
-                          <td className="text-end">{Number(tx.amount || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                      {selectedEntityTransactions.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="text-center text-muted py-4">No transactions are linked to this entity yet.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-          {entityEndexLogOpen && (
-            <div className="accumul8-help-overlay" role="dialog" aria-modal="true" aria-label="Entity Endex scan history" onClick={() => setEntityEndexLogOpen(false)}>
-              <div className="accumul8-help-modal accumul8-entity-endex-log-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="accumul8-settings-modal-header">
-                  <div>
-                    <h2 className="accumul8-settings-modal-title mb-0">Entity Endex Scan History</h2>
-                    <div className="small text-muted">Recent global runs and the parent-to-alias changes they made.</div>
-                  </div>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEntityEndexLogOpen(false)}>Close</button>
-                </div>
-                <div className="accumul8-entity-endex-log-list accumul8-scroll-area accumul8-scroll-area--cards">
-                  {entityEndexScanLogs.length > 0 ? entityEndexScanLogs.map((log) => (
-                    <section key={log.id} className="accumul8-entity-endex-log-card">
-                      <div className="accumul8-entity-endex-log-card-head">
-                        <div>
-                          <strong>{formatInlineDate(log.created_at)}</strong>
-                          <div className="small text-muted">{log.summary_text}</div>
-                        </div>
-                        <div className="small text-muted">
-                          {log.created_count + log.updated_count} change{log.created_count + log.updated_count === 1 ? '' : 's'}
-                        </div>
-                      </div>
-                      <div className="accumul8-entity-endex-log-meta">
-                        <span>{log.scanned_entity_count} scanned</span>
-                        <span>{log.touched_entity_count} touched</span>
-                        <span>{log.conflict_count} conflicts</span>
-                      </div>
-                      <div className="accumul8-entity-endex-log-items">
-                        {log.items.length > 0 ? log.items.map((item, index) => (
-                          <div key={`${log.id}-${item.parent_entity_id}-${item.alias_name}-${index}`} className="accumul8-entity-endex-log-item">
-                            <span className="accumul8-entity-endex-log-item-status">{item.status === 'created' ? 'Added' : 'Updated'}</span>
-                            <span>{item.parent_name} ← {item.alias_name}</span>
-                          </div>
-                        )) : <div className="small text-muted">This run did not record any parent-to-alias changes.</div>}
-                      </div>
-                    </section>
-                  )) : (
-                    <div className="text-muted">No Entity Endex scan history yet.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        <Accumul8EntityModal
-            open={entityModalOpen}
-            busy={busy}
-            initialForm={entityForm}
-            entity={editingEntity}
-            entities={entities}
-            aliasDraft={editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT}
-            entitySummary={editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null}
-            editing={editingEntityId !== null}
-            onClose={closeEntityModal}
-            onAliasDraftChange={(draft) => {
-              if (!editingEntity) return;
-              setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+          <Accumul8PageOverlays
+            acknowledgeAllMessageBoardMessages={acknowledgeAllMessageBoardMessages}
+            acknowledgeMessageBoardMessage={acknowledgeMessageBoardMessage}
+            beginEditEntity={beginEditEntity}
+            beginViewTransaction={beginViewTransaction}
+            entityEndexLogOpen={entityEndexLogOpen}
+            entityEndexScanLogs={entityEndexScanLogs}
+            formatAccountDisplayName={getAccountDisplayName}
+            formatInlineDate={formatInlineDate}
+            formatInlineDateTime={formatInlineDateTime}
+            loadMessageBoard={loadMessageBoard}
+            messageBoardLoading={messageBoardLoading}
+            messageBoardMessages={messageBoardMessages}
+            messageBoardOpen={messageBoardOpen}
+            messageBoardUnacknowledgedCount={messageBoardUnacknowledgedCount}
+            onCloseEntityEndexLog={() => setEntityEndexLogOpen(false)}
+            onCloseEntityHistory={() => setEntityHistoryEntityId(null)}
+            onCloseMessageBoard={() => setMessageBoardOpen(false)}
+            onCloseSyncHelp={() => setSyncHelpOpen(false)}
+            onOpenStatementImportFallback={openStatementImportFallback}
+            onOpenTransactionFromMessageBoard={beginViewTransaction}
+            selectedEntityHistory={selectedEntityHistory}
+            selectedEntityTransactions={selectedEntityTransactions}
+            setTabToLedger={() => setTab('ledger')}
+            syncHelpError={syncHelpError}
+            syncHelpOpen={syncHelpOpen}
+            syncHelpToken={syncHelpToken}
+          />
+          <Accumul8PageModals
+            entityModalProps={{
+              open: entityModalOpen,
+              busy,
+              initialForm: entityForm,
+              entity: editingEntity,
+              entities,
+              aliasDraft: editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT,
+              entitySummary: editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null,
+              editing: editingEntityId !== null,
+              onClose: closeEntityModal,
+              onAliasDraftChange: (draft) => {
+                if (!editingEntity) return;
+                setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+              },
+              onAddAlias: async () => {
+                if (!editingEntity) return;
+                await saveEntityAlias(editingEntity);
+              },
+              onDeleteAlias: removeEntityAlias,
+              onSave: submitEntityForm,
             }}
-            onAddAlias={async () => {
-              if (!editingEntity) return;
-              await saveEntityAlias(editingEntity);
+            ledgerEntityModalProps={{
+              open: ledgerEntityModalTransactionId !== null,
+              busy: busy || ledgerEntityModalSaving,
+              transaction: ledgerEntityModalTransactionId !== null
+                ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
+                : null,
+              entities: entitiesSorted,
+              onClose: closeLedgerEntityModal,
+              onSave: saveLedgerEntityRule,
             }}
-            onDeleteAlias={removeEntityAlias}
-            onSave={submitEntityForm}
-        />
-        <Accumul8LedgerEntityModal
-          open={ledgerEntityModalTransactionId !== null}
-          busy={busy || ledgerEntityModalSaving}
-          transaction={ledgerEntityModalTransactionId !== null
-            ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
-            : null}
-          entities={entitiesSorted}
-          onClose={closeLedgerEntityModal}
-          onSave={saveLedgerEntityRule}
-        />
-        <Accumul8EndexGroupModal
-          open={entityEndexGuideModalOpen}
-          busy={busy}
-          guide={selectedEntityEndexGuide}
-          parentEntity={selectedEntityEndexParentEntity}
-          entities={entitiesWithResolvedAliases}
-          aliasDraft={selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
-            ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
-            : DEFAULT_ENTITY_ALIAS_DRAFT}
-          onClose={closeEntityEndexGuideModal}
-          onSave={saveEntityEndexGuide}
-          onDelete={removeEntityEndexGuide}
-          onFindRelated={runEntityEndexGuideFinder}
-          onAliasDraftChange={(draft) => {
-            if (!selectedEntityEndexParentEntity) return;
-            setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
-          }}
-          onAddAlias={async () => {
-            if (!selectedEntityEndexParentEntity) return;
-            await saveEntityAlias(selectedEntityEndexParentEntity);
-          }}
-          onRemoveAlias={removeEntityAlias}
-        />
-          <Accumul8ContactModal
-            open={contactModalOpen}
-            busy={busy}
-            initialForm={contactForm}
-            editing={editingContactId !== null}
-            onClose={closeContactModal}
-            onSave={submitContactForm}
-          />
-        <Accumul8DebtorModal
-            open={debtorModalOpen}
-            busy={busy}
-            initialForm={debtorForm}
-            editing={editingDebtorId !== null}
-            onClose={closeDebtorModal}
-            onSave={submitDebtorModal}
-        />
-        <Accumul8RecurringModal
-          open={recurringModalOpen}
-          busy={busy}
-          initialForm={editingRecurringForm}
-          entities={contactEntities}
-          accounts={visibleAccounts}
-          onClose={closeRecurringModal}
-          onSave={submitRecurringModal}
-        />
-        <Accumul8TransactionModal
-            open={transactionModalOpen}
-            busy={busy}
-            initialForm={ledgerForm}
-            mode={transactionModalMode}
-            variant={transactionModalVariant}
-            transaction={editingTransactionId !== null
-              ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
-              : viewingTransactionId !== null
-                ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
-                : null}
-            entities={entitiesSorted}
-            debtors={groupedDebtors}
-            accounts={transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts}
-            statementUploads={statementUploads}
-            ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
-            onClose={closeTransactionModal}
-            onEdit={transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined}
-            onSave={submitTransactionModal}
-          />
-          <BankingOrganizationManagerModal
-            open={bankingOrganizationManagerOpen}
-            onClose={() => setBankingOrganizationManagerOpen(false)}
-            mode="banking_organization"
-            busy={busy}
-            bankingOrganizations={bankingOrganizations}
-            accounts={accounts}
-            createBankingOrganization={createBankingOrganization}
-            updateBankingOrganization={updateBankingOrganization}
-            deleteBankingOrganization={deleteBankingOrganization}
-            createAccount={createAccount}
-            updateAccount={updateAccount}
-            deleteAccount={deleteAccount}
-          />
-          <BankingOrganizationManagerModal
-            open={accountManagerOpen}
-            onClose={() => setAccountManagerOpen(false)}
-            mode="account"
-            busy={busy}
-            bankingOrganizations={bankingOrganizations}
-            accounts={accounts}
-            createBankingOrganization={createBankingOrganization}
-            updateBankingOrganization={updateBankingOrganization}
-            deleteBankingOrganization={deleteBankingOrganization}
-            createAccount={createAccount}
-            updateAccount={updateAccount}
-            deleteAccount={deleteAccount}
+            entityEndexModalProps={{
+              open: entityEndexGuideModalOpen,
+              busy,
+              guide: selectedEntityEndexGuide,
+              parentEntity: selectedEntityEndexParentEntity,
+              entities: entitiesWithResolvedAliases,
+              aliasDraft: selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
+                ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
+                : DEFAULT_ENTITY_ALIAS_DRAFT,
+              onClose: closeEntityEndexGuideModal,
+              onSave: saveEntityEndexGuide,
+              onDelete: removeEntityEndexGuide,
+              onFindRelated: runEntityEndexGuideFinder,
+              onAliasDraftChange: (draft) => {
+                if (!selectedEntityEndexParentEntity) return;
+                setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
+              },
+              onAddAlias: async () => {
+                if (!selectedEntityEndexParentEntity) return;
+                await saveEntityAlias(selectedEntityEndexParentEntity);
+              },
+              onRemoveAlias: removeEntityAlias,
+            }}
+            contactModalProps={{
+              open: contactModalOpen,
+              busy,
+              initialForm: contactForm,
+              editing: editingContactId !== null,
+              onClose: closeContactModal,
+              onSave: submitContactForm,
+            }}
+            debtorModalProps={{
+              open: debtorModalOpen,
+              busy,
+              initialForm: debtorForm,
+              editing: editingDebtorId !== null,
+              onClose: closeDebtorModal,
+              onSave: submitDebtorModal,
+            }}
+            recurringModalProps={{
+              open: recurringModalOpen,
+              busy,
+              initialForm: editingRecurringForm,
+              entities: contactEntities,
+              accounts: visibleAccounts,
+              onClose: closeRecurringModal,
+              onSave: submitRecurringModal,
+            }}
+            transactionModalProps={{
+              open: transactionModalOpen,
+              busy,
+              initialForm: ledgerForm,
+              mode: transactionModalMode,
+              variant: transactionModalVariant,
+              transaction: editingTransactionId !== null
+                ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
+                : viewingTransactionId !== null
+                  ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
+                  : null,
+              entities: entitiesSorted,
+              debtors: groupedDebtors,
+              accounts: transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts,
+              statementUploads,
+              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+              onClose: closeTransactionModal,
+              onEdit: transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined,
+              onSave: submitTransactionModal,
+            }}
+            bankingOrganizationManagerProps={{
+              open: bankingOrganizationManagerOpen,
+              onClose: () => setBankingOrganizationManagerOpen(false),
+              mode: 'banking_organization',
+              busy,
+              bankingOrganizations,
+              accounts,
+              createBankingOrganization,
+              updateBankingOrganization,
+              deleteBankingOrganization,
+              createAccount,
+              updateAccount,
+              deleteAccount,
+            }}
+            accountManagerProps={{
+              open: accountManagerOpen,
+              onClose: () => setAccountManagerOpen(false),
+              mode: 'account',
+              busy,
+              bankingOrganizations,
+              accounts,
+              createBankingOrganization,
+              updateBankingOrganization,
+              deleteBankingOrganization,
+              createAccount,
+              updateAccount,
+              deleteAccount,
+            }}
           />
           {!loaded && <div className="text-muted mt-2">Loading Accumul8...</div>}
         </div>

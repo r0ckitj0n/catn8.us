@@ -110,34 +110,12 @@ import {
   Accumul8IdResponse,
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
-import { Accumul8NotificationsTab } from './accumul8/Accumul8NotificationsTab';
-import { Accumul8ContactsTab } from './accumul8/Accumul8ContactsTab';
-import { Accumul8DebtorsTab } from './accumul8/Accumul8DebtorsTab';
-import { Accumul8EntityEndexTab } from './accumul8/Accumul8EntityEndexTab';
-import { Accumul8LedgerTab } from './accumul8/Accumul8LedgerTab';
-import { Accumul8PayBillsTab } from './accumul8/Accumul8PayBillsTab';
-import { Accumul8SyncTab } from './accumul8/Accumul8SyncTab';
+import { Accumul8PageHeader } from './accumul8/Accumul8PageHeader';
+import { Accumul8PageModalAssembly } from './accumul8/Accumul8PageModalAssembly';
 import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
 import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
-import { Accumul8RecurringTab } from './accumul8/Accumul8RecurringTab';
+import { Accumul8PageTabContent } from './accumul8/Accumul8PageTabContent';
 import './Accumul8Page.css';
-
-const Accumul8StatementsPanel = React.lazy(async () => {
-  const mod = await import('../accumul8/Accumul8StatementsPanel');
-  return { default: mod.Accumul8StatementsPanel };
-});
-
-const Accumul8CalendarView = React.lazy(async () => {
-  const mod = await import('../accumul8/Accumul8CalendarView');
-  return { default: mod.Accumul8CalendarView };
-});
-
-const Accumul8SpreadsheetView = React.lazy(async () => {
-  const mod = await import('../accumul8/Accumul8SpreadsheetView');
-  return { default: mod.Accumul8SpreadsheetView };
-});
-
-const ACCUMUL8_TAB_LOADING_FALLBACK = <div className="accumul8-panel text-muted py-4">Loading view...</div>;
 
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
@@ -2751,552 +2729,301 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section">
         <div className="container accumul8-page">
-          <div className="accumul8-page-header mb-2">
-            <div className="accumul8-page-title-row">
-              <h1 className="section-title mb-0 accumul8-title-mark">
-                <button
-                  type="button"
-                  className={`accumul8-title-mark-button${messageBoardUnacknowledgedCount > 0 ? ' has-alert' : ''}`}
-                  onClick={() => setMessageBoardOpen(true)}
-                  aria-label={`Open message board${messageBoardUnacknowledgedCount > 0 ? ` (${messageBoardUnacknowledgedCount} new)` : ''}`}
-                >
-                  <span className="visually-hidden">ACCUMUL8</span>
-                  <picture className="accumul8-title-mark-picture" aria-hidden="true">
-                    <source srcSet="/images/branding/accumul8-title.webp" type="image/webp" />
-                    <img className="accumul8-title-mark-image" src="/images/branding/accumul8-title.png" alt="" />
-                  </picture>
-                </button>
-              </h1>
-              <div className="accumul8-header-control-deck">
-                <div className="accumul8-header-primary-row">
-                  <div className="accumul8-tabs accumul8-tabs--header">
-                    <div className="accumul8-tabs accumul8-tabs--header-buttons">
-                      {[
-                        ['aicountant', 'AIcountant'],
-                        ['spreadsheet', 'Budget'],
-                        ['calendar', 'Calendar'],
-                        ['debtors', 'IOU'],
-                        ['ledger', 'Ledger'],
-                        ['pay_bills', 'Bills'],
-                      ].map(([key, label]) => (
-                        <button key={key} type="button" className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setTab(key as TabKey)}>{label}</button>
-                      ))}
-                      <div className="accumul8-settings-menu-anchor" ref={settingsMenuRef}>
-                        <button
-                          ref={settingsButtonRef}
-                          type="button"
-                          className={`btn ${settingsMenuOpen ? 'btn-primary' : 'btn-outline-primary'}`}
-                          aria-haspopup="dialog"
-                          aria-expanded={settingsMenuOpen}
-                          onClick={() => setSettingsMenuOpen((current) => !current)}
-                        >
-                          Tools
-                        </button>
-                        {settingsMenuOpen ? (
-                          <div
-                            className="accumul8-settings-modal"
-                            role="dialog"
-                            aria-label="Accumul8 tools sections"
-                            style={{
-                              top: `${settingsMenuPosition.top}px`,
-                              left: `${settingsMenuPosition.left}px`,
-                              width: `${settingsMenuPosition.width}px`,
-                            }}
-                          >
-                            <div className="accumul8-settings-modal-actions">
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary"
-                                onClick={() => {
-                                  setTab('statements');
-                                  setSettingsMenuOpen(false);
-                                }}
-                              >
-                                Bank Statements
-                              </button>
-                              {[
-                                ['contacts', 'Entities'],
-                                ['entity_endex', 'Entity Endex'],
-                                ['notifications', 'Notifications'],
-                                ['recurring', 'Recurring'],
-                                ['sync', 'Sync'],
-                              ].map(([key, label]) => (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
-                                  onClick={() => {
-                                    setTab(key as TabKey);
-                                    setSettingsMenuOpen(false);
-                                  }}
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="accumul8-owner-selector">
-                    <select
-                      id="accumul8-owner-select"
-                      className="form-select form-select-sm"
-                      aria-label="Viewing owner"
-                      value={activeOwnerUserId > 0 ? String(activeOwnerUserId) : ''}
-                      onChange={(e) => {
-                        const next = Number(e.target.value || 0);
-                        if (!Number.isFinite(next) || next <= 0) return;
-                        setSelectedOwnerUserId(next);
-                        if (typeof window !== 'undefined') {
-                          window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
-                        }
-                      }}
-                      disabled={busy || accessibleAccountOwners.length <= 1}
-                    >
-                      {accessibleAccountOwners.map((owner) => (
-                        <option key={owner.owner_user_id} value={owner.owner_user_id}>
-                          {owner.username}
-                          {owner.is_self ? ' (You)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="accumul8-page-toolbar accumul8-page-toolbar--embedded">
-                  <div className="accumul8-page-filters">
-                    <div className="accumul8-filter-stack">
-                      <div className="accumul8-toolbar-field accumul8-toolbar-field--banking-org">
-                        <div className="accumul8-filter-control-row">
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                            onClick={() => setBankingOrganizationManagerOpen(true)}
-                            aria-label="Manage banking organizations"
-                            title="Manage banking organizations"
-                          >
-                            <i className="bi bi-gear"></i>
-                          </button>
-                          <select
-                            id="accumul8-group-filter"
-                            className={getActiveFilterClass('form-select form-select-sm', selectedBankingOrganizationId !== '')}
-                            aria-label="Banking Organization"
-                            value={selectedBankingOrganizationId}
-                            onChange={(e) => setSelectedBankingOrganizationId(e.target.value)}
-                          >
-                            <option value="">All Banking Organizations</option>
-                            {bankingOrganizations.map((organization) => (
-                              <option key={organization.id} value={organization.id}>{organization.banking_organization_name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="accumul8-toolbar-field accumul8-toolbar-field--bank-account">
-                        <div className="accumul8-filter-control-row">
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary btn-sm accumul8-filter-gear"
-                            onClick={() => setAccountManagerOpen(true)}
-                            aria-label="Manage bank accounts"
-                            title="Manage bank accounts"
-                          >
-                            <i className="bi bi-gear"></i>
-                          </button>
-                          <select
-                            id="accumul8-bank-filter"
-                            className={getActiveFilterClass('form-select form-select-sm', selectedBankAccountId !== '')}
-                            aria-label="Bank account"
-                            value={selectedBankAccountId}
-                            onChange={(e) => setSelectedBankAccountId(e.target.value)}
-                          >
-                            <option value="">All bank accounts</option>
-                            {visibleAccounts.map((account) => (
-                              <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                    {launchableBankingOrganizations.length ? (
-                      <div className="accumul8-bank-launcher-panel">
-                        <div className="accumul8-bank-launcher-group" aria-label="Banking organization quick links">
-                          {launchableBankingOrganizations.map((organization) => {
-                            const organizationIconPath = resolveAccumul8BankingOrganizationIconPath(
-                              organization.banking_organization_name,
-                              organization.icon_path,
-                            );
-
-                            return (
-                              <button
-                                key={organization.id}
-                                type="button"
-                                className={`btn btn-outline-secondary btn-sm accumul8-bank-launcher${selectedBankingOrganizationId === String(organization.id) ? ' accumul8-bank-launcher--selected' : ''}`}
-                                onClick={() => openBankingOrganizationPopup(organization.login_url, organization.banking_organization_name)}
-                                aria-label={`Open ${organization.banking_organization_name}`}
-                                title={`Open ${organization.banking_organization_name}`}
-                              >
-                                {organizationIconPath ? (
-                                  <img
-                                    className="accumul8-bank-launcher-icon"
-                                    src={organizationIconPath}
-                                    alt=""
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <span className="accumul8-bank-launcher-emoji" aria-hidden="true">🏦</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-                    {tab === 'contacts' && (
-                      <div className="accumul8-toolbar-summary" aria-label="Entity summary">
-                        <div className="accumul8-summary-card"><span>Total</span><strong>{entitiesSorted.length}</strong></div>
-                        <div className="accumul8-summary-card"><span>Payees/Payers</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_payee || 0) === 1 || Number(entity.is_payer || 0) === 1).length}</strong></div>
-                        <div className="accumul8-summary-card"><span>Businesses</span><strong>{entitiesSorted.filter((entity) => normalizeEntityKind(entity.entity_kind, entity.is_vendor) === 'business').length}</strong></div>
-                        <div className="accumul8-summary-card"><span>Balance People</span><strong>{entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1).length}</strong></div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="accumul8-summary-grid">
-                    <div className="accumul8-summary-card"><span>Current Balance</span><strong>{formatCurrencyAmount(headerSummary.currentBalance)}</strong></div>
-                    <button
-                      type="button"
-                      className="accumul8-summary-card accumul8-summary-card--button"
-                      onClick={handleProjectedBalanceCardClick}
-                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} projected balance. Click to change summary window.`}
-                      title={`Showing selected-account balance for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
-                    >
-                      <span>{`Balance (${formatSummaryWindowLabel(summaryWindow)})`}</span>
-                      <strong>{formatCurrencyAmount(projectedBalanceForWindow)}</strong>
-                    </button>
-                    <button
-                      type="button"
-                      className="accumul8-summary-card accumul8-summary-card--button"
-                      onClick={handleProjectedBalanceCardClick}
-                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} unpaid bills. Click to change summary window.`}
-                      title={`Showing unpaid bills for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
-                    >
-                      <span>{`Unpaid Bills (${formatSummaryWindowLabel(summaryWindow)})`}</span>
-                      <strong>{formatCurrencyAmount(headerSummary.unpaidBills)}</strong>
-                    </button>
-                    <button
-                      type="button"
-                      className="accumul8-summary-card accumul8-summary-card--button"
-                      onClick={handleProjectedBalanceCardClick}
-                      aria-label={`${formatSummaryWindowLabel(summaryWindow)} windfalls. Click to change summary window.`}
-                      title={`Showing non-recurring deposits for ${formatSummaryWindowLabel(summaryWindow).toLowerCase()}. Click to cycle Current, 7 days, 30 days, 60 days, and 90 days.`}
-                    >
-                      <span>{`Windfalls (${formatSummaryWindowLabel(summaryWindow)})`}</span>
-                      <strong>{formatCurrencyAmount(headerSummary.windfalls)}</strong>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <a
-                className={`accumul8-header-brand-logo${isHeaderLogoSpinning ? ' accumul8-header-brand-logo--syncing' : ''}`}
-                href="https://catn8.us"
-                aria-label="Go to catn8.us"
-              >
-                <WebpImage className="accumul8-header-brand-logo-image" src="/images/catn8_logo.png" alt="catn8.us Logo" />
-              </a>
-            </div>
-          </div>
-          <div className={`accumul8-tab-shell accumul8-tab-shell--${tab}`}>
-          {tab === 'aicountant' && (
-            <div className="accumul8-panel accumul8-panel--viewport-fill">
-              <Accumul8AIcountantPanel
-                ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
-                ownerUsername={selectedOwnerProfile?.username || viewer?.username || 'You'}
-                runningHousekeeping={runningAIcountantHousekeeping}
-                balancingBooks={balancingBooks}
-                runningWatchlist={runningAIcountantWatchlist}
-                messageBoardPendingCount={messageBoardUnacknowledgedCount}
-                onRunHousekeeping={handleRunAIcountantHousekeeping}
-                onBalanceBooks={handleBalanceBooks}
-                onRunWatchlist={handleRunAIcountantWatchlist}
-                onOpenMessageBoard={() => setMessageBoardOpen(true)}
-                onDataChanged={load}
-                onToast={onToast}
-              />
-            </div>
-          )}
-          {tab === 'ledger' && (
-            <Accumul8LedgerTab
-              activeLedgerRowId={activeLedgerRowId}
-              activateLedgerRow={activateLedgerRow}
-              beginEditTransaction={beginEditTransaction}
-              beginViewTransaction={beginViewTransaction}
-              busy={busy}
-              customLedgerEndDate={customLedgerEndDate}
-              customLedgerStartDate={customLedgerStartDate}
-              filterPresetOptions={LEDGER_FILTER_PRESET_OPTIONS}
-              flashingSaveButtonKey={flashingSaveButtonKey}
-              getAccountDisplayName={getAccountDisplayName}
-              handleDeleteTransaction={handleDeleteTransaction}
-              ledgerDateFilter={ledgerDateFilter}
-              ledgerDisplayBalanceById={ledgerDisplayBalanceById}
-              ledgerDraftById={ledgerDraftById}
-              ledgerFilterPreset={ledgerFilterPreset}
-              ledgerPagination={ledgerPagination}
-              ledgerPaginationMode={ledgerPaginationMode}
-              ledgerTable={ledgerTable}
-              ledgerTableRef={ledgerTableRef}
-              listSearchQuery={listSearchQueryByTab.ledger}
-              openCreateTransactionModal={openCreateTransactionModal}
-              openLedgerEntityModal={openLedgerEntityModal}
-              renderDateRangeControls={renderDateRangeControls}
-              saveLedgerRow={saveLedgerRow}
-              setCustomLedgerEndDate={setCustomLedgerEndDate}
-              setCustomLedgerStartDate={setCustomLedgerStartDate}
-              setInlineRowRef={setInlineRowRef}
-              setLedgerArchivePage={setLedgerArchivePage}
-              setLedgerDateFilter={(value) => setLedgerDateFilter(value as DateRangeFilter)}
-              setLedgerFilterPreset={(value) => setLedgerFilterPreset(value as LedgerFilterPreset)}
-              setLedgerPaginationMode={setLedgerPaginationMode}
-              setLedgerRowDraft={setLedgerRowDraft}
-              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: value }))}
-            />
-          )}
-          {tab === 'calendar' && (
-            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
-              <div className="accumul8-panel accumul8-panel--viewport-fill accumul8-panel--calendar-scroll">
-                <Accumul8CalendarView
-                  accounts={scopedAccounts}
-                  transactions={filteredTransactions}
-                  onTransactionSelect={beginViewTransaction}
-                />
-              </div>
-            </React.Suspense>
-          )}
-          {tab === 'spreadsheet' && (
-            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
-              <div className="accumul8-panel accumul8-panel--viewport-fill">
-                <Accumul8SpreadsheetView
-                  busy={busy}
-                  selectedMonth={budgetMonth}
-                  recurringPayments={budgetPlannerRecurringPayments}
-                  transactions={filteredTransactions}
-                  entities={contactEntities}
-                  accounts={scopedAccounts}
-                  onSelectedMonthChange={setBudgetMonth}
-                  onEnsureBudgetMonth={async (monthValue) => { await ensureBudgetMonth({ month_value: monthValue }); }}
-                  onUpdateTransaction={updateTransaction}
-                  onDeleteRecurring={handleDeleteRecurring}
-                  onOpenRecurring={beginEditRecurring}
-                />
-              </div>
-            </React.Suspense>
-          )}
-          {tab === 'debtors' && (
-            <Accumul8DebtorsTab
-              activateDebtorRow={activateDebtorRow}
-              activeDebtorRowId={activeDebtorRowId}
-              activeLedgerRowId={activeLedgerRowId}
-              activeOwnerUserId={activeOwnerUserId}
-              balanceLedgerTable={balanceLedgerTable}
-              balanceLedgerTableRef={balanceLedgerTableRef}
-              beginEditTransaction={beginEditTransaction}
-              beginViewTransaction={beginViewTransaction}
-              busy={busy}
-              debtorDraftById={debtorDraftById}
-              debtorRunningBalanceByTxId={debtorRunningBalanceByTxId}
-              debtorsTable={debtorsTable}
-              debtorsTableRef={debtorsTableRef}
-              deleteDebtor={deleteDebtor}
-              flashingSaveButtonKey={flashingSaveButtonKey}
-              groupedDebtors={groupedDebtors}
-              handleDeleteTransaction={handleDeleteTransaction}
-              ledgerDraftById={ledgerDraftById}
-              listSearchQuery={listSearchQueryByTab.debtors}
-              openCreateDebtorModal={openCreateDebtorModal}
-              openCreateIouTransactionModal={openCreateIouTransactionModal}
-              openLedgerEntityModal={openLedgerEntityModal}
-              saveDebtorRow={saveDebtorRow}
-              saveLedgerRow={saveLedgerRow}
-              selectedDebtorId={selectedDebtorId}
-              selectedOwnerUserId={selectedOwnerUserId}
-              setDebtorRowDraft={setDebtorRowDraft}
-              setInlineRowRef={setInlineRowRef}
-              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: value }))}
-              setSelectedDebtorId={setSelectedDebtorId}
-              statementUploads={statementUploads}
-            />
-          )}
-          {tab === 'pay_bills' && (
-            <Accumul8PayBillsTab
-              activatePayBillRow={activatePayBillRow}
-              activeOwnerUserId={activeOwnerUserId}
-              activePayBillRowId={activePayBillRowId}
-              beginViewTransaction={beginViewTransaction}
-              busy={busy}
-              customPayBillsEndDate={customPayBillsEndDate}
-              customPayBillsStartDate={customPayBillsStartDate}
-              deleteTransaction={deleteTransaction}
-              flashingSaveButtonKey={flashingSaveButtonKey}
-              getAccountDisplayName={getAccountDisplayName}
-              listSearchQuery={listSearchQueryByTab.pay_bills}
-              openLedgerEntityModal={openLedgerEntityModal}
-              payBillsAccountOptions={payBillsAccountOptions}
-              payBillsDateFilter={payBillsDateFilter}
-              payBillsTable={payBillsTable}
-              payBillsTableRef={payBillsTableRef}
-              payBillDraftById={payBillDraftById}
-              renderDateRangeControls={renderDateRangeControls}
-              savePayBillRow={savePayBillRow}
-              selectedOwnerUserId={selectedOwnerUserId}
-              setCustomPayBillsEndDate={setCustomPayBillsEndDate}
-              setCustomPayBillsStartDate={setCustomPayBillsStartDate}
-              setInlineRowRef={setInlineRowRef}
-              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: value }))}
-              setPayBillRowDraft={setPayBillRowDraft}
-              setPayBillsDateFilter={(value) => setPayBillsDateFilter(value as DateRangeFilter)}
-              statementUploads={statementUploads}
-              todayDate={todayDate}
-            />
-          )}
-          {tab === 'contacts' && (
-            <Accumul8ContactsTab
-              activeEntityRowId={activeEntityRowId}
-              activateEntityRow={activateEntityRow}
-              busy={busy}
-              defaultEntityAliasDraft={DEFAULT_ENTITY_ALIAS_DRAFT}
-              entities={entities}
-              entitiesTable={entitiesTable}
-              entitiesTableRef={entitiesTableRef}
-              entityAliasDraftById={entityAliasDraftById}
-              entityDraftById={entityDraftById}
-              entityTransactionSummaryById={entityTransactionSummaryById}
-              flashingSaveButtonKey={flashingSaveButtonKey}
-              listSearchQuery={listSearchQueryByTab.contacts}
-              openCreateEntityModal={openCreateEntityModal}
-              removeEntityAlias={removeEntityAlias}
-              saveEntityAlias={saveEntityAlias}
-              saveEntityRow={saveEntityRow}
-              setEntityAliasDraftById={setEntityAliasDraftById}
-              setEntityHistoryEntityId={setEntityHistoryEntityId}
-              setEntityRowDraft={setEntityRowDraft}
-              setInlineRowRef={setInlineRowRef}
-              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: value }))}
-            />
-          )}
-          {tab === 'entity_endex' && (
-            <Accumul8EntityEndexTab
-              beginEditEntity={beginEditEntity}
-              busy={busy}
-              entityEndexFindingAll={entityEndexFindingAll}
-              entityEndexGuideByParentKey={entityEndexGuideByParentKey}
-              entityEndexGuides={entityEndexGuides}
-              entityEndexParents={entityEndexParents}
-              entityEndexQuery={entityEndexQuery}
-              entityEndexScanLogs={entityEndexScanLogs}
-              entityTransactionSummaryById={entityTransactionSummaryById}
-              linkedAliasEntitiesByParentId={linkedAliasEntitiesByParentId}
-              openEntityEndexGuideModal={openEntityEndexGuideModal}
-              runEntityMaintenanceAliasScan={runEntityMaintenanceAliasScan}
-              setEntityEndexLogOpen={setEntityEndexLogOpen}
-              setEntityEndexQuery={setEntityEndexQuery}
-            />
-          )}
-          {tab === 'recurring' && (
-            <Accumul8RecurringTab
-              activeRecurringRowId={activeRecurringRowId}
-              beginEditRecurring={beginEditRecurring}
-              busy={busy}
-              deleteRecurring={deleteRecurring}
-              flashingSaveButtonKey={flashingSaveButtonKey}
-              getAccountDisplayName={getAccountDisplayName}
-              listSearchQuery={listSearchQueryByTab.recurring}
-              openCreateRecurringModal={openCreateRecurringModal}
-              payBillsAccountOptions={payBillsAccountOptions}
-              recurringDraftById={recurringDraftById}
-              recurringTable={recurringTable}
-              recurringTableRef={recurringTableRef}
-              saveRecurringRow={saveRecurringRow}
-              setInlineRowRef={setInlineRowRef}
-              setListSearchQuery={(value) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: value }))}
-              setRecurringRowDraft={setRecurringRowDraft}
-            />
-          )}
-          {tab === 'notifications' && (
-            <Accumul8NotificationsTab
-              beginEditNotificationRule={beginEditNotificationRule}
-              busy={busy}
-              createNotificationRule={createNotificationRule}
-              deleteNotificationRule={deleteNotificationRule}
-              editingNotificationRuleId={editingNotificationRuleId}
-              notificationForm={notificationForm}
-              notificationRules={notificationRules}
-              parseCustomUserIds={parseCustomUserIds}
-              resetNotificationForm={resetNotificationForm}
-              sendNotification={sendNotification}
-              setNotificationForm={setNotificationForm}
-              toggleNotificationRule={toggleNotificationRule}
-              updateNotificationRule={updateNotificationRule}
-            />
-          )}
-          {tab === 'sync' && (
-            <Accumul8SyncTab
-              bankConnections={bankConnections}
-              busy={busy}
-              createBankConnection={createBankConnection}
-              deleteBankConnection={deleteBankConnection}
-              formatAccountBackfillNote={formatAccountBackfillNote}
-              formatAccountMappingLabel={formatAccountMappingLabel}
-              formatSyncStatusLabel={formatSyncStatusLabel}
-              formatSyncStatusMessage={formatSyncStatusMessage}
-              isTellerRateLimited={isTellerRateLimited}
-              lastSyncReport={lastSyncReport}
-              linkedAccountsByConnectionId={linkedAccountsByConnectionId}
-              openSyncHelp={openSyncHelp}
-              runConnectionSync={runConnectionSync}
-              runTellerConnect={runTellerConnect}
-              summaryFormatAccountBackfillNote={formatSyncSummaryBackfillNote}
-              summaryFormatAccountLabel={formatSyncSummaryAccountLabel}
-              syncProvider={syncProvider}
-              syncingConnectionId={syncingConnectionId}
-              updateBankConnection={updateBankConnection}
-            />
-          )}
-          {tab === 'statements' && (
-            <React.Suspense fallback={ACCUMUL8_TAB_LOADING_FALLBACK}>
-              <div className="accumul8-panel accumul8-panel--viewport-fill">
-                <Accumul8StatementsPanel
-                  busy={busy}
-                  accounts={accounts}
-                  bankingOrganizations={bankingOrganizations}
-                  statementUploads={statementUploads}
-                  archivedStatementUploads={archivedStatementUploads}
-                  statementAuditRuns={statementAuditRuns}
-                  transactions={transactions}
-                  ownerUserId={selectedOwnerUserId || activeOwnerUserId || 0}
-                  onUpload={uploadStatement}
-                  onRescan={rescanStatementUpload}
-                  onUpdateMetadata={updateStatementUploadMetadata}
-                  onArchiveStatement={archiveStatementUpload}
-                  onRestoreStatement={restoreStatementUpload}
-                  onDeleteArchivedStatement={deleteArchivedStatementUpload}
-                  onConfirmImport={confirmStatementImport}
-                  onReconcile={reconcileStatementUpload}
-                  onImportReviewRow={importStatementReviewRow}
-                  onLinkReviewRow={linkStatementReviewRow}
-                  onSearch={searchStatementUploads}
-                  onAuditStatements={auditStatementUploads}
-                  onAuditImportedCleanup={auditImportedTransactionCleanup}
-                  onPurgeImportedCleanup={purgeImportedTransactionCleanup}
-                  onPurgeAllImportedTransactions={purgeAllImportedStatementTransactions}
-                  onPurgeAllStatementUploads={purgeAllStatementUploads}
-                  onOpenTransaction={beginViewTransaction}
-                  onDeleteTransaction={handleDeleteTransaction}
-                />
-              </div>
-            </React.Suspense>
-          )}
-          </div>
+          <Accumul8PageHeader
+            accessibleAccountOwners={accessibleAccountOwners}
+            activeOwnerUserId={activeOwnerUserId}
+            bankingOrganizations={bankingOrganizations}
+            busy={busy}
+            entitiesSorted={entitiesSorted}
+            formatAccountOptionLabel={formatAccountOptionLabel}
+            formatCurrencyAmount={formatCurrencyAmount}
+            formatSummaryWindowLabel={formatSummaryWindowLabel}
+            getActiveFilterClass={getActiveFilterClass}
+            handleProjectedBalanceCardClick={handleProjectedBalanceCardClick}
+            headerSummary={headerSummary}
+            isHeaderLogoSpinning={isHeaderLogoSpinning}
+            launchableBankingOrganizations={launchableBankingOrganizations}
+            messageBoardUnacknowledgedCount={messageBoardUnacknowledgedCount}
+            normalizeEntityKind={normalizeEntityKind}
+            onOpenAccountManager={() => setAccountManagerOpen(true)}
+            onOpenBankingOrganizationManager={() => setBankingOrganizationManagerOpen(true)}
+            onOpenMessageBoard={() => setMessageBoardOpen(true)}
+            onOpenPopup={openBankingOrganizationPopup}
+            onSelectBankAccount={setSelectedBankAccountId}
+            onSelectBankingOrganization={setSelectedBankingOrganizationId}
+            onSelectOwner={(next) => {
+              setSelectedOwnerUserId(next);
+              if (typeof window !== 'undefined') {
+                window.localStorage.setItem(ACCUMUL8_OWNER_STORAGE_KEY, String(next));
+              }
+            }}
+            onSelectTab={(nextTab) => setTab(nextTab as TabKey)}
+            projectedBalanceForWindow={projectedBalanceForWindow}
+            selectedBankAccountId={selectedBankAccountId}
+            selectedBankingOrganizationId={selectedBankingOrganizationId}
+            settingsButtonRef={settingsButtonRef}
+            settingsMenuOpen={settingsMenuOpen}
+            settingsMenuPosition={settingsMenuPosition}
+            settingsMenuRef={settingsMenuRef}
+            setSettingsMenuOpen={setSettingsMenuOpen}
+            summaryWindow={summaryWindow}
+            tab={tab}
+            visibleAccounts={visibleAccounts}
+          />
+          <Accumul8PageTabContent
+            aiPanelProps={{
+              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+              ownerUsername: selectedOwnerProfile?.username || viewer?.username || 'You',
+              runningHousekeeping: runningAIcountantHousekeeping,
+              balancingBooks,
+              runningWatchlist: runningAIcountantWatchlist,
+              messageBoardPendingCount: messageBoardUnacknowledgedCount,
+              onRunHousekeeping: handleRunAIcountantHousekeeping,
+              onBalanceBooks: handleBalanceBooks,
+              onRunWatchlist: handleRunAIcountantWatchlist,
+              onOpenMessageBoard: () => setMessageBoardOpen(true),
+              onDataChanged: load,
+              onToast,
+            }}
+            calendarViewProps={{
+              accounts: scopedAccounts,
+              transactions: filteredTransactions,
+              onTransactionSelect: beginViewTransaction,
+            }}
+            contactsTabProps={{
+              activeEntityRowId,
+              activateEntityRow,
+              busy,
+              defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
+              entities,
+              entitiesTable,
+              entitiesTableRef,
+              entityAliasDraftById,
+              entityDraftById,
+              entityTransactionSummaryById,
+              flashingSaveButtonKey,
+              listSearchQuery: listSearchQueryByTab.contacts,
+              openCreateEntityModal,
+              removeEntityAlias,
+              saveEntityAlias,
+              saveEntityRow,
+              setEntityAliasDraftById,
+              setEntityHistoryEntityId,
+              setEntityRowDraft,
+              setInlineRowRef,
+              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: value })),
+            }}
+            debtorsTabProps={{
+              activateDebtorRow,
+              activeDebtorRowId,
+              activeLedgerRowId,
+              activeOwnerUserId,
+              balanceLedgerTable,
+              balanceLedgerTableRef,
+              beginEditTransaction,
+              beginViewTransaction,
+              busy,
+              debtorDraftById,
+              debtorRunningBalanceByTxId,
+              debtorsTable,
+              debtorsTableRef,
+              deleteDebtor,
+              flashingSaveButtonKey,
+              groupedDebtors,
+              handleDeleteTransaction,
+              ledgerDraftById,
+              listSearchQuery: listSearchQueryByTab.debtors,
+              openCreateDebtorModal,
+              openCreateIouTransactionModal,
+              openLedgerEntityModal,
+              saveDebtorRow,
+              saveLedgerRow,
+              selectedDebtorId,
+              selectedOwnerUserId,
+              setDebtorRowDraft,
+              setInlineRowRef,
+              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: value })),
+              setSelectedDebtorId,
+              statementUploads,
+            }}
+            entityEndexTabProps={{
+              beginEditEntity,
+              busy,
+              entityEndexFindingAll,
+              entityEndexGuideByParentKey,
+              entityEndexGuides,
+              entityEndexParents,
+              entityEndexQuery,
+              entityEndexScanLogs,
+              entityTransactionSummaryById,
+              linkedAliasEntitiesByParentId,
+              openEntityEndexGuideModal,
+              runEntityMaintenanceAliasScan,
+              setEntityEndexLogOpen,
+              setEntityEndexQuery,
+            }}
+            ledgerTabProps={{
+              activeLedgerRowId,
+              activateLedgerRow,
+              beginEditTransaction,
+              beginViewTransaction,
+              busy,
+              customLedgerEndDate,
+              customLedgerStartDate,
+              filterPresetOptions: LEDGER_FILTER_PRESET_OPTIONS,
+              flashingSaveButtonKey,
+              getAccountDisplayName,
+              handleDeleteTransaction,
+              ledgerDateFilter,
+              ledgerDisplayBalanceById,
+              ledgerDraftById,
+              ledgerFilterPreset,
+              ledgerPagination,
+              ledgerPaginationMode,
+              ledgerTable,
+              ledgerTableRef,
+              listSearchQuery: listSearchQueryByTab.ledger,
+              openCreateTransactionModal,
+              openLedgerEntityModal,
+              renderDateRangeControls,
+              saveLedgerRow,
+              setCustomLedgerEndDate,
+              setCustomLedgerStartDate,
+              setInlineRowRef,
+              setLedgerArchivePage,
+              setLedgerDateFilter: (value) => setLedgerDateFilter(value as DateRangeFilter),
+              setLedgerFilterPreset: (value) => setLedgerFilterPreset(value as LedgerFilterPreset),
+              setLedgerPaginationMode,
+              setLedgerRowDraft,
+              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: value })),
+            }}
+            notificationsTabProps={{
+              beginEditNotificationRule,
+              busy,
+              createNotificationRule,
+              deleteNotificationRule,
+              editingNotificationRuleId,
+              notificationForm,
+              notificationRules,
+              parseCustomUserIds,
+              resetNotificationForm,
+              sendNotification,
+              setNotificationForm,
+              toggleNotificationRule,
+              updateNotificationRule,
+            }}
+            payBillsTabProps={{
+              activatePayBillRow,
+              activeOwnerUserId,
+              activePayBillRowId,
+              beginViewTransaction,
+              busy,
+              customPayBillsEndDate,
+              customPayBillsStartDate,
+              deleteTransaction,
+              flashingSaveButtonKey,
+              getAccountDisplayName,
+              listSearchQuery: listSearchQueryByTab.pay_bills,
+              openLedgerEntityModal,
+              payBillsAccountOptions,
+              payBillsDateFilter,
+              payBillsTable,
+              payBillsTableRef,
+              payBillDraftById,
+              renderDateRangeControls,
+              savePayBillRow,
+              selectedOwnerUserId,
+              setCustomPayBillsEndDate,
+              setCustomPayBillsStartDate,
+              setInlineRowRef,
+              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: value })),
+              setPayBillRowDraft,
+              setPayBillsDateFilter: (value) => setPayBillsDateFilter(value as DateRangeFilter),
+              statementUploads,
+              todayDate,
+            }}
+            recurringTabProps={{
+              activeRecurringRowId,
+              beginEditRecurring,
+              busy,
+              deleteRecurring,
+              flashingSaveButtonKey,
+              getAccountDisplayName,
+              listSearchQuery: listSearchQueryByTab.recurring,
+              openCreateRecurringModal,
+              payBillsAccountOptions,
+              recurringDraftById,
+              recurringTable,
+              recurringTableRef,
+              saveRecurringRow,
+              setInlineRowRef,
+              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: value })),
+              setRecurringRowDraft,
+            }}
+            spreadsheetViewProps={{
+              busy,
+              selectedMonth: budgetMonth,
+              recurringPayments: budgetPlannerRecurringPayments,
+              transactions: filteredTransactions,
+              entities: contactEntities,
+              accounts: scopedAccounts,
+              onSelectedMonthChange: setBudgetMonth,
+              onEnsureBudgetMonth: async (monthValue) => { await ensureBudgetMonth({ month_value: monthValue }); },
+              onUpdateTransaction: updateTransaction,
+              onDeleteRecurring: handleDeleteRecurring,
+              onOpenRecurring: beginEditRecurring,
+            }}
+            statementsPanelProps={{
+              busy,
+              accounts,
+              bankingOrganizations,
+              statementUploads,
+              archivedStatementUploads,
+              statementAuditRuns,
+              transactions,
+              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+              onUpload: uploadStatement,
+              onRescan: rescanStatementUpload,
+              onUpdateMetadata: updateStatementUploadMetadata,
+              onArchiveStatement: archiveStatementUpload,
+              onRestoreStatement: restoreStatementUpload,
+              onDeleteArchivedStatement: deleteArchivedStatementUpload,
+              onConfirmImport: confirmStatementImport,
+              onReconcile: reconcileStatementUpload,
+              onImportReviewRow: importStatementReviewRow,
+              onLinkReviewRow: linkStatementReviewRow,
+              onSearch: searchStatementUploads,
+              onAuditStatements: auditStatementUploads,
+              onAuditImportedCleanup: auditImportedTransactionCleanup,
+              onPurgeImportedCleanup: purgeImportedTransactionCleanup,
+              onPurgeAllImportedTransactions: purgeAllImportedStatementTransactions,
+              onPurgeAllStatementUploads: purgeAllStatementUploads,
+              onOpenTransaction: beginViewTransaction,
+              onDeleteTransaction: handleDeleteTransaction,
+            }}
+            syncTabProps={{
+              bankConnections,
+              busy,
+              createBankConnection,
+              deleteBankConnection,
+              formatAccountBackfillNote,
+              formatAccountMappingLabel,
+              formatSyncStatusLabel,
+              formatSyncStatusMessage,
+              isTellerRateLimited,
+              lastSyncReport,
+              linkedAccountsByConnectionId,
+              openSyncHelp,
+              runConnectionSync,
+              runTellerConnect,
+              summaryFormatAccountBackfillNote: formatSyncSummaryBackfillNote,
+              summaryFormatAccountLabel: formatSyncSummaryAccountLabel,
+              syncProvider,
+              syncingConnectionId,
+              updateBankConnection,
+            }}
+            tab={tab}
+          />
           <Accumul8PageOverlays
             acknowledgeAllMessageBoardMessages={acknowledgeAllMessageBoardMessages}
             acknowledgeMessageBoardMessage={acknowledgeMessageBoardMessage}
@@ -3323,133 +3050,135 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             syncHelpOpen={syncHelpOpen}
             syncHelpToken={syncHelpToken}
           />
-          <Accumul8PageModals
-            entityModalProps={{
-              open: entityModalOpen,
-              busy,
-              initialForm: entityForm,
-              entity: editingEntity,
-              entities,
-              aliasDraft: editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT,
-              entitySummary: editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null,
-              editing: editingEntityId !== null,
-              onClose: closeEntityModal,
-              onAliasDraftChange: (draft) => {
-                if (!editingEntity) return;
-                setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+          <Accumul8PageModalAssembly
+            props={{
+              entityModalProps: {
+                open: entityModalOpen,
+                busy,
+                initialForm: entityForm,
+                entity: editingEntity,
+                entities,
+                aliasDraft: editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT,
+                entitySummary: editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null,
+                editing: editingEntityId !== null,
+                onClose: closeEntityModal,
+                onAliasDraftChange: (draft) => {
+                  if (!editingEntity) return;
+                  setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+                },
+                onAddAlias: async () => {
+                  if (!editingEntity) return;
+                  await saveEntityAlias(editingEntity);
+                },
+                onDeleteAlias: removeEntityAlias,
+                onSave: submitEntityForm,
               },
-              onAddAlias: async () => {
-                if (!editingEntity) return;
-                await saveEntityAlias(editingEntity);
-              },
-              onDeleteAlias: removeEntityAlias,
-              onSave: submitEntityForm,
-            }}
-            ledgerEntityModalProps={{
-              open: ledgerEntityModalTransactionId !== null,
-              busy: busy || ledgerEntityModalSaving,
-              transaction: ledgerEntityModalTransactionId !== null
-                ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
-                : null,
-              entities: entitiesSorted,
-              onClose: closeLedgerEntityModal,
-              onSave: saveLedgerEntityRule,
-            }}
-            entityEndexModalProps={{
-              open: entityEndexGuideModalOpen,
-              busy,
-              guide: selectedEntityEndexGuide,
-              parentEntity: selectedEntityEndexParentEntity,
-              entities: entitiesWithResolvedAliases,
-              aliasDraft: selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
-                ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
-                : DEFAULT_ENTITY_ALIAS_DRAFT,
-              onClose: closeEntityEndexGuideModal,
-              onSave: saveEntityEndexGuide,
-              onDelete: removeEntityEndexGuide,
-              onFindRelated: runEntityEndexGuideFinder,
-              onAliasDraftChange: (draft) => {
-                if (!selectedEntityEndexParentEntity) return;
-                setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
-              },
-              onAddAlias: async () => {
-                if (!selectedEntityEndexParentEntity) return;
-                await saveEntityAlias(selectedEntityEndexParentEntity);
-              },
-              onRemoveAlias: removeEntityAlias,
-            }}
-            contactModalProps={{
-              open: contactModalOpen,
-              busy,
-              initialForm: contactForm,
-              editing: editingContactId !== null,
-              onClose: closeContactModal,
-              onSave: submitContactForm,
-            }}
-            debtorModalProps={{
-              open: debtorModalOpen,
-              busy,
-              initialForm: debtorForm,
-              editing: editingDebtorId !== null,
-              onClose: closeDebtorModal,
-              onSave: submitDebtorModal,
-            }}
-            recurringModalProps={{
-              open: recurringModalOpen,
-              busy,
-              initialForm: editingRecurringForm,
-              entities: contactEntities,
-              accounts: visibleAccounts,
-              onClose: closeRecurringModal,
-              onSave: submitRecurringModal,
-            }}
-            transactionModalProps={{
-              open: transactionModalOpen,
-              busy,
-              initialForm: ledgerForm,
-              mode: transactionModalMode,
-              variant: transactionModalVariant,
-              transaction: editingTransactionId !== null
-                ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
-                : viewingTransactionId !== null
-                  ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
+              ledgerEntityModalProps: {
+                open: ledgerEntityModalTransactionId !== null,
+                busy: busy || ledgerEntityModalSaving,
+                transaction: ledgerEntityModalTransactionId !== null
+                  ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
                   : null,
-              entities: entitiesSorted,
-              debtors: groupedDebtors,
-              accounts: transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts,
-              statementUploads,
-              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
-              onClose: closeTransactionModal,
-              onEdit: transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined,
-              onSave: submitTransactionModal,
-            }}
-            bankingOrganizationManagerProps={{
-              open: bankingOrganizationManagerOpen,
-              onClose: () => setBankingOrganizationManagerOpen(false),
-              mode: 'banking_organization',
-              busy,
-              bankingOrganizations,
-              accounts,
-              createBankingOrganization,
-              updateBankingOrganization,
-              deleteBankingOrganization,
-              createAccount,
-              updateAccount,
-              deleteAccount,
-            }}
-            accountManagerProps={{
-              open: accountManagerOpen,
-              onClose: () => setAccountManagerOpen(false),
-              mode: 'account',
-              busy,
-              bankingOrganizations,
-              accounts,
-              createBankingOrganization,
-              updateBankingOrganization,
-              deleteBankingOrganization,
-              createAccount,
-              updateAccount,
-              deleteAccount,
+                entities: entitiesSorted,
+                onClose: closeLedgerEntityModal,
+                onSave: saveLedgerEntityRule,
+              },
+              entityEndexModalProps: {
+                open: entityEndexGuideModalOpen,
+                busy,
+                guide: selectedEntityEndexGuide,
+                parentEntity: selectedEntityEndexParentEntity,
+                entities: entitiesWithResolvedAliases,
+                aliasDraft: selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
+                  ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
+                  : DEFAULT_ENTITY_ALIAS_DRAFT,
+                onClose: closeEntityEndexGuideModal,
+                onSave: saveEntityEndexGuide,
+                onDelete: removeEntityEndexGuide,
+                onFindRelated: runEntityEndexGuideFinder,
+                onAliasDraftChange: (draft) => {
+                  if (!selectedEntityEndexParentEntity) return;
+                  setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
+                },
+                onAddAlias: async () => {
+                  if (!selectedEntityEndexParentEntity) return;
+                  await saveEntityAlias(selectedEntityEndexParentEntity);
+                },
+                onRemoveAlias: removeEntityAlias,
+              },
+              contactModalProps: {
+                open: contactModalOpen,
+                busy,
+                initialForm: contactForm,
+                editing: editingContactId !== null,
+                onClose: closeContactModal,
+                onSave: submitContactForm,
+              },
+              debtorModalProps: {
+                open: debtorModalOpen,
+                busy,
+                initialForm: debtorForm,
+                editing: editingDebtorId !== null,
+                onClose: closeDebtorModal,
+                onSave: submitDebtorModal,
+              },
+              recurringModalProps: {
+                open: recurringModalOpen,
+                busy,
+                initialForm: editingRecurringForm,
+                entities: contactEntities,
+                accounts: visibleAccounts,
+                onClose: closeRecurringModal,
+                onSave: submitRecurringModal,
+              },
+              transactionModalProps: {
+                open: transactionModalOpen,
+                busy,
+                initialForm: ledgerForm,
+                mode: transactionModalMode,
+                variant: transactionModalVariant,
+                transaction: editingTransactionId !== null
+                  ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
+                  : viewingTransactionId !== null
+                    ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
+                    : null,
+                entities: entitiesSorted,
+                debtors: groupedDebtors,
+                accounts: transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts,
+                statementUploads,
+                ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+                onClose: closeTransactionModal,
+                onEdit: transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined,
+                onSave: submitTransactionModal,
+              },
+              bankingOrganizationManagerProps: {
+                open: bankingOrganizationManagerOpen,
+                onClose: () => setBankingOrganizationManagerOpen(false),
+                mode: 'banking_organization',
+                busy,
+                bankingOrganizations,
+                accounts,
+                createBankingOrganization,
+                updateBankingOrganization,
+                deleteBankingOrganization,
+                createAccount,
+                updateAccount,
+                deleteAccount,
+              },
+              accountManagerProps: {
+                open: accountManagerOpen,
+                onClose: () => setAccountManagerOpen(false),
+                mode: 'account',
+                busy,
+                bankingOrganizations,
+                accounts,
+                createBankingOrganization,
+                updateBankingOrganization,
+                deleteBankingOrganization,
+                createAccount,
+                updateAccount,
+                deleteAccount,
+              },
             }}
           />
           {!loaded && <div className="text-muted mt-2">Loading Accumul8...</div>}

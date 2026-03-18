@@ -92,19 +92,13 @@ import {
   BuildWizardProjectPhotosSection,
   BuildWizardTemplateEditor,
 } from './buildWizardRenderSections';
-import { BuildWizardAiToolsModal } from './buildWizardAiToolsModal';
-import { BuildWizardDocumentUploadModal } from './buildWizardDocumentUploadModal';
-import { BuildWizardLightboxModal } from './buildWizardLightboxModal';
-import { BuildWizardCompletedSection, BuildWizardOverviewSection } from './buildWizardOverviewSections';
-import { BuildWizardProjectDeskContacts } from './buildWizardProjectDeskContacts';
-import { BuildWizardProjectDeskDocuments } from './buildWizardProjectDeskDocuments';
-import { BuildWizardProjectDeskModal } from './buildWizardProjectDeskModal';
-import { BuildWizardProjectOverviewModal } from './buildWizardProjectOverviewModal';
-import { BuildWizardRecoveryReportModal } from './buildWizardRecoveryReportModal';
-import { BuildWizardStartSection } from './buildWizardStartSection';
-import { BuildWizardStepEditModal } from './buildWizardStepEditModal';
-import { BuildWizardStepInfoModal } from './buildWizardStepInfoModal';
-import { BuildWizardWorkspaceActionModals } from './buildWizardWorkspaceActionModals';
+import { BuildWizardStepActionPanel } from './buildWizardStepActionPanel';
+import { BuildWizardStepAssignees } from './buildWizardStepAssignees';
+import { BuildWizardStepNotes } from './buildWizardStepNotes';
+import { BuildWizardStepReceiptEditor } from './buildWizardStepReceiptEditor';
+import { BuildWizardStepReceiptsList } from './buildWizardStepReceiptsList';
+import { BuildWizardWorkspaceMain } from './buildWizardWorkspaceMain';
+import { BuildWizardWorkspaceModals } from './buildWizardWorkspaceModals';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
@@ -4480,177 +4474,50 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 <div className="build-wizard-step-description-display">{step.description || 'No description yet.'}</div>
               </label>
 
-              <div className="build-wizard-step-actions">
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: !prev[step.id] }))}
-                >
-                  Add Note
-                </button>
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  disabled={stepReadOnly}
-                  onClick={() => {
-                    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
-                    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: !prev[step.id] }));
-                  }}
-                >
-                  {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Edit Task' : 'Add Task'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm"
-                  disabled={stepReadOnly}
-                  onClick={() => setStepContactPickerOpenByStepId((prev) => ({ ...prev, [step.id]: !prev[step.id] }))}
-                >
-                  Add Contact
-                </button>
-                <label className="btn btn-outline-secondary btn-sm build-wizard-upload-btn">
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                    onChange={(e) => {
-                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                      if (file) {
-                        const uploadKind = draft.step_type === 'blueprints'
-                          ? 'blueprint'
-                          : (draft.step_type === 'photos' ? 'photo' : 'progress_photo');
-                        void uploadDocument(uploadKind, file, step.id, step.title, step.phase_key);
-                      }
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-                {attachableProjectDocuments.length ? (
-                  <div className="build-wizard-step-attach-existing">
-                    {attachExistingPickerOpenByStepId[step.id] ? (
-                      <input
-                        type="text"
-                        className="build-wizard-attach-filter-input"
-                        placeholder="Filter attachments..."
-                        value={attachExistingDocFilterByStepId[step.id] || ''}
-                        onChange={(e) => setAttachExistingDocFilterByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                      />
-                    ) : null}
-                    <select
-                      value={attachExistingDocByStepId[step.id] || ''}
-                      onFocus={() => setAttachExistingPickerOpenByStepId((prev) => ({ ...prev, [step.id]: true }))}
-                      onMouseDown={() => setAttachExistingPickerOpenByStepId((prev) => ({ ...prev, [step.id]: true }))}
-                      onChange={(e) => setAttachExistingDocByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                    >
-                      <option value="">Attach existing document...</option>
-                      {filteredAttachableProjectDocuments.map((doc) => {
-                        const linkedStepId = Number(doc.step_id || 0);
-                        const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
-                        const linkedStepNumber = linkedStepId > 0
-                          ? (linkedStepDisplayNumberById.get(linkedStepId) || linkedStep?.step_order || linkedStepId)
-                          : 0;
-                        const linkSuffix = linkedStep
-                          ? `Linked #${linkedStepNumber}: ${linkedStep.title}`
-                          : 'Unlinked';
-                        return (
-                          <option key={doc.id} value={String(doc.id)}>
-                            {doc.original_name} ({buildWizardTokenLabel(doc.kind, 'Other')}) - {linkSuffix}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => void onAttachExistingDocumentToStep(step)}
-                      disabled={!attachExistingDocByStepId[step.id]}
-                    >
-                      Attach
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {stepContactPickerOpenByStepId[step.id] ? (
-                <div className="build-wizard-step-contact-picker">
-                  <select
-                    value={effectiveStepContactCandidateId > 0 ? String(effectiveStepContactCandidateId) : ''}
-                    onChange={(e) => setStepContactCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                  >
-                    <option value="">Select contact...</option>
-                    {addableStepContacts.map((contact) => (
-                      <option key={`step-contact-${step.id}-${contact.id}`} value={String(contact.id)}>
-                        {contact.display_name} ({contactTypeLabel(normalizeContactType(contact))})
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    disabled={stepReadOnly || effectiveStepContactCandidateId <= 0}
-                    onClick={() => { void onAddContactToStep(step.id, effectiveStepContactCandidateId); }}
-                  >
-                    Assign
-                  </button>
-                </div>
-              ) : null}
-
-              {noteEditorOpenByStep[step.id] ? (
-                <div className="build-wizard-note-editor">
-                  <textarea
-                    rows={3}
-                    placeholder="Type your note..."
-                    value={noteDraftByStep[step.id] || ''}
-                    onChange={(e) => setNoteDraftByStep((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                  />
-                  <div className="build-wizard-note-editor-actions">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => {
-                        void onSubmitNote(step).then((saved) => {
-                          if (saved) {
-                            setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
-                          }
-                        });
-                      }}
-                    >
-                      Save Note
-                    </button>
-                    <button
-                      className="btn btn-outline-secondary btn-sm"
-                      onClick={() => setNoteEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }))}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              <BuildWizardStepActionPanel
+                addableStepContacts={addableStepContacts}
+                attachExistingDocByStepId={attachExistingDocByStepId}
+                attachExistingDocFilterByStepId={attachExistingDocFilterByStepId}
+                attachExistingPickerOpenByStepId={attachExistingPickerOpenByStepId}
+                attachableProjectDocuments={attachableProjectDocuments}
+                contactTypeLabel={contactTypeLabel}
+                draft={draft}
+                effectiveStepContactCandidateId={effectiveStepContactCandidateId}
+                filteredAttachableProjectDocuments={filteredAttachableProjectDocuments}
+                linkedStepDisplayNumberById={linkedStepDisplayNumberById}
+                normalizeContactType={normalizeContactType}
+                noteDraftByStep={noteDraftByStep}
+                noteEditorOpenByStep={noteEditorOpenByStep}
+                onAddContactToStep={onAddContactToStep}
+                onAttachExistingDocumentToStep={onAttachExistingDocumentToStep}
+                onSubmitNote={onSubmitNote}
+                setAttachExistingDocByStepId={setAttachExistingDocByStepId}
+                setAttachExistingDocFilterByStepId={setAttachExistingDocFilterByStepId}
+                setAttachExistingPickerOpenByStepId={setAttachExistingPickerOpenByStepId}
+                setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep}
+                setNoteDraftByStep={setNoteDraftByStep}
+                setNoteEditorOpenByStep={setNoteEditorOpenByStep}
+                setReceiptEditorOpenByStep={setReceiptEditorOpenByStep}
+                setStepContactCandidateByStepId={setStepContactCandidateByStepId}
+                setStepContactPickerOpenByStepId={setStepContactPickerOpenByStepId}
+                step={step}
+                stepById={stepById}
+                stepContactPickerOpenByStepId={stepContactPickerOpenByStepId}
+                stepReadOnly={stepReadOnly}
+                uploadDocument={uploadDocument}
+              />
 
               </fieldset>
 
-              {allStepAssignees.length > 0 ? (
-                <div className="build-wizard-step-assignees">
-                  <div className="build-wizard-step-assignees-label">Contacts</div>
-                  {visibleStepAssignees.length > 0 ? (
-                    <div className="build-wizard-step-assignee-list">
-                      {visibleStepAssignees.map((entry) => (
-                        <div key={`${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-row ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
-                          <span className="build-wizard-step-assignee-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24">
-                              <path d="M12 12c2.5 0 4.5-2 4.5-4.5S14.5 3 12 3 7.5 5 7.5 7.5 9.5 12 12 12Zm0 2c-4.1 0-7.5 2.9-7.5 6.5V21h15v-.5c0-3.6-3.4-6.5-7.5-6.5Z" />
-                            </svg>
-                          </span>
-                          <span className="build-wizard-step-assignee-text">{entry.contact.display_name}</span>
-                          <span className="build-wizard-step-assignee-source">
-                            {entry.source === 'phase' ? 'Phase' : 'Step'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="build-wizard-muted">
-                      {hasAssigneeFilters ? 'No assignments match the current filter.' : 'No contact assignments.'}
-                    </div>
-                  )}
-                </div>
-              ) : null}
+              <BuildWizardStepAssignees
+                allStepAssignees={allStepAssignees}
+                contactTypeChipClass={contactTypeChipClass}
+                hasAssigneeFilters={hasAssigneeFilters}
+                normalizeContactType={normalizeContactType}
+                open={allStepAssignees.length > 0}
+                stepId={step.id}
+                visibleStepAssignees={visibleStepAssignees}
+              />
 
               {(stepReceiptDocuments.length > 0 || receiptEditorOpen) ? (
               <div className="build-wizard-step-receipts">
@@ -4660,604 +4527,49 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                     {stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {formatCurrency(stepReceiptTotal)}
                   </div>
                 </div>
-                {receiptEditorOpen ? (
-                  <div
-                    className="build-wizard-note-editor"
-                    ref={(el) => { receiptEditorRefByStepId.current[step.id] = el; }}
-                  >
-                    <div className="build-wizard-muted">
-                      {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing task' : 'New task'}
-                    </div>
-                    <div className="build-wizard-step-receipt-upload-grid">
-                      <label>
-                        Title
-                        <input
-                          type="text"
-                          value={receiptDraft.receipt_title}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: { ...receiptDraft, receipt_title: e.target.value },
-                          }))}
-                        />
-                      </label>
-                      <label>
-                        Vendor
-                        <input
-                          type="text"
-                          value={receiptDraft.receipt_vendor}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: { ...receiptDraft, receipt_vendor: e.target.value },
-                          }))}
-                        />
-                      </label>
-                      <label>
-                        Task Date Override
-                        <input
-                          type="date"
-                          value={receiptDraft.receipt_date}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: { ...receiptDraft, receipt_date: e.target.value },
-                          }))}
-                          onBlur={() => {
-                            const activeDraft = receiptDraftByStep[step.id] ?? receiptDraft;
-                            void autosaveExistingReceiptDraftForStep(step, {
-                              receipt_date: toStringOrNull(activeDraft.receipt_date || ''),
-                              receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
-                                ...activeDraft.task_meta,
-                                manual_date_override: Boolean(toStringOrNull(activeDraft.receipt_date || '')),
-                              }, activeDraft.receipt_notes)),
-                            });
-                          }}
-                        />
-                      </label>
-                      <label>
-                        Amount
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          value={receiptDraft.receipt_amount}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: { ...receiptDraft, receipt_amount: e.target.value },
-                          }))}
-                        />
-                      </label>
-                      <label>
-                        Type
-                        <select
-                          value={receiptDraft.task_meta.task_type}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: {
-                              ...receiptDraft,
-                              task_meta: {
-                                ...receiptDraft.task_meta,
-                                task_type: e.target.value as BuildWizardTaskType,
-                              },
-                            },
-                          }))}
-                        >
-                          {TASK_TYPE_OPTIONS.map((opt) => (
-                            <option key={`task-type-${opt.value}`} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                      {receiptDraft.task_meta.task_type === 'permit' ? (
-                        <>
-                          <label>
-                            Saved Permit
-                            <select
-                              value={Number(receiptDraft.task_meta.permit_document_id || 0) > 0 ? String(receiptDraft.task_meta.permit_document_id) : ''}
-                              onChange={(e) => {
-                                const permitDocumentId = Number(e.target.value || '0');
-                                const selectedPermitDoc = permitDocuments.find((doc) => doc.id === permitDocumentId);
-                                setReceiptDraftByStep((prev) => ({
-                                  ...prev,
-                                  [step.id]: {
-                                    ...receiptDraft,
-                                    task_meta: {
-                                      ...receiptDraft.task_meta,
-                                      permit_document_id: permitDocumentId > 0 ? permitDocumentId : null,
-                                      permit_name: permitDocumentId > 0 ? (selectedPermitDoc?.original_name || null) : receiptDraft.task_meta.permit_name,
-                                      permit_application_url: permitDocumentId > 0 ? (selectedPermitDoc?.public_url || null) : receiptDraft.task_meta.permit_application_url,
-                                    },
-                                  },
-                                }));
-                              }}
-                            >
-                              <option value="">Select permit</option>
-                              {permitDocuments.map((doc) => (
-                                <option key={`task-permit-${doc.id}`} value={doc.id}>{doc.original_name}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Permit Name
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.permit_name || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, permit_name: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Authority
-                            <select
-                              value={receiptDraft.task_meta.permit_authority || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, permit_authority: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            >
-                              <option value="">Select authority</option>
-                              {authorityContacts.map((contact) => (
-                                <option key={`task-authority-${contact.id}`} value={contact.display_name || ''}>
-                                  {contact.display_name}
-                                  {contact.company ? ` (${contact.company})` : ''}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Permit Status
-                            <select
-                              value={receiptDraft.task_meta.permit_status || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, permit_status: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            >
-                              {permitStatusOptions.map((status) => (
-                                <option key={`task-status-${status}`} value={status}>{status === '' ? 'Select status' : status}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Permit URL
-                            <input
-                              type="url"
-                              value={receiptDraft.task_meta.permit_application_url || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, permit_application_url: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                        </>
-                      ) : null}
-                      {['purchase', 'utility', 'delivery', 'quote'].includes(receiptDraft.task_meta.task_type) ? (
-                        <>
-                          <label>
-                            Category
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.purchase_category || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_category: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Brand
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.purchase_brand || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_brand: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Model
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.purchase_model || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_model: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            SKU
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.purchase_sku || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_sku: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Qty
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={receiptDraft.task_meta.purchase_qty ?? ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_qty: toNumberOrNull(e.target.value) },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Unit
-                            <select
-                              value={receiptDraft.task_meta.purchase_unit || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_unit: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            >
-                              {purchaseUnitOptions.map((unit) => (
-                                <option key={`task-unit-${unit}`} value={unit}>{unit === '' ? 'Select unit' : unit}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Unit Price
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              inputMode="decimal"
-                              value={receiptDraft.task_meta.purchase_unit_price ?? ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_unit_price: toNumberOrNull(e.target.value) },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            Vendor
-                            <input
-                              type="text"
-                              value={receiptDraft.task_meta.purchase_vendor || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_vendor: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                          <label>
-                            URL
-                            <input
-                              type="url"
-                              value={receiptDraft.task_meta.purchase_url || ''}
-                              onChange={(e) => setReceiptDraftByStep((prev) => ({
-                                ...prev,
-                                [step.id]: {
-                                  ...receiptDraft,
-                                  task_meta: { ...receiptDraft.task_meta, purchase_url: toStringOrNull(e.target.value || '') },
-                                },
-                              }))}
-                            />
-                          </label>
-                        </>
-                      ) : null}
-                      {['utility', 'delivery'].includes(receiptDraft.task_meta.task_type) ? (
-                        <label className="is-wide">
-                          Reference / Tracking
-                          <input
-                            type="text"
-                            value={receiptDraft.task_meta.source_ref || ''}
-                            onChange={(e) => setReceiptDraftByStep((prev) => ({
-                              ...prev,
-                              [step.id]: {
-                                ...receiptDraft,
-                                task_meta: { ...receiptDraft.task_meta, source_ref: toStringOrNull(e.target.value || '') },
-                              },
-                            }))}
-                          />
-                        </label>
-                      ) : null}
-                      <label className="is-wide">
-                        Notes
-                        <input
-                          type="text"
-                          value={receiptDraft.receipt_notes}
-                          onChange={(e) => setReceiptDraftByStep((prev) => ({
-                            ...prev,
-                            [step.id]: { ...receiptDraft, receipt_notes: e.target.value },
-                          }))}
-                        />
-                      </label>
-                      <label className="is-wide">
-                        Task Attachment(s)
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          multiple
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files || []);
-                            setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: files }));
-                          }}
-                        />
-                      </label>
-                    </div>
-                    <div className="build-wizard-note-editor-actions">
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => { void onSaveReceiptForStep(step); }}
-                      >
-                        {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Task' : 'Save Task'}
-                      </button>
-                      <button
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => {
-                          setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
-                          setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-                {stepReceiptDocuments.length > 0 ? (
-                  <div className="build-wizard-step-receipt-list">
-                    {stepReceiptDocuments.map((doc) => {
-                      const attachments = stepReceiptAttachmentDocuments.filter((attachment) => Number(attachment.receipt_parent_document_id || 0) === doc.id);
-                      const parsedTask = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
-                      const taskNotes = String(parsedTask.plainNotes || '').trim();
-                      const taskTypeLabel = TASK_TYPE_OPTIONS.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
-                      const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
-                      const inlineEditingField = inlineEditingReceiptFieldByDocId[doc.id] || null;
-                      const inlineDraft = inlineReceiptDraftByDocId[doc.id] || {
-                        vendor: doc.receipt_vendor || '',
-                        date: taskUsesManualDateOverride(doc, parsedTask.taskMeta) ? (doc.receipt_date || '') : '',
-                        amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
-                        taskType: parsedTask.taskMeta.task_type,
-                        plainNotes: parsedTask.plainNotes || '',
-                        taskMeta: parsedTask.taskMeta,
-                      };
-                      return (
-                        <div
-                          className="build-wizard-step-receipt-row"
-                          key={`step-${step.id}-receipt-${doc.id}`}
-                          ref={(el) => { receiptRowRefByDocId.current[doc.id] = el; }}
-                        >
-                          <div className="build-wizard-step-receipt-file">
-                            <button
-                              type="button"
-                              className="build-wizard-step-receipt-link"
-                              onClick={() => void openDocumentPreview(doc)}
-                              title={doc.original_name}
-                            >
-                              {doc.receipt_title?.trim() || doc.caption || doc.original_name}
-                            </button>
-                            <span>
-                              Vendor:{' '}
-                              {inlineEditingField === 'vendor' ? (
-                                <select
-                                  autoFocus
-                                  value={inlineDraft.vendor}
-                                  onChange={(e) => {
-                                    const nextValue = e.target.value;
-                                    setInlineReceiptDraftByDocId((prev) => ({
-                                      ...prev,
-                                      [doc.id]: { ...inlineDraft, vendor: nextValue },
-                                    }));
-                                    void saveInlineReceiptEdit(doc, 'vendor', { vendor: nextValue });
-                                  }}
-                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'vendor'); }}
-                                >
-                                  <option value="">-</option>
-                                  {taskVendorOptions.map((vendorName) => (
-                                    <option key={`vendor-opt-${doc.id}-${vendorName}`} value={vendorName}>{vendorName}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="build-wizard-inline-edit-trigger"
-                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'vendor')}
-                                >
-                                  {doc.receipt_vendor || '-'}
-                                </button>
-                              )}
-                              {' '}| Date:{' '}
-                              {inlineEditingField === 'date' ? (
-                                <input
-                                  type="date"
-                                  autoFocus
-                                  value={inlineDraft.date}
-                                  onChange={(e) => {
-                                    const nextValue = e.target.value;
-                                    setInlineReceiptDraftByDocId((prev) => ({
-                                      ...prev,
-                                      [doc.id]: { ...inlineDraft, date: nextValue },
-                                    }));
-                                  }}
-                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'date'); }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="build-wizard-inline-edit-trigger"
-                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'date')}
-                                >
-                                  {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'}
-                                </button>
-                              )}
-                              {' '}| Amount:{' '}
-                              {inlineEditingField === 'amount' ? (
-                                <input
-                                  type="number"
-                                  autoFocus
-                                  min="0"
-                                  step="0.01"
-                                  inputMode="decimal"
-                                  value={inlineDraft.amount}
-                                  onChange={(e) => {
-                                    const nextValue = e.target.value;
-                                    setInlineReceiptDraftByDocId((prev) => ({
-                                      ...prev,
-                                      [doc.id]: { ...inlineDraft, amount: nextValue },
-                                    }));
-                                  }}
-                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'amount'); }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="build-wizard-inline-edit-trigger"
-                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'amount')}
-                                >
-                                  <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
-                                </button>
-                              )}
-                            </span>
-                            <span>
-                              Type:{' '}
-                              {inlineEditingField === 'type' ? (
-                                <select
-                                  autoFocus
-                                  value={inlineDraft.taskType}
-                                  onChange={(e) => {
-                                    const nextType = e.target.value as BuildWizardTaskType;
-                                    setInlineReceiptDraftByDocId((prev) => ({
-                                      ...prev,
-                                      [doc.id]: { ...inlineDraft, taskType: nextType },
-                                    }));
-                                    void saveInlineReceiptEdit(doc, 'type', { taskType: nextType });
-                                  }}
-                                  onBlur={() => { void saveInlineReceiptEdit(doc, 'type'); }}
-                                >
-                                  {TASK_TYPE_OPTIONS.map((opt) => (
-                                    <option key={`inline-task-type-${doc.id}-${opt.value}`} value={opt.value}>{opt.label}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="build-wizard-inline-edit-trigger"
-                                  onClick={() => startInlineReceiptEdit(doc, parsedTask, 'type')}
-                                >
-                                  {taskTypeLabel}
-                                </button>
-                              )}
-                            </span>
-                            {taskNotes ? (
-                              <div className="build-wizard-step-receipt-notes">
-                                <div className="build-wizard-step-receipt-notes-label">Notes</div>
-                                <div className="build-wizard-step-receipt-notes-body">{taskNotes}</div>
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="build-wizard-step-receipt-attachments">
-                            <div className="build-wizard-step-receipt-attachments-label">
-                              Attachments ({attachments.length})
-                            </div>
-                            {attachments.length > 0 ? (
-                              <div className="build-wizard-step-receipt-attachments-list">
-                                {attachments.map((attachment) => (
-                                  <button
-                                    key={`receipt-${doc.id}-attachment-${attachment.id}`}
-                                    type="button"
-                                    className="build-wizard-step-receipt-link"
-                                    onClick={() => void openDocumentPreview(attachment)}
-                                    title={attachment.original_name}
-                                  >
-                                    {attachment.original_name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="build-wizard-step-receipt-actions">
-                            <button
-                              type="button"
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => onStartEditReceiptForStep(step, doc)}
-                              disabled={stepReadOnly}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => openMoveTaskModal(doc)}
-                              disabled={stepReadOnly}
-                            >
-                              Move
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => openTaskAttachmentsModal(doc)}
-                            >
-                              Attachments
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
-                              disabled={deletingDocumentId === doc.id}
-                            >
-                              {deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                <BuildWizardStepReceiptEditor
+                  authorityContacts={authorityContacts}
+                  autosaveExistingReceiptDraftForStep={autosaveExistingReceiptDraftForStep}
+                  editingReceiptDocumentIdByStep={editingReceiptDocumentIdByStep}
+                  onSaveReceiptForStep={onSaveReceiptForStep}
+                  open={receiptEditorOpen}
+                  permitDocuments={permitDocuments}
+                  permitStatusOptions={permitStatusOptions}
+                  purchaseUnitOptions={purchaseUnitOptions}
+                  receiptDraft={receiptDraft}
+                  receiptDraftByStep={receiptDraftByStep}
+                  receiptEditorRefByStepId={receiptEditorRefByStepId}
+                  setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep}
+                  setReceiptAttachmentDraftByStep={setReceiptAttachmentDraftByStep}
+                  setReceiptDraftByStep={setReceiptDraftByStep}
+                  setReceiptEditorOpenByStep={setReceiptEditorOpenByStep}
+                  step={step}
+                  taskTypeOptions={TASK_TYPE_OPTIONS}
+                />
+                <BuildWizardStepReceiptsList
+                  deletingDocumentId={deletingDocumentId}
+                  formatCurrency={formatCurrency}
+                  getTaskEffectiveDate={getTaskEffectiveDate}
+                  inlineEditingReceiptFieldByDocId={inlineEditingReceiptFieldByDocId}
+                  inlineReceiptDraftByDocId={inlineReceiptDraftByDocId}
+                  onDeleteDocument={onDeleteDocument}
+                  onOpenDocumentPreview={openDocumentPreview}
+                  onStartEditReceiptForStep={onStartEditReceiptForStep}
+                  openMoveTaskModal={openMoveTaskModal}
+                  openTaskAttachmentsModal={openTaskAttachmentsModal}
+                  parseTaskMetaFromReceiptNotes={parseTaskMetaFromReceiptNotes}
+                  receiptRowRefByDocId={receiptRowRefByDocId}
+                  saveInlineReceiptEdit={saveInlineReceiptEdit}
+                  setInlineReceiptDraftByDocId={setInlineReceiptDraftByDocId}
+                  startInlineReceiptEdit={startInlineReceiptEdit}
+                  step={step}
+                  stepReadOnly={stepReadOnly}
+                  stepReceiptAttachmentDocuments={stepReceiptAttachmentDocuments}
+                  stepReceiptDocuments={stepReceiptDocuments}
+                  taskTypeOptions={TASK_TYPE_OPTIONS}
+                  taskUsesManualDateOverride={taskUsesManualDateOverride}
+                  taskVendorOptions={taskVendorOptions}
+                />
               </div>
               ) : null}
 
@@ -5271,82 +4583,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                 </div>
               ) : null}
 
-              {step.notes.length > 0 ? (
-                <div className="build-wizard-note-list">
-                  {step.notes.map((n) => (
-                    <div key={n.id}>
-                      <strong>{formatDate(n.created_at)}</strong>:
-                      {Object.prototype.hasOwnProperty.call(editingNoteTextById, n.id) ? (
-                        <div className="build-wizard-note-editor">
-                          <textarea
-                            rows={2}
-                            value={editingNoteTextById[n.id] || ''}
-                            onChange={(e) => setEditingNoteTextById((prev) => ({ ...prev, [n.id]: e.target.value }))}
-                          />
-                          <div className="build-wizard-note-editor-actions">
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => { void onSaveEditedNote(step.id, n.id); }}
-                              disabled={savingNoteId === n.id}
-                            >
-                              {savingNoteId === n.id ? 'Saving...' : 'Save'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => onCancelEditNote(n.id)}
-                              disabled={savingNoteId === n.id}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => { void onDeleteStepNoteById(step.id, n.id); }}
-                              disabled={deletingNoteId === n.id || savingNoteId === n.id}
-                            >
-                              {deletingNoteId === n.id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {' '}
-                          {n.note_text}
-                          {noteEditedAtLabel(n) ? (
-                            <>
-                              {' '}
-                              <em>(Edited {noteEditedAtLabel(n)})</em>
-                            </>
-                          ) : null}
-                          {!stepReadOnly ? (
-                            <>
-                              {' '}
-                              <button
-                                type="button"
-                                className="btn btn-outline-secondary btn-sm"
-                                onClick={() => onStartEditNote(n.id, n.note_text)}
-                              >
-                                Edit
-                              </button>
-                              {' '}
-                              <button
-                                type="button"
-                                className="btn btn-outline-danger btn-sm"
-                                onClick={() => { void onDeleteStepNoteById(step.id, n.id); }}
-                                disabled={deletingNoteId === n.id}
-                              >
-                                {deletingNoteId === n.id ? 'Deleting...' : 'Delete'}
-                              </button>
-                            </>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              <BuildWizardStepNotes
+                deletingNoteId={deletingNoteId}
+                editingNoteTextById={editingNoteTextById}
+                formatDate={formatDate}
+                noteEditedAtLabel={noteEditedAtLabel}
+                onCancelEditNote={onCancelEditNote}
+                onDeleteStepNoteById={onDeleteStepNoteById}
+                onSaveEditedNote={onSaveEditedNote}
+                onStartEditNote={onStartEditNote}
+                open={step.notes.length > 0}
+                savingNoteId={savingNoteId}
+                setEditingNoteTextById={setEditingNoteTextById}
+                step={step}
+                stepReadOnly={stepReadOnly}
+              />
 
               </>
               ) : null}
@@ -5438,525 +4689,322 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   );
 
   const renderBuildWorkspace = () => (
-    <div className="build-wizard-shell build-wizard-has-footer-space" style={{ ['--build-wizard-sticky-top' as string]: `${stickyTopOffset}px` }}>
-      <div className="build-wizard-workspace">
-        <div className="build-wizard-sticky-head" ref={stickyHeadRef}>
-          <div className="build-wizard-topbar">
-            <button className="btn btn-outline-secondary" onClick={onBackFromWorkspace}>
-              {isTemplateProject || buildEntryPoint === 'template_editor' ? 'Back to Template Editor' : 'Back to Launcher'}
-            </button>
-            <div className="build-wizard-topbar-title">{project?.title || 'Home Build'}</div>
-            <div className="build-wizard-topbar-search-shell" ref={topbarSearchBoxRef}>
-              <input
-                type="search"
-                value={topbarSearchQuery}
-                onFocus={() => setTopbarSearchOpen(true)}
-                onChange={(e) => {
-                  setTopbarSearchQuery(e.target.value);
-                  setTopbarSearchOpen(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setTopbarSearchOpen(false);
-                    return;
-                  }
-                  if (e.key === 'Enter' && topbarSearchResults.length > 0) {
-                    e.preventDefault();
-                    selectTopbarSearchResult(topbarSearchResults[0]);
-                  }
-                }}
-                className="form-control form-control-sm build-wizard-topbar-search-input"
-                placeholder="Search docs, steps, phases..."
-                aria-label="Search build wizard content"
-              />
-              {topbarSearchOpen && topbarSearchQuery.trim() ? (
-                <div className="build-wizard-topbar-search-results" role="listbox" aria-label="Build wizard search results">
-                  {topbarSearchResults.length === 0 ? (
-                    <div className="build-wizard-topbar-search-empty">
-                      No matches yet.
-                      {topbarSearchLoading ? ' Searching...' : ''}
-                    </div>
-                  ) : (
-                    topbarSearchResults.map((result) => (
-                      <button
-                        key={result.id}
-                        type="button"
-                        className="build-wizard-topbar-search-result"
-                        onClick={() => selectTopbarSearchResult(result)}
-                      >
-                        <span className="build-wizard-topbar-search-result-kind">
-                          {result.kind === 'document' ? 'Doc' : result.kind === 'step' ? 'Step' : 'Phase'}
-                        </span>
-                        <span className="build-wizard-topbar-search-result-text">
-                          <strong>{result.title}</strong>
-                          <span>{result.subtitle}</span>
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className="build-wizard-topbar-actions">
-              {isTemplateProject ? (
-                <button className="btn btn-success btn-sm" onClick={() => void onSaveTemplate()} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Template'}
-                </button>
-              ) : null}
-              <button className="btn btn-primary btn-sm" onClick={() => setAiToolsOpen(true)}>AI Tools</button>
-              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectOverviewOpen(true)}>Project Overview</button>
-              <button className="btn btn-outline-primary btn-sm" onClick={() => setProjectDeskOpen(true)}>Project Desk</button>
-              <StandardIconButton
-                iconKey="close"
-                ariaLabel="Close Build Wizard"
-                title="Close Build Wizard"
-                className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                onClick={onCloseWizard}
-              />
-            </div>
-          </div>
-
-          <div className="build-wizard-tabs">
-            {BUILD_TABS.filter((tab) => tab.id !== 'desk').map((tab) => (
-              <button
-                key={tab.id}
-                className={`build-wizard-tab${activeTab === tab.id ? ' is-active' : ''}`}
-                style={{ ['--tab-phase-color' as string]: TAB_PHASE_COLORS[tab.id] }}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className="build-wizard-tab-swatch" />
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
-            <div className="build-wizard-sticky-phase-controls">
-              <div className="build-wizard-phase-head">
-                <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
-                <div className="build-wizard-phase-totals">
-                  <span>Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.phaseTotal)}</span></span>
-                  <span>Project Total To Date: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.projectToDateTotal)}</span></span>
-                </div>
-                <div className="build-wizard-phase-date-range">
-                  <label>
-                    Phase Start
-                    <input
-                      type="date"
-                      value={activePhaseDateRange.start || ''}
-                      max={activePhaseDateRange.end || undefined}
-                      onChange={(e) => onPhaseDateRangeChange({ start: toStringOrNull(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Phase End
-                    <input
-                      type="date"
-                      value={activePhaseDateRange.end || ''}
-                      min={activePhaseDateRange.start || undefined}
-                      onChange={(e) => onPhaseDateRangeChange({ end: toStringOrNull(e.target.value) })}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm build-wizard-phase-range-reset"
-                    disabled={!activePhaseHasStoredDateRange}
-                    title="Reset phase dates to auto-derived step range"
-                    onClick={() => {
-                      if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-                        return;
-                      }
-                      void savePhaseDateRange(
-                        projectId,
-                        activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes',
-                        null,
-                        null,
-                      );
-                    }}
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-
-              <div className="build-wizard-step-assignee-filters">
-                <span>Step Card Filters</span>
-                <select
-                  value={stepCardAssigneeTypeFilter}
-                  onChange={(e) => setStepCardAssigneeTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
-                >
-                  <option value="all">All Contacts</option>
-                  <option value="contact">Contacts Only</option>
-                  <option value="vendor">Vendors Only</option>
-                  <option value="authority">Authorities Only</option>
-                </select>
-                <select
-                  value={stepCardAssigneeIdFilter > 0 ? String(stepCardAssigneeIdFilter) : ''}
-                  onChange={(e) => setStepCardAssigneeIdFilter(Number(e.target.value || '0'))}
-                >
-                  <option value="">All Assigned People</option>
-                  {stepFilterContactOptions.map((contact) => (
-                    <option key={`step-filter-contact-${contact.id}`} value={contact.id}>
-                      {contactTypeLabel(normalizeContactType(contact))}: {contact.display_name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="search"
-                  className="form-control form-control-sm build-wizard-step-text-filter-input"
-                  placeholder="Filter step text..."
-                  aria-label="Filter steps by text"
-                  value={stepCardTextFilter}
-                  onChange={(e) => setStepCardTextFilter(e.target.value)}
-                />
-                {(stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0 || stepCardTextFilterTokens.length > 0) ? (
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => {
-                      setStepCardAssigneeTypeFilter('all');
-                      setStepCardAssigneeIdFilter(0);
-                      setStepCardTextFilter('');
-                    }}
-                  >
-                    Clear Filters
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="build-wizard-phase-add build-wizard-phase-add-in-filters"
-                  title="Add step"
-                  aria-label="Add step"
-                  onClick={() => void addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general')}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="build-wizard-sticky-head-spacer" aria-hidden="true" style={{ height: stickyHeadHeight }} />
-
-        {activeTab === 'overview' ? (
-          <BuildWizardOverviewSection
-            aiBusy={aiBusy}
-            focusNextStep={(step) => focusStepInBuildView(stepPhaseBucket(step), step.id)}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
-            formatTimelineDate={formatTimelineDate}
-            onEstimateMissingWithAi={onEstimateMissingWithAi}
-            overviewMetrics={overviewMetrics}
-            projectPhotosSection={renderProjectPhotosAndKeyPaperwork()}
-          />
-        ) : null}
-
-        {activeTab === 'start' ? (
-          <BuildWizardStartSection
-            changeCurrencyEdit={changeCurrencyEdit}
-            finishCurrencyEdit={finishCurrencyEdit}
-            formatCurrency={formatCurrency}
-            lotSizeDetectedUnit={lotSizeDetectedUnit}
-            lotSizeInput={lotSizeInput}
-            lotSizeInputToSqftAuto={lotSizeInputToSqftAuto}
-            projectDraft={projectDraft}
-            projectPhotosSection={renderProjectPhotosAndKeyPaperwork()}
-            projectTotals={projectTotals}
-            renderCurrencyInputValue={renderCurrencyInputValue}
-            setLotSizeInput={setLotSizeInput}
-            setProjectDraft={setProjectDraft}
-            startCurrencyEdit={startCurrencyEdit}
-            toNumberOrNull={toNumberOrNull}
-            toStringOrNull={toStringOrNull}
-            updateProject={updateProject}
-          />
-        ) : null}
-
-        {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
-          <div className="build-wizard-card" ref={phaseTaskListCardRef}>
-            {activeTab === 'desk' ? (
-              <div className="build-wizard-desk-grid">
-                <div>
-                  <h3>Documents</h3>
-                  <div className="build-wizard-upload-row">
-                    <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                      {docKindOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
-                      {phaseOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
-                      <option value="">Auto-link by phase</option>
-                      {selectableDocSteps.map((step) => (
-                        <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                        if (file) {
-                          void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
-                        }
-                        e.currentTarget.value = '';
-                      }}
-                    />
-                  </div>
-                  <div className="build-wizard-doc-list">
-                    {renderDocumentGallery(documents, 'No documents uploaded yet.')}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {renderEditableStepCards(filteredTabSteps)}
-          </div>
-        ) : null}
-
-        {activeTab === 'completed' ? (
-          <BuildWizardCompletedSection
-            completedSteps={completedSteps}
-            contactTypeChipClass={contactTypeChipClass}
-            contactTypeLabel={contactTypeLabel}
-            footerRange={footerRange}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
-            normalizeContactType={normalizeContactType}
-            noteEditedAtLabel={noteEditedAtLabel}
-            stepAssigneesByStepId={stepAssigneesByStepId}
-            stepCostTotalExcludingQuotes={stepCostTotalExcludingQuotes}
-          />
-        ) : null}
-      </div>
-
-      <footer className="build-wizard-footer-chart">
-        <div className="build-wizard-footer-inner">
-          <FooterPhaseTimeline
-            steps={footerTimelineSteps}
-            rangeStart={footerRange.start}
-            rangeEnd={footerRange.end}
-            activeTab={activeTab}
-            editable={true}
-            displayNumberById={activeTabStepNumbers}
-            onStepTimelineChange={onTimelineStepChange}
-          />
-        </div>
-      </footer>
-
-      <BuildWizardProjectDeskModal open={projectDeskOpen} onClose={() => setProjectDeskOpen(false)} onAddStep={() => addStep('general')}>
-        <div className="build-wizard-desk-grid">
-          <BuildWizardProjectDeskDocuments
-            buildDocumentDraft={buildDocumentDraft}
-            deletingDocumentId={deletingDocumentId}
-            docKindOptions={docKindOptions}
-            documentManagerKindFilter={documentManagerKindFilter}
-            documentManagerKindOptions={documentManagerKindOptions}
-            documentManagerLinkedStepFilterOptions={documentManagerLinkedStepFilterOptions}
-            documentManagerPhaseFilter={documentManagerPhaseFilter}
-            documentManagerPhaseOptions={documentManagerPhaseOptions}
-            documentManagerQuery={documentManagerQuery}
-            documentManagerSearchLoading={documentManagerSearchLoading}
-            documentManagerSearchResultById={documentManagerSearchResultById as Map<number, { snippet?: string }>}
-            documentManagerStepFilter={documentManagerStepFilter}
-            documentSavingId={documentSavingId}
-            documents={documents}
-            filteredDocumentManagerDocs={filteredDocumentManagerDocs}
-            isPlanPreviewDoc={isPlanPreviewDoc}
-            isSpreadsheetPreviewDoc={isSpreadsheetPreviewDoc}
-            linkedStepOptions={linkedStepOptions}
-            onDeleteDocument={onDeleteDocument}
-            onOpenUploadModal={() => setDocumentUploadModalOpen(true)}
-            onReplaceDocumentFile={onReplaceDocumentFile}
-            onSaveDocumentDraft={onSaveDocumentDraft}
-            openDocumentPreview={openDocumentPreview}
-            project={project}
-            replaceFileInputByDocId={replaceFileInputByDocId}
-            replacingDocumentId={replacingDocumentId}
-            setDocumentManagerKindFilter={setDocumentManagerKindFilter}
-            setDocumentManagerPhaseFilter={setDocumentManagerPhaseFilter}
-            setDocumentManagerQuery={setDocumentManagerQuery}
-            setDocumentManagerStepFilter={setDocumentManagerStepFilter}
-            steps={steps}
-            updateDocumentDraft={updateDocumentDraft}
-            updateProject={updateProject}
-          />
-          <BuildWizardProjectDeskContacts
-            contacts={deskContacts}
-            contactAssignmentCountById={deskContactAssignmentCountById}
-            deleteContactAssignment={deleteContactAssignment}
-            deskAssignmentPhaseKey={deskAssignmentPhaseKey}
-            deskAssignmentStepId={deskAssignmentStepId}
-            deskContactDraft={deskContactDraft}
-            deskContactQuery={deskContactQuery}
-            deskContactTypeFilter={deskContactTypeFilter}
-            deskSelectedContactId={deskSelectedContactId}
-            filteredContacts={filteredDeskContacts}
-            linkedStepOptions={linkedStepOptions}
-            onAddDeskPhaseAssignment={onAddDeskPhaseAssignment}
-            onAddDeskStepAssignment={onAddDeskStepAssignment}
-            onDeleteDeskContact={onDeleteDeskContact}
-            onSaveDeskContact={onSaveDeskContact}
-            onStartNewDeskContact={onStartNewDeskContact}
-            phaseOptions={phaseOptions}
-            projectId={projectId}
-            selectedContact={selectedDeskContact}
-            selectedContactAssignments={selectedContactAssignments}
-            setDeskAssignmentPhaseKey={setDeskAssignmentPhaseKey}
-            setDeskAssignmentStepId={setDeskAssignmentStepId}
-            setDeskContactDraft={setDeskContactDraft}
-            setDeskContactQuery={setDeskContactQuery}
-            setDeskContactTypeFilter={setDeskContactTypeFilter}
-            setDeskCreateMode={setDeskCreateMode}
-            setDeskSelectedContactId={setDeskSelectedContactId}
-            stepByIdMap={stepByIdMap}
-          />
-        </div>
-        {renderEditableStepCards(projectDeskSteps)}
-      </BuildWizardProjectDeskModal>
-
-      <BuildWizardProjectOverviewModal
-        formatCurrency={formatCurrency}
-        onClose={() => setProjectOverviewOpen(false)}
-        open={projectOverviewOpen}
-        projectOverviewRange={projectOverviewRange}
-        projectOverviewSections={projectOverviewSections}
-        projectOverviewTotals={projectOverviewTotals}
-        steps={steps}
-      />
-
-      <BuildWizardDocumentUploadModal
-        busy={documentUploadBusy}
-        docKind={docKind}
-        docKindOptions={docKindOptions}
-        docPhaseKey={docPhaseKey}
-        docStepId={docStepId}
-        file={documentUploadFile}
-        onClose={() => setDocumentUploadModalOpen(false)}
-        onFileChange={setDocumentUploadFile}
-        open={documentUploadModalOpen}
-        phaseOptions={phaseOptions}
-        selectableDocSteps={selectableDocSteps}
-        setDocKind={setDocKind}
-        setDocPhaseKey={setDocPhaseKey}
-        setDocStepId={setDocStepId}
-        uploadDocument={async (...args) => {
-          setDocumentUploadBusy(true);
-          try {
-            return await uploadDocument(...args);
-          } finally {
-            setDocumentUploadBusy(false);
-          }
+    <BuildWizardWorkspaceMain
+      activeTab={activeTab}
+      activeTabStepNumbers={activeTabStepNumbers}
+      chromeProps={{
+        activePhaseDateRange,
+        activePhaseHasStoredDateRange,
+        activeTab,
+        buildEntryPoint,
+        formatCurrency,
+        isTemplateProject,
+        onAddStep: () => addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general'),
+        onBackFromWorkspace,
+        onCloseWizard,
+        onOpenAiTools: () => setAiToolsOpen(true),
+        onOpenProjectDesk: () => setProjectDeskOpen(true),
+        onOpenProjectOverview: () => setProjectOverviewOpen(true),
+        onPhaseDateRangeChange,
+        onResetFilters: () => {
+          setStepCardAssigneeTypeFilter('all');
+          setStepCardAssigneeIdFilter(0);
+          setStepCardTextFilter('');
+        },
+        onSaveTemplate,
+        onSelectTab: setActiveTab,
+        onSetStepCardAssigneeIdFilter: setStepCardAssigneeIdFilter,
+        onSetStepCardAssigneeTypeFilter: setStepCardAssigneeTypeFilter,
+        onSetStepCardTextFilter: setStepCardTextFilter,
+        onTopbarSearchQueryChange: setTopbarSearchQuery,
+        onTopbarSearchSelect: selectTopbarSearchResult,
+        onTopbarSearchToggle: setTopbarSearchOpen,
+        phaseTotals,
+        project,
+        projectId,
+        savePhaseDateRange,
+        saving,
+        stepCardAssigneeIdFilter,
+        stepCardAssigneeTypeFilter,
+        stepCardTextFilter,
+        stepCardTextFilterTokens,
+        stepFilterContactOptions,
+        stickyHeadHeight,
+        stickyHeadRef,
+        topbarSearchBoxRef,
+        topbarSearchLoading,
+        topbarSearchOpen,
+        topbarSearchQuery,
+        topbarSearchResults,
+      }}
+      completedSectionProps={{
+        completedSteps,
+        contactTypeChipClass,
+        contactTypeLabel,
+        footerRange,
+        formatCurrency,
+        formatDate,
+        normalizeContactType,
+        noteEditedAtLabel,
+        stepAssigneesByStepId,
+        stepCostTotalExcludingQuotes,
+      }}
+      deskWorkspaceProps={{
+        contactsProps: {
+          contacts: deskContacts,
+          contactAssignmentCountById: deskContactAssignmentCountById,
+          deleteContactAssignment,
+          deskAssignmentPhaseKey,
+          deskAssignmentStepId,
+          deskContactDraft,
+          deskContactQuery,
+          deskContactTypeFilter,
+          deskSelectedContactId,
+          filteredContacts: filteredDeskContacts,
+          linkedStepOptions,
+          onAddDeskPhaseAssignment,
+          onAddDeskStepAssignment,
+          onDeleteDeskContact: onDeleteDeskContact,
+          onSaveDeskContact,
+          onStartNewDeskContact,
+          phaseOptions,
+          projectId,
+          selectedContact: selectedDeskContact,
+          selectedContactAssignments,
+          setDeskAssignmentPhaseKey,
+          setDeskAssignmentStepId,
+          setDeskContactDraft,
+          setDeskContactQuery,
+          setDeskContactTypeFilter,
+          setDeskCreateMode,
+          setDeskSelectedContactId,
+          stepByIdMap,
+        },
+        documentsProps: {
+          buildDocumentDraft,
+          deletingDocumentId,
+          docKindOptions,
+          documentManagerKindFilter,
+          documentManagerKindOptions,
+          documentManagerLinkedStepFilterOptions,
+          documentManagerPhaseFilter,
+          documentManagerPhaseOptions,
+          documentManagerQuery,
+          documentManagerSearchLoading,
+          documentManagerSearchResultById: documentManagerSearchResultById as Map<number, { snippet?: string }>,
+          documentManagerStepFilter,
+          documentSavingId,
+          documents,
+          filteredDocumentManagerDocs,
+          isPlanPreviewDoc,
+          isSpreadsheetPreviewDoc,
+          linkedStepOptions,
+          onDeleteDocument,
+          onOpenUploadModal: () => setDocumentUploadModalOpen(true),
+          onReplaceDocumentFile,
+          onSaveDocumentDraft,
+          openDocumentPreview,
+          project,
+          replaceFileInputByDocId,
+          replacingDocumentId,
+          setDocumentManagerKindFilter,
+          setDocumentManagerPhaseFilter,
+          setDocumentManagerQuery,
+          setDocumentManagerStepFilter,
+          steps,
+          updateDocumentDraft,
+          updateProject,
+        },
+        onAddStep: () => addStep('general'),
+        onClose: () => setProjectDeskOpen(false),
+        open: projectDeskOpen,
+        projectDeskSteps,
+        renderEditableStepCards,
+      }}
+      docKind={docKind}
+      docKindOptions={docKindOptions}
+      docPhaseKey={docPhaseKey}
+      docStepId={docStepId}
+      documents={documents}
+      filteredTabSteps={filteredTabSteps}
+      footerRange={footerRange}
+      footerTimelineSteps={footerTimelineSteps}
+      onSetDocKind={setDocKind}
+      onSetDocPhaseKey={setDocPhaseKey}
+      onSetDocStepId={setDocStepId}
+      onTimelineStepChange={onTimelineStepChange}
+      onUploadDocument={(file) => {
+        void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
+      }}
+      overviewSectionProps={{
+        aiBusy,
+        focusNextStep: (step) => focusStepInBuildView(stepPhaseBucket(step), step.id),
+        formatCurrency,
+        formatDate,
+        formatTimelineDate,
+        onEstimateMissingWithAi,
+        overviewMetrics,
+        projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
+      }}
+      phaseOptions={phaseOptions}
+      phaseTaskListCardRef={phaseTaskListCardRef}
+      renderDocumentGallery={renderDocumentGallery}
+      renderEditableStepCards={renderEditableStepCards}
+      selectableDocSteps={selectableDocSteps}
+      startSectionProps={{
+        changeCurrencyEdit,
+        finishCurrencyEdit,
+        formatCurrency,
+        lotSizeDetectedUnit,
+        lotSizeInput,
+        lotSizeInputToSqftAuto,
+        projectDraft,
+        projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
+        projectTotals,
+        renderCurrencyInputValue,
+        setLotSizeInput,
+        setProjectDraft,
+        startCurrencyEdit,
+        toNumberOrNull,
+        toStringOrNull,
+        updateProject,
+      }}
+      stickyTopOffset={stickyTopOffset}
+    >
+      <BuildWizardWorkspaceModals
+        aiToolsProps={{
+          aiBusy,
+          aiPayloadJson: aiPayloadJson || '',
+          aiPromptText: aiPromptText || '',
+          deskAutoAssignBusy,
+          onAutoAssignDeskStepsToTimeline: onAutoAssignDeskStepsToTimeline,
+          onClose: () => setAiToolsOpen(false),
+          onCompleteWithAi,
+          open: aiToolsOpen,
+          packageForAi,
+          sendToAiAndIngest: () => generateStepsFromAi('optimize'),
+        }}
+        documentUploadProps={{
+          busy: documentUploadBusy,
+          docKind,
+          docKindOptions,
+          docPhaseKey,
+          docStepId,
+          file: documentUploadFile,
+          onClose: () => setDocumentUploadModalOpen(false),
+          onFileChange: setDocumentUploadFile,
+          open: documentUploadModalOpen,
+          phaseOptions,
+          selectableDocSteps,
+          setDocKind,
+          setDocPhaseKey,
+          setDocStepId,
+          uploadDocument: async (...args) => {
+            setDocumentUploadBusy(true);
+            try {
+              return await uploadDocument(...args);
+            } finally {
+              setDocumentUploadBusy(false);
+            }
+          },
+        }}
+        lightboxProps={{
+          closeLightbox,
+          lightboxDoc,
+          lightboxSpreadsheetSheetIndex,
+          lightboxSupportsZoom,
+          lightboxZoom,
+          lightboxZoomMax: LIGHTBOX_ZOOM_MAX,
+          lightboxZoomMin: LIGHTBOX_ZOOM_MIN,
+          lightboxZoomStep: LIGHTBOX_ZOOM_STEP,
+          onLightboxWheelZoom,
+          open: Boolean(lightboxDoc),
+          resetLightboxZoom,
+          setLightboxSpreadsheetSheetIndex,
+          zoomLightboxBy,
+        }}
+        projectOverviewProps={{
+          formatCurrency,
+          onClose: () => setProjectOverviewOpen(false),
+          open: projectOverviewOpen,
+          projectOverviewRange,
+          projectOverviewSections,
+          projectOverviewTotals,
+          steps,
+        }}
+        recoveryReportProps={{
+          fetchSingletreeRecoveryStatus,
+          onClose: () => setRecoveryReportOpen(false),
+          onToast,
+          open: recoveryReportOpen,
+          recoveryJobId,
+          recoveryPolling,
+          recoveryReportJson,
+          recoveryStagedCount,
+          recoveryStagedRoot,
+          recoveryStatus,
+          setRecoveryJobId,
+          setRecoveryPolling,
+          setRecoveryReportJson,
+          setRecoveryStatus,
+        }}
+        stepEditProps={{
+          activeTabStepNumbers,
+          closeStepEditModal,
+          dependencyCandidateByStepId,
+          setDependencyCandidateByStepId,
+          open: Boolean(stepEditModalStep && stepEditModalDraft),
+          saveStepEditModal,
+          saving: stepEditSaving,
+          step: stepEditModalStep,
+          stepById,
+          stepDraft: stepEditModalDraft,
+          stepEditModalDependencyIds,
+          stepEditModalDependencyOptions,
+          updateStepDraft,
+        }}
+        stepInfoProps={{
+          activeTabStepNumbers,
+          formatAuditValue,
+          formatDate,
+          noteEditedAtLabel,
+          onClose: () => setStepInfoModalStepId(0),
+          open: Boolean(stepInfoModalStep),
+          step: stepInfoModalStep,
+        }}
+        workspaceActionModalProps={{
+          activeTabStepNumbers,
+          attachExistingDocByReceiptId,
+          attachExistingDocFilterByReceiptId,
+          confirmState,
+          documentSavingId,
+          documents,
+          moveStepModalStep,
+          moveStepModalTargetTab,
+          moveStepPhaseTabOptions,
+          moveTaskModalDoc,
+          moveTaskModalTargetStepId,
+          moveTaskStepOptions,
+          movingStep,
+          onAttachExistingDocumentToReceipt,
+          onCloseMoveStep: () => setMoveStepModalStepId(0),
+          onCloseMoveTask: () => setMoveTaskModalDocId(0),
+          onCloseTaskAttachments: () => setTaskAttachmentsModalDocId(0),
+          onConfirm: closeConfirmation,
+          onMoveReceiptToStep,
+          onMoveStepFromModal,
+          onOpenDocumentPreview: openDocumentPreview,
+          onUploadReceiptAttachments,
+          setAttachExistingDocByReceiptId,
+          setAttachExistingDocFilterByReceiptId,
+          setMoveStepModalTargetTab,
+          setMoveTaskModalTargetStepId,
+          taskAttachmentsModalAttachableDocuments,
+          taskAttachmentsModalDoc,
+          taskAttachmentsModalStep,
         }}
       />
-
-      <BuildWizardAiToolsModal
-        aiBusy={aiBusy}
-        aiPayloadJson={aiPayloadJson || ''}
-        aiPromptText={aiPromptText || ''}
-        deskAutoAssignBusy={deskAutoAssignBusy}
-        onAutoAssignDeskStepsToTimeline={onAutoAssignDeskStepsToTimeline}
-        onClose={() => setAiToolsOpen(false)}
-        onCompleteWithAi={onCompleteWithAi}
-        open={aiToolsOpen}
-        packageForAi={packageForAi}
-        sendToAiAndIngest={() => generateStepsFromAi('optimize')}
-      />
-
-      <BuildWizardStepEditModal
-        activeTabStepNumbers={activeTabStepNumbers}
-        closeStepEditModal={closeStepEditModal}
-        dependencyCandidateByStepId={dependencyCandidateByStepId}
-        setDependencyCandidateByStepId={setDependencyCandidateByStepId}
-        open={Boolean(stepEditModalStep && stepEditModalDraft)}
-        saveStepEditModal={saveStepEditModal}
-        saving={stepEditSaving}
-        step={stepEditModalStep}
-        stepById={stepById}
-        stepDraft={stepEditModalDraft}
-        stepEditModalDependencyIds={stepEditModalDependencyIds}
-        stepEditModalDependencyOptions={stepEditModalDependencyOptions}
-        updateStepDraft={updateStepDraft}
-      />
-
-      <BuildWizardStepInfoModal
-        activeTabStepNumbers={activeTabStepNumbers}
-        formatAuditValue={formatAuditValue}
-        formatDate={formatDate}
-        noteEditedAtLabel={noteEditedAtLabel}
-        onClose={() => setStepInfoModalStepId(0)}
-        open={Boolean(stepInfoModalStep)}
-        step={stepInfoModalStep}
-      />
-
-      <BuildWizardLightboxModal
-        closeLightbox={closeLightbox}
-        lightboxDoc={lightboxDoc}
-        lightboxSpreadsheetSheetIndex={lightboxSpreadsheetSheetIndex}
-        lightboxSupportsZoom={lightboxSupportsZoom}
-        lightboxZoom={lightboxZoom}
-        lightboxZoomMax={LIGHTBOX_ZOOM_MAX}
-        lightboxZoomMin={LIGHTBOX_ZOOM_MIN}
-        lightboxZoomStep={LIGHTBOX_ZOOM_STEP}
-        onLightboxWheelZoom={onLightboxWheelZoom}
-        open={Boolean(lightboxDoc)}
-        resetLightboxZoom={resetLightboxZoom}
-        setLightboxSpreadsheetSheetIndex={setLightboxSpreadsheetSheetIndex}
-        zoomLightboxBy={zoomLightboxBy}
-      />
-
-      <BuildWizardWorkspaceActionModals
-        activeTabStepNumbers={activeTabStepNumbers}
-        attachExistingDocByReceiptId={attachExistingDocByReceiptId}
-        attachExistingDocFilterByReceiptId={attachExistingDocFilterByReceiptId}
-        confirmState={confirmState}
-        documentSavingId={documentSavingId}
-        documents={documents}
-        moveStepModalStep={moveStepModalStep}
-        moveStepModalTargetTab={moveStepModalTargetTab}
-        moveStepPhaseTabOptions={moveStepPhaseTabOptions}
-        moveTaskModalDoc={moveTaskModalDoc}
-        moveTaskModalTargetStepId={moveTaskModalTargetStepId}
-        moveTaskStepOptions={moveTaskStepOptions}
-        movingStep={movingStep}
-        onAttachExistingDocumentToReceipt={onAttachExistingDocumentToReceipt}
-        onCloseMoveStep={() => setMoveStepModalStepId(0)}
-        onCloseMoveTask={() => setMoveTaskModalDocId(0)}
-        onCloseTaskAttachments={() => setTaskAttachmentsModalDocId(0)}
-        onConfirm={closeConfirmation}
-        onMoveReceiptToStep={onMoveReceiptToStep}
-        onMoveStepFromModal={onMoveStepFromModal}
-        onOpenDocumentPreview={openDocumentPreview}
-        onUploadReceiptAttachments={onUploadReceiptAttachments}
-        setAttachExistingDocByReceiptId={setAttachExistingDocByReceiptId}
-        setAttachExistingDocFilterByReceiptId={setAttachExistingDocFilterByReceiptId}
-        setMoveStepModalTargetTab={setMoveStepModalTargetTab}
-        setMoveTaskModalTargetStepId={setMoveTaskModalTargetStepId}
-        taskAttachmentsModalAttachableDocuments={taskAttachmentsModalAttachableDocuments}
-        taskAttachmentsModalDoc={taskAttachmentsModalDoc}
-        taskAttachmentsModalStep={taskAttachmentsModalStep}
-      />
-
-      <BuildWizardRecoveryReportModal
-        fetchSingletreeRecoveryStatus={fetchSingletreeRecoveryStatus}
-        onClose={() => setRecoveryReportOpen(false)}
-        onToast={onToast}
-        open={recoveryReportOpen}
-        recoveryJobId={recoveryJobId}
-        recoveryPolling={recoveryPolling}
-        recoveryReportJson={recoveryReportJson}
-        recoveryStagedCount={recoveryStagedCount}
-        recoveryStagedRoot={recoveryStagedRoot}
-        recoveryStatus={recoveryStatus}
-        setRecoveryJobId={setRecoveryJobId}
-        setRecoveryPolling={setRecoveryPolling}
-        setRecoveryReportJson={setRecoveryReportJson}
-        setRecoveryStatus={setRecoveryStatus}
-      />
-
-    </div>
+    </BuildWizardWorkspaceMain>
   );
 
   if (view === 'launcher') {

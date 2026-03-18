@@ -12,7 +12,7 @@ import {
 import { WebpImage } from '../common/WebpImage';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { useAccumul8 } from '../../hooks/useAccumul8';
-import { PriorityTableColumn, usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
+import { usePriorityTableLayout } from '../../hooks/usePriorityTableLayout';
 import { ApiClient } from '../../core/ApiClient';
 import { resolveAccumul8StatementLink } from '../../utils/accumul8StatementLink';
 import { resolveAccumul8BankingOrganizationIconPath } from '../../utils/accumul8BankingOrganizationBranding';
@@ -20,14 +20,11 @@ import { getAccumul8AccountDisplayName } from '../../utils/accumul8Accounts';
 import { getAccumul8TransactionEditPolicy } from '../../utils/accumul8TransactionPolicy';
 import {
   OpeningBalanceMessageMeta,
-  RECURRING_PAYMENT_METHOD_LABELS,
   addUtcDays,
   formatAccountOptionLabel,
   formatCurrencyAmount,
-  formatInlineDate,
   formatInlineDateTime,
   formatInlineText,
-  formatPayBillStatusLabel,
   formatSummaryWindowLabel,
   getLedgerEffectiveDate,
   getOpeningBalanceMessageMeta,
@@ -37,15 +34,9 @@ import {
   roundCurrency,
 } from './accumul8/accumul8PageDateSearchUtils';
 import {
-  Accumul8DebtorGroupRow,
-  EntityTransactionSummary,
-  buildEntityGuideRule,
-  formatEntityContactSummary,
   formatEntityRoles,
-  formatEntityTransactionSummaryLabel,
   getActiveFilterClass,
   getLedgerDescriptionLabel,
-  inferEntityContactTypeForAmount,
   isIouAccount,
   isLaunchableHttpUrl,
   isOpeningBalanceTransaction,
@@ -54,7 +45,6 @@ import {
   normalizeEntityContactType,
   normalizeEntityKind,
   toEntityEndexGuideKey,
-  uniqueTextValues,
 } from './accumul8/accumul8PageEntityUtils';
 import {
   DebtorFormState,
@@ -69,7 +59,6 @@ import {
   normalizePaidStateDraft,
 } from './accumul8/accumul8PageFormUtils';
 import {
-  findRecurringRuleForTransactionMapping,
   formatAccountBackfillNote,
   formatAccountMappingLabel,
   formatSyncConnectionStatus,
@@ -80,34 +69,36 @@ import {
   isTellerRateLimited,
 } from './accumul8/accumul8PageRecurringSyncUtils';
 import {
-  Accumul8AIcountantHousekeepingResponse,
-  Accumul8AIcountantWatchlistResponse,
-  Accumul8BalanceBooksResponse,
   Accumul8TellerSyncResponse,
   Accumul8TellerSyncAccountSummary,
-  Accumul8Account,
   Accumul8ContactType,
   Accumul8Direction,
   Accumul8EntryType,
   Accumul8Frequency,
-  Accumul8PaymentMethod,
   Accumul8RecurringPayment,
   Accumul8Transaction,
   Accumul8Debtor,
   Accumul8Entity,
   Accumul8EntityAliasDraft,
   Accumul8EntityEndexGuide,
-  Accumul8EntityEndexGuideUpsertRequest,
   Accumul8BootstrapResponse,
   Accumul8MessageBoardMessage,
-  Accumul8MessageBoardResponse,
-  Accumul8IdResponse,
-  Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import { Accumul8PageHeader } from './accumul8/Accumul8PageHeader';
 import { useAccumul8EntityEndexActions } from './accumul8/useAccumul8EntityEndexActions';
+import { useAccumul8DebtorPayBillData } from './accumul8/useAccumul8DebtorPayBillData';
+import { useAccumul8EntityDerivedData } from './accumul8/useAccumul8EntityDerivedData';
+import { useAccumul8EntityListData } from './accumul8/useAccumul8EntityListData';
+import { useAccumul8EntityTables } from './accumul8/useAccumul8EntityTables';
+import { useAccumul8LedgerData } from './accumul8/useAccumul8LedgerData';
+import { useAccumul8LedgerEntityRuleActions } from './accumul8/useAccumul8LedgerEntityRuleActions';
+import { useAccumul8LedgerTable } from './accumul8/useAccumul8LedgerTable';
+import { useAccumul8MessageBoardActions } from './accumul8/useAccumul8MessageBoardActions';
+import { useAccumul8ModalHelperActions } from './accumul8/useAccumul8ModalHelperActions';
 import { useAccumul8ModalEditorActions } from './accumul8/useAccumul8ModalEditorActions';
 import { useAccumul8ModalResetActions } from './accumul8/useAccumul8ModalResetActions';
+import { useAccumul8PageUiHelpers } from './accumul8/useAccumul8PageUiHelpers';
+import { useAccumul8SecondaryTables } from './accumul8/useAccumul8SecondaryTables';
 import { DebtorInlineDraft, EntityInlineDraft, RecurringInlineDraft, useAccumul8InlineRowActions } from './accumul8/useAccumul8InlineRowActions';
 import { useAccumul8SyncActions } from './accumul8/useAccumul8SyncActions';
 import { Accumul8PageModalAssembly } from './accumul8/Accumul8PageModalAssembly';
@@ -525,164 +516,32 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   const selectedOwnerProfile = React.useMemo(() => (
     accessibleAccountOwners.find((owner) => owner.owner_user_id === (selectedOwnerUserId || activeOwnerUserId || 0)) || null
   ), [accessibleAccountOwners, activeOwnerUserId, selectedOwnerUserId]);
-  const loadMessageBoard = React.useCallback(async () => {
-    const ownerUserId = Number(selectedOwnerUserId || activeOwnerUserId || 0);
-    if (ownerUserId <= 0) {
-      setMessageBoardMessages([]);
-      setMessageBoardUnacknowledgedCount(0);
-      return;
-    }
-    setMessageBoardLoading(true);
-    try {
-      const response = await ApiClient.get<Accumul8MessageBoardResponse>(scopedActionUrl('list_message_board_messages'));
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to load the message board') });
-    } finally {
-      setMessageBoardLoading(false);
-    }
-  }, [activeOwnerUserId, onToast, scopedActionUrl, selectedOwnerUserId]);
+  const {
+    acknowledgeAllMessageBoardMessages,
+    acknowledgeMessageBoardMessage,
+    handleBalanceBooks,
+    handleRunAIcountantHousekeeping,
+    handleRunAIcountantWatchlist,
+    loadMessageBoard,
+  } = useAccumul8MessageBoardActions({
+    activeOwnerUserId,
+    balancingBooks,
+    load,
+    onToast,
+    runningAIcountantHousekeeping,
+    runningAIcountantWatchlist,
+    scopedActionUrl,
+    selectedOwnerUserId,
+    setBalancingBooks,
+    setMessageBoardLoading,
+    setMessageBoardMessages,
+    setMessageBoardUnacknowledgedCount,
+    setRunningAIcountantHousekeeping,
+    setRunningAIcountantWatchlist,
+  });
   React.useEffect(() => {
     void loadMessageBoard();
   }, [loadMessageBoard]);
-  const acknowledgeMessageBoardMessage = React.useCallback(async (messageId: number) => {
-    if (messageId <= 0) {
-      return;
-    }
-    setMessageBoardLoading(true);
-    try {
-      const response = await ApiClient.post<Accumul8MessageBoardResponse>(
-        scopedActionUrl('acknowledge_message_board_messages'),
-        { ids: [messageId] },
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to acknowledge message') });
-    } finally {
-      setMessageBoardLoading(false);
-    }
-  }, [onToast, scopedActionUrl]);
-  const acknowledgeAllMessageBoardMessages = React.useCallback(async () => {
-    if (messageBoardUnacknowledgedCount <= 0) {
-      return;
-    }
-    setMessageBoardLoading(true);
-    try {
-      const response = await ApiClient.post<Accumul8MessageBoardResponse>(
-        scopedActionUrl('acknowledge_message_board_messages'),
-        { all: 1 },
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'Failed to acknowledge all messages') });
-    } finally {
-      setMessageBoardLoading(false);
-    }
-  }, [messageBoardUnacknowledgedCount, onToast, scopedActionUrl]);
-  const handleRunAIcountantHousekeeping = React.useCallback(async () => {
-    if (runningAIcountantHousekeeping || balancingBooks || runningAIcountantWatchlist) {
-      return;
-    }
-    setRunningAIcountantHousekeeping(true);
-    try {
-      const response = await ApiClient.post<Accumul8AIcountantHousekeepingResponse>(
-        scopedActionUrl('run_aicountant_housekeeping'),
-        {
-          send_email: 0,
-          create_notification_rule: 1,
-          email_on_attention_only: 1,
-          run_entity_maintenance: 0,
-        },
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-      await load();
-      const ledgerSyncResult = response?.ledger_sync;
-      const balanceResult = response?.balance_books;
-      const openingBalanceResult = response?.opening_balance_reconciliation;
-      const watchlistResult = response?.watchlist;
-      const createdLedgerRows = Number(ledgerSyncResult?.created || 0);
-      const reconciledCount = Number(openingBalanceResult?.reconciled_count || 0);
-      const overdueCount = Number(watchlistResult?.overdue_count || 0);
-      const dueSoonCount = Number(watchlistResult?.due_soon_count || 0);
-      const recurringSoonCount = Number(watchlistResult?.recurring_soon_count || 0);
-      const tone = Number(balanceResult?.error_connection_count || 0) > 0 || Number(response?.attention_needed || 0) === 1
-        ? 'warning'
-        : 'success';
-      const summaryParts = [
-        `Synced ${Number(balanceResult?.synced_connection_count || 0)} bank connection${Number(balanceResult?.synced_connection_count || 0) === 1 ? '' : 's'}`,
-        `created ${createdLedgerRows} recurring ledger item${createdLedgerRows === 1 ? '' : 's'} through ${String(ledgerSyncResult?.window_end || '').trim() || 'the 90-day window'}`,
-        reconciledCount > 0
-          ? `adjusted ${reconciledCount} opening balance${reconciledCount === 1 ? '' : 's'}`
-          : 'did not need opening-balance adjustments',
-        `flagged ${overdueCount + dueSoonCount + recurringSoonCount} upcoming risk${overdueCount + dueSoonCount + recurringSoonCount === 1 ? '' : 's'}`,
-      ];
-      onToast?.({
-        tone,
-        message: `AIcountant housekeeping finished: ${summaryParts.join(', ')}. Check Alerts for the full run log.`,
-      });
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'AIcountant housekeeping failed') });
-    } finally {
-      setRunningAIcountantHousekeeping(false);
-    }
-  }, [balancingBooks, load, onToast, runningAIcountantHousekeeping, runningAIcountantWatchlist, scopedActionUrl]);
-
-  const handleBalanceBooks = React.useCallback(async () => {
-    if (balancingBooks || runningAIcountantHousekeeping) {
-      return;
-    }
-    setBalancingBooks(true);
-    try {
-      const response = await ApiClient.post<Accumul8BalanceBooksResponse>(
-        scopedActionUrl('balance_books'),
-        {},
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-      await load();
-      if (Number(response?.synced_connection_count || 0) <= 0) {
-        onToast?.({ tone: 'warning', message: 'No Teller bank connections were available to sync.' });
-        return;
-      }
-      const openingBalanceResult = response?.opening_balance_reconciliation;
-      onToast?.({
-        tone: Number(response?.error_connection_count || 0) > 0 || Number(openingBalanceResult?.review_needed_count || 0) > 0 ? 'warning' : 'success',
-        message: Number(openingBalanceResult?.reconciled_count || 0) > 0
-          ? `Balance the Books finished and adjusted ${Number(openingBalanceResult?.reconciled_count || 0)} opening balance${Number(openingBalanceResult?.reconciled_count || 0) === 1 ? '' : 's'}. Check the message board for dates and ledger links.`
-          : 'Balance the Books finished. Check the message board for the full run log.',
-      });
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'Balance the Books failed') });
-    } finally {
-      setBalancingBooks(false);
-    }
-  }, [balancingBooks, load, onToast, runningAIcountantHousekeeping, scopedActionUrl]);
-  const handleRunAIcountantWatchlist = React.useCallback(async () => {
-    if (runningAIcountantWatchlist || runningAIcountantHousekeeping) {
-      return;
-    }
-    setRunningAIcountantWatchlist(true);
-    try {
-      const response = await ApiClient.post<Accumul8AIcountantWatchlistResponse>(
-        scopedActionUrl('run_aicountant_watchlist'),
-        { send_email: 0, create_notification_rule: 1 },
-      );
-      setMessageBoardMessages(Array.isArray(response?.messages) ? response.messages : []);
-      setMessageBoardUnacknowledgedCount(Number(response?.unacknowledged_count || 0));
-      onToast?.({
-        tone: Number(response?.overdue_count || 0) > 0 ? 'warning' : 'success',
-        message: 'AIcountant watchlist posted to the message board.',
-      });
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: String(error?.message || 'AIcountant watchlist failed') });
-    } finally {
-      setRunningAIcountantWatchlist(false);
-    }
-  }, [onToast, runningAIcountantHousekeeping, runningAIcountantWatchlist, scopedActionUrl]);
   const visibleAccounts = React.useMemo(() => {
     const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
     if (bankingOrganizationId <= 0) {
@@ -740,327 +599,47 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     });
   }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const ledgerDateRange = React.useMemo(() => {
-    if (ledgerDateFilter === 'all_dates') {
-      return { startDate: '', endDate: '' };
-    }
-    if (ledgerDateFilter === 'custom') {
-      return {
-        startDate: customLedgerStartDate || '',
-        endDate: customLedgerEndDate || '',
-      };
-    }
-    if (ledgerDateFilter === '7_days') {
-      return { startDate: '', endDate: addUtcDays(todayDate, 7) };
-    }
-    if (ledgerDateFilter === '30_days') {
-      return { startDate: '', endDate: addUtcDays(todayDate, 30) };
-    }
-    if (ledgerDateFilter === '60_days') {
-      return { startDate: '', endDate: addUtcDays(todayDate, 60) };
-    }
-    if (ledgerDateFilter === '90_days') {
-      return { startDate: '', endDate: addUtcDays(todayDate, 90) };
-    }
-    return {
-      startDate: '',
-      endDate: `${todayDate.slice(0, 4)}-12-31`,
-    };
-  }, [customLedgerEndDate, customLedgerStartDate, ledgerDateFilter, todayDate]);
-  const ledgerSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.ledger), [listSearchQueryByTab.ledger]);
-  const ledgerRowsBase = React.useMemo(() => (
-    filteredTransactions.filter((tx) => {
-      const effectiveDate = getLedgerEffectiveDate(tx);
-      const isPaid = Number(tx.is_paid || 0) === 1;
-      const isReconciled = Number(tx.is_reconciled || 0) === 1;
-      const isPendingBank = Number(tx.pending_status || 0) === 1;
-      const isUpcomingRecurring = String(tx.source_kind || '') === 'recurring' && effectiveDate >= todayDate && !isPaid;
-      const isLate = !isPaid && Boolean(effectiveDate) && effectiveDate < todayDate;
-      const isUpcomingUnpaid = !isPaid && Boolean(effectiveDate) && effectiveDate >= todayDate;
-      if (!isDateInRange(effectiveDate, ledgerDateRange)) {
-        return false;
-      }
-      switch (ledgerFilterPreset) {
-        case 'all':
-          return !effectiveDate || effectiveDate <= todayDate;
-        case 'planning':
-          return true;
-        case 'hide_upcoming_recurring':
-          return !isUpcomingRecurring;
-        case 'hide_reconciled':
-          return !isReconciled;
-        case 'hide_paid':
-          return !isPaid;
-        case 'hide_pending_bank':
-          return !isPendingBank;
-        case 'show_late_payments':
-          return isLate;
-        case 'show_paid_not_reconciled':
-          return isPaid && !isReconciled;
-        case 'show_reconciled_not_paid':
-          return isReconciled && !isPaid;
-        case 'show_unpaid_only':
-          return !isPaid;
-        case 'show_upcoming_unpaid':
-          return isUpcomingUnpaid;
-        default:
-          return true;
-      }
-    })
-  ), [filteredTransactions, ledgerDateRange, ledgerFilterPreset, todayDate]);
-  const ledgerRows = React.useMemo(() => (
-    ledgerRowsBase.filter((tx) => matchesSearchQuery(ledgerSearchQuery, [
-      tx.transaction_date,
-      tx.due_date,
-      tx.description,
-      tx.memo,
-      getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name),
-      tx.contact_name,
-      tx.entity_name,
-      tx.balance_entity_name,
-      tx.entry_type,
-      tx.source_kind,
-      tx.amount,
-      tx.running_balance,
-      Number(tx.is_paid || 0) === 1 ? 'paid' : 'unpaid',
-      Number(tx.is_reconciled || 0) === 1 ? 'reconciled' : 'unreconciled',
-    ]))
-  ), [getAccountDisplayName, ledgerRowsBase, ledgerSearchQuery]);
-  const ledgerDisplayBalanceById = React.useMemo(() => {
-    if (ledgerFilterPreset === 'planning') {
-      return new Map<number, number>();
-    }
-
-    const sortedTransactions = filteredTransactions.slice().sort((a, b) => {
-      const accountDelta = Number(a.account_id || 0) - Number(b.account_id || 0);
-      if (accountDelta !== 0) {
-        return accountDelta;
-      }
-      const dateDelta = String(b.transaction_date || '').localeCompare(String(a.transaction_date || ''));
-      if (dateDelta !== 0) {
-        return dateDelta;
-      }
-      return Number(b.id || 0) - Number(a.id || 0);
-    });
-
-    const runningByAccount = new Map<number, number>(
-      scopedAccounts.map((account) => [Number(account.id || 0), roundCurrency(Number(account.current_balance || 0))])
-    );
-    const balancesById = new Map<number, number>();
-
-    sortedTransactions.forEach((tx) => {
-      const txId = Number(tx.id || 0);
-      if (txId <= 0) {
-        return;
-      }
-
-      const accountId = Number(tx.account_id || 0);
-      if (accountId <= 0) {
-        balancesById.set(txId, roundCurrency(Number(tx.running_balance || 0)));
-        return;
-      }
-
-      const currentBalance = roundCurrency(runningByAccount.get(accountId) || 0);
-      const isPlannerOnly = Number(tx.is_budget_planner || 0) === 1 && String(tx.source_kind || '') !== 'teller';
-      const isFutureDated = String(tx.transaction_date || '') > todayDate;
-      if (isPlannerOnly || isFutureDated || String(tx.source_kind || '') === 'statement_pdf') {
-        balancesById.set(txId, currentBalance);
-        return;
-      }
-
-      const delta = roundCurrency(Number(tx.amount || 0) + Number(tx.rta_amount || 0));
-      balancesById.set(txId, currentBalance);
-      runningByAccount.set(accountId, roundCurrency(currentBalance - delta));
-    });
-
-    return balancesById;
-  }, [filteredTransactions, ledgerFilterPreset, scopedAccounts, todayDate]);
-  const payBillsAccountOptions = React.useMemo(() => (
-    accounts
-      .filter((account) => Number(account.is_active || 0) === 1)
-      .slice()
-      .sort((a, b) => formatAccountOptionLabel(a).localeCompare(formatAccountOptionLabel(b)))
-  ), [accounts]);
-  const filteredRecurringPayments = React.useMemo(() => {
-    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
-    const bankAccountId = Number(selectedBankAccountId || 0);
-    return recurringPayments.filter((item) => {
-      if (bankingOrganizationId > 0 && Number(item.banking_organization_id || 0) !== bankingOrganizationId) {
-        return false;
-      }
-      if (bankAccountId > 0 && Number(item.account_id || 0) !== bankAccountId) {
-        return false;
-      }
-      return true;
-    });
-  }, [recurringPayments, selectedBankingOrganizationId, selectedBankAccountId]);
-  const recurringSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.recurring), [listSearchQueryByTab.recurring]);
-  const recurringRows = React.useMemo(() => (
-    filteredRecurringPayments.filter((item) => matchesSearchQuery(recurringSearchQuery, [
-      item.title,
-      item.notes,
-      item.next_due_date,
-      item.frequency,
-      item.payment_method,
-      item.direction,
-      item.entity_name,
-      getAccountDisplayName(item.account_id, item.account_name),
-      item.amount,
-      Number(item.is_budget_planner || 0) === 1 ? 'shown' : 'hidden',
-      Number(item.is_active || 0) === 1 ? 'active' : 'paused',
-    ]))
-  ), [filteredRecurringPayments, getAccountDisplayName, recurringSearchQuery]);
-  const payBillRows = React.useMemo(() => {
-    return filteredTransactions
-      .filter((tx) => {
-        if (Number(tx.amount || 0) >= 0) {
-          return false;
-        }
-        if (Number(tx.is_paid || 0) !== 0) {
-          return false;
-        }
-        const sourceKind = String(tx.source_kind || 'manual');
-        const entryType = String(tx.entry_type || 'manual');
-        const matchesSource = sourceKind === 'recurring' || sourceKind === 'manual' || sourceKind === 'plaid' || sourceKind === 'teller';
-        const matchesEntryType = entryType === 'bill' || entryType === 'auto' || entryType === 'manual';
-        if (!matchesSource && !matchesEntryType) {
-          return false;
-        }
-        return String(tx.due_date || tx.transaction_date || '').trim() !== '';
-      })
-      .slice()
-      .sort((a, b) => {
-        const aDate = String(a.due_date || a.transaction_date || '');
-        const bDate = String(b.due_date || b.transaction_date || '');
-        const aPastDue = aDate < todayDate;
-        const bPastDue = bDate < todayDate;
-        if (aPastDue !== bPastDue) {
-          return aPastDue ? -1 : 1;
-        }
-        const dateCompare = aDate.localeCompare(bDate);
-        if (dateCompare !== 0) {
-          return dateCompare;
-        }
-        return a.id - b.id;
-      });
-  }, [filteredTransactions]);
-  const payBillsDateRange = React.useMemo(() => {
-    const startDate = '';
-    if (payBillsDateFilter === 'all_dates') {
-      return { startDate, endDate: '' };
-    }
-    if (payBillsDateFilter === 'custom') {
-      return {
-        startDate: customPayBillsStartDate || '',
-        endDate: customPayBillsEndDate || '',
-      };
-    }
-    if (payBillsDateFilter === '7_days') {
-      return { startDate, endDate: addUtcDays(todayDate, 7) };
-    }
-    if (payBillsDateFilter === '30_days') {
-      return { startDate, endDate: addUtcDays(todayDate, 30) };
-    }
-    if (payBillsDateFilter === '60_days') {
-      return { startDate, endDate: addUtcDays(todayDate, 60) };
-    }
-    if (payBillsDateFilter === '90_days') {
-      return { startDate, endDate: addUtcDays(todayDate, 90) };
-    }
-    return {
-      startDate,
-      endDate: `${todayDate.slice(0, 4)}-12-31`,
-    };
-  }, [customPayBillsEndDate, customPayBillsStartDate, payBillsDateFilter, todayDate]);
-  const filteredPayBillRows = React.useMemo(() => (
-    payBillRows.filter((tx) => {
-      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate) {
-        return false;
-      }
-      if (effectiveDate < todayDate) {
-        return true;
-      }
-      if (payBillsDateRange.startDate && effectiveDate < payBillsDateRange.startDate) {
-        return false;
-      }
-      if (payBillsDateRange.endDate && effectiveDate > payBillsDateRange.endDate) {
-        return false;
-      }
-      return true;
-    })
-  ), [payBillRows, payBillsDateRange]);
-  const payBillsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.pay_bills), [listSearchQueryByTab.pay_bills]);
-  const payBillsRows = React.useMemo(() => (
-    filteredPayBillRows.filter((tx) => matchesSearchQuery(payBillsSearchQuery, [
-      tx.due_date,
-      tx.transaction_date,
-      tx.paid_date,
-      tx.description,
-      tx.memo,
-      getAccountDisplayName(tx.account_id, tx.account_name),
-      tx.contact_name,
-      tx.entity_name,
-      tx.amount,
-      Number(tx.is_paid || 0) === 1 ? 'paid' : ((tx.due_date || tx.transaction_date) < todayDate ? 'past due' : 'upcoming'),
-    ]))
-  ), [filteredPayBillRows, getAccountDisplayName, payBillsSearchQuery, todayDate]);
-  const currentVisibleBalance = React.useMemo(() => (
-    roundCurrency(scopedAccounts.reduce((sum, account) => sum + Number(account.current_balance || 0), 0))
-  ), [scopedAccounts]);
-  const summaryWindowEndDate = React.useMemo(
-    () => (summaryWindow === 'current' ? todayDate : addUtcDays(todayDate, summaryWindow)),
-    [summaryWindow, todayDate],
-  );
-  const projectedBalanceForWindow = React.useMemo(() => {
-    const projectedDelta = filteredTransactions.reduce((sum, tx) => {
-      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate || effectiveDate < todayDate || effectiveDate > summaryWindowEndDate) {
-        return sum;
-      }
-      if (Number(tx.is_paid || 0) === 1) {
-        return sum;
-      }
-      if (!isProjectedPlanningTransaction(tx, todayDate)) {
-        return sum;
-      }
-
-      return sum + Number(tx.amount || 0);
-    }, 0);
-
-    return roundCurrency(currentVisibleBalance + projectedDelta);
-  }, [currentVisibleBalance, filteredTransactions, summaryWindowEndDate, todayDate]);
-  const summaryWindowTotals = React.useMemo(() => {
-    let unpaidBills = 0;
-    let windfalls = 0;
-
-    filteredTransactions.forEach((tx) => {
-      const effectiveDate = String(tx.due_date || tx.transaction_date || '');
-      if (!effectiveDate || effectiveDate < todayDate || effectiveDate > summaryWindowEndDate) {
-        return;
-      }
-      if (!isProjectedPlanningTransaction(tx, todayDate)) {
-        return;
-      }
-
-      const amount = Number(tx.amount || 0);
-      const isPaid = Number(tx.is_paid || 0) === 1;
-      const isNonRecurringDeposit = tx.entry_type === 'deposit' && String(tx.source_kind || '') !== 'recurring';
-
-      if (!isPaid && amount < 0) {
-        unpaidBills += Math.abs(amount);
-      }
-
-      if (isNonRecurringDeposit && amount > 0) {
-        windfalls += amount;
-      }
-    });
-
-    return {
-      unpaidBills: roundCurrency(unpaidBills),
-      windfalls: roundCurrency(windfalls),
-    };
-  }, [filteredTransactions, summaryWindowEndDate]);
+  const { currentVisibleBalance, ledgerDisplayBalanceById, ledgerRows, ledgerSearchQuery } = useAccumul8LedgerData({
+    customLedgerEndDate,
+    customLedgerStartDate,
+    filteredTransactions,
+    getAccountDisplayName,
+    ledgerDateFilter,
+    ledgerFilterPreset,
+    listSearchQueryByTab,
+    scopedAccounts,
+    todayDate,
+  });
+  const {
+    debtorRows,
+    debtorRunningBalanceByTxId,
+    filteredRecurringPayments,
+    groupedDebtors,
+    payBillsAccountOptions,
+    payBillsRows,
+    projectedBalanceForWindow,
+    recurringRows,
+    selectedDebtorEntries,
+    summaryWindowEndDate,
+    summaryWindowTotals,
+  } = useAccumul8DebtorPayBillData({
+    accounts,
+    currentVisibleBalance,
+    customPayBillsEndDate,
+    customPayBillsStartDate,
+    debtors,
+    debtorLedger,
+    filteredTransactions,
+    getAccountDisplayName,
+    listSearchQueryByTab,
+    payBillsDateFilter,
+    recurringPayments,
+    selectedBankAccountId,
+    selectedBankingOrganizationId,
+    selectedDebtorId,
+    summaryWindow,
+    todayDate,
+  });
   const headerSummary = React.useMemo<Accumul8HeaderSummary>(() => {
     return {
       currentBalance: currentVisibleBalance,
@@ -1078,281 +657,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return SUMMARY_WINDOW_OPTIONS[nextIndex];
     });
   }, []);
-  const debtorsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.debtors), [listSearchQueryByTab.debtors]);
-  const groupedDebtors = React.useMemo<Accumul8DebtorGroupRow[]>(() => {
-    const grouped = new Map<string, Accumul8DebtorGroupRow>();
-    debtors.forEach((debtor) => {
-      const normalizedName = normalizeDebtorGroupKey(debtor.debtor_name);
-      const groupKey = normalizedName || `debtor:${debtor.id}`;
-      const existing = grouped.get(groupKey);
-      if (!existing) {
-        grouped.set(groupKey, {
-          ...debtor,
-          group_key: groupKey,
-          member_ids: [debtor.id],
-          has_duplicate_members: false,
-        });
-        return;
-      }
-
-      existing.total_loaned = roundCurrency(Number(existing.total_loaned || 0) + Number(debtor.total_loaned || 0));
-      existing.total_repaid = roundCurrency(Number(existing.total_repaid || 0) + Number(debtor.total_repaid || 0));
-      existing.outstanding_balance = roundCurrency(Number(existing.outstanding_balance || 0) + Number(debtor.outstanding_balance || 0));
-      existing.transaction_count = Number(existing.transaction_count || 0) + Number(debtor.transaction_count || 0);
-      existing.last_activity_date = [existing.last_activity_date, debtor.last_activity_date].filter(Boolean).sort().at(-1) || '';
-      existing.notes = existing.notes || debtor.notes;
-      existing.contact_name = existing.contact_name || debtor.contact_name;
-      existing.entity_name = existing.entity_name || debtor.entity_name;
-      existing.entity_id = existing.entity_id ?? debtor.entity_id;
-      existing.contact_id = existing.contact_id ?? debtor.contact_id;
-      existing.is_active = Number(existing.is_active || 0) === 1 || Number(debtor.is_active || 0) === 1 ? 1 : 0;
-      existing.member_ids.push(debtor.id);
-      existing.has_duplicate_members = existing.member_ids.length > 1;
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => (
-      a.debtor_name.localeCompare(b.debtor_name, undefined, { sensitivity: 'base' }) || a.id - b.id
-    ));
-  }, [debtors]);
-  const debtorGroupKeyByDebtorId = React.useMemo(() => {
-    const next = new Map<number, string>();
-    groupedDebtors.forEach((debtor) => {
-      debtor.member_ids.forEach((memberId) => {
-        next.set(memberId, debtor.group_key);
-      });
-    });
-    return next;
-  }, [groupedDebtors]);
-  const debtorRunningBalanceByTxId = React.useMemo(() => {
-    const runningByGroupKey = new Map<string, number>();
-    const next = new Map<number, number>();
-    const chronologicalRows = [...debtorLedger].sort((a, b) => (
-      String(a.transaction_date || '').localeCompare(String(b.transaction_date || ''))
-      || a.id - b.id
-    ));
-
-    chronologicalRows.forEach((tx) => {
-      const debtorId = Number(tx.debtor_id || 0);
-      const fallbackKey = debtorId > 0 ? `debtor:${debtorId}` : normalizeDebtorGroupKey(tx.debtor_name);
-      const groupKey = debtorGroupKeyByDebtorId.get(debtorId) || fallbackKey || `tx:${tx.id}`;
-      const runningBalance = roundCurrency((runningByGroupKey.get(groupKey) || 0) + Number(tx.amount || 0));
-      runningByGroupKey.set(groupKey, runningBalance);
-      next.set(tx.id, runningBalance);
-    });
-
-    return next;
-  }, [debtorGroupKeyByDebtorId, debtorLedger]);
-  const debtorRows = React.useMemo(() => (
-    groupedDebtors.filter((debtor) => matchesSearchQuery(debtorsSearchQuery, [
-      debtor.debtor_name,
-      debtor.notes,
-      debtor.last_activity_date,
-      debtor.total_loaned,
-      debtor.total_repaid,
-      debtor.outstanding_balance,
-      Number(debtor.is_active || 0) === 1 ? 'active' : 'paused',
-    ]))
-  ), [debtorsSearchQuery, groupedDebtors]);
-  const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
-    { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
-    { key: 'due', header: 'Due', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.due_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date) },
-    { key: 'account', header: 'Acct', minWidth: 138, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name, ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, tx.banking_organization_name) },
-    { key: 'description', header: 'Description', minWidth: 240, maxAutoWidth: 560, priority: 6, sortable: true, sortAccessor: (tx) => getLedgerDescriptionLabel(tx), contentAccessor: (tx) => getLedgerDescriptionLabel(tx) },
-    { key: 'memo', header: 'Memo', minWidth: 150, maxAutoWidth: 360, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
-    { key: 'amount', header: 'Amt', minWidth: 102, maxAutoWidth: 128, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'balance', header: 'Bal', minWidth: 108, maxAutoWidth: 136, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0), contentAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2) },
-    { key: 'paid', header: 'Paid', minWidth: 92, maxAutoWidth: 106, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
-    { key: 'reconciled', header: "Rec'd", minWidth: 92, maxAutoWidth: 116, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
-    { key: 'actions', header: 'Actions', minWidth: 122, maxAutoWidth: 132, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [getAccountDisplayName, ledgerDisplayBalanceById]);
-  const debtorsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8DebtorGroupRow>>>(() => ([
-    { key: 'person', header: 'Person', minWidth: 220, maxAutoWidth: 320, priority: 4, sortable: true, sortAccessor: (debtor) => debtor.debtor_name || '', contentAccessor: (debtor) => debtor.debtor_name || '-' },
-    { key: 'charges', header: 'Charges', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_loaned || 0), contentAccessor: (debtor) => Number(debtor.total_loaned || 0).toFixed(2) },
-    { key: 'credits', header: 'Credits', minWidth: 120, maxAutoWidth: 142, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.total_repaid || 0), contentAccessor: (debtor) => Number(debtor.total_repaid || 0).toFixed(2) },
-    { key: 'net', header: 'Net IOU', minWidth: 132, maxAutoWidth: 152, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => Number(debtor.outstanding_balance || 0), contentAccessor: (debtor) => Number(debtor.outstanding_balance || 0).toFixed(2) },
-    { key: 'activity', header: 'Last Activity', minWidth: 136, maxAutoWidth: 170, priority: 1, sortable: true, defaultSortDirection: 'desc', sortAccessor: (debtor) => debtor.last_activity_date || '', contentAccessor: (debtor) => debtor.last_activity_date || '-' },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), []);
-  const payBillsTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
-    { key: 'due', header: 'Due', minWidth: 96, maxAutoWidth: 114, sortable: true, sortAccessor: (tx) => tx.due_date || tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.due_date || tx.transaction_date) },
-    { key: 'paidDate', header: 'Paid', minWidth: 96, maxAutoWidth: 114, sortable: true, sortAccessor: (tx) => tx.paid_date || '', contentAccessor: (tx) => formatInlineDate(tx.paid_date) },
-    { key: 'description', header: 'Description', minWidth: 250, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
-    { key: 'account', header: 'Acct', minWidth: 132, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', ''), contentAccessor: (tx) => getAccountDisplayName(tx.account_id, tx.account_name, '', 'No account') },
-    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'asc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 112, sortable: true, sortAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate), contentAccessor: (tx) => formatPayBillStatusLabel(tx, todayDate) },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [getAccountDisplayName, todayDate]);
-  const recurringTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8RecurringPayment>>>(() => ([
-    { key: 'title', header: 'Title', minWidth: 230, maxAutoWidth: 520, priority: 6, sortable: true, sortAccessor: (item) => item.title || '', contentAccessor: (item) => [item.title || 'Untitled recurring item', item.notes || ''] },
-    { key: 'nextDue', header: 'Next Due', minWidth: 126, maxAutoWidth: 144, sortable: true, sortAccessor: (item) => item.next_due_date || '', contentAccessor: (item) => formatInlineDate(item.next_due_date) },
-    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (item) => Number(item.amount || 0), contentAccessor: (item) => Number(item.amount || 0).toFixed(2) },
-    { key: 'frequency', header: 'Frequency', minWidth: 96, maxAutoWidth: 118, sortable: true, sortAccessor: (item) => item.frequency || '', contentAccessor: (item) => item.frequency || '-' },
-    { key: 'account', header: 'Acct', minWidth: 132, maxAutoWidth: 220, priority: 2, sortable: true, sortAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', ''), contentAccessor: (item) => getAccountDisplayName(item.account_id, item.account_name, '', 'No account') },
-    { key: 'paymentMethod', header: 'Method', minWidth: 98, maxAutoWidth: 136, priority: 1, sortable: true, sortAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod], contentAccessor: (item) => RECURRING_PAYMENT_METHOD_LABELS[(item.payment_method || 'unspecified') as Accumul8PaymentMethod] },
-    { key: 'planner', header: 'Planner', minWidth: 108, maxAutoWidth: 120, sortable: true, sortAccessor: (item) => Number(item.is_budget_planner || 0), contentAccessor: (item) => Number(item.is_budget_planner || 0) === 1 ? 'Shown' : 'Hidden' },
-    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 108, sortable: true, sortAccessor: (item) => Number(item.is_active || 0), contentAccessor: (item) => Number(item.is_active || 0) === 1 ? 'Active' : 'Paused' },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [getAccountDisplayName]);
-  const ledgerTable = usePriorityTableLayout({
-    tableRef: ledgerTableRef,
-    rows: ledgerRows,
-    columns: ledgerTableColumns,
-  });
-  const ledgerPaginationCutoffDate = React.useMemo(() => addUtcDays(todayDate, -60), [todayDate]);
-  const ledgerPagination = React.useMemo(() => {
-    const allRows = ledgerTable.rows;
-    if (ledgerPaginationMode === 'all') {
-      return {
-        rows: allRows,
-        recentCount: allRows.filter((tx) => {
-          const effectiveDate = getLedgerEffectiveDate(tx);
-          return Boolean(effectiveDate) && effectiveDate >= ledgerPaginationCutoffDate;
-        }).length,
-        archivedCount: allRows.filter((tx) => {
-          const effectiveDate = getLedgerEffectiveDate(tx);
-          return Boolean(effectiveDate) && effectiveDate < ledgerPaginationCutoffDate;
-        }).length,
-        totalRows: allRows.length,
-        currentPage: 1,
-        totalPages: 1,
-        hasArchivedPages: false,
-      };
-    }
-
-    const recentRows: Accumul8Transaction[] = [];
-    const archivedRows: Accumul8Transaction[] = [];
-    allRows.forEach((tx) => {
-      const effectiveDate = getLedgerEffectiveDate(tx);
-      if (effectiveDate && effectiveDate < ledgerPaginationCutoffDate) {
-        archivedRows.push(tx);
-      } else {
-        recentRows.push(tx);
-      }
-    });
-
-    const totalPages = Math.max(1, Math.ceil(archivedRows.length / 100));
-    const currentPage = Math.min(Math.max(ledgerArchivePage, 1), totalPages);
-    const archivedStart = (currentPage - 1) * 100;
-    const archivedSlice = archivedRows.slice(archivedStart, archivedStart + 100);
-
-    return {
-      rows: currentPage === 1 ? [...recentRows, ...archivedSlice] : archivedSlice,
-      recentCount: recentRows.length,
-      archivedCount: archivedRows.length,
-      totalRows: allRows.length,
-      currentPage,
-      totalPages,
-      hasArchivedPages: archivedRows.length > 100,
-    };
-  }, [ledgerArchivePage, ledgerPaginationCutoffDate, ledgerPaginationMode, ledgerTable.rows]);
-  const debtorsTable = usePriorityTableLayout({
-    tableRef: debtorsTableRef,
-    rows: debtorRows,
-    columns: debtorsTableColumns,
-  });
-  const payBillsTable = usePriorityTableLayout({
-    tableRef: payBillsTableRef,
-    rows: payBillsRows,
-    columns: payBillsTableColumns,
-  });
-  const recurringTable = usePriorityTableLayout({
-    tableRef: recurringTableRef,
-    rows: recurringRows,
-    columns: recurringTableColumns,
-  });
-  React.useEffect(() => {
-    setLedgerArchivePage(1);
-  }, [
-    ledgerDateFilter,
-    customLedgerStartDate,
+  const { ledgerPagination, ledgerTable } = useAccumul8LedgerTable({
     customLedgerEndDate,
+    customLedgerStartDate,
+    getAccountDisplayName,
+    ledgerArchivePage,
+    ledgerDateFilter,
+    ledgerDisplayBalanceById,
     ledgerFilterPreset,
-    ledgerSearchQuery,
-    selectedBankingOrganizationId,
-    selectedBankAccountId,
     ledgerPaginationMode,
-    ledgerTable.sortState?.key,
-    ledgerTable.sortState?.direction,
-  ]);
-  React.useEffect(() => {
-    if (ledgerPaginationMode === 'all') {
-      if (ledgerArchivePage !== 1) {
-        setLedgerArchivePage(1);
-      }
-      return;
-    }
-    if (ledgerArchivePage > ledgerPagination.totalPages) {
-      setLedgerArchivePage(ledgerPagination.totalPages);
-    }
-  }, [ledgerArchivePage, ledgerPagination.totalPages, ledgerPaginationMode]);
-  const linkedAccountsByConnectionId = React.useMemo(() => {
-    const next: Record<number, Accumul8Account[]> = {};
-    accounts.forEach((account) => {
-      const connectionId = Number(account.bank_connection_id || 0);
-      if (connectionId <= 0) {
-        return;
-      }
-      if (!next[connectionId]) {
-        next[connectionId] = [];
-      }
-      next[connectionId].push(account);
-    });
-    return next;
-  }, [accounts]);
-  const renderDateRangeControls = React.useCallback((
-    prefix: 'ledger' | 'pay-bills',
-    filter: DateRangeFilter,
-    setFilter: (value: DateRangeFilter) => void,
-    customStartDate: string,
-    setCustomStartDate: (value: string) => void,
-    customEndDate: string,
-    setCustomEndDate: (value: string) => void,
-    includeAllDates = false,
-  ) => (
-    <div className="accumul8-panel-toolbar-range d-flex flex-wrap align-items-end gap-2">
-      <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
-        <label className="visually-hidden" htmlFor={`accumul8-${prefix}-range`}>Date Range</label>
-        <select
-          id={`accumul8-${prefix}-range`}
-          className={getActiveFilterClass('form-select form-select-sm accumul8-panel-toolbar-range-select', includeAllDates ? filter !== 'all_dates' : filter !== '30_days')}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as DateRangeFilter)}
-          aria-label="Date range"
-        >
-          {includeAllDates ? <option value="all_dates">All Dates</option> : null}
-          {DATE_RANGE_FILTER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </div>
-      {filter === 'custom' && (
-        <>
-          <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
-            <label className="visually-hidden" htmlFor={`accumul8-${prefix}-start`}>Start date</label>
-            <input
-              id={`accumul8-${prefix}-start`}
-              className={getActiveFilterClass('form-control form-control-sm', customStartDate.trim() !== '')}
-              type="date"
-              value={customStartDate}
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              aria-label="Start date"
-            />
-          </div>
-          <div className="accumul8-toolbar-field accumul8-toolbar-field--compact">
-            <label className="visually-hidden" htmlFor={`accumul8-${prefix}-end`}>End date</label>
-            <input
-              id={`accumul8-${prefix}-end`}
-              className={getActiveFilterClass('form-control form-control-sm', customEndDate.trim() !== '')}
-              type="date"
-              value={customEndDate}
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              aria-label="End date"
-            />
-          </div>
-        </>
-      )}
-    </div>
-  ), []);
+    ledgerRows,
+    ledgerSearchQuery,
+    ledgerTableRef,
+    selectedBankAccountId,
+    selectedBankingOrganizationId,
+    setLedgerArchivePage,
+    todayDate,
+  });
+  const { debtorsTable, payBillsTable, recurringTable } = useAccumul8SecondaryTables({
+    debtorsTableRef,
+    debtorRows,
+    getAccountDisplayName,
+    payBillsRows,
+    payBillsTableRef,
+    recurringRows,
+    recurringTableRef,
+    todayDate,
+  });
+  const { flashSaveButton, linkedAccountsByConnectionId, parseCustomUserIds, renderDateRangeControls, setInlineRowRef } = useAccumul8PageUiHelpers({
+    accounts,
+    dateRangeFilterOptions: DATE_RANGE_FILTER_OPTIONS,
+    flashSaveButtonTimeoutRef,
+    getActiveFilterClass,
+    inlineRowRefs,
+    setFlashingSaveButtonKey,
+  });
   const { openStatementImportFallback, openSyncHelp, runConnectionSync, runTellerConnect } = useAccumul8SyncActions({
     load,
     onToast,
@@ -1398,97 +737,34 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setTransactionModalVariant,
     setViewingTransactionId,
   });
-  const setInlineRowRef = React.useCallback((key: string, node: HTMLTableRowElement | null) => {
-    if (node) {
-      inlineRowRefs.current[key] = node;
-      return;
-    }
-    delete inlineRowRefs.current[key];
-  }, []);
-  const flashSaveButton = React.useCallback((key: string) => {
-    setFlashingSaveButtonKey(key);
-    if (flashSaveButtonTimeoutRef.current !== null && typeof window !== 'undefined') {
-      window.clearTimeout(flashSaveButtonTimeoutRef.current);
-    }
-    if (typeof window !== 'undefined') {
-      flashSaveButtonTimeoutRef.current = window.setTimeout(() => {
-        setFlashingSaveButtonKey((current) => (current === key ? '' : current));
-        flashSaveButtonTimeoutRef.current = null;
-      }, 900);
-    }
-  }, []);
-  const parseCustomUserIds = React.useCallback((raw: string): number[] => (
-    raw.split(',').map((v) => Number(v.trim())).filter((n) => Number.isFinite(n) && n > 0)
-  ), []);
-  const closeContactModal = React.useCallback(() => {
-    setContactModalOpen(false);
-    resetContactForm();
-  }, [resetContactForm]);
-  const closeDebtorModal = React.useCallback(() => {
-    setDebtorModalOpen(false);
-    resetDebtorForm();
-  }, [resetDebtorForm]);
-  const closeTransactionModal = React.useCallback(() => {
-    setTransactionModalOpen(false);
-    setTransactionModalVariant('ledger');
-    resetLedgerForm();
-  }, [resetLedgerForm]);
-  const closeEntityModal = React.useCallback(() => {
-    setEntityAliasDraftById((prev) => {
-      if (editingEntityId === null || !prev[editingEntityId]) return prev;
-      const next = { ...prev };
-      delete next[editingEntityId];
-      return next;
-    });
-    setEntityModalOpen(false);
-    resetEntityForm();
-  }, [editingEntityId, resetEntityForm]);
-  const closeLedgerEntityModal = React.useCallback(() => {
-    setLedgerEntityModalTransactionId(null);
-  }, []);
-  const collectEntityAliasNames = React.useCallback((entityId: number, entityDisplayName: string) => {
-    const draft = entityAliasDraftById[entityId] || DEFAULT_ENTITY_ALIAS_DRAFT;
-    const entity = entities.find((item) => item.id === entityId) || null;
-    const blockedKeys = new Set<string>([
-      normalizeEntityAliasKey(entityDisplayName),
-      ...((entity?.aliases || []).map((alias) => normalizeEntityAliasKey(alias.alias_name))),
-    ]);
-    const seenKeys = new Set<string>();
-    const names: string[] = [];
-    const candidates = [
-      ...((draft.pending_alias_names || []).map((value) => String(value || '').trim()).filter(Boolean)),
-      String(draft.alias_name || '').trim(),
-    ];
-
-    candidates.forEach((value) => {
-      const aliasKey = normalizeEntityAliasKey(value);
-      if (!value || !aliasKey || blockedKeys.has(aliasKey) || seenKeys.has(aliasKey)) {
-        return;
-      }
-      seenKeys.add(aliasKey);
-      names.push(value);
-    });
-
-    return names;
-  }, [entities, entityAliasDraftById]);
-  const persistEntityAliases = React.useCallback(async (entityId: number, entityDisplayName: string, aliasNames?: string[]) => {
-    const namesToSave = aliasNames || collectEntityAliasNames(entityId, entityDisplayName);
-    if (namesToSave.length === 0) {
-      return;
-    }
-    for (const aliasName of namesToSave) {
-      await createEntityAlias({
-        entity_id: entityId,
-        alias_name: aliasName,
-        merge_entity_id: null,
-      });
-    }
-    setEntityAliasDraftById((prev) => {
-      const next = { ...prev };
-      next[entityId] = DEFAULT_ENTITY_ALIAS_DRAFT;
-      return next;
-    });
-  }, [collectEntityAliasNames, createEntityAlias]);
+  const {
+    closeContactModal,
+    closeDebtorModal,
+    closeEntityModal,
+    closeLedgerEntityModal,
+    closeRecurringModal,
+    closeTransactionModal,
+    collectEntityAliasNames,
+    persistEntityAliases,
+  } = useAccumul8ModalHelperActions({
+    createEntityAlias,
+    defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
+    editingEntityId,
+    entities,
+    entityAliasDraftById,
+    resetContactForm,
+    resetDebtorForm,
+    resetEntityForm,
+    resetLedgerForm,
+    resetRecurringEditor,
+    setContactModalOpen,
+    setDebtorModalOpen,
+    setEntityAliasDraftById,
+    setEntityModalOpen,
+    setLedgerEntityModalTransactionId,
+    setTransactionModalOpen,
+    setTransactionModalVariant,
+  });
   const {
     beginEditBudgetRow,
     beginEditContact,
@@ -1513,7 +789,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     closeContactModal,
     closeDebtorModal,
     closeEntityModal,
-    closeRecurringModal: React.useCallback(() => { resetRecurringEditor(); }, [resetRecurringEditor]),
+    closeRecurringModal,
     closeTransactionModal,
     collectEntityAliasNames,
     contacts,
@@ -1567,286 +843,55 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     updateRecurring,
     updateTransaction,
   });
-  const saveLedgerEntityRule = React.useCallback(async (payload: { mode: 'existing' | 'new'; entityId: number | null; newEntityName: string }) => {
-    const transaction = transactions.find((row) => row.id === ledgerEntityModalTransactionId) || null;
-    if (!transaction) {
-      return;
-    }
-
-    try {
-      setLedgerEntityModalSaving(true);
-      let targetEntityId = payload.entityId ?? 0;
-      let targetEntityName = '';
-
-      if (payload.mode === 'new') {
-        const createResponse = await ApiClient.post<Accumul8IdResponse>(accumul8ActionUrl('create_entity'), {
-          display_name: payload.newEntityName,
-          entity_kind: 'business',
-          contact_type: inferEntityContactTypeForAmount(Number(transaction.amount || 0)),
-          is_active: 1,
-          default_amount: Math.abs(Number(transaction.amount || 0)),
-          notes: String(transaction.memo || '').trim(),
-        });
-        targetEntityId = Number(createResponse?.id || 0);
-        targetEntityName = payload.newEntityName;
-      } else {
-        const selectedEntity = entities.find((entity) => entity.id === Number(payload.entityId || 0)) || null;
-        targetEntityId = Number(selectedEntity?.id || 0);
-        targetEntityName = String(selectedEntity?.display_name || '');
-      }
-
-      if (targetEntityId <= 0) {
-        throw new Error('Choose an entity before saving this rule.');
-      }
-
-      const description = String(transaction.description || '').trim();
-      const aliasKey = normalizeEntityAliasKey(description);
-      const conflictingAlias = entityAliases.find((alias) => (
-        normalizeEntityAliasKey(alias.alias_name) === aliasKey && Number(alias.entity_id || 0) !== targetEntityId
-      ));
-      if (conflictingAlias) {
-        await ApiClient.post(accumul8ActionUrl('delete_entity_alias'), { id: conflictingAlias.id });
-      }
-
-      if (aliasKey && normalizeEntityAliasKey(targetEntityName) !== aliasKey) {
-        try {
-          await ApiClient.post(accumul8ActionUrl('create_entity_alias'), {
-            entity_id: targetEntityId,
-            alias_name: description,
-            merge_entity_id: null,
-            reassign_if_conflict: true,
-          });
-        } catch (error: any) {
-          const message = String(error?.message || '');
-          if (!message.toLowerCase().includes('alias matches the entity name after normalization')) {
-            throw error;
-          }
-        }
-      }
-
-      const guide = entityEndexGuides.find((item) => (
-        Number(item.parent_entity_id || 0) === targetEntityId
-          || toEntityEndexGuideKey(item) === normalizeEntityAliasKey(targetEntityName)
-      )) || null;
-      const guidePayload: Accumul8EntityEndexGuideUpsertRequest = {
-        parent_name: targetEntityName,
-        parent_entity_id: targetEntityId,
-        match_rule: buildEntityGuideRule(description, targetEntityName),
-        examples: uniqueTextValues([
-          ...(guide?.examples || []),
-          description,
-          transaction.entity_name || '',
-        ], (value) => value.trim().toLowerCase()),
-        match_contains: uniqueTextValues([
-          ...(guide?.match_contains || []),
-          description,
-          targetEntityName,
-        ], (value) => value.trim().toLowerCase()),
-        match_fragments: uniqueTextValues([
-          ...(guide?.match_fragments || []),
-          description,
-          targetEntityName,
-        ], normalizeEntityAliasKey),
-        is_active: 1,
-      };
-
-      if (guide?.id) {
-        await ApiClient.post(accumul8ActionUrl('update_entity_endex_guide'), { id: guide.id, ...guidePayload });
-      } else {
-        await ApiClient.post(accumul8ActionUrl('create_entity_endex_guide'), guidePayload);
-      }
-
-      const recurringRule = findRecurringRuleForTransactionMapping(transaction, recurringPayments, targetEntityId);
-      if (recurringRule) {
-        await ApiClient.post(accumul8ActionUrl('update_recurring'), {
-          id: recurringRule.id,
-          title: recurringRule.title,
-          direction: recurringRule.direction,
-          amount: Number(recurringRule.amount || 0),
-          frequency: recurringRule.frequency,
-          payment_method: recurringRule.payment_method,
-          interval_count: Number(recurringRule.interval_count || 1),
-          next_due_date: recurringRule.next_due_date,
-          paid_date: recurringRule.paid_date || '',
-          entity_id: targetEntityId,
-          account_id: recurringRule.account_id ?? null,
-          is_budget_planner: Number(recurringRule.is_budget_planner ?? 1),
-          notes: recurringRule.notes || '',
-          recurring_bank_aliases: uniqueTextValues([
-            ...(recurringRule.recurring_bank_aliases || []),
-            description,
-            transaction.entity_name || '',
-            targetEntityName,
-          ], normalizeEntityAliasKey),
-        });
-      }
-
-      await ApiClient.post(accumul8ActionUrl('update_transaction'), {
-        id: transaction.id,
-        transaction_date: transaction.transaction_date,
-        due_date: transaction.due_date,
-        paid_date: transaction.paid_date,
-        entry_type: transaction.entry_type,
-        description: transaction.description,
-        memo: transaction.memo,
-        amount: Number(transaction.amount || 0),
-        rta_amount: Number(transaction.rta_amount || 0),
-        is_paid: Number(transaction.is_paid || 0),
-        is_reconciled: Number(transaction.is_reconciled || 0),
-        is_budget_planner: Number(transaction.is_budget_planner || 0),
-        entity_id: targetEntityId,
-        account_id: transaction.account_id ?? null,
-        balance_entity_id: transaction.balance_entity_id ?? null,
-      });
-      let aliasScanWarning = false;
-      try {
-        await ApiClient.post(accumul8ActionUrl('scan_entity_aliases'), { entity_id: targetEntityId });
-      } catch (_error) {
-        aliasScanWarning = true;
-      }
-      if (recurringRule) {
-        try {
-          await ApiClient.post(accumul8ActionUrl('materialize_due_recurring'), {});
-        } catch (_error) {
-          aliasScanWarning = true;
-        }
-      }
-      await load();
-      closeLedgerEntityModal();
-      onToast?.({
-        tone: aliasScanWarning ? 'warning' : 'success',
-        message: aliasScanWarning
-          ? `Updated ${targetEntityName || 'entity'} for "${description}", but the follow-up alias scan could not finish.`
-          : `Updated ${targetEntityName || 'entity'} for "${description}" and refreshed its matching rule.`,
-      });
-    } catch (error: any) {
-      onToast?.({
-        tone: 'error',
-        message: String(error?.message || 'Failed to update the entity name rule.'),
-      });
-    } finally {
-      setLedgerEntityModalSaving(false);
-    }
-  }, [
+  const { saveLedgerEntityRule } = useAccumul8LedgerEntityRuleActions({
     accumul8ActionUrl,
     closeLedgerEntityModal,
+    entities,
     entityAliases,
     entityEndexGuides,
-    entities,
     ledgerEntityModalTransactionId,
-    recurringPayments,
     load,
     onToast,
+    recurringPayments,
+    setLedgerEntityModalSaving,
     transactions,
-  ]);
-  const closeRecurringModal = React.useCallback(() => {
-    resetRecurringEditor();
-  }, [resetRecurringEditor]);
+  });
   const budgetRowsSorted = React.useMemo(() => (
     [...budgetRows].sort((a, b) => (a.row_order - b.row_order) || (a.id - b.id))
   ), [budgetRows]);
-  const linkedAliasEntityIds = React.useMemo(() => {
-    const hiddenIds = new Set<number>();
-    const entityIdsByNameKey = new Map<string, number[]>();
-
-    entitiesWithResolvedAliases.forEach((entity) => {
-      const nameKey = normalizeEntityAliasKey(entity.display_name);
-      if (!nameKey) {
-        return;
-      }
-      const bucket = entityIdsByNameKey.get(nameKey) || [];
-      bucket.push(entity.id);
-      entityIdsByNameKey.set(nameKey, bucket);
-    });
-
-    entitiesWithResolvedAliases.forEach((entity) => {
-      entity.aliases.forEach((alias) => {
-        const aliasKey = normalizeEntityAliasKey(alias.alias_name);
-        if (!aliasKey) {
-          return;
-        }
-        (entityIdsByNameKey.get(aliasKey) || []).forEach((matchedEntityId) => {
-          if (matchedEntityId !== entity.id) {
-            hiddenIds.add(matchedEntityId);
-          }
-        });
-      });
-    });
-
-    return hiddenIds;
-  }, [entitiesWithResolvedAliases]);
-  const entitiesSorted = React.useMemo(() => (
-    [...entitiesWithResolvedAliases]
-      .filter((entity) => !linkedAliasEntityIds.has(entity.id))
-      .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id))
-  ), [entitiesWithResolvedAliases, linkedAliasEntityIds]);
-  const contactsSearchQuery = React.useMemo(() => normalizeSearchQuery(listSearchQueryByTab.contacts), [listSearchQueryByTab.contacts]);
-  const entityRows = React.useMemo(() => (
-    entitiesSorted.filter((entity) => matchesSearchQuery(contactsSearchQuery, [
-      entity.display_name,
-      entity.notes,
-      entity.phone_number,
-      entity.email,
-      entity.street_address,
-      entity.city,
-      entity.state,
-      entity.zip,
-      entity.contact_type,
-      entity.entity_kind,
-      entity.aliases.map((alias) => alias.alias_name).join(' '),
-      Number(entity.is_active || 0) === 1 ? 'active' : 'paused',
-      Number(entity.is_balance_person || 0) === 1 ? 'iou person' : '',
-      formatEntityRoles(entity),
-    ]))
-  ), [contactsSearchQuery, entitiesSorted]);
-  const linkedAliasEntitiesByParentId = React.useMemo(() => {
-    const next: Record<number, Accumul8Entity[]> = {};
-    entitiesWithResolvedAliases.forEach((parentEntity) => {
-      parentEntity.aliases.forEach((alias) => {
-        const aliasKey = normalizeEntityAliasKey(alias.alias_name);
-        if (!aliasKey) {
-          return;
-        }
-        entitiesWithResolvedAliases.forEach((candidate) => {
-          if (candidate.id === parentEntity.id) {
-            return;
-          }
-          if (normalizeEntityAliasKey(candidate.display_name) !== aliasKey) {
-            return;
-          }
-          if (!next[parentEntity.id]) {
-            next[parentEntity.id] = [];
-          }
-          if (!next[parentEntity.id].some((row) => row.id === candidate.id)) {
-            next[parentEntity.id].push(candidate);
-          }
-        });
-      });
-    });
-    Object.values(next).forEach((rows) => rows.sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')) || (a.id - b.id)));
-    return next;
-  }, [entitiesWithResolvedAliases]);
-  const entityEndexParents = React.useMemo(() => {
-    const query = String(entityEndexQuery || '').trim().toLowerCase();
-    return entitiesSorted.filter((entity) => {
-      const importedBudgetParent = Number(entity.legacy_contact_id || 0) > 0 || Number(entity.legacy_debtor_id || 0) > 0;
-      const aliases = entity.aliases || [];
-      const linkedChildren = linkedAliasEntitiesByParentId[entity.id] || [];
-      if (!importedBudgetParent && aliases.length === 0 && linkedChildren.length === 0) {
-        return false;
-      }
-      if (query === '') {
-        return true;
-      }
-      const haystack = [
-        entity.display_name,
-        entity.notes,
-        ...aliases.map((alias) => alias.alias_name),
-        ...linkedChildren.map((child) => child.display_name),
-      ].join(' ').toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [entitiesSorted, entityEndexQuery, linkedAliasEntitiesByParentId]);
+  const { entitiesSorted, entityRows } = useAccumul8EntityListData({
+    entitiesWithResolvedAliases,
+    listSearchQueryByTab,
+  });
+  const {
+    balanceEntities,
+    budgetActualByRowId,
+    budgetPlannerRecurringPayments,
+    contactEntities,
+    entityEndexParents,
+    entityTransactionSummaryById,
+    iouVisibleAccounts,
+    linkedAliasEntitiesByParentId,
+    selectedEntityEndexGuide,
+    selectedEntityEndexParentEntity,
+    selectedEntityHistory,
+    selectedEntityTransactions,
+    spreadsheetTotals,
+  } = useAccumul8EntityDerivedData({
+    budgetMonth,
+    budgetRowsSorted,
+    editingEntityEndexGuideId,
+    entities,
+    entitiesSorted,
+    entitiesWithResolvedAliases,
+    entityEndexGuides,
+    entityEndexQuery,
+    entityHistoryEntityId,
+    filteredRecurringPayments,
+    filteredTransactions,
+    transactions,
+    visibleAccounts,
+  });
   const entityEndexGuideByParentKey = React.useMemo(() => (
     entityEndexGuides.reduce<Record<string, Accumul8EntityEndexGuide>>((acc, guide) => {
       const key = toEntityEndexGuideKey(guide);
@@ -1856,175 +901,13 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       return acc;
     }, {})
   ), [entityEndexGuides]);
-  const entityEndexGuideById = React.useMemo(() => (
-    entityEndexGuides.reduce<Record<number, Accumul8EntityEndexGuide>>((acc, guide) => {
-      if (guide.id > 0) {
-        acc[guide.id] = guide;
-      }
-      return acc;
-    }, {})
-  ), [entityEndexGuides]);
-  const selectedEntityEndexGuide = React.useMemo(() => (
-    editingEntityEndexGuideId !== null ? (entityEndexGuideById[editingEntityEndexGuideId] || null) : null
-  ), [editingEntityEndexGuideId, entityEndexGuideById]);
-  const selectedEntityEndexParentEntity = React.useMemo(() => {
-    if (!selectedEntityEndexGuide) {
-      return null;
-    }
-    if (selectedEntityEndexGuide.parent_entity_id) {
-      return entitiesWithResolvedAliases.find((entity) => entity.id === selectedEntityEndexGuide.parent_entity_id) || null;
-    }
-    const parentKey = normalizeEntityAliasKey(selectedEntityEndexGuide.parent_name);
-    return entitiesWithResolvedAliases.find((entity) => normalizeEntityAliasKey(entity.display_name) === parentKey) || null;
-  }, [entitiesWithResolvedAliases, selectedEntityEndexGuide]);
-  const entityTransactionsById = React.useMemo(() => {
-    const grouped: Record<number, Accumul8Transaction[]> = {};
-    for (const tx of transactions) {
-      const entityId = Number(tx.entity_id || 0);
-      if (entityId <= 0) {
-        continue;
-      }
-      if (!grouped[entityId]) {
-        grouped[entityId] = [];
-      }
-      grouped[entityId].push(tx);
-    }
-    return grouped;
-  }, [transactions]);
-  const entityTransactionSummaryById = React.useMemo(() => {
-    const summary: Record<number, EntityTransactionSummary> = {};
-    Object.entries(entityTransactionsById).forEach(([entityId, rows]) => {
-      const latest = rows[0] || null;
-      summary[Number(entityId)] = {
-        count: rows.length,
-        lastAmount: latest ? Number(latest.amount || 0) : null,
-        lastDate: latest?.transaction_date || latest?.due_date || '',
-      };
-    });
-    return summary;
-  }, [entityTransactionsById]);
-  const selectedEntityHistory = React.useMemo(() => (
-    entityHistoryEntityId ? entities.find((entity) => entity.id === entityHistoryEntityId) || null : null
-  ), [entities, entityHistoryEntityId]);
-  const selectedEntityTransactions = React.useMemo(() => (
-    entityHistoryEntityId ? entityTransactionsById[entityHistoryEntityId] || [] : []
-  ), [entityHistoryEntityId, entityTransactionsById]);
-  const contactEntities = React.useMemo(() => (
-    entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 0)
-  ), [entitiesSorted]);
-  const balanceEntities = React.useMemo(() => (
-    entitiesSorted.filter((entity) => Number(entity.is_balance_person || 0) === 1)
-  ), [entitiesSorted]);
-  const iouVisibleAccounts = React.useMemo(() => (
-    visibleAccounts.filter((account) => isIouAccount(account))
-  ), [visibleAccounts]);
-  const ledgerRowsForBudgetMonth = React.useMemo(() => (
-    filteredTransactions.filter((tx) => String(tx.transaction_date || '').slice(0, 7) === budgetMonth)
-  ), [budgetMonth, filteredTransactions]);
-  const budgetActualByRowId = React.useMemo(() => {
-    const map: Record<number, number> = {};
-    for (const row of budgetRowsSorted) {
-      const pattern = String(row.match_pattern || '').trim().toLowerCase();
-      if (pattern === '') {
-        map[row.id] = 0;
-        continue;
-      }
-      let total = 0;
-      for (const tx of ledgerRowsForBudgetMonth) {
-        const haystack = `${tx.description || ''} ${tx.memo || ''} ${tx.contact_name || ''} ${tx.debtor_name || ''}`.toLowerCase();
-        if (haystack.includes(pattern)) {
-          total += Math.abs(Number(tx.amount || 0));
-        }
-      }
-      map[row.id] = Number(total.toFixed(2));
-    }
-    return map;
-  }, [budgetRowsSorted, ledgerRowsForBudgetMonth]);
-  const spreadsheetTotals = React.useMemo(() => {
-    let budget = 0;
-    let actual = 0;
-    for (const row of budgetRowsSorted) {
-      if (!row.is_active) continue;
-      budget += Number(row.monthly_budget || 0);
-      actual += Number(budgetActualByRowId[row.id] || 0);
-    }
-    return {
-      budget: Number(budget.toFixed(2)),
-      actual: Number(actual.toFixed(2)),
-      remaining: Number((budget - actual).toFixed(2)),
-    };
-  }, [budgetActualByRowId, budgetRowsSorted]);
-  const budgetPlannerRecurringPayments = React.useMemo(() => (
-    filteredRecurringPayments.filter((rp) => Number(rp.is_budget_planner || 0) === 1)
-  ), [filteredRecurringPayments]);
-  const selectedDebtorEntries = React.useMemo(() => {
-    if (!selectedDebtorId) {
-      return debtorLedger;
-    }
-    const selectedDebtor = groupedDebtors.find((debtor) => debtor.group_key === selectedDebtorId) || null;
-    if (!selectedDebtor) {
-      return debtorLedger;
-    }
-    const memberIds = new Set(selectedDebtor.member_ids);
-    return debtorLedger.filter((tx) => memberIds.has(Number(tx.debtor_id || 0)));
-  }, [debtorLedger, groupedDebtors, selectedDebtorId]);
-  const entitiesTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Entity>>>(() => ([
-    {
-      key: 'name',
-      header: 'Name',
-      minWidth: 240,
-      maxAutoWidth: 520,
-      priority: 5,
-      sortable: true,
-      sortAccessor: (entity) => entity.display_name || '',
-      contentAccessor: (entity) => [
-        entity.display_name || 'Unnamed entity',
-        entity.notes || '',
-        entity.aliases.map((alias) => alias.alias_name).join(' | '),
-      ],
-    },
-    { key: 'roles', header: 'Roles', minWidth: 126, maxAutoWidth: 180, priority: 1, sortable: true, sortAccessor: (entity) => formatEntityRoles(entity), contentAccessor: (entity) => formatEntityRoles(entity) },
-    {
-      key: 'contactInfo',
-      header: 'Contact Info',
-      minWidth: 220,
-      maxAutoWidth: 420,
-      priority: 4,
-      sortable: true,
-      sortAccessor: (entity) => formatEntityContactSummary(entity).join(' | '),
-      contentAccessor: (entity) => formatEntityContactSummary(entity),
-    },
-    {
-      key: 'lastTransaction',
-      header: 'Last Transaction',
-      minWidth: 172,
-      maxAutoWidth: 220,
-      sortable: true,
-      defaultSortDirection: 'desc',
-      sortAccessor: (entity) => (entityTransactionSummaryById[entity.id]?.lastDate || ''),
-      contentAccessor: (entity) => formatEntityTransactionSummaryLabel(entityTransactionSummaryById[entity.id] || { count: 0, lastAmount: null, lastDate: '' }),
-    },
-    { key: 'status', header: 'Status', minWidth: 92, maxAutoWidth: 108, sortable: true, sortAccessor: (entity) => Number(entity.is_active || 0), contentAccessor: (entity) => Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused' },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [entityTransactionSummaryById]);
-  const balanceLedgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
-    { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
-    { key: 'person', header: 'Person', minWidth: 156, maxAutoWidth: 230, priority: 2, sortable: true, sortAccessor: (tx) => tx.debtor_name || '', contentAccessor: (tx) => tx.debtor_name || '-' },
-    { key: 'description', header: 'Description', minWidth: 220, maxAutoWidth: 520, priority: 5, sortable: true, sortAccessor: (tx) => tx.description || '', contentAccessor: (tx) => tx.description || '-' },
-    { key: 'memo', header: 'Memo', minWidth: 148, maxAutoWidth: 340, priority: 3, sortable: true, sortAccessor: (tx) => tx.memo || '', contentAccessor: (tx) => tx.memo || '-' },
-    { key: 'amount', header: 'Amt', minWidth: 100, maxAutoWidth: 126, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(tx.amount || 0), contentAccessor: (tx) => Number(tx.amount || 0).toFixed(2) },
-    { key: 'running', header: 'Running IOU', minWidth: 166, maxAutoWidth: 196, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(debtorRunningBalanceByTxId.get(tx.id) || 0), contentAccessor: (tx) => Number(debtorRunningBalanceByTxId.get(tx.id) || 0).toFixed(2) },
-    { key: 'actions', header: 'Actions', minWidth: 148, maxAutoWidth: 156, sortable: false, contentAccessor: () => 'Actions' },
-  ]), [debtorRunningBalanceByTxId]);
-  const entitiesTable = usePriorityTableLayout({
-    tableRef: entitiesTableRef,
-    rows: entityRows,
-    columns: entitiesTableColumns,
-  });
-  const balanceLedgerTable = usePriorityTableLayout({
-    tableRef: balanceLedgerTableRef,
-    rows: selectedDebtorEntries,
-    columns: balanceLedgerTableColumns,
+  const { balanceLedgerTable, entitiesTable } = useAccumul8EntityTables({
+    balanceLedgerTableRef,
+    debtorRunningBalanceByTxId,
+    entitiesTableRef,
+    entityRows,
+    entityTransactionSummaryById,
+    selectedDebtorEntries,
   });
   const closeEntityEndexGuideModal = React.useCallback(() => {
     setEditingEntityEndexGuideId(null);

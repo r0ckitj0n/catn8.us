@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { StandardIconButton } from '../../components/common/StandardIconButton';
 import { ApiClient } from '../ApiClient';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import {
@@ -13,7 +12,6 @@ import {
 import { IBuildWizardDropdownSettings } from '../../types/buildWizardDropdowns';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { BuildTabId, DocumentDraftMap, LotSizeUnit, StepDraftMap, StepType, WizardView } from '../../types/pages/buildWizardPage';
-import { read, utils } from 'xlsx';
 import {
   buildWizardTokenLabel,
   BUILD_WIZARD_DROPDOWN_SETTINGS_UPDATED_EVENT,
@@ -31,13 +29,10 @@ import {
 import {
   calculateDurationDays,
   detectLotSizeUnit,
-  fileExtensionFromName,
   formatCurrency,
   formatDate,
   formatTimelineDate,
-  getDefaultRange,
   getStepPastelColor,
-  isPdfDocument,
   lotSizeInputToSqftAuto,
   lotSizeSqftToDisplayInput,
   parseDate,
@@ -46,7 +41,6 @@ import {
   pushUrlState,
   recommendPhaseKeyForStep,
   sortAlpha,
-  tabLabelShort,
   stepDateRange,
   stepPhaseBucket,
   thumbnailKindLabel,
@@ -57,7 +51,6 @@ import {
 } from '../../components/pages/build-wizard/buildWizardUtils';
 import { DateRangeChart, FooterPhaseTimeline } from '../../components/pages/build-wizard/BuildWizardTimeline';
 import {
-  BuildWizardConfirmState,
   BuildWizardContactType,
   BuildWizardSearchResult,
   BuildWizardTaskMeta,
@@ -67,7 +60,6 @@ import {
   PhaseDateRange,
   ProjectOverviewPhaseSection,
   ProjectOverviewStepRow,
-  SpreadsheetPreviewSheet,
   TaskDocumentField,
   TaskDocumentPreview,
   contactTypeChipClass,
@@ -85,7 +77,7 @@ import {
   setTaskDateOverrideInReceiptNotes as setTaskDateOverrideInReceiptNotesBase,
   taskUsesManualDateOverride,
 } from './buildWizardTaskMetaUtils';
-import { buildSearchText, buildStepCostVerificationSignature, isTextLikeMime } from './buildWizardSearchCostUtils';
+import { buildSearchText, buildStepCostVerificationSignature } from './buildWizardSearchCostUtils';
 import {
   BuildWizardDocumentGallery,
   BuildWizardLauncher,
@@ -100,9 +92,20 @@ import { BuildWizardStepReceiptEditor } from './buildWizardStepReceiptEditor';
 import { BuildWizardStepReceiptsList } from './buildWizardStepReceiptsList';
 import { BuildWizardWorkspaceMain } from './buildWizardWorkspaceMain';
 import { BuildWizardWorkspaceModals } from './buildWizardWorkspaceModals';
+import { useBuildWizardConfirmationActions } from './useBuildWizardConfirmationActions';
+import { useBuildWizardDeskActions } from './useBuildWizardDeskActions';
+import { useBuildWizardDocumentManagerData } from './useBuildWizardDocumentManagerData';
+import { useBuildWizardLauncherActions } from './useBuildWizardLauncherActions';
+import { useBuildWizardDocumentStepData } from './useBuildWizardDocumentStepData';
+import { useBuildWizardDocumentPreview } from './useBuildWizardDocumentPreview';
 import { useBuildWizardDocumentDraftActions } from './useBuildWizardDocumentDraftActions';
+import { useBuildWizardPhaseRangeActions } from './useBuildWizardPhaseRangeActions';
+import { useBuildWizardNoteDocumentActions } from './useBuildWizardNoteDocumentActions';
+import { useBuildWizardOverviewData } from './useBuildWizardOverviewData';
 import { useBuildWizardReceiptActions } from './useBuildWizardReceiptActions';
+import { useBuildWizardStepDragActions } from './useBuildWizardStepDragActions';
 import { useBuildWizardStepEditActions } from './useBuildWizardStepEditActions';
+import { useBuildWizardWorkspaceSelectionData } from './useBuildWizardWorkspaceSelectionData';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
@@ -114,15 +117,11 @@ const LIGHTBOX_ZOOM_MIN = 0.5;
 const LIGHTBOX_ZOOM_MAX = 3;
 const LIGHTBOX_ZOOM_STEP = 0.1;
 const LIGHTBOX_ZOOM_STEP_FAST = 0.2;
-const PROJECT_OVERVIEW_TAB_ORDER: BuildTabId[] = [...PHASE_PROGRESS_ORDER, 'desk'];
-
 const clampLightboxZoom = (value: number): number => {
   return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
 };
 
 const LIGHTBOX_TEXT_PREVIEW_MAX_CHARS = 120000;
-const TEXT_PREVIEW_EXTENSIONS = new Set(['TXT', 'MD', 'JSON', 'CSV', 'LOG', 'XML', 'YAML', 'YML']);
-
 const TASK_META_FIELD_LABELS: Record<keyof BuildWizardTaskMeta, string> = {
   task_type: 'Task Type',
   manual_date_override: 'Manual Date Override',
@@ -355,13 +354,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const topbarSearchBoxRef = React.useRef<HTMLDivElement | null>(null);
   const previousActiveTabRef = React.useRef<BuildTabId>('start');
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
-  const [confirmState, setConfirmState] = React.useState<BuildWizardConfirmState | null>(null);
-
-  const closeLightbox = React.useCallback(() => {
-    setLightboxDoc(null);
-    setLightboxSpreadsheetSheetIndex(0);
-    setLightboxZoom(1);
-  }, []);
 
   const zoomLightboxBy = React.useCallback((delta: number) => {
     setLightboxZoom((prev) => clampLightboxZoom(prev + delta));
@@ -370,6 +362,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const resetLightboxZoom = React.useCallback(() => {
     setLightboxZoom(1);
   }, []);
+  const { closeConfirmation, confirmState, requestConfirmation } = useBuildWizardConfirmationActions();
+  const {
+    closeLightbox,
+    isPlanPreviewDoc,
+    isSpreadsheetPreviewDoc,
+    isTextPreviewDoc,
+    openDocumentPreview,
+  } = useBuildWizardDocumentPreview({
+    lightboxTextPreviewMaxChars: LIGHTBOX_TEXT_PREVIEW_MAX_CHARS,
+    onToast,
+    parseTaskDocumentPreview,
+    setLightboxDoc,
+    setLightboxSpreadsheetSheetIndex,
+    setLightboxZoom,
+  });
 
   React.useEffect(() => {
     if (initialUrlState.view === 'build' && initialUrlState.projectId && initialUrlState.projectId !== projectId) {
@@ -1173,772 +1180,107 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return Math.max(0, normalizedEstimated - getStepQuoteTotal(step.id));
   }, [getStepQuoteTotal]);
 
-  const stepCostTotalExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
-    const actual = getStepActualExcludingQuotes(step);
-    if (actual > 0) {
-      return actual;
-    }
-    return getStepEstimatedExcludingQuotes(step);
-  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes]);
+  const {
+    overviewMetrics,
+    phaseTotals,
+    projectOverviewRange,
+    projectOverviewSections,
+    projectOverviewTotals,
+    projectTotals,
+    stepCostTotalExcludingQuotes,
+  } = useBuildWizardOverviewData({
+    activeTab,
+    documents,
+    filteredTabSteps,
+    getStepActualExcludingQuotes,
+    getStepEstimatedExcludingQuotes,
+    isAiEstimatedField,
+    project,
+    stepAssigneesByStepId,
+    stepPhaseBucket,
+    steps,
+  });
 
-  const phaseTotals = React.useMemo(() => {
-    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return { phaseTotal: 0, projectToDateTotal: 0 };
-    }
+  const {
+    activePhaseDateRange,
+    activePhaseHasStoredDateRange,
+    onMoveStepFromModal,
+    onOpenMoveStepModal,
+    onPhaseDateRangeChange,
+    resolvePhaseDateRange,
+  } = useBuildWizardPhaseRangeActions({
+    activeTab,
+    moveStepModalStepId,
+    moveStepModalTargetTab,
+    movingStep,
+    onToast,
+    phaseDateRanges,
+    projectId,
+    savePhaseDateRange,
+    setActiveTab,
+    setMoveStepModalStepId,
+    setMoveStepModalTargetTab,
+    setMovingStep,
+    stepById,
+    stepPhaseBucket,
+    steps,
+    updateStep,
+  });
 
-    const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
-    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + stepCostTotalExcludingQuotes(step), 0);
-    const projectToDateTotal = steps.reduce((sum, step) => {
-      const stepPhase = stepPhaseBucket(step);
-      const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhase);
-      if (stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex) {
-        return sum + stepCostTotalExcludingQuotes(step);
-      }
-      return sum;
-    }, 0);
+  const {
+    attachableProjectDocuments,
+    footerTimelineSteps,
+    linkedStepDisplayNumberById,
+    linkedStepOptions,
+    selectableDocSteps,
+  } = useBuildWizardWorkspaceSelectionData({
+    activeTab,
+    docPhaseKey,
+    documents,
+    filteredTabSteps,
+    setFooterRange,
+    stepPhaseBucket,
+    steps,
+  });
 
-    return { phaseTotal, projectToDateTotal };
-  }, [activeTab, filteredTabSteps, stepCostTotalExcludingQuotes, steps]);
-
-  const stepDocumentCountByStepId = React.useMemo(() => {
-    const map = new Map<number, number>();
-    documents.forEach((documentItem) => {
-      const linkedStepId = Number(documentItem.step_id || 0);
-      if (linkedStepId <= 0) {
-        return;
-      }
-      map.set(linkedStepId, (map.get(linkedStepId) || 0) + 1);
-    });
-    return map;
-  }, [documents]);
-
-  const projectOverviewRange = React.useMemo(() => getDefaultRange(steps), [steps]);
-
-  const projectOverviewSections = React.useMemo<ProjectOverviewPhaseSection[]>(() => {
-    const rangeStartDate = parseDate(projectOverviewRange.start);
-    const rangeEndDate = parseDate(projectOverviewRange.end);
-    const hasRange = Boolean(rangeStartDate && rangeEndDate && rangeEndDate.getTime() >= rangeStartDate.getTime());
-    const totalDays = hasRange
-      ? Math.max(1, Math.round((rangeEndDate!.getTime() - rangeStartDate!.getTime()) / 86400000) + 1)
-      : 1;
-
-    return PROJECT_OVERVIEW_TAB_ORDER.map((tabId) => {
-      const phaseSteps = steps
-        .filter((step) => stepPhaseBucket(step) === tabId)
-        .sort((a, b) => {
-          if (a.step_order !== b.step_order) {
-            return a.step_order - b.step_order;
-          }
-          return a.id - b.id;
-        });
-
-      const rows: ProjectOverviewStepRow[] = phaseSteps.map((step, index) => {
-        const range = stepDateRange(step);
-        const startIso = range.start ? toIsoDate(range.start) : null;
-        const endIso = range.end ? toIsoDate(range.end) : null;
-        const hasTimeline = Boolean(startIso && endIso && hasRange);
-        let leftPercent = 0;
-        let widthPercent = 0;
-        if (hasTimeline && rangeStartDate && range.start && range.end) {
-          const clampedStartMs = Math.max(rangeStartDate.getTime(), range.start.getTime());
-          const clampedEndMs = Math.min(rangeEndDate!.getTime(), range.end.getTime());
-          if (clampedEndMs >= clampedStartMs) {
-            const leftDays = Math.max(0, Math.round((clampedStartMs - rangeStartDate.getTime()) / 86400000));
-            const widthDays = Math.max(1, Math.round((clampedEndMs - clampedStartMs) / 86400000) + 1);
-            leftPercent = (leftDays / totalDays) * 100;
-            widthPercent = (widthDays / totalDays) * 100;
-          }
-        }
-        const actualCost = Number(step.actual_cost);
-        const estimatedCost = Number(step.estimated_cost);
-        const costMode: ProjectOverviewStepRow['costMode'] = Number.isFinite(actualCost) && actualCost > 0
-          ? 'actual'
-          : (Number.isFinite(estimatedCost) && estimatedCost > 0 ? 'estimated' : 'missing');
-        return {
-          stepId: step.id,
-          displayOrder: index + 1,
-          title: step.title,
-          stepType: step.step_type,
-          startIso,
-          endIso,
-          durationDays: calculateDurationDays(startIso, endIso),
-          totalCost: stepCostTotalExcludingQuotes(step),
-          costMode,
-          assigneeCount: (stepAssigneesByStepId.get(step.id) || []).length,
-          documentCount: stepDocumentCountByStepId.get(step.id) || 0,
-          isCompleted: Number(step.is_completed) === 1,
-          hasTimeline,
-          leftPercent,
-          widthPercent,
-        };
-      });
-
-      const rowStarts = rows.map((row) => row.startIso).filter((value): value is string => Boolean(value)).sort();
-      const rowEnds = rows.map((row) => row.endIso).filter((value): value is string => Boolean(value)).sort();
-      return {
-        tabId,
-        label: tabLabelShort(tabId),
-        phaseColor: TAB_PHASE_COLORS[tabId],
-        stepCount: rows.length,
-        completedCount: rows.filter((row) => row.isCompleted).length,
-        totalCost: rows.reduce((sum, row) => sum + row.totalCost, 0),
-        startIso: rowStarts.length ? rowStarts[0] : null,
-        endIso: rowEnds.length ? rowEnds[rowEnds.length - 1] : null,
-        rows,
-      };
-    }).filter((section) => section.stepCount > 0);
-  }, [projectOverviewRange.end, projectOverviewRange.start, stepAssigneesByStepId, stepCostTotalExcludingQuotes, stepDocumentCountByStepId, steps]);
-
-  const projectOverviewTotals = React.useMemo(() => {
-    return projectOverviewSections.reduce(
-      (totals, section) => {
-        totals.stepCount += section.stepCount;
-        totals.completedCount += section.completedCount;
-        totals.totalCost += section.totalCost;
-        return totals;
-      },
-      { stepCount: 0, completedCount: 0, totalCost: 0 },
-    );
-  }, [projectOverviewSections]);
-
-  const derivePhaseDateRange = React.useCallback((tabId: BuildTabId): PhaseDateRange => {
-    const tabSteps = steps.filter((step) => stepPhaseBucket(step) === tabId);
-    const sortedStartDates = tabSteps
-      .map((step) => toStringOrNull(step.expected_start_date || ''))
-      .filter((value): value is string => Boolean(value))
-      .sort();
-    const sortedEndCandidates = tabSteps
-      .map((step) => toStringOrNull(step.expected_end_date || '') || toStringOrNull(step.expected_start_date || ''))
-      .filter((value): value is string => Boolean(value))
-      .sort();
-    return {
-      start: sortedStartDates.length ? sortedStartDates[0] : null,
-      end: sortedEndCandidates.length ? sortedEndCandidates[sortedEndCandidates.length - 1] : null,
-    };
-  }, [steps]);
-
-  const phaseDateRangeByTab = React.useMemo<Partial<Record<BuildTabId, PhaseDateRange>>>(() => {
-    const map: Partial<Record<BuildTabId, PhaseDateRange>> = {};
-    phaseDateRanges.forEach((range) => {
-      const phaseTab = range.phase_tab as BuildTabId;
-      if (!PHASE_PROGRESS_ORDER.includes(phaseTab)) {
-        return;
-      }
-      map[phaseTab] = {
-        start: toStringOrNull(range.start_date || ''),
-        end: toStringOrNull(range.end_date || ''),
-      };
-    });
-    return map;
-  }, [phaseDateRanges]);
-
-  const resolvePhaseDateRange = React.useCallback((tabId: BuildTabId): PhaseDateRange => {
-    const derived = derivePhaseDateRange(tabId);
-    const override = phaseDateRangeByTab[tabId];
-    return {
-      start: toStringOrNull(override?.start || '') || derived.start,
-      end: toStringOrNull(override?.end || '') || derived.end,
-    };
-  }, [derivePhaseDateRange, phaseDateRangeByTab]);
-
-  const activePhaseDateRange = React.useMemo<PhaseDateRange>(() => {
-    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return { start: null, end: null };
-    }
-    return resolvePhaseDateRange(activeTab);
-  }, [activeTab, resolvePhaseDateRange]);
-
-  const activePhaseHasStoredDateRange = React.useMemo<boolean>(() => {
-    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return false;
-    }
-    const stored = phaseDateRangeByTab[activeTab];
-    return Boolean(toStringOrNull(stored?.start || '') || toStringOrNull(stored?.end || ''));
-  }, [activeTab, phaseDateRangeByTab]);
-
-  const clampDateToRange = React.useCallback((value: string | null | undefined, min: string | null, max: string | null): string | null => {
-    const next = toStringOrNull(value || '');
-    if (!next) {
-      return null;
-    }
-    if (min && next < min) {
-      return min;
-    }
-    if (max && next > max) {
-      return max;
-    }
-    return next;
-  }, []);
-
-  const onPhaseDateRangeChange = React.useCallback((patch: Partial<PhaseDateRange>) => {
-    if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return;
-    }
-    const current = resolvePhaseDateRange(activeTab);
-    let nextStart = toStringOrNull((patch.start ?? current.start) || '');
-    let nextEnd = toStringOrNull((patch.end ?? current.end) || '');
-    if (nextStart && nextEnd && nextStart > nextEnd) {
-      onToast?.({ tone: 'warning', message: 'Phase start date cannot be after phase end date.' });
-      return;
-    }
-
-    const phaseSteps = steps.filter((step) => stepPhaseBucket(step) === activeTab);
-    const outOfRangeStep = phaseSteps.find((step) => {
-      const stepStart = toStringOrNull(step.expected_start_date || '');
-      const stepEnd = toStringOrNull(step.expected_end_date || '') || stepStart;
-      if (nextStart && ((stepStart && stepStart < nextStart) || (stepEnd && stepEnd < nextStart))) {
-        return true;
-      }
-      if (nextEnd && ((stepStart && stepStart > nextEnd) || (stepEnd && stepEnd > nextEnd))) {
-        return true;
-      }
-      return false;
-    });
-    if (outOfRangeStep) {
-      onToast?.({
-        tone: 'error',
-        message: `Phase date range cannot exclude step "${outOfRangeStep.title}". Update that step's date range first.`,
-      });
-      return;
-    }
-    void savePhaseDateRange(projectId, activeTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
-  }, [activeTab, onToast, projectId, resolvePhaseDateRange, savePhaseDateRange, steps]);
-
-  const onOpenMoveStepModal = React.useCallback((stepId: number) => {
-    if (stepId <= 0) {
-      return;
-    }
-    const step = stepById.get(stepId);
-    if (!step) {
-      return;
-    }
-    const tab = stepPhaseBucket(step);
-    if (PHASE_PROGRESS_ORDER.includes(tab)) {
-      setMoveStepModalTargetTab(tab);
-    }
-    setMoveStepModalStepId(stepId);
-  }, [stepById]);
-
-  const onMoveStepFromModal = React.useCallback(async () => {
-    if (movingStep) {
-      return;
-    }
-    const stepId = Number(moveStepModalStepId || 0);
-    if (stepId <= 0) {
-      onToast?.({ tone: 'warning', message: 'Choose a step to move.' });
-      return;
-    }
-    const targetPhaseKey = String(TAB_DEFAULT_PHASE_KEY[moveStepModalTargetTab] || '').trim();
-    if (!targetPhaseKey) {
-      onToast?.({ tone: 'warning', message: 'Choose a valid target phase.' });
-      return;
-    }
-    const step = stepById.get(stepId);
-    if (!step) {
-      onToast?.({ tone: 'warning', message: 'Selected step no longer exists.' });
-      return;
-    }
-    if (String(step.phase_key || '').trim() === targetPhaseKey) {
-      onToast?.({ tone: 'info', message: 'Step is already in that phase.' });
-      return;
-    }
-
-    const startDate = toStringOrNull(step.expected_start_date || '');
-    const endDate = toStringOrNull(step.expected_end_date || '');
-    const patch: Partial<IBuildWizardStep> = {
-      phase_key: targetPhaseKey,
-      expected_start_date: startDate,
-      expected_end_date: endDate,
-      expected_duration_days: calculateDurationDays(startDate, endDate) ?? null,
-    };
-    if (Number(step.parent_step_id || 0) > 0) {
-      patch.parent_step_id = null;
-    }
-
-    setMovingStep(true);
-    try {
-      await updateStep(stepId, patch);
-      setActiveTab(moveStepModalTargetTab);
-      setMoveStepModalStepId(0);
-      onToast?.({ tone: 'success', message: 'Step moved and re-placed on timeline.' });
-    } finally {
-      setMovingStep(false);
-    }
-  }, [moveStepModalStepId, moveStepModalTargetTab, movingStep, onToast, stepById, updateStep]);
-
-  const footerTimelineSteps = React.useMemo(() => {
-    if (activeTab === 'start' || activeTab === 'completed' || activeTab === 'overview') {
-      return steps;
-    }
-    return filteredTabSteps;
-  }, [activeTab, steps, filteredTabSteps]);
-
-  React.useEffect(() => {
-    const next = getDefaultRange(footerTimelineSteps.length ? footerTimelineSteps : steps);
-    setFooterRange(next);
-  }, [steps, footerTimelineSteps]);
-
-  const projectTotals = React.useMemo(() => {
-    const totalEstimated = steps.reduce((sum, s) => sum + getStepEstimatedExcludingQuotes(s), 0);
-    const totalActual = steps.reduce((sum, s) => sum + getStepActualExcludingQuotes(s), 0);
-    const doneCount = steps.filter((s) => Number(s.is_completed) === 1).length;
-    return {
-      totalEstimated,
-      totalActual,
-      doneCount,
-      totalCount: steps.length,
-    };
-  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, steps]);
-
-  const overviewMetrics = React.useMemo(() => {
-    const today = new Date();
-    const todayIso = toIsoDate(today);
-    const projectStart = parseDate(project?.target_start_date || null);
-    const timelineStart = steps
-      .map((s) => parseDate(s.expected_start_date) || parseDate(s.expected_end_date))
-      .filter(Boolean)
-      .sort((a, b) => (a!.getTime() - b!.getTime()))[0] || null;
-    const startDate = projectStart || timelineStart;
-    const startCountdownDays = startDate ? Math.round((startDate.getTime() - parseDate(todayIso)!.getTime()) / 86400000) : null;
-
-    const projectEnd = parseDate(project?.target_completion_date || null);
-    const timelineEnd = steps
-      .map((s) => parseDate(s.expected_end_date) || parseDate(s.expected_start_date))
-      .filter(Boolean)
-      .sort((a, b) => (a!.getTime() - b!.getTime()))
-      .pop() || null;
-    const endDate = projectEnd || timelineEnd;
-    const endCountdownDays = endDate ? Math.round((endDate.getTime() - parseDate(todayIso)!.getTime()) / 86400000) : null;
-
-    const nextStepBase = steps
-      .filter((s) => Number(s.is_completed) !== 1)
-      .map((s) => ({ step: s, start: parseDate(s.expected_start_date), end: parseDate(s.expected_end_date) }))
-      .filter((r) => r.start || r.end)
-      .sort((a, b) => {
-        const aStart = (a.start || a.end)!.getTime();
-        const bStart = (b.start || b.end)!.getTime();
-        return aStart - bStart;
-      })[0] || null;
-    const nextStep = nextStepBase
-      ? (() => {
-          const phaseTabId = stepPhaseBucket(nextStepBase.step);
-          const phaseLabel = BUILD_TABS.find((tab) => tab.id === phaseTabId)?.label || tabLabelShort(phaseTabId);
-          const phaseStepNumber = steps
-            .filter((step) => stepPhaseBucket(step) === phaseTabId)
-            .sort((a, b) => Number(a.step_order) - Number(b.step_order))
-            .findIndex((step) => step.id === nextStepBase.step.id) + 1;
-          return {
-            ...nextStepBase,
-            phaseLabel,
-            phaseStepNumber: phaseStepNumber > 0 ? phaseStepNumber : null,
-          };
-        })()
-      : null;
-
-    const spentActual = steps.reduce((sum, s) => sum + getStepActualExcludingQuotes(s), 0);
-    const projectedTotal = steps.reduce((sum, s) => {
-      const actual = getStepActualExcludingQuotes(s);
-      if (actual > 0) {
-        return sum + actual;
-      }
-      return sum + getStepEstimatedExcludingQuotes(s);
-    }, 0);
-    const remainingProjected = Math.max(0, projectedTotal - spentActual);
-
-    const aiEstimatedCostSteps = steps.filter((s) => isAiEstimatedField(s, 'estimated_cost')).length;
-    const missingEstimateCount = steps.filter((s) => Number(s.actual_cost ?? 0) <= 0 && Number(s.estimated_cost ?? 0) <= 0).length;
-    const missingTimelineCount = steps.filter((s) => !s.expected_start_date || !s.expected_end_date).length;
-
-    return {
-      startDate: startDate ? toIsoDate(startDate) : null,
-      startCountdownDays,
-      endDate: endDate ? toIsoDate(endDate) : null,
-      endCountdownDays,
-      nextStep,
-      spentActual,
-      projectedTotal,
-      remainingProjected,
-      aiEstimatedCostSteps,
-      missingEstimateCount,
-      missingTimelineCount,
-    };
-  }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, project?.target_completion_date, project?.target_start_date, stepPhaseBucket, steps]);
-
-  const projectDocuments = React.useMemo(() => {
-    return documents.filter((d) => !d.step_id || Number(d.step_id) <= 0);
-  }, [documents]);
-
-  const permitDocuments = React.useMemo(() => {
-    return documents
-      .filter((d) => String(d.kind || '') === 'permit')
-      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
-  }, [documents]);
-
-  const primaryPhotoChoices = React.useMemo(() => {
-    return documents
-      .filter((doc) => {
-        const kind = String(doc.kind || '');
-        return Number(doc.is_image) === 1 && (kind === 'photo' || kind === 'site_photo' || kind === 'home_photo' || kind === 'progress_photo');
-      })
-      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
-  }, [documents]);
-
-  const primaryBlueprintChoices = React.useMemo(() => {
-    return documents
-      .filter((doc) => String(doc.kind || '') === 'blueprint')
-      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
-  }, [documents]);
-
-  const phaseOptions = React.useMemo(() => {
-    const seen = new Set<string>();
-    const options: Array<{ value: string; label: string }> = [{ value: 'general', label: 'General' }];
-    steps.forEach((step) => {
-      const key = String(step.phase_key || '').trim() || 'general';
-      if (seen.has(key) || key === 'general') {
-        return;
-      }
-      seen.add(key);
-      options.push({ value: key, label: prettyPhaseLabel(key) });
-    });
-    return options.sort((a, b) => sortAlpha(a.label, b.label));
-  }, [steps]);
-
-  const selectableDocSteps = React.useMemo(() => {
-    const filtered = !docPhaseKey || docPhaseKey === 'general'
-      ? steps
-      : steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
-
-    return [...filtered].sort((a, b) => {
-      const aLabel = `${prettyPhaseLabel(a.phase_key)} ${a.title}`;
-      const bLabel = `${prettyPhaseLabel(b.phase_key)} ${b.title}`;
-      return sortAlpha(aLabel, bLabel);
-    });
-  }, [steps, docPhaseKey]);
-
-  const linkedStepOptions = React.useMemo(() => {
-    const tabOrder = new Map<BuildTabId, number>();
-    PROJECT_OVERVIEW_TAB_ORDER.forEach((tabId, index) => {
-      tabOrder.set(tabId, index);
-    });
-
-    const stepsByTab = new Map<BuildTabId, IBuildWizardStep[]>();
-    steps.forEach((step) => {
-      const tabId = stepPhaseBucket(step);
-      const bucket = stepsByTab.get(tabId) || [];
-      bucket.push(step);
-      stepsByTab.set(tabId, bucket);
-    });
-
-    const options: Array<{ step: IBuildWizardStep; displayNumber: number; sortKey: string; label: string }> = [];
-    Array.from(stepsByTab.entries())
-      .sort((a, b) => {
-        const aOrder = tabOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
-        const bOrder = tabOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
-        if (aOrder !== bOrder) {
-          return aOrder - bOrder;
-        }
-        return sortAlpha(tabLabelShort(a[0]), tabLabelShort(b[0]));
-      })
-      .forEach(([tabId, tabSteps]) => {
-        const ordered = [...tabSteps].sort((a, b) => {
-          const aRawOrder = Number(a.step_order) || 0;
-          const bRawOrder = Number(b.step_order) || 0;
-          const aHasOrder = aRawOrder > 0;
-          const bHasOrder = bRawOrder > 0;
-          if (aHasOrder && bHasOrder && aRawOrder !== bRawOrder) {
-            return aRawOrder - bRawOrder;
-          }
-          if (aHasOrder !== bHasOrder) {
-            return aHasOrder ? -1 : 1;
-          }
-          return a.id - b.id;
-        });
-
-        const tabLabel = BUILD_TABS.find((candidate) => candidate.id === tabId)?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId);
-        const phaseNumberMatch = tabLabel.match(/^(\d+)\./);
-        const phasePrefix = phaseNumberMatch
-          ? `Phase ${phaseNumberMatch[1]}`
-          : (tabId === 'desk' ? 'Project Desk' : tabLabel);
-
-        ordered.forEach((step, index) => {
-          options.push({
-            step,
-            displayNumber: index + 1,
-            sortKey: `${String(tabOrder.get(tabId) ?? Number.MAX_SAFE_INTEGER).padStart(2, '0')}-${String(index + 1).padStart(3, '0')}`,
-            label: `${phasePrefix}, Step ${index + 1}: ${String(step.title || '').trim()}`.trim(),
-          });
-        });
-      });
-
-    return options;
-  }, [stepPhaseBucket, steps]);
-
-  const linkedStepDisplayNumberById = React.useMemo(() => {
-    const map = new Map<number, number>();
-    linkedStepOptions.forEach((option) => {
-      map.set(option.step.id, option.displayNumber);
-    });
-    return map;
-  }, [linkedStepOptions]);
-
-  const attachableProjectDocuments = React.useMemo(() => {
-    return documents
-      .filter((doc) => String(doc.kind || '').trim() !== 'receipt_attachment')
-      .sort((a, b) => {
-      const nameCmp = sortAlpha(String(a.original_name || ''), String(b.original_name || ''));
-      if (nameCmp !== 0) {
-        return nameCmp;
-      }
-      return a.id - b.id;
-    });
-  }, [documents]);
-
-  const moveTaskModalDoc = React.useMemo(() => {
-    if (moveTaskModalDocId <= 0) {
-      return null;
-    }
-    const doc = documents.find((candidate) => candidate.id === moveTaskModalDocId) || null;
-    return doc && String(doc.kind || '').trim() === 'receipt' ? doc : null;
-  }, [documents, moveTaskModalDocId]);
-
-  const taskAttachmentsModalDoc = React.useMemo(() => {
-    if (taskAttachmentsModalDocId <= 0) {
-      return null;
-    }
-    const doc = documents.find((candidate) => candidate.id === taskAttachmentsModalDocId) || null;
-    return doc && String(doc.kind || '').trim() === 'receipt' ? doc : null;
-  }, [documents, taskAttachmentsModalDocId]);
-
-  const moveTaskStepOptions = React.useMemo(() => {
-    if (!moveTaskModalDoc) {
-      return [] as Array<{ step: IBuildWizardStep; displayNumber: number; sortKey: string; label: string }>;
-    }
-    return linkedStepOptions.filter((option) => option.step.id !== Number(moveTaskModalDoc.step_id || 0));
-  }, [linkedStepOptions, moveTaskModalDoc]);
-
-  const taskAttachmentsModalStep = React.useMemo(() => {
-    if (!taskAttachmentsModalDoc) {
-      return null;
-    }
-    return stepByIdMap.get(Number(taskAttachmentsModalDoc.step_id || 0)) || null;
-  }, [stepByIdMap, taskAttachmentsModalDoc]);
-
-  const taskAttachmentsModalAttachableDocuments = React.useMemo(() => {
-    if (!taskAttachmentsModalDoc) {
-      return [] as IBuildWizardDocument[];
-    }
-    const receiptId = taskAttachmentsModalDoc.id;
-    const receiptFilter = String(attachExistingDocFilterByReceiptId[receiptId] || '').trim().toLowerCase();
-    return attachableProjectDocuments
-      .filter((candidate) => {
-        if (candidate.id === receiptId) {
-          return false;
-        }
-        if (String(candidate.kind || '').trim() === 'receipt') {
-          return false;
-        }
-        const isAlreadyAttached = String(candidate.kind || '').trim() === 'receipt_attachment'
-          && Number(candidate.receipt_parent_document_id || 0) === receiptId;
-        if (isAlreadyAttached) {
-          return false;
-        }
-        if (!receiptFilter) {
-          return true;
-        }
-        const haystack = `${candidate.original_name} ${buildWizardTokenLabel(candidate.kind, 'Other')}`.toLowerCase();
-        return haystack.includes(receiptFilter);
-      })
-      .sort((a, b) => sortAlpha(String(a.original_name || ''), String(b.original_name || '')));
-  }, [attachExistingDocFilterByReceiptId, attachableProjectDocuments, taskAttachmentsModalDoc]);
-
-  const documentManagerKindOptions = React.useMemo(() => {
-    const fromDocs = documents
-      .filter((doc) => String(doc.kind || '').trim() !== 'receipt_attachment')
-      .map((doc) => String(doc.kind || '').trim())
-      .filter(Boolean);
-    const fromSettings = docKindOptions
-      .map((opt) => String(opt.value || '').trim())
-      .filter(Boolean);
-    return Array.from(new Set([...fromSettings, ...fromDocs])).sort((a, b) => sortAlpha(a, b));
-  }, [documents, docKindOptions]);
-
-  const documentManagerPhaseOptions = React.useMemo(() => {
-    const keys = new Set<string>();
-    keys.add('general');
-    steps.forEach((step) => {
-      const key = String(step.phase_key || '').trim() || 'general';
-      keys.add(key);
-    });
-    documents.forEach((doc) => {
-      const key = String(doc.step_phase_key || '').trim();
-      if (key) {
-        keys.add(key);
-      }
-    });
-    return Array.from(keys).sort((a, b) => sortAlpha(prettyPhaseLabel(a), prettyPhaseLabel(b)));
-  }, [documents, steps]);
-
-  const documentManagerLinkedStepFilterOptions = React.useMemo(() => {
-    const linkedIds = new Set<number>();
-    documents.forEach((doc) => {
-      const stepId = Number(doc.step_id || 0);
-      if (stepId > 0) {
-        linkedIds.add(stepId);
-      }
-    });
-    return linkedStepOptions.filter((option) => linkedIds.has(option.step.id));
-  }, [documents, linkedStepOptions]);
-
-  const documentManagerSearchIds = React.useMemo(() => {
-    const ids = new Set<number>();
-    documentManagerSearchResults.forEach((doc) => {
-      if (Number(doc.id) > 0) {
-        ids.add(Number(doc.id));
-      }
-    });
-    return ids;
-  }, [documentManagerSearchResults]);
-
-  const documentManagerSearchResultById = React.useMemo(() => {
-    const map = new Map<number, IBuildWizardContentSearchResult>();
-    documentManagerSearchResults.forEach((doc) => {
-      if (Number(doc.id) > 0) {
-        map.set(Number(doc.id), doc);
-      }
-    });
-    return map;
-  }, [documentManagerSearchResults]);
-
-  const filteredDocumentManagerDocs = React.useMemo(() => {
-    const query = documentManagerQuery.trim();
-    return documents.filter((doc) => {
-      const docKindValue = String(doc.kind || '').trim();
-      if (docKindValue === 'receipt_attachment') {
-        return false;
-      }
-      if (documentManagerKindFilter !== 'all' && docKindValue !== documentManagerKindFilter) {
-        return false;
-      }
-      const docPhaseValue = String(doc.step_phase_key || '').trim() || 'general';
-      if (documentManagerPhaseFilter !== 'all' && docPhaseValue !== documentManagerPhaseFilter) {
-        return false;
-      }
-      if (documentManagerStepFilter === 'unlinked' && Number(doc.step_id || 0) > 0) {
-        return false;
-      }
-      if (
-        documentManagerStepFilter !== 'all'
-        && documentManagerStepFilter !== 'unlinked'
-        && Number(doc.step_id || 0) !== Number(documentManagerStepFilter)
-      ) {
-        return false;
-      }
-      if (query.length >= 2 && !documentManagerSearchIds.has(Number(doc.id))) {
-        return false;
-      }
-      return true;
-    });
-  }, [documents, documentManagerKindFilter, documentManagerPhaseFilter, documentManagerQuery, documentManagerSearchIds, documentManagerStepFilter]);
-
-  const topbarSearchResults = React.useMemo<BuildWizardSearchResult[]>(() => {
-    const query = topbarSearchQuery.trim().toLowerCase();
-    if (!query) {
-      return [];
-    }
-    const tokens = query.split(/\s+/g).filter(Boolean);
-    if (!tokens.length) {
-      return [];
-    }
-    const includesAll = (haystack: string): boolean => tokens.every((token) => haystack.includes(token));
-    const rank = (haystack: string): number => {
-      let score = 0;
-      if (haystack.includes(query)) {
-        score += 20;
-      }
-      tokens.forEach((token) => {
-        if (haystack.includes(token)) {
-          score += 5;
-        }
-      });
-      return score;
-    };
-
-    const results: BuildWizardSearchResult[] = [];
-
-    BUILD_TABS.filter((tab) => tab.id !== 'desk').forEach((tab) => {
-      const normalized = `${String(tab.label || '').toLowerCase()} ${String(prettyPhaseLabel(tab.id)).toLowerCase()}`;
-      if (!includesAll(normalized)) {
-        return;
-      }
-      results.push({
-        id: `phase:${tab.id}`,
-        score: 90 + rank(normalized),
-        kind: 'phase',
-        title: tab.label,
-        subtitle: 'Build Wizard phase',
-        phaseId: tab.id,
-      });
-    });
-
-    steps.forEach((step) => {
-      const phaseId = stepPhaseBucket(step);
-      const notesText = (step.notes || []).map((note) => String(note.note_text || '')).join(' ');
-      const normalized = [
-        step.title,
-        step.description,
-        step.phase_key,
-        prettyPhaseLabel(step.phase_key),
-        step.step_type,
-        notesText,
-      ].map((v) => String(v || '').toLowerCase()).join(' ');
-      if (!includesAll(normalized)) {
-        return;
-      }
-      results.push({
-        id: `step:${step.id}`,
-        score: 70 + rank(normalized),
-        kind: 'step',
-        title: `#${step.step_order} ${step.title}`,
-        subtitle: `${prettyPhaseLabel(step.phase_key)} phase`,
-        stepId: step.id,
-        phaseId,
-      });
-    });
-
-    topbarSearchDocumentResults.forEach((doc) => {
-      const normalized = [
-        doc.original_name,
-        doc.caption,
-        doc.kind,
-        doc.step_title,
-        doc.step_phase_key,
-        prettyPhaseLabel(doc.step_phase_key || 'general'),
-        doc.snippet,
-      ].map((v) => String(v || '').toLowerCase()).join(' ');
-      if (!includesAll(normalized)) {
-        return;
-      }
-      const linkedStepId = Number(doc.step_id || 0);
-      const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
-      const linkedPhaseId = linkedStep ? stepPhaseBucket(linkedStep) : null;
-      results.push({
-        id: `document:${doc.id}`,
-        score: 60 + rank(normalized),
-        kind: 'document',
-        title: doc.original_name || `Document #${doc.id}`,
-        subtitle: linkedStepId > 0
-          ? `${buildWizardTokenLabel(doc.kind, 'Other')} | Linked to ${doc.step_title || `step #${linkedStepId}`}${doc.snippet ? ` | ${doc.snippet}` : ''}`
-          : `${buildWizardTokenLabel(doc.kind, 'Other')} | Project document${doc.snippet ? ` | ${doc.snippet}` : ''}`,
-        document: doc,
-        linkedStepId,
-        linkedPhaseId,
-      });
-    });
-
-    return results
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 20);
-  }, [stepById, steps, topbarSearchDocumentResults, topbarSearchQuery]);
+  const {
+    documentManagerSearchResultById,
+    documentManagerKindOptions,
+    documentManagerLinkedStepFilterOptions,
+    documentManagerPhaseOptions,
+    filteredDocumentManagerDocs,
+    moveTaskModalDoc,
+    moveTaskStepOptions,
+    permitDocuments,
+    phaseOptions,
+    primaryBlueprintChoices,
+    primaryPhotoChoices,
+    projectDocuments,
+    taskAttachmentsModalAttachableDocuments,
+    taskAttachmentsModalDoc,
+    taskAttachmentsModalStep,
+    topbarSearchResults,
+  } = useBuildWizardDocumentManagerData({
+    attachExistingDocFilterByReceiptId,
+    attachableProjectDocuments,
+    buildTabs: BUILD_TABS,
+    docKindOptions,
+    documentManagerKindFilter,
+    documentManagerPhaseFilter,
+    documentManagerQuery,
+    documentManagerSearchResults,
+    documentManagerStepFilter,
+    documents,
+    linkedStepOptions,
+    moveTaskModalDocId,
+    stepById,
+    stepByIdMap,
+    stepPhaseBucket,
+    steps,
+    taskAttachmentsModalDocId,
+    topbarSearchDocumentResults,
+    topbarSearchQuery,
+  });
 
   React.useEffect(() => {
     if (docStepId <= 0) {
@@ -2098,101 +1440,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   }, [stepById, stepEditModalStepId]);
 
-  const launcherProjects = React.useMemo(() => {
-    return projects.filter((candidate) => Number(candidate.is_template || 0) !== 1);
-  }, [projects]);
-
-  const templateProjects = React.useMemo(() => {
-    return projects.filter((candidate) => Number(candidate.is_template || 0) === 1);
-  }, [projects]);
-
+  const launcherProjects = React.useMemo(() => projects.filter((candidate) => Number(candidate.is_template || 0) !== 1), [projects]);
+  const templateProjects = React.useMemo(() => projects.filter((candidate) => Number(candidate.is_template || 0) === 1), [projects]);
   const isTemplateProject = Number(project?.is_template || 0) === 1;
-
-  const openBuild = async (nextProjectId: number, source: 'launcher' | 'template_editor' = 'launcher') => {
-    await openProject(nextProjectId);
-    setActiveTab('overview');
-    setBuildEntryPoint(source);
-    setView('build');
-    pushUrlState('build', nextProjectId);
-  };
-
-  const onCreateNewBuild = async () => {
-    const today = toIsoDate(new Date());
-    const nextId = await createProject(`New Home Plan ${today}`, 'blank', newHomeWastewaterKind, newHomeWaterKind);
-    if (nextId > 0) {
-      setActiveTab('start');
-      setBuildEntryPoint('launcher');
-      setView('build');
-      pushUrlState('build', nextId);
-    }
-  };
-
-  const onOpenTemplateEditor = async () => {
-    if (templateProjects.length === 0) {
-      await createProject('Build a House Template', 'blank', 'septic', 'county_water', true);
-    }
-    setBuildEntryPoint('template_editor');
-    setView('template_editor');
-    pushUrlState('template_editor', null);
-  };
-
-  const onCreateTemplate = async () => {
-    const today = toIsoDate(new Date());
-    const nextId = await createProject(`New Template ${today}`, 'blank', 'septic', 'county_water', true);
-    if (nextId > 0) {
-      setActiveTab('start');
-      setBuildEntryPoint('template_editor');
-      setView('build');
-      pushUrlState('build', nextId);
-    }
-  };
-
-  const onBackToLauncher = () => {
-    setView('launcher');
-    setBuildEntryPoint('launcher');
-    pushUrlState('launcher', null);
-  };
-
-  const onBackFromWorkspace = () => {
-    if (isTemplateProject || buildEntryPoint === 'template_editor') {
-      setView('template_editor');
-      setBuildEntryPoint('template_editor');
-      pushUrlState('template_editor', null);
-      return;
-    }
-    onBackToLauncher();
-  };
-
-  const onSaveTemplate = async () => {
-    if (projectId <= 0) {
-      return;
-    }
-    await updateProject({ is_template: 1 });
-  };
-
-  const onCloseWizard = React.useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const fallbackUrl = '/';
-    const referrer = String(window.document.referrer || '').trim();
-    if (!referrer) {
-      window.location.assign(fallbackUrl);
-      return;
-    }
-    try {
-      const refUrl = new URL(referrer);
-      const refHost = String(refUrl.hostname || '').toLowerCase();
-      const isCatn8Domain = refHost === 'catn8.us' || refHost.endsWith('.catn8.us');
-      if (isCatn8Domain) {
-        window.location.assign(refUrl.toString());
-        return;
-      }
-    } catch (_) {
-      // Ignore malformed referrer and use default fallback.
-    }
-    window.location.assign(fallbackUrl);
-  }, []);
+  const { onBackFromWorkspace, onBackToLauncher, onCloseWizard, onCreateNewBuild, onCreateTemplate, onOpenTemplateEditor, onSaveTemplate, openBuild } = useBuildWizardLauncherActions({
+    buildEntryPoint,
+    createProject,
+    isTemplateProject,
+    newHomeWastewaterKind,
+    newHomeWaterKind,
+    onSetLauncherView: (nextView, nextEntryPoint) => {
+      setView(nextView);
+      setBuildEntryPoint(nextEntryPoint);
+    },
+    openProject,
+    projectId,
+    setActiveTab,
+    templateProjectsLength: templateProjects.length,
+    updateProject,
+  });
 
   const updateStepDraft = (stepId: number, patch: Partial<IBuildWizardStep>) => {
     setStepDrafts((prev) => ({
@@ -2302,16 +1568,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     void commitStep(stepId, nextPatch);
   }, [stepById]);
 
-  const onSubmitNote = async (step: IBuildWizardStep): Promise<boolean> => {
-    const draft = String(noteDraftByStep[step.id] || '').trim();
-    if (!draft) {
-      return false;
-    }
-    await addStepNote(step.id, draft);
-    setNoteDraftByStep((prev) => ({ ...prev, [step.id]: '' }));
-    return true;
-  };
-
   const noteEditedAtLabel = React.useCallback((note: { created_at: string; updated_at?: string | null }): string => {
     const createdAt = String(note.created_at || '').trim();
     const updatedAt = String(note.updated_at || '').trim();
@@ -2321,296 +1577,39 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return formatDate(updatedAt);
   }, []);
 
-  const requestConfirmation = React.useCallback((config: {
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    confirmButtonClass?: string;
-  }) => {
-    return new Promise<boolean>((resolve) => {
-      setConfirmState({
-        title: config.title,
-        message: config.message,
-        confirmLabel: config.confirmLabel || 'Confirm',
-        cancelLabel: config.cancelLabel || 'Cancel',
-        confirmButtonClass: config.confirmButtonClass || 'btn btn-danger',
-        resolve,
-      });
-    });
-  }, []);
-
-  const closeConfirmation = React.useCallback((confirmed: boolean) => {
-    setConfirmState((current) => {
-      if (current) {
-        current.resolve(confirmed);
-      }
-      return null;
-    });
-  }, []);
-
-  const onStartEditNote = (noteId: number, noteText: string) => {
-    setEditingNoteTextById((prev) => ({ ...prev, [noteId]: noteText }));
-  };
-
-  const onCancelEditNote = (noteId: number) => {
-    setEditingNoteTextById((prev) => {
-      const next = { ...prev };
-      delete next[noteId];
-      return next;
-    });
-  };
-
-  const onSaveEditedNote = async (stepId: number, noteId: number) => {
-    if (savingNoteId === noteId) {
-      return;
-    }
-    const draft = String(editingNoteTextById[noteId] || '').trim();
-    if (!draft) {
-      onToast?.({ tone: 'warning', message: 'Note cannot be empty.' });
-      return;
-    }
-    setSavingNoteId(noteId);
-    try {
-      const ok = await updateStepNote(stepId, noteId, draft);
-      if (ok) {
-        onCancelEditNote(noteId);
-      }
-    } finally {
-      setSavingNoteId(0);
-    }
-  };
-
-  const onDeleteStepNoteById = async (stepId: number, noteId: number) => {
-    if (deletingNoteId === noteId) {
-      return;
-    }
-    const confirmed = await requestConfirmation({
-      title: 'Delete Note?',
-      message: 'Delete this note?\n\nThis cannot be undone.',
-      confirmLabel: 'Delete',
-      confirmButtonClass: 'btn btn-danger',
-    });
-    if (!confirmed) {
-      return;
-    }
-    setDeletingNoteId(noteId);
-    try {
-      await deleteStepNote(stepId, noteId);
-      onCancelEditNote(noteId);
-    } finally {
-      setDeletingNoteId(0);
-    }
-  };
-
-  const onDeleteDocument = async (docId: number, docName: string) => {
-    if (docId <= 0 || deletingDocumentId === docId) {
-      return;
-    }
-    const confirmed = await requestConfirmation({
-      title: 'Delete Document?',
-      message: `Delete "${docName}"?\n\nThis cannot be undone.`,
-      confirmLabel: 'Delete',
-      confirmButtonClass: 'btn btn-danger',
-    });
-    if (!confirmed) {
-      return;
-    }
-    setDeletingDocumentId(docId);
-    try {
-      await deleteDocument(docId);
-    } finally {
-      setDeletingDocumentId(0);
-    }
-  };
-
-  const onRemoveDocumentFromStep = async (docId: number, docName: string) => {
-    if (docId <= 0 || unlinkingDocumentId === docId) {
-      return;
-    }
-    setUnlinkingDocumentId(docId);
-    try {
-      await updateDocument(docId, { step_id: null });
-    } finally {
-      setUnlinkingDocumentId(0);
-    }
-  };
-
-  const onReplaceDocumentFile = async (doc: IBuildWizardDocument, file: File | null) => {
-    if (!file || replacingDocumentId === doc.id) {
-      return;
-    }
-    setReplacingDocumentId(doc.id);
-    try {
-      await replaceDocument(doc.id, file);
-    } finally {
-      setReplacingDocumentId(0);
-    }
-  };
-
-  const isSpreadsheetPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
-    const ext = fileExtensionFromName(doc.original_name);
-    if (ext === 'XLSX' || ext === 'XLSM' || ext === 'XLS') {
-      return true;
-    }
-    const mime = String(doc.mime_type || '').toLowerCase();
-    return mime.includes('spreadsheet') || mime.includes('excel');
-  }, []);
-
-  const isPlanPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
-    return fileExtensionFromName(doc.original_name) === 'PLAN';
-  }, []);
-
-  const isTextPreviewDoc = React.useCallback((doc: IBuildWizardDocument): boolean => {
-    const ext = fileExtensionFromName(doc.original_name);
-    if (TEXT_PREVIEW_EXTENSIONS.has(ext)) {
-      return true;
-    }
-    return isTextLikeMime(doc.mime_type || '');
-  }, []);
-
-  const openDocumentPreview = React.useCallback(async (doc: IBuildWizardDocument) => {
-    const src = String(doc.public_url || '').trim();
-    const title = String(doc.original_name || 'Document');
-    if (!src) {
-      onToast?.({ tone: 'error', message: `Unable to open ${title}` });
-      return;
-    }
-
-    if (Number(doc.is_image) === 1) {
-      setLightboxZoom(1);
-      setLightboxDoc({ mode: 'image', src, title });
-      return;
-    }
-
-    if (isPdfDocument(doc)) {
-      setLightboxDoc({ mode: 'embed', src, title });
-      return;
-    }
-
-    setLightboxZoom(1);
-    setLightboxDoc({ mode: 'loading', src, title });
-    setLightboxSpreadsheetSheetIndex(0);
-
-    try {
-      if (!isSpreadsheetPreviewDoc(doc) && !isPlanPreviewDoc(doc) && !isTextPreviewDoc(doc)) {
-        setLightboxDoc({ mode: 'embed', src, title });
-        return;
-      }
-
-      const blob = await ApiClient.getBlob(src);
-
-      if (isSpreadsheetPreviewDoc(doc)) {
-        const bytes = await blob.arrayBuffer();
-        const workbook = read(bytes, { type: 'array' });
-        const maxRows = 120;
-        const maxCols = 24;
-        let truncated = false;
-
-        const sheets: SpreadsheetPreviewSheet[] = workbook.SheetNames.map((sheetName) => {
-          const sheet = workbook.Sheets[sheetName];
-          const rawRows = utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
-            header: 1,
-            raw: false,
-            blankrows: false,
-            defval: '',
-          });
-          const boundedRows = rawRows.slice(0, maxRows).map((row) => {
-            const hasExtraCols = row.length > maxCols;
-            if (hasExtraCols) {
-              truncated = true;
-            }
-            return row.slice(0, maxCols).map((cell) => String(cell ?? ''));
-          });
-          if (rawRows.length > maxRows) {
-            truncated = true;
-          }
-          return {
-            name: sheetName,
-            rows: boundedRows,
-          };
-        });
-
-        if (!sheets.length) {
-          throw new Error('Spreadsheet has no visible sheets');
-        }
-
-        setLightboxDoc({ mode: 'spreadsheet', src, title, sheets, truncated });
-        return;
-      }
-
-      if (isPlanPreviewDoc(doc)) {
-        const textRaw = await blob.text();
-        const text = textRaw.replace(/\u0000/g, '').trim();
-        if (!text) {
-          throw new Error('Plan file appears empty');
-        }
-
-        const sample = text.slice(0, 2000);
-        const nonPrintableCount = sample.replace(/[\t\r\n\x20-\x7E]/g, '').length;
-        if (sample.length > 0 && nonPrintableCount / sample.length > 0.2) {
-          const bytes = new Uint8Array(await blob.arrayBuffer());
-          const maxBytes = 4096;
-          const bounded = bytes.slice(0, maxBytes);
-          const lines: string[] = [];
-          for (let offset = 0; offset < bounded.length; offset += 16) {
-            const chunk = bounded.slice(offset, offset + 16);
-            const hex = Array.from(chunk).map((b) => b.toString(16).padStart(2, '0')).join(' ');
-            const ascii = Array.from(chunk).map((b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('');
-            lines.push(`${offset.toString(16).padStart(6, '0')}  ${hex.padEnd(47, ' ')}  ${ascii}`);
-          }
-          setLightboxDoc({
-            mode: 'plan',
-            src,
-            title,
-            text: lines.join('\n'),
-            truncated: bytes.length > maxBytes,
-            format: 'hex',
-          });
-          return;
-        }
-
-        const maxChars = 60000;
-        const truncated = text.length > maxChars;
-        setLightboxDoc({
-          mode: 'plan',
-          src,
-          title,
-          text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
-          truncated,
-          format: 'text',
-        });
-        return;
-      }
-
-      const textRaw = await blob.text();
-      const cleanedText = textRaw.replace(/\u0000/g, '');
-      if (!cleanedText.trim()) {
-        throw new Error('Text file appears empty');
-      }
-      const truncated = cleanedText.length > LIGHTBOX_TEXT_PREVIEW_MAX_CHARS;
-      const boundedText = truncated
-        ? `${cleanedText.slice(0, LIGHTBOX_TEXT_PREVIEW_MAX_CHARS)}\n\n...truncated for preview...`
-        : cleanedText;
-      setLightboxDoc({
-        mode: 'text',
-        src,
-        title,
-        text: boundedText,
-        truncated,
-        taskPreview: parseTaskDocumentPreview(boundedText),
-      });
-    } catch (err: any) {
-      const detail = String(err?.message || '').trim() || 'Failed to load file preview';
-      setLightboxDoc({
-        mode: 'error',
-        src,
-        title,
-        message: detail,
-      });
-      onToast?.({ tone: 'warning', message: `${title}: ${detail}` });
-    }
-  }, [isPlanPreviewDoc, isSpreadsheetPreviewDoc, isTextPreviewDoc, onToast]);
+  const {
+    onCancelEditNote,
+    onDeleteDocument,
+    onDeleteStepNoteById,
+    onRemoveDocumentFromStep,
+    onReplaceDocumentFile,
+    onSaveEditedNote,
+    onStartEditNote,
+    onSubmitNote,
+  } = useBuildWizardNoteDocumentActions({
+    addStepNote,
+    deleteDocument,
+    deleteStepNote,
+    deletingDocumentId,
+    deletingNoteId,
+    editingNoteTextById,
+    noteDraftByStep,
+    onToast,
+    replacingDocumentId,
+    replaceDocument,
+    requestConfirmation,
+    setDeletingDocumentId,
+    setDeletingNoteId,
+    setEditingNoteTextById,
+    setNoteDraftByStep,
+    setReplacingDocumentId,
+    setSavingNoteId,
+    setUnlinkingDocumentId,
+    unlinkingDocumentId,
+    updateDocument,
+    updateStepNote,
+    savingNoteId,
+  });
 
   const lightboxSupportsZoom = Boolean(lightboxDoc && (lightboxDoc.mode === 'image' || lightboxDoc.mode === 'spreadsheet' || lightboxDoc.mode === 'plan'));
 
@@ -2678,257 +1677,39 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   };
 
-  const onStartNewDeskContact = React.useCallback(() => {
-    setDeskCreateMode(true);
-    setDeskSelectedContactId(0);
-    setDeskContactDraft({
-      display_name: '',
-      email: '',
-      phone: '',
-      company: '',
-      role_title: '',
-      notes: '',
-      contact_type: 'contact',
-      is_vendor: 0,
-      is_project_only: 1,
-      vendor_type: '',
-      vendor_license: '',
-      vendor_trade: '',
-      vendor_website: '',
-    });
-  }, []);
-
-  const onSaveDeskContact = React.useCallback(async () => {
-    if (projectId <= 0) {
-      return;
-    }
-    const next = await saveContact({
-      project_id: projectId,
-      contact_id: deskContactDraft.contact_id,
-      display_name: deskContactDraft.display_name,
-      contact_type: deskContactDraft.contact_type,
-      email: toStringOrNull(deskContactDraft.email),
-      phone: toStringOrNull(deskContactDraft.phone),
-      company: toStringOrNull(deskContactDraft.company),
-      role_title: toStringOrNull(deskContactDraft.role_title),
-      notes: toStringOrNull(deskContactDraft.notes),
-      is_vendor: deskContactDraft.contact_type === 'vendor' ? 1 : 0,
-      is_project_only: deskContactDraft.is_project_only,
-      vendor_type: toStringOrNull(deskContactDraft.vendor_type),
-      vendor_license: toStringOrNull(deskContactDraft.vendor_license),
-      vendor_trade: toStringOrNull(deskContactDraft.vendor_trade),
-      vendor_website: toStringOrNull(deskContactDraft.vendor_website),
-    });
-    if (next?.id) {
-      setDeskCreateMode(false);
-      setDeskSelectedContactId(next.id);
-    }
-  }, [deskContactDraft, projectId, saveContact]);
-
-  const onDeleteDeskContact = React.useCallback(async () => {
-    if (projectId <= 0 || !selectedDeskContact) {
-      return;
-    }
-    const confirmed = await requestConfirmation({
-      title: 'Delete Contact?',
-      message: `Delete contact "${selectedDeskContact.display_name}"?`,
-      confirmLabel: 'Delete Contact',
-      confirmButtonClass: 'btn btn-danger',
-    });
-    if (!confirmed) {
-      return;
-    }
-    const didDelete = await deleteContact(projectId, selectedDeskContact.id);
-    if (!didDelete) {
-      return;
-    }
-    const fallback = deskContacts.find((contact) => contact.id !== selectedDeskContact.id);
-    setDeskSelectedContactId(fallback?.id || 0);
-  }, [deleteContact, deskContacts, projectId, requestConfirmation, selectedDeskContact]);
-
-  const onAddDeskPhaseAssignment = React.useCallback(async () => {
-    if (projectId <= 0 || !selectedDeskContact) {
-      return;
-    }
-    await addContactAssignment({
-      project_id: projectId,
-      contact_id: selectedDeskContact.id,
-      phase_key: deskAssignmentPhaseKey,
-    });
-  }, [addContactAssignment, deskAssignmentPhaseKey, projectId, selectedDeskContact]);
-
-  const onAddDeskStepAssignment = React.useCallback(async () => {
-    if (projectId <= 0 || !selectedDeskContact || deskAssignmentStepId <= 0) {
-      return;
-    }
-    await addContactAssignment({
-      project_id: projectId,
-      contact_id: selectedDeskContact.id,
-      step_id: deskAssignmentStepId,
-    });
-  }, [addContactAssignment, deskAssignmentStepId, projectId, selectedDeskContact]);
-
-  const onAddContactToStep = React.useCallback(async (stepId: number, contactId: number) => {
-    if (projectId <= 0 || stepId <= 0 || contactId <= 0) {
-      return;
-    }
-    const saved = await addContactAssignment({
-      project_id: projectId,
-      contact_id: contactId,
-      step_id: stepId,
-    });
-    if (saved) {
-      setStepContactCandidateByStepId((prev) => ({ ...prev, [stepId]: '' }));
-      setStepContactPickerOpenByStepId((prev) => ({ ...prev, [stepId]: false }));
-    }
-  }, [addContactAssignment, projectId]);
-
-  const onAutoAssignDeskStepsToTimeline = React.useCallback(async () => {
-    if (deskAutoAssignBusy || aiBusy) {
-      return;
-    }
-    const initialDeskSteps = steps.filter((step) => stepPhaseBucket(step) === 'desk');
-    if (!initialDeskSteps.length) {
-      onToast?.({ tone: 'info', message: 'No Project Desk steps are waiting for timeline placement.' });
-      return;
-    }
-
-    const normalizePhaseKey = (value: string | null | undefined): string => {
-      const normalized = String(value || '').trim().toLowerCase();
-      return normalized === '' ? 'general' : normalized;
-    };
-    const orderedPhaseKeys = [
-      'design_preconstruction',
-      'site_preparation',
-      'framing_shell',
-      'mep_rough_in',
-      'interior_finishes',
-      'inspections_closeout',
-    ];
-    const phaseRank = new Map<string, number>(orderedPhaseKeys.map((key, index) => [key, index]));
-    setDeskAutoAssignBusy(true);
-    let movedCount = 0;
-    let aiPlacedCount = 0;
-
-    try {
-      let candidateSteps: IBuildWizardStep[] = steps;
-      const aiResponse = await generateStepsFromAi('fill_missing');
-      if (Array.isArray(aiResponse?.steps) && aiResponse.steps.length > 0) {
-        candidateSteps = aiResponse.steps;
-      }
-      const deskSteps = candidateSteps.filter((step) => stepPhaseBucket(step) === 'desk');
-      aiPlacedCount = Math.max(0, initialDeskSteps.length - deskSteps.length);
-      if (!deskSteps.length) {
-        onToast?.({
-          tone: 'success',
-          message: `Placed ${aiPlacedCount} lost step${aiPlacedCount === 1 ? '' : 's'} on the build timeline with AI.`,
-        });
-        return;
-      }
-      const stepById = new Map<number, IBuildWizardStep>(candidateSteps.map((step) => [step.id, step]));
-      const dependentById = new Map<number, number[]>();
-      candidateSteps.forEach((candidate) => {
-        (Array.isArray(candidate.depends_on_step_ids) ? candidate.depends_on_step_ids : []).forEach((dependencyId) => {
-          const list = dependentById.get(dependencyId) || [];
-          list.push(candidate.id);
-          dependentById.set(dependencyId, list);
-        });
-      });
-      const sortedDeskSteps = [...deskSteps].sort((a, b) => {
-        if (a.step_order !== b.step_order) {
-          return a.step_order - b.step_order;
-        }
-        return a.id - b.id;
-      });
-      const assignedByStepId = new Map<number, string>();
-
-      const inferFromRelatedSteps = (step: IBuildWizardStep): string | null => {
-        const dependencyRanks: number[] = [];
-        (Array.isArray(step.depends_on_step_ids) ? step.depends_on_step_ids : []).forEach((depId) => {
-          const explicit = assignedByStepId.get(depId) || normalizePhaseKey(stepById.get(depId)?.phase_key);
-          const explicitRank = phaseRank.get(explicit);
-          if (typeof explicitRank === 'number') {
-            dependencyRanks.push(explicitRank);
-            return;
-          }
-          const hinted = recommendPhaseKeyForStep(stepById.get(depId) || ({} as IBuildWizardStep));
-          const hintRank = hinted ? phaseRank.get(hinted) : undefined;
-          if (typeof hintRank === 'number') {
-            dependencyRanks.push(hintRank);
-          }
-        });
-        if (dependencyRanks.length) {
-          return orderedPhaseKeys[Math.max(...dependencyRanks)];
-        }
-
-        const dependentRanks: number[] = [];
-        (dependentById.get(step.id) || []).forEach((childId) => {
-          const explicit = assignedByStepId.get(childId) || normalizePhaseKey(stepById.get(childId)?.phase_key);
-          const explicitRank = phaseRank.get(explicit);
-          if (typeof explicitRank === 'number') {
-            dependentRanks.push(explicitRank);
-            return;
-          }
-          const hinted = recommendPhaseKeyForStep(stepById.get(childId) || ({} as IBuildWizardStep));
-          const hintRank = hinted ? phaseRank.get(hinted) : undefined;
-          if (typeof hintRank === 'number') {
-            dependentRanks.push(hintRank);
-          }
-        });
-        if (dependentRanks.length) {
-          const rank = Math.max(0, Math.min(...dependentRanks) - 1);
-          return orderedPhaseKeys[rank];
-        }
-        return null;
-      };
-
-      const inferByOrderFallback = (step: IBuildWizardStep): string => {
-        const sortedAll = [...candidateSteps].sort((a, b) => {
-          if (a.step_order !== b.step_order) {
-            return a.step_order - b.step_order;
-          }
-          return a.id - b.id;
-        });
-        const idx = Math.max(0, sortedAll.findIndex((candidate) => candidate.id === step.id));
-        const ratio = sortedAll.length > 1 ? (idx / (sortedAll.length - 1)) : 0;
-        if (ratio < 0.2) {
-          return 'design_preconstruction';
-        }
-        if (ratio < 0.38) {
-          return 'site_preparation';
-        }
-        if (ratio < 0.56) {
-          return 'framing_shell';
-        }
-        if (ratio < 0.74) {
-          return 'mep_rough_in';
-        }
-        if (ratio < 0.9) {
-          return 'interior_finishes';
-        }
-        return 'inspections_closeout';
-      };
-
-      for (const step of sortedDeskSteps) {
-        const suggestedPhaseKey =
-          recommendPhaseKeyForStep(step)
-          || inferFromRelatedSteps(step)
-          || inferByOrderFallback(step);
-        const currentPhaseKey = String(step.phase_key || '').trim().toLowerCase() || 'general';
-        assignedByStepId.set(step.id, suggestedPhaseKey);
-        if (currentPhaseKey !== suggestedPhaseKey) {
-          await updateStep(step.id, { phase_key: suggestedPhaseKey });
-          movedCount += 1;
-        }
-      }
-      onToast?.({
-        tone: 'success',
-        message: `Placed ${movedCount + aiPlacedCount} lost step${movedCount + aiPlacedCount === 1 ? '' : 's'} on the build timeline.`,
-      });
-    } finally {
-      setDeskAutoAssignBusy(false);
-    }
-  }, [aiBusy, deskAutoAssignBusy, generateStepsFromAi, onToast, steps, updateStep]);
+  const {
+    onAddContactToStep,
+    onAddDeskPhaseAssignment,
+    onAddDeskStepAssignment,
+    onAutoAssignDeskStepsToTimeline,
+    onDeleteDeskContact,
+    onSaveDeskContact,
+    onStartNewDeskContact,
+  } = useBuildWizardDeskActions({
+    addContactAssignment,
+    aiBusy,
+    deleteContact,
+    deskAssignmentPhaseKey,
+    deskAssignmentStepId,
+    deskAutoAssignBusy,
+    deskContactDraft,
+    deskContacts,
+    generateStepsFromAi,
+    onToast,
+    projectId,
+    requestConfirmation,
+    saveContact,
+    selectedDeskContact,
+    setDeskAutoAssignBusy,
+    setDeskContactDraft,
+    setDeskCreateMode,
+    setDeskSelectedContactId,
+    setStepContactCandidateByStepId,
+    setStepContactPickerOpenByStepId,
+    steps,
+    updateStep,
+    toStringOrNull,
+  });
 
   const onRunSingletreeRecovery = async (apply: boolean) => {
     if (!isAdmin) {
@@ -3054,81 +1835,17 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     };
   }, [recoveryJobId, recoveryStatus, recoveryPolling, fetchSingletreeRecoveryStatus]);
 
-  const expandPhaseRangeForStep = React.useCallback(async (
-    step: IBuildWizardStep,
-    overrides?: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
-  ) => {
-    const tabId = stepPhaseBucket(step);
-    if (!PHASE_PROGRESS_ORDER.includes(tabId)) {
-      return;
-    }
-    const stepStart = toStringOrNull((overrides?.expected_start_date ?? step.expected_start_date) || '');
-    const stepEnd = toStringOrNull((overrides?.expected_end_date ?? step.expected_end_date) || '') || stepStart;
-    if (!stepStart && !stepEnd) {
-      return;
-    }
-    const currentRange = resolvePhaseDateRange(tabId);
-    const nextStart = stepStart
-      ? (currentRange.start ? (stepStart < currentRange.start ? stepStart : currentRange.start) : stepStart)
-      : currentRange.start;
-    const nextEnd = stepEnd
-      ? (currentRange.end ? (stepEnd > currentRange.end ? stepEnd : currentRange.end) : stepEnd)
-      : currentRange.end;
-    if (nextStart === currentRange.start && nextEnd === currentRange.end) {
-      return;
-    }
-    await savePhaseDateRange(projectId, tabId as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart || null, nextEnd || null);
-  }, [projectId, resolvePhaseDateRange, savePhaseDateRange]);
-
-  const onSaveDocument = async (
-    documentId: number,
-    patch: {
-      kind?: string;
-      caption?: string | null;
-      step_id?: number | null;
-      receipt_parent_document_id?: number | null;
-      receipt_amount?: number | null;
-      receipt_title?: string | null;
-      receipt_vendor?: string | null;
-      receipt_date?: string | null;
-      receipt_notes?: string | null;
-    },
-  ) => {
-    if (documentSavingId === documentId) {
-      return null;
-    }
-    setDocumentSavingId(documentId);
-    try {
-      const savedDocument = await updateDocument(documentId, patch);
-      return savedDocument;
-    } finally {
-      setDocumentSavingId(0);
-    }
-  };
-
-  const taskVendorOptions = React.useMemo(() => {
-    const set = new Set<string>();
-    contacts.forEach((contact) => {
-      const name = String(contact.display_name || '').trim();
-      if (name !== '') {
-        set.add(name);
-      }
-      const company = String(contact.company || '').trim();
-      if (company !== '') {
-        set.add(company);
-      }
-    });
-    documents.forEach((doc) => {
-      if (String(doc.kind || '').trim() !== 'receipt') {
-        return;
-      }
-      const vendor = String(doc.receipt_vendor || '').trim();
-      if (vendor !== '') {
-        set.add(vendor);
-      }
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  }, [contacts, documents]);
+  const { clampStepDatesWithinRange, expandPhaseRangeForStep, onSaveDocument, taskVendorOptions } = useBuildWizardDocumentStepData({
+    contacts,
+    documentSavingId,
+    documents,
+    projectId,
+    resolvePhaseDateRange,
+    savePhaseDateRange,
+    setDocumentSavingId,
+    stepPhaseBucket,
+    updateDocument,
+  });
 
   const {
     buildDocumentDraft,
@@ -3216,22 +1933,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     await generateStepsFromAi('complete');
   };
 
-  const clearStepDragState = () => {
-    setDraggingStepId(0);
-    setDragOverInsertIndex(-1);
-    setDragOverParentStepId(0);
-  };
-
-  const beginStepDrag = (e: React.DragEvent<HTMLElement>, stepId: number, stepReadOnly: boolean): void => {
-    if (stepReadOnly || stepId <= 0) {
-      e.preventDefault();
-      return;
-    }
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(stepId));
-    setDraggingStepId(stepId);
-  };
-
   const parseCurrencyText = (value: string): number | null => {
     const cleaned = String(value || '')
       .replace(/[^0-9.-]/g, '')
@@ -3287,102 +1988,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return formatCurrencyForInput(value);
   };
 
-  const clampStepDatesWithinRange = (
-    step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
-    minDate?: string | null,
-    maxDate?: string | null,
-  ): Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date' | 'expected_duration_days'> | null => {
-    const lower = toStringOrNull(minDate || '');
-    const upper = toStringOrNull(maxDate || '');
-    if (!lower && !upper) {
-      return null;
-    }
-
-    let nextStart = toStringOrNull(step.expected_start_date || '');
-    let nextEnd = toStringOrNull(step.expected_end_date || '');
-
-    if (!nextStart) {
-      nextStart = lower || upper || null;
-    }
-    if (!nextEnd) {
-      nextEnd = nextStart;
-    }
-
-    if (lower && nextStart && nextStart < lower) {
-      nextStart = lower;
-    }
-    if (upper && nextStart && nextStart > upper) {
-      nextStart = upper;
-    }
-    if (lower && nextEnd && nextEnd < lower) {
-      nextEnd = lower;
-    }
-    if (upper && nextEnd && nextEnd > upper) {
-      nextEnd = upper;
-    }
-    if (nextStart && nextEnd && nextEnd < nextStart) {
-      nextEnd = nextStart;
-    }
-
-    const changed = nextStart !== toStringOrNull(step.expected_start_date || '')
-      || nextEnd !== toStringOrNull(step.expected_end_date || '');
-    if (!changed) {
-      return null;
-    }
-    return {
-      expected_start_date: nextStart,
-      expected_end_date: nextEnd,
-      expected_duration_days: calculateDurationDays(nextStart, nextEnd) ?? null,
-    };
-  };
-
-  const clampStepDatesBetweenNeighbors = (
-    step: Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>,
-    previousStep: IBuildWizardStep | null,
-    nextStep: IBuildWizardStep | null,
-  ): Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date' | 'expected_duration_days'> | null => {
-    const lower = previousStep?.expected_end_date || previousStep?.expected_start_date || null;
-    const upper = nextStep?.expected_start_date || nextStep?.expected_end_date || null;
-    return clampStepDatesWithinRange(step, lower, upper);
-  };
-
-  const buildPhaseReorderIds = (
-    phaseKey: string,
-    preferredIds: number[],
-    movedStepId: number,
-    movedStepPhaseKey: string,
-  ): number[] => {
-    const normalizedPhase = String(phaseKey || '').trim();
-    if (!normalizedPhase) {
-      return [];
-    }
-    const phaseMembers = [...steps]
-      .filter((candidate) => {
-        if (candidate.id === movedStepId) {
-          return movedStepPhaseKey === normalizedPhase;
-        }
-        return (candidate.phase_key || '') === normalizedPhase;
-      })
-      .sort((a, b) => {
-        if (a.step_order !== b.step_order) {
-          return a.step_order - b.step_order;
-        }
-        return a.id - b.id;
-      })
-      .map((candidate) => candidate.id);
-    const memberSet = new Set(phaseMembers);
-    const preferredUnique: number[] = [];
-    preferredIds.forEach((id) => {
-      const stepId = Number(id || 0);
-      if (stepId > 0 && memberSet.has(stepId) && !preferredUnique.includes(stepId)) {
-        preferredUnique.push(stepId);
-      }
-    });
-    const missing = phaseMembers.filter((id) => !preferredUnique.includes(id));
-    return [...preferredUnique, ...missing];
-  };
-
-  const { autoReorderPhaseByTimeline, compareStepsByTimeline, saveStepEditModal } = useBuildWizardStepEditActions({
+  const { autoReorderPhaseByTimeline, saveStepEditModal } = useBuildWizardStepEditActions({
     clearStepDraft,
     documents,
     expandPhaseRangeForStep,
@@ -3497,109 +2103,18 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       }
     })();
   }, [projectId, resolvePhaseDateRange, savePhaseDateRange, steps]);
-
-  const onDropReorder = async (insertIndex: number) => {
-    if (draggingStepId <= 0) {
-      clearStepDragState();
-      return;
-    }
-    const flatIds = activeTabTreeRows.map((row) => row.step.id);
-    if (!flatIds.includes(draggingStepId)) {
-      clearStepDragState();
-      return;
-    }
-    const draggedStep = stepById.get(draggingStepId);
-    if (!draggedStep) {
-      clearStepDragState();
-      return;
-    }
-    const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
-    const boundedInsertIndex = Math.max(0, Math.min(insertIndex, withoutDragged.length));
-    withoutDragged.splice(boundedInsertIndex, 0, draggingStepId);
-
-    const previousVisibleStepId = boundedInsertIndex > 0 ? withoutDragged[boundedInsertIndex - 1] : 0;
-    const nextVisibleStepId = boundedInsertIndex < (withoutDragged.length - 1) ? withoutDragged[boundedInsertIndex + 1] : 0;
-    const previousVisibleStep = previousVisibleStepId > 0 ? stepById.get(previousVisibleStepId) || null : null;
-    const nextVisibleStep = nextVisibleStepId > 0 ? stepById.get(nextVisibleStepId) || null : null;
-    const destinationPhaseKey = (
-      previousVisibleStep?.phase_key
-      || nextVisibleStep?.phase_key
-      || draggedStep.phase_key
-      || ''
-    );
-    if (!destinationPhaseKey) {
-      clearStepDragState();
-      return;
-    }
-
-    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === destinationPhaseKey);
-    const phaseOrderedIds = buildPhaseReorderIds(destinationPhaseKey, preferredPhaseOrder, draggingStepId, destinationPhaseKey);
-    try {
-      if (draggedStep.phase_key !== destinationPhaseKey || Number(draggedStep.parent_step_id || 0) > 0) {
-        await updateStep(draggingStepId, { phase_key: destinationPhaseKey, parent_step_id: null });
-      }
-      if (phaseOrderedIds.length > 0) {
-        await reorderSteps(destinationPhaseKey, phaseOrderedIds);
-        const movedIndex = phaseOrderedIds.indexOf(draggingStepId);
-        const prevPhaseStep = movedIndex > 0 ? (stepById.get(phaseOrderedIds[movedIndex - 1]) || null) : null;
-        const nextPhaseStep = movedIndex >= 0 && movedIndex < (phaseOrderedIds.length - 1)
-          ? (stepById.get(phaseOrderedIds[movedIndex + 1]) || null)
-          : null;
-        const datePatch = clampStepDatesBetweenNeighbors(draggedStep, prevPhaseStep, nextPhaseStep);
-        if (datePatch) {
-          await updateStep(draggingStepId, datePatch);
-        }
-      }
-    } finally {
-      clearStepDragState();
-    }
-  };
-
-  const onDropMakeChild = async (targetStepId: number) => {
-    if (draggingStepId <= 0 || targetStepId <= 0 || draggingStepId === targetStepId) {
-      clearStepDragState();
-      return;
-    }
-    const flatIds = activeTabTreeRows.map((row) => row.step.id);
-    if (!flatIds.includes(draggingStepId) || !flatIds.includes(targetStepId)) {
-      clearStepDragState();
-      return;
-    }
-    const draggedStep = stepById.get(draggingStepId);
-    const targetStep = stepById.get(targetStepId);
-    const targetPhaseKey = targetStep?.phase_key || '';
-    if (!draggedStep || !targetStep || !targetPhaseKey) {
-      clearStepDragState();
-      return;
-    }
-
-    const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
-    const targetIndex = withoutDragged.indexOf(targetStepId);
-    const insertIndex = targetIndex >= 0 ? (targetIndex + 1) : withoutDragged.length;
-    withoutDragged.splice(insertIndex, 0, draggingStepId);
-    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === targetPhaseKey);
-    const phaseOrderedIds = buildPhaseReorderIds(targetPhaseKey, preferredPhaseOrder, draggingStepId, targetPhaseKey);
-
-    try {
-      if (draggedStep.phase_key !== targetPhaseKey) {
-        await updateStep(draggingStepId, { phase_key: targetPhaseKey });
-      }
-      const childDatePatch = clampStepDatesWithinRange(
-        draggedStep,
-        targetStep.expected_start_date,
-        targetStep.expected_end_date,
-      );
-      await updateStep(draggingStepId, {
-        ...(childDatePatch || {}),
-        parent_step_id: targetStepId,
-      });
-      if (phaseOrderedIds.length > 0) {
-        await reorderSteps(targetPhaseKey, phaseOrderedIds);
-      }
-    } finally {
-      clearStepDragState();
-    }
-  };
+  const { beginStepDrag, clearStepDragState, onDropMakeChild, onDropReorder } = useBuildWizardStepDragActions({
+    activeTabTreeRows,
+    clampStepDatesWithinRange,
+    draggingStepId,
+    reorderSteps,
+    setDragOverInsertIndex,
+    setDragOverParentStepId,
+    setDraggingStepId,
+    stepById,
+    steps,
+    updateStep,
+  });
 
   const currencyAuditFields = new Set([
     'estimated_cost',
@@ -3754,7 +2269,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         isSpreadsheetPreviewDoc={isSpreadsheetPreviewDoc}
         items={items}
         openDocumentPreview={(doc) => { void openDocumentPreview(doc); }}
-        onRemoveDocumentFromStep={(id, originalName) => onRemoveDocumentFromStep(id, originalName)}
+        onRemoveDocumentFromStep={(id) => onRemoveDocumentFromStep(id)}
         readOnly={readOnly}
         unlinkingDocumentId={unlinkingDocumentId}
       />

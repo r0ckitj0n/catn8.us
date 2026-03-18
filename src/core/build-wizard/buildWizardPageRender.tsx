@@ -763,6 +763,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const [dragOverParentStepId, setDragOverParentStepId] = React.useState<number>(0);
   const [expandedStepById, setExpandedStepById] = React.useState<Record<number, boolean>>({});
   const [stepInfoModalStepId, setStepInfoModalStepId] = React.useState<number>(0);
+  const [stepEditModalStepId, setStepEditModalStepId] = React.useState<number>(0);
+  const [stepEditSaving, setStepEditSaving] = React.useState<boolean>(false);
   const [topbarSearchQuery, setTopbarSearchQuery] = React.useState<string>('');
   const [topbarSearchOpen, setTopbarSearchOpen] = React.useState<boolean>(false);
   const [topbarSearchLoading, setTopbarSearchLoading] = React.useState<boolean>(false);
@@ -1330,12 +1332,53 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     return stepByIdMap.get(stepInfoModalStepId) || null;
   }, [stepInfoModalStepId, stepByIdMap]);
 
+  const stepEditModalStep = React.useMemo(() => {
+    if (stepEditModalStepId <= 0) {
+      return null;
+    }
+    return stepByIdMap.get(stepEditModalStepId) || null;
+  }, [stepEditModalStepId, stepByIdMap]);
+
   const moveStepModalStep = React.useMemo(() => {
     if (moveStepModalStepId <= 0) {
       return null;
     }
     return stepByIdMap.get(moveStepModalStepId) || null;
   }, [moveStepModalStepId, stepByIdMap]);
+
+  const stepEditModalDraft = React.useMemo(() => {
+    if (!stepEditModalStep) {
+      return null;
+    }
+    return stepDrafts[stepEditModalStep.id] || stepEditModalStep;
+  }, [stepDrafts, stepEditModalStep]);
+
+  const stepEditModalDependencyIds = React.useMemo(() => {
+    if (!stepEditModalStep || !stepEditModalDraft) {
+      return [] as number[];
+    }
+    return Array.from(
+      new Set(
+        (Array.isArray(stepEditModalDraft.depends_on_step_ids) ? stepEditModalDraft.depends_on_step_ids : [])
+          .map((rawId) => Number(rawId || 0))
+          .filter((id) => id > 0 && id !== stepEditModalStep.id),
+      ),
+    );
+  }, [stepEditModalDraft, stepEditModalStep]);
+
+  const stepEditModalDependencyOptions = React.useMemo(() => {
+    if (!stepEditModalStep) {
+      return [] as IBuildWizardStep[];
+    }
+    return steps
+      .filter((candidate) => candidate.id !== stepEditModalStep.id && !stepEditModalDependencyIds.includes(candidate.id))
+      .sort((a, b) => {
+        if (a.step_order !== b.step_order) {
+          return a.step_order - b.step_order;
+        }
+        return a.id - b.id;
+      });
+  }, [stepEditModalDependencyIds, stepEditModalStep, steps]);
 
   const selectedContactAssignments = React.useMemo(() => {
     if (!selectedDeskContact) {
@@ -1768,36 +1811,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       return max;
     }
     return next;
-  }, []);
-
-  const mergeDateMin = React.useCallback((a: string | null | undefined, b: string | null | undefined): string | undefined => {
-    const left = toStringOrNull(a || '');
-    const right = toStringOrNull(b || '');
-    if (!left && !right) {
-      return undefined;
-    }
-    if (!left) {
-      return right || undefined;
-    }
-    if (!right) {
-      return left || undefined;
-    }
-    return left > right ? left : right;
-  }, []);
-
-  const mergeDateMax = React.useCallback((a: string | null | undefined, b: string | null | undefined): string | undefined => {
-    const left = toStringOrNull(a || '');
-    const right = toStringOrNull(b || '');
-    if (!left && !right) {
-      return undefined;
-    }
-    if (!left) {
-      return right || undefined;
-    }
-    if (!right) {
-      return left || undefined;
-    }
-    return left < right ? left : right;
   }, []);
 
   const onPhaseDateRangeChange = React.useCallback((patch: Partial<PhaseDateRange>) => {
@@ -2519,6 +2532,15 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   }, [moveStepModalStepId, stepById]);
 
+  React.useEffect(() => {
+    if (stepEditModalStepId <= 0) {
+      return;
+    }
+    if (!stepById.has(stepEditModalStepId)) {
+      setStepEditModalStepId(0);
+    }
+  }, [stepById, stepEditModalStepId]);
+
   const launcherProjects = React.useMemo(() => {
     return projects.filter((candidate) => Number(candidate.is_template || 0) !== 1);
   }, [projects]);
@@ -2624,6 +2646,32 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       },
     }));
   };
+
+  const clearStepDraft = React.useCallback((stepId: number) => {
+    setStepDrafts((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, stepId)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[stepId];
+      return next;
+    });
+  }, []);
+
+  const openStepEditModal = React.useCallback((step: IBuildWizardStep) => {
+    setStepDrafts((prev) => ({
+      ...prev,
+      [step.id]: { ...step },
+    }));
+    setStepEditModalStepId(step.id);
+  }, []);
+
+  const closeStepEditModal = React.useCallback(() => {
+    if (stepEditModalStepId > 0) {
+      clearStepDraft(stepEditModalStepId);
+    }
+    setStepEditModalStepId(0);
+  }, [clearStepDraft, stepEditModalStepId]);
 
   const commitStep = async (stepId: number, patch: Partial<IBuildWizardStep>) => {
     await updateStep(stepId, patch);
@@ -4154,6 +4202,88 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     }
   }, [compareStepsByTimeline, reorderSteps, steps]);
 
+  const saveStepEditModal = React.useCallback(async () => {
+    if (!stepEditModalStep || stepEditSaving) {
+      return;
+    }
+
+    const step = stepEditModalStep;
+    const draft = stepDrafts[step.id] || step;
+    const nextTitle = String(draft.title || '').trim();
+    if (!nextTitle) {
+      onToast?.({ tone: 'warning', message: 'Step title is required.' });
+      return;
+    }
+
+    const nextStartDate = toStringOrNull(draft.expected_start_date || '');
+    const requestedEndDate = toStringOrNull(draft.expected_end_date || '');
+    const nextEndDate = nextStartDate && requestedEndDate && requestedEndDate < nextStartDate
+      ? nextStartDate
+      : requestedEndDate;
+    const nextDurationDays = calculateDurationDays(nextStartDate, nextEndDate) ?? (draft.expected_duration_days ?? null);
+    const nextDependencyIds = Array.from(
+      new Set(
+        (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
+          .map((rawId) => Number(rawId || 0))
+          .filter((id) => id > 0 && id !== step.id),
+      ),
+    );
+    const actualCostFloor = documents.reduce((sum, doc) => {
+      if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') {
+        return sum;
+      }
+      const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
+      if (parsed.taskMeta.task_type === 'quote') {
+        return sum;
+      }
+      return sum + Number(doc.receipt_amount || 0);
+    }, 0);
+    const requestedActualCost = draft.actual_cost ?? null;
+    const nextActualCost = requestedActualCost === null
+      ? (actualCostFloor > 0 ? actualCostFloor : null)
+      : Math.max(Number(requestedActualCost), actualCostFloor);
+    const patch: Partial<IBuildWizardStep> = {
+      title: nextTitle,
+      description: String(draft.description || '').trim(),
+      expected_start_date: nextStartDate,
+      expected_end_date: nextEndDate,
+      expected_duration_days: nextDurationDays,
+      estimated_cost: draft.estimated_cost ?? null,
+      actual_cost: nextActualCost,
+      depends_on_step_ids: nextDependencyIds,
+    };
+
+    setStepEditSaving(true);
+    try {
+      const nextStep = await updateStep(step.id, patch);
+      if (!nextStep) {
+        return;
+      }
+      const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
+      timelineOverrides.set(step.id, {
+        expected_start_date: nextStartDate,
+        expected_end_date: nextEndDate,
+      });
+      await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
+      await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
+      clearStepDraft(step.id);
+      setStepEditModalStepId(0);
+      onToast?.({ tone: 'success', message: 'Step updated.' });
+    } finally {
+      setStepEditSaving(false);
+    }
+  }, [
+    autoReorderPhaseByTimeline,
+    clearStepDraft,
+    documents,
+    expandPhaseRangeForStep,
+    onToast,
+    stepDrafts,
+    stepEditModalStep,
+    stepEditSaving,
+    updateStep,
+  ]);
+
   React.useEffect(() => {
     if (projectId <= 0) {
       return;
@@ -4444,10 +4574,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
           const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
           const draft = stepDrafts[step.id] || step;
           const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
-          const childDateMin = parentStep?.expected_start_date || undefined;
-          const childDateMax = parentStep?.expected_end_date || undefined;
-          const stepDateMin = mergeDateMin(childDateMin, null);
-          const stepDateMax = mergeDateMax(childDateMax, null);
           const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
           const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
           const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
@@ -4474,20 +4600,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
             };
           });
           const hasDependencies = dependencyItems.length > 0;
-          const selectedDependencyCandidateId = Number(dependencyCandidateByStepId[step.id] || 0);
-          const dependencyCandidateOptions = steps
-            .filter((candidate) => candidate.id !== step.id && !dependencyIds.includes(candidate.id))
-            .sort((a, b) => {
-              if (a.step_order !== b.step_order) {
-                return a.step_order - b.step_order;
-              }
-              return a.id - b.id;
-            });
-          const commitDependencies = (nextIds: number[]) => {
-            const normalized = Array.from(new Set(nextIds.map((value) => Number(value || 0)).filter((id) => id > 0 && id !== step.id)));
-            updateStepDraft(step.id, { depends_on_step_ids: normalized });
-            void commitStep(step.id, { depends_on_step_ids: normalized });
-          };
           const stepPastelColor = getStepPastelColor(step.id);
           const isExpanded = expandedStepById[step.id] === true;
           const stepAttachmentCount = documents.reduce((count, doc) => (Number(doc.step_id || 0) === step.id ? count + 1 : count), 0);
@@ -4642,115 +4754,27 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                       </span>
 	                  </div>
                   <div className="build-wizard-step-metrics-panel">
-                    <label className="build-wizard-title-inline build-wizard-title-inline-compact">
-                      <input
-                        type="text"
-                        value={draft.title || ''}
-                        disabled={stepReadOnly}
-                        onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
-                        onBlur={() => void commitStep(step.id, { title: String(stepDrafts[step.id]?.title || '').trim() })}
-                      />
-                    </label>
+                    <div className="build-wizard-step-title-display">
+                      {step.title || 'Untitled Step'}
+                    </div>
                     <div className="build-wizard-inline-metrics">
-                      <label className="build-wizard-duration-inline">
-                        Duration (Days)
-                        <input type="number" value={durationDays ?? ''} readOnly />
-                      </label>
-                      <label className="build-wizard-date-inline">
-                        Start {aiEstimated.has('expected_start_date') ? '*' : ''}
-                        <input
-                          type="date"
-                          value={draft.expected_start_date || ''}
-                          min={stepDateMin}
-                          max={stepDateMax}
-                          disabled={stepReadOnly}
-                          onChange={(e) => {
-                            const nextStartDate = toStringOrNull(e.target.value);
-                            const nextDuration = calculateDurationDays(nextStartDate, draft.expected_end_date) ?? draft.expected_duration_days;
-                            updateStepDraft(step.id, {
-                              expected_start_date: nextStartDate,
-                              expected_duration_days: nextDuration,
-                            });
-                          }}
-                          onBlur={() => {
-                            const nextDraft = stepDrafts[step.id] || step;
-                            const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
-                            const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
-                            const nextDuration = calculateDurationDays(nextStartDate, nextDraft.expected_end_date)
-                              ?? (nextDraft.expected_duration_days ?? null);
-                            const nextPatch = {
-                              expected_start_date: nextStartDate,
-                              expected_duration_days: nextDuration,
-                            };
-                            const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
-                            timelineOverrides.set(step.id, {
-                              expected_start_date: nextStartDate,
-                              expected_end_date: nextEndDate,
-                            });
-                            void (async () => {
-                              await commitStep(step.id, nextPatch);
-                              await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
-                              await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
-                            })();
-                          }}
-                        />
-                      </label>
-                      <label className="build-wizard-date-inline">
-                        End {aiEstimated.has('expected_end_date') ? '*' : ''}
-                        <input
-                          type="date"
-                          value={draft.expected_end_date || ''}
-                          min={stepDateMin}
-                          max={stepDateMax}
-                          disabled={stepReadOnly}
-                          onChange={(e) => {
-                            const nextEndDate = toStringOrNull(e.target.value);
-                            const nextDuration = calculateDurationDays(draft.expected_start_date, nextEndDate) ?? draft.expected_duration_days;
-                            updateStepDraft(step.id, {
-                              expected_end_date: nextEndDate,
-                              expected_duration_days: nextDuration,
-                            });
-                          }}
-                          onBlur={() => {
-                            const nextDraft = stepDrafts[step.id] || step;
-                            const nextStartDate = toStringOrNull(nextDraft.expected_start_date || '');
-                            const nextEndDate = toStringOrNull(nextDraft.expected_end_date || '');
-                            const nextDuration = calculateDurationDays(nextDraft.expected_start_date, nextEndDate)
-                              ?? (nextDraft.expected_duration_days ?? null);
-                            const nextPatch = {
-                              expected_end_date: nextEndDate,
-                              expected_duration_days: nextDuration,
-                            };
-                            const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
-                            timelineOverrides.set(step.id, {
-                              expected_start_date: nextStartDate,
-                              expected_end_date: nextEndDate,
-                            });
-                            void (async () => {
-                              await commitStep(step.id, nextPatch);
-                              await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
-                              await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
-                            })();
-                          }}
-                        />
-                      </label>
-                      <label className="build-wizard-date-inline">
-                        Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          className="build-wizard-currency-input"
-                          value={renderCurrencyInputValue(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
-                          disabled={stepReadOnly}
-                          onFocus={() => startCurrencyEdit(`step-${step.id}-estimated_cost`, draft.estimated_cost)}
-                          onChange={(e) => changeCurrencyEdit(`step-${step.id}-estimated_cost`, e.target.value)}
-                          onBlur={() => finishCurrencyEdit(`step-${step.id}-estimated_cost`, (value) => {
-                            updateStepDraft(step.id, { estimated_cost: value });
-                            void commitStep(step.id, { estimated_cost: value });
-                          })}
-                        />
-                      </label>
-                      <label className="build-wizard-date-inline">
+                      <div className="build-wizard-date-inline">
+                        <span>Duration (Days)</span>
+                        <strong>{durationDays ?? '-'}</strong>
+                      </div>
+                      <div className="build-wizard-date-inline">
+                        <span>Start {aiEstimated.has('expected_start_date') ? '*' : ''}</span>
+                        <strong>{step.expected_start_date || '-'}</strong>
+                      </div>
+                      <div className="build-wizard-date-inline">
+                        <span>End {aiEstimated.has('expected_end_date') ? '*' : ''}</span>
+                        <strong>{step.expected_end_date || '-'}</strong>
+                      </div>
+                      <div className="build-wizard-date-inline">
+                        <span>Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}</span>
+                        <strong>{step.estimated_cost !== null ? formatCurrency(Number(step.estimated_cost || 0)) : '-'}</strong>
+                      </div>
+                      <div className="build-wizard-date-inline">
                         <span className="build-wizard-cost-label-row">
                           <span>Actual Cost</span>
                           <span className="build-wizard-cost-actions">
@@ -4775,23 +4799,8 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                             ) : null}
                           </span>
                         </span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          className="build-wizard-currency-input"
-                          value={renderCurrencyInputValue(`step-${step.id}-actual_cost`, effectiveActualCost)}
-                          disabled={stepReadOnly}
-                          onFocus={() => startCurrencyEdit(`step-${step.id}-actual_cost`, effectiveActualCost)}
-                          onChange={(e) => changeCurrencyEdit(`step-${step.id}-actual_cost`, e.target.value)}
-                          onBlur={() => finishCurrencyEdit(`step-${step.id}-actual_cost`, (value) => {
-                            const nextActual = value === null
-                              ? (actualCostFloor > 0 ? actualCostFloor : null)
-                              : Math.max(value, actualCostFloor);
-                            updateStepDraft(step.id, { actual_cost: nextActual });
-                            void commitStep(step.id, { actual_cost: nextActual });
-                          })}
-                        />
-                      </label>
+                        <strong>{effectiveActualCost !== null ? formatCurrency(Number(effectiveActualCost || 0)) : '-'}</strong>
+                      </div>
                     </div>
                   </div>
                   {completionLocked ? (
@@ -4806,6 +4815,16 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   ) : null}
                 </div>
                 <div className="build-wizard-step-header-right">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    aria-label="Edit step"
+                    title="Edit step"
+                    disabled={stepReadOnly}
+                    onClick={() => openStepEditModal(step)}
+                  >
+                    Edit
+                  </button>
                   {stepAttachmentCount > 0 ? (
                     <span
                       className="build-wizard-step-attachment-indicator"
@@ -4870,69 +4889,22 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
               {isExpanded ? (
               <>
               <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
-              <div className="build-wizard-step-grid">
-                <div className={`build-wizard-type-note build-wizard-dependency-note ${hasDependencies ? '' : 'is-empty-inline'}`}>
-                  <div className="build-wizard-dependency-head">
-                    <span>Depends on:</span>
-                    {hasDependencies ? (
-                      <button
-                        type="button"
-                        className="btn btn-link btn-sm"
-                        onClick={() => commitDependencies([])}
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
+                <div className="build-wizard-step-grid">
+                  <div className={`build-wizard-type-note build-wizard-dependency-note ${hasDependencies ? '' : 'is-empty-inline'}`}>
+                    <div className="build-wizard-dependency-head">
+                      <span>Depends on:</span>
+                    </div>
                   {hasDependencies ? (
                     <div className="build-wizard-dependency-chip-list">
                       {dependencyItems.map((dependencyItem) => (
                         <span key={`${step.id}-dependency-${dependencyItem.id}`} className="build-wizard-dependency-chip">
                           {dependencyItem.label}
-                          <button
-                            type="button"
-                            className="build-wizard-dependency-chip-remove"
-                            aria-label={`Remove dependency ${dependencyItem.label}`}
-                            title="Remove dependency"
-                            onClick={() => {
-                              commitDependencies(dependencyIds.filter((id) => id !== dependencyItem.id));
-                            }}
-                          >
-                            ×
-                          </button>
                         </span>
                       ))}
                     </div>
                   ) : (
                     <div className="build-wizard-dependency-empty">No dependencies set.</div>
                   )}
-                  <div className="build-wizard-dependency-controls">
-                    <select
-                      value={dependencyCandidateByStepId[step.id] || ''}
-                      onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                    >
-                      <option value="">Add dependency step...</option>
-                      {dependencyCandidateOptions.map((candidate) => (
-                        <option key={candidate.id} value={String(candidate.id)}>
-                          {formatDependencyLabel(candidate)}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary btn-sm"
-                      disabled={selectedDependencyCandidateId <= 0}
-                      onClick={() => {
-                        if (selectedDependencyCandidateId <= 0 || dependencyIds.includes(selectedDependencyCandidateId)) {
-                          return;
-                        }
-                        commitDependencies([...dependencyIds, selectedDependencyCandidateId]);
-                        setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: '' }));
-                      }}
-                    >
-                      Add
-                    </button>
-                  </div>
                 </div>
                 {parentStep ? (
                   <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
@@ -4946,12 +4918,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
               <label className="build-wizard-notes-field">
                 Step Description
-                <textarea
-                  rows={2}
-                  value={draft.description || ''}
-                  onChange={(e) => updateStepDraft(step.id, { description: e.target.value })}
-                  onBlur={() => void commitStep(step.id, { description: String(stepDrafts[step.id]?.description || '') })}
-                />
+                <div className="build-wizard-step-description-display">{step.description || 'No description yet.'}</div>
               </label>
 
               <div className="build-wizard-step-actions">
@@ -7653,6 +7620,196 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
                   <textarea value={aiPayloadJson || ''} readOnly rows={10} />
                 </label>
               </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {stepEditModalStep && stepEditModalDraft ? (
+        <div className="build-wizard-doc-manager" onClick={() => closeStepEditModal()}>
+          <div className="build-wizard-doc-manager-inner build-wizard-step-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="build-wizard-doc-manager-head">
+              <h3>Edit Step #{activeTabStepNumbers.get(stepEditModalStep.id) || stepEditModalStep.step_order}</h3>
+              <div className="build-wizard-doc-manager-actions">
+                <StandardIconButton
+                  iconKey="close"
+                  ariaLabel="Close step editor"
+                  title="Close"
+                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+                  onClick={() => closeStepEditModal()}
+                />
+              </div>
+            </div>
+
+            <fieldset className="build-wizard-step-fields">
+              <div className="build-wizard-step-grid">
+                <div className={`build-wizard-type-note build-wizard-dependency-note ${stepEditModalDependencyIds.length > 0 ? '' : 'is-empty-inline'}`}>
+                  <div className="build-wizard-dependency-head">
+                    <span>Depends on:</span>
+                    {stepEditModalDependencyIds.length > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm"
+                        onClick={() => updateStepDraft(stepEditModalStep.id, { depends_on_step_ids: [] })}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                  {stepEditModalDependencyIds.length > 0 ? (
+                    <div className="build-wizard-dependency-chip-list">
+                      {stepEditModalDependencyIds.map((dependencyId) => {
+                        const dependency = stepById.get(dependencyId) || null;
+                        const phaseId = dependency ? stepPhaseBucket(dependency) : null;
+                        const phase = phaseId ? BUILD_TABS.find((tab) => tab.id === phaseId) : null;
+                        const label = dependency
+                          ? `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phase ? phase.label : prettyPhaseLabel(dependency.phase_key)})`
+                          : `#${dependencyId} (missing step)`;
+                        return (
+                          <span key={`step-edit-dependency-${dependencyId}`} className="build-wizard-dependency-chip">
+                            {label}
+                            <button
+                              type="button"
+                              className="build-wizard-dependency-chip-remove"
+                              aria-label={`Remove dependency ${label}`}
+                              title="Remove dependency"
+                              onClick={() => updateStepDraft(stepEditModalStep.id, {
+                                depends_on_step_ids: stepEditModalDependencyIds.filter((id) => id !== dependencyId),
+                              })}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="build-wizard-dependency-empty">No dependencies set.</div>
+                  )}
+                  <div className="build-wizard-dependency-controls">
+                    <select
+                      value={dependencyCandidateByStepId[stepEditModalStep.id] || ''}
+                      onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [stepEditModalStep.id]: e.target.value }))}
+                    >
+                      <option value="">Add dependency step...</option>
+                      {stepEditModalDependencyOptions.map((candidate) => {
+                        const phaseId = stepPhaseBucket(candidate);
+                        const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
+                        const label = `#${activeTabStepNumbers.get(candidate.id) || candidate.step_order} ${candidate.title} (${phase ? phase.label : prettyPhaseLabel(candidate.phase_key)})`;
+                        return <option key={candidate.id} value={String(candidate.id)}>{label}</option>;
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm"
+                      disabled={Number(dependencyCandidateByStepId[stepEditModalStep.id] || 0) <= 0}
+                      onClick={() => {
+                        const selectedId = Number(dependencyCandidateByStepId[stepEditModalStep.id] || 0);
+                        if (selectedId <= 0 || stepEditModalDependencyIds.includes(selectedId)) {
+                          return;
+                        }
+                        updateStepDraft(stepEditModalStep.id, {
+                          depends_on_step_ids: [...stepEditModalDependencyIds, selectedId],
+                        });
+                        setDependencyCandidateByStepId((prev) => ({ ...prev, [stepEditModalStep.id]: '' }));
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="build-wizard-doc-manager-grid build-wizard-step-edit-grid">
+                <label className="is-wide">
+                  Title
+                  <input
+                    type="text"
+                    value={stepEditModalDraft.title || ''}
+                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { title: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Start Date
+                  <input
+                    type="date"
+                    value={stepEditModalDraft.expected_start_date || ''}
+                    onChange={(e) => {
+                      const nextStartDate = toStringOrNull(e.target.value);
+                      const nextDuration = calculateDurationDays(nextStartDate, stepEditModalDraft.expected_end_date)
+                        ?? stepEditModalDraft.expected_duration_days;
+                      updateStepDraft(stepEditModalStep.id, {
+                        expected_start_date: nextStartDate,
+                        expected_duration_days: nextDuration,
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  End Date
+                  <input
+                    type="date"
+                    value={stepEditModalDraft.expected_end_date || ''}
+                    onChange={(e) => {
+                      const nextEndDate = toStringOrNull(e.target.value);
+                      const nextDuration = calculateDurationDays(stepEditModalDraft.expected_start_date, nextEndDate)
+                        ?? stepEditModalDraft.expected_duration_days;
+                      updateStepDraft(stepEditModalStep.id, {
+                        expected_end_date: nextEndDate,
+                        expected_duration_days: nextDuration,
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  Estimated Cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={stepEditModalDraft.estimated_cost ?? ''}
+                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { estimated_cost: toNumberOrNull(e.target.value) })}
+                  />
+                </label>
+                <label>
+                  Actual Cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={stepEditModalDraft.actual_cost ?? ''}
+                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { actual_cost: toNumberOrNull(e.target.value) })}
+                  />
+                </label>
+                <label className="is-wide">
+                  Step Description
+                  <textarea
+                    rows={4}
+                    value={stepEditModalDraft.description || ''}
+                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { description: e.target.value })}
+                  />
+                </label>
+              </div>
+            </fieldset>
+
+            <div className="build-wizard-doc-manager-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={stepEditSaving}
+                onClick={() => { void saveStepEditModal(); }}
+              >
+                {stepEditSaving ? 'Saving...' : 'Save Step'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => closeStepEditModal()}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

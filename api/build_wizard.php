@@ -2227,16 +2227,75 @@ function catn8_build_wizard_document_for_user(int $documentId, int $uid): ?array
 
     return Database::queryOne(
         'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes,
+                d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes,
                 db.file_blob, db.mime_type AS file_blob_mime_type,
-                bi.image_blob, bi.mime_type AS blob_mime_type
+                bi.image_blob, bi.mime_type AS blob_mime_type,
+                si.extracted_text
          FROM build_wizard_documents d
          INNER JOIN build_wizard_projects p ON p.id = d.project_id
          LEFT JOIN build_wizard_document_blobs db ON db.document_id = d.id
          LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
+         LEFT JOIN build_wizard_document_search_index si ON si.document_id = d.id
          WHERE d.id = ? AND p.owner_user_id = ?
          LIMIT 1',
         [$documentId, $uid]
     );
+}
+
+function catn8_build_wizard_document_is_text_like(array $doc): bool
+{
+    $mime = strtolower(trim((string)($doc['mime_type'] ?? '')));
+    if ($mime !== '' && (str_starts_with($mime, 'text/') || str_contains($mime, 'json') || str_contains($mime, 'xml'))) {
+        return true;
+    }
+
+    $name = strtolower(trim((string)($doc['original_name'] ?? '')));
+    foreach (['.txt', '.md', '.csv', '.json', '.log', '.plan'] as $ext) {
+        if ($name !== '' && str_ends_with($name, $ext)) {
+            return true;
+        }
+    }
+
+    return strtolower(trim((string)($doc['kind'] ?? ''))) === 'receipt';
+}
+
+function catn8_build_wizard_fallback_document_text(array $doc): string
+{
+    $indexedText = trim((string)($doc['extracted_text'] ?? ''));
+    if ($indexedText !== '') {
+        return $indexedText;
+    }
+
+    $title = trim((string)($doc['receipt_title'] ?? ''));
+    $vendor = trim((string)($doc['receipt_vendor'] ?? ''));
+    $date = trim((string)($doc['receipt_date'] ?? ''));
+    $notes = trim((string)($doc['receipt_notes'] ?? ''));
+    $caption = trim((string)($doc['caption'] ?? ''));
+    $amount = $doc['receipt_amount'] !== null ? trim((string)$doc['receipt_amount']) : '';
+
+    $lines = [];
+    if ($title !== '' || $vendor !== '' || $date !== '' || $amount !== '' || $notes !== '') {
+        $lines[] = 'Task record';
+        if ($title !== '') {
+            $lines[] = 'Title: ' . $title;
+        }
+        if ($vendor !== '') {
+            $lines[] = 'Vendor: ' . $vendor;
+        }
+        if ($date !== '') {
+            $lines[] = 'Date: ' . $date;
+        }
+        if ($amount !== '') {
+            $lines[] = 'Amount: ' . $amount;
+        }
+        if ($notes !== '') {
+            $lines[] = 'Notes: ' . $notes;
+        }
+    } elseif ($caption !== '') {
+        $lines[] = $caption;
+    }
+
+    return trim(implode("\n", $lines));
 }
 
 function catn8_build_wizard_resolve_document_path(string $storagePath): string
@@ -5247,6 +5306,25 @@ try {
                     echo $recoveredBytes;
                     exit;
                 }
+            }
+        }
+        if ($path === '') {
+            $fallbackText = catn8_build_wizard_fallback_document_text($doc);
+            if ($fallbackText !== '' && catn8_build_wizard_document_is_text_like($doc)) {
+                $fallbackMime = trim((string)($doc['mime_type'] ?? 'text/plain'));
+                if ($fallbackMime === '' || !catn8_build_wizard_document_is_text_like(['mime_type' => $fallbackMime, 'original_name' => $doc['original_name'] ?? '', 'kind' => $doc['kind'] ?? ''])) {
+                    $fallbackMime = 'text/plain';
+                }
+                catn8_build_wizard_upsert_document_blob((int)($doc['id'] ?? 0), $fallbackMime, $fallbackText);
+                $safeName = str_replace(["\r", "\n", '"'], [' ', ' ', "'"], trim((string)($doc['original_name'] ?? 'download')) ?: 'download');
+                header('Content-Type: ' . $fallbackMime . '; charset=UTF-8');
+                if ($download) {
+                    header('Content-Disposition: attachment; filename="' . $safeName . '"');
+                }
+                header('Content-Length: ' . strlen($fallbackText));
+                header('Cache-Control: private, max-age=600');
+                echo $fallbackText;
+                exit;
             }
         }
         if ($path === '') {

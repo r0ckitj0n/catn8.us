@@ -5,7 +5,7 @@ import {
   Accumul8Transaction,
 } from '../../types/accumul8';
 
-export type StatementModalSection = 'inbox' | 'library' | 'search';
+export type StatementModalSection = 'inbox' | 'library' | 'search' | 'signals';
 export type StatementLibraryFilter = 'all' | 'review' | 'processed' | 'failed' | 'suspicious';
 export type StatementWorkspacePanel = 'review' | 'imported' | 'duplicates' | 'failed' | 'suspicious' | 'reconciliation';
 

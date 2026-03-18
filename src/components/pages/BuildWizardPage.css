@@ -1177,6 +1177,23 @@
   opacity: 0.75;
 }
 
+.build-wizard-step-title-display {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #18324c;
+  line-height: 1.25;
+}
+
+.build-wizard-step-description-display {
+  min-height: 54px;
+  border: 1px solid #d4deec;
+  border-radius: 10px;
+  background: #f9fbfe;
+  padding: 10px 12px;
+  color: #30465f;
+  white-space: pre-wrap;
+}
+
 .build-wizard-permit-usage-note {
   grid-column: 1 / -1;
   font-size: 0.78rem;
@@ -2892,6 +2909,14 @@
 
 .build-wizard-step-info-modal {
   width: min(980px, 100%);
+}
+
+.build-wizard-step-edit-modal {
+  width: min(980px, 100%);
+}
+
+.build-wizard-step-edit-grid {
+  margin-top: 10px;
 }
 
 .build-wizard-task-attachments-modal {

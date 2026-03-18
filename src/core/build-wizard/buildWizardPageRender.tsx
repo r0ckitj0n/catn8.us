@@ -1,8 +1,6 @@
 import React from 'react';
 
 import { StandardIconButton } from '../../components/common/StandardIconButton';
-import { StandardIconLink } from '../../components/common/StandardIconLink';
-import { WebpImage } from '../../components/common/WebpImage';
 import { ApiClient } from '../ApiClient';
 import { useBuildWizard } from '../../hooks/useBuildWizard';
 import {
@@ -94,6 +92,19 @@ import {
   BuildWizardProjectPhotosSection,
   BuildWizardTemplateEditor,
 } from './buildWizardRenderSections';
+import { BuildWizardAiToolsModal } from './buildWizardAiToolsModal';
+import { BuildWizardDocumentUploadModal } from './buildWizardDocumentUploadModal';
+import { BuildWizardLightboxModal } from './buildWizardLightboxModal';
+import { BuildWizardCompletedSection, BuildWizardOverviewSection } from './buildWizardOverviewSections';
+import { BuildWizardProjectDeskContacts } from './buildWizardProjectDeskContacts';
+import { BuildWizardProjectDeskDocuments } from './buildWizardProjectDeskDocuments';
+import { BuildWizardProjectDeskModal } from './buildWizardProjectDeskModal';
+import { BuildWizardProjectOverviewModal } from './buildWizardProjectOverviewModal';
+import { BuildWizardRecoveryReportModal } from './buildWizardRecoveryReportModal';
+import { BuildWizardStartSection } from './buildWizardStartSection';
+import { BuildWizardStepEditModal } from './buildWizardStepEditModal';
+import { BuildWizardStepInfoModal } from './buildWizardStepInfoModal';
+import { BuildWizardWorkspaceActionModals } from './buildWizardWorkspaceActionModals';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
@@ -5627,294 +5638,37 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         <div className="build-wizard-sticky-head-spacer" aria-hidden="true" style={{ height: stickyHeadHeight }} />
 
         {activeTab === 'overview' ? (
-          <div className="build-wizard-card">
-            <h2>Project Overview</h2>
-            <div className="build-wizard-overview-grid">
-              <div className="build-wizard-overview-metric">
-                <div className="build-wizard-overview-label">Project Start Date</div>
-                <div className="build-wizard-overview-value">{overviewMetrics.startDate ? formatTimelineDate(overviewMetrics.startDate) : 'Not set'}</div>
-                <div className="build-wizard-overview-sub">
-                  {overviewMetrics.startCountdownDays === null
-                    ? 'Set Target Start Date or step start dates.'
-                    : (overviewMetrics.startCountdownDays >= 0
-                      ? `${overviewMetrics.startCountdownDays} day(s) until start`
-                      : `${Math.abs(overviewMetrics.startCountdownDays)} day(s) since start`)}
-                </div>
-              </div>
-              {overviewMetrics.nextStep ? (
-                <button
-                  type="button"
-                  className="build-wizard-overview-metric build-wizard-overview-metric-button"
-                  onClick={() => focusStepInBuildView(stepPhaseBucket(overviewMetrics.nextStep.step), overviewMetrics.nextStep.step.id)}
-                  title="Open this step in its phase timeline"
-                >
-                  <div className="build-wizard-overview-label">Next Looming Step</div>
-                  <div className="build-wizard-overview-value">
-                    {`${overviewMetrics.nextStep.phaseLabel}${overviewMetrics.nextStep.phaseStepNumber ? `, Step ${overviewMetrics.nextStep.phaseStepNumber}` : ''}: ${overviewMetrics.nextStep.step.title}`}
-                  </div>
-                  <div className="build-wizard-overview-sub">
-                    {`${formatDate(overviewMetrics.nextStep.step.expected_start_date)} - ${formatDate(overviewMetrics.nextStep.step.expected_end_date)}`}
-                  </div>
-                </button>
-              ) : (
-                <div className="build-wizard-overview-metric">
-                  <div className="build-wizard-overview-label">Next Looming Step</div>
-                  <div className="build-wizard-overview-value">No upcoming step dates</div>
-                  <div className="build-wizard-overview-sub">Add expected dates to upcoming steps.</div>
-                </div>
-              )}
-              <div className="build-wizard-overview-metric">
-                <div className="build-wizard-overview-label">Estimated Project End</div>
-                <div className="build-wizard-overview-value">{overviewMetrics.endDate ? formatTimelineDate(overviewMetrics.endDate) : 'Not set'}</div>
-                <div className="build-wizard-overview-sub">
-                  {overviewMetrics.endCountdownDays === null
-                    ? 'Set Target Completion Date or step end dates.'
-                    : (overviewMetrics.endCountdownDays >= 0
-                      ? `${overviewMetrics.endCountdownDays} day(s) remaining`
-                      : `${Math.abs(overviewMetrics.endCountdownDays)} day(s) past due`)}
-                </div>
-              </div>
-            </div>
-
-            <div className="build-wizard-overview-spend">
-              <h3>Budget Progress</h3>
-              <div className="build-wizard-overview-bar">
-                <div
-                  className="build-wizard-overview-spent"
-                  style={{ width: `${overviewMetrics.projectedTotal > 0 ? Math.min(100, (overviewMetrics.spentActual / overviewMetrics.projectedTotal) * 100) : 0}%` }}
-                />
-              </div>
-              <div className="build-wizard-overview-spend-meta">
-                <span>Spent: {formatCurrency(overviewMetrics.spentActual)}</span>
-                <span>Projected Total: {formatCurrency(overviewMetrics.projectedTotal)}</span>
-                <span>Estimated Left: {formatCurrency(overviewMetrics.remainingProjected)}{overviewMetrics.aiEstimatedCostSteps > 0 ? '*' : ''}</span>
-              </div>
-            </div>
-
-            <div className="build-wizard-overview-missing">
-              <div className="build-wizard-overview-missing-title">Missing Data Check</div>
-              <div className="build-wizard-overview-missing-text">
-                Steps missing cost estimates: {overviewMetrics.missingEstimateCount} | Steps missing dates: {overviewMetrics.missingTimelineCount}
-              </div>
-              <button className="btn btn-outline-primary btn-sm" onClick={() => void onEstimateMissingWithAi()} disabled={aiBusy}>
-                {aiBusy ? 'Estimating...' : 'Estimate Missing w/ AI'}
-              </button>
-              <div className="build-wizard-overview-footnote">* AI-estimated value</div>
-            </div>
-
-            {renderProjectPhotosAndKeyPaperwork()}
-          </div>
+          <BuildWizardOverviewSection
+            aiBusy={aiBusy}
+            focusNextStep={(step) => focusStepInBuildView(stepPhaseBucket(step), step.id)}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            formatTimelineDate={formatTimelineDate}
+            onEstimateMissingWithAi={onEstimateMissingWithAi}
+            overviewMetrics={overviewMetrics}
+            projectPhotosSection={renderProjectPhotosAndKeyPaperwork()}
+          />
         ) : null}
 
         {activeTab === 'start' ? (
-          <div className="build-wizard-card">
-            <h2>Initial Home Information</h2>
-            <div className="build-wizard-grid">
-              <label>
-                Home Name
-                <input
-                  type="text"
-                  value={projectDraft.title || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, title: e.target.value }))}
-                  onBlur={() => void updateProject({ title: projectDraft.title || '' })}
-                />
-              </label>
-              <label>
-                Status
-                <select
-                  value={projectDraft.status || 'planning'}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, status: e.target.value }))}
-                  onBlur={() => void updateProject({ status: projectDraft.status || 'planning' })}
-                >
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="on_hold">On Hold</option>
-                  <option value="planning">Planning</option>
-                </select>
-              </label>
-              <label>
-                Lot Address
-                <input
-                  type="text"
-                  value={projectDraft.lot_address || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, lot_address: e.target.value }))}
-                  onBlur={() => void updateProject({ lot_address: projectDraft.lot_address || '' })}
-                />
-              </label>
-              <label>
-                Square Feet
-                <input
-                  type="number"
-                  value={projectDraft.square_feet ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, square_feet: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ square_feet: projectDraft.square_feet })}
-                />
-              </label>
-              <label>
-                Home Style
-                <input
-                  type="text"
-                  value={projectDraft.home_style || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, home_style: e.target.value }))}
-                  onBlur={() => void updateProject({ home_style: projectDraft.home_style || '' })}
-                />
-              </label>
-              <label>
-                Home Type
-                <select
-                  value={projectDraft.home_type || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, home_type: e.target.value }))}
-                  onBlur={() => void updateProject({ home_type: projectDraft.home_type || '' })}
-                >
-                  <option value="">Select type</option>
-                  <option value="single_family">Single Family</option>
-                  <option value="townhouse">Townhouse</option>
-                  <option value="condo">Condo</option>
-                  <option value="multi_family">Multi Family</option>
-                  <option value="manufactured">Manufactured</option>
-                  <option value="farm_ranch">Farm/Ranch</option>
-                </select>
-              </label>
-              <label>
-                Number of Rooms
-                <input
-                  type="number"
-                  value={projectDraft.room_count ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, room_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ room_count: projectDraft.room_count })}
-                />
-              </label>
-              <label>
-                Number of Bedrooms
-                <input
-                  type="number"
-                  value={projectDraft.bedrooms_count ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, bedrooms_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ bedrooms_count: projectDraft.bedrooms_count })}
-                />
-              </label>
-              <label>
-                Number of Kitchens
-                <input
-                  type="number"
-                  value={projectDraft.kitchens_count ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, kitchens_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={(e) => void updateProject({ kitchens_count: toNumberOrNull(e.currentTarget.value) })}
-                />
-              </label>
-              <label>
-                Number of Bathrooms
-                <input
-                  type="number"
-                  value={projectDraft.bathroom_count ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, bathroom_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ bathroom_count: projectDraft.bathroom_count })}
-                />
-              </label>
-              <label>
-                Stories
-                <input
-                  type="number"
-                  value={projectDraft.stories_count ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, stories_count: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ stories_count: projectDraft.stories_count })}
-                />
-              </label>
-              <label>
-                Lot Size
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={lotSizeInput}
-                  onChange={(e) => setLotSizeInput(e.target.value)}
-                  onBlur={() => {
-                    const nextLotSizeSqft = lotSizeInputToSqftAuto(lotSizeInput);
-                    setProjectDraft((prev) => ({ ...prev, lot_size_sqft: nextLotSizeSqft }));
-                    void updateProject({ lot_size_sqft: nextLotSizeSqft });
-                  }}
-                />
-                <div className="build-wizard-permit-usage-note">{lotSizeDetectedUnit === 'acres' ? '(acres)' : '(sq ft)'}</div>
-              </label>
-              <label>
-                Garage Spaces
-                <input
-                  type="number"
-                  value={projectDraft.garage_spaces ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, garage_spaces: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ garage_spaces: projectDraft.garage_spaces })}
-                />
-              </label>
-              <label>
-                Parking Spaces
-                <input
-                  type="number"
-                  value={projectDraft.parking_spaces ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, parking_spaces: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ parking_spaces: projectDraft.parking_spaces })}
-                />
-              </label>
-              <label>
-                Year Built (if existing)
-                <input
-                  type="number"
-                  value={projectDraft.year_built ?? ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, year_built: toNumberOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ year_built: projectDraft.year_built })}
-                />
-              </label>
-              <label>
-                HOA Monthly Fee
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="build-wizard-currency-input"
-                  value={renderCurrencyInputValue('project-hoa_fee_monthly', projectDraft.hoa_fee_monthly)}
-                  onFocus={() => startCurrencyEdit('project-hoa_fee_monthly', projectDraft.hoa_fee_monthly)}
-                  onChange={(e) => changeCurrencyEdit('project-hoa_fee_monthly', e.target.value)}
-                  onBlur={() => finishCurrencyEdit('project-hoa_fee_monthly', (value) => {
-                    setProjectDraft((prev) => ({ ...prev, hoa_fee_monthly: value }));
-                    void updateProject({ hoa_fee_monthly: value });
-                  })}
-                />
-              </label>
-              <label>
-                Target Start Date
-                <input
-                  type="date"
-                  value={projectDraft.target_start_date || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_start_date: toStringOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ target_start_date: toStringOrNull(projectDraft.target_start_date || '') })}
-                />
-              </label>
-              <label>
-                Target Completion Date
-                <input
-                  type="date"
-                  value={projectDraft.target_completion_date || ''}
-                  onChange={(e) => setProjectDraft((prev) => ({ ...prev, target_completion_date: toStringOrNull(e.target.value) }))}
-                  onBlur={() => void updateProject({ target_completion_date: toStringOrNull(projectDraft.target_completion_date || '') })}
-                />
-              </label>
-            </div>
-
-            <label className="build-wizard-notes-field">
-              Home Notes
-              <textarea
-                rows={5}
-                value={projectDraft.wizard_notes || ''}
-                onChange={(e) => setProjectDraft((prev) => ({ ...prev, wizard_notes: e.target.value }))}
-                onBlur={() => void updateProject({ wizard_notes: projectDraft.wizard_notes || '' })}
-              />
-            </label>
-
-            <div className="build-wizard-stats-row">
-              <span>Completed Steps: {projectTotals.doneCount}/{projectTotals.totalCount}</span>
-              <span>Estimated Total: {formatCurrency(projectTotals.totalEstimated)}</span>
-              <span>Actual Total: {formatCurrency(projectTotals.totalActual)}</span>
-            </div>
-
-            {renderProjectPhotosAndKeyPaperwork()}
-          </div>
+          <BuildWizardStartSection
+            changeCurrencyEdit={changeCurrencyEdit}
+            finishCurrencyEdit={finishCurrencyEdit}
+            formatCurrency={formatCurrency}
+            lotSizeDetectedUnit={lotSizeDetectedUnit}
+            lotSizeInput={lotSizeInput}
+            lotSizeInputToSqftAuto={lotSizeInputToSqftAuto}
+            projectDraft={projectDraft}
+            projectPhotosSection={renderProjectPhotosAndKeyPaperwork()}
+            projectTotals={projectTotals}
+            renderCurrencyInputValue={renderCurrencyInputValue}
+            setLotSizeInput={setLotSizeInput}
+            setProjectDraft={setProjectDraft}
+            startCurrencyEdit={startCurrencyEdit}
+            toNumberOrNull={toNumberOrNull}
+            toStringOrNull={toStringOrNull}
+            updateProject={updateProject}
+          />
         ) : null}
 
         {activeTab !== 'overview' && activeTab !== 'start' && activeTab !== 'completed' ? (
@@ -5963,49 +5717,18 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         ) : null}
 
         {activeTab === 'completed' ? (
-          <div className="build-wizard-card">
-            <h2>Completed Steps</h2>
-            <div className="build-wizard-completed-layout">
-              <div className="build-wizard-completed-list">
-                {completedSteps.length ? completedSteps.map((step) => (
-                  <div className="build-wizard-completed-item" key={step.id}>
-                    <div className="build-wizard-completed-head">
-                      <strong>#{step.step_order} {step.title}</strong>
-                      <span>{formatCurrency(stepCostTotalExcludingQuotes(step))}</span>
-                    </div>
-                    <div className="build-wizard-completed-date">Date: {formatDate(step.completed_at || step.expected_end_date || step.expected_start_date)}</div>
-                    {(stepAssigneesByStepId.get(step.id) || []).length > 0 ? (
-                      <div className="build-wizard-step-assignees">
-                        <div className="build-wizard-step-assignees-label">Assigned</div>
-                        <div className="build-wizard-step-assignees-list">
-                          {(stepAssigneesByStepId.get(step.id) || []).map((entry) => (
-                            <span key={`completed-${step.id}-${entry.contact.id}`} className={`build-wizard-step-assignee-chip ${contactTypeChipClass(normalizeContactType(entry.contact))}`}>
-                              {contactTypeLabel(normalizeContactType(entry.contact))}: {entry.contact.display_name}
-                              {entry.source === 'phase' ? ' (Phase)' : ' (Step)'}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {step.notes.length ? (
-                      <div className="build-wizard-completed-notes">
-                    {step.notes.map((note) => (
-                          <div key={note.id}>
-                            <strong>{formatDate(note.created_at)}</strong>: {note.note_text}
-                            {noteEditedAtLabel(note) ? ` (Edited ${noteEditedAtLabel(note)})` : ''}
-                          </div>
-                        ))}
-                      </div>
-                    ) : <div className="build-wizard-muted">No notes on this step.</div>}
-                  </div>
-                )) : <div className="build-wizard-muted">No completed steps yet.</div>}
-              </div>
-              <aside className="build-wizard-completed-chart">
-                <h3>Date Graph</h3>
-                <DateRangeChart steps={completedSteps} rangeStart={footerRange.start} rangeEnd={footerRange.end} />
-              </aside>
-            </div>
-          </div>
+          <BuildWizardCompletedSection
+            completedSteps={completedSteps}
+            contactTypeChipClass={contactTypeChipClass}
+            contactTypeLabel={contactTypeLabel}
+            footerRange={footerRange}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            normalizeContactType={normalizeContactType}
+            noteEditedAtLabel={noteEditedAtLabel}
+            stepAssigneesByStepId={stepAssigneesByStepId}
+            stepCostTotalExcludingQuotes={stepCostTotalExcludingQuotes}
+          />
         ) : null}
       </div>
 
@@ -6023,1688 +5746,215 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
         </div>
       </footer>
 
-      {projectDeskOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setProjectDeskOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-project-desk-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Project Desk</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <button
-                  type="button"
-                  className="build-wizard-phase-add"
-                  title="Add step"
-                  aria-label="Add step"
-                  onClick={() => void addStep('general')}
-                >
-                  +
-                </button>
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close project desk"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setProjectDeskOpen(false)}
-                />
-              </div>
-            </div>
-            <div className="build-wizard-desk-grid">
-              <div className="build-wizard-desk-documents">
-                <div className="build-wizard-doc-manager-head">
-                  <h3>Documents</h3>
-                  <div className="build-wizard-doc-manager-actions">
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => setDocumentUploadModalOpen(true)}
-                    >
-                      Upload Document
-                    </button>
-                  </div>
-                </div>
-                {documents.length ? (
-                  <div className="build-wizard-doc-manager-list">
-                    <div className="build-wizard-doc-manager-filters">
-                      <label>
-                        Kind
-                        <select
-                          value={documentManagerKindFilter}
-                          onChange={(e) => setDocumentManagerKindFilter(e.target.value)}
-                        >
-                          <option value="all">All</option>
-                          {documentManagerKindOptions.map((kindValue) => (
-                            <option key={kindValue} value={kindValue}>
-                              {buildWizardTokenLabel(kindValue, 'Other')}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Phase
-                        <select
-                          value={documentManagerPhaseFilter}
-                          onChange={(e) => setDocumentManagerPhaseFilter(e.target.value)}
-                        >
-                          <option value="all">All</option>
-                          {documentManagerPhaseOptions.map((phaseKey) => (
-                            <option key={phaseKey} value={phaseKey}>
-                              {prettyPhaseLabel(phaseKey)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Linked Step
-                        <select
-                          value={documentManagerStepFilter}
-                          onChange={(e) => setDocumentManagerStepFilter(e.target.value)}
-                        >
-                          <option value="all">All</option>
-                          <option value="unlinked">No step linked</option>
-                          {documentManagerLinkedStepFilterOptions.map((option) => (
-                            <option key={`doc-filter-step-${option.step.id}`} value={String(option.step.id)}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Query Index
-                        <input
-                          type="search"
-                          value={documentManagerQuery}
-                          onChange={(e) => setDocumentManagerQuery(e.target.value)}
-                          placeholder="Search indexed document text..."
-                        />
-                      </label>
-                    </div>
-                    {documentManagerQuery.trim().length >= 2 ? (
-                      <div className="build-wizard-muted">
-                        {documentManagerSearchLoading
-                          ? 'Searching index...'
-                          : `Index matches: ${filteredDocumentManagerDocs.length}`}
-                      </div>
-                    ) : null}
-                    {filteredDocumentManagerDocs.length ? filteredDocumentManagerDocs.map((doc) => {
-                      const draft = buildDocumentDraft(doc);
-                      const selectedStep = steps.find((step) => step.id === Number(draft.step_id || 0));
-                      const phaseLabel = prettyPhaseLabel(selectedStep?.phase_key || doc.step_phase_key || 'general');
-                      const indexedHit = documentManagerSearchResultById.get(doc.id);
-
-                      return (
-                        <div className="build-wizard-doc-manager-row" key={doc.id}>
-                          <div className="build-wizard-doc-manager-preview">
-                            {Number(doc.is_image) === 1 ? (
-                              <button
-                                className="build-wizard-doc-thumb-btn"
-                                onClick={() => void openDocumentPreview(doc)}
-                                title="Open preview"
-                              >
-                                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={doc.original_name} className="build-wizard-doc-thumb" />
-                              </button>
-                            ) : isPdfDocument(doc) ? (
-                              <button type="button" className="build-wizard-doc-thumb-link" onClick={() => void openDocumentPreview(doc)} title="Open preview">
-                                <WebpImage src={doc.thumbnail_url || doc.public_url} alt={`${doc.original_name} preview`} className="build-wizard-doc-thumb" />
-                              </button>
-                            ) : (isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc)) ? (
-                              <button
-                                type="button"
-                                className="build-wizard-doc-file-link build-wizard-doc-file-link-rich"
-                                onClick={() => void openDocumentPreview(doc)}
-                                title="Open preview"
-                              >
-                                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                                  <svg viewBox="0 0 24 24">
-                                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                                    <path d="M9 13h6M9 16h6" />
-                                  </svg>
-                                </span>
-                                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                                <span className="build-wizard-doc-file-open">Open preview</span>
-                              </button>
-                            ) : (
-                              <button type="button" className="build-wizard-doc-file-link build-wizard-doc-file-link-rich" onClick={() => void openDocumentPreview(doc)}>
-                                <span className="build-wizard-doc-file-glyph" aria-hidden="true">
-                                  <svg viewBox="0 0 24 24">
-                                    <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5" />
-                                    <path d="M9 13h6M9 16h6" />
-                                  </svg>
-                                </span>
-                                <span className="build-wizard-doc-file-ext">{thumbnailKindLabel(doc)}</span>
-                                <span className="build-wizard-doc-file-open">Open file</span>
-                              </button>
-                            )}
-                          </div>
-                          <div className="build-wizard-doc-manager-fields">
-                            <div className="build-wizard-doc-manager-title">{doc.original_name}</div>
-                            <div className="build-wizard-doc-manager-meta">Uploaded: {formatTimelineDate(doc.uploaded_at)} | Phase: {phaseLabel}</div>
-                            {indexedHit?.snippet ? (
-                              <div className="build-wizard-muted">{indexedHit.snippet}</div>
-                            ) : null}
-                            <div className="build-wizard-doc-manager-grid">
-                              <label>
-                                Kind
-                                <select
-                                  value={draft.kind}
-                                  onChange={(e) => updateDocumentDraft(doc.id, { kind: e.target.value })}
-                                >
-                                  {docKindOptions.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                Linked Step
-                                <select
-                                  className="build-wizard-doc-manager-step-select"
-                                  value={draft.step_id > 0 ? String(draft.step_id) : ''}
-                                  onChange={(e) => updateDocumentDraft(doc.id, { step_id: Number(e.target.value || '0') })}
-                                >
-                                  <option value="">No step linked</option>
-                                  {linkedStepOptions.map((option) => (
-                                    <option key={option.step.id} value={option.step.id}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="is-wide">
-                                Caption
-                                <input
-                                  type="text"
-                                  value={draft.caption}
-                                  onChange={(e) => updateDocumentDraft(doc.id, { caption: e.target.value })}
-                                />
-                              </label>
-                              {draft.kind === 'receipt' ? (
-                                <>
-                                  <label>
-                                    Receipt Title
-                                    <input
-                                      type="text"
-                                      value={draft.receipt_title}
-                                      onChange={(e) => updateDocumentDraft(doc.id, { receipt_title: e.target.value })}
-                                    />
-                                  </label>
-                                  <label>
-                                    Receipt Vendor
-                                    <input
-                                      type="text"
-                                      value={draft.receipt_vendor}
-                                      onChange={(e) => updateDocumentDraft(doc.id, { receipt_vendor: e.target.value })}
-                                    />
-                                  </label>
-                                  <label>
-                                    Task Date Override
-                                    <input
-                                      type="date"
-                                      value={draft.receipt_date}
-                                      onChange={(e) => updateDocumentDraft(doc.id, { receipt_date: e.target.value })}
-                                    />
-                                  </label>
-                                  <label>
-                                    Receipt Amount
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      inputMode="decimal"
-                                      value={draft.receipt_amount}
-                                      onChange={(e) => updateDocumentDraft(doc.id, { receipt_amount: e.target.value })}
-                                    />
-                                  </label>
-                                  <label className="is-wide">
-                                    Receipt Notes
-                                    <input
-                                      type="text"
-                                      value={draft.receipt_notes}
-                                      onChange={(e) => updateDocumentDraft(doc.id, { receipt_notes: e.target.value })}
-                                    />
-                                  </label>
-                                </>
-                              ) : null}
-                            </div>
-                            <div className="build-wizard-doc-manager-actions">
-                              {(isSpreadsheetPreviewDoc(doc) || isPlanPreviewDoc(doc) || Number(doc.is_image) === 1) ? (
-                                <StandardIconButton
-                                  iconKey="view"
-                                  ariaLabel={`Open ${doc.original_name}`}
-                                  title="Open"
-                                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                                  onClick={() => void openDocumentPreview(doc)}
-                                />
-                              ) : (
-                                <StandardIconButton
-                                  iconKey="view"
-                                  ariaLabel={`Open ${doc.original_name}`}
-                                  title="Open"
-                                  className="btn btn-outline-primary btn-sm catn8-action-icon-btn"
-                                  onClick={() => void openDocumentPreview(doc)}
-                                />
-                              )}
-                              <StandardIconLink
-                                iconKey="download"
-                                ariaLabel={`Download ${doc.original_name}`}
-                                title="Download"
-                                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
-                                href={withDownloadFlag(doc.public_url)}
-                              />
-                              <input
-                                ref={(el) => { replaceFileInputByDocId.current[doc.id] = el; }}
-                                type="file"
-                                className="build-wizard-hidden-file-input"
-                                onChange={(e) => {
-                                  const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                                  void onReplaceDocumentFile(doc, file);
-                                  e.currentTarget.value = '';
-                                }}
-                              />
-                              <StandardIconButton
-                                iconKey={replacingDocumentId === doc.id ? 'refresh' : 'upload'}
-                                ariaLabel={replacingDocumentId === doc.id ? `Replacing ${doc.original_name}` : `Replace ${doc.original_name}`}
-                                title={replacingDocumentId === doc.id ? 'Replacing...' : 'Replace'}
-                                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn"
-                                onClick={() => replaceFileInputByDocId.current[doc.id]?.click()}
-                                disabled={replacingDocumentId === doc.id}
-                              />
-                              {Number(doc.is_image) === 1 ? (
-                                <button
-                                  className="btn btn-outline-primary btn-sm"
-                                  onClick={() => void updateProject({ primary_photo_document_id: doc.id })}
-                                >
-                                  {Number(project?.primary_photo_document_id || 0) === doc.id ? 'Primary Photo' : 'Set Primary Photo'}
-                                </button>
-                              ) : null}
-                              {String(doc.kind || '') === 'blueprint' ? (
-                                <button
-                                  className="btn btn-outline-primary btn-sm"
-                                  onClick={() => void updateProject({ blueprint_document_id: doc.id })}
-                                >
-                                  {Number(project?.blueprint_document_id || 0) === doc.id ? 'Primary Blueprint' : 'Set Primary Blueprint'}
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={() => void onSaveDocumentDraft(doc)}
-                                disabled={documentSavingId === doc.id || Number(draft.step_id || 0) <= 0}
-                                title={Number(draft.step_id || 0) > 0 ? 'Attach this document to the selected step' : 'Select a step first'}
-                              >
-                                Attach to Step
-                              </button>
-                              <StandardIconButton
-                                iconKey={documentSavingId === doc.id ? 'refresh' : 'save'}
-                                ariaLabel={documentSavingId === doc.id ? `Saving ${doc.original_name}` : `Save ${doc.original_name}`}
-                                title={documentSavingId === doc.id ? 'Saving...' : 'Save'}
-                                className="btn btn-success btn-sm catn8-action-icon-btn"
-                                onClick={() => void onSaveDocumentDraft(doc)}
-                                disabled={documentSavingId === doc.id}
-                              />
-                              <StandardIconButton
-                                iconKey={deletingDocumentId === doc.id ? 'refresh' : 'delete'}
-                                ariaLabel={deletingDocumentId === doc.id ? `Deleting ${doc.original_name}` : `Delete ${doc.original_name}`}
-                                title={deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-                                className="btn btn-outline-danger btn-sm catn8-action-icon-btn"
-                                onClick={() => void onDeleteDocument(doc.id, doc.original_name)}
-                                disabled={deletingDocumentId === doc.id}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }) : <div className="build-wizard-muted">No documents match the selected filters.</div>}
-                  </div>
-                ) : (
-                  <div className="build-wizard-muted">No documents uploaded yet.</div>
-                )}
-              </div>
-              <div className="build-wizard-desk-contacts">
-                <h3>Contacts</h3>
-                <div className="build-wizard-contact-summary">
-                  <span className="build-wizard-contact-summary-chip">
-                    Total: {deskContacts.length}
-                  </span>
-                  <span className="build-wizard-contact-summary-chip is-vendor">
-                    Vendors: {deskContacts.filter((contact) => normalizeContactType(contact) === 'vendor').length}
-                  </span>
-                  <span className="build-wizard-contact-summary-chip is-authority">
-                    Authorities: {deskContacts.filter((contact) => normalizeContactType(contact) === 'authority').length}
-                  </span>
-                  <span className="build-wizard-contact-summary-chip is-contact">
-                    Contacts: {deskContacts.filter((contact) => normalizeContactType(contact) === 'contact').length}
-                  </span>
-                </div>
-                <div className="build-wizard-contact-toolbar">
-                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={onStartNewDeskContact}>
-                    New Contact
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => {
-                      setDeskContactQuery('');
-                      setDeskContactTypeFilter('all');
-                    }}
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-                <div className="build-wizard-contact-filter-grid">
-                  <input
-                    type="search"
-                    placeholder="Search name, company, email..."
-                    value={deskContactQuery}
-                    onChange={(e) => setDeskContactQuery(e.target.value)}
-                  />
-                  <select
-                    value={deskContactTypeFilter}
-                    onChange={(e) => setDeskContactTypeFilter(e.target.value as 'all' | BuildWizardContactType)}
-                  >
-                    <option value="all">All types</option>
-                    <option value="contact">Contacts only</option>
-                    <option value="vendor">Vendors only</option>
-                    <option value="authority">Authorities only</option>
-                  </select>
-                </div>
-                <div className="build-wizard-contact-list-nav">
-                  {filteredDeskContacts.length ? filteredDeskContacts.map((contact) => {
-                    const assignmentCount = deskContactAssignmentCountById.get(contact.id) || 0;
-                    const isSelected = contact.id === deskSelectedContactId;
-                    return (
-                      <button
-                        type="button"
-                        key={contact.id}
-                        className={`build-wizard-contact-list-item${isSelected ? ' is-selected' : ''}`}
-                        onClick={() => {
-                          setDeskCreateMode(false);
-                          setDeskSelectedContactId(contact.id);
-                        }}
-                      >
-                        <span className="build-wizard-contact-list-main">
-                          <strong>{contact.display_name || 'Unnamed contact'}</strong>
-                          <span className="build-wizard-contact-list-sub">
-                            {contact.company ? `${contact.company} | ` : ''}
-                            {contactTypeLabel(normalizeContactType(contact))}
-                            {contact.project_id ? ' | Project' : ' | Site'}
-                          </span>
-                        </span>
-                        <span className="build-wizard-contact-list-count">
-                          {assignmentCount} assignment{assignmentCount === 1 ? '' : 's'}
-                        </span>
-                      </button>
-                    );
-                  }) : <div className="build-wizard-muted">No contacts match the current filters.</div>}
-                </div>
-                <div className="build-wizard-contact-editor">
-                  <label>
-                    Name
-                    <input
-                      type="text"
-                      value={deskContactDraft.display_name}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, display_name: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Email
-                    <input
-                      type="email"
-                      value={deskContactDraft.email}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, email: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Phone
-                    <input
-                      type="text"
-                      value={deskContactDraft.phone}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, phone: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Company
-                    <input
-                      type="text"
-                      value={deskContactDraft.company}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, company: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Role
-                    <input
-                      type="text"
-                      value={deskContactDraft.role_title}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, role_title: e.target.value }))}
-                    />
-                  </label>
-                  <div className="build-wizard-contact-flags">
-                    <label>
-                      Type
-                      <select
-                        value={deskContactDraft.contact_type}
-                        onChange={(e) => {
-                          const nextType = e.target.value as BuildWizardContactType;
-                          setDeskContactDraft((prev) => ({
-                            ...prev,
-                            contact_type: nextType,
-                            is_vendor: nextType === 'vendor' ? 1 : 0,
-                            ...(nextType === 'vendor' ? {} : {
-                              vendor_type: '',
-                              vendor_license: '',
-                              vendor_trade: '',
-                              vendor_website: '',
-                            }),
-                          }));
-                        }}
-                      >
-                        <option value="contact">Contact</option>
-                        <option value="vendor">Vendor</option>
-                        <option value="authority">Authority</option>
-                      </select>
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={deskContactDraft.is_project_only === 1}
-                        onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, is_project_only: e.target.checked ? 1 : 0 }))}
-                      />
-                      Project-only contact
-                    </label>
-                  </div>
-                  {deskContactDraft.contact_type === 'vendor' ? (
-                    <div className="build-wizard-contact-vendor-fields">
-                      <label>
-                        Vendor Type
-                        <input
-                          type="text"
-                          value={deskContactDraft.vendor_type}
-                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_type: e.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        Trade
-                        <input
-                          type="text"
-                          value={deskContactDraft.vendor_trade}
-                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_trade: e.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        License
-                        <input
-                          type="text"
-                          value={deskContactDraft.vendor_license}
-                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_license: e.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        Website
-                        <input
-                          type="url"
-                          value={deskContactDraft.vendor_website}
-                          onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, vendor_website: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  <label>
-                    Notes
-                    <textarea
-                      rows={3}
-                      value={deskContactDraft.notes}
-                      onChange={(e) => setDeskContactDraft((prev) => ({ ...prev, notes: e.target.value }))}
-                    />
-                  </label>
-                  <div className="build-wizard-contact-actions">
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => void onSaveDeskContact()}
-                      disabled={!deskContactDraft.display_name.trim()}
-                    >
-                      Save Contact
-                    </button>
-                    {selectedDeskContact ? (
-                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void onDeleteDeskContact()}>
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                {selectedDeskContact ? (
-                  <div className="build-wizard-contact-assignments">
-                    <h4>Assignments</h4>
-                    <div className="build-wizard-contact-assignment-controls">
-                      <select value={deskAssignmentPhaseKey} onChange={(e) => setDeskAssignmentPhaseKey(e.target.value)}>
-                        <option value="general">General</option>
-                        {phaseOptions.map((opt) => (
-                          <option key={`contact-phase-${opt.value}`} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void onAddDeskPhaseAssignment()}>
-                        Assign Phase
-                      </button>
-                    </div>
-                    <div className="build-wizard-contact-assignment-controls">
-                      <select
-                        value={deskAssignmentStepId > 0 ? String(deskAssignmentStepId) : ''}
-                        onChange={(e) => setDeskAssignmentStepId(Number(e.target.value || '0'))}
-                      >
-                        <option value="">Select step...</option>
-                        {linkedStepOptions.map((opt) => (
-                          <option key={`contact-step-${opt.step.id}`} value={opt.step.id}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void onAddDeskStepAssignment()}>
-                        Assign Step
-                      </button>
-                    </div>
-                    <div className="build-wizard-contact-assignment-list">
-                      {selectedContactAssignments.length ? selectedContactAssignments.map((assignment) => {
-                        const assignedStep = assignment.step_id ? stepByIdMap.get(assignment.step_id) : null;
-                        const phaseName = assignment.phase_key ? prettyPhaseLabel(assignment.phase_key) : null;
-                        return (
-                          <div key={assignment.id} className="build-wizard-contact-assignment-item">
-                            <div>
-                              {assignedStep
-                                ? `Step #${assignedStep.step_order} ${assignedStep.title}`
-                                : `Phase: ${phaseName || 'General'}`}
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => void deleteContactAssignment(projectId, assignment.id)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        );
-                      }) : <div className="build-wizard-muted">No assignments yet.</div>}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            {renderEditableStepCards(projectDeskSteps)}
-          </div>
+      <BuildWizardProjectDeskModal open={projectDeskOpen} onClose={() => setProjectDeskOpen(false)} onAddStep={() => addStep('general')}>
+        <div className="build-wizard-desk-grid">
+          <BuildWizardProjectDeskDocuments
+            buildDocumentDraft={buildDocumentDraft}
+            deletingDocumentId={deletingDocumentId}
+            docKindOptions={docKindOptions}
+            documentManagerKindFilter={documentManagerKindFilter}
+            documentManagerKindOptions={documentManagerKindOptions}
+            documentManagerLinkedStepFilterOptions={documentManagerLinkedStepFilterOptions}
+            documentManagerPhaseFilter={documentManagerPhaseFilter}
+            documentManagerPhaseOptions={documentManagerPhaseOptions}
+            documentManagerQuery={documentManagerQuery}
+            documentManagerSearchLoading={documentManagerSearchLoading}
+            documentManagerSearchResultById={documentManagerSearchResultById as Map<number, { snippet?: string }>}
+            documentManagerStepFilter={documentManagerStepFilter}
+            documentSavingId={documentSavingId}
+            documents={documents}
+            filteredDocumentManagerDocs={filteredDocumentManagerDocs}
+            isPlanPreviewDoc={isPlanPreviewDoc}
+            isSpreadsheetPreviewDoc={isSpreadsheetPreviewDoc}
+            linkedStepOptions={linkedStepOptions}
+            onDeleteDocument={onDeleteDocument}
+            onOpenUploadModal={() => setDocumentUploadModalOpen(true)}
+            onReplaceDocumentFile={onReplaceDocumentFile}
+            onSaveDocumentDraft={onSaveDocumentDraft}
+            openDocumentPreview={openDocumentPreview}
+            project={project}
+            replaceFileInputByDocId={replaceFileInputByDocId}
+            replacingDocumentId={replacingDocumentId}
+            setDocumentManagerKindFilter={setDocumentManagerKindFilter}
+            setDocumentManagerPhaseFilter={setDocumentManagerPhaseFilter}
+            setDocumentManagerQuery={setDocumentManagerQuery}
+            setDocumentManagerStepFilter={setDocumentManagerStepFilter}
+            steps={steps}
+            updateDocumentDraft={updateDocumentDraft}
+            updateProject={updateProject}
+          />
+          <BuildWizardProjectDeskContacts
+            contacts={deskContacts}
+            contactAssignmentCountById={deskContactAssignmentCountById}
+            deleteContactAssignment={deleteContactAssignment}
+            deskAssignmentPhaseKey={deskAssignmentPhaseKey}
+            deskAssignmentStepId={deskAssignmentStepId}
+            deskContactDraft={deskContactDraft}
+            deskContactQuery={deskContactQuery}
+            deskContactTypeFilter={deskContactTypeFilter}
+            deskSelectedContactId={deskSelectedContactId}
+            filteredContacts={filteredDeskContacts}
+            linkedStepOptions={linkedStepOptions}
+            onAddDeskPhaseAssignment={onAddDeskPhaseAssignment}
+            onAddDeskStepAssignment={onAddDeskStepAssignment}
+            onDeleteDeskContact={onDeleteDeskContact}
+            onSaveDeskContact={onSaveDeskContact}
+            onStartNewDeskContact={onStartNewDeskContact}
+            phaseOptions={phaseOptions}
+            projectId={projectId}
+            selectedContact={selectedDeskContact}
+            selectedContactAssignments={selectedContactAssignments}
+            setDeskAssignmentPhaseKey={setDeskAssignmentPhaseKey}
+            setDeskAssignmentStepId={setDeskAssignmentStepId}
+            setDeskContactDraft={setDeskContactDraft}
+            setDeskContactQuery={setDeskContactQuery}
+            setDeskContactTypeFilter={setDeskContactTypeFilter}
+            setDeskCreateMode={setDeskCreateMode}
+            setDeskSelectedContactId={setDeskSelectedContactId}
+            stepByIdMap={stepByIdMap}
+          />
         </div>
-      ) : null}
+        {renderEditableStepCards(projectDeskSteps)}
+      </BuildWizardProjectDeskModal>
 
-      {projectOverviewOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setProjectOverviewOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-project-overview-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Project Overview</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close project overview"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setProjectOverviewOpen(false)}
-                />
-              </div>
-            </div>
+      <BuildWizardProjectOverviewModal
+        formatCurrency={formatCurrency}
+        onClose={() => setProjectOverviewOpen(false)}
+        open={projectOverviewOpen}
+        projectOverviewRange={projectOverviewRange}
+        projectOverviewSections={projectOverviewSections}
+        projectOverviewTotals={projectOverviewTotals}
+        steps={steps}
+      />
 
-            <div className="build-wizard-project-overview-summary">
-              <div className="build-wizard-project-overview-summary-item">
-                <span>Total Steps</span>
-                <strong>{projectOverviewTotals.stepCount}</strong>
-              </div>
-              <div className="build-wizard-project-overview-summary-item">
-                <span>Completed</span>
-                <strong>{projectOverviewTotals.completedCount}</strong>
-              </div>
-              <div className="build-wizard-project-overview-summary-item">
-                <span>Projected Cost</span>
-                <strong>{formatCurrency(projectOverviewTotals.totalCost)}</strong>
-              </div>
-              <div className="build-wizard-project-overview-summary-item">
-                <span>Range</span>
-                <strong>{formatTimelineDate(projectOverviewRange.start)} - {formatTimelineDate(projectOverviewRange.end)}</strong>
-              </div>
-            </div>
+      <BuildWizardDocumentUploadModal
+        busy={documentUploadBusy}
+        docKind={docKind}
+        docKindOptions={docKindOptions}
+        docPhaseKey={docPhaseKey}
+        docStepId={docStepId}
+        file={documentUploadFile}
+        onClose={() => setDocumentUploadModalOpen(false)}
+        onFileChange={setDocumentUploadFile}
+        open={documentUploadModalOpen}
+        phaseOptions={phaseOptions}
+        selectableDocSteps={selectableDocSteps}
+        setDocKind={setDocKind}
+        setDocPhaseKey={setDocPhaseKey}
+        setDocStepId={setDocStepId}
+        uploadDocument={async (...args) => {
+          setDocumentUploadBusy(true);
+          try {
+            return await uploadDocument(...args);
+          } finally {
+            setDocumentUploadBusy(false);
+          }
+        }}
+      />
 
-            <div className="build-wizard-project-overview-timeline-card">
-              <h4>Master Timeline</h4>
-              <FooterPhaseTimeline
-                steps={steps}
-                rangeStart={projectOverviewRange.start}
-                rangeEnd={projectOverviewRange.end}
-                activeTab="overview"
-                editable={false}
-              />
-            </div>
+      <BuildWizardAiToolsModal
+        aiBusy={aiBusy}
+        aiPayloadJson={aiPayloadJson || ''}
+        aiPromptText={aiPromptText || ''}
+        deskAutoAssignBusy={deskAutoAssignBusy}
+        onAutoAssignDeskStepsToTimeline={onAutoAssignDeskStepsToTimeline}
+        onClose={() => setAiToolsOpen(false)}
+        onCompleteWithAi={onCompleteWithAi}
+        open={aiToolsOpen}
+        packageForAi={packageForAi}
+        sendToAiAndIngest={() => generateStepsFromAi('optimize')}
+      />
 
-            <div className="build-wizard-project-overview-phase-list">
-              {projectOverviewSections.map((section) => (
-                <section key={section.tabId} className="build-wizard-project-overview-phase">
-                  <header className="build-wizard-project-overview-phase-head">
-                    <h4>
-                      <span className="build-wizard-project-overview-phase-dot" style={{ background: section.phaseColor }} />
-                      {section.label}
-                    </h4>
-                    <div className="build-wizard-project-overview-phase-meta">
-                      <span>{section.completedCount}/{section.stepCount} complete</span>
-                      <span>{formatTimelineDate(section.startIso)} - {formatTimelineDate(section.endIso)}</span>
-                      <span>{formatCurrency(section.totalCost)}</span>
-                    </div>
-                  </header>
-                  <div className="build-wizard-project-overview-step-list">
-                    {section.rows.map((row) => (
-                      <article key={row.stepId} className={`build-wizard-project-overview-step-row${row.isCompleted ? ' is-completed' : ''}`}>
-                        <div className="build-wizard-project-overview-step-title">
-                          <div className="build-wizard-project-overview-step-main">
-                            <span className="build-wizard-project-overview-step-number">#{row.displayOrder}</span>
-                            <strong>{row.title}</strong>
-                            <span className="build-wizard-project-overview-step-type">{buildWizardTokenLabel(row.stepType, 'Other')}</span>
-                            {row.isCompleted ? <span className="build-wizard-project-overview-step-status">Completed</span> : null}
-                          </div>
-                          <div className="build-wizard-project-overview-step-meta">
-                            <span>{formatDate(row.startIso)} - {formatDate(row.endIso)}</span>
-                            <span>{row.durationDays ? `${row.durationDays} day(s)` : 'No duration'}</span>
-                            <span>{row.assigneeCount} assignee(s)</span>
-                            <span>{row.documentCount} doc(s)</span>
-                          </div>
-                        </div>
-                        <div className="build-wizard-project-overview-step-cost">
-                          <div>{formatCurrency(row.totalCost)}</div>
-                          <span>{row.costMode === 'actual' ? 'Actual' : (row.costMode === 'estimated' ? 'Estimated' : 'Missing')}</span>
-                        </div>
-                        <div className="build-wizard-project-overview-step-timeline">
-                          {row.hasTimeline ? (
-                            <div
-                              className="build-wizard-project-overview-step-bar"
-                              style={{
-                                left: `${row.leftPercent}%`,
-                                width: `${row.widthPercent}%`,
-                                background: section.phaseColor,
-                              }}
-                            />
-                          ) : (
-                            <div className="build-wizard-project-overview-step-no-timeline">No timeline dates</div>
-                          )}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <BuildWizardStepEditModal
+        activeTabStepNumbers={activeTabStepNumbers}
+        closeStepEditModal={closeStepEditModal}
+        dependencyCandidateByStepId={dependencyCandidateByStepId}
+        setDependencyCandidateByStepId={setDependencyCandidateByStepId}
+        open={Boolean(stepEditModalStep && stepEditModalDraft)}
+        saveStepEditModal={saveStepEditModal}
+        saving={stepEditSaving}
+        step={stepEditModalStep}
+        stepById={stepById}
+        stepDraft={stepEditModalDraft}
+        stepEditModalDependencyIds={stepEditModalDependencyIds}
+        stepEditModalDependencyOptions={stepEditModalDependencyOptions}
+        updateStepDraft={updateStepDraft}
+      />
 
-      {documentUploadModalOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setDocumentUploadModalOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-upload-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Upload Document</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close upload dialog"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setDocumentUploadModalOpen(false)}
-                />
-              </div>
-            </div>
-            <div className="build-wizard-doc-manager-grid">
-              <label>
-                Kind
-                <select value={docKind} onChange={(e) => setDocKind(e.target.value)}>
-                  {docKindOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Phase
-                <select value={docPhaseKey} onChange={(e) => setDocPhaseKey(e.target.value)}>
-                  {phaseOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="is-wide">
-                Linked Step
-                <select value={docStepId > 0 ? String(docStepId) : ''} onChange={(e) => setDocStepId(Number(e.target.value || '0'))}>
-                  <option value="">Auto-link by phase</option>
-                  {selectableDocSteps.map((step) => (
-                    <option key={step.id} value={step.id}>#{step.step_order} {step.title}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="is-wide">
-                File
-                <input
-                  type="file"
-                  onChange={(e) => setDocumentUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-                />
-              </label>
-            </div>
-            <div className="build-wizard-doc-manager-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={documentUploadBusy || !documentUploadFile}
-                onClick={() => {
-                  if (!documentUploadFile || documentUploadBusy) {
-                    return;
-                  }
-                  setDocumentUploadBusy(true);
-                  void uploadDocument(docKind, documentUploadFile, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey)
-                    .then(() => {
-                      setDocumentUploadModalOpen(false);
-                      setDocumentUploadFile(null);
-                    })
-                    .finally(() => setDocumentUploadBusy(false));
-                }}
-              >
-                {documentUploadBusy ? 'Uploading...' : 'Upload'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline-secondary btn-sm"
-                onClick={() => {
-                  setDocumentUploadModalOpen(false);
-                  setDocumentUploadFile(null);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <BuildWizardStepInfoModal
+        activeTabStepNumbers={activeTabStepNumbers}
+        formatAuditValue={formatAuditValue}
+        formatDate={formatDate}
+        noteEditedAtLabel={noteEditedAtLabel}
+        onClose={() => setStepInfoModalStepId(0)}
+        open={Boolean(stepInfoModalStep)}
+        step={stepInfoModalStep}
+      />
 
-      {aiToolsOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setAiToolsOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-ai-tools-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>AI Tools</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close AI tools"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setAiToolsOpen(false)}
-                />
-              </div>
-            </div>
+      <BuildWizardLightboxModal
+        closeLightbox={closeLightbox}
+        lightboxDoc={lightboxDoc}
+        lightboxSpreadsheetSheetIndex={lightboxSpreadsheetSheetIndex}
+        lightboxSupportsZoom={lightboxSupportsZoom}
+        lightboxZoom={lightboxZoom}
+        lightboxZoomMax={LIGHTBOX_ZOOM_MAX}
+        lightboxZoomMin={LIGHTBOX_ZOOM_MIN}
+        lightboxZoomStep={LIGHTBOX_ZOOM_STEP}
+        onLightboxWheelZoom={onLightboxWheelZoom}
+        open={Boolean(lightboxDoc)}
+        resetLightboxZoom={resetLightboxZoom}
+        setLightboxSpreadsheetSheetIndex={setLightboxSpreadsheetSheetIndex}
+        zoomLightboxBy={zoomLightboxBy}
+      />
 
-            <div className="build-wizard-ai-tools-grid">
-              <section className="build-wizard-ai-tool-card">
-                <h4>Complete w/ AI</h4>
-                <p>
-                  Runs a full AI pass to reorder, add, and refine steps across phases using project data and linked documents.
-                </p>
-                <ol>
-                  <li>Upload key docs in Project Desk.</li>
-                  <li>Review phase assignments and major milestones.</li>
-                  <li>Run Complete w/ AI, then review step changes before final edits.</li>
-                </ol>
-                <button className="btn btn-primary" onClick={() => void onCompleteWithAi()} disabled={aiBusy}>
-                  {aiBusy ? 'AI Running...' : 'Complete w/ AI'}
-                </button>
-              </section>
+      <BuildWizardWorkspaceActionModals
+        activeTabStepNumbers={activeTabStepNumbers}
+        attachExistingDocByReceiptId={attachExistingDocByReceiptId}
+        attachExistingDocFilterByReceiptId={attachExistingDocFilterByReceiptId}
+        confirmState={confirmState}
+        documentSavingId={documentSavingId}
+        documents={documents}
+        moveStepModalStep={moveStepModalStep}
+        moveStepModalTargetTab={moveStepModalTargetTab}
+        moveStepPhaseTabOptions={moveStepPhaseTabOptions}
+        moveTaskModalDoc={moveTaskModalDoc}
+        moveTaskModalTargetStepId={moveTaskModalTargetStepId}
+        moveTaskStepOptions={moveTaskStepOptions}
+        movingStep={movingStep}
+        onAttachExistingDocumentToReceipt={onAttachExistingDocumentToReceipt}
+        onCloseMoveStep={() => setMoveStepModalStepId(0)}
+        onCloseMoveTask={() => setMoveTaskModalDocId(0)}
+        onCloseTaskAttachments={() => setTaskAttachmentsModalDocId(0)}
+        onConfirm={closeConfirmation}
+        onMoveReceiptToStep={onMoveReceiptToStep}
+        onMoveStepFromModal={onMoveStepFromModal}
+        onOpenDocumentPreview={openDocumentPreview}
+        onUploadReceiptAttachments={onUploadReceiptAttachments}
+        setAttachExistingDocByReceiptId={setAttachExistingDocByReceiptId}
+        setAttachExistingDocFilterByReceiptId={setAttachExistingDocFilterByReceiptId}
+        setMoveStepModalTargetTab={setMoveStepModalTargetTab}
+        setMoveTaskModalTargetStepId={setMoveTaskModalTargetStepId}
+        taskAttachmentsModalAttachableDocuments={taskAttachmentsModalAttachableDocuments}
+        taskAttachmentsModalDoc={taskAttachmentsModalDoc}
+        taskAttachmentsModalStep={taskAttachmentsModalStep}
+      />
 
-              <section className="build-wizard-ai-tool-card">
-                <h4>Build AI Package</h4>
-                <p>
-                  Builds the packaged prompt and payload JSON from your current project so you can inspect exactly what AI will consume.
-                </p>
-                <ol>
-                  <li>Click Build AI Package.</li>
-                  <li>Review Prompt Text for context quality.</li>
-                  <li>Review Payload JSON for data completeness.</li>
-                </ol>
-                <button className="btn btn-success" disabled={aiBusy} onClick={() => void packageForAi()}>Build AI Package</button>
-              </section>
-
-              <section className="build-wizard-ai-tool-card">
-                <h4>Send to AI + Ingest</h4>
-                <p>
-                  Sends the current package to AI and immediately ingests the response back into your project steps and planning data.
-                </p>
-                <ol>
-                  <li>Build AI Package first.</li>
-                  <li>Run Send to AI + Ingest.</li>
-                  <li>Review generated updates and adjust as needed.</li>
-                </ol>
-                <button className="btn btn-primary" disabled={aiBusy} onClick={() => void generateStepsFromAi('optimize')}>
-                  {aiBusy ? 'Sending to AI...' : 'Send to AI + Ingest'}
-                </button>
-              </section>
-
-              <section className="build-wizard-ai-tool-card">
-                <h4>Place Lost Steps on Timeline</h4>
-                <p>
-                  Attempts an AI pass to place Project Desk steps into timeline phases, then applies local fallback rules for any remaining lost steps.
-                </p>
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={() => void onAutoAssignDeskStepsToTimeline()}
-                  disabled={deskAutoAssignBusy || aiBusy}
-                  title="AI-assisted placement of Project Desk steps into timeline phases"
-                >
-                  {(deskAutoAssignBusy || aiBusy) ? 'Placing Lost Steps...' : 'Place Lost Steps on Timeline'}
-                </button>
-              </section>
-
-              <section className="build-wizard-ai-tool-card build-wizard-ai-tool-card-readout">
-                <h4>AI Package Readout</h4>
-                <p>Use this panel to inspect what is being sent to AI.</p>
-                <label>
-                  Prompt Text
-                  <textarea value={aiPromptText || ''} readOnly rows={6} />
-                </label>
-                <label>
-                  Payload JSON
-                  <textarea value={aiPayloadJson || ''} readOnly rows={10} />
-                </label>
-              </section>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {stepEditModalStep && stepEditModalDraft ? (
-        <div className="build-wizard-doc-manager" onClick={() => closeStepEditModal()}>
-          <div className="build-wizard-doc-manager-inner build-wizard-step-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Edit Step #{activeTabStepNumbers.get(stepEditModalStep.id) || stepEditModalStep.step_order}</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close step editor"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => closeStepEditModal()}
-                />
-              </div>
-            </div>
-
-            <fieldset className="build-wizard-step-fields">
-              <div className="build-wizard-step-grid">
-                <div className={`build-wizard-type-note build-wizard-dependency-note ${stepEditModalDependencyIds.length > 0 ? '' : 'is-empty-inline'}`}>
-                  <div className="build-wizard-dependency-head">
-                    <span>Depends on:</span>
-                    {stepEditModalDependencyIds.length > 0 ? (
-                      <button
-                        type="button"
-                        className="btn btn-link btn-sm"
-                        onClick={() => updateStepDraft(stepEditModalStep.id, { depends_on_step_ids: [] })}
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
-                  {stepEditModalDependencyIds.length > 0 ? (
-                    <div className="build-wizard-dependency-chip-list">
-                      {stepEditModalDependencyIds.map((dependencyId) => {
-                        const dependency = stepById.get(dependencyId) || null;
-                        const phaseId = dependency ? stepPhaseBucket(dependency) : null;
-                        const phase = phaseId ? BUILD_TABS.find((tab) => tab.id === phaseId) : null;
-                        const label = dependency
-                          ? `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phase ? phase.label : prettyPhaseLabel(dependency.phase_key)})`
-                          : `#${dependencyId} (missing step)`;
-                        return (
-                          <span key={`step-edit-dependency-${dependencyId}`} className="build-wizard-dependency-chip">
-                            {label}
-                            <button
-                              type="button"
-                              className="build-wizard-dependency-chip-remove"
-                              aria-label={`Remove dependency ${label}`}
-                              title="Remove dependency"
-                              onClick={() => updateStepDraft(stepEditModalStep.id, {
-                                depends_on_step_ids: stepEditModalDependencyIds.filter((id) => id !== dependencyId),
-                              })}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="build-wizard-dependency-empty">No dependencies set.</div>
-                  )}
-                  <div className="build-wizard-dependency-controls">
-                    <select
-                      value={dependencyCandidateByStepId[stepEditModalStep.id] || ''}
-                      onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [stepEditModalStep.id]: e.target.value }))}
-                    >
-                      <option value="">Add dependency step...</option>
-                      {stepEditModalDependencyOptions.map((candidate) => {
-                        const phaseId = stepPhaseBucket(candidate);
-                        const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
-                        const label = `#${activeTabStepNumbers.get(candidate.id) || candidate.step_order} ${candidate.title} (${phase ? phase.label : prettyPhaseLabel(candidate.phase_key)})`;
-                        return <option key={candidate.id} value={String(candidate.id)}>{label}</option>;
-                      })}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary btn-sm"
-                      disabled={Number(dependencyCandidateByStepId[stepEditModalStep.id] || 0) <= 0}
-                      onClick={() => {
-                        const selectedId = Number(dependencyCandidateByStepId[stepEditModalStep.id] || 0);
-                        if (selectedId <= 0 || stepEditModalDependencyIds.includes(selectedId)) {
-                          return;
-                        }
-                        updateStepDraft(stepEditModalStep.id, {
-                          depends_on_step_ids: [...stepEditModalDependencyIds, selectedId],
-                        });
-                        setDependencyCandidateByStepId((prev) => ({ ...prev, [stepEditModalStep.id]: '' }));
-                      }}
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="build-wizard-doc-manager-grid build-wizard-step-edit-grid">
-                <label className="is-wide">
-                  Title
-                  <input
-                    type="text"
-                    value={stepEditModalDraft.title || ''}
-                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { title: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Start Date
-                  <input
-                    type="date"
-                    value={stepEditModalDraft.expected_start_date || ''}
-                    onChange={(e) => {
-                      const nextStartDate = toStringOrNull(e.target.value);
-                      const nextDuration = calculateDurationDays(nextStartDate, stepEditModalDraft.expected_end_date)
-                        ?? stepEditModalDraft.expected_duration_days;
-                      updateStepDraft(stepEditModalStep.id, {
-                        expected_start_date: nextStartDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  End Date
-                  <input
-                    type="date"
-                    value={stepEditModalDraft.expected_end_date || ''}
-                    onChange={(e) => {
-                      const nextEndDate = toStringOrNull(e.target.value);
-                      const nextDuration = calculateDurationDays(stepEditModalDraft.expected_start_date, nextEndDate)
-                        ?? stepEditModalDraft.expected_duration_days;
-                      updateStepDraft(stepEditModalStep.id, {
-                        expected_end_date: nextEndDate,
-                        expected_duration_days: nextDuration,
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  Estimated Cost
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={stepEditModalDraft.estimated_cost ?? ''}
-                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { estimated_cost: toNumberOrNull(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  Actual Cost
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={stepEditModalDraft.actual_cost ?? ''}
-                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { actual_cost: toNumberOrNull(e.target.value) })}
-                  />
-                </label>
-                <label className="is-wide">
-                  Step Description
-                  <textarea
-                    rows={4}
-                    value={stepEditModalDraft.description || ''}
-                    onChange={(e) => updateStepDraft(stepEditModalStep.id, { description: e.target.value })}
-                  />
-                </label>
-              </div>
-            </fieldset>
-
-            <div className="build-wizard-doc-manager-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={stepEditSaving}
-                onClick={() => { void saveStepEditModal(); }}
-              >
-                {stepEditSaving ? 'Saving...' : 'Save Step'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline-secondary btn-sm"
-                onClick={() => closeStepEditModal()}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {stepInfoModalStep ? (
-        <div className="build-wizard-doc-manager" onClick={() => setStepInfoModalStepId(0)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-step-info-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Step #{activeTabStepNumbers.get(stepInfoModalStep.id) || stepInfoModalStep.step_order} Information</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close step information"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setStepInfoModalStepId(0)}
-                />
-              </div>
-            </div>
-
-            <div className="build-wizard-step-info-grid">
-              <div className="build-wizard-step-info-card">
-                <h4>Timestamps</h4>
-                <div><strong>Created:</strong> {formatDate(stepInfoModalStep.created_at)}</div>
-                <div><strong>Updated:</strong> {formatDate(stepInfoModalStep.updated_at)}</div>
-                <div><strong>Completed:</strong> {formatDate(stepInfoModalStep.completed_at)}</div>
-              </div>
-
-              <div className="build-wizard-step-info-card">
-                <h4>Record History</h4>
-                {Array.isArray(stepInfoModalStep.audit_logs) && stepInfoModalStep.audit_logs.length > 0 ? (
-                  <div className="build-wizard-step-history-list">
-                    {stepInfoModalStep.audit_logs.map((log) => {
-                      const changeEntries = log.changes && typeof log.changes === 'object'
-                        ? Object.entries(log.changes as Record<string, unknown>)
-                        : [];
-                      return (
-                        <div className="build-wizard-step-history-item" key={`step-log-${log.id}`}>
-                          <div className="build-wizard-step-history-head">
-                            <span>{String(log.action_key || 'updated').replace(/_/g, ' ')}</span>
-                            <span>{formatDate(log.created_at)}</span>
-                          </div>
-                          {changeEntries.length > 0 ? (
-                            <div className="build-wizard-step-history-changes">
-                              {changeEntries.map(([field, value]) => {
-                                const change = value as { before?: unknown; after?: unknown };
-                                const hasBeforeAfter = change && typeof change === 'object'
-                                  && Object.prototype.hasOwnProperty.call(change, 'before')
-                                  && Object.prototype.hasOwnProperty.call(change, 'after');
-                                return (
-                                  <div key={`step-log-${log.id}-${field}`}>
-                                    <strong>{field}</strong>: {hasBeforeAfter
-                                      ? `${formatAuditValue(change.before, field)} -> ${formatAuditValue(change.after, field)}`
-                                      : formatAuditValue(value, field)}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="build-wizard-muted">No field-level delta recorded.</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="build-wizard-muted">No record history yet.</div>
-                )}
-              </div>
-
-              <div className="build-wizard-step-info-card">
-                <h4>Step Notes</h4>
-                {stepInfoModalStep.notes.length > 0 ? (
-                  <div className="build-wizard-step-history-list">
-                    {stepInfoModalStep.notes.map((note) => (
-                      <div className="build-wizard-step-history-item" key={`step-note-modal-${note.id}`}>
-                        <div className="build-wizard-step-history-head">
-                          <span>Note #{note.id}</span>
-                          <span>
-                            Created {formatDate(note.created_at)}
-                            {noteEditedAtLabel(note) ? ` | Edited ${noteEditedAtLabel(note)}` : ''}
-                          </span>
-                        </div>
-                        <div>{note.note_text}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="build-wizard-muted">No notes recorded.</div>
-                )}
-              </div>
-
-              <div className="build-wizard-step-info-card">
-                <h4>Backend Snapshot</h4>
-                <pre className="build-wizard-step-info-json">
-                  {JSON.stringify(stepInfoModalStep, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {lightboxDoc ? (
-        <div className="build-wizard-lightbox" onClick={closeLightbox}>
-          <div className="build-wizard-lightbox-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-lightbox-actions">
-              {lightboxSupportsZoom ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
-                    onClick={() => zoomLightboxBy(-LIGHTBOX_ZOOM_STEP)}
-                    title="Zoom out"
-                    aria-label="Zoom out"
-                    disabled={lightboxZoom <= LIGHTBOX_ZOOM_MIN}
-                  >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
-                    onClick={resetLightboxZoom}
-                    title="Reset zoom"
-                    aria-label="Reset zoom"
-                  >
-                    {Math.round(lightboxZoom * 100)}%
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm build-wizard-lightbox-zoom-btn"
-                    onClick={() => zoomLightboxBy(LIGHTBOX_ZOOM_STEP)}
-                    title="Zoom in"
-                    aria-label="Zoom in"
-                    disabled={lightboxZoom >= LIGHTBOX_ZOOM_MAX}
-                  >
-                    +
-                  </button>
-                </>
-              ) : null}
-              <StandardIconLink
-                iconKey="download"
-                ariaLabel="Download"
-                title="Download"
-                href={withDownloadFlag(lightboxDoc.src)}
-                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-download"
-              />
-              <StandardIconButton
-                iconKey="close"
-                ariaLabel="Close preview"
-                title="Close"
-                className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-close"
-                onClick={closeLightbox}
-              />
-            </div>
-            <div className={`build-wizard-lightbox-zoom-frame ${lightboxSupportsZoom ? 'is-zoomable' : ''}`} onWheel={onLightboxWheelZoom}>
-              <div className="build-wizard-lightbox-zoom-content" style={lightboxSupportsZoom ? { transform: `scale(${lightboxZoom})` } : undefined}>
-                {lightboxDoc.mode === 'image' ? (
-                  <WebpImage src={lightboxDoc.src} alt={lightboxDoc.title} className="build-wizard-lightbox-image" />
-                ) : null}
-                {lightboxDoc.mode === 'loading' ? (
-                  <div className="build-wizard-lightbox-message">Loading preview...</div>
-                ) : null}
-                {lightboxDoc.mode === 'error' ? (
-                  <div className="build-wizard-lightbox-message">
-                    <div>{lightboxDoc.message}</div>
-                    <div>
-                      <a href={lightboxDoc.src} target="_blank" rel="noreferrer">Open original file</a>
-                    </div>
-                  </div>
-                ) : null}
-                {lightboxDoc.mode === 'embed' ? (
-                  <div className="build-wizard-lightbox-embed-wrap">
-                    <iframe
-                      src={lightboxDoc.src}
-                      title={lightboxDoc.title}
-                      className="build-wizard-lightbox-embed"
-                    />
-                  </div>
-                ) : null}
-                {lightboxDoc.mode === 'plan' ? (
-                  <div className="build-wizard-lightbox-plan-wrap">
-                    <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
-                    <div className="build-wizard-lightbox-note">
-                      {lightboxDoc.format === 'hex' ? 'Binary .plan preview (hex + ASCII).' : 'Text preview.'}
-                      {lightboxDoc.truncated ? ' Preview truncated for performance.' : ''}
-                    </div>
-                  </div>
-                ) : null}
-                {lightboxDoc.mode === 'text' ? (
-                  <div className="build-wizard-lightbox-text-wrap">
-                    {lightboxDoc.taskPreview ? (
-                      <div className="build-wizard-lightbox-task-preview">
-                        {lightboxDoc.taskPreview.summaryFields.length ? (
-                          <section>
-                            <h4>Task Summary</h4>
-                            <dl className="build-wizard-lightbox-task-fields">
-                              {lightboxDoc.taskPreview.summaryFields.map((field) => (
-                                <React.Fragment key={`summary-${field.label}`}>
-                                  <dt>{field.label}</dt>
-                                  <dd>{field.value}</dd>
-                                </React.Fragment>
-                              ))}
-                            </dl>
-                          </section>
-                        ) : null}
-                        {lightboxDoc.taskPreview.noteLines.length ? (
-                          <section>
-                            <h4>Notes</h4>
-                            <div className="build-wizard-lightbox-task-notes">
-                              {lightboxDoc.taskPreview.noteLines.map((line, idx) => (
-                                <p key={`note-${idx}`}>{line}</p>
-                              ))}
-                            </div>
-                          </section>
-                        ) : null}
-                        {lightboxDoc.taskPreview.metaFields.length ? (
-                          <section>
-                            <h4>Task Metadata</h4>
-                            <dl className="build-wizard-lightbox-task-fields">
-                              {lightboxDoc.taskPreview.metaFields.map((field) => (
-                                <React.Fragment key={`meta-${field.label}`}>
-                                  <dt>{field.label}</dt>
-                                  <dd>{field.value}</dd>
-                                </React.Fragment>
-                              ))}
-                            </dl>
-                          </section>
-                        ) : null}
-                        {lightboxDoc.taskPreview.systemLines.length ? (
-                          <section>
-                            <h4>Source</h4>
-                            <ul className="build-wizard-lightbox-task-system">
-                              {lightboxDoc.taskPreview.systemLines.map((line, idx) => (
-                                <li key={`source-${idx}`}>{line}</li>
-                              ))}
-                            </ul>
-                          </section>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <details className="build-wizard-lightbox-text-raw">
-                      <summary>Raw document text</summary>
-                      <pre className="build-wizard-lightbox-plan">{lightboxDoc.text}</pre>
-                    </details>
-                    {lightboxDoc.truncated ? (
-                      <div className="build-wizard-lightbox-note">Text preview truncated for performance.</div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {lightboxDoc.mode === 'spreadsheet' ? (
-                  <div className="build-wizard-lightbox-sheet-wrap">
-                    <div className="build-wizard-lightbox-sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
-                      {lightboxDoc.sheets.map((sheet, idx) => (
-                        <button
-                          key={sheet.name}
-                          type="button"
-                          className={`build-wizard-lightbox-sheet-tab ${lightboxSpreadsheetSheetIndex === idx ? 'is-active' : ''}`}
-                          onClick={() => setLightboxSpreadsheetSheetIndex(idx)}
-                        >
-                          {sheet.name}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="build-wizard-lightbox-sheet-table-wrap">
-                      <table className="build-wizard-lightbox-sheet-table">
-                        <tbody>
-                          {(lightboxDoc.sheets[lightboxSpreadsheetSheetIndex]?.rows || []).map((row, rowIndex) => (
-                            <tr key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}`}>
-                              {row.map((cell, cellIndex) => (
-                                <td key={`${lightboxSpreadsheetSheetIndex}-${rowIndex}-${cellIndex}`}>{cell}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {lightboxDoc.truncated ? <div className="build-wizard-lightbox-note">Preview is limited to 120 rows and 24 columns per sheet.</div> : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="build-wizard-lightbox-title">{lightboxDoc.title}</div>
-          </div>
-        </div>
-      ) : null}
-
-      {confirmState ? (
-        <div className="build-wizard-doc-manager" onClick={() => closeConfirmation(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>{confirmState.title}</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close confirmation dialog"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => closeConfirmation(false)}
-                />
-              </div>
-            </div>
-            <p className="build-wizard-confirm-message">{confirmState.message}</p>
-            <div className="build-wizard-confirm-actions">
-              <button type="button" className="btn btn-outline-secondary" onClick={() => closeConfirmation(false)}>
-                {confirmState.cancelLabel}
-              </button>
-              <button type="button" className={confirmState.confirmButtonClass} onClick={() => closeConfirmation(true)}>
-                {confirmState.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {moveStepModalStep ? (
-        <div className="build-wizard-doc-manager" onClick={() => !movingStep && setMoveStepModalStepId(0)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Move Step</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close move step dialog"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => {
-                    if (!movingStep) {
-                      setMoveStepModalStepId(0);
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <p className="build-wizard-confirm-message">
-              {`Where do you want to move "#${activeTabStepNumbers.get(moveStepModalStep.id) || moveStepModalStep.step_order} ${moveStepModalStep.title}"?`}
-            </p>
-            <label className="build-wizard-move-modal-field">
-              Target phase
-              <select
-                value={moveStepModalTargetTab}
-                onChange={(e) => setMoveStepModalTargetTab(e.target.value as BuildTabId)}
-                disabled={movingStep}
-              >
-                {moveStepPhaseTabOptions.map((option) => (
-                  <option key={`move-modal-phase-${option.value}`} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="build-wizard-confirm-actions">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setMoveStepModalStepId(0)}
-                disabled={movingStep}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void onMoveStepFromModal()}
-                disabled={movingStep}
-              >
-                {movingStep ? 'Moving...' : 'Move Step'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {moveTaskModalDoc ? (
-        <div className="build-wizard-doc-manager" onClick={() => documentSavingId !== moveTaskModalDoc.id && setMoveTaskModalDocId(0)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Move Task</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close move task dialog"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => {
-                    if (documentSavingId !== moveTaskModalDoc.id) {
-                      setMoveTaskModalDocId(0);
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <p className="build-wizard-confirm-message">
-              {`Where do you want to move "${moveTaskModalDoc.receipt_title?.trim() || moveTaskModalDoc.original_name}"?`}
-            </p>
-            <label className="build-wizard-move-modal-field">
-              Target step
-              <select
-                value={moveTaskModalTargetStepId > 0 ? String(moveTaskModalTargetStepId) : ''}
-                onChange={(e) => setMoveTaskModalTargetStepId(Number(e.target.value || '0'))}
-                disabled={documentSavingId === moveTaskModalDoc.id}
-              >
-                <option value="">Choose a step...</option>
-                {moveTaskStepOptions.map((option) => (
-                  <option key={`move-task-modal-${option.step.id}`} value={option.step.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="build-wizard-confirm-actions">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setMoveTaskModalDocId(0)}
-                disabled={documentSavingId === moveTaskModalDoc.id}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => { void onMoveReceiptToStep(); }}
-                disabled={documentSavingId === moveTaskModalDoc.id || moveTaskModalTargetStepId <= 0}
-              >
-                {documentSavingId === moveTaskModalDoc.id ? 'Moving...' : 'Move Task'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {taskAttachmentsModalDoc ? (
-        <div className="build-wizard-doc-manager" onClick={() => setTaskAttachmentsModalDocId(0)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-task-attachments-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Task Attachments</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close attachments dialog"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setTaskAttachmentsModalDocId(0)}
-                />
-              </div>
-            </div>
-            <p className="build-wizard-confirm-message">
-              {`Manage attachments for "${taskAttachmentsModalDoc.receipt_title?.trim() || taskAttachmentsModalDoc.original_name}".`}
-            </p>
-            <div className="build-wizard-task-attachments-grid">
-              <section className="build-wizard-task-attachments-card">
-                <h4>Upload New Attachment</h4>
-                <label className="btn btn-outline-primary btn-sm build-wizard-upload-btn">
-                  Choose Files
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    multiple
-                    onChange={(e) => {
-                      onUploadReceiptAttachments(taskAttachmentsModalDoc, e.target.files);
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-                <div className="build-wizard-muted">Accepted: images and PDF files.</div>
-              </section>
-              <section className="build-wizard-task-attachments-card">
-                <h4>Attach Existing Document</h4>
-                <label className="build-wizard-move-modal-field">
-                  Filter documents
-                  <input
-                    type="text"
-                    className="build-wizard-attach-filter-input"
-                    placeholder="Filter attachments..."
-                    value={attachExistingDocFilterByReceiptId[taskAttachmentsModalDoc.id] || ''}
-                    onChange={(e) => setAttachExistingDocFilterByReceiptId((prev) => ({ ...prev, [taskAttachmentsModalDoc.id]: e.target.value }))}
-                  />
-                </label>
-                <label className="build-wizard-move-modal-field">
-                  Existing document
-                  <select
-                    value={attachExistingDocByReceiptId[taskAttachmentsModalDoc.id] || ''}
-                    onChange={(e) => setAttachExistingDocByReceiptId((prev) => ({ ...prev, [taskAttachmentsModalDoc.id]: e.target.value }))}
-                  >
-                    <option value="">Choose a document...</option>
-                    {taskAttachmentsModalAttachableDocuments.map((candidate) => (
-                      <option key={`task-modal-attach-${taskAttachmentsModalDoc.id}-${candidate.id}`} value={String(candidate.id)}>
-                        {candidate.original_name} ({buildWizardTokenLabel(candidate.kind, 'Other')})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="build-wizard-doc-manager-actions">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => {
-                      if (taskAttachmentsModalStep) {
-                        void onAttachExistingDocumentToReceipt(taskAttachmentsModalStep, taskAttachmentsModalDoc);
-                      }
-                    }}
-                    disabled={!taskAttachmentsModalStep || !attachExistingDocByReceiptId[taskAttachmentsModalDoc.id]}
-                  >
-                    Attach Existing
-                  </button>
-                </div>
-              </section>
-              <section className="build-wizard-task-attachments-card is-wide">
-                <h4>Current Attachments</h4>
-                {documents.filter((doc) => Number(doc.receipt_parent_document_id || 0) === taskAttachmentsModalDoc.id).length > 0 ? (
-                  <div className="build-wizard-step-receipt-attachments-list">
-                    {documents
-                      .filter((doc) => Number(doc.receipt_parent_document_id || 0) === taskAttachmentsModalDoc.id)
-                      .map((attachment) => (
-                        <button
-                          key={`task-modal-current-attachment-${attachment.id}`}
-                          type="button"
-                          className="build-wizard-step-receipt-link"
-                          onClick={() => void openDocumentPreview(attachment)}
-                          title={attachment.original_name}
-                        >
-                          {attachment.original_name}
-                        </button>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="build-wizard-muted">No attachments yet.</div>
-                )}
-              </section>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {recoveryReportOpen ? (
-        <div className="build-wizard-doc-manager" onClick={() => setRecoveryReportOpen(false)}>
-          <div className="build-wizard-doc-manager-inner build-wizard-recovery-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="build-wizard-doc-manager-head">
-              <h3>Singletree Recovery Report</h3>
-              <div className="build-wizard-doc-manager-actions">
-                <button
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={async () => {
-                    if (!recoveryJobId || recoveryPolling) {
-                      return;
-                    }
-                    setRecoveryPolling(true);
-                    try {
-                      const status = await fetchSingletreeRecoveryStatus(recoveryJobId);
-                      if (status) {
-                        setRecoveryStatus(String(status.status || ''));
-                        setRecoveryReportJson(JSON.stringify(status, null, 2));
-                        if (Number(status.completed || 0) === 1 || status.status === 'completed' || status.status === 'failed') {
-                          setRecoveryJobId('');
-                        }
-                      }
-                    } finally {
-                      setRecoveryPolling(false);
-                    }
-                  }}
-                  disabled={!recoveryJobId || recoveryPolling}
-                >
-                  {recoveryPolling ? 'Checking...' : 'Refresh Status'}
-                </button>
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(recoveryReportJson || '');
-                      onToast?.({ tone: 'success', message: 'Recovery report copied.' });
-                    } catch (_) {
-                      onToast?.({ tone: 'warning', message: 'Could not copy to clipboard.' });
-                    }
-                  }}
-                  disabled={!recoveryReportJson}
-                >
-                  Copy JSON
-                </button>
-                <StandardIconButton
-                  iconKey="close"
-                  ariaLabel="Close recovery report"
-                  title="Close"
-                  className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-                  onClick={() => setRecoveryReportOpen(false)}
-                />
-              </div>
-            </div>
-            {recoveryStagedRoot ? (
-              <div className="build-wizard-recovery-status">
-                Staged Files: {recoveryStagedCount} | Source Root: {recoveryStagedRoot}
-              </div>
-            ) : (
-              <div className="build-wizard-recovery-status">
-                No staged files yet. Upload source files from your Mac, then run Dry Run/Apply.
-              </div>
-            )}
-            {recoveryStatus ? (
-              <div className="build-wizard-recovery-status">
-                Status: {recoveryStatus}{recoveryJobId ? ` (job ${recoveryJobId})` : ''}
-              </div>
-            ) : null}
-            {recoveryReportJson ? (
-              <pre className="build-wizard-recovery-json">{recoveryReportJson}</pre>
-            ) : (
-              <div className="build-wizard-muted">No recovery report yet. Run Dry Run or Apply first.</div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <BuildWizardRecoveryReportModal
+        fetchSingletreeRecoveryStatus={fetchSingletreeRecoveryStatus}
+        onClose={() => setRecoveryReportOpen(false)}
+        onToast={onToast}
+        open={recoveryReportOpen}
+        recoveryJobId={recoveryJobId}
+        recoveryPolling={recoveryPolling}
+        recoveryReportJson={recoveryReportJson}
+        recoveryStagedCount={recoveryStagedCount}
+        recoveryStagedRoot={recoveryStagedRoot}
+        recoveryStatus={recoveryStatus}
+        setRecoveryJobId={setRecoveryJobId}
+        setRecoveryPolling={setRecoveryPolling}
+        setRecoveryReportJson={setRecoveryReportJson}
+        setRecoveryStatus={setRecoveryStatus}
+      />
 
     </div>
   );

@@ -1,0 +1,143 @@
+import React from 'react';
+
+import { IBuildWizardContact, IBuildWizardContactAssignment, IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
+import { StepDraftMap } from '../../types/pages/buildWizardPage';
+import { BuildWizardTaskMeta, BuildWizardTaskType } from './buildWizardPageRenderTypes';
+import type { BuildWizardStepActionPanel } from './buildWizardStepActionPanel';
+import type { BuildWizardStepAssignees } from './buildWizardStepAssignees';
+import type { BuildWizardStepNotes } from './buildWizardStepNotes';
+import type { BuildWizardStepReceiptEditor } from './buildWizardStepReceiptEditor';
+import type { BuildWizardStepReceiptsList } from './buildWizardStepReceiptsList';
+
+type StepActionPanelProps = React.ComponentProps<typeof BuildWizardStepActionPanel>;
+type StepAssigneesProps = React.ComponentProps<typeof BuildWizardStepAssignees>;
+type StepNotesProps = React.ComponentProps<typeof BuildWizardStepNotes>;
+type StepReceiptEditorProps = React.ComponentProps<typeof BuildWizardStepReceiptEditor>;
+type StepReceiptsListProps = React.ComponentProps<typeof BuildWizardStepReceiptsList>;
+
+export type BuildWizardEditableTreeRow = {
+  level: number;
+  step: IBuildWizardStep;
+};
+
+export type BuildWizardParsedTask = {
+  plainNotes: string;
+  taskMeta: BuildWizardTaskMeta;
+};
+
+export type BuildWizardInlineReceiptDraft = {
+  amount: string;
+  date: string;
+  plainNotes: string;
+  taskMeta: BuildWizardTaskMeta;
+  taskType: BuildWizardTaskType;
+  vendor: string;
+};
+
+export interface BuildWizardEditableStepCardContext {
+  activeTabStepNumbers: Map<number, number>;
+  attachExistingDocByStepId: StepActionPanelProps['attachExistingDocByStepId'];
+  attachExistingDocFilterByStepId: StepActionPanelProps['attachExistingDocFilterByStepId'];
+  attachExistingPickerOpenByStepId: StepActionPanelProps['attachExistingPickerOpenByStepId'];
+  attachableProjectDocuments: StepActionPanelProps['attachableProjectDocuments'];
+  authorityContacts: StepReceiptEditorProps['authorityContacts'];
+  autosaveExistingReceiptDraftForStep: StepReceiptEditorProps['autosaveExistingReceiptDraftForStep'];
+  beginStepDrag: (event: React.DragEvent<HTMLElement>, stepId: number, stepReadOnly: boolean) => void;
+  clearStepDragState: () => void;
+  contactTypeChipClass: StepAssigneesProps['contactTypeChipClass'];
+  contactTypeLabel: StepActionPanelProps['contactTypeLabel'];
+  contacts: IBuildWizardContact[];
+  deleteStep: (stepId: number) => Promise<unknown>;
+  deletingDocumentId: StepReceiptsListProps['deletingDocumentId'];
+  deletingNoteId: StepNotesProps['deletingNoteId'];
+  documents: IBuildWizardDocument[];
+  dragOverParentStepId: number;
+  draggingStepId: number;
+  editingNoteTextById: StepNotesProps['editingNoteTextById'];
+  editingReceiptDocumentIdByStep: StepReceiptEditorProps['editingReceiptDocumentIdByStep'];
+  expandedStepById: Record<number, boolean>;
+  formatCurrency: StepReceiptsListProps['formatCurrency'];
+  formatDate: StepNotesProps['formatDate'];
+  getTaskEffectiveDate: StepReceiptsListProps['getTaskEffectiveDate'];
+  inlineEditingReceiptFieldByDocId: StepReceiptsListProps['inlineEditingReceiptFieldByDocId'];
+  inlineReceiptDraftByDocId: Record<number, BuildWizardInlineReceiptDraft>;
+  incompleteDescendantCountByStepId: Map<number, number>;
+  linkedStepDisplayNumberById: Map<number, number>;
+  normalizeContactType: StepActionPanelProps['normalizeContactType'];
+  noteDraftByStep: StepActionPanelProps['noteDraftByStep'];
+  noteEditedAtLabel: StepNotesProps['noteEditedAtLabel'];
+  noteEditorOpenByStep: StepActionPanelProps['noteEditorOpenByStep'];
+  onAddContactToStep: StepActionPanelProps['onAddContactToStep'];
+  onAttachExistingDocumentToStep: StepActionPanelProps['onAttachExistingDocumentToStep'];
+  onCancelEditNote: StepNotesProps['onCancelEditNote'];
+  onDeleteDocument: StepReceiptsListProps['onDeleteDocument'];
+  onDeleteStepNoteById: StepNotesProps['onDeleteStepNoteById'];
+  onDropMakeChild: (parentStepId: number) => Promise<void>;
+  onOpenDocumentPreview: StepReceiptsListProps['onOpenDocumentPreview'];
+  onOpenMoveStepModal: (stepId: number) => void;
+  onRefreshStepActualCost: (step: IBuildWizardStep, verificationSignature: string, recalculatedActualCost: number | null) => Promise<void>;
+  onSaveEditedNote: StepNotesProps['onSaveEditedNote'];
+  onSaveReceiptForStep: StepReceiptEditorProps['onSaveReceiptForStep'];
+  onStartEditNote: StepNotesProps['onStartEditNote'];
+  onStartEditReceiptForStep: StepReceiptsListProps['onStartEditReceiptForStep'];
+  onSubmitNote: StepActionPanelProps['onSubmitNote'];
+  openMoveTaskModal: StepReceiptsListProps['openMoveTaskModal'];
+  openStepEditModal: (step: IBuildWizardStep) => void;
+  openTaskAttachmentsModal: StepReceiptsListProps['openTaskAttachmentsModal'];
+  parseTaskMetaFromReceiptNotes: StepReceiptsListProps['parseTaskMetaFromReceiptNotes'];
+  permitDocuments: StepReceiptEditorProps['permitDocuments'];
+  permitStatusOptions: StepReceiptEditorProps['permitStatusOptions'];
+  purchaseUnitOptions: StepReceiptEditorProps['purchaseUnitOptions'];
+  receiptDraftByStep: StepReceiptEditorProps['receiptDraftByStep'];
+  receiptEditorOpenByStep: Record<number, boolean>;
+  receiptEditorRefByStepId: StepReceiptEditorProps['receiptEditorRefByStepId'];
+  receiptMetricsByStepId: Map<number, {
+    allCount: number;
+    allTotal: number;
+    nonQuoteCount: number;
+    nonQuoteTotal: number;
+    quoteCount: number;
+    quoteTotal: number;
+  }>;
+  receiptRowRefByDocId: StepReceiptsListProps['receiptRowRefByDocId'];
+  refreshingActualCostByStepId: Record<number, boolean>;
+  renderDocumentGallery: (items: IBuildWizardDocument[], emptyText: string, readOnly?: boolean) => React.ReactNode;
+  requestConfirmation: (config: {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    confirmButtonClass: string;
+  }) => Promise<boolean>;
+  saveInlineReceiptEdit: StepReceiptsListProps['saveInlineReceiptEdit'];
+  savingNoteId: StepNotesProps['savingNoteId'];
+  setAttachExistingDocByStepId: StepActionPanelProps['setAttachExistingDocByStepId'];
+  setAttachExistingDocFilterByStepId: StepActionPanelProps['setAttachExistingDocFilterByStepId'];
+  setAttachExistingPickerOpenByStepId: StepActionPanelProps['setAttachExistingPickerOpenByStepId'];
+  setDragOverInsertIndex: React.Dispatch<React.SetStateAction<number>>;
+  setDragOverParentStepId: React.Dispatch<React.SetStateAction<number>>;
+  setEditingNoteTextById: StepNotesProps['setEditingNoteTextById'];
+  setEditingReceiptDocumentIdByStep: StepReceiptEditorProps['setEditingReceiptDocumentIdByStep'];
+  setExpandedStepById: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
+  setInlineReceiptDraftByDocId: StepReceiptsListProps['setInlineReceiptDraftByDocId'];
+  setNoteDraftByStep: StepActionPanelProps['setNoteDraftByStep'];
+  setNoteEditorOpenByStep: StepActionPanelProps['setNoteEditorOpenByStep'];
+  setReceiptAttachmentDraftByStep: StepReceiptEditorProps['setReceiptAttachmentDraftByStep'];
+  setReceiptDraftByStep: StepReceiptEditorProps['setReceiptDraftByStep'];
+  setReceiptEditorOpenByStep: StepActionPanelProps['setReceiptEditorOpenByStep'];
+  setStepContactCandidateByStepId: StepActionPanelProps['setStepContactCandidateByStepId'];
+  setStepContactPickerOpenByStepId: StepActionPanelProps['setStepContactPickerOpenByStepId'];
+  setStepInfoModalStepId: React.Dispatch<React.SetStateAction<number>>;
+  startInlineReceiptEdit: StepReceiptsListProps['startInlineReceiptEdit'];
+  stepAssigneesByStepId: Map<number, StepAssigneesProps['allStepAssignees']>;
+  stepById: Map<number, IBuildWizardStep>;
+  stepContactCandidateByStepId: Record<number, string>;
+  stepContactPickerOpenByStepId: Record<number, boolean>;
+  stepDirectAssigneesByStepId: Map<number, Array<{ assignment: IBuildWizardContactAssignment; contact: IBuildWizardContact }>>;
+  stepDrafts: StepDraftMap;
+  taskTypeOptions: StepReceiptEditorProps['taskTypeOptions'];
+  taskUsesManualDateOverride: StepReceiptsListProps['taskUsesManualDateOverride'];
+  taskVendorOptions: StepReceiptsListProps['taskVendorOptions'];
+  toggleStep: (step: IBuildWizardStep, completed: boolean) => Promise<unknown>;
+  uploadDocument: StepActionPanelProps['uploadDocument'];
+  verifiedActualCostSignatureByStepId: Record<number, string>;
+}

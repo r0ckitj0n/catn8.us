@@ -94,6 +94,7 @@ import {
 } from './buildWizardRenderSections';
 import { BuildWizardStepActionPanel } from './buildWizardStepActionPanel';
 import { BuildWizardStepAssignees } from './buildWizardStepAssignees';
+import { BuildWizardEditableStepCards } from './buildWizardEditableStepCards';
 import { BuildWizardStepNotes } from './buildWizardStepNotes';
 import { BuildWizardStepReceiptEditor } from './buildWizardStepReceiptEditor';
 import { BuildWizardStepReceiptsList } from './buildWizardStepReceiptsList';
@@ -4074,552 +4075,114 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   };
 
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
-    if (!tabSteps.length) {
-      return <div className="build-wizard-muted">No steps in this tab yet.</div>;
-    }
-    const hasAssigneeFilters = stepCardAssigneeTypeFilter !== 'all' || stepCardAssigneeIdFilter > 0;
-    const hasTextFilter = stepCardTextFilterTokens.length > 0;
-    const rows = activeTabTreeRows;
-    const visibleRows = rows.filter((row) => {
-      if (!hasTextFilter) {
-        return true;
-      }
-      const haystack = stepSearchTextById.get(row.step.id) || '';
-      return stepCardTextFilterTokens.every((token) => haystack.includes(token));
-    });
-
-    if (!visibleRows.length) {
-      return <div className="build-wizard-muted">No steps match the current filter.</div>;
-    }
-
     return (
-      <div className="build-wizard-step-list">
-        <div
-          className={`build-wizard-drop-zone ${dragOverInsertIndex === 0 ? 'is-active' : ''}`}
-          onDragOver={(e) => {
-            if (draggingStepId > 0) {
-              e.preventDefault();
-              setDragOverInsertIndex(0);
-              setDragOverParentStepId(0);
-            }
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            void onDropReorder(0);
-          }}
-        />
-        {visibleRows.map((row, rowIndex) => {
-          const step = row.step;
-          const allStepAssignees = stepAssigneesByStepId.get(step.id) || [];
-          const directStepAssignees = stepDirectAssigneesByStepId.get(step.id) || [];
-          const visibleStepAssignees = allStepAssignees.filter((entry) => {
-            const contactType = normalizeContactType(entry.contact);
-            if (stepCardAssigneeTypeFilter !== 'all' && contactType !== stepCardAssigneeTypeFilter) {
-              return false;
-            }
-            if (stepCardAssigneeIdFilter > 0 && entry.contact.id !== stepCardAssigneeIdFilter) {
-              return false;
-            }
-            return true;
-          });
-          const assigneeFilterMatch = !hasAssigneeFilters || visibleStepAssignees.length > 0;
-          const stepReadOnly = Number(step.is_completed) === 1;
-          const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
-          const draft = stepDrafts[step.id] || step;
-          const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
-          const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
-          const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
-          const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date)
-            ?? (draft.expected_duration_days ?? null);
-          const aiEstimated = new Set(Array.isArray(draft.ai_estimated_fields) ? draft.ai_estimated_fields : []);
-          const dependencyIds = Array.from(
-            new Set(
-              (Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : [])
-                .map((rawId) => Number(rawId || 0))
-                .filter((id) => id > 0 && id !== step.id),
-            ),
-          );
-          const formatDependencyLabel = (dependency: IBuildWizardStep): string => {
-            const phaseId = stepPhaseBucket(dependency);
-            const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
-            const phaseLabel = phase ? phase.label : prettyPhaseLabel(dependency.phase_key);
-            return `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phaseLabel})`;
-          };
-          const dependencyItems = dependencyIds.map((dependencyId) => {
-            const dependency = stepById.get(dependencyId) || null;
-            return {
-              id: dependencyId,
-              label: dependency ? formatDependencyLabel(dependency) : `#${dependencyId} (missing step)`,
-            };
-          });
-          const hasDependencies = dependencyItems.length > 0;
-          const stepPastelColor = getStepPastelColor(step.id);
-          const isExpanded = expandedStepById[step.id] === true;
-          const stepAttachmentCount = documents.reduce((count, doc) => (Number(doc.step_id || 0) === step.id ? count + 1 : count), 0);
-          const stepReceiptDocuments = documents
-            .filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt')
-            .sort((a, b) => {
-              const aDate = toStringOrNull(a.receipt_date || '');
-              const bDate = toStringOrNull(b.receipt_date || '');
-              if (aDate && bDate && aDate !== bDate) {
-                return aDate.localeCompare(bDate);
-              }
-              if (aDate && !bDate) {
-                return -1;
-              }
-              if (!aDate && bDate) {
-                return 1;
-              }
-              const uploadedCmp = String(a.uploaded_at || '').localeCompare(String(b.uploaded_at || ''));
-              if (uploadedCmp !== 0) {
-                return uploadedCmp;
-              }
-              return a.id - b.id;
-            });
-          const stepReceiptAttachmentDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind === 'receipt_attachment');
-          const stepNonReceiptDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id && doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
-          const stepDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id);
-          const stepReceiptMetrics = receiptMetricsByStepId.get(step.id) || {
-            allCount: stepReceiptDocuments.length,
-            nonQuoteCount: stepReceiptDocuments.length,
-            quoteCount: 0,
-            allTotal: stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0),
-            nonQuoteTotal: stepReceiptDocuments.reduce((sum, doc) => sum + Number(doc.receipt_amount || 0), 0),
-            quoteTotal: 0,
-          };
-          const stepTaskCount = Math.max(stepReceiptDocuments.length, Number(draft.receipt_count || 0));
-          const hasStepTasks = stepTaskCount > 0;
-          const stepReceiptTotal = stepReceiptMetrics.nonQuoteTotal;
-          const actualCostFloor = Math.max(0, stepReceiptTotal);
-          const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
-          const effectiveActualCost = draftActualCost === null
-            ? (actualCostFloor > 0 ? actualCostFloor : null)
-            : Math.max(draftActualCost, actualCostFloor);
-          const recalculatedActualCost = actualCostFloor > 0 ? actualCostFloor : null;
-          const actualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, effectiveActualCost);
-          const refreshedActualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, recalculatedActualCost);
-          const isActualCostVerified = verifiedActualCostSignatureByStepId[step.id] === actualCostVerificationSignature;
-          const isRefreshingActualCost = refreshingActualCostByStepId[step.id] === true;
-          const receiptDraft = receiptDraftByStep[step.id] || {
-            receipt_title: '',
-            receipt_vendor: '',
-            receipt_date: '',
-            receipt_amount: '',
-            receipt_notes: '',
-            task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType),
-          };
-          const stepAttachmentFilter = String(attachExistingDocFilterByStepId[step.id] || '').trim().toLowerCase();
-          const filteredAttachableProjectDocuments = stepAttachmentFilter
-            ? attachableProjectDocuments.filter((doc) => {
-              const linkedStepId = Number(doc.step_id || 0);
-              const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
-              const haystack = `${doc.original_name} ${buildWizardTokenLabel(doc.kind, 'Other')} ${linkedStep?.title || ''}`.toLowerCase();
-              return haystack.includes(stepAttachmentFilter);
-            })
-            : attachableProjectDocuments;
-          const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
-          const stepDirectContactIdSet = new Set<number>(directStepAssignees.map((entry) => entry.contact.id));
-          const addableStepContacts = contacts
-            .filter((contact) => !stepDirectContactIdSet.has(contact.id))
-            .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
-          const selectedStepContactCandidateId = Number(stepContactCandidateByStepId[step.id] || 0);
-          const effectiveStepContactCandidateId = selectedStepContactCandidateId > 0
-            && addableStepContacts.some((contact) => contact.id === selectedStepContactCandidateId)
-            ? selectedStepContactCandidateId
-            : (addableStepContacts[0]?.id || 0);
-          return (
-            <React.Fragment key={step.id}>
-            <div
-              id={`build-wizard-step-${step.id}`}
-              className={`build-wizard-step ${row.level > 0 ? 'is-child' : ''} ${dragOverParentStepId === step.id ? 'is-parent-target' : ''} ${stepReadOnly ? 'is-readonly' : ''} ${!assigneeFilterMatch ? 'is-assignee-filtered-out' : ''} ${!isExpanded ? 'is-collapsed' : ''}`}
-              style={{ '--bw-indent-level': String(row.level), '--bw-step-phase-color': stepPastelColor } as React.CSSProperties}
-              draggable={!stepReadOnly}
-              onDragStart={(e) => {
-                const target = e.target as HTMLElement | null;
-                const fromHandle = Boolean(target?.closest('.build-wizard-step-drag-handle-btn'));
-                if (!fromHandle) {
-                  e.preventDefault();
-                  return;
-                }
-                beginStepDrag(e as React.DragEvent<HTMLElement>, step.id, stepReadOnly);
-              }}
-              onDragEnd={() => clearStepDragState()}
-              onDragOver={(e) => {
-                if (!stepReadOnly && draggingStepId > 0 && draggingStepId !== step.id) {
-                  e.preventDefault();
-                  setDragOverParentStepId(step.id);
-                  setDragOverInsertIndex(-1);
-                }
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                void onDropMakeChild(step.id);
-              }}
-            >
-              <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
-	          <div className="build-wizard-step-header">
-	            <div className="build-wizard-step-header-left">
-                  <div className="build-wizard-step-handle-stack">
-                    <button
-                      type="button"
-                      className="build-wizard-step-drag-handle-btn"
-                      draggable={!stepReadOnly}
-                      disabled={stepReadOnly}
-                      onDragStart={(e) => {
-                        beginStepDrag(e as React.DragEvent<HTMLElement>, step.id, stepReadOnly);
-                      }}
-                      onDragEnd={() => clearStepDragState()}
-                      aria-label={stepReadOnly ? 'Step is read-only' : 'Drag to reorder step'}
-                      title={stepReadOnly ? 'Read-only step' : 'Drag to reorder'}
-                    >
-                      ⋮⋮
-                    </button>
-                    {hasStepTasks ? (
-                      <span
-                        className="build-wizard-step-task-indicator"
-                        aria-label={`Step has ${stepTaskCount} task${stepTaskCount === 1 ? '' : 's'}`}
-                        title={`Has ${stepTaskCount} task${stepTaskCount === 1 ? '' : 's'}`}
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      className="build-wizard-step-expand-btn"
-                      onClick={() => setExpandedStepById((prev) => ({ ...prev, [step.id]: !isExpanded }))}
-                      aria-label={isExpanded ? 'Collapse step card' : 'Expand step card'}
-                      title={isExpanded ? 'Collapse step' : 'Expand step'}
-                    >
-                      {isExpanded ? '▾' : '▸'}
-                    </button>
-                  </div>
-                  {row.level > 0 ? <span className="build-wizard-child-glyph" aria-hidden="true">↳</span> : null}
-	                  <div className="build-wizard-inline-check">
-	                    <label className="build-wizard-inline-complete-toggle">
-	                      <input
-	                        type="checkbox"
-	                        checked={Number(step.is_completed) === 1}
-	                        disabled={completionLocked}
-	                        onChange={(e) => void toggleStep(step, e.target.checked)}
-	                      />
-	                      <span>Complete</span>
-	                    </label>
-                      <span className="build-wizard-step-order-pill" title="Step number is automatically set from timeline order">
-                        #{stepDisplayNumber}
-                      </span>
-	                  </div>
-                  <div className="build-wizard-step-metrics-panel">
-                    <div className="build-wizard-step-title-display">
-                      {step.title || 'Untitled Step'}
-                    </div>
-                    <div className="build-wizard-inline-metrics">
-                      <div className="build-wizard-date-inline">
-                        <span>Duration (Days)</span>
-                        <strong>{durationDays ?? '-'}</strong>
-                      </div>
-                      <div className="build-wizard-date-inline">
-                        <span>Start {aiEstimated.has('expected_start_date') ? '*' : ''}</span>
-                        <strong>{step.expected_start_date || '-'}</strong>
-                      </div>
-                      <div className="build-wizard-date-inline">
-                        <span>End {aiEstimated.has('expected_end_date') ? '*' : ''}</span>
-                        <strong>{step.expected_end_date || '-'}</strong>
-                      </div>
-                      <div className="build-wizard-date-inline">
-                        <span>Estimated Cost {aiEstimated.has('estimated_cost') ? '*' : ''}</span>
-                        <strong>{step.estimated_cost !== null ? formatCurrency(Number(step.estimated_cost || 0)) : '-'}</strong>
-                      </div>
-                      <div className="build-wizard-date-inline">
-                        <span className="build-wizard-cost-label-row">
-                          <span>Actual Cost</span>
-                          <span className="build-wizard-cost-actions">
-                            <button
-                              type="button"
-                              className="build-wizard-actual-cost-refresh-btn"
-                              disabled={stepReadOnly || isRefreshingActualCost}
-                              aria-label="Recalculate actual cost from tasks"
-                              title="Recalculate actual cost from tasks"
-                              onClick={() => void onRefreshStepActualCost(step, refreshedActualCostVerificationSignature, recalculatedActualCost)}
-                            >
-                              {isRefreshingActualCost ? '⏳' : '🔄'}
-                            </button>
-                            {isActualCostVerified ? (
-                              <span
-                                className="build-wizard-actual-cost-check"
-                                aria-label="Actual cost is up to date"
-                                title="Actual cost is up to date"
-                              >
-                                ✓
-                              </span>
-                            ) : null}
-                          </span>
-                        </span>
-                        <strong>{effectiveActualCost !== null ? formatCurrency(Number(effectiveActualCost || 0)) : '-'}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  {completionLocked ? (
-                    <span className="build-wizard-parent-lock-note">
-                      Complete {incompleteDescendantCount} child step{incompleteDescendantCount === 1 ? '' : 's'} first
-                    </span>
-                  ) : null}
-                  {stepReadOnly ? (
-                    <span className="build-wizard-step-readonly-note">
-                      Read-only (completed)
-                    </span>
-                  ) : null}
-                </div>
-                <div className="build-wizard-step-header-right">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    aria-label="Edit step"
-                    title="Edit step"
-                    disabled={stepReadOnly}
-                    onClick={() => openStepEditModal(step)}
-                  >
-                    Edit
-                  </button>
-                  {stepAttachmentCount > 0 ? (
-                    <span
-                      className="build-wizard-step-attachment-indicator"
-                      aria-label={`${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'} on this step`}
-                      title={`${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'}`}
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M8 12.5l6.2-6.2a3.5 3.5 0 0 1 5 5l-8.4 8.4a5.5 5.5 0 1 1-7.8-7.8L13.1 1.8" />
-                      </svg>
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    aria-label="Move step"
-                    title="Move step to another phase"
-                    disabled={stepReadOnly}
-                    onClick={() => onOpenMoveStepModal(step.id)}
-                  >
-                    Move
-                  </button>
-                  <button
-                    type="button"
-                    className="build-wizard-step-info-btn"
-                    aria-label="Step information"
-                    title="Step information"
-                    onClick={() => setStepInfoModalStepId(step.id)}
-                  >
-                    i
-                  </button>
-                  <button
-                    type="button"
-                    className="build-wizard-step-delete"
-                    aria-label="Delete step"
-                    title="Delete step"
-                    disabled={stepReadOnly}
-                    onClick={() => {
-                      if (stepReadOnly) {
-                        return;
-                      }
-                      void (async () => {
-                        const ok = await requestConfirmation({
-                          title: 'Delete Step?',
-                          message: 'Delete this step?',
-                          confirmLabel: 'Delete Step',
-                          confirmButtonClass: 'btn btn-danger',
-                        });
-                        if (ok) {
-                          await deleteStep(step.id);
-                        }
-                      })();
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {isExpanded ? (
-              <>
-              <fieldset className="build-wizard-step-fields" disabled={stepReadOnly}>
-                <div className="build-wizard-step-grid">
-                  <div className={`build-wizard-type-note build-wizard-dependency-note ${hasDependencies ? '' : 'is-empty-inline'}`}>
-                    <div className="build-wizard-dependency-head">
-                      <span>Depends on:</span>
-                    </div>
-                  {hasDependencies ? (
-                    <div className="build-wizard-dependency-chip-list">
-                      {dependencyItems.map((dependencyItem) => (
-                        <span key={`${step.id}-dependency-${dependencyItem.id}`} className="build-wizard-dependency-chip">
-                          {dependencyItem.label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="build-wizard-dependency-empty">No dependencies set.</div>
-                  )}
-                </div>
-                {parentStep ? (
-                  <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div>
-                ) : null}
-                {(stepReceiptDocuments.length > 0 || stepReceiptTotal > 0) ? (
-                  <div className="build-wizard-type-note">
-                    Tasks: {stepTaskCount} file{stepTaskCount === 1 ? '' : 's'} | Total {formatCurrency(stepReceiptTotal)}
-                  </div>
-                ) : null}
-              </div>
-
-              <label className="build-wizard-notes-field">
-                Step Description
-                <div className="build-wizard-step-description-display">{step.description || 'No description yet.'}</div>
-              </label>
-
-              <BuildWizardStepActionPanel
-                addableStepContacts={addableStepContacts}
-                attachExistingDocByStepId={attachExistingDocByStepId}
-                attachExistingDocFilterByStepId={attachExistingDocFilterByStepId}
-                attachExistingPickerOpenByStepId={attachExistingPickerOpenByStepId}
-                attachableProjectDocuments={attachableProjectDocuments}
-                contactTypeLabel={contactTypeLabel}
-                draft={draft}
-                effectiveStepContactCandidateId={effectiveStepContactCandidateId}
-                filteredAttachableProjectDocuments={filteredAttachableProjectDocuments}
-                linkedStepDisplayNumberById={linkedStepDisplayNumberById}
-                normalizeContactType={normalizeContactType}
-                noteDraftByStep={noteDraftByStep}
-                noteEditorOpenByStep={noteEditorOpenByStep}
-                onAddContactToStep={onAddContactToStep}
-                onAttachExistingDocumentToStep={onAttachExistingDocumentToStep}
-                onSubmitNote={onSubmitNote}
-                setAttachExistingDocByStepId={setAttachExistingDocByStepId}
-                setAttachExistingDocFilterByStepId={setAttachExistingDocFilterByStepId}
-                setAttachExistingPickerOpenByStepId={setAttachExistingPickerOpenByStepId}
-                setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep}
-                setNoteDraftByStep={setNoteDraftByStep}
-                setNoteEditorOpenByStep={setNoteEditorOpenByStep}
-                setReceiptEditorOpenByStep={setReceiptEditorOpenByStep}
-                setStepContactCandidateByStepId={setStepContactCandidateByStepId}
-                setStepContactPickerOpenByStepId={setStepContactPickerOpenByStepId}
-                step={step}
-                stepById={stepById}
-                stepContactPickerOpenByStepId={stepContactPickerOpenByStepId}
-                stepReadOnly={stepReadOnly}
-                uploadDocument={uploadDocument}
-              />
-
-              </fieldset>
-
-              <BuildWizardStepAssignees
-                allStepAssignees={allStepAssignees}
-                contactTypeChipClass={contactTypeChipClass}
-                hasAssigneeFilters={hasAssigneeFilters}
-                normalizeContactType={normalizeContactType}
-                open={allStepAssignees.length > 0}
-                stepId={step.id}
-                visibleStepAssignees={visibleStepAssignees}
-              />
-
-              {(stepReceiptDocuments.length > 0 || receiptEditorOpen) ? (
-              <div className="build-wizard-step-receipts">
-                <div className="build-wizard-step-receipts-head">
-                  <div className="build-wizard-step-assignees-label">Tasks</div>
-                  <div className="build-wizard-step-receipts-summary">
-                    {stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {formatCurrency(stepReceiptTotal)}
-                  </div>
-                </div>
-                <BuildWizardStepReceiptEditor
-                  authorityContacts={authorityContacts}
-                  autosaveExistingReceiptDraftForStep={autosaveExistingReceiptDraftForStep}
-                  editingReceiptDocumentIdByStep={editingReceiptDocumentIdByStep}
-                  onSaveReceiptForStep={onSaveReceiptForStep}
-                  open={receiptEditorOpen}
-                  permitDocuments={permitDocuments}
-                  permitStatusOptions={permitStatusOptions}
-                  purchaseUnitOptions={purchaseUnitOptions}
-                  receiptDraft={receiptDraft}
-                  receiptDraftByStep={receiptDraftByStep}
-                  receiptEditorRefByStepId={receiptEditorRefByStepId}
-                  setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep}
-                  setReceiptAttachmentDraftByStep={setReceiptAttachmentDraftByStep}
-                  setReceiptDraftByStep={setReceiptDraftByStep}
-                  setReceiptEditorOpenByStep={setReceiptEditorOpenByStep}
-                  step={step}
-                  taskTypeOptions={TASK_TYPE_OPTIONS}
-                />
-                <BuildWizardStepReceiptsList
-                  deletingDocumentId={deletingDocumentId}
-                  formatCurrency={formatCurrency}
-                  getTaskEffectiveDate={getTaskEffectiveDate}
-                  inlineEditingReceiptFieldByDocId={inlineEditingReceiptFieldByDocId}
-                  inlineReceiptDraftByDocId={inlineReceiptDraftByDocId}
-                  onDeleteDocument={onDeleteDocument}
-                  onOpenDocumentPreview={openDocumentPreview}
-                  onStartEditReceiptForStep={onStartEditReceiptForStep}
-                  openMoveTaskModal={openMoveTaskModal}
-                  openTaskAttachmentsModal={openTaskAttachmentsModal}
-                  parseTaskMetaFromReceiptNotes={parseTaskMetaFromReceiptNotes}
-                  receiptRowRefByDocId={receiptRowRefByDocId}
-                  saveInlineReceiptEdit={saveInlineReceiptEdit}
-                  setInlineReceiptDraftByDocId={setInlineReceiptDraftByDocId}
-                  startInlineReceiptEdit={startInlineReceiptEdit}
-                  step={step}
-                  stepReadOnly={stepReadOnly}
-                  stepReceiptAttachmentDocuments={stepReceiptAttachmentDocuments}
-                  stepReceiptDocuments={stepReceiptDocuments}
-                  taskTypeOptions={TASK_TYPE_OPTIONS}
-                  taskUsesManualDateOverride={taskUsesManualDateOverride}
-                  taskVendorOptions={taskVendorOptions}
-                />
-              </div>
-              ) : null}
-
-              {stepNonReceiptDocuments.length > 0 ? (
-                <div className="build-wizard-step-media">
-                  {renderDocumentGallery(
-                    stepNonReceiptDocuments,
-                    '',
-                    stepReadOnly
-                  )}
-                </div>
-              ) : null}
-
-              <BuildWizardStepNotes
-                deletingNoteId={deletingNoteId}
-                editingNoteTextById={editingNoteTextById}
-                formatDate={formatDate}
-                noteEditedAtLabel={noteEditedAtLabel}
-                onCancelEditNote={onCancelEditNote}
-                onDeleteStepNoteById={onDeleteStepNoteById}
-                onSaveEditedNote={onSaveEditedNote}
-                onStartEditNote={onStartEditNote}
-                open={step.notes.length > 0}
-                savingNoteId={savingNoteId}
-                setEditingNoteTextById={setEditingNoteTextById}
-                step={step}
-                stepReadOnly={stepReadOnly}
-              />
-
-              </>
-              ) : null}
-            </div>
-            <div
-              className={`build-wizard-drop-zone ${dragOverInsertIndex === rowIndex + 1 ? 'is-active' : ''}`}
-              onDragOver={(e) => {
-                if (draggingStepId > 0) {
-                  e.preventDefault();
-                  setDragOverInsertIndex(rowIndex + 1);
-                  setDragOverParentStepId(0);
-                }
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                void onDropReorder(rowIndex + 1);
-              }}
-            />
-            </React.Fragment>
-          );
-        })}
-      </div>
+      <BuildWizardEditableStepCards
+        activeTabTreeRows={activeTabTreeRows}
+        cardContext={{
+          activeTabStepNumbers,
+          attachExistingDocByStepId,
+          attachExistingDocFilterByStepId,
+          attachExistingPickerOpenByStepId,
+          attachableProjectDocuments,
+          authorityContacts,
+          autosaveExistingReceiptDraftForStep,
+          beginStepDrag,
+          clearStepDragState,
+          contactTypeChipClass,
+          contactTypeLabel,
+          contacts,
+          deleteStep,
+          deletingDocumentId,
+          deletingNoteId,
+          documents,
+          dragOverParentStepId,
+          draggingStepId,
+          editingNoteTextById,
+          editingReceiptDocumentIdByStep,
+          expandedStepById,
+          formatCurrency,
+          formatDate,
+          getTaskEffectiveDate,
+          inlineEditingReceiptFieldByDocId,
+          inlineReceiptDraftByDocId,
+          incompleteDescendantCountByStepId,
+          linkedStepDisplayNumberById,
+          normalizeContactType,
+          noteDraftByStep,
+          noteEditedAtLabel,
+          noteEditorOpenByStep,
+          onAddContactToStep,
+          onAttachExistingDocumentToStep,
+          onCancelEditNote,
+          onDeleteDocument,
+          onDeleteStepNoteById,
+          onDropMakeChild,
+          onOpenDocumentPreview: openDocumentPreview,
+          onOpenMoveStepModal,
+          onRefreshStepActualCost,
+          onSaveEditedNote,
+          onSaveReceiptForStep,
+          onStartEditNote,
+          onStartEditReceiptForStep,
+          onSubmitNote,
+          openMoveTaskModal,
+          openStepEditModal,
+          openTaskAttachmentsModal,
+          parseTaskMetaFromReceiptNotes,
+          permitDocuments,
+          permitStatusOptions,
+          purchaseUnitOptions,
+          receiptDraftByStep,
+          receiptEditorOpenByStep,
+          receiptEditorRefByStepId,
+          receiptMetricsByStepId,
+          receiptRowRefByDocId,
+          refreshingActualCostByStepId,
+          renderDocumentGallery,
+          requestConfirmation,
+          saveInlineReceiptEdit,
+          savingNoteId,
+          setAttachExistingDocByStepId,
+          setAttachExistingDocFilterByStepId,
+          setAttachExistingPickerOpenByStepId,
+          setDragOverInsertIndex,
+          setDragOverParentStepId,
+          setEditingNoteTextById,
+          setEditingReceiptDocumentIdByStep,
+          setExpandedStepById,
+          setInlineReceiptDraftByDocId,
+          setNoteDraftByStep,
+          setNoteEditorOpenByStep,
+          setReceiptAttachmentDraftByStep,
+          setReceiptDraftByStep,
+          setReceiptEditorOpenByStep,
+          setStepContactCandidateByStepId,
+          setStepContactPickerOpenByStepId,
+          setStepInfoModalStepId,
+          startInlineReceiptEdit,
+          stepAssigneesByStepId,
+          stepById,
+          stepContactCandidateByStepId,
+          stepContactPickerOpenByStepId,
+          stepDirectAssigneesByStepId,
+          stepDrafts,
+          taskTypeOptions: TASK_TYPE_OPTIONS,
+          taskUsesManualDateOverride,
+          taskVendorOptions,
+          toggleStep,
+          uploadDocument,
+          verifiedActualCostSignatureByStepId,
+        }}
+        dragOverInsertIndex={dragOverInsertIndex}
+        onDropReorder={onDropReorder}
+        setDragOverInsertIndex={setDragOverInsertIndex}
+        setDragOverParentStepId={setDragOverParentStepId}
+        stepCardAssigneeIdFilter={stepCardAssigneeIdFilter}
+        stepCardAssigneeTypeFilter={stepCardAssigneeTypeFilter}
+        stepCardTextFilterTokens={stepCardTextFilterTokens}
+        stepSearchTextById={stepSearchTextById}
+        tabSteps={tabSteps}
+      />
     );
   };
 

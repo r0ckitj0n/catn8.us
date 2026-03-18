@@ -111,6 +111,8 @@ import {
   Accumul8EntityUpsertRequest,
 } from '../../types/accumul8';
 import { Accumul8PageHeader } from './accumul8/Accumul8PageHeader';
+import { useAccumul8EntityEndexActions } from './accumul8/useAccumul8EntityEndexActions';
+import { DebtorInlineDraft, EntityInlineDraft, RecurringInlineDraft, useAccumul8InlineRowActions } from './accumul8/useAccumul8InlineRowActions';
 import { Accumul8PageModalAssembly } from './accumul8/Accumul8PageModalAssembly';
 import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
 import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
@@ -159,9 +161,6 @@ const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: st
   { value: 'show_unpaid_only', label: 'Show unpaid only' },
   { value: 'show_upcoming_unpaid', label: 'Show upcoming unpaid' },
 ];
-type DebtorInlineDraft = Partial<Pick<Accumul8Debtor, 'debtor_name' | 'notes' | 'is_active'>>;
-type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
-type RecurringInlineDraft = Partial<Pick<Accumul8RecurringPayment, 'title' | 'next_due_date' | 'amount' | 'frequency' | 'payment_method' | 'is_budget_planner' | 'is_active' | 'notes' | 'account_id'>>;
 type EntityFormState = {
   display_name: string;
   entity_kind: string;
@@ -2344,243 +2343,73 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     rows: selectedDebtorEntries,
     columns: balanceLedgerTableColumns,
   });
-  const handleDeleteTransaction = React.useCallback((id: number, description: string) => {
-    if (window.confirm(`Delete "${description || 'this ledger item'}"?`)) {
-      void deleteTransaction(id);
-    }
-  }, [deleteTransaction]);
-  const handleDeleteRecurring = React.useCallback((id: number, description: string) => {
-    if (window.confirm(`Delete "${description || 'this recurring item'}"?`)) {
-      void deleteRecurring(id);
-    }
-  }, [deleteRecurring]);
-  const activateLedgerRow = React.useCallback((id: number) => {
-    setActiveLedgerRowId(id);
-  }, []);
-  const activatePayBillRow = React.useCallback((id: number) => {
-    setActivePayBillRowId(id);
-  }, []);
-  const activateDebtorRow = React.useCallback((id: number) => {
-    setActiveDebtorRowId(id);
-  }, []);
-  const activateEntityRow = React.useCallback((id: number) => {
-    setActiveEntityRowId(id);
-  }, []);
-  const activateRecurringRow = React.useCallback((id: number) => {
-    setActiveRecurringRowId(id);
-  }, []);
-  const setLedgerRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
-    const normalizedPatch = normalizePaidStateDraft(tx, ledgerDraftById[tx.id], patch);
-    setLedgerDraftById((prev) => ({
-      ...prev,
-      [tx.id]: {
-        ...prev[tx.id],
-        ...normalizedPatch,
-      },
-    }));
-  }, [ledgerDraftById]);
-  const setDebtorRowDraft = React.useCallback((row: Accumul8Debtor, patch: DebtorInlineDraft) => {
-    setDebtorDraftById((prev) => ({
-      ...prev,
-      [row.id]: {
-        ...prev[row.id],
-        ...patch,
-      },
-    }));
-  }, []);
-  const setEntityRowDraft = React.useCallback((row: Accumul8Entity, patch: EntityInlineDraft) => {
-    setEntityDraftById((prev) => ({
-      ...prev,
-      [row.id]: {
-        ...prev[row.id],
-        ...patch,
-      },
-    }));
-  }, []);
-  const setPayBillRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
-    const normalizedPatch = normalizePaidStateDraft(tx, payBillDraftById[tx.id], patch);
-    setPayBillDraftById((prev) => ({
-      ...prev,
-      [tx.id]: {
-        ...prev[tx.id],
-        ...normalizedPatch,
-      },
-    }));
-  }, [payBillDraftById]);
-  const setRecurringRowDraft = React.useCallback((row: Accumul8RecurringPayment, patch: RecurringInlineDraft) => {
-    setRecurringDraftById((prev) => ({
-      ...prev,
-      [row.id]: {
-        ...prev[row.id],
-        ...patch,
-      },
-    }));
-  }, []);
-  const saveLedgerRow = React.useCallback(async (tx: Accumul8Transaction) => {
-    const draft = ledgerDraftById[tx.id];
-    if (!draft) {
-      return;
-    }
-    await updateTransaction(tx.id, {
-      transaction_date: draft.transaction_date ?? tx.transaction_date,
-      due_date: draft.due_date ?? tx.due_date,
-      paid_date: draft.paid_date ?? tx.paid_date,
-      entry_type: tx.entry_type,
-      description: draft.description ?? tx.description,
-      memo: draft.memo ?? tx.memo,
-      amount: Number(draft.amount ?? tx.amount ?? 0),
-      rta_amount: Number(draft.rta_amount ?? tx.rta_amount ?? 0),
-      is_paid: Number(draft.is_paid ?? tx.is_paid ?? 0),
-      is_reconciled: Number(draft.is_reconciled ?? tx.is_reconciled ?? 0),
-      is_budget_planner: Number(draft.is_budget_planner ?? tx.is_budget_planner ?? 0),
-      entity_id: draft.entity_id ?? tx.entity_id ?? null,
-      account_id: draft.account_id ?? tx.account_id ?? null,
-      balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
-    });
-    setLedgerDraftById((prev) => {
-      const next = { ...prev };
-      delete next[tx.id];
-      return next;
-    });
-    setActiveLedgerRowId((current) => (current === tx.id ? null : current));
-  }, [ledgerDraftById, updateTransaction]);
-  const savePayBillRow = React.useCallback(async (tx: Accumul8Transaction) => {
-    const draft = payBillDraftById[tx.id];
-    if (!draft) {
-      return;
-    }
-    await updateTransaction(tx.id, {
-      transaction_date: draft.transaction_date ?? tx.transaction_date,
-      due_date: draft.due_date ?? tx.due_date,
-      paid_date: draft.paid_date ?? tx.paid_date,
-      entry_type: tx.entry_type,
-      description: draft.description ?? tx.description,
-      memo: draft.memo ?? tx.memo,
-      amount: Number(draft.amount ?? tx.amount ?? 0),
-      rta_amount: Number(draft.rta_amount ?? tx.rta_amount ?? 0),
-      is_paid: Number(draft.is_paid ?? tx.is_paid ?? 0),
-      is_reconciled: Number(draft.is_reconciled ?? tx.is_reconciled ?? 0),
-      is_budget_planner: Number(draft.is_budget_planner ?? tx.is_budget_planner ?? 0),
-      entity_id: draft.entity_id ?? tx.entity_id ?? null,
-      account_id: draft.account_id ?? tx.account_id ?? null,
-      balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
-    });
-    setPayBillDraftById((prev) => {
-      const next = { ...prev };
-      delete next[tx.id];
-      return next;
-    });
-    setActivePayBillRowId((current) => (current === tx.id ? null : current));
-  }, [payBillDraftById, updateTransaction]);
-  const saveDebtorRow = React.useCallback(async (row: Accumul8Debtor) => {
-    const draft = debtorDraftById[row.id];
-    if (!draft) {
-      return;
-    }
-    await updateDebtor(row.id, {
-      debtor_name: draft.debtor_name ?? row.debtor_name,
-      notes: draft.notes ?? row.notes ?? '',
-      is_active: Number(draft.is_active ?? row.is_active ?? 0),
-    });
-    setDebtorDraftById((prev) => {
-      const next = { ...prev };
-      delete next[row.id];
-      return next;
-    });
-    setActiveDebtorRowId((current) => (current === row.id ? null : current));
-  }, [debtorDraftById, updateDebtor]);
-  const saveEntityRow = React.useCallback(async (entity: Accumul8Entity) => {
-    const draft = entityDraftById[entity.id];
-    if (!draft) {
-      return;
-    }
-    await updateEntity(entity.id, {
-      display_name: draft.display_name ?? entity.display_name,
-      entity_kind: draft.entity_kind ?? normalizeEntityKind(entity.entity_kind, entity.is_vendor),
-      contact_type: draft.contact_type ?? normalizeEntityContactType(entity),
-      is_payee: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payee' ? 1 : 0,
-      is_payer: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'payer' ? 1 : 0,
-      is_vendor: (draft.entity_kind ?? normalizeEntityKind(entity.entity_kind, entity.is_vendor)) === 'business' ? 1 : 0,
-      is_balance_person: (draft.contact_type ?? normalizeEntityContactType(entity)) === 'repayment' ? 1 : 0,
-      default_amount: Number(draft.default_amount ?? entity.default_amount ?? 0),
-      email: draft.email ?? entity.email ?? '',
-      phone_number: draft.phone_number ?? entity.phone_number ?? '',
-      street_address: draft.street_address ?? entity.street_address ?? '',
-      city: draft.city ?? entity.city ?? '',
-      state: draft.state ?? entity.state ?? '',
-      zip: draft.zip ?? entity.zip ?? '',
-      notes: draft.notes ?? entity.notes ?? '',
-      is_active: Number(draft.is_active ?? entity.is_active ?? 0),
-    });
-    setEntityDraftById((prev) => {
-      const next = { ...prev };
-      delete next[entity.id];
-      return next;
-    });
-    setActiveEntityRowId((current) => (current === entity.id ? null : current));
-  }, [entityDraftById, updateEntity]);
-  const saveEntityAlias = React.useCallback(async (entity: Accumul8Entity) => {
-    await persistEntityAliases(entity.id, entity.display_name);
-  }, [persistEntityAliases]);
-  const removeEntityAlias = React.useCallback(async (aliasId: number) => {
-    await deleteEntityAlias(aliasId);
-  }, [deleteEntityAlias]);
-  const openEntityEndexGuideModal = React.useCallback((guideId: number | null = null) => {
-    setEditingEntityEndexGuideId(guideId);
-    setEntityEndexGuideModalOpen(true);
-  }, []);
   const closeEntityEndexGuideModal = React.useCallback(() => {
     setEditingEntityEndexGuideId(null);
     setEntityEndexGuideModalOpen(false);
   }, []);
-  const runEntityMaintenanceAliasScan = React.useCallback(async () => {
-    setEntityEndexFindingAll(true);
-    try {
-      await findAllEntityAliases();
-    } finally {
-      setEntityEndexFindingAll(false);
-    }
-  }, [findAllEntityAliases]);
-  const saveEntityEndexGuide = React.useCallback(async (payload: Accumul8EntityEndexGuideUpsertRequest) => {
-    if (editingEntityEndexGuideId) {
-      await updateEntityEndexGuide(editingEntityEndexGuideId, payload);
-    } else {
-      await createEntityEndexGuide(payload);
-    }
-    closeEntityEndexGuideModal();
-  }, [closeEntityEndexGuideModal, createEntityEndexGuide, editingEntityEndexGuideId, updateEntityEndexGuide]);
-  const removeEntityEndexGuide = React.useCallback(async (guideId: number) => {
-    await deleteEntityEndexGuide(guideId);
-    closeEntityEndexGuideModal();
-  }, [closeEntityEndexGuideModal, deleteEntityEndexGuide]);
-  const runEntityEndexGuideFinder = React.useCallback(async (entityId: number) => {
-    await findEntityAliases({ entity_id: entityId });
-  }, [findEntityAliases]);
-  const saveRecurringRow = React.useCallback(async (row: Accumul8RecurringPayment) => {
-    const draft = recurringDraftById[row.id];
-    if (!draft) {
-      return;
-    }
-    await updateRecurring(row.id, {
-      title: draft.title ?? row.title,
-      direction: row.direction,
-      amount: Number(draft.amount ?? row.amount ?? 0),
-      frequency: (draft.frequency ?? row.frequency) as Accumul8Frequency,
-      payment_method: (draft.payment_method ?? row.payment_method) as Accumul8PaymentMethod,
-      interval_count: Number(row.interval_count || 1),
-      next_due_date: draft.next_due_date ?? row.next_due_date,
-      entity_id: row.entity_id ?? null,
-      account_id: draft.account_id ?? row.account_id ?? null,
-      is_budget_planner: Number(draft.is_budget_planner ?? row.is_budget_planner ?? 0),
-      notes: draft.notes ?? row.notes ?? '',
-    });
-    setRecurringDraftById((prev) => {
-      const next = { ...prev };
-      delete next[row.id];
-      return next;
-    });
-    setActiveRecurringRowId((current) => (current === row.id ? null : current));
-  }, [recurringDraftById, updateRecurring]);
+  const {
+    activateDebtorRow,
+    activateEntityRow,
+    activateLedgerRow,
+    activatePayBillRow,
+    activateRecurringRow,
+    handleDeleteRecurring,
+    handleDeleteTransaction,
+    removeEntityAlias,
+    saveDebtorRow,
+    saveEntityAlias,
+    saveEntityRow,
+    saveLedgerRow,
+    savePayBillRow,
+    saveRecurringRow,
+    setDebtorRowDraft,
+    setEntityRowDraft,
+    setLedgerRowDraft,
+    setPayBillRowDraft,
+    setRecurringRowDraft,
+  } = useAccumul8InlineRowActions({
+    debtorDraftById,
+    deleteEntityAlias,
+    deleteRecurring,
+    deleteTransaction,
+    entityDraftById,
+    ledgerDraftById,
+    payBillDraftById,
+    persistEntityAliases,
+    recurringDraftById,
+    setActiveDebtorRowId,
+    setActiveEntityRowId,
+    setActiveLedgerRowId,
+    setActivePayBillRowId,
+    setActiveRecurringRowId,
+    setDebtorDraftById,
+    setEntityDraftById,
+    setLedgerDraftById,
+    setPayBillDraftById,
+    setRecurringDraftById,
+    updateDebtor,
+    updateEntity,
+    updateRecurring,
+    updateTransaction,
+  });
+  const {
+    openEntityEndexGuideModal,
+    removeEntityEndexGuide,
+    runEntityEndexGuideFinder,
+    runEntityMaintenanceAliasScan,
+    saveEntityEndexGuide,
+  } = useAccumul8EntityEndexActions({
+    closeEntityEndexGuideModal,
+    createEntityEndexGuide,
+    deleteEntityEndexGuide,
+    editingEntityEndexGuideId,
+    findAllEntityAliases,
+    findEntityAliases,
+    setEditingEntityEndexGuideId,
+    setEntityEndexFindingAll,
+    setEntityEndexGuideModalOpen,
+    updateEntityEndexGuide,
+  });
   React.useEffect(() => {
     return () => {
       if (flashSaveButtonTimeoutRef.current !== null && typeof window !== 'undefined') {

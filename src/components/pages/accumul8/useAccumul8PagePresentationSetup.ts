@@ -217,5 +217,4 @@ export function useAccumul8PagePresentationSetup(options: any) {
       summaryWindow: options.summaryWindow,
       tab: options.tab,
       visibleAccounts: options.visibleAccounts,
-    }) };
-}
+    }) };}

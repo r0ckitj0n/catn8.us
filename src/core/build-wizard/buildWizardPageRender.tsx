@@ -48,7 +48,6 @@ import {
 } from '../../components/pages/build-wizard/buildWizardUtils';
 import {
   BuildWizardContactType,
-  BuildWizardSearchResult,
   BuildWizardTaskMeta,
   BuildWizardTaskType,
   InlineReceiptField,
@@ -106,6 +105,8 @@ import { useBuildWizardWorkspaceChromeEffects } from './useBuildWizardWorkspaceC
 import { useBuildWizardDocumentActionSetup } from './useBuildWizardDocumentActionSetup';
 import { useBuildWizardWorkflowActionSetup } from './useBuildWizardWorkflowActionSetup';
 import { useBuildWizardWorkspaceComposedProps } from './useBuildWizardWorkspaceComposedProps';
+import { useBuildWizardWorkspaceUiCallbacks } from './useBuildWizardWorkspaceUiCallbacks';
+import { buildBuildWizardWorkspaceComposedOptions } from './buildBuildWizardWorkspaceComposedOptions';
 import {
   clampLightboxZoom,
   allowedTaskTypes,
@@ -334,14 +335,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   const previousActiveTabRef = React.useRef<BuildTabId>('start');
   const [replacingDocumentId, setReplacingDocumentId] = React.useState<number>(0);
 
-  const zoomLightboxBy = React.useCallback((delta: number) => {
-    setLightboxZoom((prev) => clampLightboxZoom(prev + delta));
-  }, []);
-
-  const resetLightboxZoom = React.useCallback(() => {
-    setLightboxZoom(1);
-  }, []);
-  const { closeConfirmation, confirmState, requestConfirmation } = useBuildWizardConfirmationActions();
+  const confirmationActions = useBuildWizardConfirmationActions();
   const {
     closeLightbox,
     isPlanPreviewDoc,
@@ -462,7 +456,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     steps,
   });
 
-  const { activeTabStepNumbers, activeTabTreeRows, incompleteDescendantCountByStepId } = useBuildWizardActiveTabTree(filteredTabSteps);
+  const activeTabTree = useBuildWizardActiveTabTree(filteredTabSteps);
 
   const stepEditModalDependencyIds = React.useMemo(() => {
     if (!stepEditModalStep || !stepEditModalDraft) {
@@ -491,17 +485,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
   }, [stepEditModalDependencyIds, stepEditModalStep, steps]);
 
-  const {
-    getStepActualExcludingQuotes,
-    getStepEstimatedExcludingQuotes,
-    moveStepPhaseTabOptions,
-    receiptMetricsByStepId,
-    stepAssigneesByStepId,
-    stepCardTextFilterTokens,
-    stepDirectAssigneesByStepId,
-    stepFilterContactOptions,
-    stepSearchTextById,
-  } = useBuildWizardStepWorkspaceMeta({
+  const stepWorkspaceMeta = useBuildWizardStepWorkspaceMeta({
     contactAssignments,
     contacts,
     documents,
@@ -511,35 +495,20 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     steps,
   });
 
-  const {
-    overviewMetrics,
-    phaseTotals,
-    projectOverviewRange,
-    projectOverviewSections,
-    projectOverviewTotals,
-    projectTotals,
-    stepCostTotalExcludingQuotes,
-  } = useBuildWizardOverviewData({
+  const overviewData = useBuildWizardOverviewData({
     activeTab,
     documents,
     filteredTabSteps,
-    getStepActualExcludingQuotes,
-    getStepEstimatedExcludingQuotes,
+    getStepActualExcludingQuotes: stepWorkspaceMeta.getStepActualExcludingQuotes,
+    getStepEstimatedExcludingQuotes: stepWorkspaceMeta.getStepEstimatedExcludingQuotes,
     isAiEstimatedField,
     project,
-    stepAssigneesByStepId,
+    stepAssigneesByStepId: stepWorkspaceMeta.stepAssigneesByStepId,
     stepPhaseBucket,
     steps,
   });
 
-  const {
-    activePhaseDateRange,
-    activePhaseHasStoredDateRange,
-    onMoveStepFromModal,
-    onOpenMoveStepModal,
-    onPhaseDateRangeChange,
-    resolvePhaseDateRange,
-  } = useBuildWizardPhaseRangeActions({
+  const phaseRangeActions = useBuildWizardPhaseRangeActions({
     activeTab,
     moveStepModalStepId,
     moveStepModalTargetTab,
@@ -558,13 +527,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateStep,
   });
 
-  const {
-    attachableProjectDocuments,
-    footerTimelineSteps,
-    linkedStepDisplayNumberById,
-    linkedStepOptions,
-    selectableDocSteps,
-  } = useBuildWizardWorkspaceSelectionData({
+  const workspaceSelectionData = useBuildWizardWorkspaceSelectionData({
     activeTab,
     docPhaseKey,
     documents,
@@ -574,26 +537,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     steps,
   });
 
-  const {
-    documentManagerSearchResultById,
-    documentManagerKindOptions,
-    documentManagerLinkedStepFilterOptions,
-    documentManagerPhaseOptions,
-    filteredDocumentManagerDocs,
-    moveTaskModalDoc,
-    moveTaskStepOptions,
-    permitDocuments,
-    phaseOptions,
-    primaryBlueprintChoices,
-    primaryPhotoChoices,
-    projectDocuments,
-    taskAttachmentsModalAttachableDocuments,
-    taskAttachmentsModalDoc,
-    taskAttachmentsModalStep,
-    topbarSearchResults,
-  } = useBuildWizardDocumentManagerData({
+  const documentManagerData = useBuildWizardDocumentManagerData({
     attachExistingDocFilterByReceiptId,
-    attachableProjectDocuments,
+    attachableProjectDocuments: workspaceSelectionData.attachableProjectDocuments,
     buildTabs: BUILD_TABS,
     docKindOptions,
     documentManagerKindFilter,
@@ -602,7 +548,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     documentManagerSearchResults,
     documentManagerStepFilter,
     documents,
-    linkedStepOptions,
+    linkedStepOptions: workspaceSelectionData.linkedStepOptions,
     moveTaskModalDocId,
     stepById,
     stepByIdMap,
@@ -617,7 +563,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     deskContacts,
     deskCreateMode,
     deskSelectedContactId,
-    documentManagerLinkedStepFilterOptions,
+    documentManagerLinkedStepFilterOptions: documentManagerData.documentManagerLinkedStepFilterOptions,
     documentManagerStepFilter,
     documents,
     docStepId,
@@ -625,7 +571,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     parseTaskMetaFromReceiptNotes,
     projectDeskOpen,
     selectedDeskContact,
-    selectableDocSteps,
+    selectableDocSteps: workspaceSelectionData.selectableDocSteps,
     setDeskContactDraft,
     setDeskCreateMode,
     setDeskSelectedContactId,
@@ -650,14 +596,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     stepById,
     stepCardAssigneeIdFilter,
     stepEditModalStepId,
-    stepFilterContactOptions,
+    stepFilterContactOptions: stepWorkspaceMeta.stepFilterContactOptions,
     stepPhaseBucket,
   });
 
   const launcherProjects = React.useMemo(() => projects.filter((candidate) => Number(candidate.is_template || 0) !== 1), [projects]);
   const templateProjects = React.useMemo(() => projects.filter((candidate) => Number(candidate.is_template || 0) === 1), [projects]);
   const isTemplateProject = Number(project?.is_template || 0) === 1;
-  const { onBackFromWorkspace, onBackToLauncher, onCloseWizard, onCreateNewBuild, onCreateTemplate, onOpenTemplateEditor, onSaveTemplate, openBuild } = useBuildWizardLauncherActions({
+  const launcherActions = useBuildWizardLauncherActions({
     buildEntryPoint,
     createProject,
     isTemplateProject,
@@ -674,19 +620,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateProject,
   });
 
-  const {
-    changeCurrencyEdit,
-    clearStepDraft,
-    closeStepEditModal,
-    finishCurrencyEdit,
-    noteEditedAtLabel,
-    onRefreshStepActualCost,
-    onTimelineStepChange,
-    openStepEditModal,
-    renderCurrencyInputValue,
-    startCurrencyEdit,
-    updateStepDraft,
-  } = useBuildWizardStepUiActions({
+  const stepUiActions = useBuildWizardStepUiActions({
     activeCurrencyInputKey,
     currencyInputByKey,
     onToast,
@@ -701,17 +635,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     stepEditModalStepId,
     updateStep,
   });
+  const { clearStepDraft } = stepUiActions;
 
-  const {
-    onCancelEditNote,
-    onDeleteDocument,
-    onDeleteStepNoteById,
-    onRemoveDocumentFromStep,
-    onReplaceDocumentFile,
-    onSaveEditedNote,
-    onStartEditNote,
-    onSubmitNote,
-  } = useBuildWizardNoteDocumentActions({
+  const noteDocumentActions = useBuildWizardNoteDocumentActions({
     addStepNote,
     deleteDocument,
     deleteStepNote,
@@ -722,7 +648,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     onToast,
     replacingDocumentId,
     replaceDocument,
-    requestConfirmation,
+    requestConfirmation: confirmationActions.requestConfirmation,
     setDeletingDocumentId,
     setDeletingNoteId,
     setEditingNoteTextById,
@@ -738,79 +664,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   const lightboxSupportsZoom = Boolean(lightboxDoc && (lightboxDoc.mode === 'image' || lightboxDoc.mode === 'spreadsheet' || lightboxDoc.mode === 'plan'));
 
-  const onLightboxWheelZoom = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (!lightboxSupportsZoom) {
-      return;
-    }
-    e.preventDefault();
-    const direction = e.deltaY < 0 ? 1 : -1;
-    const delta = (e.shiftKey ? LIGHTBOX_ZOOM_STEP_FAST : LIGHTBOX_ZOOM_STEP) * direction;
-    setLightboxZoom((prev) => clampLightboxZoom(prev + delta));
-  }, [lightboxSupportsZoom]);
+  const workspaceUiCallbacks = useBuildWizardWorkspaceUiCallbacks({
+    activeTab,
+    clampLightboxZoom,
+    deleteProject,
+    focusStepExpansion: setExpandedStepById,
+    lightboxSupportsZoom,
+    lightboxZoomStep: LIGHTBOX_ZOOM_STEP,
+    lightboxZoomStepFast: LIGHTBOX_ZOOM_STEP_FAST,
+    onOpenDocumentPreview: openDocumentPreview,
+    requestConfirmation: confirmationActions.requestConfirmation,
+    setActiveTab,
+    setDeletingProjectId,
+    setLightboxZoom,
+    setTopbarSearchFocusStepId,
+    setTopbarSearchOpen,
+  });
+  const { focusStepInBuildView } = workspaceUiCallbacks;
 
-  const focusStepInBuildView = React.useCallback((phaseId: BuildTabId, stepId: number) => {
-    if (stepId <= 0) {
-      return;
-    }
-    setActiveTab(phaseId);
-    setExpandedStepById((prev) => ({ ...prev, [stepId]: true }));
-    setTopbarSearchFocusStepId(0);
-    window.setTimeout(() => setTopbarSearchFocusStepId(stepId), 0);
-  }, []);
-
-  const selectTopbarSearchResult = React.useCallback((result: BuildWizardSearchResult) => {
-    setTopbarSearchOpen(false);
-
-    if (result.kind === 'phase') {
-      setActiveTab(result.phaseId);
-      return;
-    }
-
-    if (result.kind === 'step') {
-      focusStepInBuildView(result.phaseId, result.stepId);
-      return;
-    }
-
-    if (result.linkedPhaseId) {
-      setActiveTab(result.linkedPhaseId);
-    }
-    if (result.linkedStepId > 0) {
-      focusStepInBuildView(result.linkedPhaseId || activeTab, result.linkedStepId);
-      return;
-    }
-    void openDocumentPreview(result.document);
-  }, [activeTab, focusStepInBuildView, openDocumentPreview]);
-
-  const onDeleteProject = async (projectSummary: { id: number; title: string }) => {
-    if (deletingProjectId === projectSummary.id || projectSummary.id <= 0) {
-      return;
-    }
-    const confirmed = await requestConfirmation({
-      title: 'Delete Project?',
-      message: `Delete "${projectSummary.title}"?\n\nThis will permanently purge this project and all related records from the database.`,
-      confirmLabel: 'Delete Project',
-      confirmButtonClass: 'btn btn-danger',
-    });
-    if (!confirmed) {
-      return;
-    }
-    setDeletingProjectId(projectSummary.id);
-    try {
-      await deleteProject(projectSummary.id);
-    } finally {
-      setDeletingProjectId(0);
-    }
-  };
-
-  const {
-    onAddContactToStep,
-    onAddDeskPhaseAssignment,
-    onAddDeskStepAssignment,
-    onAutoAssignDeskStepsToTimeline,
-    onDeleteDeskContact,
-    onSaveDeskContact,
-    onStartNewDeskContact,
-  } = useBuildWizardDeskActions({
+  const deskActions = useBuildWizardDeskActions({
     addContactAssignment,
     aiBusy,
     deleteContact,
@@ -822,7 +694,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     generateStepsFromAi,
     onToast,
     projectId,
-    requestConfirmation,
+    requestConfirmation: confirmationActions.requestConfirmation,
     saveContact,
     selectedDeskContact,
     setDeskAutoAssignBusy,
@@ -836,26 +708,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     toStringOrNull,
   });
 
-  const {
-    autosaveExistingReceiptDraftForStep,
-    buildDocumentDraft,
-    clampStepDatesWithinRange,
-    expandPhaseRangeForStep,
-    onAttachExistingDocumentToReceipt,
-    onAttachExistingDocumentToStep,
-    onMoveReceiptToStep,
-    onSaveDocument,
-    onSaveDocumentDraft,
-    onSaveReceiptForStep,
-    onStartEditReceiptForStep,
-    onUploadReceiptAttachments,
-    openMoveTaskModal,
-    openTaskAttachmentsModal,
-    saveInlineReceiptEdit,
-    startInlineReceiptEdit,
-    taskVendorOptions,
-    updateDocumentDraft,
-  } = useBuildWizardDocumentActionSetup({
+  const documentActions = useBuildWizardDocumentActionSetup({
     attachExistingDocByReceiptId,
     attachExistingDocByStepId,
     buildDocumentDraftDeps: { documentDrafts, parseTaskMetaFromReceiptNotes, setTaskDateOverrideInReceiptNotes, taskUsesManualDateOverride },
@@ -865,7 +718,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     documentSavingId,
     editingReceiptDocumentIdByStep,
     inlineReceiptDraftByDocId,
-    moveTaskModalDoc,
+    moveTaskModalDoc: documentManagerData.moveTaskModalDoc,
     moveTaskModalTargetStepId,
     onToast,
     parseTaskMetaFromReceiptNotes,
@@ -875,7 +728,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     receiptDraftByStep,
     receiptEditorRefByStepId,
     receiptRowRefByDocId,
-    resolvePhaseDateRange,
+    resolvePhaseDateRange: phaseRangeActions.resolvePhaseDateRange,
     savePhaseDateRange,
     setAttachExistingDocByReceiptId,
     setAttachExistingDocByStepId,
@@ -898,20 +751,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateDocument,
     uploadDocument,
   });
+  const { clampStepDatesWithinRange, expandPhaseRangeForStep } = documentActions;
 
-  const {
-    autoReorderPhaseByTimeline,
-    beginStepDrag,
-    clearStepDragState,
-    onCompleteWithAi,
-    onDropMakeChild,
-    onDropReorder,
-    onEstimateMissingWithAi,
-    onRunSingletreeRecovery,
-    onUploadRecoveryFiles,
-    saveStepEditModal,
-  } = useBuildWizardWorkflowActionSetup({
-    activeTabTreeRows,
+  const workflowActions = useBuildWizardWorkflowActionSetup({
+    activeTabTreeRows: activeTabTree.activeTabTreeRows,
     clampStepDatesWithinRange,
     clearedLegacyTaskDatesByProjectRef,
     clearStepDraft,
@@ -935,7 +778,7 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     recoveryUploadBusy,
     recoveryUploadInputRef,
     reorderSteps,
-    requestConfirmation,
+    requestConfirmation: confirmationActions.requestConfirmation,
     setDragOverInsertIndex,
     setDragOverParentStepId,
     setDraggingStepId,
@@ -962,14 +805,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
 
   useBuildWizardPhaseRangeAutoSync({
     projectId,
-    resolvePhaseDateRange,
+    resolvePhaseDateRange: phaseRangeActions.resolvePhaseDateRange,
     savePhaseDateRange,
     stepPhaseBucket,
     steps,
     toStringOrNull,
   });
 
-  const { projectPhotosSection, renderDocumentGallery, renderLauncher, renderTemplateEditor } = useBuildWizardRenderers({
+  const renderers = useBuildWizardRenderers({
     deletingProjectId,
     docKind,
     docKindOptions,
@@ -981,21 +824,21 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     launcherProjects,
     newHomeWastewaterKind,
     newHomeWaterKind,
-    onBackToLauncher,
-    onCloseWizard,
-    onCreateNewBuild,
-    onCreateTemplate,
-    onDeleteProject,
-    onOpenTemplateEditor,
-    onRemoveDocumentFromStep,
-    openBuild,
+    onBackToLauncher: launcherActions.onBackToLauncher,
+    onCloseWizard: launcherActions.onCloseWizard,
+    onCreateNewBuild: launcherActions.onCreateNewBuild,
+    onCreateTemplate: launcherActions.onCreateTemplate,
+    onDeleteProject: workspaceUiCallbacks.onDeleteProject,
+    onOpenTemplateEditor: launcherActions.onOpenTemplateEditor,
+    onRemoveDocumentFromStep: noteDocumentActions.onRemoveDocumentFromStep,
+    openBuild: launcherActions.openBuild,
     openDocumentPreview,
-    phaseOptions,
-    primaryBlueprintChoices,
-    primaryPhotoChoices,
+    phaseOptions: documentManagerData.phaseOptions,
+    primaryBlueprintChoices: documentManagerData.primaryBlueprintChoices,
+    primaryPhotoChoices: documentManagerData.primaryPhotoChoices,
     project,
-    projectDocuments,
-    selectableDocSteps,
+    projectDocuments: documentManagerData.projectDocuments,
+    selectableDocSteps: workspaceSelectionData.selectableDocSteps,
     setDocKind,
     setDocPhaseKey,
     setDocStepId,
@@ -1007,52 +850,44 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     uploadDocument,
   });
 
-  const workspaceComposedOptions = {
+  const workspaceComposedOptions = buildBuildWizardWorkspaceComposedOptions({
     LIGHTBOX_ZOOM_MAX, LIGHTBOX_ZOOM_MIN, LIGHTBOX_ZOOM_STEP, TAB_DEFAULT_PHASE_KEY,
-    activePhaseDateRange, activePhaseHasStoredDateRange, activeTab, activeTabStepNumbers, activeTabTreeRows, addStep,
-    aiBusy, aiPayloadJson, aiPromptText, aiToolsOpen,
+    activeTab, activeTabTree, addStep, aiBusy, aiPayloadJson, aiPromptText, aiToolsOpen,
     attachExistingDocByReceiptId, attachExistingDocByStepId, attachExistingDocFilterByReceiptId, attachExistingDocFilterByStepId, attachExistingPickerOpenByStepId,
-    attachableProjectDocuments, authorityContacts, autosaveExistingReceiptDraftForStep, beginStepDrag, buildDocumentDraft, buildEntryPoint,
-    changeCurrencyEdit, closeConfirmation, closeLightbox, completedSteps, confirmState, contactTypeChipClass, contactTypeLabel, contacts,
-    deleteContactAssignment, deleteStep, deletingDocumentId, deletingNoteId, dependencyCandidateByStepId,
+    attachableProjectDocuments: workspaceSelectionData.attachableProjectDocuments, authorityContacts, buildEntryPoint, closeLightbox, completedSteps, confirmationActions, contactTypeChipClass, contactTypeLabel, contacts,
+    deleteContactAssignment, deleteStep, deletingDocumentId, deletingNoteId, dependencyCandidateByStepId, deskActions,
     deskAssignmentPhaseKey, deskAssignmentStepId, deskAutoAssignBusy, deskContactAssignmentCountById, deskContactDraft, deskContactQuery, deskContactTypeFilter, deskContacts, deskSelectedContactId,
-    docKind, docKindOptions, docPhaseKey, docStepId,
-    documentManagerKindFilter, documentManagerKindOptions, documentManagerLinkedStepFilterOptions, documentManagerPhaseFilter, documentManagerPhaseOptions,
-    documentManagerQuery, documentManagerSearchLoading, documentManagerSearchResultById: documentManagerSearchResultById as Map<number, { snippet?: string }>, documentManagerStepFilter, documentSavingId,
-    documents, dragOverInsertIndex, dragOverParentStepId, draggingStepId, editingNoteTextById, editingReceiptDocumentIdByStep, expandedStepById,
-    fetchSingletreeRecoveryStatus, filteredDeskContacts, filteredDocumentManagerDocs, filteredTabSteps, finishCurrencyEdit, footerRange, footerTimelineSteps,
-    formatCurrency, formatDate, formatTimelineDate, focusStepInBuildView, generateStepsFromAi, getTaskEffectiveDate, incompleteDescendantCountByStepId,
-    inlineEditingReceiptFieldByDocId, inlineReceiptDraftByDocId, isPlanPreviewDoc, isSpreadsheetPreviewDoc, isTemplateProject,
-    lightboxDoc, lightboxSpreadsheetSheetIndex, lightboxSupportsZoom, lightboxZoom, linkedStepDisplayNumberById, linkedStepOptions,
-    lotSizeDetectedUnit, lotSizeInput, lotSizeInputToSqftAuto, moveStepModalStep, moveStepModalTargetTab, moveStepPhaseTabOptions, moveTaskModalDoc, moveTaskModalTargetStepId, moveTaskStepOptions, movingStep,
-    normalizeContactType, noteDraftByStep, noteEditedAtLabel, noteEditorOpenByStep,
-    onAddContactToStep, onAddDeskPhaseAssignment, onAddDeskStepAssignment, onAttachExistingDocumentToReceipt, onAttachExistingDocumentToStep, onAutoAssignDeskStepsToTimeline,
-    onBackFromWorkspace, onCancelEditNote, onCloseWizard, onCompleteWithAi, onDeleteDeskContact, onDeleteDocument, onDeleteStepNoteById, onDropMakeChild, onEstimateMissingWithAi,
-    onLightboxWheelZoom, onMoveReceiptToStep, onMoveStepFromModal, onOpenDocumentPreview: openDocumentPreview, onOpenMoveStepModal, onPhaseDateRangeChange, onRefreshStepActualCost,
-    onReplaceDocumentFile, onSaveDeskContact, onSaveDocumentDraft, onSaveEditedNote, onSaveReceiptForStep, onSaveTemplate, onStartEditNote, onStartEditReceiptForStep, onStartNewDeskContact, onSubmitNote,
-    onTimelineStepChange, onToast, onUploadReceiptAttachments, openDocumentPreview, openMoveTaskModal, openStepEditModal, openTaskAttachmentsModal,
-    overviewMetrics, packageForAi, parseTaskMetaFromReceiptNotes, permitDocuments, permitStatusOptions, phaseOptions, phaseTaskListCardRef, phaseTotals,
-    project, projectDeskOpen, projectDeskSteps, projectDraft, projectId, projectOverviewOpen, projectOverviewRange, projectOverviewSections, projectOverviewTotals, projectPhotosSection, projectTotals,
-    purchaseUnitOptions, receiptDraftByStep, receiptEditorOpenByStep, receiptEditorRefByStepId, receiptMetricsByStepId, receiptRowRefByDocId,
-    recoveryJobId, recoveryPolling, recoveryReportJson, recoveryReportOpen, recoveryStagedCount, recoveryStagedRoot, recoveryStatus,
-    refreshingActualCostByStepId, renderCurrencyInputValue, renderDocumentGallery, replaceFileInputByDocId, replacingDocumentId, requestConfirmation, resetLightboxZoom,
-    saveInlineReceiptEdit, savePhaseDateRange, saveStepEditModal, saving, savingNoteId, selectableDocSteps, selectTopbarSearchResult, selectedContactAssignments, selectedDeskContact,
-    setActiveTab, setAiToolsOpen, setAttachExistingDocByReceiptId, setAttachExistingDocFilterByReceiptId, setAttachExistingDocByStepId, setAttachExistingDocFilterByStepId, setAttachExistingPickerOpenByStepId,
-    setDependencyCandidateByStepId, setDeskAssignmentPhaseKey, setDeskAssignmentStepId, setDeskContactDraft, setDeskContactQuery, setDeskContactTypeFilter, setDeskCreateMode, setDeskSelectedContactId,
-    setDocKind, setDocPhaseKey, setDocStepId, setDocumentManagerKindFilter, setDocumentManagerPhaseFilter, setDocumentManagerQuery, setDocumentManagerStepFilter,
-    setDocumentUploadBusy, setDocumentUploadFile, setDocumentUploadModalOpen, setDragOverInsertIndex, setDragOverParentStepId, setEditingNoteTextById, setEditingReceiptDocumentIdByStep, setExpandedStepById,
-    setInlineReceiptDraftByDocId, setLightboxSpreadsheetSheetIndex, setLotSizeInput, setMoveStepModalStepId, setMoveStepModalTargetTab, setMoveTaskModalDocId, setMoveTaskModalTargetStepId,
-    setNoteDraftByStep, setNoteEditorOpenByStep, setProjectDeskOpen, setProjectDraft, setProjectOverviewOpen, setReceiptAttachmentDraftByStep, setReceiptDraftByStep, setReceiptEditorOpenByStep,
-    setRecoveryJobId, setRecoveryPolling, setRecoveryReportJson, setRecoveryReportOpen, setRecoveryStatus, setStepCardAssigneeIdFilter, setStepCardAssigneeTypeFilter, setStepCardTextFilter,
-    setStepContactCandidateByStepId, setStepContactPickerOpenByStepId, setStepInfoModalStepId, setTaskAttachmentsModalDocId, setTopbarSearchOpen, setTopbarSearchQuery,
-    startCurrencyEdit, startInlineReceiptEdit, stepAssigneesByStepId, stepById, stepByIdMap, stepCardAssigneeIdFilter, stepCardAssigneeTypeFilter, stepCardTextFilter, stepCardTextFilterTokens,
-    stepContactCandidateByStepId, stepContactPickerOpenByStepId, stepCostTotalExcludingQuotes, stepDrafts, stepEditModalDependencyIds, stepEditModalDependencyOptions, stepEditModalDraft, stepEditModalStep,
-    stepEditSaving, stepFilterContactOptions, stepInfoModalStep, stepPhaseBucket, stepSearchTextById, stepUsesManualDateOverride: taskUsesManualDateOverride,
-    stickyHeadHeight, stickyHeadRef, stickyTopOffset, steps, taskAttachmentsModalAttachableDocuments, taskAttachmentsModalDoc, taskAttachmentsModalStep,
-    taskTypeOptions: TASK_TYPE_OPTIONS, taskUsesManualDateOverride, taskVendorOptions, toNumberOrNull, toStringOrNull, toggleStep,
-    topbarSearchBoxRef, topbarSearchLoading, topbarSearchOpen, topbarSearchQuery, topbarSearchResults, updateDocumentDraft, updateProject, updateStepDraft, uploadDocument,
-    verifiedActualCostSignatureByStepId, zoomLightboxBy,
-  };
+    docKind, docKindOptions, docPhaseKey, docStepId, documentActions, documentManagerData, documentManagerKindFilter, documentManagerPhaseFilter,
+    documentManagerQuery, documentManagerSearchLoading, documentManagerStepFilter, documentSavingId, documents,
+    dragOverInsertIndex, dragOverParentStepId, draggingStepId, editingNoteTextById, editingReceiptDocumentIdByStep, expandedStepById,
+    fetchSingletreeRecoveryStatus, filteredDeskContacts, filteredTabSteps, footerRange, formatCurrency, formatDate, formatTimelineDate,
+    focusStepInBuildView, generateStepsFromAi, getTaskEffectiveDate, inlineEditingReceiptFieldByDocId, inlineReceiptDraftByDocId,
+    isPlanPreviewDoc, isSpreadsheetPreviewDoc, isTemplateProject, launcherActions, lightboxDoc, lightboxSpreadsheetSheetIndex,
+    lightboxSupportsZoom, lightboxZoom, lotSizeDetectedUnit, lotSizeInput, lotSizeInputToSqftAuto, moveStepModalStep, moveStepModalTargetTab,
+    moveTaskModalTargetStepId, movingStep, normalizeContactType, noteDocumentActions, noteDraftByStep, noteEditorOpenByStep,
+    onOpenDocumentPreview: openDocumentPreview, onToast, openDocumentPreview, overviewData, packageForAi, parseTaskMetaFromReceiptNotes,
+    permitStatusOptions, phaseRangeActions, phaseTaskListCardRef, project, projectDeskOpen, projectDeskSteps, projectDraft, projectId,
+    projectOverviewOpen, projectPhotosSection: renderers.projectPhotosSection, purchaseUnitOptions, receiptDraftByStep, receiptEditorOpenByStep,
+    receiptEditorRefByStepId, receiptRowRefByDocId, recoveryJobId, recoveryPolling, recoveryReportJson, recoveryReportOpen,
+    recoveryStagedCount, recoveryStagedRoot, recoveryStatus, refreshingActualCostByStepId, renderDocumentGallery: renderers.renderDocumentGallery, replaceFileInputByDocId, replacingDocumentId,
+    savePhaseDateRange, saving, savingNoteId, selectableDocSteps: workspaceSelectionData.selectableDocSteps, selectedContactAssignments, selectedDeskContact, setActiveTab, setAiToolsOpen,
+    setAttachExistingDocByReceiptId, setAttachExistingDocByStepId, setAttachExistingDocFilterByReceiptId, setAttachExistingDocFilterByStepId,
+    setAttachExistingPickerOpenByStepId, setDependencyCandidateByStepId, setDeskAssignmentPhaseKey, setDeskAssignmentStepId,
+    setDeskContactDraft, setDeskContactQuery, setDeskContactTypeFilter, setDeskCreateMode, setDeskSelectedContactId, setDocKind, setDocPhaseKey,
+    setDocStepId, setDocumentManagerKindFilter, setDocumentManagerPhaseFilter, setDocumentManagerQuery, setDocumentManagerStepFilter,
+    setDocumentUploadBusy, setDocumentUploadFile, setDocumentUploadModalOpen, setDragOverInsertIndex, setDragOverParentStepId,
+    setEditingNoteTextById, setEditingReceiptDocumentIdByStep, setExpandedStepById, setInlineReceiptDraftByDocId, setLightboxSpreadsheetSheetIndex,
+    setLotSizeInput, setMoveStepModalStepId, setMoveStepModalTargetTab, setMoveTaskModalDocId, setMoveTaskModalTargetStepId,
+    setNoteDraftByStep, setNoteEditorOpenByStep, setProjectDeskOpen, setProjectDraft, setProjectOverviewOpen, setReceiptAttachmentDraftByStep,
+    setReceiptDraftByStep, setReceiptEditorOpenByStep, setRecoveryJobId, setRecoveryPolling, setRecoveryReportJson, setRecoveryReportOpen,
+    setRecoveryStatus, setStepCardAssigneeIdFilter, setStepCardAssigneeTypeFilter, setStepCardTextFilter, setStepContactCandidateByStepId,
+    setStepContactPickerOpenByStepId, setStepInfoModalStepId, setTaskAttachmentsModalDocId, setTopbarSearchOpen, setTopbarSearchQuery,
+    stepById, stepByIdMap, stepCardAssigneeIdFilter, stepCardAssigneeTypeFilter, stepCardTextFilter, stepDrafts, stepEditModalDependencyIds,
+    stepEditModalDependencyOptions, stepEditModalDraft, stepEditModalStep, stepEditSaving, stepInfoModalStep, stepPhaseBucket, steps,
+    stepUiActions, stepWorkspaceMeta, stickyHeadHeight, stickyHeadRef, stickyTopOffset, taskTypeOptions: TASK_TYPE_OPTIONS,
+    taskUsesManualDateOverride, toNumberOrNull, toStringOrNull, toggleStep, topbarSearchBoxRef, topbarSearchLoading, topbarSearchOpen,
+    topbarSearchQuery, updateProject, uploadDocument, verifiedActualCostSignatureByStepId, workflowActions, workspaceSelectionData, workspaceUiCallbacks,
+  });
   const { buildWorkspaceProps, workspaceModalProps } = useBuildWizardWorkspaceComposedProps(workspaceComposedOptions);
 
   const renderBuildWorkspace = () => (
@@ -1062,10 +897,10 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
   );
 
   if (view === 'launcher') {
-    return renderLauncher();
+    return renderers.renderLauncher();
   }
   if (view === 'template_editor') {
-    return renderTemplateEditor();
+    return renderers.renderTemplateEditor();
   }
   return renderBuildWorkspace();
 }

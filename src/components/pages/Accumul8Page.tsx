@@ -368,13 +368,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     void loadStatementWorkspace();
   }, [loadStatementWorkspace, statementsLoaded, tab]);
-  const {
-    filteredTransactions,
-    getAccountDisplayName,
-    scopedAccounts,
-    selectedOwnerProfile,
-    visibleAccounts,
-  } = useAccumul8ScopeData({
+  const scopeData = useAccumul8ScopeData({
     accounts,
     accessibleAccountOwners,
     activeOwnerUserId,
@@ -384,14 +378,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setSelectedBankAccountId,
     transactions,
   });
-  const {
-    acknowledgeAllMessageBoardMessages,
-    acknowledgeMessageBoardMessage,
-    handleBalanceBooks,
-    handleRunAIcountantHousekeeping,
-    handleRunAIcountantWatchlist,
-    loadMessageBoard,
-  } = useAccumul8MessageBoardActions({
+  const messageBoardActions = useAccumul8MessageBoardActions({
     activeOwnerUserId,
     balancingBooks,
     load,
@@ -408,41 +395,29 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setRunningAIcountantWatchlist,
   });
   React.useEffect(() => {
-    void loadMessageBoard();
-  }, [loadMessageBoard]);
+    void messageBoardActions.loadMessageBoard();
+  }, [messageBoardActions]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const { currentVisibleBalance, ledgerDisplayBalanceById, ledgerRows, ledgerSearchQuery } = useAccumul8LedgerData({
+  const ledgerData = useAccumul8LedgerData({
     customLedgerEndDate,
     customLedgerStartDate,
-    filteredTransactions,
-    getAccountDisplayName,
+    filteredTransactions: scopeData.filteredTransactions,
+    getAccountDisplayName: scopeData.getAccountDisplayName,
     ledgerDateFilter,
     ledgerFilterPreset,
     listSearchQueryByTab,
-    scopedAccounts,
+    scopedAccounts: scopeData.scopedAccounts,
     todayDate,
   });
-  const {
-    debtorRows,
-    debtorRunningBalanceByTxId,
-    filteredRecurringPayments,
-    groupedDebtors,
-    payBillsAccountOptions,
-    payBillsRows,
-    projectedBalanceForWindow,
-    recurringRows,
-    selectedDebtorEntries,
-    summaryWindowEndDate,
-    summaryWindowTotals,
-  } = useAccumul8DebtorPayBillData({
+  const debtorPayBillData = useAccumul8DebtorPayBillData({
     accounts,
-    currentVisibleBalance,
+    currentVisibleBalance: ledgerData.currentVisibleBalance,
     customPayBillsEndDate,
     customPayBillsStartDate,
     debtors,
     debtorLedger,
-    filteredTransactions,
-    getAccountDisplayName,
+    filteredTransactions: scopeData.filteredTransactions,
+    getAccountDisplayName: scopeData.getAccountDisplayName,
     listSearchQueryByTab,
     payBillsDateFilter,
     recurringPayments,
@@ -452,46 +427,41 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     summaryWindow,
     todayDate,
   });
-  const {
-    aliasRowsByEntityId,
-    editingEntity,
-    entitiesWithResolvedAliases,
-    headerSummary,
-  } = useAccumul8ResolvedEntityData({
-    currentVisibleBalance,
+  const resolvedEntityData = useAccumul8ResolvedEntityData({
+    currentVisibleBalance: ledgerData.currentVisibleBalance,
     editingEntityId,
     entities,
     entityAliases,
-    summaryWindowTotals,
+    summaryWindowTotals: debtorPayBillData.summaryWindowTotals,
   });
-  const { ledgerPagination, ledgerTable } = useAccumul8LedgerTable({
+  const ledgerTableData = useAccumul8LedgerTable({
     customLedgerEndDate,
     customLedgerStartDate,
-    getAccountDisplayName,
+    getAccountDisplayName: scopeData.getAccountDisplayName,
     ledgerArchivePage,
     ledgerDateFilter,
-    ledgerDisplayBalanceById,
+    ledgerDisplayBalanceById: ledgerData.ledgerDisplayBalanceById,
     ledgerFilterPreset,
     ledgerPaginationMode,
-    ledgerRows,
-    ledgerSearchQuery,
+    ledgerRows: ledgerData.ledgerRows,
+    ledgerSearchQuery: ledgerData.ledgerSearchQuery,
     ledgerTableRef,
     selectedBankAccountId,
     selectedBankingOrganizationId,
     setLedgerArchivePage,
     todayDate,
   });
-  const { debtorsTable, payBillsTable, recurringTable } = useAccumul8SecondaryTables({
+  const secondaryTables = useAccumul8SecondaryTables({
     debtorsTableRef,
-    debtorRows,
-    getAccountDisplayName,
-    payBillsRows,
+    debtorRows: debtorPayBillData.debtorRows,
+    getAccountDisplayName: scopeData.getAccountDisplayName,
+    payBillsRows: debtorPayBillData.payBillsRows,
     payBillsTableRef,
-    recurringRows,
+    recurringRows: debtorPayBillData.recurringRows,
     recurringTableRef,
     todayDate,
   });
-  const { flashSaveButton, linkedAccountsByConnectionId, parseCustomUserIds, renderDateRangeControls, setInlineRowRef } = useAccumul8PageUiHelpers({
+  const pageUiHelpers = useAccumul8PageUiHelpers({
     accounts,
     dateRangeFilterOptions: DATE_RANGE_FILTER_OPTIONS,
     flashSaveButtonTimeoutRef,
@@ -499,69 +469,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     inlineRowRefs,
     setFlashingSaveButtonKey,
   });
-  const {
-    activateDebtorRow,
-    activateEntityRow,
-    activateLedgerRow,
-    activatePayBillRow,
-    beginEditBudgetRow,
-    beginEditContact,
-    beginEditEntity,
-    beginEditNotificationRule,
-    beginEditRecurring,
-    beginEditTransaction,
-    beginViewTransaction,
-    closeContactModal,
-    closeDebtorModal,
-    closeEntityModal,
-    closeLedgerEntityModal,
-    closeRecurringModal,
-    closeTransactionModal,
-    collectEntityAliasNames,
-    handleDeleteRecurring,
-    handleDeleteTransaction,
-    openCreateContactModal,
-    openCreateDebtorModal,
-    openCreateEntityModal,
-    openCreateIouTransactionModal,
-    openCreateRecurringModal,
-    openCreateTransactionModal,
-    openLedgerEntityModal,
-    openStatementImportFallback,
-    openSyncHelp,
-    openEntityEndexGuideModal,
-    persistEntityAliases,
-    removeEntityAlias,
-    removeEntityEndexGuide,
-    resetBudgetForm,
-    resetContactForm,
-    resetDebtorForm,
-    resetEntityForm,
-    resetLedgerForm,
-    resetNotificationForm,
-    resetRecurringEditor,
-    runConnectionSync,
-    runEntityEndexGuideFinder,
-    runEntityMaintenanceAliasScan,
-    runTellerConnect,
-    saveDebtorRow,
-    saveEntityAlias,
-    saveEntityEndexGuide,
-    saveEntityRow,
-    saveLedgerRow,
-    savePayBillRow,
-    saveRecurringRow,
-    setDebtorRowDraft,
-    setEntityRowDraft,
-    setLedgerRowDraft,
-    setPayBillRowDraft,
-    setRecurringRowDraft,
-    submitContactForm,
-    submitDebtorModal,
-    submitEntityForm,
-    submitRecurringModal,
-    submitTransactionModal,
-  } = useAccumul8PageActionSetup({
+  const pageActions = useAccumul8PageActionSetup({
     contacts,
     createContact,
     createDebtor,
@@ -659,7 +567,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   }, [setEditingEntityEndexGuideId, setEntityEndexGuideModalOpen]);
   const { saveLedgerEntityRule } = useAccumul8LedgerEntityRuleActions({
     accumul8ActionUrl,
-    closeLedgerEntityModal,
+    closeLedgerEntityModal: pageActions.closeLedgerEntityModal,
     entities,
     entityAliases,
     entityEndexGuides,
@@ -670,12 +578,7 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setLedgerEntityModalSaving,
     transactions,
   });
-  const {
-    activeInlineRows,
-    budgetRowsSorted,
-    entityEndexGuideByParentKey,
-    handleProjectedBalanceCardClick,
-  } = useAccumul8PageDerivedState({
+  const pageDerivedState = useAccumul8PageDerivedState({
     activeDebtorRowId,
     activeEntityRowId,
     activeLedgerRowId,
@@ -696,50 +599,36 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     setSummaryWindow,
     summaryWindowOptions: SUMMARY_WINDOW_OPTIONS,
   });
-  const { entitiesSorted, entityRows } = useAccumul8EntityListData({
-    entitiesWithResolvedAliases,
+  const entityListData = useAccumul8EntityListData({
+    entitiesWithResolvedAliases: resolvedEntityData.entitiesWithResolvedAliases,
     listSearchQueryByTab,
   });
-  const {
-    balanceEntities,
-    budgetActualByRowId,
-    budgetPlannerRecurringPayments,
-    contactEntities,
-    entityEndexParents,
-    entityTransactionSummaryById,
-    iouVisibleAccounts,
-    linkedAliasEntitiesByParentId,
-    selectedEntityEndexGuide,
-    selectedEntityEndexParentEntity,
-    selectedEntityHistory,
-    selectedEntityTransactions,
-    spreadsheetTotals,
-  } = useAccumul8EntityDerivedData({
+  const entityDerivedData = useAccumul8EntityDerivedData({
     budgetMonth,
-    budgetRowsSorted,
+    budgetRowsSorted: pageDerivedState.budgetRowsSorted,
     editingEntityEndexGuideId,
     entities,
-    entitiesSorted,
-    entitiesWithResolvedAliases,
+    entitiesSorted: entityListData.entitiesSorted,
+    entitiesWithResolvedAliases: resolvedEntityData.entitiesWithResolvedAliases,
     entityEndexGuides,
     entityEndexQuery,
     entityHistoryEntityId,
-    filteredRecurringPayments,
-    filteredTransactions,
+    filteredRecurringPayments: debtorPayBillData.filteredRecurringPayments,
+    filteredTransactions: scopeData.filteredTransactions,
     transactions,
-    visibleAccounts,
+    visibleAccounts: scopeData.visibleAccounts,
   });
-  const { balanceLedgerTable, entitiesTable } = useAccumul8EntityTables({
+  const entityTables = useAccumul8EntityTables({
     balanceLedgerTableRef,
-    debtorRunningBalanceByTxId,
+    debtorRunningBalanceByTxId: debtorPayBillData.debtorRunningBalanceByTxId,
     entitiesTableRef,
-    entityRows,
-    entityTransactionSummaryById,
-    selectedDebtorEntries,
+    entityRows: entityListData.entityRows,
+    entityTransactionSummaryById: entityDerivedData.entityTransactionSummaryById,
+    selectedDebtorEntries: debtorPayBillData.selectedDebtorEntries,
   });
   useAccumul8PageEffects({
-    activeRows: activeInlineRows,
-    flashSaveButton,
+    activeRows: pageDerivedState.activeInlineRows,
+    flashSaveButton: pageUiHelpers.flashSaveButton,
     flashSaveButtonTimeoutRef,
     inlineRowRefs,
     setSettingsMenuOpen,
@@ -748,19 +637,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     settingsMenuOpen,
     settingsMenuRef,
   });
-  const composedActionGroups = {
-    activateDebtorRow, activateEntityRow, activateLedgerRow, activatePayBillRow,
-    beginEditEntity, beginEditNotificationRule, beginEditRecurring, beginEditTransaction, beginViewTransaction,
-    closeContactModal, closeDebtorModal, closeEntityModal, closeLedgerEntityModal, closeRecurringModal, closeTransactionModal,
-    handleDeleteRecurring, handleDeleteTransaction,
-    openCreateDebtorModal, openCreateEntityModal, openCreateIouTransactionModal, openCreateRecurringModal, openCreateTransactionModal,
-    openEntityEndexGuideModal, openLedgerEntityModal, openStatementImportFallback, openSyncHelp,
-    removeEntityAlias, removeEntityEndexGuide, resetNotificationForm,
-    runConnectionSync, runEntityEndexGuideFinder, runEntityMaintenanceAliasScan, runTellerConnect,
-    saveDebtorRow, saveEntityAlias, saveEntityEndexGuide, saveEntityRow, saveLedgerRow, savePayBillRow, saveRecurringRow,
-    setEntityRowDraft, setLedgerRowDraft, setPayBillRowDraft, setRecurringRowDraft,
-    submitContactForm, submitDebtorModal, submitEntityForm, submitRecurringModal, submitTransactionModal,
-  };
   const composedConstants = {
     ACCUMUL8_OWNER_STORAGE_KEY, DEFAULT_ENTITY_ALIAS_DRAFT, LEDGER_FILTER_PRESET_OPTIONS,
     formatAccountBackfillNote, formatAccountMappingLabel, formatAccountOptionLabel, formatCurrencyAmount, formatSummaryWindowLabel,
@@ -772,33 +648,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     archiveStatementUpload, archivedStatementUploads, auditImportedTransactionCleanup, auditStatementUploads, bankConnections, bankingOrganizations,
     budgetMonth, busy, confirmStatementImport, createAccount, createBankConnection, createBankingOrganization, createNotificationRule,
     customLedgerEndDate, customLedgerStartDate, customPayBillsEndDate, customPayBillsStartDate, debtorDraftById, debtorForm,
-    debtorRunningBalanceByTxId, deleteBankConnection, deleteDebtor, deleteNotificationRule, deleteRecurring, deleteTransaction,
-    editingContactId, editingDebtorId, editingEntity, editingEntityId, editingNotificationRuleId, editingRecurringForm, editingRecurringId,
-    editingTransactionId, entities, entitiesSorted, entitiesWithResolvedAliases, entityAliasDraftById, entityDraftById, entityEndexGuides,
-    entityEndexScanLogs, entityForm, groupedDebtors, headerSummary, importStatementReviewRow, lastSyncReport, ledgerDateFilter,
-    ledgerDisplayBalanceById, ledgerDraftById, ledgerForm, ledgerPagination, ledgerPaginationMode, ledgerTable, linkStatementReviewRow, load,
-    notificationForm, notificationRules, onToast, payBillsAccountOptions, payBillsDateFilter, payBillDraftById, projectedBalanceForWindow,
+    debtorRunningBalanceByTxId: debtorPayBillData.debtorRunningBalanceByTxId, deleteBankConnection, deleteDebtor, deleteNotificationRule, deleteRecurring, deleteTransaction,
+    editingContactId, editingDebtorId, editingEntity: resolvedEntityData.editingEntity, editingEntityId, editingNotificationRuleId, editingRecurringForm, editingRecurringId,
+    editingTransactionId, entities, entitiesSorted: entityListData.entitiesSorted, entitiesWithResolvedAliases: resolvedEntityData.entitiesWithResolvedAliases, entityAliasDraftById, entityDraftById, entityEndexGuides,
+    entityEndexScanLogs, entityForm, groupedDebtors: debtorPayBillData.groupedDebtors, headerSummary: resolvedEntityData.headerSummary, importStatementReviewRow, lastSyncReport, ledgerDateFilter,
+    ledgerDisplayBalanceById: ledgerData.ledgerDisplayBalanceById, ledgerDraftById, ledgerForm, ledgerPagination: ledgerTableData.ledgerPagination, ledgerPaginationMode, ledgerTable: ledgerTableData.ledgerTable, linkStatementReviewRow, load,
+    notificationForm, notificationRules, onToast, payBillsAccountOptions: debtorPayBillData.payBillsAccountOptions, payBillsDateFilter, payBillDraftById, projectedBalanceForWindow: debtorPayBillData.projectedBalanceForWindow,
     purgeImportedTransactionCleanup, purgeAllImportedStatementTransactions, purgeAllStatementUploads, reconcileStatementUpload,
     recurringDraftById, saveLedgerEntityRule, searchStatementUploads, selectedOwnerUserId, sendNotification, setBudgetMonth,
     setCustomLedgerEndDate, setCustomLedgerStartDate, setCustomPayBillsEndDate, setCustomPayBillsStartDate, setEntityAliasDraftById,
-    setEntityRowDraft, setLedgerArchivePage, setLedgerDateFilter, setLedgerPaginationMode, setLedgerRowDraft, setNotificationForm,
+    setEntityRowDraft: pageActions.setEntityRowDraft, setLedgerArchivePage, setLedgerDateFilter, setLedgerPaginationMode, setLedgerRowDraft: pageActions.setLedgerRowDraft, setNotificationForm,
     setPayBillsDateFilter, setSelectedOwnerUserId, setTab, statementAuditRuns, statementUploads, syncProvider, syncingConnectionId, tab,
     todayDate, toggleNotificationRule, transactions, updateAccount, updateBankConnection, updateBankingOrganization, updateNotificationRule,
     updateStatementUploadMetadata, updateTransaction, uploadStatement, viewer, viewingTransactionId, closeEntityEndexGuideModal,
-    contactForm, createBankingOrganization, createAccount,
+    contactForm,
   };
-  const composedDerived = { entityEndexGuideByParentKey, handleProjectedBalanceCardClick };
-  const composedEntityDerived = {
-    budgetPlannerRecurringPayments, contactEntities, entityEndexParents, entityTransactionSummaryById, iouVisibleAccounts,
-    linkedAliasEntitiesByParentId, selectedEntityEndexGuide, selectedEntityEndexParentEntity, selectedEntityHistory, selectedEntityTransactions,
-  };
-  const composedHelpers = { linkedAccountsByConnectionId, parseCustomUserIds, renderDateRangeControls, setInlineRowRef };
-  const composedMessageBoard = {
-    acknowledgeAllMessageBoardMessages, acknowledgeMessageBoardMessage, handleBalanceBooks,
-    handleRunAIcountantHousekeeping, handleRunAIcountantWatchlist, loadMessageBoard,
-  };
-  const composedScope = { filteredTransactions, getAccountDisplayName, scopedAccounts, selectedOwnerProfile, visibleAccounts };
-  const composedTables = { balanceLedgerTable, debtorsTable, entitiesTable, payBillsTable, recurringTable };
+  const composedTables = { balanceLedgerTable: entityTables.balanceLedgerTable, debtorsTable: secondaryTables.debtorsTable, entitiesTable: entityTables.entitiesTable, payBillsTable: secondaryTables.payBillsTable, recurringTable: secondaryTables.recurringTable };
   const composedUi = {
     accountManagerOpen, balanceLedgerTableRef, balancingBooks, bankingOrganizationManagerOpen, contactModalOpen, debtorsTableRef,
     debtorModalOpen, editingEntityEndexGuideId, entitiesTableRef, entityEndexFindingAll, entityEndexGuideModalOpen, entityEndexLogOpen,
@@ -812,15 +677,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     settingsButtonRef, settingsMenuOpen, settingsMenuPosition, settingsMenuRef, summaryWindow, syncHelpError, syncHelpOpen,
     syncHelpToken, transactionModalMode, transactionModalOpen, transactionModalVariant,
   };
-  const { tabContentProps, headerProps, modalProps, overlayProps } = useAccumul8PageComposedProps({
-    actions: composedActionGroups,
+  const composedProps = useAccumul8PageComposedProps({
+    actions: pageActions,
     constants: composedConstants,
     data: composedData,
-    derived: composedDerived,
-    entityDerived: composedEntityDerived,
-    helpers: composedHelpers,
-    messageBoard: composedMessageBoard,
-    scope: composedScope,
+    derived: pageDerivedState,
+    entityDerived: entityDerivedData,
+    helpers: pageUiHelpers,
+    messageBoard: messageBoardActions,
+    scope: scopeData,
     tables: composedTables,
     ui: composedUi,
   });
@@ -837,10 +702,10 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
       onLogout={onLogout}
       onAccountClick={onAccountClick}
       mysteryTitle={mysteryTitle}
-      headerProps={headerProps}
-      tabContentProps={tabContentProps}
-      overlayProps={overlayProps}
-      modalProps={modalProps}
+      headerProps={composedProps.headerProps}
+      tabContentProps={composedProps.tabContentProps}
+      overlayProps={composedProps.overlayProps}
+      modalProps={composedProps.modalProps}
       loaded={loaded}
     />
   );

@@ -84,6 +84,7 @@ export interface UseAccumul8ModalEditorActionsOptions {
   setLedgerEntityModalTransactionId: React.Dispatch<React.SetStateAction<number | null>>;
   setLedgerForm: React.Dispatch<React.SetStateAction<ReturnType<typeof createDefaultLedgerForm>>>;
   setNotificationForm: React.Dispatch<React.SetStateAction<{ rule_name: string; trigger_type: string; days_before_due: number; target_scope: 'group' | 'custom'; custom_user_ids: string; email_subject_template: string; email_body_template: string }>>;
+  setRecurringLinkModalRecurringId: React.Dispatch<React.SetStateAction<number | null>>;
   setRecurringModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setTransactionModalMode: React.Dispatch<React.SetStateAction<'create' | 'edit' | 'view'>>;
   setTransactionModalOpen: React.Dispatch<React.SetStateAction<boolean>>;

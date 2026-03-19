@@ -7,6 +7,7 @@ export function useAccumul8PageUiState(options: any) {
   const [entityModalOpen, setEntityModalOpen] = React.useState(false);
   const [debtorModalOpen, setDebtorModalOpen] = React.useState(false);
   const [recurringModalOpen, setRecurringModalOpen] = React.useState(false);
+  const [recurringLinkModalRecurringId, setRecurringLinkModalRecurringId] = React.useState<number | null>(null);
   const [transactionModalOpen, setTransactionModalOpen] = React.useState(false);
   const [transactionModalMode, setTransactionModalMode] = React.useState<'create' | 'view' | 'edit'>('create');
   const [transactionModalVariant, setTransactionModalVariant] = React.useState<'ledger' | 'iou'>('ledger');
@@ -140,6 +141,7 @@ export function useAccumul8PageUiState(options: any) {
     openBankingOrganizationPopup,
     payBillsTableRef,
     recurringModalOpen,
+    recurringLinkModalRecurringId,
     recurringTableRef,
     runningAIcountantHousekeeping,
     runningAIcountantWatchlist,
@@ -170,6 +172,7 @@ export function useAccumul8PageUiState(options: any) {
     setMessageBoardOpen,
     setMessageBoardUnacknowledgedCount,
     setRecurringModalOpen,
+    setRecurringLinkModalRecurringId,
     setRunningAIcountantHousekeeping,
     setRunningAIcountantWatchlist,
     setSelectedBankAccountId,

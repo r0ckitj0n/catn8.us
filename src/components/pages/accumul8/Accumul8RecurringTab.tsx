@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { Accumul8TableHeaderCell } from '../../accumul8/Accumul8TableHeaderCell';
-import { ACCUMUL8_EDIT_BUTTON_EMOJI, ACCUMUL8_SAVE_BUTTON_EMOJI, ACCUMUL8_VIEW_BUTTON_EMOJI } from '../../accumul8/accumul8Ui';
+import { ACCUMUL8_EDIT_BUTTON_EMOJI, ACCUMUL8_MAP_BUTTON_EMOJI, ACCUMUL8_SAVE_BUTTON_EMOJI, ACCUMUL8_VIEW_BUTTON_EMOJI } from '../../accumul8/accumul8Ui';
 import { PriorityTableSortState } from '../../../hooks/usePriorityTableLayout';
 import { Accumul8Account, Accumul8Direction, Accumul8Frequency, Accumul8PaymentMethod, Accumul8RecurringPayment } from '../../../types/accumul8';
 import { RECURRING_PAYMENT_METHOD_LABELS, formatAccountOptionLabel, formatInlineDate, formatInlineText, formatRecurringAmount, formatRecurringTitle } from './accumul8PageDateSearchUtils';
@@ -20,6 +20,7 @@ interface Accumul8RecurringTabProps {
   getAccountDisplayName: (accountId: number | null | undefined, accountName?: string | null, bankingOrganizationName?: string | null, fallback?: string) => string;
   listSearchQuery: string;
   openCreateRecurringModal: () => void;
+  openRecurringLinkModal: (id: number) => void;
   payBillsAccountOptions: AccountOption[];
   recurringDraftById: Record<number, RecurringInlineDraft>;
   recurringTable: {
@@ -46,6 +47,7 @@ export function Accumul8RecurringTab({
   getAccountDisplayName,
   listSearchQuery,
   openCreateRecurringModal,
+  openRecurringLinkModal,
   payBillsAccountOptions,
   recurringDraftById,
   recurringTable,
@@ -190,6 +192,7 @@ export function Accumul8RecurringTab({
                     <div className="accumul8-row-actions accumul8-row-actions--always-on">
                       <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`View ${rp.title}`} title={`View ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                       <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditRecurring(rp.id)} disabled={busy} aria-label={`Edit ${rp.title}`} title={`Edit ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
+                      <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openRecurringLinkModal(rp.id)} disabled={busy} aria-label={`Teach matching history for ${rp.title}`} title={`Teach matching history for ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button>
                       <button type="button" className="btn btn-sm btn-outline-danger accumul8-icon-action" onClick={() => { if (window.confirm('Delete this recurring item?')) { void deleteRecurring(rp.id); } }} disabled={busy} aria-label={`Delete ${rp.title}`}><i className="bi bi-trash"></i></button>
                       <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `recurring-${rp.id}` ? ' is-flashing' : ''}`} onClick={() => void saveRecurringRow(rp)} disabled={busy || !recurringDraft} aria-label={`Save ${rp.title}`} title={recurringDraft ? `Save ${rp.title}` : `No changes to save for ${rp.title}`}><span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span></button>
                     </div>

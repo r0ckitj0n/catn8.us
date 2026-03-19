@@ -153,6 +153,7 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     setEntityEndexFindingAll: state.setEntityEndexFindingAll, setEntityEndexGuideModalOpen: state.setEntityEndexGuideModalOpen, setEntityForm: state.setEntityForm, setEntityModalOpen: state.setEntityModalOpen,
     setLastSyncReport: state.setLastSyncReport, setLedgerDraftById: state.setLedgerDraftById, setLedgerEntityModalTransactionId: state.setLedgerEntityModalTransactionId, setLedgerForm: state.setLedgerForm,
     setNotificationForm: state.setNotificationForm, setPayBillDraftById: state.setPayBillDraftById, setRecurringDraftById: state.setRecurringDraftById, setRecurringModalOpen: state.setRecurringModalOpen,
+    setRecurringLinkModalRecurringId: state.setRecurringLinkModalRecurringId,
     setSyncHelpError: state.setSyncHelpError, setSyncHelpOpen: state.setSyncHelpOpen, setSyncHelpToken: state.setSyncHelpToken, setSyncingConnectionId: state.setSyncingConnectionId, setTab: state.setTab,
     setTransactionModalMode: state.setTransactionModalMode, setTransactionModalOpen: state.setTransactionModalOpen, setTransactionModalVariant: state.setTransactionModalVariant,
     setViewingTransactionId: state.setViewingTransactionId, syncBankConnection: session.syncBankConnection, syncProvider: session.syncProvider, transactions: session.transactions,

@@ -120,6 +120,18 @@ export function useAccumul8PageLayerPropsBuilder(options: any): {
         onClose: options.closeRecurringModal,
         onSave: options.submitRecurringModal,
       },
+      recurringLinkModalProps: {
+        open: options.recurringLinkModalRecurringId !== null,
+        busy: options.busy,
+        recurring: options.recurringLinkModalRecurringId !== null
+          ? (options.recurringPayments.find((item: any) => item.id === options.recurringLinkModalRecurringId) || null)
+          : null,
+        onClose: () => options.setRecurringLinkModalRecurringId(null),
+        onLink: options.linkRecurringTransactionExample,
+        onLoadCandidates: options.listRecurringLinkCandidates,
+        onLoadHistory: options.listRecurringLinkHistory,
+        onOpenTransaction: options.beginViewTransaction,
+      },
       transactionModalProps: {
         open: options.transactionModalOpen,
         busy: options.busy,

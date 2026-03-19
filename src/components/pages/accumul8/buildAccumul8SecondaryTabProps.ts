@@ -91,6 +91,7 @@ export function buildAccumul8SecondaryTabProps(options: any) {
       getAccountDisplayName: options.getAccountDisplayName,
       listSearchQuery: options.listSearchQueryByTab.recurring,
       openCreateRecurringModal: options.openCreateRecurringModal,
+      openRecurringLinkModal: options.openRecurringLinkModal,
       payBillsAccountOptions: options.payBillsAccountOptions,
       recurringDraftById: options.recurringDraftById,
       recurringTable: options.recurringTable,

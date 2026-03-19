@@ -7,6 +7,7 @@ import { Accumul8EntityModal } from '../../modals/Accumul8EntityModal';
 import { Accumul8LedgerEntityModal } from '../../modals/Accumul8LedgerEntityModal';
 import { Accumul8LogsModal } from '../../modals/Accumul8LogsModal';
 import { Accumul8RecurringModal } from '../../modals/Accumul8RecurringModal';
+import { Accumul8RecurringLinkModal } from '../../modals/Accumul8RecurringLinkModal';
 import { Accumul8TransactionModal } from '../../modals/Accumul8TransactionModal';
 import { Accumul8EndexGroupModal } from '../../accumul8/Accumul8EndexGroupModal';
 
@@ -20,6 +21,7 @@ interface Accumul8PageModalsProps {
   ledgerEntityModalProps: React.ComponentProps<typeof Accumul8LedgerEntityModal>;
   logsModalProps: React.ComponentProps<typeof Accumul8LogsModal>;
   recurringModalProps: React.ComponentProps<typeof Accumul8RecurringModal>;
+  recurringLinkModalProps: React.ComponentProps<typeof Accumul8RecurringLinkModal>;
   transactionModalProps: React.ComponentProps<typeof Accumul8TransactionModal>;
 }
 
@@ -33,6 +35,7 @@ export function Accumul8PageModals({
   ledgerEntityModalProps,
   logsModalProps,
   recurringModalProps,
+  recurringLinkModalProps,
   transactionModalProps,
 }: Accumul8PageModalsProps) {
   return (
@@ -44,6 +47,7 @@ export function Accumul8PageModals({
       <Accumul8DebtorModal {...debtorModalProps} />
       <Accumul8LogsModal {...logsModalProps} />
       <Accumul8RecurringModal {...recurringModalProps} />
+      <Accumul8RecurringLinkModal {...recurringLinkModalProps} />
       <Accumul8TransactionModal {...transactionModalProps} />
       <BankingOrganizationManagerModal {...bankingOrganizationManagerProps} />
       <BankingOrganizationManagerModal {...accountManagerProps} />

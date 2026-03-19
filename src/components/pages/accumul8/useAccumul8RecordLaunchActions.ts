@@ -12,6 +12,7 @@ interface UseAccumul8RecordLaunchActionsOptions {
   setEditingTransactionId: React.Dispatch<React.SetStateAction<number | null>>;
   setLedgerEntityModalTransactionId: React.Dispatch<React.SetStateAction<number | null>>;
   setLedgerForm: React.Dispatch<React.SetStateAction<ReturnType<typeof createDefaultLedgerForm>>>;
+  setRecurringLinkModalRecurringId: React.Dispatch<React.SetStateAction<number | null>>;
   setRecurringModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setTransactionModalMode: React.Dispatch<React.SetStateAction<'create' | 'edit' | 'view'>>;
   setTransactionModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -29,6 +30,7 @@ export function useAccumul8RecordLaunchActions({
   setEditingTransactionId,
   setLedgerEntityModalTransactionId,
   setLedgerForm,
+  setRecurringLinkModalRecurringId,
   setRecurringModalOpen,
   setTransactionModalMode,
   setTransactionModalOpen,
@@ -59,6 +61,11 @@ export function useAccumul8RecordLaunchActions({
   const openCreateTransactionModal = React.useCallback((defaults?: { balanceEntityId?: string }) => { setEditingTransactionId(null); setViewingTransactionId(null); setTransactionModalMode('create'); setTransactionModalVariant('ledger'); setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, balanceEntityId: defaults?.balanceEntityId || '' })); setTransactionModalOpen(true); }, [selectedBankAccountId, setEditingTransactionId, setLedgerForm, setTransactionModalMode, setTransactionModalOpen, setTransactionModalVariant, setViewingTransactionId]);
   const openCreateIouTransactionModal = React.useCallback((defaults?: { debtorId?: string }) => { setEditingTransactionId(null); setViewingTransactionId(null); setTransactionModalMode('create'); setTransactionModalVariant('iou'); setLedgerForm(createDefaultLedgerForm({ accountId: selectedBankAccountId, debtorId: defaults?.debtorId || '' })); setTransactionModalOpen(true); }, [selectedBankAccountId, setEditingTransactionId, setLedgerForm, setTransactionModalMode, setTransactionModalOpen, setTransactionModalVariant, setViewingTransactionId]);
   const openLedgerEntityModal = React.useCallback((transactionId: number) => { const transaction = transactions.find((row) => row.id === transactionId) || null; if (!transaction || Number(transaction.debtor_id || 0) > 0) return; setLedgerEntityModalTransactionId(transaction.id); }, [setLedgerEntityModalTransactionId, transactions]);
+  const openRecurringLinkModal = React.useCallback((recurringId: number) => {
+    const recurring = recurringPayments.find((row) => row.id === recurringId) || null;
+    if (!recurring) return;
+    setRecurringLinkModalRecurringId(recurring.id);
+  }, [recurringPayments, setRecurringLinkModalRecurringId]);
   const beginEditRecurring = React.useCallback((id: number) => {
     const recurring = recurringPayments.find((v) => v.id === id);
     if (!recurring) return;
@@ -68,5 +75,5 @@ export function useAccumul8RecordLaunchActions({
   }, [recurringPayments, setEditingRecurringForm, setEditingRecurringId, setRecurringModalOpen]);
   const openCreateRecurringModal = React.useCallback(() => { setEditingRecurringId(null); setEditingRecurringForm(DEFAULT_RECURRING_FORM); setRecurringModalOpen(true); }, [DEFAULT_RECURRING_FORM, setEditingRecurringForm, setEditingRecurringId, setRecurringModalOpen]);
 
-  return { beginEditRecurring, beginEditTransaction, beginViewTransaction, openCreateIouTransactionModal, openCreateRecurringModal, openCreateTransactionModal, openLedgerEntityModal };
+  return { beginEditRecurring, beginEditTransaction, beginViewTransaction, openCreateIouTransactionModal, openCreateRecurringModal, openCreateTransactionModal, openLedgerEntityModal, openRecurringLinkModal };
 }

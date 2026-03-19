@@ -92,6 +92,7 @@ export function useAccumul8PageActionGroupOptions(options: any) {
       setLedgerEntityModalTransactionId: options.setLedgerEntityModalTransactionId,
       setLedgerForm: options.setLedgerForm,
       setNotificationForm: options.setNotificationForm,
+      setRecurringLinkModalRecurringId: options.setRecurringLinkModalRecurringId,
       setRecurringModalOpen: options.setRecurringModalOpen,
       setTransactionModalMode: options.setTransactionModalMode,
       setTransactionModalOpen: options.setTransactionModalOpen,

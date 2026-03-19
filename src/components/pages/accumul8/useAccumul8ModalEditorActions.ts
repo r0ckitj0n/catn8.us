@@ -16,7 +16,7 @@ export function useAccumul8ModalEditorActions(options: UseAccumul8ModalEditorAct
     selectedBankAccountId, setBudgetForm, setContactForm, setContactModalOpen, setDebtorForm, setDebtorModalOpen,
     setEditingBudgetRowId, setEditingContactId, setEditingDebtorId, setEditingEntityId, setEditingNotificationRuleId,
     setEditingRecurringForm, setEditingRecurringId, setEditingTransactionId, setEntityAliasDraftById, setEntityForm,
-    setEntityModalOpen, setLedgerEntityModalTransactionId, setLedgerForm, setNotificationForm, setRecurringModalOpen,
+    setEntityModalOpen, setLedgerEntityModalTransactionId, setLedgerForm, setNotificationForm, setRecurringLinkModalRecurringId, setRecurringModalOpen,
     setTransactionModalMode, setTransactionModalOpen, setTransactionModalVariant, setViewingTransactionId,
     transactions, updateContact, updateDebtor, updateEntity, updateRecurring, updateTransaction,
   } = options;
@@ -61,6 +61,7 @@ export function useAccumul8ModalEditorActions(options: UseAccumul8ModalEditorAct
     openCreateRecurringModal,
     openCreateTransactionModal,
     openLedgerEntityModal,
+    openRecurringLinkModal,
   } = useAccumul8RecordLaunchActions({
     DEFAULT_RECURRING_FORM,
     recurringPayments,
@@ -70,6 +71,7 @@ export function useAccumul8ModalEditorActions(options: UseAccumul8ModalEditorAct
     setEditingTransactionId,
     setLedgerEntityModalTransactionId,
     setLedgerForm,
+    setRecurringLinkModalRecurringId,
     setRecurringModalOpen,
     setTransactionModalMode,
     setTransactionModalOpen,
@@ -123,6 +125,7 @@ export function useAccumul8ModalEditorActions(options: UseAccumul8ModalEditorAct
     openCreateRecurringModal,
     openCreateTransactionModal,
     openLedgerEntityModal,
+    openRecurringLinkModal,
     submitContactForm,
     submitDebtorModal,
     submitEntityForm,

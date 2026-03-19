@@ -20,6 +20,10 @@ import {
   Accumul8EntityUpsertRequest,
   Accumul8IdResponse,
   Accumul8NotificationRuleUpsertRequest,
+  Accumul8RecurringLinkCandidatesResponse,
+  Accumul8RecurringLinkHistoryResponse,
+  Accumul8RecurringLinkRequest,
+  Accumul8RecurringLinkResponse,
   Accumul8RecurringUpsertRequest,
   Accumul8TransactionMoveRequest,
   Accumul8TransactionUpsertRequest,
@@ -140,6 +144,35 @@ export function useAccumul8CrudActions(args: {
   const updateRecurring = React.useCallback(async (id: number, form: Accumul8RecurringUpsertRequest) => withReload(() => ApiClient.post(scopedActionUrl('update_recurring'), { id, ...form }), 'Recurring item updated'), [scopedActionUrl, withReload]);
   const toggleRecurring = React.useCallback(async (id: number) => withReload(() => ApiClient.post(scopedActionUrl('toggle_recurring'), { id }), 'Recurring item updated'), [scopedActionUrl, withReload]);
   const deleteRecurring = React.useCallback(async (id: number) => withReload(() => ApiClient.post(scopedActionUrl('delete_recurring'), { id }), 'Recurring item deleted'), [scopedActionUrl, withReload]);
+  const listRecurringLinkCandidates = React.useCallback(async (recurringId: number, query = '') => (
+    ApiClient.get<Accumul8RecurringLinkCandidatesResponse>(`${scopedActionUrl('list_recurring_link_candidates')}&recurring_id=${recurringId}&q=${encodeURIComponent(query)}`)
+  ), [scopedActionUrl]);
+  const listRecurringLinkHistory = React.useCallback(async (recurringId: number, query = '') => (
+    ApiClient.get<Accumul8RecurringLinkHistoryResponse>(`${scopedActionUrl('list_recurring_link_history')}&recurring_id=${recurringId}&q=${encodeURIComponent(query)}`)
+  ), [scopedActionUrl]);
+  const linkRecurringTransactionExample = React.useCallback(async (payload: Accumul8RecurringLinkRequest) => {
+    setBusy(true);
+    try {
+      const result = await ApiClient.post<Accumul8RecurringLinkResponse>(scopedActionUrl('link_recurring_transaction_example'), payload);
+      await load();
+      if (onToast) {
+        const linkedHistoryCount = Number(result?.linked_history_count || 0);
+        const historyCount = Number(result?.history_count || 0);
+        onToast({
+          tone: 'success',
+          message: linkedHistoryCount > 0
+            ? `Recurring history updated and linked ${linkedHistoryCount} additional ledger ${linkedHistoryCount === 1 ? 'entry' : 'entries'} (${historyCount} total).`
+            : `Recurring example linked (${historyCount} total linked ledger ${historyCount === 1 ? 'entry' : 'entries'}).`,
+        });
+      }
+      return result;
+    } catch (error: any) {
+      handleError(error, 'Failed to link recurring item to ledger history');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, [handleError, load, onToast, scopedActionUrl, setBusy]);
   const materializeDueRecurring = React.useCallback(async () => withReload(() => ApiClient.post(scopedActionUrl('materialize_due_recurring'), {}), 'Recurring items posted to ledger'), [scopedActionUrl, withReload]);
   const ensureBudgetMonth = React.useCallback(async (payload: Accumul8BudgetMonthEnsureRequest) => withReload<Accumul8BudgetMonthEnsureResponse>(() => ApiClient.post<Accumul8BudgetMonthEnsureResponse>(scopedActionUrl('ensure_budget_month'), payload)), [scopedActionUrl, withReload]);
   const createTransaction = React.useCallback(async (form: Accumul8TransactionUpsertRequest) => withReload(() => ApiClient.post(scopedActionUrl('create_transaction'), form), 'Transaction saved'), [scopedActionUrl, withReload]);
@@ -180,7 +213,7 @@ export function useAccumul8CrudActions(args: {
     createBankConnection, updateBankConnection, deleteBankConnection,
     createAccount, updateAccount, deleteAccount, updateContact, deleteContact,
     createDebtor, updateDebtor, deleteDebtor,
-    createRecurring, updateRecurring, toggleRecurring, deleteRecurring, materializeDueRecurring,
+    createRecurring, updateRecurring, toggleRecurring, deleteRecurring, listRecurringLinkCandidates, listRecurringLinkHistory, linkRecurringTransactionExample, materializeDueRecurring,
     ensureBudgetMonth,
     createTransaction, updateTransaction, deleteTransaction, moveTransactionsToAccount,
     toggleTransactionPaid, toggleTransactionReconciled, toggleTransactionBudgetPlanner,

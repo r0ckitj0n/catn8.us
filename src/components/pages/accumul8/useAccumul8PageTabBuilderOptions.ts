@@ -107,6 +107,7 @@ export function useAccumul8PageTabBuilderOptions(options: any) {
     openCreateTransactionModal: options.openCreateTransactionModal,
     openEntityEndexGuideModal: options.openEntityEndexGuideModal,
     openLedgerEntityModal: options.openLedgerEntityModal,
+    openRecurringLinkModal: options.openRecurringLinkModal,
     openSyncHelp: options.openSyncHelp,
     parseCustomUserIds: options.parseCustomUserIds,
     payBillsAccountOptions: options.payBillsAccountOptions,

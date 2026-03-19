@@ -82,6 +82,7 @@ export function useAccumul8PageActionsSetup(options: any) {
     setNotificationForm: options.setNotificationForm,
     setPayBillDraftById: options.setPayBillDraftById,
     setRecurringDraftById: options.setRecurringDraftById,
+    setRecurringLinkModalRecurringId: options.setRecurringLinkModalRecurringId,
     setRecurringModalOpen: options.setRecurringModalOpen,
     setSyncHelpError: options.setSyncHelpError,
     setSyncHelpOpen: options.setSyncHelpOpen,

@@ -10876,7 +10876,13 @@ function accumul8_list_recurring(int $viewerId): array
     $rows = Database::queryAll(
         'SELECT rp.id, ' . $entityIdSelect . ', COALESCE(e.display_name, "") AS entity_name, rp.contact_id, ' . $accountIdSelect . ', rp.title, rp.direction, rp.amount, rp.frequency, ' . $paymentMethodSelect . ', ' . $intervalCountSelect . ',
                 ' . $dayOfMonthSelect . ', ' . $dayOfWeekSelect . ', rp.next_due_date, ' . $paidDateSelect . ', ' . $notesSelect . ', ' . $isActiveSelect . ', ' . $isBudgetPlannerSelect . ',
-                c.contact_name, ' . $accountNameSelect . '
+                c.contact_name, ' . $accountNameSelect . ',
+                (
+                    SELECT COUNT(*)
+                    FROM accumul8_transactions tx
+                    WHERE tx.owner_user_id = rp.owner_user_id
+                      AND tx.recurring_payment_id = rp.id
+                ) AS recurring_link_count
          FROM accumul8_recurring_payments rp
          LEFT JOIN accumul8_contacts c ON c.id = rp.contact_id
          LEFT JOIN accumul8_entities e ON e.id = rp.entity_id
@@ -10911,6 +10917,7 @@ function accumul8_list_recurring(int $viewerId): array
             'contact_name' => (string)($r['contact_name'] ?? ''),
             'account_name' => (string)($r['account_name'] ?? ''),
             'banking_organization_name' => (string)($r['banking_organization_name'] ?? ''),
+            'recurring_link_count' => (int)($r['recurring_link_count'] ?? 0),
             'recurring_bank_aliases' => $aliasMap[(int)($r['id'] ?? 0)] ?? [],
         ];
     }, $rows);
@@ -11017,8 +11024,7 @@ function accumul8_list_recurring_link_candidates(int $viewerId, int $recurringId
         $whereParts[] = 't.amount < 0';
     }
 
-    $whereParts[] = '(t.recurring_payment_id IS NULL OR t.recurring_payment_id = ?)';
-    $params[] = $recurringId;
+    $whereParts[] = 't.recurring_payment_id IS NULL';
 
     $query = accumul8_normalize_text($query, 120);
     if ($query !== '') {

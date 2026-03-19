@@ -29,6 +29,33 @@ function formatRecurringLinkDate(transaction: Accumul8Transaction): string {
   return String(transaction.due_date || transaction.transaction_date || '').trim() || 'No date';
 }
 
+function matchesRecurringLinkQuery(transaction: Accumul8Transaction, query: string): boolean {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const amount = Number(transaction.amount || 0);
+  const normalizedAmount = Math.abs(amount).toFixed(2);
+  const amountWithoutDecimals = normalizedAmount.replace(/\.00$/, '');
+  const searchableText = [
+    transaction.description,
+    transaction.memo,
+    transaction.account_name,
+    transaction.entity_name,
+    transaction.contact_name,
+    transaction.debtor_name,
+    transaction.source_kind,
+    formatRecurringLinkDate(transaction),
+    normalizedAmount,
+    amountWithoutDecimals,
+  ]
+    .map((value) => String(value || '').toLowerCase())
+    .join('\n');
+
+  return searchableText.includes(normalizedQuery);
+}
+
 export function Accumul8RecurringLinkModal({
   open,
   busy,
@@ -50,6 +77,15 @@ export function Accumul8RecurringLinkModal({
   const [linkingTransactionId, setLinkingTransactionId] = React.useState<number | null>(null);
 
   const recurringId = Number(recurring?.id || 0);
+  const linkedHistoryIds = React.useMemo(() => new Set(historyRows.map((transaction) => Number(transaction.id || 0))), [historyRows]);
+  const filteredCandidateRows = React.useMemo(
+    () => candidateRows.filter((transaction) => !linkedHistoryIds.has(Number(transaction.id || 0)) && matchesRecurringLinkQuery(transaction, candidateQuery)),
+    [candidateQuery, candidateRows, linkedHistoryIds],
+  );
+  const filteredHistoryRows = React.useMemo(
+    () => historyRows.filter((transaction) => matchesRecurringLinkQuery(transaction, historyQuery)),
+    [historyQuery, historyRows],
+  );
 
   React.useEffect(() => {
     if (!open) {
@@ -187,10 +223,14 @@ export function Accumul8RecurringLinkModal({
                       />
                       {candidateError ? <div className="alert alert-danger py-2 mb-0">{candidateError}</div> : null}
                       {loadingCandidates ? <div className="text-muted">Loading candidate transactions...</div> : null}
-                      {!loadingCandidates && candidateRows.length === 0 ? <div className="text-muted">No candidate ledger entries found.</div> : null}
-                      {!loadingCandidates && candidateRows.length > 0 ? (
+                      {!loadingCandidates && filteredCandidateRows.length === 0 ? (
+                        <div className="text-muted">
+                          {candidateQuery.trim() ? 'No candidate ledger entries match that filter.' : 'No candidate ledger entries found.'}
+                        </div>
+                      ) : null}
+                      {!loadingCandidates && filteredCandidateRows.length > 0 ? (
                         <div className="d-flex flex-column gap-2">
-                          {candidateRows.map((transaction) => (
+                          {filteredCandidateRows.map((transaction) => (
                             <article key={`candidate-${transaction.id}`} className="card border-0 bg-light-subtle">
                               <div className="card-body py-3">
                                 <div className="d-flex justify-content-between align-items-start gap-3">
@@ -246,10 +286,14 @@ export function Accumul8RecurringLinkModal({
                       />
                       {historyError ? <div className="alert alert-danger py-2 mb-0">{historyError}</div> : null}
                       {loadingHistory ? <div className="text-muted">Loading recurring history...</div> : null}
-                      {!loadingHistory && historyRows.length === 0 ? <div className="text-muted">No linked history yet.</div> : null}
-                      {!loadingHistory && historyRows.length > 0 ? (
+                      {!loadingHistory && filteredHistoryRows.length === 0 ? (
+                        <div className="text-muted">
+                          {historyQuery.trim() ? 'No linked history entries match that filter.' : 'No linked history yet.'}
+                        </div>
+                      ) : null}
+                      {!loadingHistory && filteredHistoryRows.length > 0 ? (
                         <div className="d-flex flex-column gap-2">
-                          {historyRows.map((transaction) => (
+                          {filteredHistoryRows.map((transaction) => (
                             <article key={`history-${transaction.id}`} className="card border-0 bg-light-subtle">
                               <div className="card-body py-3">
                                 <div className="d-flex justify-content-between align-items-start gap-3">

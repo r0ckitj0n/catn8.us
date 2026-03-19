@@ -56,6 +56,7 @@ export interface Accumul8RecurringPayment {
   contact_name: string;
   account_name: string;
   banking_organization_name: string;
+  recurring_link_count: number;
   recurring_bank_aliases: string[];
 }
 

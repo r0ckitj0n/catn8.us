@@ -2374,6 +2374,21 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   font-size: 0.7rem;
 }
 
+.accumul8-link-status-icon {
+  display: inline-block;
+  transition: filter 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+
+.accumul8-link-status-icon.no-links {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.accumul8-link-status-icon.has-links {
+  filter: saturate(1.15);
+  opacity: 1;
+}
+
 .accumul8-icon-action.is-flashing {
   animation: accumul8-save-flash 0.9s ease-in-out 1;
 }

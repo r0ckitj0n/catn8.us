@@ -44,9 +44,13 @@ export function useAccumul8(
     scopedActionUrl,
     isTellerRateLimitError,
   });
+  const ownerScopeKey = Number(selectedOwnerUserId || 0);
   React.useEffect(() => {
     void load();
-  }, [load]);
+    // Intentionally keyed to owner scope so Accumul8 bootstrap runs once per owner change,
+    // instead of re-running on every render from callback identity churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerScopeKey]);
   const loadLogs = React.useCallback(async (logType: string) => {
     return ApiClient.get<Accumul8LogListResponse>(`${scopedActionUrl('list_logs')}&log_type=${encodeURIComponent(logType)}`);
   }, [scopedActionUrl]);

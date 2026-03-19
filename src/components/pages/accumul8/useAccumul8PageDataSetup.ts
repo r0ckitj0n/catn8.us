@@ -21,10 +21,13 @@ import { useAccumul8ScopeData } from './useAccumul8ScopeData';
 import { useAccumul8SecondaryTables } from './useAccumul8SecondaryTables';
 
 export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void) {
+  const ownerScopeKey = React.useMemo(() => String(session.selectedOwnerUserId || session.activeOwnerUserId || 0), [session.activeOwnerUserId, session.selectedOwnerUserId]);
+  const pendingTransactionsRequestRef = React.useRef<string>('');
+
   React.useEffect(() => {
     if (state.tab !== 'statements' || session.statementsLoaded) return;
     void session.loadStatementWorkspace();
-  }, [session.loadStatementWorkspace, session.statementsLoaded, state.tab]);
+  }, [session.statementsLoaded, session.selectedOwnerUserId, state.tab]);
 
   const shouldHydrateFullTransactions = React.useMemo(() => (
     state.tab !== 'ledger'
@@ -47,8 +50,15 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
   React.useEffect(() => {
     if (!shouldHydrateFullTransactions) return;
     if (session.transactionsPagination?.is_full_dataset) return;
-    void session.loadAllTransactions();
-  }, [session.loadAllTransactions, session.transactionsPagination?.is_full_dataset, shouldHydrateFullTransactions]);
+    const requestKey = `all:${ownerScopeKey}`;
+    if (pendingTransactionsRequestRef.current === requestKey) return;
+    pendingTransactionsRequestRef.current = requestKey;
+    void session.loadAllTransactions().finally(() => {
+      if (pendingTransactionsRequestRef.current === requestKey) {
+        pendingTransactionsRequestRef.current = '';
+      }
+    });
+  }, [ownerScopeKey, session.transactionsPagination?.is_full_dataset, shouldHydrateFullTransactions]);
 
   React.useEffect(() => {
     if (shouldHydrateFullTransactions) return;
@@ -56,9 +66,16 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     if (session.transactionsPagination?.is_full_dataset) return;
     const currentPage = Number(session.transactionsPagination?.current_page || 1);
     if (currentPage === state.ledgerArchivePage) return;
-    void session.loadTransactionsPage(state.ledgerArchivePage, Number(session.transactionsPagination?.page_size || 250));
+    const requestKey = `page:${ownerScopeKey}:${state.ledgerArchivePage}:${Number(session.transactionsPagination?.page_size || 250)}`;
+    if (pendingTransactionsRequestRef.current === requestKey) return;
+    pendingTransactionsRequestRef.current = requestKey;
+    void session.loadTransactionsPage(state.ledgerArchivePage, Number(session.transactionsPagination?.page_size || 250)).finally(() => {
+      if (pendingTransactionsRequestRef.current === requestKey) {
+        pendingTransactionsRequestRef.current = '';
+      }
+    });
   }, [
-    session.loadTransactionsPage,
+    ownerScopeKey,
     session.transactionsPagination?.current_page,
     session.transactionsPagination?.is_full_dataset,
     session.transactionsPagination?.page_size,

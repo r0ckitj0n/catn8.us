@@ -46,6 +46,7 @@ export function useBuildWizardPageEffects(options: any) {
     setStepDrafts: options.state.setStepDrafts,
     setStepInfoModalStepId: options.state.setStepInfoModalStepId,
     setTaskAttachmentsModalDocId: options.state.setTaskAttachmentsModalDocId,
+    stepEditModalStepId: options.state.stepEditModalStepId,
     stepInfoModalStepId: options.state.stepInfoModalStepId,
     steps: options.buildWizard.steps,
     taskAttachmentsModalDocId: options.state.taskAttachmentsModalDocId,

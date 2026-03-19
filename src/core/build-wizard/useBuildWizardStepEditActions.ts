@@ -89,14 +89,14 @@ export function useBuildWizardStepEditActions({
     const nextEndDate = nextStartDate && requestedEndDate && requestedEndDate < nextStartDate ? nextStartDate : requestedEndDate;
     const nextDurationDays = calculateDurationDays(nextStartDate, nextEndDate) ?? (draft.expected_duration_days ?? null);
     const nextDependencyIds = Array.from(new Set((Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : []).map((rawId) => Number(rawId || 0)).filter((id) => id > 0 && id !== step.id)));
-    const actualCostFloor = documents.reduce((sum, doc) => {
+    const receiptActualCostTotal = documents.reduce((sum, doc) => {
       if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') return sum;
       const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
       if (parsed.taskMeta.task_type === 'quote') return sum;
       return sum + Number(doc.receipt_amount || 0);
     }, 0);
     const requestedActualCost = draft.actual_cost ?? null;
-    const nextActualCost = requestedActualCost === null ? (actualCostFloor > 0 ? actualCostFloor : null) : Math.max(Number(requestedActualCost), actualCostFloor);
+    const nextActualCost = requestedActualCost === null ? null : Number(requestedActualCost);
     const patch: Partial<IBuildWizardStep> = {
       title: nextTitle,
       description: String(draft.description || '').trim(),
@@ -117,7 +117,15 @@ export function useBuildWizardStepEditActions({
       await expandPhaseRangeForStep(step, timelineOverrides.get(step.id));
       clearStepDraft(step.id);
       setStepEditModalStepId(0);
-      onToast?.({ tone: 'success', message: 'Step updated.' });
+      const savedWithManualActualCost = receiptActualCostTotal > 0
+        && nextActualCost !== null
+        && Math.abs(nextActualCost - receiptActualCostTotal) >= 0.005;
+      onToast?.({
+        tone: savedWithManualActualCost ? 'info' : 'success',
+        message: savedWithManualActualCost
+          ? 'Step updated. Actual cost is now a manual override; use refresh to sync it back to task totals.'
+          : 'Step updated.',
+      });
     } finally {
       setStepEditSaving(false);
     }

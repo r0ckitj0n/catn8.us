@@ -17,6 +17,7 @@ export function useBuildWizardWorkspaceCleanupEffects(options: any) {
     setStepDrafts,
     setStepInfoModalStepId,
     setTaskAttachmentsModalDocId,
+    stepEditModalStepId,
     stepInfoModalStepId,
     steps,
     taskAttachmentsModalDocId,
@@ -28,6 +29,13 @@ export function useBuildWizardWorkspaceCleanupEffects(options: any) {
       const validIds = new Set<number>();
       steps.forEach((step: any) => {
         validIds.add(step.id);
+        if (step.id === stepEditModalStepId && Object.prototype.hasOwnProperty.call(next, step.id)) {
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(next, step.id)) {
+          next[step.id] = { ...step };
+          return;
+        }
         next[step.id] = { ...step };
       });
       Object.keys(next).forEach((idText) => {
@@ -38,7 +46,7 @@ export function useBuildWizardWorkspaceCleanupEffects(options: any) {
       });
       return next;
     });
-  }, [setStepDrafts, steps]);
+  }, [setStepDrafts, stepEditModalStepId, steps]);
 
   React.useEffect(() => {
     const validIds = new Set(steps.map((step: any) => step.id));

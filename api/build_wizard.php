@@ -5902,10 +5902,6 @@ try {
 
         if (array_key_exists('actual_cost', $body)) {
             $nextActualCost = catn8_build_wizard_to_decimal_or_null($body['actual_cost']);
-            $receiptTotalFloor = catn8_build_wizard_receipt_total_for_step($stepId);
-            if ($receiptTotalFloor > 0 && ($nextActualCost === null || (float)$nextActualCost < $receiptTotalFloor)) {
-                $nextActualCost = $receiptTotalFloor;
-            }
             $updates[] = 'actual_cost = ?';
             $params[] = $nextActualCost;
         }

@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { useBootstrapModal } from '../../hooks/useBootstrapModal';
 import { Accumul8LogEntry, Accumul8LogListResponse, Accumul8LogType, Accumul8LogTypeOption } from '../../types/accumul8';
 import { ModalCloseIconButton } from '../common/ModalCloseIconButton';
 
@@ -21,7 +20,6 @@ const DEFAULT_LOG_TYPES: Accumul8LogTypeOption[] = [
 ];
 
 export function Accumul8LogsModal({ open, busy, onClose, onLoadLogs }: Accumul8LogsModalProps) {
-  const { modalRef, modalApiRef } = useBootstrapModal(onClose);
   const [activeLogType, setActiveLogType] = React.useState<Accumul8LogType>('sync');
   const [availableLogTypes, setAvailableLogTypes] = React.useState<Accumul8LogTypeOption[]>(DEFAULT_LOG_TYPES);
   const [entries, setEntries] = React.useState<Accumul8LogEntry[]>([]);
@@ -46,15 +44,25 @@ export function Accumul8LogsModal({ open, busy, onClose, onLoadLogs }: Accumul8L
   }, [onLoadLogs]);
 
   React.useEffect(() => {
-    const modal = modalApiRef.current;
-    if (!modal) return;
-    if (open) {
-      modal.show();
-      void loadLogs(activeLogType);
-      return;
-    }
-    modal.hide();
-  }, [activeLogType, loadLogs, modalApiRef, open]);
+    if (!open) return;
+    void loadLogs(activeLogType);
+  }, [activeLogType, loadLogs, open]);
+
+  React.useEffect(() => {
+    if (!open || typeof window === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [onClose, open]);
 
   const filteredEntries = React.useMemo(() => {
     const query = filterText.trim().toLowerCase();
@@ -65,7 +73,21 @@ export function Accumul8LogsModal({ open, busy, onClose, onLoadLogs }: Accumul8L
   }, [entries, filterText]);
 
   return (
-    <div className="modal fade" tabIndex={-1} aria-hidden="true" ref={modalRef}>
+    <>
+      <div className="modal-backdrop fade show" />
+      <div
+        className="modal fade show"
+        tabIndex={-1}
+        aria-hidden={!open}
+        aria-modal="true"
+        role="dialog"
+        style={{ display: 'block' }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      >
       <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
         <div className="modal-content">
           <div className="modal-header">
@@ -140,6 +162,7 @@ export function Accumul8LogsModal({ open, busy, onClose, onLoadLogs }: Accumul8L
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

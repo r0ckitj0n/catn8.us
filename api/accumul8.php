@@ -11216,6 +11216,8 @@ function accumul8_query_transactions_rows(int $viewerId, int $limit = 400, int $
          LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset,
         [$viewerId]
     );
+
+    return $rows;
 }
 
 function accumul8_map_transaction_rows(int $viewerId, array $rows): array
@@ -11285,6 +11287,19 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
 
 function accumul8_list_transactions_page(int $viewerId, int $page = 1, int $pageSize = 250, bool $fullDataset = false): array
 {
+    if (!accumul8_table_exists('accumul8_transactions')) {
+        return [
+            'transactions' => [],
+            'transactions_pagination' => [
+                'current_page' => 1,
+                'page_size' => max(1, min(500, $pageSize)),
+                'total_pages' => 1,
+                'total_rows' => 0,
+                'is_full_dataset' => $fullDataset,
+            ],
+        ];
+    }
+
     $totalRows = (int)((Database::queryOne(
         'SELECT COUNT(*) AS total_rows
          FROM accumul8_transactions
@@ -16497,13 +16512,27 @@ if ($action === 'bootstrap') {
     $transactionPage = max(1, (int)($_GET['transaction_page'] ?? 1));
     $transactionPageSize = max(1, min(500, (int)($_GET['transaction_page_size'] ?? 250)));
     $transactionMode = accumul8_normalize_text((string)($_GET['transaction_mode'] ?? 'page'), 12);
-    $transactionPayload = $transactionMode === 'all'
-        ? accumul8_list_transactions_page($viewerId, 1, $transactionPageSize, true)
-        : accumul8_list_transactions_page($viewerId, $transactionPage, $transactionPageSize, false);
 
     $warnings = [];
     accumul8_bootstrap_section('sync_recurring_ledger_window', static fn() => accumul8_sync_recurring_ledger_window($viewerId, $actorUserId), [], $warnings);
-    $transactions = accumul8_bootstrap_section('transactions', static fn() => $transactionPayload['transactions'], [], $warnings);
+    $transactionPayload = accumul8_bootstrap_section(
+        'transactions',
+        static fn() => $transactionMode === 'all'
+            ? accumul8_list_transactions_page($viewerId, 1, $transactionPageSize, true)
+            : accumul8_list_transactions_page($viewerId, $transactionPage, $transactionPageSize, false),
+        [
+            'transactions' => [],
+            'transactions_pagination' => [
+                'current_page' => 1,
+                'page_size' => $transactionPageSize,
+                'total_pages' => 1,
+                'total_rows' => 0,
+                'is_full_dataset' => $transactionMode === 'all',
+            ],
+        ],
+        $warnings
+    );
+    $transactions = is_array($transactionPayload['transactions'] ?? null) ? $transactionPayload['transactions'] : [];
     $entities = accumul8_bootstrap_section('entities', static fn() => accumul8_list_entities($viewerId), [], $warnings);
     $entityAliases = accumul8_bootstrap_section('entity_aliases', static fn() => accumul8_list_entity_aliases($viewerId), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
@@ -16542,7 +16571,15 @@ if ($action === 'bootstrap') {
         'accounts' => $accounts,
         'debtors' => $debtors,
         'budget_rows' => $budgetRows,
-        'transactions_pagination' => $transactionPayload['transactions_pagination'],
+        'transactions_pagination' => is_array($transactionPayload['transactions_pagination'] ?? null)
+            ? $transactionPayload['transactions_pagination']
+            : [
+                'current_page' => 1,
+                'page_size' => $transactionPageSize,
+                'total_pages' => 1,
+                'total_rows' => 0,
+                'is_full_dataset' => $transactionMode === 'all',
+            ],
         'notification_rules' => $rules,
         'pay_bills' => $payBills,
         'bank_connections' => $connections,

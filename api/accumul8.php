@@ -6388,11 +6388,12 @@ function accumul8_teller_absorb_matching_recurring_placeholder(
         $transactionDate,
         $description,
         [
-            'allowed_source_kinds' => ['recurring'],
+            'allowed_source_kinds' => ['recurring', 'manual'],
             'window_days' => 7,
             'min_score' => 15,
             'min_margin' => 2,
             'expected_entity_id' => $currentRecurringEntityId > 0 ? $currentRecurringEntityId : null,
+            'planner_only' => 1,
             'exclude_ids' => [$transactionId],
         ]
     );
@@ -6777,11 +6778,12 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
                         $date,
                         $description,
                         [
-                            'allowed_source_kinds' => ['recurring'],
+                            'allowed_source_kinds' => ['recurring', 'manual'],
                             'window_days' => 7,
                             'min_score' => 15,
                             'min_margin' => 2,
                             'expected_entity_id' => $resolvedEntityId > 0 ? $resolvedEntityId : null,
+                            'planner_only' => 1,
                         ]
                     );
                     if ($recurringPlaceholder) {
@@ -15012,13 +15014,49 @@ function accumul8_recurring_description_match_score($left, $right): int
     return 4;
 }
 
-function accumul8_recurring_occurrence_match_score(array $candidate, int $recurringId, string $occurrenceDate, string $description, int $windowDays): int
+function accumul8_recurring_is_generic_description($value): bool
 {
-    $candidateRecurringId = (int)($candidate['recurring_payment_id'] ?? 0);
-    if ($recurringId > 0 && $candidateRecurringId > 0 && $candidateRecurringId !== $recurringId) {
-        return -1;
+    $normalized = accumul8_normalize_locator_text($value);
+    if ($normalized === '') {
+        return true;
     }
 
+    $tokens = accumul8_recurring_match_tokens($normalized);
+    if ($tokens === []) {
+        return true;
+    }
+
+    $genericTokens = [
+        'bill' => true,
+        'card' => true,
+        'charge' => true,
+        'credit' => true,
+        'expense' => true,
+        'minimum' => true,
+        'payment' => true,
+        'payoff' => true,
+        'transfer' => true,
+        'utility' => true,
+        'utilities' => true,
+    ];
+
+    foreach ($tokens as $token) {
+        if (!isset($genericTokens[(string)$token])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function accumul8_recurring_candidate_conflicts_with_recurring(array $candidate, int $recurringId): bool
+{
+    $candidateRecurringId = (int)($candidate['recurring_payment_id'] ?? 0);
+    return $recurringId > 0 && $candidateRecurringId > 0 && $candidateRecurringId !== $recurringId;
+}
+
+function accumul8_recurring_candidate_date_match_score(array $candidate, string $occurrenceDate, int $windowDays): int
+{
     $candidateDates = array_values(array_unique(array_filter([
         accumul8_normalize_date($candidate['due_date'] ?? null),
         accumul8_normalize_date($candidate['transaction_date'] ?? null),
@@ -15039,21 +15077,19 @@ function accumul8_recurring_occurrence_match_score(array $candidate, int $recurr
         return -1;
     }
 
-    $dateScore = match (true) {
+    return match (true) {
         $bestDelta === 0 => 12,
         $bestDelta === 1 => 10,
         $bestDelta <= 3 => 8,
         $bestDelta <= 5 => 6,
         default => 4,
     };
-    $descriptionScore = accumul8_recurring_description_match_score($description, (string)($candidate['description'] ?? ''));
-    if ($descriptionScore <= 0) {
-        return -1;
-    }
+}
 
-    $sourceKind = accumul8_transaction_source_kind($candidate['source_kind'] ?? '');
-    $score = $dateScore + $descriptionScore;
-    if ($sourceKind === 'recurring') {
+function accumul8_recurring_candidate_state_score(array $candidate): int
+{
+    $score = 0;
+    if (accumul8_transaction_source_kind($candidate['source_kind'] ?? '') === 'recurring') {
         $score += 3;
     }
     if ((int)($candidate['is_reconciled'] ?? 0) === 1) {
@@ -15067,6 +15103,24 @@ function accumul8_recurring_occurrence_match_score(array $candidate, int $recurr
     }
 
     return $score;
+}
+
+function accumul8_recurring_occurrence_match_score(array $candidate, int $recurringId, string $occurrenceDate, string $description, int $windowDays): int
+{
+    if (accumul8_recurring_candidate_conflicts_with_recurring($candidate, $recurringId)) {
+        return -1;
+    }
+
+    $dateScore = accumul8_recurring_candidate_date_match_score($candidate, $occurrenceDate, $windowDays);
+    if ($dateScore < 0) {
+        return -1;
+    }
+    $descriptionScore = accumul8_recurring_description_match_score($description, (string)($candidate['description'] ?? ''));
+    if ($descriptionScore <= 0) {
+        return -1;
+    }
+
+    return $dateScore + $descriptionScore + accumul8_recurring_candidate_state_score($candidate);
 }
 
 function accumul8_recurring_amount_match_score(float $expectedAmount, float $actualAmount, bool $entityMatched, int $descriptionScore): int
@@ -15117,6 +15171,7 @@ function accumul8_find_best_transaction_for_recurring_occurrence(
     $minScore = max(1, (int)($options['min_score'] ?? 14));
     $minMargin = max(1, (int)($options['min_margin'] ?? 2));
     $expectedEntityId = isset($options['expected_entity_id']) ? (int)$options['expected_entity_id'] : 0;
+    $plannerOnly = (int)($options['planner_only'] ?? 0) === 1;
     $comparisonDescriptions = accumul8_normalize_recurring_bank_alias_list($options['candidate_descriptions'] ?? []);
     if ($comparisonDescriptions === []) {
         $comparisonDescriptions = [$description];
@@ -15189,6 +15244,21 @@ function accumul8_find_best_transaction_for_recurring_occurrence(
 
     $scored = [];
     foreach ($rows as $row) {
+        $sourceKind = accumul8_transaction_source_kind($row['source_kind'] ?? '');
+        if ($plannerOnly) {
+            $isPlannerCandidate = $sourceKind === 'recurring'
+                || (
+                    (int)($row['is_budget_planner'] ?? 0) === 1
+                    && !in_array($sourceKind, ['teller', 'statement_upload', 'statement_pdf'], true)
+                );
+            if (!$isPlannerCandidate) {
+                continue;
+            }
+        }
+        if (accumul8_recurring_candidate_conflicts_with_recurring($row, $recurringId)) {
+            continue;
+        }
+
         $candidateDescriptions = [(string)($row['description'] ?? '')];
         $candidateRecurringId = (int)($row['recurring_payment_id'] ?? 0);
         if ($candidateRecurringId > 0 && isset($candidateRecurringAliasMap[$candidateRecurringId])) {
@@ -15206,27 +15276,49 @@ function accumul8_find_best_transaction_for_recurring_occurrence(
                 }
             }
         }
-        if ($bestDescriptionScore <= 0) {
-            continue;
-        }
-
-        $baseScore = accumul8_recurring_occurrence_match_score($row, $recurringId, $occurrenceDate, $seedDescription, $windowDays);
-        if ($baseScore < 0) {
-            continue;
-        }
-        $rowDescriptionScore = accumul8_recurring_description_match_score($seedDescription, (string)($row['description'] ?? ''));
-        $baseScore = ($baseScore - max(0, $rowDescriptionScore)) + $bestDescriptionScore;
-
         $candidateEntityId = isset($row['entity_id']) ? (int)$row['entity_id'] : 0;
         if ($candidateEntityId <= 0) {
             $candidateEntityId = (int)(accumul8_find_matching_entity_id($viewerId, (string)($row['description'] ?? '')) ?? 0);
         }
         $entityMatched = $expectedEntityId > 0 && $candidateEntityId > 0 && $candidateEntityId === $expectedEntityId;
+        $dateScore = accumul8_recurring_candidate_date_match_score($row, $occurrenceDate, $windowDays);
+        if ($dateScore < 0) {
+            continue;
+        }
         $amountScore = accumul8_recurring_amount_match_score($amount, (float)($row['amount'] ?? 0), $entityMatched, $bestDescriptionScore);
         if ($amountScore < 0) {
             continue;
         }
-        $score = $baseScore + $amountScore + ($entityMatched ? 6 : 0);
+        if ($bestDescriptionScore > 0) {
+            $baseScore = accumul8_recurring_occurrence_match_score($row, $recurringId, $occurrenceDate, $seedDescription, $windowDays);
+            if ($baseScore < 0) {
+                continue;
+            }
+            $rowDescriptionScore = accumul8_recurring_description_match_score($seedDescription, (string)($row['description'] ?? ''));
+            $baseScore = ($baseScore - max(0, $rowDescriptionScore)) + $bestDescriptionScore;
+            $score = $baseScore + $amountScore + ($entityMatched ? 6 : 0);
+        } else {
+            $genericSeedDescription = accumul8_recurring_is_generic_description($seedDescription);
+            $genericCandidateDescription = accumul8_recurring_is_generic_description((string)($row['description'] ?? ''));
+            $hasStrongAmountDate = $amountScore >= 10 && $dateScore >= 10;
+            $hasGenericAmountDate = ($genericSeedDescription || $genericCandidateDescription) && $amountScore >= 10 && $dateScore >= 8;
+            if (!$entityMatched && !$hasStrongAmountDate && !$hasGenericAmountDate) {
+                continue;
+            }
+
+            $fallbackBoost = accumul8_recurring_candidate_state_score($row);
+            if ($entityMatched) {
+                $fallbackBoost += 8;
+            } elseif ($hasStrongAmountDate) {
+                $fallbackBoost += 2;
+            } else {
+                $fallbackBoost -= 2;
+            }
+            if ($genericSeedDescription || $genericCandidateDescription) {
+                $fallbackBoost += 1;
+            }
+            $score = $dateScore + $amountScore + $fallbackBoost;
+        }
         if ($score < $minScore) {
             continue;
         }
@@ -15712,7 +15804,13 @@ function accumul8_sync_open_recurring_transactions_from_template(int $viewerId, 
          FROM accumul8_transactions
          WHERE owner_user_id = ?
            AND recurring_payment_id = ?
-           AND COALESCE(source_kind, "") = "recurring"
+           AND (
+                COALESCE(source_kind, "") = "recurring"
+                OR (
+                    COALESCE(is_budget_planner, 0) = 1
+                    AND COALESCE(source_kind, "manual") NOT IN ("teller", "statement_upload", "statement_pdf")
+                )
+           )
            AND (
                 is_paid = 0
                 OR COALESCE(paid_date, "") = ?
@@ -15765,7 +15863,11 @@ function accumul8_sync_recurring_template_from_transaction(int $viewerId, array 
 {
     $sourceKind = accumul8_transaction_source_kind($existingTx['source_kind'] ?? $updatedTx['source_kind'] ?? '');
     $recurringPaymentId = (int)($existingTx['recurring_payment_id'] ?? $updatedTx['recurring_payment_id'] ?? 0);
-    if ($sourceKind !== 'recurring' || $recurringPaymentId <= 0) {
+    $isBudgetPlanner = (int)($updatedTx['is_budget_planner'] ?? $existingTx['is_budget_planner'] ?? 0) === 1;
+    $externalId = accumul8_normalize_text((string)($existingTx['external_id'] ?? $updatedTx['external_id'] ?? ''), 191);
+    $canSyncFromTransaction = $sourceKind === 'recurring'
+        || ($sourceKind === 'manual' && $isBudgetPlanner && $externalId === '');
+    if (!$canSyncFromTransaction || $recurringPaymentId <= 0) {
         return;
     }
 

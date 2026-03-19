@@ -72,6 +72,10 @@ export function Accumul8LogsModal({ open, busy, onClose, onLoadLogs }: Accumul8L
     return entries.filter((entry) => String(entry.search_text || '').toLowerCase().includes(query));
   }, [entries, filterText]);
 
+  if (!open) {
+    return null;
+  }
+
   return (
     <>
       <div className="modal-backdrop fade show" />

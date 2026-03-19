@@ -28,6 +28,8 @@ export function useAccumul8PageLayerBuilderOptions(options: any) {
     createBankingOrganization: options.createBankingOrganization,
     debtorForm: options.debtorForm,
     debtorModalOpen: options.debtorModalOpen,
+    deleteAccount: options.deleteAccount,
+    deleteBankingOrganization: options.deleteBankingOrganization,
     editingContactId: options.editingContactId,
     editingDebtorId: options.editingDebtorId,
     editingEntity: options.editingEntity,

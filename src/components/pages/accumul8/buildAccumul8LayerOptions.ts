@@ -27,6 +27,8 @@ export function buildAccumul8LayerOptions(options: any) {
     createBankingOrganization: data.createBankingOrganization,
     debtorForm: data.debtorForm,
     debtorModalOpen: ui.debtorModalOpen,
+    deleteAccount: data.deleteAccount,
+    deleteBankingOrganization: data.deleteBankingOrganization,
     editingContactId: data.editingContactId,
     editingDebtorId: data.editingDebtorId,
     editingEntity: data.editingEntity,

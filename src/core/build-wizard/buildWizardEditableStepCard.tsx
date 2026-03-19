@@ -109,12 +109,23 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
     uploadDocument,
     verifiedActualCostSignatureByStepId,
   } = context;
+  const safeStepAssigneesByStepId = stepAssigneesByStepId ?? new Map<number, typeof stepAssigneesByStepId extends Map<number, infer V> ? V : never>();
+  const safeStepDirectAssigneesByStepId = stepDirectAssigneesByStepId ?? new Map<number, typeof stepDirectAssigneesByStepId extends Map<number, infer V> ? V : never>();
+  const safeStepDrafts = stepDrafts ?? {};
+  const safeExpandedStepById = expandedStepById ?? {};
+  const safeReceiptMetricsByStepId = receiptMetricsByStepId ?? new Map<number, typeof receiptMetricsByStepId extends Map<number, infer V> ? V : never>();
+  const safeVerifiedActualCostSignatureByStepId = verifiedActualCostSignatureByStepId ?? {};
+  const safeRefreshingActualCostByStepId = refreshingActualCostByStepId ?? {};
+  const safeReceiptDraftByStep = receiptDraftByStep ?? {};
+  const safeAttachExistingDocFilterByStepId = attachExistingDocFilterByStepId ?? {};
+  const safeReceiptEditorOpenByStep = receiptEditorOpenByStep ?? {};
+  const safeStepContactCandidateByStepId = stepContactCandidateByStepId ?? {};
   const step = row.step;
-  const allStepAssignees = stepAssigneesByStepId.get(step.id) || [];
-  const directStepAssignees = stepDirectAssigneesByStepId.get(step.id) || [];
+  const allStepAssignees = safeStepAssigneesByStepId.get(step.id) || [];
+  const directStepAssignees = safeStepDirectAssigneesByStepId.get(step.id) || [];
   const stepReadOnly = Number(step.is_completed) === 1;
   const stepDisplayNumber = activeTabStepNumbers.get(step.id) || step.step_order;
-  const draft = stepDrafts[step.id] || step;
+  const draft = safeStepDrafts[step.id] || step;
   const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
   const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
   const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
@@ -131,7 +142,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
     return { id: dependencyId, label: `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phaseLabel})` };
   });
   const stepPastelColor = getStepPastelColor(step.id);
-  const isExpanded = expandedStepById[step.id] === true;
+  const isExpanded = safeExpandedStepById[step.id] === true;
   const stepDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id);
   const stepReceiptDocuments = stepDocuments.filter((doc) => doc.kind === 'receipt').sort((a, b) => {
     const aDate = toStringOrNull(a.receipt_date || '');
@@ -145,7 +156,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   });
   const stepReceiptAttachmentDocuments = stepDocuments.filter((doc) => doc.kind === 'receipt_attachment');
   const stepNonReceiptDocuments = stepDocuments.filter((doc) => doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
-  const stepReceiptMetrics = receiptMetricsByStepId.get(step.id) || {
+  const stepReceiptMetrics = safeReceiptMetricsByStepId.get(step.id) || {
     allCount: stepReceiptDocuments.length,
     nonQuoteCount: stepReceiptDocuments.length,
     quoteCount: 0,
@@ -159,11 +170,11 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
   const effectiveActualCost = draftActualCost === null ? (actualCostFloor > 0 ? actualCostFloor : null) : Math.max(draftActualCost, actualCostFloor);
   const recalculatedActualCost = actualCostFloor > 0 ? actualCostFloor : null;
-  const actualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, effectiveActualCost);
-  const refreshedActualCostVerificationSignature = buildStepCostVerificationSignature(step, stepDrafts[step.id], stepDocuments, recalculatedActualCost);
-  const isActualCostVerified = verifiedActualCostSignatureByStepId[step.id] === actualCostVerificationSignature;
-  const isRefreshingActualCost = refreshingActualCostByStepId[step.id] === true;
-  const receiptDraft = receiptDraftByStep[step.id] || {
+  const actualCostVerificationSignature = buildStepCostVerificationSignature(step, safeStepDrafts[step.id], stepDocuments, effectiveActualCost);
+  const refreshedActualCostVerificationSignature = buildStepCostVerificationSignature(step, safeStepDrafts[step.id], stepDocuments, recalculatedActualCost);
+  const isActualCostVerified = safeVerifiedActualCostSignatureByStepId[step.id] === actualCostVerificationSignature;
+  const isRefreshingActualCost = safeRefreshingActualCostByStepId[step.id] === true;
+  const receiptDraft = safeReceiptDraftByStep[step.id] || {
     receipt_title: '',
     receipt_vendor: '',
     receipt_date: '',
@@ -171,19 +182,19 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
     receipt_notes: '',
     task_meta: defaultTaskMeta((step.step_type || 'construction') as Parameters<typeof defaultTaskMeta>[0]),
   };
-  const stepAttachmentFilter = String(attachExistingDocFilterByStepId[step.id] || '').trim().toLowerCase();
+  const stepAttachmentFilter = String(safeAttachExistingDocFilterByStepId[step.id] || '').trim().toLowerCase();
   const filteredAttachableProjectDocuments = stepAttachmentFilter ? attachableProjectDocuments.filter((doc) => {
     const linkedStepId = Number(doc.step_id || 0);
     const linkedStep = linkedStepId > 0 ? stepById.get(linkedStepId) : null;
     const haystack = `${doc.original_name} ${buildWizardTokenLabel(doc.kind, 'Other')} ${linkedStep?.title || ''}`.toLowerCase();
     return haystack.includes(stepAttachmentFilter);
   }) : attachableProjectDocuments;
-  const receiptEditorOpen = receiptEditorOpenByStep[step.id] === true;
+  const receiptEditorOpen = safeReceiptEditorOpenByStep[step.id] === true;
   const stepDirectContactIdSet = new Set<number>(directStepAssignees.map((entry) => entry.contact.id));
   const addableStepContactOptions = contacts
     .filter((contact) => !stepDirectContactIdSet.has(contact.id))
     .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
-  const selectedStepContactCandidateId = Number(stepContactCandidateByStepId[step.id] || 0);
+  const selectedStepContactCandidateId = Number(safeStepContactCandidateByStepId[step.id] || 0);
   const effectiveStepContactCandidateId = selectedStepContactCandidateId > 0 && addableStepContactOptions.some((contact) => contact.id === selectedStepContactCandidateId) ? selectedStepContactCandidateId : (addableStepContactOptions[0]?.id || 0);
 
   return (
@@ -285,7 +296,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
 
           {stepNonReceiptDocuments.length > 0 ? <div className="build-wizard-step-media">{renderDocumentGallery(stepNonReceiptDocuments, '', stepReadOnly)}</div> : null}
 
-          <BuildWizardStepNotes deletingNoteId={deletingNoteId} editingNoteTextById={editingNoteTextById} formatDate={formatDate} noteEditedAtLabel={noteEditedAtLabel} onCancelEditNote={onCancelEditNote} onDeleteStepNoteById={onDeleteStepNoteById} onSaveEditedNote={onSaveEditedNote} onStartEditNote={onStartEditNote} open={step.notes.length > 0} savingNoteId={savingNoteId} setEditingNoteTextById={setEditingNoteTextById} step={step} stepReadOnly={stepReadOnly} />
+          <BuildWizardStepNotes deletingNoteId={deletingNoteId} editingNoteTextById={editingNoteTextById} formatDate={formatDate} noteEditedAtLabel={noteEditedAtLabel} onCancelEditNote={onCancelEditNote} onDeleteStepNoteById={onDeleteStepNoteById} onSaveEditedNote={onSaveEditedNote} onStartEditNote={onStartEditNote} open={Array.isArray(step.notes) && step.notes.length > 0} savingNoteId={savingNoteId} setEditingNoteTextById={setEditingNoteTextById} step={step} stepReadOnly={stepReadOnly} />
         </>
       ) : null}
     </div>

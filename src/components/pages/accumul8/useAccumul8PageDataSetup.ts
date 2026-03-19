@@ -24,7 +24,7 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
   React.useEffect(() => {
     if (state.tab !== 'statements' || session.statementsLoaded) return;
     void session.loadStatementWorkspace();
-  }, [session, state.tab]);
+  }, [session.loadStatementWorkspace, session.statementsLoaded, state.tab]);
 
   const scopeData = useAccumul8ScopeData({
     accounts: session.accounts,
@@ -43,7 +43,7 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     setMessageBoardMessages: state.setMessageBoardMessages, setMessageBoardUnacknowledgedCount: state.setMessageBoardUnacknowledgedCount,
     setRunningAIcountantHousekeeping: state.setRunningAIcountantHousekeeping, setRunningAIcountantWatchlist: state.setRunningAIcountantWatchlist,
   });
-  React.useEffect(() => { void messageBoardActions.loadMessageBoard(); }, [messageBoardActions]);
+  React.useEffect(() => { void messageBoardActions.loadMessageBoard(); }, [messageBoardActions.loadMessageBoard]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const ledgerData = useAccumul8LedgerData({
     customLedgerEndDate: state.customLedgerEndDate, customLedgerStartDate: state.customLedgerStartDate, filteredTransactions: scopeData.filteredTransactions,
@@ -103,7 +103,7 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
   const closeEntityEndexGuideModal = React.useCallback(() => {
     state.setEditingEntityEndexGuideId(null);
     state.setEntityEndexGuideModalOpen(false);
-  }, [state]);
+  }, [state.setEditingEntityEndexGuideId, state.setEntityEndexGuideModalOpen]);
   const { saveLedgerEntityRule } = useAccumul8LedgerEntityRuleActions({
     accumul8ActionUrl: session.accumul8ActionUrl, closeLedgerEntityModal: pageActions.closeLedgerEntityModal, entities: session.entities, entityAliases: session.entityAliases, entityEndexGuides: session.entityEndexGuides,
     ledgerEntityModalTransactionId: state.ledgerEntityModalTransactionId, load: session.load, onToast, recurringPayments: session.recurringPayments, setLedgerEntityModalSaving: state.setLedgerEntityModalSaving, transactions: session.transactions,

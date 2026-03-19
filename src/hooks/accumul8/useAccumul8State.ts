@@ -46,7 +46,7 @@ export function useAccumul8State() {
   const [statementAuditRuns, setStatementAuditRuns] = React.useState<Accumul8StatementAuditRun[]>([]);
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'teller', env: 'sandbox', configured: 0 });
 
-  return {
+  return React.useMemo(() => ({
     busy, setBusy,
     loaded, setLoaded,
     statementsLoaded, setStatementsLoaded,
@@ -72,5 +72,31 @@ export function useAccumul8State() {
     archivedStatementUploads, setArchivedStatementUploads,
     statementAuditRuns, setStatementAuditRuns,
     syncProvider, setSyncProvider,
-  };
+  }), [
+    busy,
+    loaded,
+    statementsLoaded,
+    activeOwnerUserId,
+    accessibleAccountOwners,
+    summary,
+    entities,
+    entityAliases,
+    entityEndexGuides,
+    entityEndexScanLogs,
+    contacts,
+    recurringPayments,
+    transactions,
+    bankingOrganizations,
+    accounts,
+    notificationRules,
+    payBills,
+    debtors,
+    debtorLedger,
+    budgetRows,
+    bankConnections,
+    statementUploads,
+    archivedStatementUploads,
+    statementAuditRuns,
+    syncProvider,
+  ]);
 }

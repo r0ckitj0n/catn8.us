@@ -19,8 +19,9 @@ export function useAccumul8PageSessionData(viewer: any, onToast?: (toast: { tone
     if (selectedOwnerUserId > 0) params.set('owner_user_id', String(selectedOwnerUserId));
     return `/api/accumul8.php?${params.toString()}`;
   }, [selectedOwnerUserId]);
+  const accumul8 = useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined);
 
-  return {
+  return React.useMemo(() => ({
     ACCUMUL8_OWNER_STORAGE_KEY,
     accumul8ActionUrl,
     canAccess,
@@ -29,6 +30,14 @@ export function useAccumul8PageSessionData(viewer: any, onToast?: (toast: { tone
     isAuthed,
     selectedOwnerUserId,
     setSelectedOwnerUserId,
-    ...useAccumul8(onToast, selectedOwnerUserId > 0 ? selectedOwnerUserId : undefined),
-  };
+    ...accumul8,
+  }), [
+    accumul8,
+    accumul8ActionUrl,
+    canAccess,
+    isAccumul8User,
+    isAdministrator,
+    isAuthed,
+    selectedOwnerUserId,
+  ]);
 }

@@ -97,129 +97,44 @@ import { useAccumul8MessageBoardActions } from './accumul8/useAccumul8MessageBoa
 import { useAccumul8ModalHelperActions } from './accumul8/useAccumul8ModalHelperActions';
 import { useAccumul8ModalEditorActions } from './accumul8/useAccumul8ModalEditorActions';
 import { useAccumul8ModalResetActions } from './accumul8/useAccumul8ModalResetActions';
+import { useAccumul8PageActionGroups } from './accumul8/useAccumul8PageActionGroups';
+import { useAccumul8PageEffects } from './accumul8/useAccumul8PageEffects';
 import { useAccumul8PageUiHelpers } from './accumul8/useAccumul8PageUiHelpers';
+import { useAccumul8ModalOverlayProps } from './accumul8/useAccumul8ModalOverlayProps';
+import { useAccumul8ScopeData } from './accumul8/useAccumul8ScopeData';
 import { useAccumul8SecondaryTables } from './accumul8/useAccumul8SecondaryTables';
+import { useAccumul8TabContentProps } from './accumul8/useAccumul8TabContentProps';
 import { DebtorInlineDraft, EntityInlineDraft, RecurringInlineDraft, useAccumul8InlineRowActions } from './accumul8/useAccumul8InlineRowActions';
 import { useAccumul8SyncActions } from './accumul8/useAccumul8SyncActions';
 import { Accumul8PageModalAssembly } from './accumul8/Accumul8PageModalAssembly';
 import { Accumul8PageOverlays } from './accumul8/Accumul8PageOverlays';
 import { Accumul8PageModals } from './accumul8/Accumul8PageModals';
 import { Accumul8PageTabContent } from './accumul8/Accumul8PageTabContent';
+import {
+  ACCUMUL8_OWNER_STORAGE_KEY,
+  DATE_RANGE_FILTER_OPTIONS,
+  DEFAULT_CONTACT_FORM,
+  DEFAULT_ENTITY_ALIAS_DRAFT,
+  DEFAULT_ENTITY_FORM,
+  DEFAULT_RECURRING_FORM,
+  LEDGER_FILTER_PRESET_OPTIONS,
+  SUMMARY_WINDOW_OPTIONS,
+} from './accumul8/accumul8PageDefaults';
+import {
+  Accumul8HeaderSummary,
+  Accumul8SyncReport,
+  DateRangeFilter,
+  EntityFormState,
+  LedgerFilterPreset,
+  LedgerPaginationMode,
+  SearchableListTabKey,
+  TabKey,
+} from './accumul8/accumul8PageTypes';
 import './Accumul8Page.css';
 
 interface Accumul8PageProps extends AppShellPageProps {
   onToast?: (toast: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
-type TabKey = 'aicountant' | 'ledger' | 'calendar' | 'spreadsheet' | 'debtors' | 'pay_bills' | 'contacts' | 'entity_endex' | 'recurring' | 'notifications' | 'sync' | 'statements';
-type SearchableListTabKey = 'ledger' | 'debtors' | 'pay_bills' | 'contacts' | 'recurring';
-type LedgerFilterPreset =
-  | 'all'
-  | 'planning'
-  | 'hide_upcoming_recurring'
-  | 'hide_reconciled'
-  | 'hide_paid'
-  | 'hide_pending_bank'
-  | 'show_late_payments'
-  | 'show_paid_not_reconciled'
-  | 'show_reconciled_not_paid'
-  | 'show_unpaid_only'
-  | 'show_upcoming_unpaid';
-type Accumul8HeaderSummary = {
-  currentBalance: number;
-  unpaidBills: number;
-  windfalls: number;
-};
-type Accumul8SyncReport = {
-  connectionId: number;
-  institutionName: string;
-  syncedAt: string;
-  result: Accumul8TellerSyncResponse;
-};
-const ACCUMUL8_OWNER_STORAGE_KEY = 'accumul8.selected_owner_user_id';
-const LEDGER_FILTER_PRESET_OPTIONS: Array<{ value: LedgerFilterPreset; label: string }> = [
-  { value: 'all', label: 'All transactions' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'hide_upcoming_recurring', label: 'Hide upcoming recurring payments' },
-  { value: 'hide_reconciled', label: 'Hide reconciled transactions' },
-  { value: 'hide_paid', label: 'Hide paid transactions' },
-  { value: 'hide_pending_bank', label: 'Hide pending bank transactions' },
-  { value: 'show_late_payments', label: 'Show late payments' },
-  { value: 'show_paid_not_reconciled', label: 'Show paid, not reconciled' },
-  { value: 'show_reconciled_not_paid', label: 'Show reconciled, not paid' },
-  { value: 'show_unpaid_only', label: 'Show unpaid only' },
-  { value: 'show_upcoming_unpaid', label: 'Show upcoming unpaid' },
-];
-type EntityFormState = {
-  display_name: string;
-  entity_kind: string;
-  contact_type: Accumul8ContactType;
-  is_vendor: number;
-  default_amount: number;
-  email: string;
-  phone_number: string;
-  street_address: string;
-  city: string;
-  state: string;
-  zip: string;
-  notes: string;
-  is_active: number;
-};
-type DateRangeFilter = 'all_dates' | '7_days' | '30_days' | '60_days' | '90_days' | 'eoy' | 'custom';
-type LedgerPaginationMode = '100' | 'all';
-const DEFAULT_CONTACT_FORM = {
-  contact_name: '',
-  contact_type: 'payee' as Accumul8ContactType,
-  default_amount: 0,
-  email: '',
-  phone_number: '',
-  street_address: '',
-  city: '',
-  state: '',
-  zip: '',
-  notes: '',
-};
-const DEFAULT_RECURRING_FORM: RecurringFormState = {
-  title: '',
-  direction: 'outflow',
-  amount: 0,
-  frequency: 'monthly',
-  payment_method: 'unspecified',
-  interval_count: 1,
-  next_due_date: '',
-  entity_id: '',
-  account_id: '',
-  is_budget_planner: 1,
-  notes: '',
-};
-const DEFAULT_ENTITY_FORM: EntityFormState = {
-  display_name: '',
-  entity_kind: 'business',
-  contact_type: 'payee',
-  is_vendor: 0,
-  default_amount: 0,
-  email: '',
-  phone_number: '',
-  street_address: '',
-  city: '',
-  state: '',
-  zip: '',
-  notes: '',
-  is_active: 1,
-};
-const DEFAULT_ENTITY_ALIAS_DRAFT: Accumul8EntityAliasDraft = {
-  alias_name: '',
-  merge_entity_id: null,
-  pending_alias_names: [],
-};
-const DATE_RANGE_FILTER_OPTIONS: Array<{ value: Exclude<DateRangeFilter, 'all_dates'>; label: string }> = [
-  { value: '7_days', label: '7 Days' },
-  { value: '30_days', label: '30 Days' },
-  { value: '60_days', label: '60 Days' },
-  { value: '90_days', label: '90 Days' },
-  { value: 'eoy', label: 'EOY' },
-  { value: 'custom', label: 'Custom' },
-];
-const SUMMARY_WINDOW_OPTIONS = ['current', 7, 30, 60, 90] as const;
 type SummaryWindowOption = typeof SUMMARY_WINDOW_OPTIONS[number];
 
 export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, mysteryTitle, onToast }: Accumul8PageProps) {
@@ -513,9 +428,22 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     }
     void loadStatementWorkspace();
   }, [loadStatementWorkspace, statementsLoaded, tab]);
-  const selectedOwnerProfile = React.useMemo(() => (
-    accessibleAccountOwners.find((owner) => owner.owner_user_id === (selectedOwnerUserId || activeOwnerUserId || 0)) || null
-  ), [accessibleAccountOwners, activeOwnerUserId, selectedOwnerUserId]);
+  const {
+    filteredTransactions,
+    getAccountDisplayName,
+    scopedAccounts,
+    selectedOwnerProfile,
+    visibleAccounts,
+  } = useAccumul8ScopeData({
+    accounts,
+    accessibleAccountOwners,
+    activeOwnerUserId,
+    selectedBankAccountId,
+    selectedBankingOrganizationId,
+    selectedOwnerUserId,
+    setSelectedBankAccountId,
+    transactions,
+  });
   const {
     acknowledgeAllMessageBoardMessages,
     acknowledgeMessageBoardMessage,
@@ -542,62 +470,6 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
   React.useEffect(() => {
     void loadMessageBoard();
   }, [loadMessageBoard]);
-  const visibleAccounts = React.useMemo(() => {
-    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
-    if (bankingOrganizationId <= 0) {
-      return accounts;
-    }
-    return accounts.filter((account) => Number(account.banking_organization_id || 0) === bankingOrganizationId);
-  }, [accounts, selectedBankingOrganizationId]);
-  const accountDisplayNameById = React.useMemo(() => {
-    const next: Record<number, string> = {};
-    accounts.forEach((account) => {
-      next[account.id] = getAccumul8AccountDisplayName(account);
-    });
-    return next;
-  }, [accounts]);
-  const getAccountDisplayName = React.useCallback((
-    accountId: number | null | undefined,
-    fallbackName?: string | null,
-    bankingOrganizationName?: string | null,
-    emptyFallback = '-',
-  ): string => {
-    const resolved = accountId ? accountDisplayNameById[accountId] : '';
-    if (resolved) {
-      return resolved;
-    }
-    const fallback = String(fallbackName || '').trim() || String(bankingOrganizationName || '').trim();
-    return fallback || emptyFallback;
-  }, [accountDisplayNameById]);
-  React.useEffect(() => {
-    const bankAccountId = Number(selectedBankAccountId || 0);
-    if (bankAccountId <= 0) {
-      return;
-    }
-    if (!visibleAccounts.some((account) => account.id === bankAccountId)) {
-      setSelectedBankAccountId('');
-    }
-  }, [selectedBankAccountId, visibleAccounts]);
-  const scopedAccounts = React.useMemo(() => {
-    const bankAccountId = Number(selectedBankAccountId || 0);
-    if (bankAccountId > 0) {
-      return visibleAccounts.filter((account) => account.id === bankAccountId);
-    }
-    return visibleAccounts;
-  }, [selectedBankAccountId, visibleAccounts]);
-  const filteredTransactions = React.useMemo(() => {
-    const bankingOrganizationId = Number(selectedBankingOrganizationId || 0);
-    const bankAccountId = Number(selectedBankAccountId || 0);
-    return transactions.filter((tx) => {
-      if (bankingOrganizationId > 0 && Number(tx.banking_organization_id || 0) !== bankingOrganizationId) {
-        return false;
-      }
-      if (bankAccountId > 0 && Number(tx.account_id || 0) !== bankAccountId) {
-        return false;
-      }
-      return true;
-    });
-  }, [selectedBankingOrganizationId, selectedBankAccountId, transactions]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const { currentVisibleBalance, ledgerDisplayBalanceById, ledgerRows, ledgerSearchQuery } = useAccumul8LedgerData({
     customLedgerEndDate,
@@ -692,80 +564,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     inlineRowRefs,
     setFlashingSaveButtonKey,
   });
-  const { openStatementImportFallback, openSyncHelp, runConnectionSync, runTellerConnect } = useAccumul8SyncActions({
-    load,
-    onToast,
-    scopedActionUrl,
-    setLastSyncReport,
-    setSyncHelpError,
-    setSyncHelpOpen,
-    setSyncHelpToken,
-    setSyncingConnectionId,
-    setTab,
-    syncBankConnection,
-    syncProvider,
-  });
+  const closeEntityEndexGuideModal = React.useCallback(() => {
+    setEditingEntityEndexGuideId(null);
+    setEntityEndexGuideModalOpen(false);
+  }, []);
   const {
-    resetBudgetForm,
-    resetContactForm,
-    resetDebtorForm,
-    resetEntityForm,
-    resetLedgerForm,
-    resetNotificationForm,
-    resetRecurringEditor,
-  } = useAccumul8ModalResetActions({
-    DEFAULT_CONTACT_FORM,
-    DEFAULT_ENTITY_FORM,
-    DEFAULT_RECURRING_FORM,
-    selectedBankAccountId,
-    setBudgetForm,
-    setContactForm,
-    setDebtorForm,
-    setEditingBudgetRowId,
-    setEditingContactId,
-    setEditingDebtorId,
-    setEditingEntityId,
-    setEditingNotificationRuleId,
-    setEditingRecurringForm,
-    setEditingRecurringId,
-    setEditingTransactionId,
-    setEntityForm,
-    setLedgerForm,
-    setNotificationForm,
-    setRecurringModalOpen,
-    setTransactionModalMode,
-    setTransactionModalVariant,
-    setViewingTransactionId,
-  });
-  const {
-    closeContactModal,
-    closeDebtorModal,
-    closeEntityModal,
-    closeLedgerEntityModal,
-    closeRecurringModal,
-    closeTransactionModal,
-    collectEntityAliasNames,
-    persistEntityAliases,
-  } = useAccumul8ModalHelperActions({
-    createEntityAlias,
-    defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
-    editingEntityId,
-    entities,
-    entityAliasDraftById,
-    resetContactForm,
-    resetDebtorForm,
-    resetEntityForm,
-    resetLedgerForm,
-    resetRecurringEditor,
-    setContactModalOpen,
-    setDebtorModalOpen,
-    setEntityAliasDraftById,
-    setEntityModalOpen,
-    setLedgerEntityModalTransactionId,
-    setTransactionModalOpen,
-    setTransactionModalVariant,
-  });
-  const {
+    activateDebtorRow,
+    activateEntityRow,
+    activateLedgerRow,
+    activatePayBillRow,
     beginEditBudgetRow,
     beginEditContact,
     beginEditEntity,
@@ -773,6 +580,15 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     beginEditRecurring,
     beginEditTransaction,
     beginViewTransaction,
+    closeContactModal,
+    closeDebtorModal,
+    closeEntityModal,
+    closeLedgerEntityModal,
+    closeRecurringModal,
+    closeTransactionModal,
+    collectEntityAliasNames,
+    handleDeleteRecurring,
+    handleDeleteTransaction,
     openCreateContactModal,
     openCreateDebtorModal,
     openCreateEntityModal,
@@ -780,68 +596,179 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     openCreateRecurringModal,
     openCreateTransactionModal,
     openLedgerEntityModal,
+    openStatementImportFallback,
+    openSyncHelp,
+    openEntityEndexGuideModal,
+    persistEntityAliases,
+    removeEntityAlias,
+    removeEntityEndexGuide,
+    resetBudgetForm,
+    resetContactForm,
+    resetDebtorForm,
+    resetEntityForm,
+    resetLedgerForm,
+    resetNotificationForm,
+    resetRecurringEditor,
+    runConnectionSync,
+    runEntityEndexGuideFinder,
+    runEntityMaintenanceAliasScan,
+    runTellerConnect,
+    saveDebtorRow,
+    saveEntityAlias,
+    saveEntityEndexGuide,
+    saveEntityRow,
+    saveLedgerRow,
+    savePayBillRow,
+    saveRecurringRow,
+    setDebtorRowDraft,
+    setEntityRowDraft,
+    setLedgerRowDraft,
+    setPayBillRowDraft,
+    setRecurringRowDraft,
     submitContactForm,
     submitDebtorModal,
     submitEntityForm,
     submitRecurringModal,
     submitTransactionModal,
-  } = useAccumul8ModalEditorActions({
-    closeContactModal,
-    closeDebtorModal,
-    closeEntityModal,
-    closeRecurringModal,
-    closeTransactionModal,
-    collectEntityAliasNames,
-    contacts,
-    createContact,
-    createDebtor,
-    createEntity,
-    createRecurring,
-    createTransaction,
-    DEFAULT_CONTACT_FORM,
-    DEFAULT_ENTITY_ALIAS_DRAFT,
-    DEFAULT_ENTITY_FORM,
-    DEFAULT_RECURRING_FORM,
-    editingContactId,
-    editingDebtorId,
-    editingEntityId,
-    editingRecurringId,
-    editingTransactionId,
-    entities,
-    notificationRules,
-    persistEntityAliases,
-    recurringPayments,
-    selectedBankAccountId,
-    setBudgetForm,
-    setContactForm,
-    setContactModalOpen,
-    setDebtorForm,
-    setDebtorModalOpen,
-    setEditingBudgetRowId,
-    setEditingContactId,
-    setEditingDebtorId,
-    setEditingEntityId,
-    setEditingNotificationRuleId,
-    setEditingRecurringForm,
-    setEditingRecurringId,
-    setEditingTransactionId,
-    setEntityAliasDraftById,
-    setEntityForm,
-    setEntityModalOpen,
-    setLedgerEntityModalTransactionId,
-    setLedgerForm,
-    setNotificationForm,
-    setRecurringModalOpen,
-    setTransactionModalMode,
-    setTransactionModalOpen,
-    setTransactionModalVariant,
-    setViewingTransactionId,
-    transactions,
-    updateContact,
-    updateDebtor,
-    updateEntity,
-    updateRecurring,
-    updateTransaction,
+  } = useAccumul8PageActionGroups({
+    sync: {
+      load,
+      onToast,
+      scopedActionUrl,
+      setLastSyncReport,
+      setSyncHelpError,
+      setSyncHelpOpen,
+      setSyncHelpToken,
+      setSyncingConnectionId,
+      setTab,
+      syncBankConnection,
+      syncProvider,
+    },
+    reset: {
+      DEFAULT_CONTACT_FORM,
+      DEFAULT_ENTITY_FORM,
+      DEFAULT_RECURRING_FORM,
+      selectedBankAccountId,
+      setBudgetForm,
+      setContactForm,
+      setDebtorForm,
+      setEditingBudgetRowId,
+      setEditingContactId,
+      setEditingDebtorId,
+      setEditingEntityId,
+      setEditingNotificationRuleId,
+      setEditingRecurringForm,
+      setEditingRecurringId,
+      setEditingTransactionId,
+      setEntityForm,
+      setLedgerForm,
+      setNotificationForm,
+      setRecurringModalOpen,
+      setTransactionModalMode,
+      setTransactionModalVariant,
+      setViewingTransactionId,
+    },
+    helperBase: {
+      createEntityAlias,
+      defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
+      editingEntityId,
+      entities,
+      entityAliasDraftById,
+      setContactModalOpen,
+      setDebtorModalOpen,
+      setEntityAliasDraftById,
+      setEntityModalOpen,
+      setLedgerEntityModalTransactionId,
+      setTransactionModalOpen,
+      setTransactionModalVariant,
+    },
+    editorBase: {
+      contacts,
+      createContact,
+      createDebtor,
+      createEntity,
+      createRecurring,
+      createTransaction,
+      DEFAULT_CONTACT_FORM,
+      DEFAULT_ENTITY_ALIAS_DRAFT,
+      DEFAULT_ENTITY_FORM,
+      DEFAULT_RECURRING_FORM,
+      editingContactId,
+      editingDebtorId,
+      editingEntityId,
+      editingRecurringId,
+      editingTransactionId,
+      entities,
+      notificationRules,
+      recurringPayments,
+      selectedBankAccountId,
+      setBudgetForm,
+      setContactForm,
+      setContactModalOpen,
+      setDebtorForm,
+      setDebtorModalOpen,
+      setEditingBudgetRowId,
+      setEditingContactId,
+      setEditingDebtorId,
+      setEditingEntityId,
+      setEditingNotificationRuleId,
+      setEditingRecurringForm,
+      setEditingRecurringId,
+      setEditingTransactionId,
+      setEntityAliasDraftById,
+      setEntityForm,
+      setEntityModalOpen,
+      setLedgerEntityModalTransactionId,
+      setLedgerForm,
+      setNotificationForm,
+      setRecurringModalOpen,
+      setTransactionModalMode,
+      setTransactionModalOpen,
+      setTransactionModalVariant,
+      setViewingTransactionId,
+      transactions,
+      updateContact,
+      updateDebtor,
+      updateEntity,
+      updateRecurring,
+      updateTransaction,
+    },
+    inlineRowsBase: {
+      debtorDraftById,
+      deleteEntityAlias,
+      deleteRecurring,
+      deleteTransaction,
+      entityDraftById,
+      ledgerDraftById,
+      payBillDraftById,
+      recurringDraftById,
+      setActiveDebtorRowId,
+      setActiveEntityRowId,
+      setActiveLedgerRowId,
+      setActivePayBillRowId,
+      setActiveRecurringRowId,
+      setDebtorDraftById,
+      setEntityDraftById,
+      setLedgerDraftById,
+      setPayBillDraftById,
+      setRecurringDraftById,
+      updateDebtor,
+      updateEntity,
+      updateRecurring,
+      updateTransaction,
+    },
+    entityEndex: {
+      closeEntityEndexGuideModal,
+      createEntityEndexGuide,
+      deleteEntityEndexGuide,
+      editingEntityEndexGuideId,
+      findAllEntityAliases,
+      findEntityAliases,
+      setEditingEntityEndexGuideId,
+      setEntityEndexFindingAll,
+      setEntityEndexGuideModalOpen,
+      updateEntityEndexGuide,
+    },
   });
   const { saveLedgerEntityRule } = useAccumul8LedgerEntityRuleActions({
     accumul8ActionUrl,
@@ -909,188 +836,455 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
     entityTransactionSummaryById,
     selectedDebtorEntries,
   });
-  const closeEntityEndexGuideModal = React.useCallback(() => {
-    setEditingEntityEndexGuideId(null);
-    setEntityEndexGuideModalOpen(false);
-  }, []);
-  const {
-    activateDebtorRow,
-    activateEntityRow,
-    activateLedgerRow,
-    activatePayBillRow,
-    activateRecurringRow,
-    handleDeleteRecurring,
-    handleDeleteTransaction,
-    removeEntityAlias,
-    saveDebtorRow,
-    saveEntityAlias,
-    saveEntityRow,
-    saveLedgerRow,
-    savePayBillRow,
-    saveRecurringRow,
-    setDebtorRowDraft,
-    setEntityRowDraft,
-    setLedgerRowDraft,
-    setPayBillRowDraft,
-    setRecurringRowDraft,
-  } = useAccumul8InlineRowActions({
-    debtorDraftById,
-    deleteEntityAlias,
-    deleteRecurring,
-    deleteTransaction,
-    entityDraftById,
-    ledgerDraftById,
-    payBillDraftById,
-    persistEntityAliases,
-    recurringDraftById,
-    setActiveDebtorRowId,
-    setActiveEntityRowId,
-    setActiveLedgerRowId,
-    setActivePayBillRowId,
-    setActiveRecurringRowId,
-    setDebtorDraftById,
-    setEntityDraftById,
-    setLedgerDraftById,
-    setPayBillDraftById,
-    setRecurringDraftById,
-    updateDebtor,
-    updateEntity,
-    updateRecurring,
-    updateTransaction,
+  const activeInlineRows = React.useMemo(() => ([
+    activeLedgerRowId !== null ? {
+      key: `ledger-${activeLedgerRowId}`,
+      hasDraft: Boolean(ledgerDraftById[activeLedgerRowId]),
+      clear: () => setActiveLedgerRowId((current) => (current === activeLedgerRowId ? null : current)),
+    } : null,
+    activePayBillRowId !== null ? {
+      key: `paybill-${activePayBillRowId}`,
+      hasDraft: Boolean(payBillDraftById[activePayBillRowId]),
+      clear: () => setActivePayBillRowId((current) => (current === activePayBillRowId ? null : current)),
+    } : null,
+    activeDebtorRowId !== null ? {
+      key: `debtor-${activeDebtorRowId}`,
+      hasDraft: Boolean(debtorDraftById[activeDebtorRowId]),
+      clear: () => setActiveDebtorRowId((current) => (current === activeDebtorRowId ? null : current)),
+    } : null,
+    activeEntityRowId !== null ? {
+      key: `entity-${activeEntityRowId}`,
+      hasDraft: Boolean(entityDraftById[activeEntityRowId]),
+      clear: () => setActiveEntityRowId((current) => (current === activeEntityRowId ? null : current)),
+    } : null,
+    activeRecurringRowId !== null ? {
+      key: `recurring-${activeRecurringRowId}`,
+      hasDraft: Boolean(recurringDraftById[activeRecurringRowId]),
+      clear: () => setActiveRecurringRowId((current) => (current === activeRecurringRowId ? null : current)),
+    } : null,
+  ].filter(Boolean) as Array<{ key: string; hasDraft: boolean; clear: () => void }>), [activeDebtorRowId, activeEntityRowId, activeLedgerRowId, activePayBillRowId, activeRecurringRowId, debtorDraftById, entityDraftById, ledgerDraftById, payBillDraftById, recurringDraftById]);
+  useAccumul8PageEffects({
+    activeRows: activeInlineRows,
+    flashSaveButton,
+    flashSaveButtonTimeoutRef,
+    inlineRowRefs,
+    setSettingsMenuOpen,
+    setSettingsMenuPosition,
+    settingsButtonRef,
+    settingsMenuOpen,
+    settingsMenuRef,
   });
-  const {
-    openEntityEndexGuideModal,
-    removeEntityEndexGuide,
-    runEntityEndexGuideFinder,
-    runEntityMaintenanceAliasScan,
-    saveEntityEndexGuide,
-  } = useAccumul8EntityEndexActions({
-    closeEntityEndexGuideModal,
-    createEntityEndexGuide,
-    deleteEntityEndexGuide,
-    editingEntityEndexGuideId,
-    findAllEntityAliases,
-    findEntityAliases,
-    setEditingEntityEndexGuideId,
-    setEntityEndexFindingAll,
-    setEntityEndexGuideModalOpen,
-    updateEntityEndexGuide,
+  const tabContentProps = useAccumul8TabContentProps({
+    aiPanelProps: {
+      ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+      ownerUsername: selectedOwnerProfile?.username || viewer?.username || 'You',
+      runningHousekeeping: runningAIcountantHousekeeping,
+      balancingBooks,
+      runningWatchlist: runningAIcountantWatchlist,
+      messageBoardPendingCount: messageBoardUnacknowledgedCount,
+      onRunHousekeeping: handleRunAIcountantHousekeeping,
+      onBalanceBooks: handleBalanceBooks,
+      onRunWatchlist: handleRunAIcountantWatchlist,
+      onOpenMessageBoard: () => setMessageBoardOpen(true),
+      onDataChanged: load,
+      onToast,
+    },
+    calendarViewProps: {
+      accounts: scopedAccounts,
+      transactions: filteredTransactions,
+      onTransactionSelect: beginViewTransaction,
+    },
+    contactsTabProps: {
+      activeEntityRowId,
+      activateEntityRow,
+      busy,
+      defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
+      entities,
+      entitiesTable,
+      entitiesTableRef,
+      entityAliasDraftById,
+      entityDraftById,
+      entityTransactionSummaryById,
+      flashingSaveButtonKey,
+      listSearchQuery: listSearchQueryByTab.contacts,
+      openCreateEntityModal,
+      removeEntityAlias,
+      saveEntityAlias,
+      saveEntityRow,
+      setEntityAliasDraftById,
+      setEntityHistoryEntityId,
+      setEntityRowDraft,
+      setInlineRowRef,
+      setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: value })),
+    },
+    debtorsTabProps: {
+      activateDebtorRow,
+      activeDebtorRowId,
+      activeLedgerRowId,
+      activeOwnerUserId,
+      balanceLedgerTable,
+      balanceLedgerTableRef,
+      beginEditTransaction,
+      beginViewTransaction,
+      busy,
+      debtorDraftById,
+      debtorRunningBalanceByTxId,
+      debtorsTable,
+      debtorsTableRef,
+      deleteDebtor,
+      flashingSaveButtonKey,
+      groupedDebtors,
+      handleDeleteTransaction,
+      ledgerDraftById,
+      listSearchQuery: listSearchQueryByTab.debtors,
+      openCreateDebtorModal,
+      openCreateIouTransactionModal,
+      openLedgerEntityModal,
+      saveDebtorRow,
+      saveLedgerRow,
+      selectedDebtorId,
+      selectedOwnerUserId,
+      setDebtorRowDraft,
+      setInlineRowRef,
+      setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: value })),
+      setSelectedDebtorId,
+      statementUploads,
+    },
+    entityEndexTabProps: {
+      beginEditEntity,
+      busy,
+      entityEndexFindingAll,
+      entityEndexGuideByParentKey,
+      entityEndexGuides,
+      entityEndexParents,
+      entityEndexQuery,
+      entityEndexScanLogs,
+      entityTransactionSummaryById,
+      linkedAliasEntitiesByParentId,
+      openEntityEndexGuideModal,
+      runEntityMaintenanceAliasScan,
+      setEntityEndexLogOpen,
+      setEntityEndexQuery,
+    },
+    ledgerTabProps: {
+      activeLedgerRowId,
+      activateLedgerRow,
+      beginEditTransaction,
+      beginViewTransaction,
+      busy,
+      customLedgerEndDate,
+      customLedgerStartDate,
+      filterPresetOptions: LEDGER_FILTER_PRESET_OPTIONS,
+      flashingSaveButtonKey,
+      getAccountDisplayName,
+      handleDeleteTransaction,
+      ledgerDateFilter,
+      ledgerDisplayBalanceById,
+      ledgerDraftById,
+      ledgerFilterPreset,
+      ledgerPagination,
+      ledgerPaginationMode,
+      ledgerTable,
+      ledgerTableRef,
+      listSearchQuery: listSearchQueryByTab.ledger,
+      openCreateTransactionModal,
+      openLedgerEntityModal,
+      renderDateRangeControls,
+      saveLedgerRow,
+      setCustomLedgerEndDate,
+      setCustomLedgerStartDate,
+      setInlineRowRef,
+      setLedgerArchivePage,
+      setLedgerDateFilter: (value) => setLedgerDateFilter(value as DateRangeFilter),
+      setLedgerFilterPreset: (value) => setLedgerFilterPreset(value as LedgerFilterPreset),
+      setLedgerPaginationMode,
+      setLedgerRowDraft,
+      setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: value })),
+    },
+    notificationsTabProps: {
+      beginEditNotificationRule,
+      busy,
+      createNotificationRule,
+      deleteNotificationRule,
+      editingNotificationRuleId,
+      notificationForm,
+      notificationRules,
+      parseCustomUserIds,
+      resetNotificationForm,
+      sendNotification,
+      setNotificationForm,
+      toggleNotificationRule,
+      updateNotificationRule,
+    },
+    payBillsTabProps: {
+      activatePayBillRow,
+      activeOwnerUserId,
+      activePayBillRowId,
+      beginViewTransaction,
+      busy,
+      customPayBillsEndDate,
+      customPayBillsStartDate,
+      deleteTransaction,
+      flashingSaveButtonKey,
+      getAccountDisplayName,
+      listSearchQuery: listSearchQueryByTab.pay_bills,
+      openLedgerEntityModal,
+      payBillsAccountOptions,
+      payBillsDateFilter,
+      payBillsTable,
+      payBillsTableRef,
+      payBillDraftById,
+      renderDateRangeControls,
+      savePayBillRow,
+      selectedOwnerUserId,
+      setCustomPayBillsEndDate,
+      setCustomPayBillsStartDate,
+      setInlineRowRef,
+      setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: value })),
+      setPayBillRowDraft,
+      setPayBillsDateFilter: (value) => setPayBillsDateFilter(value as DateRangeFilter),
+      statementUploads,
+      todayDate,
+    },
+    recurringTabProps: {
+      activeRecurringRowId,
+      beginEditRecurring,
+      busy,
+      deleteRecurring,
+      flashingSaveButtonKey,
+      getAccountDisplayName,
+      listSearchQuery: listSearchQueryByTab.recurring,
+      openCreateRecurringModal,
+      payBillsAccountOptions,
+      recurringDraftById,
+      recurringTable,
+      recurringTableRef,
+      saveRecurringRow,
+      setInlineRowRef,
+      setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: value })),
+      setRecurringRowDraft,
+    },
+    spreadsheetViewProps: {
+      busy,
+      selectedMonth: budgetMonth,
+      recurringPayments: budgetPlannerRecurringPayments,
+      transactions: filteredTransactions,
+      entities: contactEntities,
+      accounts: scopedAccounts,
+      onSelectedMonthChange: setBudgetMonth,
+      onEnsureBudgetMonth: async (monthValue) => { await ensureBudgetMonth({ month_value: monthValue }); },
+      onUpdateTransaction: updateTransaction,
+      onDeleteRecurring: handleDeleteRecurring,
+      onOpenRecurring: beginEditRecurring,
+    },
+    statementsPanelProps: {
+      busy,
+      accounts,
+      bankingOrganizations,
+      statementUploads,
+      archivedStatementUploads,
+      statementAuditRuns,
+      transactions,
+      ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+      onUpload: uploadStatement,
+      onRescan: rescanStatementUpload,
+      onUpdateMetadata: updateStatementUploadMetadata,
+      onArchiveStatement: archiveStatementUpload,
+      onRestoreStatement: restoreStatementUpload,
+      onDeleteArchivedStatement: deleteArchivedStatementUpload,
+      onConfirmImport: confirmStatementImport,
+      onReconcile: reconcileStatementUpload,
+      onImportReviewRow: importStatementReviewRow,
+      onLinkReviewRow: linkStatementReviewRow,
+      onSearch: searchStatementUploads,
+      onAuditStatements: auditStatementUploads,
+      onAuditImportedCleanup: auditImportedTransactionCleanup,
+      onPurgeImportedCleanup: purgeImportedTransactionCleanup,
+      onPurgeAllImportedTransactions: purgeAllImportedStatementTransactions,
+      onPurgeAllStatementUploads: purgeAllStatementUploads,
+      onOpenTransaction: beginViewTransaction,
+      onDeleteTransaction: handleDeleteTransaction,
+    },
+    syncTabProps: {
+      bankConnections,
+      busy,
+      createBankConnection,
+      deleteBankConnection,
+      formatAccountBackfillNote,
+      formatAccountMappingLabel,
+      formatSyncStatusLabel,
+      formatSyncStatusMessage,
+      isTellerRateLimited,
+      lastSyncReport,
+      linkedAccountsByConnectionId,
+      openSyncHelp,
+      runConnectionSync,
+      runTellerConnect,
+      summaryFormatAccountBackfillNote: formatSyncSummaryBackfillNote,
+      summaryFormatAccountLabel: formatSyncSummaryAccountLabel,
+      syncProvider,
+      syncingConnectionId,
+      updateBankConnection,
+    },
+    tab,
   });
-  React.useEffect(() => {
-    return () => {
-      if (flashSaveButtonTimeoutRef.current !== null && typeof window !== 'undefined') {
-        window.clearTimeout(flashSaveButtonTimeoutRef.current);
-      }
-    };
-  }, []);
-  React.useLayoutEffect(() => {
-    if (!settingsMenuOpen || typeof window === 'undefined' || !settingsButtonRef.current) {
-      return undefined;
-    }
-
-    const updateMenuPosition = () => {
-      const buttonRect = settingsButtonRef.current?.getBoundingClientRect();
-      if (!buttonRect) {
-        return;
-      }
-      const menuWidth = Math.min(320, Math.max(220, Math.round(buttonRect.width + 48)));
-      const viewportPadding = 12;
-      const nextLeft = Math.min(
-        Math.max(viewportPadding, buttonRect.left),
-        Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding),
-      );
-
-      setSettingsMenuPosition({
-        top: Math.round(buttonRect.bottom + 8),
-        left: Math.round(nextLeft),
-        width: menuWidth,
-      });
-    };
-
-    updateMenuPosition();
-    window.addEventListener('resize', updateMenuPosition);
-    window.addEventListener('scroll', updateMenuPosition, true);
-    return () => {
-      window.removeEventListener('resize', updateMenuPosition);
-      window.removeEventListener('scroll', updateMenuPosition, true);
-    };
-  }, [settingsMenuOpen]);
-  React.useEffect(() => {
-    if (!settingsMenuOpen || typeof document === 'undefined') {
-      return undefined;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!settingsMenuRef.current?.contains(event.target as Node)) {
-        setSettingsMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSettingsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [settingsMenuOpen]);
-  React.useEffect(() => {
-    const activeRows = [
-      activeLedgerRowId !== null ? {
-        key: `ledger-${activeLedgerRowId}`,
-        hasDraft: Boolean(ledgerDraftById[activeLedgerRowId]),
-        clear: () => setActiveLedgerRowId((current) => (current === activeLedgerRowId ? null : current)),
-      } : null,
-      activePayBillRowId !== null ? {
-        key: `paybill-${activePayBillRowId}`,
-        hasDraft: Boolean(payBillDraftById[activePayBillRowId]),
-        clear: () => setActivePayBillRowId((current) => (current === activePayBillRowId ? null : current)),
-      } : null,
-      activeDebtorRowId !== null ? {
-        key: `debtor-${activeDebtorRowId}`,
-        hasDraft: Boolean(debtorDraftById[activeDebtorRowId]),
-        clear: () => setActiveDebtorRowId((current) => (current === activeDebtorRowId ? null : current)),
-      } : null,
-      activeEntityRowId !== null ? {
-        key: `entity-${activeEntityRowId}`,
-        hasDraft: Boolean(entityDraftById[activeEntityRowId]),
-        clear: () => setActiveEntityRowId((current) => (current === activeEntityRowId ? null : current)),
-      } : null,
-      activeRecurringRowId !== null ? {
-        key: `recurring-${activeRecurringRowId}`,
-        hasDraft: Boolean(recurringDraftById[activeRecurringRowId]),
-        clear: () => setActiveRecurringRowId((current) => (current === activeRecurringRowId ? null : current)),
-      } : null,
-    ].filter(Boolean) as Array<{ key: string; hasDraft: boolean; clear: () => void }>;
-    if (activeRows.length === 0 || typeof document === 'undefined') {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      for (const row of activeRows) {
-        const node = inlineRowRefs.current[row.key];
-        if (!node || node.contains(target)) {
-          continue;
-        }
-        if (row.hasDraft) {
-          flashSaveButton(row.key);
-        }
-        row.clear();
-      }
-    };
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown, true);
-    };
-  }, [activeDebtorRowId, activeEntityRowId, activeLedgerRowId, activePayBillRowId, activeRecurringRowId, debtorDraftById, entityDraftById, flashSaveButton, ledgerDraftById, payBillDraftById, recurringDraftById]);
+  const { modalProps, overlayProps } = useAccumul8ModalOverlayProps({
+    overlayProps: {
+      acknowledgeAllMessageBoardMessages,
+      acknowledgeMessageBoardMessage,
+      beginEditEntity,
+      beginViewTransaction,
+      entityEndexLogOpen,
+      entityEndexScanLogs,
+      formatAccountDisplayName: getAccountDisplayName,
+      loadMessageBoard,
+      messageBoardLoading,
+      messageBoardMessages,
+      messageBoardOpen,
+      messageBoardUnacknowledgedCount,
+      onCloseEntityEndexLog: () => setEntityEndexLogOpen(false),
+      onCloseEntityHistory: () => setEntityHistoryEntityId(null),
+      onCloseMessageBoard: () => setMessageBoardOpen(false),
+      onCloseSyncHelp: () => setSyncHelpOpen(false),
+      onOpenStatementImportFallback: openStatementImportFallback,
+      onOpenTransactionFromMessageBoard: beginViewTransaction,
+      selectedEntityHistory,
+      selectedEntityTransactions,
+      setTabToLedger: () => setTab('ledger'),
+      syncHelpError,
+      syncHelpOpen,
+      syncHelpToken,
+    },
+    modalProps: {
+      entityModalProps: {
+        open: entityModalOpen,
+        busy,
+        initialForm: entityForm,
+        entity: editingEntity,
+        entities,
+        aliasDraft: editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT,
+        entitySummary: editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null,
+        editing: editingEntityId !== null,
+        onClose: closeEntityModal,
+        onAliasDraftChange: (draft) => {
+          if (!editingEntity) return;
+          setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
+        },
+        onAddAlias: async () => {
+          if (!editingEntity) return;
+          await saveEntityAlias(editingEntity);
+        },
+        onDeleteAlias: removeEntityAlias,
+        onSave: submitEntityForm,
+      },
+      ledgerEntityModalProps: {
+        open: ledgerEntityModalTransactionId !== null,
+        busy: busy || ledgerEntityModalSaving,
+        transaction: ledgerEntityModalTransactionId !== null
+          ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
+          : null,
+        entities: entitiesSorted,
+        onClose: closeLedgerEntityModal,
+        onSave: saveLedgerEntityRule,
+      },
+      entityEndexModalProps: {
+        open: entityEndexGuideModalOpen,
+        busy,
+        guide: selectedEntityEndexGuide,
+        parentEntity: selectedEntityEndexParentEntity,
+        entities: entitiesWithResolvedAliases,
+        aliasDraft: selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
+          ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
+          : DEFAULT_ENTITY_ALIAS_DRAFT,
+        onClose: closeEntityEndexGuideModal,
+        onSave: saveEntityEndexGuide,
+        onDelete: removeEntityEndexGuide,
+        onFindRelated: runEntityEndexGuideFinder,
+        onAliasDraftChange: (draft) => {
+          if (!selectedEntityEndexParentEntity) return;
+          setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
+        },
+        onAddAlias: async () => {
+          if (!selectedEntityEndexParentEntity) return;
+          await saveEntityAlias(selectedEntityEndexParentEntity);
+        },
+        onRemoveAlias: removeEntityAlias,
+      },
+      contactModalProps: {
+        open: contactModalOpen,
+        busy,
+        initialForm: contactForm,
+        editing: editingContactId !== null,
+        onClose: closeContactModal,
+        onSave: submitContactForm,
+      },
+      debtorModalProps: {
+        open: debtorModalOpen,
+        busy,
+        initialForm: debtorForm,
+        editing: editingDebtorId !== null,
+        onClose: closeDebtorModal,
+        onSave: submitDebtorModal,
+      },
+      recurringModalProps: {
+        open: recurringModalOpen,
+        busy,
+        initialForm: editingRecurringForm,
+        entities: contactEntities,
+        accounts: visibleAccounts,
+        onClose: closeRecurringModal,
+        onSave: submitRecurringModal,
+      },
+      transactionModalProps: {
+        open: transactionModalOpen,
+        busy,
+        initialForm: ledgerForm,
+        mode: transactionModalMode,
+        variant: transactionModalVariant,
+        transaction: editingTransactionId !== null
+          ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
+          : viewingTransactionId !== null
+            ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
+            : null,
+        entities: entitiesSorted,
+        debtors: groupedDebtors,
+        accounts: transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts,
+        statementUploads,
+        ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
+        onClose: closeTransactionModal,
+        onEdit: transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined,
+        onSave: submitTransactionModal,
+      },
+      bankingOrganizationManagerProps: {
+        open: bankingOrganizationManagerOpen,
+        onClose: () => setBankingOrganizationManagerOpen(false),
+        mode: 'banking_organization',
+        busy,
+        bankingOrganizations,
+        accounts,
+        createBankingOrganization,
+        updateBankingOrganization,
+        deleteBankingOrganization,
+        createAccount,
+        updateAccount,
+        deleteAccount,
+      },
+      accountManagerProps: {
+        open: accountManagerOpen,
+        onClose: () => setAccountManagerOpen(false),
+        mode: 'account',
+        busy,
+        bankingOrganizations,
+        accounts,
+        createBankingOrganization,
+        updateBankingOrganization,
+        deleteBankingOrganization,
+        createAccount,
+        updateAccount,
+        deleteAccount,
+      },
+    },
+  });
   if (!isAuthed) {
     return (
       <PageLayout page="accumul8" title="ACCUMUL8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
@@ -1165,417 +1359,9 @@ export function Accumul8Page({ viewer, onLoginClick, onLogout, onAccountClick, m
             tab={tab}
             visibleAccounts={visibleAccounts}
           />
-          <Accumul8PageTabContent
-            aiPanelProps={{
-              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
-              ownerUsername: selectedOwnerProfile?.username || viewer?.username || 'You',
-              runningHousekeeping: runningAIcountantHousekeeping,
-              balancingBooks,
-              runningWatchlist: runningAIcountantWatchlist,
-              messageBoardPendingCount: messageBoardUnacknowledgedCount,
-              onRunHousekeeping: handleRunAIcountantHousekeeping,
-              onBalanceBooks: handleBalanceBooks,
-              onRunWatchlist: handleRunAIcountantWatchlist,
-              onOpenMessageBoard: () => setMessageBoardOpen(true),
-              onDataChanged: load,
-              onToast,
-            }}
-            calendarViewProps={{
-              accounts: scopedAccounts,
-              transactions: filteredTransactions,
-              onTransactionSelect: beginViewTransaction,
-            }}
-            contactsTabProps={{
-              activeEntityRowId,
-              activateEntityRow,
-              busy,
-              defaultEntityAliasDraft: DEFAULT_ENTITY_ALIAS_DRAFT,
-              entities,
-              entitiesTable,
-              entitiesTableRef,
-              entityAliasDraftById,
-              entityDraftById,
-              entityTransactionSummaryById,
-              flashingSaveButtonKey,
-              listSearchQuery: listSearchQueryByTab.contacts,
-              openCreateEntityModal,
-              removeEntityAlias,
-              saveEntityAlias,
-              saveEntityRow,
-              setEntityAliasDraftById,
-              setEntityHistoryEntityId,
-              setEntityRowDraft,
-              setInlineRowRef,
-              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, contacts: value })),
-            }}
-            debtorsTabProps={{
-              activateDebtorRow,
-              activeDebtorRowId,
-              activeLedgerRowId,
-              activeOwnerUserId,
-              balanceLedgerTable,
-              balanceLedgerTableRef,
-              beginEditTransaction,
-              beginViewTransaction,
-              busy,
-              debtorDraftById,
-              debtorRunningBalanceByTxId,
-              debtorsTable,
-              debtorsTableRef,
-              deleteDebtor,
-              flashingSaveButtonKey,
-              groupedDebtors,
-              handleDeleteTransaction,
-              ledgerDraftById,
-              listSearchQuery: listSearchQueryByTab.debtors,
-              openCreateDebtorModal,
-              openCreateIouTransactionModal,
-              openLedgerEntityModal,
-              saveDebtorRow,
-              saveLedgerRow,
-              selectedDebtorId,
-              selectedOwnerUserId,
-              setDebtorRowDraft,
-              setInlineRowRef,
-              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, debtors: value })),
-              setSelectedDebtorId,
-              statementUploads,
-            }}
-            entityEndexTabProps={{
-              beginEditEntity,
-              busy,
-              entityEndexFindingAll,
-              entityEndexGuideByParentKey,
-              entityEndexGuides,
-              entityEndexParents,
-              entityEndexQuery,
-              entityEndexScanLogs,
-              entityTransactionSummaryById,
-              linkedAliasEntitiesByParentId,
-              openEntityEndexGuideModal,
-              runEntityMaintenanceAliasScan,
-              setEntityEndexLogOpen,
-              setEntityEndexQuery,
-            }}
-            ledgerTabProps={{
-              activeLedgerRowId,
-              activateLedgerRow,
-              beginEditTransaction,
-              beginViewTransaction,
-              busy,
-              customLedgerEndDate,
-              customLedgerStartDate,
-              filterPresetOptions: LEDGER_FILTER_PRESET_OPTIONS,
-              flashingSaveButtonKey,
-              getAccountDisplayName,
-              handleDeleteTransaction,
-              ledgerDateFilter,
-              ledgerDisplayBalanceById,
-              ledgerDraftById,
-              ledgerFilterPreset,
-              ledgerPagination,
-              ledgerPaginationMode,
-              ledgerTable,
-              ledgerTableRef,
-              listSearchQuery: listSearchQueryByTab.ledger,
-              openCreateTransactionModal,
-              openLedgerEntityModal,
-              renderDateRangeControls,
-              saveLedgerRow,
-              setCustomLedgerEndDate,
-              setCustomLedgerStartDate,
-              setInlineRowRef,
-              setLedgerArchivePage,
-              setLedgerDateFilter: (value) => setLedgerDateFilter(value as DateRangeFilter),
-              setLedgerFilterPreset: (value) => setLedgerFilterPreset(value as LedgerFilterPreset),
-              setLedgerPaginationMode,
-              setLedgerRowDraft,
-              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, ledger: value })),
-            }}
-            notificationsTabProps={{
-              beginEditNotificationRule,
-              busy,
-              createNotificationRule,
-              deleteNotificationRule,
-              editingNotificationRuleId,
-              notificationForm,
-              notificationRules,
-              parseCustomUserIds,
-              resetNotificationForm,
-              sendNotification,
-              setNotificationForm,
-              toggleNotificationRule,
-              updateNotificationRule,
-            }}
-            payBillsTabProps={{
-              activatePayBillRow,
-              activeOwnerUserId,
-              activePayBillRowId,
-              beginViewTransaction,
-              busy,
-              customPayBillsEndDate,
-              customPayBillsStartDate,
-              deleteTransaction,
-              flashingSaveButtonKey,
-              getAccountDisplayName,
-              listSearchQuery: listSearchQueryByTab.pay_bills,
-              openLedgerEntityModal,
-              payBillsAccountOptions,
-              payBillsDateFilter,
-              payBillsTable,
-              payBillsTableRef,
-              payBillDraftById,
-              renderDateRangeControls,
-              savePayBillRow,
-              selectedOwnerUserId,
-              setCustomPayBillsEndDate,
-              setCustomPayBillsStartDate,
-              setInlineRowRef,
-              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, pay_bills: value })),
-              setPayBillRowDraft,
-              setPayBillsDateFilter: (value) => setPayBillsDateFilter(value as DateRangeFilter),
-              statementUploads,
-              todayDate,
-            }}
-            recurringTabProps={{
-              activeRecurringRowId,
-              beginEditRecurring,
-              busy,
-              deleteRecurring,
-              flashingSaveButtonKey,
-              getAccountDisplayName,
-              listSearchQuery: listSearchQueryByTab.recurring,
-              openCreateRecurringModal,
-              payBillsAccountOptions,
-              recurringDraftById,
-              recurringTable,
-              recurringTableRef,
-              saveRecurringRow,
-              setInlineRowRef,
-              setListSearchQuery: (value) => setListSearchQueryByTab((prev) => ({ ...prev, recurring: value })),
-              setRecurringRowDraft,
-            }}
-            spreadsheetViewProps={{
-              busy,
-              selectedMonth: budgetMonth,
-              recurringPayments: budgetPlannerRecurringPayments,
-              transactions: filteredTransactions,
-              entities: contactEntities,
-              accounts: scopedAccounts,
-              onSelectedMonthChange: setBudgetMonth,
-              onEnsureBudgetMonth: async (monthValue) => { await ensureBudgetMonth({ month_value: monthValue }); },
-              onUpdateTransaction: updateTransaction,
-              onDeleteRecurring: handleDeleteRecurring,
-              onOpenRecurring: beginEditRecurring,
-            }}
-            statementsPanelProps={{
-              busy,
-              accounts,
-              bankingOrganizations,
-              statementUploads,
-              archivedStatementUploads,
-              statementAuditRuns,
-              transactions,
-              ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
-              onUpload: uploadStatement,
-              onRescan: rescanStatementUpload,
-              onUpdateMetadata: updateStatementUploadMetadata,
-              onArchiveStatement: archiveStatementUpload,
-              onRestoreStatement: restoreStatementUpload,
-              onDeleteArchivedStatement: deleteArchivedStatementUpload,
-              onConfirmImport: confirmStatementImport,
-              onReconcile: reconcileStatementUpload,
-              onImportReviewRow: importStatementReviewRow,
-              onLinkReviewRow: linkStatementReviewRow,
-              onSearch: searchStatementUploads,
-              onAuditStatements: auditStatementUploads,
-              onAuditImportedCleanup: auditImportedTransactionCleanup,
-              onPurgeImportedCleanup: purgeImportedTransactionCleanup,
-              onPurgeAllImportedTransactions: purgeAllImportedStatementTransactions,
-              onPurgeAllStatementUploads: purgeAllStatementUploads,
-              onOpenTransaction: beginViewTransaction,
-              onDeleteTransaction: handleDeleteTransaction,
-            }}
-            syncTabProps={{
-              bankConnections,
-              busy,
-              createBankConnection,
-              deleteBankConnection,
-              formatAccountBackfillNote,
-              formatAccountMappingLabel,
-              formatSyncStatusLabel,
-              formatSyncStatusMessage,
-              isTellerRateLimited,
-              lastSyncReport,
-              linkedAccountsByConnectionId,
-              openSyncHelp,
-              runConnectionSync,
-              runTellerConnect,
-              summaryFormatAccountBackfillNote: formatSyncSummaryBackfillNote,
-              summaryFormatAccountLabel: formatSyncSummaryAccountLabel,
-              syncProvider,
-              syncingConnectionId,
-              updateBankConnection,
-            }}
-            tab={tab}
-          />
-          <Accumul8PageOverlays
-            acknowledgeAllMessageBoardMessages={acknowledgeAllMessageBoardMessages}
-            acknowledgeMessageBoardMessage={acknowledgeMessageBoardMessage}
-            beginEditEntity={beginEditEntity}
-            beginViewTransaction={beginViewTransaction}
-            entityEndexLogOpen={entityEndexLogOpen}
-            entityEndexScanLogs={entityEndexScanLogs}
-            formatAccountDisplayName={getAccountDisplayName}
-            loadMessageBoard={loadMessageBoard}
-            messageBoardLoading={messageBoardLoading}
-            messageBoardMessages={messageBoardMessages}
-            messageBoardOpen={messageBoardOpen}
-            messageBoardUnacknowledgedCount={messageBoardUnacknowledgedCount}
-            onCloseEntityEndexLog={() => setEntityEndexLogOpen(false)}
-            onCloseEntityHistory={() => setEntityHistoryEntityId(null)}
-            onCloseMessageBoard={() => setMessageBoardOpen(false)}
-            onCloseSyncHelp={() => setSyncHelpOpen(false)}
-            onOpenStatementImportFallback={openStatementImportFallback}
-            onOpenTransactionFromMessageBoard={beginViewTransaction}
-            selectedEntityHistory={selectedEntityHistory}
-            selectedEntityTransactions={selectedEntityTransactions}
-            setTabToLedger={() => setTab('ledger')}
-            syncHelpError={syncHelpError}
-            syncHelpOpen={syncHelpOpen}
-            syncHelpToken={syncHelpToken}
-          />
-          <Accumul8PageModalAssembly
-            props={{
-              entityModalProps: {
-                open: entityModalOpen,
-                busy,
-                initialForm: entityForm,
-                entity: editingEntity,
-                entities,
-                aliasDraft: editingEntity && entityAliasDraftById[editingEntity.id] ? entityAliasDraftById[editingEntity.id] : DEFAULT_ENTITY_ALIAS_DRAFT,
-                entitySummary: editingEntity ? (entityTransactionSummaryById[editingEntity.id] || { count: 0, lastAmount: null, lastDate: '' }) : null,
-                editing: editingEntityId !== null,
-                onClose: closeEntityModal,
-                onAliasDraftChange: (draft) => {
-                  if (!editingEntity) return;
-                  setEntityAliasDraftById((prev) => ({ ...prev, [editingEntity.id]: draft }));
-                },
-                onAddAlias: async () => {
-                  if (!editingEntity) return;
-                  await saveEntityAlias(editingEntity);
-                },
-                onDeleteAlias: removeEntityAlias,
-                onSave: submitEntityForm,
-              },
-              ledgerEntityModalProps: {
-                open: ledgerEntityModalTransactionId !== null,
-                busy: busy || ledgerEntityModalSaving,
-                transaction: ledgerEntityModalTransactionId !== null
-                  ? (transactions.find((tx) => tx.id === ledgerEntityModalTransactionId) || null)
-                  : null,
-                entities: entitiesSorted,
-                onClose: closeLedgerEntityModal,
-                onSave: saveLedgerEntityRule,
-              },
-              entityEndexModalProps: {
-                open: entityEndexGuideModalOpen,
-                busy,
-                guide: selectedEntityEndexGuide,
-                parentEntity: selectedEntityEndexParentEntity,
-                entities: entitiesWithResolvedAliases,
-                aliasDraft: selectedEntityEndexParentEntity && entityAliasDraftById[selectedEntityEndexParentEntity.id]
-                  ? entityAliasDraftById[selectedEntityEndexParentEntity.id]
-                  : DEFAULT_ENTITY_ALIAS_DRAFT,
-                onClose: closeEntityEndexGuideModal,
-                onSave: saveEntityEndexGuide,
-                onDelete: removeEntityEndexGuide,
-                onFindRelated: runEntityEndexGuideFinder,
-                onAliasDraftChange: (draft) => {
-                  if (!selectedEntityEndexParentEntity) return;
-                  setEntityAliasDraftById((prev) => ({ ...prev, [selectedEntityEndexParentEntity.id]: draft }));
-                },
-                onAddAlias: async () => {
-                  if (!selectedEntityEndexParentEntity) return;
-                  await saveEntityAlias(selectedEntityEndexParentEntity);
-                },
-                onRemoveAlias: removeEntityAlias,
-              },
-              contactModalProps: {
-                open: contactModalOpen,
-                busy,
-                initialForm: contactForm,
-                editing: editingContactId !== null,
-                onClose: closeContactModal,
-                onSave: submitContactForm,
-              },
-              debtorModalProps: {
-                open: debtorModalOpen,
-                busy,
-                initialForm: debtorForm,
-                editing: editingDebtorId !== null,
-                onClose: closeDebtorModal,
-                onSave: submitDebtorModal,
-              },
-              recurringModalProps: {
-                open: recurringModalOpen,
-                busy,
-                initialForm: editingRecurringForm,
-                entities: contactEntities,
-                accounts: visibleAccounts,
-                onClose: closeRecurringModal,
-                onSave: submitRecurringModal,
-              },
-              transactionModalProps: {
-                open: transactionModalOpen,
-                busy,
-                initialForm: ledgerForm,
-                mode: transactionModalMode,
-                variant: transactionModalVariant,
-                transaction: editingTransactionId !== null
-                  ? (transactions.find((tx) => tx.id === editingTransactionId) || null)
-                  : viewingTransactionId !== null
-                    ? (transactions.find((tx) => tx.id === viewingTransactionId) || null)
-                    : null,
-                entities: entitiesSorted,
-                debtors: groupedDebtors,
-                accounts: transactionModalVariant === 'iou' ? iouVisibleAccounts : visibleAccounts,
-                statementUploads,
-                ownerUserId: selectedOwnerUserId || activeOwnerUserId || 0,
-                onClose: closeTransactionModal,
-                onEdit: transactionModalMode === 'view' && viewingTransactionId !== null ? () => beginEditTransaction(viewingTransactionId) : undefined,
-                onSave: submitTransactionModal,
-              },
-              bankingOrganizationManagerProps: {
-                open: bankingOrganizationManagerOpen,
-                onClose: () => setBankingOrganizationManagerOpen(false),
-                mode: 'banking_organization',
-                busy,
-                bankingOrganizations,
-                accounts,
-                createBankingOrganization,
-                updateBankingOrganization,
-                deleteBankingOrganization,
-                createAccount,
-                updateAccount,
-                deleteAccount,
-              },
-              accountManagerProps: {
-                open: accountManagerOpen,
-                onClose: () => setAccountManagerOpen(false),
-                mode: 'account',
-                busy,
-                bankingOrganizations,
-                accounts,
-                createBankingOrganization,
-                updateBankingOrganization,
-                deleteBankingOrganization,
-                createAccount,
-                updateAccount,
-                deleteAccount,
-              },
-            }}
-          />
+          <Accumul8PageTabContent {...tabContentProps} />
+          <Accumul8PageOverlays {...overlayProps} />
+          <Accumul8PageModalAssembly props={modalProps} />
           {!loaded && <div className="text-muted mt-2">Loading Accumul8...</div>}
         </div>
       </section>

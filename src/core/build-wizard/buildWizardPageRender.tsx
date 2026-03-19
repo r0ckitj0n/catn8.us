@@ -94,8 +94,10 @@ import { BuildWizardWorkspaceMain } from './buildWizardWorkspaceMain';
 import { BuildWizardWorkspaceModals } from './buildWizardWorkspaceModals';
 import { useBuildWizardConfirmationActions } from './useBuildWizardConfirmationActions';
 import { useBuildWizardDeskActions } from './useBuildWizardDeskActions';
+import { useBuildWizardAiConfirmActions } from './useBuildWizardAiConfirmActions';
 import { useBuildWizardDocumentManagerData } from './useBuildWizardDocumentManagerData';
 import { useBuildWizardLauncherActions } from './useBuildWizardLauncherActions';
+import { useBuildWizardRecoveryUiActions } from './useBuildWizardRecoveryUiActions';
 import { useBuildWizardDocumentStepData } from './useBuildWizardDocumentStepData';
 import { useBuildWizardDocumentPreview } from './useBuildWizardDocumentPreview';
 import { useBuildWizardDocumentDraftActions } from './useBuildWizardDocumentDraftActions';
@@ -105,7 +107,30 @@ import { useBuildWizardOverviewData } from './useBuildWizardOverviewData';
 import { useBuildWizardReceiptActions } from './useBuildWizardReceiptActions';
 import { useBuildWizardStepDragActions } from './useBuildWizardStepDragActions';
 import { useBuildWizardStepEditActions } from './useBuildWizardStepEditActions';
+import { useBuildWizardStepUiActions } from './useBuildWizardStepUiActions';
+import { useBuildWizardWorkspaceMainProps } from './useBuildWizardWorkspaceMainProps';
+import { useBuildWizardWorkspaceModalProps } from './useBuildWizardWorkspaceModalProps';
+import { useBuildWizardActiveTabTree } from './useBuildWizardActiveTabTree';
+import { useBuildWizardStepWorkspaceMeta } from './useBuildWizardStepWorkspaceMeta';
+import { useBuildWizardWorkspaceData } from './useBuildWizardWorkspaceData';
 import { useBuildWizardWorkspaceSelectionData } from './useBuildWizardWorkspaceSelectionData';
+import {
+  clampLightboxZoom,
+  allowedTaskTypes,
+  LIGHTBOX_TEXT_PREVIEW_MAX_CHARS,
+  LIGHTBOX_ZOOM_MAX,
+  LIGHTBOX_ZOOM_MIN,
+  LIGHTBOX_ZOOM_STEP,
+  LIGHTBOX_ZOOM_STEP_FAST,
+  TASK_META_FIELD_LABELS,
+  TASK_TYPE_OPTIONS,
+} from './buildWizardPageRenderConstants';
+import {
+  formatAuditValue as formatAuditValueBase,
+  formatCurrencyForInput,
+  parseCurrencyText,
+} from './buildWizardCurrencyAuditUtils';
+import { useBuildWizardPhaseRangeAutoSync } from './useBuildWizardPhaseRangeAutoSync';
 import '../../components/pages/BuildWizardPage.css';
 
 interface BuildWizardPageProps extends AppShellPageProps {
@@ -113,44 +138,6 @@ interface BuildWizardPageProps extends AppShellPageProps {
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
 
-const LIGHTBOX_ZOOM_MIN = 0.5;
-const LIGHTBOX_ZOOM_MAX = 3;
-const LIGHTBOX_ZOOM_STEP = 0.1;
-const LIGHTBOX_ZOOM_STEP_FAST = 0.2;
-const clampLightboxZoom = (value: number): number => {
-  return Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, Number(value.toFixed(2))));
-};
-
-const LIGHTBOX_TEXT_PREVIEW_MAX_CHARS = 120000;
-const TASK_META_FIELD_LABELS: Record<keyof BuildWizardTaskMeta, string> = {
-  task_type: 'Task Type',
-  manual_date_override: 'Manual Date Override',
-  permit_document_id: 'Permit Document',
-  permit_name: 'Permit Name',
-  permit_authority: 'Permit Authority',
-  permit_status: 'Permit Status',
-  permit_application_url: 'Permit URL',
-  purchase_category: 'Purchase Category',
-  purchase_brand: 'Brand',
-  purchase_model: 'Model',
-  purchase_sku: 'SKU',
-  purchase_unit: 'Unit',
-  purchase_qty: 'Quantity',
-  purchase_unit_price: 'Unit Price',
-  purchase_vendor: 'Vendor',
-  purchase_url: 'Purchase URL',
-  source_ref: 'Source Ref',
-};
-
-const TASK_TYPE_OPTIONS: Array<{ value: BuildWizardTaskType; label: string }> = [
-  ...STEP_TYPE_OPTIONS.map((option): { value: BuildWizardTaskType; label: string } => ({
-    value: option.value as BuildWizardTaskType,
-    label: option.label,
-  })),
-  { value: 'quote', label: 'Quote' },
-];
-TASK_TYPE_OPTIONS.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-const allowedTaskTypes = TASK_TYPE_OPTIONS.map((option) => option.value);
 const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined) => parseTaskMetaFromReceiptNotesBase(notes, allowedTaskTypes);
 const setTaskDateOverrideInReceiptNotes = (notes: string | null | undefined, taskDate: string | null | undefined) => setTaskDateOverrideInReceiptNotesBase(notes, taskDate, allowedTaskTypes);
 const parseTaskDocumentPreview = (text: string): TaskDocumentPreview | null => parseTaskDocumentPreviewBase(text, TASK_META_FIELD_LABELS);
@@ -747,175 +734,38 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     };
   }, [documentManagerQuery, projectId, searchContent]);
 
-  const completedSteps = React.useMemo(() => {
-    return steps
-      .filter((s) => Number(s.is_completed) === 1)
-      .sort((a, b) => {
-        const ad = parseDate(a.completed_at)?.getTime() || 0;
-        const bd = parseDate(b.completed_at)?.getTime() || 0;
-        return bd - ad;
-      });
-  }, [steps]);
+  const {
+    authorityContacts,
+    completedSteps,
+    deskContactAssignmentCountById,
+    deskContacts,
+    filteredDeskContacts,
+    filteredTabSteps,
+    moveStepModalStep,
+    projectDeskSteps,
+    selectedContactAssignments,
+    selectedDeskContact,
+    stepById,
+    stepByIdMap,
+    stepEditModalDraft,
+    stepEditModalStep,
+    stepInfoModalStep,
+  } = useBuildWizardWorkspaceData({
+    activeTab,
+    contactAssignments,
+    contacts,
+    deskContactQuery,
+    deskContactTypeFilter,
+    deskSelectedContactId,
+    moveStepModalStepId,
+    stepDrafts,
+    stepEditModalStepId,
+    stepInfoModalStepId,
+    stepPhaseBucket,
+    steps,
+  });
 
-  const filteredTabSteps = React.useMemo(() => {
-    if (activeTab === 'completed' || activeTab === 'start' || activeTab === 'overview') {
-      return [] as IBuildWizardStep[];
-    }
-    return steps.filter((step) => stepPhaseBucket(step) === activeTab);
-  }, [steps, activeTab]);
-
-  const stepById = React.useMemo(() => {
-    const map = new Map<number, IBuildWizardStep>();
-    steps.forEach((step) => {
-      map.set(step.id, step);
-    });
-    return map;
-  }, [steps]);
-
-  const activeTabTreeRows = React.useMemo(() => {
-    const stepIdsInTab = new Set(filteredTabSteps.map((step) => step.id));
-    const childrenByParent = new Map<number, IBuildWizardStep[]>();
-    const roots: IBuildWizardStep[] = [];
-    const sortedTabSteps = [...filteredTabSteps].sort((a, b) => {
-      if (a.step_order !== b.step_order) {
-        return a.step_order - b.step_order;
-      }
-      return a.id - b.id;
-    });
-
-    sortedTabSteps.forEach((step) => {
-      const parentStepId = Number(step.parent_step_id || 0);
-      if (parentStepId > 0 && stepIdsInTab.has(parentStepId)) {
-        const siblings = childrenByParent.get(parentStepId) || [];
-        siblings.push(step);
-        childrenByParent.set(parentStepId, siblings);
-      } else {
-        roots.push(step);
-      }
-    });
-
-    const rows: Array<{ step: IBuildWizardStep; level: number }> = [];
-    const visited = new Set<number>();
-    const walk = (node: IBuildWizardStep, level: number) => {
-      if (visited.has(node.id)) {
-        return;
-      }
-      visited.add(node.id);
-      rows.push({ step: node, level });
-      const children = childrenByParent.get(node.id) || [];
-      children.forEach((child) => walk(child, level + 1));
-    };
-    roots.forEach((root) => walk(root, 0));
-    sortedTabSteps.forEach((step) => {
-      if (!visited.has(step.id)) {
-        walk(step, 0);
-      }
-    });
-    return rows;
-  }, [filteredTabSteps]);
-
-  const activeTabStepNumbers = React.useMemo(() => {
-    const map = new Map<number, number>();
-    activeTabTreeRows.forEach((row, idx) => {
-      map.set(row.step.id, idx + 1);
-    });
-    return map;
-  }, [activeTabTreeRows]);
-
-  const incompleteDescendantCountByStepId = React.useMemo(() => {
-    const childrenByParent = new Map<number, number[]>();
-    filteredTabSteps.forEach((step) => {
-      const parentStepId = Number(step.parent_step_id || 0);
-      if (parentStepId > 0) {
-        const children = childrenByParent.get(parentStepId) || [];
-        children.push(step.id);
-        childrenByParent.set(parentStepId, children);
-      }
-    });
-
-    const completionById = new Map<number, boolean>();
-    filteredTabSteps.forEach((step) => {
-      completionById.set(step.id, Number(step.is_completed) === 1);
-    });
-
-    const countMap = new Map<number, number>();
-    const countIncompleteDescendants = (stepId: number, stack: Set<number> = new Set()): number => {
-      if (countMap.has(stepId)) {
-        return countMap.get(stepId) || 0;
-      }
-      if (stack.has(stepId)) {
-        return 0;
-      }
-      stack.add(stepId);
-      let count = 0;
-      const children = childrenByParent.get(stepId) || [];
-      children.forEach((childId) => {
-        if (!(completionById.get(childId) || false)) {
-          count += 1;
-        }
-        count += countIncompleteDescendants(childId, stack);
-      });
-      stack.delete(stepId);
-      countMap.set(stepId, count);
-      return count;
-    };
-
-    filteredTabSteps.forEach((step) => {
-      countIncompleteDescendants(step.id);
-    });
-    return countMap;
-  }, [filteredTabSteps]);
-
-  const projectDeskSteps = React.useMemo(() => {
-    return steps.filter((step) => stepPhaseBucket(step) === 'desk');
-  }, [steps]);
-
-  const deskContacts = React.useMemo(() => {
-    return [...contacts].sort((a, b) => {
-      return sortAlpha(String(a.display_name || ''), String(b.display_name || ''));
-    });
-  }, [contacts]);
-
-  const selectedDeskContact = React.useMemo(() => {
-    if (deskSelectedContactId <= 0) {
-      return null;
-    }
-    return deskContacts.find((contact) => contact.id === deskSelectedContactId) || null;
-  }, [deskContacts, deskSelectedContactId]);
-
-  const stepByIdMap = React.useMemo(() => {
-    const map = new Map<number, IBuildWizardStep>();
-    steps.forEach((step) => map.set(step.id, step));
-    return map;
-  }, [steps]);
-
-  const stepInfoModalStep = React.useMemo(() => {
-    if (stepInfoModalStepId <= 0) {
-      return null;
-    }
-    return stepByIdMap.get(stepInfoModalStepId) || null;
-  }, [stepInfoModalStepId, stepByIdMap]);
-
-  const stepEditModalStep = React.useMemo(() => {
-    if (stepEditModalStepId <= 0) {
-      return null;
-    }
-    return stepByIdMap.get(stepEditModalStepId) || null;
-  }, [stepEditModalStepId, stepByIdMap]);
-
-  const moveStepModalStep = React.useMemo(() => {
-    if (moveStepModalStepId <= 0) {
-      return null;
-    }
-    return stepByIdMap.get(moveStepModalStepId) || null;
-  }, [moveStepModalStepId, stepByIdMap]);
-
-  const stepEditModalDraft = React.useMemo(() => {
-    if (!stepEditModalStep) {
-      return null;
-    }
-    return stepDrafts[stepEditModalStep.id] || stepEditModalStep;
-  }, [stepDrafts, stepEditModalStep]);
+  const { activeTabStepNumbers, activeTabTreeRows, incompleteDescendantCountByStepId } = useBuildWizardActiveTabTree(filteredTabSteps);
 
   const stepEditModalDependencyIds = React.useMemo(() => {
     if (!stepEditModalStep || !stepEditModalDraft) {
@@ -944,241 +794,25 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
       });
   }, [stepEditModalDependencyIds, stepEditModalStep, steps]);
 
-  const selectedContactAssignments = React.useMemo(() => {
-    if (!selectedDeskContact) {
-      return [] as IBuildWizardContactAssignment[];
-    }
-    return contactAssignments
-      .filter((assignment) => assignment.contact_id === selectedDeskContact.id)
-      .sort((a, b) => a.id - b.id);
-  }, [contactAssignments, selectedDeskContact]);
-
-  const deskContactAssignmentCountById = React.useMemo(() => {
-    const map = new Map<number, number>();
-    contactAssignments.forEach((assignment) => {
-      map.set(assignment.contact_id, (map.get(assignment.contact_id) || 0) + 1);
-    });
-    return map;
-  }, [contactAssignments]);
-
-  const filteredDeskContacts = React.useMemo(() => {
-    const query = deskContactQuery.trim().toLowerCase();
-    return deskContacts.filter((contact) => {
-      const contactType = normalizeContactType(contact);
-      if (deskContactTypeFilter !== 'all' && contactType !== deskContactTypeFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
-      const haystack = [
-        contact.display_name,
-        contact.company,
-        contact.role_title,
-        contact.email,
-        contact.phone,
-      ].map((value) => String(value || '').toLowerCase()).join(' ');
-      return haystack.includes(query);
-    });
-  }, [deskContactQuery, deskContactTypeFilter, deskContacts]);
-
-  const authorityContacts = React.useMemo(() => {
-    return contacts
-      .filter((contact) => normalizeContactType(contact) === 'authority')
-      .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
-  }, [contacts]);
-
-  const stepAssigneesByStepId = React.useMemo(() => {
-    const normalizePhaseKey = (value: string | null | undefined): string => String(value || '').trim().toLowerCase();
-    const contactMap = new Map<number, typeof contacts[number]>();
-    contacts.forEach((contact) => {
-      contactMap.set(contact.id, contact);
-    });
-    const byStep = new Map<number, Array<{ contact: typeof contacts[number]; source: 'step' | 'phase' }>>();
-
-    steps.forEach((step) => {
-      const phaseKey = normalizePhaseKey(step.phase_key || 'general');
-      const dedupByContact = new Map<number, { contact: typeof contacts[number]; source: 'step' | 'phase' }>();
-
-      contactAssignments.forEach((assignment) => {
-        const assignmentStepId = Number(assignment.step_id || 0);
-        const assignmentPhaseKey = normalizePhaseKey(assignment.phase_key || '');
-        const isStepMatch = assignmentStepId > 0 && assignmentStepId === step.id;
-        const isPhaseMatch = assignmentStepId <= 0 && assignmentPhaseKey !== '' && assignmentPhaseKey === phaseKey;
-        if (!isStepMatch && !isPhaseMatch) {
-          return;
-        }
-        const contact = contactMap.get(assignment.contact_id);
-        if (!contact) {
-          return;
-        }
-        const nextSource: 'step' | 'phase' = isStepMatch ? 'step' : 'phase';
-        const existing = dedupByContact.get(contact.id);
-        if (!existing || (existing.source === 'phase' && nextSource === 'step')) {
-          dedupByContact.set(contact.id, { contact, source: nextSource });
-        }
-      });
-
-      if (dedupByContact.size > 0) {
-        byStep.set(
-          step.id,
-          Array.from(dedupByContact.values()).sort((a, b) => sortAlpha(String(a.contact.display_name || ''), String(b.contact.display_name || ''))),
-        );
-      }
-    });
-
-    return byStep;
-  }, [contactAssignments, contacts, steps]);
-
-  const stepDirectAssigneesByStepId = React.useMemo(() => {
-    const contactMap = new Map<number, IBuildWizardContact>();
-    contacts.forEach((contact) => {
-      contactMap.set(contact.id, contact);
-    });
-
-    const byStep = new Map<number, Array<{ assignment: IBuildWizardContactAssignment; contact: IBuildWizardContact }>>();
-    contactAssignments.forEach((assignment) => {
-      const stepId = Number(assignment.step_id || 0);
-      if (stepId <= 0) {
-        return;
-      }
-      const contact = contactMap.get(assignment.contact_id);
-      if (!contact) {
-        return;
-      }
-      const rows = byStep.get(stepId) || [];
-      rows.push({ assignment, contact });
-      byStep.set(stepId, rows);
-    });
-
-    byStep.forEach((rows, stepId) => {
-      const sortedRows = [...rows].sort((a, b) => sortAlpha(String(a.contact.display_name || ''), String(b.contact.display_name || '')));
-      byStep.set(stepId, sortedRows);
-    });
-
-    return byStep;
-  }, [contactAssignments, contacts]);
-
-  const stepFilterContactOptions = React.useMemo(() => {
-    const inTabContactIds = new Set<number>();
-    filteredTabSteps.forEach((step) => {
-      const assignees = stepAssigneesByStepId.get(step.id) || [];
-      assignees.forEach((entry) => inTabContactIds.add(entry.contact.id));
-    });
-    return contacts
-      .filter((contact) => inTabContactIds.has(contact.id))
-      .sort((a, b) => sortAlpha(String(a.display_name || ''), String(b.display_name || '')));
-  }, [contacts, filteredTabSteps, stepAssigneesByStepId]);
-
-  const moveStepPhaseTabOptions = React.useMemo(() => {
-    return PHASE_PROGRESS_ORDER.map((tabId) => {
-      const tab = BUILD_TABS.find((candidate) => candidate.id === tabId);
-      return {
-        value: tabId,
-        label: tab?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId),
-      };
-    });
-  }, []);
-
-  const stepCardTextFilterTokens = React.useMemo(() => {
-    return stepCardTextFilter
-      .trim()
-      .toLowerCase()
-      .split(/\s+/g)
-      .filter(Boolean);
-  }, [stepCardTextFilter]);
-
-  const stepSearchTextById = React.useMemo(() => {
-    const documentsByStepId = new Map<number, IBuildWizardDocument[]>();
-    documents.forEach((documentItem) => {
-      const stepId = Number(documentItem.step_id || 0);
-      if (stepId <= 0) {
-        return;
-      }
-      const rows = documentsByStepId.get(stepId) || [];
-      rows.push(documentItem);
-      documentsByStepId.set(stepId, rows);
-    });
-
-    const byId = new Map<number, string>();
-    steps.forEach((step) => {
-      const stepDocuments = documentsByStepId.get(step.id) || [];
-      const stepAssignees = stepAssigneesByStepId.get(step.id) || [];
-      const parsedReceiptData = stepDocuments
-        .filter((documentItem) => String(documentItem.kind || '').trim() === 'receipt')
-        .map((documentItem) => parseTaskMetaFromReceiptNotes(documentItem.receipt_notes));
-      byId.set(
-        step.id,
-        buildSearchText(
-          step,
-          stepDocuments,
-          stepAssignees.map((entry) => entry.contact),
-          parsedReceiptData,
-          prettyPhaseLabel(step.phase_key),
-        ),
-      );
-    });
-    return byId;
-  }, [documents, stepAssigneesByStepId, steps]);
-
-  const receiptMetricsByStepId = React.useMemo(() => {
-    const map = new Map<number, {
-      allCount: number;
-      nonQuoteCount: number;
-      quoteCount: number;
-      allTotal: number;
-      nonQuoteTotal: number;
-      quoteTotal: number;
-    }>();
-    documents.forEach((documentItem) => {
-      if (String(documentItem.kind || '').trim() !== 'receipt') {
-        return;
-      }
-      const stepId = Number(documentItem.step_id || 0);
-      if (stepId <= 0) {
-        return;
-      }
-      const existing = map.get(stepId) || {
-        allCount: 0,
-        nonQuoteCount: 0,
-        quoteCount: 0,
-        allTotal: 0,
-        nonQuoteTotal: 0,
-        quoteTotal: 0,
-      };
-      const parsed = parseTaskMetaFromReceiptNotes(documentItem.receipt_notes || '');
-      const isQuote = parsed.taskMeta.task_type === 'quote';
-      const amount = Number(documentItem.receipt_amount || 0);
-      const normalizedAmount = Number.isFinite(amount) ? amount : 0;
-      existing.allCount += 1;
-      existing.allTotal += normalizedAmount;
-      if (isQuote) {
-        existing.quoteCount += 1;
-        existing.quoteTotal += normalizedAmount;
-      } else {
-        existing.nonQuoteCount += 1;
-        existing.nonQuoteTotal += normalizedAmount;
-      }
-      map.set(stepId, existing);
-    });
-    return map;
-  }, [documents]);
-
-  const getStepQuoteTotal = React.useCallback((stepId: number): number => {
-    return receiptMetricsByStepId.get(stepId)?.quoteTotal || 0;
-  }, [receiptMetricsByStepId]);
-
-  const getStepActualExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
-    const actual = Number(step.actual_cost);
-    const normalizedActual = Number.isFinite(actual) && actual > 0 ? actual : 0;
-    return Math.max(0, normalizedActual - getStepQuoteTotal(step.id));
-  }, [getStepQuoteTotal]);
-
-  const getStepEstimatedExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
-    const estimated = Number(step.estimated_cost);
-    const normalizedEstimated = Number.isFinite(estimated) && estimated > 0 ? estimated : 0;
-    return Math.max(0, normalizedEstimated - getStepQuoteTotal(step.id));
-  }, [getStepQuoteTotal]);
+  const {
+    getStepActualExcludingQuotes,
+    getStepEstimatedExcludingQuotes,
+    moveStepPhaseTabOptions,
+    receiptMetricsByStepId,
+    stepAssigneesByStepId,
+    stepCardTextFilterTokens,
+    stepDirectAssigneesByStepId,
+    stepFilterContactOptions,
+    stepSearchTextById,
+  } = useBuildWizardStepWorkspaceMeta({
+    contactAssignments,
+    contacts,
+    documents,
+    filteredTabSteps,
+    parseTaskMetaFromReceiptNotes,
+    stepCardTextFilter,
+    steps,
+  });
 
   const {
     overviewMetrics,
@@ -1460,122 +1094,33 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateProject,
   });
 
-  const updateStepDraft = (stepId: number, patch: Partial<IBuildWizardStep>) => {
-    setStepDrafts((prev) => ({
-      ...prev,
-      [stepId]: {
-        ...(prev[stepId] || ({} as IBuildWizardStep)),
-        ...patch,
-      },
-    }));
-  };
-
-  const clearStepDraft = React.useCallback((stepId: number) => {
-    setStepDrafts((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, stepId)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[stepId];
-      return next;
-    });
-  }, []);
-
-  const openStepEditModal = React.useCallback((step: IBuildWizardStep) => {
-    setStepDrafts((prev) => ({
-      ...prev,
-      [step.id]: { ...step },
-    }));
-    setStepEditModalStepId(step.id);
-  }, []);
-
-  const closeStepEditModal = React.useCallback(() => {
-    if (stepEditModalStepId > 0) {
-      clearStepDraft(stepEditModalStepId);
-    }
-    setStepEditModalStepId(0);
-  }, [clearStepDraft, stepEditModalStepId]);
-
-  const commitStep = async (stepId: number, patch: Partial<IBuildWizardStep>) => {
-    await updateStep(stepId, patch);
-  };
-
-  const clearCurrencyEdit = (key: string): void => {
-    if (activeCurrencyInputKey === key) {
-      setActiveCurrencyInputKey('');
-    }
-    setCurrencyInputByKey((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, key)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const markStepActualCostVerified = (stepId: number, signature: string) => {
-    setVerifiedActualCostSignatureByStepId((prev) => ({ ...prev, [stepId]: signature }));
-  };
-
-  const onRefreshStepActualCost = async (
-    step: IBuildWizardStep,
-    signature: string,
-    nextActualCost: number | null,
-  ) => {
-    const stepId = step.id;
-    if (stepId <= 0) {
-      return;
-    }
-    setRefreshingActualCostByStepId((prev) => ({ ...prev, [stepId]: true }));
-    try {
-      const nextStep = await updateStep(stepId, { actual_cost: nextActualCost });
-      if (!nextStep) {
-        return;
-      }
-      updateStepDraft(stepId, { actual_cost: nextActualCost });
-      clearCurrencyEdit(`step-${stepId}-actual_cost`);
-      markStepActualCostVerified(stepId, signature);
-      onToast?.({ tone: 'success', message: 'Actual cost refreshed from task totals.' });
-    } finally {
-      setRefreshingActualCostByStepId((prev) => {
-        const next = { ...prev };
-        delete next[stepId];
-        return next;
-      });
-    }
-  };
-
-  const onTimelineStepChange = React.useCallback((stepId: number, patch: {
-    expected_start_date: string | null;
-    expected_end_date: string | null;
-    expected_duration_days: number | null;
-  }) => {
-    const step = stepById.get(stepId);
-    if (!step || Number(step.is_completed) === 1) {
-      return;
-    }
-    const nextStart = toStringOrNull(patch.expected_start_date || '');
-    const nextEnd = toStringOrNull(patch.expected_end_date || '');
-    const normalizedEnd = (nextStart && nextEnd && nextEnd < nextStart) ? nextStart : nextEnd;
-    const nextPatch = {
-      ...patch,
-      expected_start_date: nextStart,
-      expected_end_date: normalizedEnd,
-      expected_duration_days: calculateDurationDays(nextStart, normalizedEnd) ?? patch.expected_duration_days,
-    };
-    updateStepDraft(stepId, nextPatch);
-    void commitStep(stepId, nextPatch);
-  }, [stepById]);
-
-  const noteEditedAtLabel = React.useCallback((note: { created_at: string; updated_at?: string | null }): string => {
-    const createdAt = String(note.created_at || '').trim();
-    const updatedAt = String(note.updated_at || '').trim();
-    if (!createdAt || !updatedAt || createdAt === updatedAt) {
-      return '';
-    }
-    return formatDate(updatedAt);
-  }, []);
+  const {
+    changeCurrencyEdit,
+    clearStepDraft,
+    closeStepEditModal,
+    finishCurrencyEdit,
+    noteEditedAtLabel,
+    onRefreshStepActualCost,
+    onTimelineStepChange,
+    openStepEditModal,
+    renderCurrencyInputValue,
+    startCurrencyEdit,
+    updateStepDraft,
+  } = useBuildWizardStepUiActions({
+    activeCurrencyInputKey,
+    currencyInputByKey,
+    onToast,
+    setActiveCurrencyInputKey,
+    setCurrencyInputByKey,
+    setRefreshingActualCostByStepId,
+    setStepDrafts,
+    setStepEditModalStepId,
+    setVerifiedActualCostSignatureByStepId,
+    stepById,
+    stepDrafts,
+    stepEditModalStepId,
+    updateStep,
+  });
 
   const {
     onCancelEditNote,
@@ -1711,130 +1256,6 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     toStringOrNull,
   });
 
-  const onRunSingletreeRecovery = async (apply: boolean) => {
-    if (!isAdmin) {
-      return;
-    }
-    if (recoveryBusy) {
-      return;
-    }
-    if (apply) {
-      const confirmed = await requestConfirmation({
-        title: 'Apply Recovery?',
-        message: 'Apply Singletree recovery now?\n\nThis will write document mappings/blobs for "Cabin - 91 Singletree Ln".',
-        confirmLabel: 'Apply Recovery',
-        confirmButtonClass: 'btn btn-danger',
-      });
-      if (!confirmed) {
-        return;
-      }
-    }
-    const host = (typeof window !== 'undefined') ? String(window.location.hostname || '').toLowerCase() : '';
-    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
-    const sourceRootToUse = String(recoveryStagedRoot || '').trim() || '/Users/jongraves/Documents/Home/91 Singletree Ln';
-
-    if (!isLocalHost && !String(recoveryStagedRoot || '').trim()) {
-      onToast?.({
-        tone: 'error',
-        message: 'Upload source files to server first, then run recovery.',
-      });
-      setRecoveryReportOpen(true);
-      return;
-    }
-
-    const res = await recoverSingletreeDocuments(apply, {
-      db_env: 'live',
-      project_title: 'Cabin - 91 Singletree Ln',
-      source_root: sourceRootToUse,
-    });
-    if (res) {
-      setRecoveryReportJson(JSON.stringify(res, null, 2));
-      setRecoveryJobId(String(res.job_id || ''));
-      setRecoveryStatus(String(res.status || 'queued'));
-      setRecoveryReportOpen(true);
-    }
-  };
-
-  const onUploadRecoveryFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0 || recoveryUploadBusy) {
-      return;
-    }
-    setRecoveryUploadBusy(true);
-    try {
-      const fileArray = Array.from(files);
-      const batchSize = 12;
-      let token = recoveryUploadToken || '';
-      let totalSaved = 0;
-      let stagedRoot = recoveryStagedRoot || '';
-
-      for (let i = 0; i < fileArray.length; i += batchSize) {
-        const batch = fileArray.slice(i, i + batchSize);
-        const res = await stageSingletreeSourceFiles(batch, token || undefined);
-        if (!res?.success) {
-          break;
-        }
-        token = String(res.upload_token || token);
-        stagedRoot = String(res.staged_root || stagedRoot);
-        totalSaved += Number(res.files_saved || 0);
-      }
-
-      if (token) {
-        setRecoveryUploadToken(token);
-      }
-      if (stagedRoot) {
-        setRecoveryStagedRoot(stagedRoot);
-      }
-      if (totalSaved > 0) {
-        setRecoveryStagedCount((prev) => prev + totalSaved);
-        setRecoveryReportOpen(true);
-      }
-    } finally {
-      setRecoveryUploadBusy(false);
-      if (recoveryUploadInputRef.current) {
-        recoveryUploadInputRef.current.value = '';
-      }
-    }
-  };
-
-  React.useEffect(() => {
-    if (!recoveryJobId) {
-      return;
-    }
-    if (recoveryStatus === 'completed' || recoveryStatus === 'failed') {
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setInterval(async () => {
-      if (cancelled) {
-        return;
-      }
-      if (recoveryPolling) {
-        return;
-      }
-      setRecoveryPolling(true);
-      try {
-        const status = await fetchSingletreeRecoveryStatus(recoveryJobId);
-        if (!status) {
-          return;
-        }
-        setRecoveryStatus(String(status.status || ''));
-        setRecoveryReportJson(JSON.stringify(status, null, 2));
-        if (Number(status.completed || 0) === 1 || status.status === 'completed' || status.status === 'failed') {
-          setRecoveryJobId('');
-        }
-      } finally {
-        if (!cancelled) {
-          setRecoveryPolling(false);
-        }
-      }
-    }, 2000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [recoveryJobId, recoveryStatus, recoveryPolling, fetchSingletreeRecoveryStatus]);
-
   const { clampStepDatesWithinRange, expandPhaseRangeForStep, onSaveDocument, taskVendorOptions } = useBuildWizardDocumentStepData({
     contacts,
     documentSavingId,
@@ -1907,86 +1328,41 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     uploadDocument,
   });
 
-  const onEstimateMissingWithAi = async () => {
-    const confirmed = await requestConfirmation({
-      title: 'Estimate Missing Values?',
-      message: 'Ask AI to estimate missing timeline and budget values for this project?',
-      confirmLabel: 'Run AI Estimate',
-      confirmButtonClass: 'btn btn-primary',
-    });
-    if (!confirmed) {
-      return;
-    }
-    await generateStepsFromAi('fill_missing');
-  };
-
-  const onCompleteWithAi = async () => {
-    const confirmed = await requestConfirmation({
-      title: 'Run Complete w/ AI?',
-      message: 'This can reorder/add/update steps across phases using your project data and documents.',
-      confirmLabel: 'Run Complete w/ AI',
-      confirmButtonClass: 'btn btn-primary',
-    });
-    if (!confirmed) {
-      return;
-    }
-    await generateStepsFromAi('complete');
-  };
-
-  const parseCurrencyText = (value: string): number | null => {
-    const cleaned = String(value || '')
-      .replace(/[^0-9.-]/g, '')
-      .trim();
-    if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
-      return null;
-    }
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const formatCurrencyForInput = (value: number | null | undefined): string => {
-    if (value === null || typeof value === 'undefined' || Number.isNaN(Number(value))) {
-      return '';
-    }
-    return Number(value).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
-  };
-
-  const startCurrencyEdit = (key: string, value: number | null | undefined): void => {
-    setActiveCurrencyInputKey(key);
-    setCurrencyInputByKey((prev) => ({
-      ...prev,
-      [key]: value === null || typeof value === 'undefined' || Number.isNaN(Number(value))
-        ? ''
-        : String(value),
-    }));
-  };
-
-  const changeCurrencyEdit = (key: string, text: string): void => {
-    setCurrencyInputByKey((prev) => ({ ...prev, [key]: text }));
-  };
-
-  const finishCurrencyEdit = (key: string, onCommit: (value: number | null) => void): void => {
-    const parsed = parseCurrencyText(currencyInputByKey[key] ?? '');
-    onCommit(parsed);
-    if (activeCurrencyInputKey === key) {
-      setActiveCurrencyInputKey('');
-    }
-    setCurrencyInputByKey((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, key)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const renderCurrencyInputValue = (key: string, value: number | null | undefined): string => {
-    if (activeCurrencyInputKey === key) {
-      return currencyInputByKey[key] ?? (value === null || typeof value === 'undefined' ? '' : String(value));
-    }
-    return formatCurrencyForInput(value);
-  };
+  const { onCompleteWithAi, onEstimateMissingWithAi } = useBuildWizardAiConfirmActions({
+    generateStepsFromAi,
+    requestConfirmation,
+  });
+  const { onRunSingletreeRecovery, onUploadRecoveryFiles } = useBuildWizardRecoveryUiActions({
+    clearedLegacyTaskDatesByProjectRef,
+    documents,
+    fetchSingletreeRecoveryStatus,
+    isAdmin,
+    isLegacyAutoStampedTaskDate,
+    onToast,
+    openProject,
+    parseTaskMetaFromReceiptNotes,
+    projectId,
+    recoverSingletreeDocuments,
+    recoveryBusy,
+    recoveryJobId,
+    recoveryPolling,
+    recoveryStagedRoot,
+    recoveryStatus,
+    recoveryUploadBusy,
+    recoveryUploadInputRef,
+    requestConfirmation,
+    setRecoveryJobId,
+    setRecoveryPolling,
+    setRecoveryReportJson,
+    setRecoveryReportOpen,
+    setRecoveryStagedCount,
+    setRecoveryStagedRoot,
+    setRecoveryStatus,
+    setRecoveryUploadBusy,
+    setRecoveryUploadToken,
+    setTaskDateOverrideInReceiptNotes,
+    stageSingletreeSourceFiles,
+  });
 
   const { autoReorderPhaseByTimeline, saveStepEditModal } = useBuildWizardStepEditActions({
     clearStepDraft,
@@ -2004,105 +1380,14 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateStep,
   });
 
-  React.useEffect(() => {
-    if (projectId <= 0) {
-      return;
-    }
-    if (clearedLegacyTaskDatesByProjectRef.current.has(projectId)) {
-      return;
-    }
-    const legacyTaskDocs = documents.filter((doc) => {
-      const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
-      return isLegacyAutoStampedTaskDate(doc, parsed.taskMeta);
-    });
-    if (legacyTaskDocs.length === 0) {
-      clearedLegacyTaskDatesByProjectRef.current.add(projectId);
-      return;
-    }
-
-    clearedLegacyTaskDatesByProjectRef.current.add(projectId);
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        for (const doc of legacyTaskDocs) {
-          if (cancelled) {
-            return;
-          }
-          await ApiClient.post<{ document?: IBuildWizardDocument; documents?: IBuildWizardDocument[] }>(
-            '/api/build_wizard.php?action=update_document',
-            {
-              document_id: doc.id,
-              receipt_date: null,
-              receipt_notes: setTaskDateOverrideInReceiptNotes(doc.receipt_notes, null),
-            },
-          );
-        }
-        if (!cancelled) {
-          await openProject(projectId);
-          onToast?.({
-            tone: 'info',
-            message: legacyTaskDocs.length === 1
-              ? 'Cleared one legacy task date. Tasks now follow the step date unless you set an override.'
-              : `Cleared ${legacyTaskDocs.length} legacy task dates. Tasks now follow the step date unless you set an override.`,
-          });
-        }
-      } catch (error: any) {
-        clearedLegacyTaskDatesByProjectRef.current.delete(projectId);
-        if (!cancelled) {
-          onToast?.({
-            tone: 'warning',
-            message: error?.message || 'Failed to clear legacy task dates automatically.',
-          });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [documents, onToast, openProject, projectId]);
-
-  React.useEffect(() => {
-    if (projectId <= 0 || steps.length === 0) {
-      return;
-    }
-    void (async () => {
-      const phaseTabs = Array.from(new Set(steps.map((step) => stepPhaseBucket(step)).filter((tab) => PHASE_PROGRESS_ORDER.includes(tab))));
-      for (const phaseTab of phaseTabs) {
-        const phaseSteps = steps.filter((step) => stepPhaseBucket(step) === phaseTab);
-        const phaseAnchors = phaseSteps
-          .map((step) => {
-            const start = toStringOrNull(step.expected_start_date || '');
-            const end = toStringOrNull(step.expected_end_date || '') || start;
-            return { start, end };
-          })
-          .filter((entry) => entry.start || entry.end);
-        if (phaseAnchors.length === 0) {
-          continue;
-        }
-        const minStepDate = phaseAnchors
-          .map((entry) => entry.start || entry.end)
-          .filter((value): value is string => Boolean(value))
-          .sort((a, b) => a.localeCompare(b))[0] || null;
-        const maxStepDate = phaseAnchors
-          .map((entry) => entry.end || entry.start)
-          .filter((value): value is string => Boolean(value))
-          .sort((a, b) => a.localeCompare(b))
-          .pop() || null;
-        const current = resolvePhaseDateRange(phaseTab);
-        const nextStart = minStepDate
-          ? (current.start ? (minStepDate < current.start ? minStepDate : current.start) : minStepDate)
-          : current.start;
-        const nextEnd = maxStepDate
-          ? (current.end ? (maxStepDate > current.end ? maxStepDate : current.end) : maxStepDate)
-          : current.end;
-        if (nextStart !== current.start || nextEnd !== current.end) {
-          await savePhaseDateRange(projectId, phaseTab as 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', nextStart, nextEnd);
-        }
-      }
-    })();
-  }, [projectId, resolvePhaseDateRange, savePhaseDateRange, steps]);
+  useBuildWizardPhaseRangeAutoSync({
+    projectId,
+    resolvePhaseDateRange,
+    savePhaseDateRange,
+    stepPhaseBucket,
+    steps,
+    toStringOrNull,
+  });
   const { beginStepDrag, clearStepDragState, onDropMakeChild, onDropReorder } = useBuildWizardStepDragActions({
     activeTabTreeRows,
     clampStepDatesWithinRange,
@@ -2116,38 +1401,9 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     updateStep,
   });
 
-  const currencyAuditFields = new Set([
-    'estimated_cost',
-    'actual_cost',
-    'purchase_unit_price',
-    'receipt_total',
-    'receipt_amount',
-    'hoa_fee_monthly',
-  ]);
-
-  const formatAuditValue = (value: unknown, fieldName?: string): string => {
-    if (value === null || typeof value === 'undefined') {
-      return 'null';
-    }
-    const normalizedField = String(fieldName || '').trim().toLowerCase();
-    if (normalizedField && currencyAuditFields.has(normalizedField)) {
-      const numericValue = Number(value);
-      if (Number.isFinite(numericValue)) {
-        return formatCurrency(numericValue);
-      }
-    }
-    if (typeof value === 'string') {
-      return value;
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-    try {
-      return JSON.stringify(value);
-    } catch (_) {
-      return String(value);
-    }
-  };
+  const formatAuditValue = React.useCallback((value: unknown, fieldName?: string): string => {
+    return formatAuditValueBase(value, fieldName, formatCurrency);
+  }, []);
 
   const renderEditableStepCards = (tabSteps: IBuildWizardStep[]) => {
     return (
@@ -2326,322 +1582,325 @@ export function renderBuildWizardPage({ onToast, isAdmin }: BuildWizardPageProps
     />
   );
 
-  const renderBuildWorkspace = () => (
-    <BuildWizardWorkspaceMain
-      activeTab={activeTab}
-      activeTabStepNumbers={activeTabStepNumbers}
-      chromeProps={{
-        activePhaseDateRange,
-        activePhaseHasStoredDateRange,
-        activeTab,
-        buildEntryPoint,
-        formatCurrency,
-        isTemplateProject,
-        onAddStep: () => addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general'),
-        onBackFromWorkspace,
-        onCloseWizard,
-        onOpenAiTools: () => setAiToolsOpen(true),
-        onOpenProjectDesk: () => setProjectDeskOpen(true),
-        onOpenProjectOverview: () => setProjectOverviewOpen(true),
-        onPhaseDateRangeChange,
-        onResetFilters: () => {
-          setStepCardAssigneeTypeFilter('all');
-          setStepCardAssigneeIdFilter(0);
-          setStepCardTextFilter('');
-        },
-        onSaveTemplate,
-        onSelectTab: setActiveTab,
-        onSetStepCardAssigneeIdFilter: setStepCardAssigneeIdFilter,
-        onSetStepCardAssigneeTypeFilter: setStepCardAssigneeTypeFilter,
-        onSetStepCardTextFilter: setStepCardTextFilter,
-        onTopbarSearchQueryChange: setTopbarSearchQuery,
-        onTopbarSearchSelect: selectTopbarSearchResult,
-        onTopbarSearchToggle: setTopbarSearchOpen,
-        phaseTotals,
-        project,
+  const workspaceModalProps = useBuildWizardWorkspaceModalProps({
+    aiToolsProps: {
+      aiBusy,
+      aiPayloadJson: aiPayloadJson || '',
+      aiPromptText: aiPromptText || '',
+      deskAutoAssignBusy,
+      onAutoAssignDeskStepsToTimeline: onAutoAssignDeskStepsToTimeline,
+      onClose: () => setAiToolsOpen(false),
+      onCompleteWithAi,
+      open: aiToolsOpen,
+      packageForAi,
+      sendToAiAndIngest: () => generateStepsFromAi('optimize'),
+    },
+    documentUploadProps: {
+      busy: documentUploadBusy,
+      docKind,
+      docKindOptions,
+      docPhaseKey,
+      docStepId,
+      file: documentUploadFile,
+      onClose: () => setDocumentUploadModalOpen(false),
+      onFileChange: setDocumentUploadFile,
+      open: documentUploadModalOpen,
+      phaseOptions,
+      selectableDocSteps,
+      setDocKind,
+      setDocPhaseKey,
+      setDocStepId,
+      uploadDocument: async (...args) => {
+        setDocumentUploadBusy(true);
+        try {
+          return await uploadDocument(...args);
+        } finally {
+          setDocumentUploadBusy(false);
+        }
+      },
+    },
+    lightboxProps: {
+      closeLightbox,
+      lightboxDoc,
+      lightboxSpreadsheetSheetIndex,
+      lightboxSupportsZoom,
+      lightboxZoom,
+      lightboxZoomMax: LIGHTBOX_ZOOM_MAX,
+      lightboxZoomMin: LIGHTBOX_ZOOM_MIN,
+      lightboxZoomStep: LIGHTBOX_ZOOM_STEP,
+      onLightboxWheelZoom,
+      open: Boolean(lightboxDoc),
+      resetLightboxZoom,
+      setLightboxSpreadsheetSheetIndex,
+      zoomLightboxBy,
+    },
+    projectOverviewProps: {
+      formatCurrency,
+      onClose: () => setProjectOverviewOpen(false),
+      open: projectOverviewOpen,
+      projectOverviewRange,
+      projectOverviewSections,
+      projectOverviewTotals,
+      steps,
+    },
+    recoveryReportProps: {
+      fetchSingletreeRecoveryStatus,
+      onClose: () => setRecoveryReportOpen(false),
+      onToast,
+      open: recoveryReportOpen,
+      recoveryJobId,
+      recoveryPolling,
+      recoveryReportJson,
+      recoveryStagedCount,
+      recoveryStagedRoot,
+      recoveryStatus,
+      setRecoveryJobId,
+      setRecoveryPolling,
+      setRecoveryReportJson,
+      setRecoveryStatus,
+    },
+    stepEditProps: {
+      activeTabStepNumbers,
+      closeStepEditModal,
+      dependencyCandidateByStepId,
+      setDependencyCandidateByStepId,
+      open: Boolean(stepEditModalStep && stepEditModalDraft),
+      saveStepEditModal,
+      saving: stepEditSaving,
+      step: stepEditModalStep,
+      stepById,
+      stepDraft: stepEditModalDraft,
+      stepEditModalDependencyIds,
+      stepEditModalDependencyOptions,
+      updateStepDraft,
+    },
+    stepInfoProps: {
+      activeTabStepNumbers,
+      formatAuditValue,
+      formatDate,
+      noteEditedAtLabel,
+      onClose: () => setStepInfoModalStepId(0),
+      open: Boolean(stepInfoModalStep),
+      step: stepInfoModalStep,
+    },
+    workspaceActionModalProps: {
+      activeTabStepNumbers,
+      attachExistingDocByReceiptId,
+      attachExistingDocFilterByReceiptId,
+      confirmState,
+      documentSavingId,
+      documents,
+      moveStepModalStep,
+      moveStepModalTargetTab,
+      moveStepPhaseTabOptions,
+      moveTaskModalDoc,
+      moveTaskModalTargetStepId,
+      moveTaskStepOptions,
+      movingStep,
+      onAttachExistingDocumentToReceipt,
+      onCloseMoveStep: () => setMoveStepModalStepId(0),
+      onCloseMoveTask: () => setMoveTaskModalDocId(0),
+      onCloseTaskAttachments: () => setTaskAttachmentsModalDocId(0),
+      onConfirm: closeConfirmation,
+      onMoveReceiptToStep,
+      onMoveStepFromModal,
+      onOpenDocumentPreview: openDocumentPreview,
+      onUploadReceiptAttachments,
+      setAttachExistingDocByReceiptId,
+      setAttachExistingDocFilterByReceiptId,
+      setMoveStepModalTargetTab,
+      setMoveTaskModalTargetStepId,
+      taskAttachmentsModalAttachableDocuments,
+      taskAttachmentsModalDoc,
+      taskAttachmentsModalStep,
+    },
+  });
+  const buildWorkspaceProps = useBuildWizardWorkspaceMainProps({
+    activeTab,
+    activeTabStepNumbers,
+    chromeProps: {
+      activePhaseDateRange,
+      activePhaseHasStoredDateRange,
+      activeTab,
+      buildEntryPoint,
+      formatCurrency,
+      isTemplateProject,
+      onAddStep: () => addStep(TAB_DEFAULT_PHASE_KEY[activeTab] || 'general'),
+      onBackFromWorkspace,
+      onCloseWizard,
+      onOpenAiTools: () => setAiToolsOpen(true),
+      onOpenProjectDesk: () => setProjectDeskOpen(true),
+      onOpenProjectOverview: () => setProjectOverviewOpen(true),
+      onPhaseDateRangeChange,
+      onResetFilters: () => {
+        setStepCardAssigneeTypeFilter('all');
+        setStepCardAssigneeIdFilter(0);
+        setStepCardTextFilter('');
+      },
+      onSaveTemplate,
+      onSelectTab: setActiveTab,
+      onSetStepCardAssigneeIdFilter: setStepCardAssigneeIdFilter,
+      onSetStepCardAssigneeTypeFilter: setStepCardAssigneeTypeFilter,
+      onSetStepCardTextFilter: setStepCardTextFilter,
+      onTopbarSearchQueryChange: setTopbarSearchQuery,
+      onTopbarSearchSelect: selectTopbarSearchResult,
+      onTopbarSearchToggle: setTopbarSearchOpen,
+      phaseTotals,
+      project,
+      projectId,
+      savePhaseDateRange,
+      saving,
+      stepCardAssigneeIdFilter,
+      stepCardAssigneeTypeFilter,
+      stepCardTextFilter,
+      stepCardTextFilterTokens,
+      stepFilterContactOptions,
+      stickyHeadHeight,
+      stickyHeadRef,
+      topbarSearchBoxRef,
+      topbarSearchLoading,
+      topbarSearchOpen,
+      topbarSearchQuery,
+      topbarSearchResults,
+    },
+    completedSectionProps: {
+      completedSteps,
+      contactTypeChipClass,
+      contactTypeLabel,
+      footerRange,
+      formatCurrency,
+      formatDate,
+      normalizeContactType,
+      noteEditedAtLabel,
+      stepAssigneesByStepId,
+      stepCostTotalExcludingQuotes,
+    },
+    deskWorkspaceProps: {
+      contactsProps: {
+        contacts: deskContacts,
+        contactAssignmentCountById: deskContactAssignmentCountById,
+        deleteContactAssignment,
+        deskAssignmentPhaseKey,
+        deskAssignmentStepId,
+        deskContactDraft,
+        deskContactQuery,
+        deskContactTypeFilter,
+        deskSelectedContactId,
+        filteredContacts: filteredDeskContacts,
+        linkedStepOptions,
+        onAddDeskPhaseAssignment,
+        onAddDeskStepAssignment,
+        onDeleteDeskContact,
+        onSaveDeskContact,
+        onStartNewDeskContact,
+        phaseOptions,
         projectId,
-        savePhaseDateRange,
-        saving,
-        stepCardAssigneeIdFilter,
-        stepCardAssigneeTypeFilter,
-        stepCardTextFilter,
-        stepCardTextFilterTokens,
-        stepFilterContactOptions,
-        stickyHeadHeight,
-        stickyHeadRef,
-        topbarSearchBoxRef,
-        topbarSearchLoading,
-        topbarSearchOpen,
-        topbarSearchQuery,
-        topbarSearchResults,
-      }}
-      completedSectionProps={{
-        completedSteps,
-        contactTypeChipClass,
-        contactTypeLabel,
-        footerRange,
-        formatCurrency,
-        formatDate,
-        normalizeContactType,
-        noteEditedAtLabel,
-        stepAssigneesByStepId,
-        stepCostTotalExcludingQuotes,
-      }}
-      deskWorkspaceProps={{
-        contactsProps: {
-          contacts: deskContacts,
-          contactAssignmentCountById: deskContactAssignmentCountById,
-          deleteContactAssignment,
-          deskAssignmentPhaseKey,
-          deskAssignmentStepId,
-          deskContactDraft,
-          deskContactQuery,
-          deskContactTypeFilter,
-          deskSelectedContactId,
-          filteredContacts: filteredDeskContacts,
-          linkedStepOptions,
-          onAddDeskPhaseAssignment,
-          onAddDeskStepAssignment,
-          onDeleteDeskContact: onDeleteDeskContact,
-          onSaveDeskContact,
-          onStartNewDeskContact,
-          phaseOptions,
-          projectId,
-          selectedContact: selectedDeskContact,
-          selectedContactAssignments,
-          setDeskAssignmentPhaseKey,
-          setDeskAssignmentStepId,
-          setDeskContactDraft,
-          setDeskContactQuery,
-          setDeskContactTypeFilter,
-          setDeskCreateMode,
-          setDeskSelectedContactId,
-          stepByIdMap,
-        },
-        documentsProps: {
-          buildDocumentDraft,
-          deletingDocumentId,
-          docKindOptions,
-          documentManagerKindFilter,
-          documentManagerKindOptions,
-          documentManagerLinkedStepFilterOptions,
-          documentManagerPhaseFilter,
-          documentManagerPhaseOptions,
-          documentManagerQuery,
-          documentManagerSearchLoading,
-          documentManagerSearchResultById: documentManagerSearchResultById as Map<number, { snippet?: string }>,
-          documentManagerStepFilter,
-          documentSavingId,
-          documents,
-          filteredDocumentManagerDocs,
-          isPlanPreviewDoc,
-          isSpreadsheetPreviewDoc,
-          linkedStepOptions,
-          onDeleteDocument,
-          onOpenUploadModal: () => setDocumentUploadModalOpen(true),
-          onReplaceDocumentFile,
-          onSaveDocumentDraft,
-          openDocumentPreview,
-          project,
-          replaceFileInputByDocId,
-          replacingDocumentId,
-          setDocumentManagerKindFilter,
-          setDocumentManagerPhaseFilter,
-          setDocumentManagerQuery,
-          setDocumentManagerStepFilter,
-          steps,
-          updateDocumentDraft,
-          updateProject,
-        },
-        onAddStep: () => addStep('general'),
-        onClose: () => setProjectDeskOpen(false),
-        open: projectDeskOpen,
-        projectDeskSteps,
-        renderEditableStepCards,
-      }}
-      docKind={docKind}
-      docKindOptions={docKindOptions}
-      docPhaseKey={docPhaseKey}
-      docStepId={docStepId}
-      documents={documents}
-      filteredTabSteps={filteredTabSteps}
-      footerRange={footerRange}
-      footerTimelineSteps={footerTimelineSteps}
-      onSetDocKind={setDocKind}
-      onSetDocPhaseKey={setDocPhaseKey}
-      onSetDocStepId={setDocStepId}
-      onTimelineStepChange={onTimelineStepChange}
-      onUploadDocument={(file) => {
-        void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
-      }}
-      overviewSectionProps={{
-        aiBusy,
-        focusNextStep: (step) => focusStepInBuildView(stepPhaseBucket(step), step.id),
-        formatCurrency,
-        formatDate,
-        formatTimelineDate,
-        onEstimateMissingWithAi,
-        overviewMetrics,
-        projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
-      }}
-      phaseOptions={phaseOptions}
-      phaseTaskListCardRef={phaseTaskListCardRef}
-      renderDocumentGallery={renderDocumentGallery}
-      renderEditableStepCards={renderEditableStepCards}
-      selectableDocSteps={selectableDocSteps}
-      startSectionProps={{
-        changeCurrencyEdit,
-        finishCurrencyEdit,
-        formatCurrency,
-        lotSizeDetectedUnit,
-        lotSizeInput,
-        lotSizeInputToSqftAuto,
-        projectDraft,
-        projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
-        projectTotals,
-        renderCurrencyInputValue,
-        setLotSizeInput,
-        setProjectDraft,
-        startCurrencyEdit,
-        toNumberOrNull,
-        toStringOrNull,
+        selectedContact: selectedDeskContact,
+        selectedContactAssignments,
+        setDeskAssignmentPhaseKey,
+        setDeskAssignmentStepId,
+        setDeskContactDraft,
+        setDeskContactQuery,
+        setDeskContactTypeFilter,
+        setDeskCreateMode,
+        setDeskSelectedContactId,
+        stepByIdMap,
+      },
+      documentsProps: {
+        buildDocumentDraft,
+        deletingDocumentId,
+        docKindOptions,
+        documentManagerKindFilter,
+        documentManagerKindOptions,
+        documentManagerLinkedStepFilterOptions,
+        documentManagerPhaseFilter,
+        documentManagerPhaseOptions,
+        documentManagerQuery,
+        documentManagerSearchLoading,
+        documentManagerSearchResultById: documentManagerSearchResultById as Map<number, { snippet?: string }>,
+        documentManagerStepFilter,
+        documentSavingId,
+        documents,
+        filteredDocumentManagerDocs,
+        isPlanPreviewDoc,
+        isSpreadsheetPreviewDoc,
+        linkedStepOptions,
+        onDeleteDocument,
+        onOpenUploadModal: () => setDocumentUploadModalOpen(true),
+        onReplaceDocumentFile,
+        onSaveDocumentDraft,
+        openDocumentPreview,
+        project,
+        replaceFileInputByDocId,
+        replacingDocumentId,
+        setDocumentManagerKindFilter,
+        setDocumentManagerPhaseFilter,
+        setDocumentManagerQuery,
+        setDocumentManagerStepFilter,
+        steps,
+        updateDocumentDraft,
         updateProject,
-      }}
-      stickyTopOffset={stickyTopOffset}
-    >
-      <BuildWizardWorkspaceModals
-        aiToolsProps={{
-          aiBusy,
-          aiPayloadJson: aiPayloadJson || '',
-          aiPromptText: aiPromptText || '',
-          deskAutoAssignBusy,
-          onAutoAssignDeskStepsToTimeline: onAutoAssignDeskStepsToTimeline,
-          onClose: () => setAiToolsOpen(false),
-          onCompleteWithAi,
-          open: aiToolsOpen,
-          packageForAi,
-          sendToAiAndIngest: () => generateStepsFromAi('optimize'),
-        }}
-        documentUploadProps={{
-          busy: documentUploadBusy,
-          docKind,
-          docKindOptions,
-          docPhaseKey,
-          docStepId,
-          file: documentUploadFile,
-          onClose: () => setDocumentUploadModalOpen(false),
-          onFileChange: setDocumentUploadFile,
-          open: documentUploadModalOpen,
-          phaseOptions,
-          selectableDocSteps,
-          setDocKind,
-          setDocPhaseKey,
-          setDocStepId,
-          uploadDocument: async (...args) => {
-            setDocumentUploadBusy(true);
-            try {
-              return await uploadDocument(...args);
-            } finally {
-              setDocumentUploadBusy(false);
-            }
-          },
-        }}
-        lightboxProps={{
-          closeLightbox,
-          lightboxDoc,
-          lightboxSpreadsheetSheetIndex,
-          lightboxSupportsZoom,
-          lightboxZoom,
-          lightboxZoomMax: LIGHTBOX_ZOOM_MAX,
-          lightboxZoomMin: LIGHTBOX_ZOOM_MIN,
-          lightboxZoomStep: LIGHTBOX_ZOOM_STEP,
-          onLightboxWheelZoom,
-          open: Boolean(lightboxDoc),
-          resetLightboxZoom,
-          setLightboxSpreadsheetSheetIndex,
-          zoomLightboxBy,
-        }}
-        projectOverviewProps={{
-          formatCurrency,
-          onClose: () => setProjectOverviewOpen(false),
-          open: projectOverviewOpen,
-          projectOverviewRange,
-          projectOverviewSections,
-          projectOverviewTotals,
-          steps,
-        }}
-        recoveryReportProps={{
-          fetchSingletreeRecoveryStatus,
-          onClose: () => setRecoveryReportOpen(false),
-          onToast,
-          open: recoveryReportOpen,
-          recoveryJobId,
-          recoveryPolling,
-          recoveryReportJson,
-          recoveryStagedCount,
-          recoveryStagedRoot,
-          recoveryStatus,
-          setRecoveryJobId,
-          setRecoveryPolling,
-          setRecoveryReportJson,
-          setRecoveryStatus,
-        }}
-        stepEditProps={{
-          activeTabStepNumbers,
-          closeStepEditModal,
-          dependencyCandidateByStepId,
-          setDependencyCandidateByStepId,
-          open: Boolean(stepEditModalStep && stepEditModalDraft),
-          saveStepEditModal,
-          saving: stepEditSaving,
-          step: stepEditModalStep,
-          stepById,
-          stepDraft: stepEditModalDraft,
-          stepEditModalDependencyIds,
-          stepEditModalDependencyOptions,
-          updateStepDraft,
-        }}
-        stepInfoProps={{
-          activeTabStepNumbers,
-          formatAuditValue,
-          formatDate,
-          noteEditedAtLabel,
-          onClose: () => setStepInfoModalStepId(0),
-          open: Boolean(stepInfoModalStep),
-          step: stepInfoModalStep,
-        }}
-        workspaceActionModalProps={{
-          activeTabStepNumbers,
-          attachExistingDocByReceiptId,
-          attachExistingDocFilterByReceiptId,
-          confirmState,
-          documentSavingId,
-          documents,
-          moveStepModalStep,
-          moveStepModalTargetTab,
-          moveStepPhaseTabOptions,
-          moveTaskModalDoc,
-          moveTaskModalTargetStepId,
-          moveTaskStepOptions,
-          movingStep,
-          onAttachExistingDocumentToReceipt,
-          onCloseMoveStep: () => setMoveStepModalStepId(0),
-          onCloseMoveTask: () => setMoveTaskModalDocId(0),
-          onCloseTaskAttachments: () => setTaskAttachmentsModalDocId(0),
-          onConfirm: closeConfirmation,
-          onMoveReceiptToStep,
-          onMoveStepFromModal,
-          onOpenDocumentPreview: openDocumentPreview,
-          onUploadReceiptAttachments,
-          setAttachExistingDocByReceiptId,
-          setAttachExistingDocFilterByReceiptId,
-          setMoveStepModalTargetTab,
-          setMoveTaskModalTargetStepId,
-          taskAttachmentsModalAttachableDocuments,
-          taskAttachmentsModalDoc,
-          taskAttachmentsModalStep,
-        }}
-      />
+      },
+      onAddStep: () => addStep('general'),
+      onClose: () => setProjectDeskOpen(false),
+      open: projectDeskOpen,
+      projectDeskSteps,
+      renderEditableStepCards,
+    },
+    docKind,
+    docKindOptions,
+    docPhaseKey,
+    docStepId,
+    documents,
+    filteredTabSteps,
+    footerRange,
+    footerTimelineSteps,
+    onSetDocKind: setDocKind,
+    onSetDocPhaseKey: setDocPhaseKey,
+    onSetDocStepId: setDocStepId,
+    onTimelineStepChange,
+    onUploadDocument: (file) => {
+      void uploadDocument(docKind, file, docStepId > 0 ? docStepId : undefined, undefined, docPhaseKey);
+    },
+    overviewSectionProps: {
+      aiBusy,
+      focusNextStep: (step) => focusStepInBuildView(stepPhaseBucket(step), step.id),
+      formatCurrency,
+      formatDate,
+      formatTimelineDate,
+      onEstimateMissingWithAi,
+      overviewMetrics,
+      projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
+    },
+    phaseOptions,
+    phaseTaskListCardRef,
+    renderDocumentGallery,
+    renderEditableStepCards,
+    selectableDocSteps,
+    startSectionProps: {
+      changeCurrencyEdit,
+      finishCurrencyEdit,
+      formatCurrency,
+      lotSizeDetectedUnit,
+      lotSizeInput,
+      lotSizeInputToSqftAuto,
+      projectDraft,
+      projectPhotosSection: renderProjectPhotosAndKeyPaperwork(),
+      projectTotals,
+      renderCurrencyInputValue,
+      setLotSizeInput,
+      setProjectDraft,
+      startCurrencyEdit,
+      toNumberOrNull,
+      toStringOrNull,
+      updateProject,
+    },
+    stickyTopOffset,
+  });
+
+  const renderBuildWorkspace = () => (
+    <BuildWizardWorkspaceMain {...buildWorkspaceProps}>
+      <BuildWizardWorkspaceModals {...workspaceModalProps} />
     </BuildWizardWorkspaceMain>
   );
 

@@ -20,6 +20,14 @@ import type {
 } from './accumul8-core';
 import type { Accumul8StatementAuditRun, Accumul8StatementUpload } from './accumul8-statements';
 
+export interface Accumul8TransactionsPagination {
+  current_page: number;
+  page_size: number;
+  total_pages: number;
+  total_rows: number;
+  is_full_dataset: boolean;
+}
+
 export interface Accumul8BootstrapResponse {
   success: boolean;
   selected_owner_user_id: number;
@@ -39,6 +47,7 @@ export interface Accumul8BootstrapResponse {
   debtors: Accumul8Debtor[];
   debtor_ledger: Accumul8Transaction[];
   budget_rows: Accumul8BudgetRow[];
+  transactions_pagination?: Accumul8TransactionsPagination;
   sync_provider: {
     provider: string;
     env: string;

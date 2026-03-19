@@ -2732,6 +2732,19 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   white-space: normal;
 }
 
+.accumul8-logs-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.accumul8-logs-modal-entry {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
 @media (max-width: 1200px) {
   .accumul8-page-toolbar {
     flex-wrap: wrap;

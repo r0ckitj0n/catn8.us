@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { PriorityTableColumn, usePriorityTableLayout } from '../../../hooks/usePriorityTableLayout';
-import { Accumul8Transaction } from '../../../types/accumul8';
+import { Accumul8Transaction, Accumul8TransactionsPagination } from '../../../types/accumul8';
 import { addUtcDays, formatInlineDate, getLedgerEffectiveDate } from './accumul8PageDateSearchUtils';
 import { getLedgerDescriptionLabel } from './accumul8PageEntityUtils';
 
@@ -21,6 +21,7 @@ interface UseAccumul8LedgerTableOptions {
   selectedBankAccountId: string;
   selectedBankingOrganizationId: string;
   todayDate: string;
+  transactionsPagination: Accumul8TransactionsPagination;
 }
 
 export function useAccumul8LedgerTable({
@@ -39,6 +40,7 @@ export function useAccumul8LedgerTable({
   selectedBankingOrganizationId,
   setLedgerArchivePage,
   todayDate,
+  transactionsPagination,
 }: UseAccumul8LedgerTableOptions) {
   const ledgerTableColumns = React.useMemo<Array<PriorityTableColumn<Accumul8Transaction>>>(() => ([
     { key: 'date', header: 'Date', minWidth: 110, maxAutoWidth: 126, sortable: true, sortAccessor: (tx) => tx.transaction_date || '', contentAccessor: (tx) => formatInlineDate(tx.transaction_date) },
@@ -57,6 +59,19 @@ export function useAccumul8LedgerTable({
   const ledgerPaginationCutoffDate = React.useMemo(() => addUtcDays(todayDate, -60), [todayDate]);
   const ledgerPagination = React.useMemo(() => {
     const allRows = ledgerTable.rows;
+    const isServerPaginated = Number(transactionsPagination.is_full_dataset ? 1 : 0) !== 1;
+    if (isServerPaginated) {
+      return {
+        rows: allRows,
+        recentCount: allRows.length,
+        archivedCount: Math.max(Number(transactionsPagination.total_rows || 0) - allRows.length, 0),
+        totalRows: Number(transactionsPagination.total_rows || allRows.length),
+        currentPage: Number(transactionsPagination.current_page || 1),
+        totalPages: Number(transactionsPagination.total_pages || 1),
+        hasArchivedPages: Number(transactionsPagination.total_pages || 1) > 1,
+        isServerPaginated: true,
+      };
+    }
     if (ledgerPaginationMode === 'all') {
       return {
         rows: allRows,
@@ -72,6 +87,7 @@ export function useAccumul8LedgerTable({
         currentPage: 1,
         totalPages: 1,
         hasArchivedPages: false,
+        isServerPaginated: false,
       };
     }
     const recentRows: Accumul8Transaction[] = [];
@@ -88,12 +104,15 @@ export function useAccumul8LedgerTable({
     const currentPage = Math.min(Math.max(ledgerArchivePage, 1), totalPages);
     const archivedStart = (currentPage - 1) * 100;
     const archivedSlice = archivedRows.slice(archivedStart, archivedStart + 100);
-    return { rows: currentPage === 1 ? [...recentRows, ...archivedSlice] : archivedSlice, recentCount: recentRows.length, archivedCount: archivedRows.length, totalRows: allRows.length, currentPage, totalPages, hasArchivedPages: archivedRows.length > 100 };
-  }, [ledgerArchivePage, ledgerPaginationCutoffDate, ledgerPaginationMode, ledgerTable.rows]);
+    return { rows: currentPage === 1 ? [...recentRows, ...archivedSlice] : archivedSlice, recentCount: recentRows.length, archivedCount: archivedRows.length, totalRows: allRows.length, currentPage, totalPages, hasArchivedPages: archivedRows.length > 100, isServerPaginated: false };
+  }, [ledgerArchivePage, ledgerPaginationCutoffDate, ledgerPaginationMode, ledgerTable.rows, transactionsPagination]);
 
   React.useEffect(() => {
+    if (Number(transactionsPagination.is_full_dataset ? 1 : 0) !== 1) {
+      return;
+    }
     setLedgerArchivePage(1);
-  }, [customLedgerEndDate, customLedgerStartDate, ledgerDateFilter, ledgerFilterPreset, ledgerPaginationMode, ledgerSearchQuery, ledgerTable.sortState?.direction, ledgerTable.sortState?.key, selectedBankAccountId, selectedBankingOrganizationId, setLedgerArchivePage]);
+  }, [customLedgerEndDate, customLedgerStartDate, ledgerDateFilter, ledgerFilterPreset, ledgerPaginationMode, ledgerSearchQuery, ledgerTable.sortState?.direction, ledgerTable.sortState?.key, selectedBankAccountId, selectedBankingOrganizationId, setLedgerArchivePage, transactionsPagination.is_full_dataset]);
 
   React.useEffect(() => {
     if (ledgerPaginationMode === 'all') {
@@ -102,10 +121,13 @@ export function useAccumul8LedgerTable({
       }
       return;
     }
+    if (Number(transactionsPagination.is_full_dataset ? 1 : 0) !== 1) {
+      return;
+    }
     if (ledgerArchivePage > ledgerPagination.totalPages) {
       setLedgerArchivePage(ledgerPagination.totalPages);
     }
-  }, [ledgerArchivePage, ledgerPagination.totalPages, ledgerPaginationMode, setLedgerArchivePage]);
+  }, [ledgerArchivePage, ledgerPagination.totalPages, ledgerPaginationMode, setLedgerArchivePage, transactionsPagination.is_full_dataset]);
 
   return { ledgerPagination, ledgerTable };
 }

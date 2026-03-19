@@ -11178,9 +11178,10 @@ function accumul8_statement_upload_lookup(int $viewerId, array $uploadIds): arra
     return $lookup;
 }
 
-function accumul8_list_transactions(int $viewerId, int $limit = 400): array
+function accumul8_query_transactions_rows(int $viewerId, int $limit = 400, int $offset = 0): array
 {
     $limit = max(1, min(10000, $limit));
+    $offset = max(0, $offset);
     $hasDebtor = accumul8_has_debtor_support();
     $recurringPaymentIdSelect = accumul8_optional_select('accumul8_transactions', 'recurring_payment_id', 't.recurring_payment_id', 'NULL AS recurring_payment_id');
     $dueDateSelect = accumul8_optional_select('accumul8_transactions', 'due_date', 't.due_date', 'NULL AS due_date');
@@ -11212,10 +11213,13 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
          ' . $debtorJoin . '
          WHERE t.owner_user_id = ?
          ORDER BY t.transaction_date DESC, t.id DESC
-         LIMIT ' . (int)$limit,
+         LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset,
         [$viewerId]
     );
+}
 
+function accumul8_map_transaction_rows(int $viewerId, array $rows): array
+{
     $uploadIds = [];
     foreach ($rows as $row) {
         $sourceKind = (string)($row['source_kind'] ?? '');
@@ -11272,6 +11276,52 @@ function accumul8_list_transactions(int $viewerId, int $limit = 400): array
             'debtor_name' => (string)($r['debtor_name'] ?? ''),
         ];
     }, $rows);
+}
+
+function accumul8_list_transactions(int $viewerId, int $limit = 400): array
+{
+    return accumul8_map_transaction_rows($viewerId, accumul8_query_transactions_rows($viewerId, $limit, 0));
+}
+
+function accumul8_list_transactions_page(int $viewerId, int $page = 1, int $pageSize = 250, bool $fullDataset = false): array
+{
+    $totalRows = (int)((Database::queryOne(
+        'SELECT COUNT(*) AS total_rows
+         FROM accumul8_transactions
+         WHERE owner_user_id = ?',
+        [$viewerId]
+    )['total_rows'] ?? 0));
+
+    if ($fullDataset) {
+        $rows = $totalRows > 0 ? accumul8_map_transaction_rows($viewerId, accumul8_query_transactions_rows($viewerId, max($totalRows, 1), 0)) : [];
+        return [
+            'transactions' => $rows,
+            'transactions_pagination' => [
+                'current_page' => 1,
+                'page_size' => max($totalRows, 1),
+                'total_pages' => 1,
+                'total_rows' => $totalRows,
+                'is_full_dataset' => true,
+            ],
+        ];
+    }
+
+    $pageSize = max(1, min(500, $pageSize));
+    $totalPages = max(1, (int)ceil($totalRows / $pageSize));
+    $page = max(1, min($page, $totalPages));
+    $offset = ($page - 1) * $pageSize;
+    $rows = $totalRows > 0 ? accumul8_map_transaction_rows($viewerId, accumul8_query_transactions_rows($viewerId, $pageSize, $offset)) : [];
+
+    return [
+        'transactions' => $rows,
+        'transactions_pagination' => [
+            'current_page' => $page,
+            'page_size' => $pageSize,
+            'total_pages' => $totalPages,
+            'total_rows' => $totalRows,
+            'is_full_dataset' => false,
+        ],
+    ];
 }
 
 function accumul8_list_notification_rules(int $viewerId): array
@@ -11702,6 +11752,189 @@ function accumul8_list_statement_audit_runs(int $viewerId, int $limit = 10): arr
         [$viewerId]
     );
     return array_map('accumul8_statement_serialize_audit_run', $rows);
+}
+
+function accumul8_log_type_options(): array
+{
+    return [
+        ['type' => 'diagnostics', 'label' => 'Diagnostics', 'description' => 'Recent Accumul8 diagnostic events and failures.'],
+        ['type' => 'entity_endex', 'label' => 'Entity Endex', 'description' => 'Alias scan history for Entity Endex maintenance.'],
+        ['type' => 'notifications', 'label' => 'Notifications', 'description' => 'Sent notification runs and recipients.'],
+        ['type' => 'statement_audits', 'label' => 'Statement Audits', 'description' => 'Statement audit runs and outcomes.'],
+        ['type' => 'statement_reconciliations', 'label' => 'Statement Reconciliation', 'description' => 'Recent reconciliation runs for imported statements.'],
+        ['type' => 'sync', 'label' => 'Sync', 'description' => 'Teller and housekeeping sync events.'],
+    ];
+}
+
+function accumul8_log_entry(string $id, string $createdAt, string $status, string $title, string $subtitle = '', string $body = '', array $details = []): array
+{
+    $searchParts = [$title, $subtitle, $body];
+    foreach ($details as $detail) {
+        $searchParts[] = (string)$detail;
+    }
+
+    return [
+        'id' => $id,
+        'created_at' => $createdAt,
+        'status' => $status,
+        'title' => $title,
+        'subtitle' => $subtitle,
+        'body' => $body,
+        'details' => array_values(array_filter(array_map(static fn($item): string => trim((string)$item), $details), static fn($item): bool => $item !== '')),
+        'search_text' => trim(implode(' ', array_filter(array_map(static fn($item): string => trim((string)$item), $searchParts)))),
+    ];
+}
+
+function accumul8_list_notification_logs(int $viewerId, int $limit = 50): array
+{
+    if (!accumul8_table_exists('accumul8_notification_logs')) {
+        return [];
+    }
+    $limit = max(1, min(100, $limit));
+    $rows = Database::queryAll(
+        'SELECT l.id, l.rule_id, COALESCE(r.rule_name, "") AS rule_name, COALESCE(l.subject, "") AS subject,
+                COALESCE(l.body_excerpt, "") AS body_excerpt, COALESCE(l.recipients_json, "{}") AS recipients_json, l.sent_at
+         FROM accumul8_notification_logs l
+         LEFT JOIN accumul8_notification_rules r
+           ON r.id = l.rule_id
+          AND r.owner_user_id = l.owner_user_id
+         WHERE l.owner_user_id = ?
+         ORDER BY l.id DESC
+         LIMIT ' . (int)$limit,
+        [$viewerId]
+    );
+
+    return array_map(static function (array $row): array {
+        $recipients = json_decode((string)($row['recipients_json'] ?? '{}'), true);
+        $sent = is_array($recipients['sent'] ?? null) ? $recipients['sent'] : [];
+        $failed = is_array($recipients['failed'] ?? null) ? $recipients['failed'] : [];
+        $details = [];
+        if ($sent !== []) {
+            $details[] = 'Sent: ' . implode(', ', array_values(array_filter(array_map(static fn($recipient): string => trim((string)($recipient['email'] ?? $recipient['username'] ?? '')), $sent))));
+        }
+        if ($failed !== []) {
+            $details[] = 'Failed: ' . implode(', ', array_values(array_filter(array_map(static fn($recipient): string => trim((string)($recipient['email'] ?? $recipient['username'] ?? '')), $failed))));
+        }
+        return accumul8_log_entry(
+            'notifications-' . (int)($row['id'] ?? 0),
+            (string)($row['sent_at'] ?? ''),
+            $failed === [] ? 'sent' : 'partial',
+            (string)($row['subject'] ?? 'Notification'),
+            trim((string)($row['rule_name'] ?? '')),
+            (string)($row['body_excerpt'] ?? ''),
+            $details
+        );
+    }, $rows);
+}
+
+function accumul8_list_statement_reconciliation_log_entries(int $viewerId, int $limit = 50): array
+{
+    if (!accumul8_table_exists('accumul8_statement_reconciliation_logs')) {
+        return [];
+    }
+    $limit = max(1, min(100, $limit));
+    $rows = Database::queryAll(
+        'SELECT l.id, l.statement_upload_id, l.reconciliation_status, l.transaction_count, l.already_reconciled_count, l.reconciled_now_count,
+                l.linked_match_count, l.missing_match_count, l.invalid_row_count, COALESCE(l.summary_text, "") AS summary_text, l.created_at,
+                COALESCE(u.original_filename, "") AS original_filename
+         FROM accumul8_statement_reconciliation_logs l
+         LEFT JOIN accumul8_statement_uploads u
+           ON u.id = l.statement_upload_id
+          AND u.owner_user_id = l.owner_user_id
+         WHERE l.owner_user_id = ?
+         ORDER BY l.id DESC
+         LIMIT ' . (int)$limit,
+        [$viewerId]
+    );
+
+    return array_map(static function (array $row): array {
+        return accumul8_log_entry(
+            'statement-reconciliation-' . (int)($row['id'] ?? 0),
+            (string)($row['created_at'] ?? ''),
+            (string)($row['reconciliation_status'] ?? 'pending'),
+            (string)($row['original_filename'] ?? ('Statement Upload #' . (int)($row['statement_upload_id'] ?? 0))),
+            'Reconciled now: ' . (int)($row['reconciled_now_count'] ?? 0) . ', linked: ' . (int)($row['linked_match_count'] ?? 0),
+            (string)($row['summary_text'] ?? ''),
+            [
+                'Transactions reviewed: ' . (int)($row['transaction_count'] ?? 0),
+                'Already reconciled: ' . (int)($row['already_reconciled_count'] ?? 0),
+                'Missing matches: ' . (int)($row['missing_match_count'] ?? 0),
+                'Invalid rows: ' . (int)($row['invalid_row_count'] ?? 0),
+            ]
+        );
+    }, $rows);
+}
+
+function accumul8_list_diagnostic_log_entries(int $viewerId, int $limit = 50, bool $syncOnly = false): array
+{
+    if (!accumul8_table_exists('catn8_diagnostics_events')) {
+        return [];
+    }
+    $limit = max(1, min(100, $limit));
+    $params = [$viewerId];
+    $where = ['(user_id = ? OR user_id IS NULL)'];
+    if ($syncOnly) {
+        $where[] = '(endpoint LIKE "%accumul8%" OR event_key LIKE "accumul8%" OR event_key LIKE "teller%" OR event_key LIKE "settings.teller%")';
+    } else {
+        $where[] = '(endpoint LIKE "%accumul8%" OR event_key LIKE "accumul8%")';
+    }
+    $rows = Database::queryAll(
+        'SELECT id, created_at, COALESCE(endpoint, "") AS endpoint, COALESCE(event_key, "") AS event_key,
+                COALESCE(message, "") AS message, COALESCE(meta_json, "") AS meta_json, ok, http_status
+         FROM catn8_diagnostics_events
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id DESC
+         LIMIT ' . (int)$limit,
+        $params
+    );
+
+    return array_map(static function (array $row): array {
+        $meta = trim((string)($row['meta_json'] ?? ''));
+        return accumul8_log_entry(
+            'diagnostics-' . (int)($row['id'] ?? 0),
+            (string)($row['created_at'] ?? ''),
+            (int)($row['ok'] ?? 0) === 1 ? 'ok' : 'error',
+            (string)($row['event_key'] ?? 'diagnostic'),
+            (string)($row['endpoint'] ?? ''),
+            (string)($row['message'] ?? ''),
+            $meta !== '' ? ['Meta: ' . $meta, 'HTTP status: ' . ((string)($row['http_status'] ?? '') !== '' ? (string)$row['http_status'] : 'n/a')] : ['HTTP status: ' . ((string)($row['http_status'] ?? '') !== '' ? (string)$row['http_status'] : 'n/a')]
+        );
+    }, $rows);
+}
+
+function accumul8_list_statement_audit_log_entries(int $viewerId, int $limit = 25): array
+{
+    return array_map(static function (array $row): array {
+        return accumul8_log_entry(
+            'statement-audit-' . (int)($row['id'] ?? 0),
+            (string)($row['created_at'] ?? ''),
+            (int)($row['failed_count'] ?? 0) > 0 ? 'failed' : ((int)($row['warning_count'] ?? 0) > 0 ? 'warning' : 'passed'),
+            'Uploads: ' . (int)($row['upload_count'] ?? 0) . ', passed: ' . (int)($row['passed_count'] ?? 0),
+            trim((string)($row['audit_start_date'] ?? '') . ((string)($row['audit_end_date'] ?? '') !== '' ? ' to ' . (string)($row['audit_end_date'] ?? '') : '')),
+            (string)($row['summary_text'] ?? ''),
+            [
+                'Warnings: ' . (int)($row['warning_count'] ?? 0),
+                'Failed: ' . (int)($row['failed_count'] ?? 0),
+            ]
+        );
+    }, accumul8_list_statement_audit_runs($viewerId, $limit));
+}
+
+function accumul8_list_entity_endex_log_entries(int $viewerId, int $limit = 25): array
+{
+    return array_map(static function (array $row): array {
+        return accumul8_log_entry(
+            'entity-endex-' . (int)($row['id'] ?? 0),
+            (string)($row['created_at'] ?? ''),
+            (int)($row['conflict_count'] ?? 0) > 0 ? 'warning' : 'ok',
+            (string)($row['summary_text'] ?? 'Entity Endex scan'),
+            'Created: ' . (int)($row['created_count'] ?? 0) . ', updated: ' . (int)($row['updated_count'] ?? 0),
+            '',
+            array_map(static function (array $item): string {
+                return trim((string)($item['status'] ?? 'created') . ': ' . (string)($item['parent_name'] ?? '') . ' -> ' . (string)($item['alias_name'] ?? ''));
+            }, is_array($row['items'] ?? null) ? $row['items'] : [])
+        );
+    }, accumul8_list_entity_endex_scan_logs($viewerId, $limit));
 }
 
 function accumul8_statement_load_audit_upload_record(int $viewerId, int $uploadId): ?array
@@ -16261,10 +16494,16 @@ if ($action === '') {
 
 if ($action === 'bootstrap') {
     catn8_require_method('GET');
+    $transactionPage = max(1, (int)($_GET['transaction_page'] ?? 1));
+    $transactionPageSize = max(1, min(500, (int)($_GET['transaction_page_size'] ?? 250)));
+    $transactionMode = accumul8_normalize_text((string)($_GET['transaction_mode'] ?? 'page'), 12);
+    $transactionPayload = $transactionMode === 'all'
+        ? accumul8_list_transactions_page($viewerId, 1, $transactionPageSize, true)
+        : accumul8_list_transactions_page($viewerId, $transactionPage, $transactionPageSize, false);
 
     $warnings = [];
     accumul8_bootstrap_section('sync_recurring_ledger_window', static fn() => accumul8_sync_recurring_ledger_window($viewerId, $actorUserId), [], $warnings);
-    $transactions = accumul8_bootstrap_section('transactions', static fn() => accumul8_list_transactions($viewerId, 5000), [], $warnings);
+    $transactions = accumul8_bootstrap_section('transactions', static fn() => $transactionPayload['transactions'], [], $warnings);
     $entities = accumul8_bootstrap_section('entities', static fn() => accumul8_list_entities($viewerId), [], $warnings);
     $entityAliases = accumul8_bootstrap_section('entity_aliases', static fn() => accumul8_list_entity_aliases($viewerId), [], $warnings);
     $contacts = accumul8_bootstrap_section('contacts', static fn() => accumul8_list_contacts($viewerId), [], $warnings);
@@ -16303,6 +16542,7 @@ if ($action === 'bootstrap') {
         'accounts' => $accounts,
         'debtors' => $debtors,
         'budget_rows' => $budgetRows,
+        'transactions_pagination' => $transactionPayload['transactions_pagination'],
         'notification_rules' => $rules,
         'pay_bills' => $payBills,
         'bank_connections' => $connections,
@@ -16316,6 +16556,19 @@ if ($action === 'bootstrap') {
     ]);
 }
 
+if ($action === 'list_transactions_page') {
+    catn8_require_method('GET');
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $pageSize = max(1, min(500, (int)($_GET['page_size'] ?? 250)));
+    $mode = accumul8_normalize_text((string)($_GET['mode'] ?? 'page'), 12);
+    $payload = accumul8_list_transactions_page($viewerId, $page, $pageSize, $mode === 'all');
+    catn8_json_response([
+        'success' => true,
+        'transactions' => $payload['transactions'],
+        'transactions_pagination' => $payload['transactions_pagination'],
+    ]);
+}
+
 if ($action === 'list_statement_workspace') {
     catn8_require_method('GET');
     catn8_json_response([
@@ -16323,6 +16576,26 @@ if ($action === 'list_statement_workspace') {
         'statement_uploads' => accumul8_list_statement_uploads($viewerId, false),
         'archived_statement_uploads' => accumul8_list_statement_uploads($viewerId, true),
         'statement_audit_runs' => accumul8_list_statement_audit_runs($viewerId, 10),
+    ]);
+}
+
+if ($action === 'list_logs') {
+    catn8_require_method('GET');
+    $logType = accumul8_normalize_text((string)($_GET['log_type'] ?? 'sync'), 64);
+    $entries = match ($logType) {
+        'diagnostics' => accumul8_list_diagnostic_log_entries($viewerId, 50, false),
+        'entity_endex' => accumul8_list_entity_endex_log_entries($viewerId, 25),
+        'notifications' => accumul8_list_notification_logs($viewerId, 50),
+        'statement_audits' => accumul8_list_statement_audit_log_entries($viewerId, 25),
+        'statement_reconciliations' => accumul8_list_statement_reconciliation_log_entries($viewerId, 50),
+        'sync' => accumul8_list_diagnostic_log_entries($viewerId, 50, true),
+        default => accumul8_list_diagnostic_log_entries($viewerId, 50, true),
+    };
+    catn8_json_response([
+        'success' => true,
+        'log_type' => in_array($logType, array_column(accumul8_log_type_options(), 'type'), true) ? $logType : 'sync',
+        'entries' => $entries,
+        'available_log_types' => accumul8_log_type_options(),
     ]);
 }
 

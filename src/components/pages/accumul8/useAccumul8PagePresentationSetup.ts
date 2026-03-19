@@ -203,6 +203,7 @@ export function useAccumul8PagePresentationSetup(options: any) {
       messageBoardUnacknowledgedCount: options.messageBoardUnacknowledgedCount,
       normalizeEntityKind: options.normalizeEntityKind,
       openBankingOrganizationPopup: options.openBankingOrganizationPopup,
+      setLogsModalOpen: options.setLogsModalOpen,
       projectedBalanceForWindow: options.projectedBalanceForWindow,
       selectedBankAccountId: options.selectedBankAccountId,
       selectedBankingOrganizationId: options.selectedBankingOrganizationId,

@@ -21,6 +21,7 @@ export function useAccumul8PageUiState(options: any) {
   const [syncHelpOpen, setSyncHelpOpen] = React.useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = React.useState(false);
   const [settingsMenuPosition, setSettingsMenuPosition] = React.useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
+  const [logsModalOpen, setLogsModalOpen] = React.useState(false);
   const [summaryWindow, setSummaryWindow] = React.useState(options.initialSummaryWindow);
   const [syncHelpToken, setSyncHelpToken] = React.useState('');
   const [syncHelpError, setSyncHelpError] = React.useState('');
@@ -50,7 +51,7 @@ export function useAccumul8PageUiState(options: any) {
   const entitiesTableRef = React.useRef<HTMLTableElement | null>(null);
   const recurringTableRef = React.useRef<HTMLTableElement | null>(null);
 
-  const isHeaderLogoSpinning = options.busy
+  const isHeaderLogoSpinning = options.loading
     || options.syncingConnectionId !== null
     || entityEndexFindingAll
     || runningAIcountantHousekeeping
@@ -126,6 +127,7 @@ export function useAccumul8PageUiState(options: any) {
     inlineRowRefs,
     isHeaderLogoSpinning,
     launchableBankingOrganizations,
+    logsModalOpen,
     ledgerEntityModalSaving,
     ledgerEntityModalTransactionId,
     ledgerFilterPreset,
@@ -162,6 +164,7 @@ export function useAccumul8PageUiState(options: any) {
     setLedgerEntityModalTransactionId,
     setLedgerFilterPreset,
     setListSearchQueryByTab,
+    setLogsModalOpen,
     setMessageBoardLoading,
     setMessageBoardMessages,
     setMessageBoardOpen,

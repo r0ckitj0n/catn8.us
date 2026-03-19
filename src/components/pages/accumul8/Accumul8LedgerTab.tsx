@@ -15,6 +15,7 @@ type LedgerPaginationMode = '100' | 'all';
 interface LedgerPagination {
   archivedCount: number;
   currentPage: number;
+  isServerPaginated?: boolean;
   recentCount: number;
   rows: Accumul8Transaction[];
   totalPages: number;
@@ -142,13 +143,13 @@ export function Accumul8LedgerTab({
           <div className="accumul8-ledger-pagination-toolbar" aria-label="Ledger pagination controls">
             <label className="visually-hidden" htmlFor="accumul8-ledger-page-mode">Ledger page size</label>
             <select id="accumul8-ledger-page-mode" className={getActiveFilterClass('form-select form-select-sm', ledgerPaginationMode !== '100')} value={ledgerPaginationMode} onChange={(e) => setLedgerPaginationMode(e.target.value as LedgerPaginationMode)} aria-label="Ledger page size">
-              <option value="100">100 older rows per page</option>
-              <option value="all">Show all on one page</option>
+              <option value="100">{ledgerPagination.isServerPaginated ? 'One server page at a time' : '100 older rows per page'}</option>
+              <option value="all">Load all rows</option>
             </select>
-            {ledgerPaginationMode !== 'all' && ledgerPagination.archivedCount > 0 ? (
+            {ledgerPaginationMode !== 'all' && ledgerPagination.totalPages > 1 ? (
               <div className="accumul8-ledger-pagination-nav">
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setLedgerArchivePage((current) => Math.max(current - 1, 1))} disabled={ledgerPagination.currentPage <= 1}>Prev</button>
-                <span className="accumul8-ledger-pagination-status">Older pages {ledgerPagination.currentPage} / {ledgerPagination.totalPages}</span>
+                <span className="accumul8-ledger-pagination-status">{ledgerPagination.isServerPaginated ? 'Page' : 'Older pages'} {ledgerPagination.currentPage} / {ledgerPagination.totalPages}</span>
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setLedgerArchivePage((current) => Math.min(current + 1, ledgerPagination.totalPages))} disabled={ledgerPagination.currentPage >= ledgerPagination.totalPages}>Next</button>
               </div>
             ) : null}
@@ -159,7 +160,9 @@ export function Accumul8LedgerTab({
       <div className="accumul8-ledger-pagination-summary">
         {ledgerPaginationMode === 'all'
           ? `Showing all ${ledgerPagination.totalRows} filtered ledger transaction${ledgerPagination.totalRows === 1 ? '' : 's'} on one page.`
-          : `Showing ${ledgerPagination.rows.length} filtered ledger transaction${ledgerPagination.rows.length === 1 ? '' : 's'} on this page, including ${ledgerPagination.recentCount} from the last 60 days and ${ledgerPagination.archivedCount} older transaction${ledgerPagination.archivedCount === 1 ? '' : 's'} split into ${ledgerPagination.totalPages} page${ledgerPagination.totalPages === 1 ? '' : 's'}.`}
+          : ledgerPagination.isServerPaginated
+            ? `Showing ${ledgerPagination.rows.length} ledger transaction${ledgerPagination.rows.length === 1 ? '' : 's'} from server page ${ledgerPagination.currentPage} of ${ledgerPagination.totalPages}. Load all rows to search or filter across the full ledger history.`
+            : `Showing ${ledgerPagination.rows.length} filtered ledger transaction${ledgerPagination.rows.length === 1 ? '' : 's'} on this page, including ${ledgerPagination.recentCount} from the last 60 days and ${ledgerPagination.archivedCount} older transaction${ledgerPagination.archivedCount === 1 ? '' : 's'} split into ${ledgerPagination.totalPages} page${ledgerPagination.totalPages === 1 ? '' : 's'}.`}
       </div>
       <div className="table-responsive mt-3 accumul8-scroll-area accumul8-scroll-area--ledger">
         <table ref={ledgerTableRef} className="table table-sm accumul8-table accumul8-table--measured accumul8-table--ledger accumul8-ledger-table accumul8-sticky-head" style={ledgerTable.tableStyle}>

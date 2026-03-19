@@ -105,6 +105,12 @@ export function useAccumul8PageLayerPropsBuilder(options: any): {
         onClose: options.closeDebtorModal,
         onSave: options.submitDebtorModal,
       },
+      logsModalProps: {
+        open: options.logsModalOpen,
+        busy: options.busy,
+        onClose: () => options.setLogsModalOpen(false),
+        onLoadLogs: options.loadLogs,
+      },
       recurringModalProps: {
         open: options.recurringModalOpen,
         busy: options.busy,

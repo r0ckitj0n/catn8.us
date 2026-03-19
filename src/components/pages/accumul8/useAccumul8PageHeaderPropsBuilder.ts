@@ -21,6 +21,7 @@ export function useAccumul8PageHeaderPropsBuilder(options: any): React.Component
     normalizeEntityKind: options.normalizeEntityKind,
     onOpenAccountManager: () => options.setAccountManagerOpen(true),
     onOpenBankingOrganizationManager: () => options.setBankingOrganizationManagerOpen(true),
+    onOpenLogs: () => options.setLogsModalOpen(true),
     onOpenMessageBoard: () => options.setMessageBoardOpen(true),
     onOpenPopup: options.openBankingOrganizationPopup,
     onSelectBankAccount: options.setSelectedBankAccountId,

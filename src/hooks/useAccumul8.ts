@@ -1,7 +1,8 @@
 import React from 'react';
 import {
-  Accumul8StatementWorkspaceResponse,
+  Accumul8LogListResponse,
 } from '../types/accumul8';
+import { ApiClient } from '../core/ApiClient';
 import { useAccumul8CrudActions } from './accumul8/useAccumul8CrudActions';
 import { useAccumul8Loader } from './accumul8/useAccumul8Loader';
 import { useAccumul8State } from './accumul8/useAccumul8State';
@@ -32,7 +33,7 @@ export function useAccumul8(
     }
     return `/api/accumul8.php?${params.toString()}`;
   }, [selectedOwnerUserId]);
-  const { loadStatementWorkspace, load } = useAccumul8Loader({ state, handleError, scopedActionUrl });
+  const { loadAllTransactions, loadStatementWorkspace, loadTransactionsPage, load } = useAccumul8Loader({ state, handleError, scopedActionUrl });
   const crudActions = useAccumul8CrudActions({ setBusy: state.setBusy, load, handleError, onToast, scopedActionUrl });
   const statementActions = useAccumul8StatementActions({
     setBusy: state.setBusy,
@@ -46,8 +47,12 @@ export function useAccumul8(
   React.useEffect(() => {
     void load();
   }, [load]);
+  const loadLogs = React.useCallback(async (logType: string) => {
+    return ApiClient.get<Accumul8LogListResponse>(`${scopedActionUrl('list_logs')}&log_type=${encodeURIComponent(logType)}`);
+  }, [scopedActionUrl]);
   return {
     busy: state.busy,
+    loading: state.loading,
     loaded: state.loaded,
     statementsLoaded: state.statementsLoaded,
     summary: state.summary,
@@ -60,6 +65,7 @@ export function useAccumul8(
     contacts: state.contacts,
     recurringPayments: state.recurringPayments,
     transactions: state.transactions,
+    transactionsPagination: state.transactionsPagination,
     bankingOrganizations: state.bankingOrganizations,
     accounts: state.accounts,
     notificationRules: state.notificationRules,
@@ -73,7 +79,10 @@ export function useAccumul8(
     statementAuditRuns: state.statementAuditRuns,
     syncProvider: state.syncProvider,
     load,
+    loadAllTransactions,
+    loadLogs,
     loadStatementWorkspace,
+    loadTransactionsPage,
     ...crudActions,
     ...statementActions,
   };

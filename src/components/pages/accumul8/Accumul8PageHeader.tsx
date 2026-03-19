@@ -24,6 +24,7 @@ interface Accumul8PageHeaderProps {
   normalizeEntityKind: typeof normalizeEntityKind;
   onOpenBankingOrganizationManager: () => void;
   onOpenAccountManager: () => void;
+  onOpenLogs: () => void;
   onOpenMessageBoard: () => void;
   onOpenPopup: (loginUrl: string | null | undefined, organizationName: string) => void;
   onSelectBankAccount: (value: string) => void;
@@ -61,6 +62,7 @@ export function Accumul8PageHeader({
   normalizeEntityKind,
   onOpenAccountManager,
   onOpenBankingOrganizationManager,
+  onOpenLogs,
   onOpenMessageBoard,
   onOpenPopup,
   onSelectBankAccount,
@@ -135,18 +137,30 @@ export function Accumul8PageHeader({
                         {[
                           ['contacts', 'Entities'],
                           ['entity_endex', 'Entity Endex'],
+                          ['logs', 'Logs'],
                           ['notifications', 'Notifications'],
                           ['recurring', 'Recurring'],
                           ['sync', 'Sync'],
                         ].map(([key, label]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => { onSelectTab(key as never); setSettingsMenuOpen(false); }}
-                          >
-                            {label}
-                          </button>
+                          key === 'logs' ? (
+                            <button
+                              key={key}
+                              type="button"
+                              className="btn btn-outline-primary"
+                              onClick={() => { onOpenLogs(); setSettingsMenuOpen(false); }}
+                            >
+                              {label}
+                            </button>
+                          ) : (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-primary'}`}
+                              onClick={() => { onSelectTab(key as never); setSettingsMenuOpen(false); }}
+                            >
+                              {label}
+                            </button>
+                          )
                         ))}
                       </div>
                     </div>

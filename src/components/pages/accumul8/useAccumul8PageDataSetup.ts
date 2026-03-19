@@ -26,6 +26,47 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     void session.loadStatementWorkspace();
   }, [session.loadStatementWorkspace, session.statementsLoaded, state.tab]);
 
+  const shouldHydrateFullTransactions = React.useMemo(() => (
+    state.tab !== 'ledger'
+    || state.ledgerPaginationMode === 'all'
+    || state.ledgerDateFilter !== 'all_dates'
+    || state.ledgerFilterPreset !== 'all'
+    || state.listSearchQueryByTab.ledger.trim() !== ''
+    || state.selectedBankAccountId !== ''
+    || state.selectedBankingOrganizationId !== ''
+  ), [
+    state.ledgerDateFilter,
+    state.ledgerFilterPreset,
+    state.ledgerPaginationMode,
+    state.listSearchQueryByTab.ledger,
+    state.selectedBankAccountId,
+    state.selectedBankingOrganizationId,
+    state.tab,
+  ]);
+
+  React.useEffect(() => {
+    if (!shouldHydrateFullTransactions) return;
+    if (session.transactionsPagination?.is_full_dataset) return;
+    void session.loadAllTransactions();
+  }, [session.loadAllTransactions, session.transactionsPagination?.is_full_dataset, shouldHydrateFullTransactions]);
+
+  React.useEffect(() => {
+    if (shouldHydrateFullTransactions) return;
+    if (state.tab !== 'ledger') return;
+    if (session.transactionsPagination?.is_full_dataset) return;
+    const currentPage = Number(session.transactionsPagination?.current_page || 1);
+    if (currentPage === state.ledgerArchivePage) return;
+    void session.loadTransactionsPage(state.ledgerArchivePage, Number(session.transactionsPagination?.page_size || 250));
+  }, [
+    session.loadTransactionsPage,
+    session.transactionsPagination?.current_page,
+    session.transactionsPagination?.is_full_dataset,
+    session.transactionsPagination?.page_size,
+    shouldHydrateFullTransactions,
+    state.ledgerArchivePage,
+    state.tab,
+  ]);
+
   const scopeData = useAccumul8ScopeData({
     accounts: session.accounts,
     accessibleAccountOwners: session.accessibleAccountOwners,
@@ -66,7 +107,7 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     ledgerArchivePage: state.ledgerArchivePage, ledgerDateFilter: state.ledgerDateFilter, ledgerDisplayBalanceById: ledgerData.ledgerDisplayBalanceById,
     ledgerFilterPreset: state.ledgerFilterPreset, ledgerPaginationMode: state.ledgerPaginationMode, ledgerRows: ledgerData.ledgerRows, ledgerSearchQuery: ledgerData.ledgerSearchQuery,
     ledgerTableRef: state.ledgerTableRef, selectedBankAccountId: state.selectedBankAccountId, selectedBankingOrganizationId: state.selectedBankingOrganizationId,
-    setLedgerArchivePage: state.setLedgerArchivePage, todayDate,
+    setLedgerArchivePage: state.setLedgerArchivePage, todayDate, transactionsPagination: session.transactionsPagination,
   });
   const secondaryTables = useAccumul8SecondaryTables({
     debtorsTableRef: state.debtorsTableRef, debtorRows: debtorPayBillData.debtorRows, getAccountDisplayName: scopeData.getAccountDisplayName, payBillsRows: debtorPayBillData.payBillsRows,

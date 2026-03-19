@@ -52,6 +52,7 @@ export function useAccumul8PageState(session: any, onToast?: (toast: { tone: 'su
     activeOwnerUserId: session.activeOwnerUserId,
     bankingOrganizations: session.bankingOrganizations,
     busy: session.busy,
+    loading: session.loading,
     initialLedgerFilterPreset: 'all' as LedgerFilterPreset,
     initialListSearchQueryByTab: { ledger: '', debtors: '', pay_bills: '', contacts: '', recurring: '' } as Record<SearchableListTabKey, string>,
     initialMessageBoardMessages: [] as Accumul8MessageBoardMessage[],

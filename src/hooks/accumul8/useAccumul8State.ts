@@ -5,6 +5,7 @@ import {
   Accumul8Account,
   Accumul8BankingOrganization,
   Accumul8BillItem,
+  Accumul8TransactionsPagination,
   Accumul8BudgetRow,
   Accumul8Contact,
   Accumul8Debtor,
@@ -21,6 +22,7 @@ import {
 
 export function useAccumul8State() {
   const [busy, setBusy] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
   const [statementsLoaded, setStatementsLoaded] = React.useState(false);
   const [activeOwnerUserId, setActiveOwnerUserId] = React.useState<number>(0);
@@ -44,10 +46,18 @@ export function useAccumul8State() {
   const [statementUploads, setStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [archivedStatementUploads, setArchivedStatementUploads] = React.useState<Accumul8StatementUpload[]>([]);
   const [statementAuditRuns, setStatementAuditRuns] = React.useState<Accumul8StatementAuditRun[]>([]);
+  const [transactionsPagination, setTransactionsPagination] = React.useState<Accumul8TransactionsPagination>({
+    current_page: 1,
+    page_size: 250,
+    total_pages: 1,
+    total_rows: 0,
+    is_full_dataset: false,
+  });
   const [syncProvider, setSyncProvider] = React.useState({ provider: 'teller', env: 'sandbox', configured: 0 });
 
   return React.useMemo(() => ({
     busy, setBusy,
+    loading, setLoading,
     loaded, setLoaded,
     statementsLoaded, setStatementsLoaded,
     activeOwnerUserId, setActiveOwnerUserId,
@@ -71,9 +81,11 @@ export function useAccumul8State() {
     statementUploads, setStatementUploads,
     archivedStatementUploads, setArchivedStatementUploads,
     statementAuditRuns, setStatementAuditRuns,
+    transactionsPagination, setTransactionsPagination,
     syncProvider, setSyncProvider,
   }), [
     busy,
+    loading,
     loaded,
     statementsLoaded,
     activeOwnerUserId,
@@ -97,6 +109,7 @@ export function useAccumul8State() {
     statementUploads,
     archivedStatementUploads,
     statementAuditRuns,
+    transactionsPagination,
     syncProvider,
   ]);
 }

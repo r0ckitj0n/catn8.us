@@ -19,13 +19,13 @@ export type TaskDocumentPreview = {
 };
 
 export type LightboxPreview =
-  | { mode: 'image'; src: string; title: string }
-  | { mode: 'embed'; src: string; title: string }
-  | { mode: 'loading'; src: string; title: string }
-  | { mode: 'spreadsheet'; src: string; title: string; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
-  | { mode: 'plan'; src: string; title: string; text: string; truncated: boolean; format: 'text' | 'hex' }
-  | { mode: 'text'; src: string; title: string; text: string; truncated: boolean; taskPreview: TaskDocumentPreview | null }
-  | { mode: 'error'; src: string; title: string; message: string };
+  | { mode: 'image'; src: string; title: string; document: IBuildWizardDocument }
+  | { mode: 'embed'; src: string; title: string; document: IBuildWizardDocument }
+  | { mode: 'loading'; src: string; title: string; document: IBuildWizardDocument }
+  | { mode: 'spreadsheet'; src: string; title: string; document: IBuildWizardDocument; sheets: SpreadsheetPreviewSheet[]; truncated: boolean }
+  | { mode: 'plan'; src: string; title: string; document: IBuildWizardDocument; text: string; truncated: boolean; format: 'text' | 'hex' }
+  | { mode: 'text'; src: string; title: string; document: IBuildWizardDocument; text: string; truncated: boolean; taskPreview: TaskDocumentPreview | null }
+  | { mode: 'error'; src: string; title: string; document: IBuildWizardDocument; message: string };
 
 export type BuildWizardSearchResult =
   | { id: string; score: number; kind: 'phase'; title: string; subtitle: string; phaseId: BuildTabId }

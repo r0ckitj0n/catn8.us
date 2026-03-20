@@ -44,7 +44,7 @@ export function useBuildWizardEditableStepCardContextBuilder(options: any): Buil
     onDeleteDocument: options.onDeleteDocument,
     onDeleteStepNoteById: options.onDeleteStepNoteById,
     onDropMakeChild: options.onDropMakeChild,
-    onOpenDocumentPreview: options.openDocumentPreview,
+    onOpenDocumentPreview: options.onOpenDocumentPreview ?? options.openDocumentPreview,
     onOpenMoveStepModal: options.onOpenMoveStepModal,
     onRefreshStepActualCost: options.onRefreshStepActualCost,
     onTimelineStepChange: options.onTimelineStepChange,

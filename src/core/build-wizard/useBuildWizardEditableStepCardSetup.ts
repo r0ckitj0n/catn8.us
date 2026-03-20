@@ -42,7 +42,7 @@ export function useBuildWizardEditableStepCardSetup(options: any) {
     onDeleteDocument: options.onDeleteDocument,
     onDeleteStepNoteById: options.onDeleteStepNoteById,
     onDropMakeChild: options.onDropMakeChild,
-    onOpenDocumentPreview: options.openDocumentPreview,
+    onOpenDocumentPreview: options.onOpenDocumentPreview ?? options.openDocumentPreview,
     onOpenMoveStepModal: options.onOpenMoveStepModal,
     onRefreshStepActualCost: options.onRefreshStepActualCost,
     onTimelineStepChange: options.onTimelineStepChange,

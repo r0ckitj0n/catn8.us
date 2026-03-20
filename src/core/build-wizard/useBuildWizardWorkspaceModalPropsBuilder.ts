@@ -50,6 +50,21 @@ export function useBuildWizardWorkspaceModalPropsBuilder(options: any): React.Co
       lightboxZoomMin: options.LIGHTBOX_ZOOM_MIN,
       lightboxZoomStep: options.LIGHTBOX_ZOOM_STEP,
       onLightboxWheelZoom: options.onLightboxWheelZoom,
+      onEditTaskFromPreview: (() => {
+        const previewDoc = options.lightboxDoc?.document;
+        if (!previewDoc || String(previewDoc.kind || '').trim() !== 'receipt') {
+          return undefined;
+        }
+        const stepId = Number(previewDoc.step_id || 0);
+        const step = stepId > 0 ? (options.stepById.get(stepId) || null) : null;
+        if (!step || typeof options.onStartEditReceiptForStep !== 'function') {
+          return undefined;
+        }
+        return () => {
+          options.closeLightbox();
+          options.onStartEditReceiptForStep(step, previewDoc);
+        };
+      })(),
       open: Boolean(options.lightboxDoc),
       resetLightboxZoom: options.resetLightboxZoom,
       setLightboxSpreadsheetSheetIndex: options.setLightboxSpreadsheetSheetIndex,

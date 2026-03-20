@@ -64,22 +64,22 @@ export function useBuildWizardDocumentPreview({
 
     if (Number(doc.is_image) === 1) {
       setLightboxZoom(1);
-      setLightboxDoc({ mode: 'image', src, title });
+      setLightboxDoc({ mode: 'image', src, title, document: doc });
       return;
     }
 
     if (isPdfDocument(doc)) {
-      setLightboxDoc({ mode: 'embed', src, title });
+      setLightboxDoc({ mode: 'embed', src, title, document: doc });
       return;
     }
 
     setLightboxZoom(1);
-    setLightboxDoc({ mode: 'loading', src, title });
+    setLightboxDoc({ mode: 'loading', src, title, document: doc });
     setLightboxSpreadsheetSheetIndex(0);
 
     try {
       if (!isSpreadsheetPreviewDoc(doc) && !isPlanPreviewDoc(doc) && !isTextPreviewDoc(doc)) {
-        setLightboxDoc({ mode: 'embed', src, title });
+        setLightboxDoc({ mode: 'embed', src, title, document: doc });
         return;
       }
 
@@ -117,7 +117,7 @@ export function useBuildWizardDocumentPreview({
           throw new Error('Spreadsheet has no visible sheets');
         }
 
-        setLightboxDoc({ mode: 'spreadsheet', src, title, sheets, truncated });
+        setLightboxDoc({ mode: 'spreadsheet', src, title, document: doc, sheets, truncated });
         return;
       }
 
@@ -145,6 +145,7 @@ export function useBuildWizardDocumentPreview({
             mode: 'plan',
             src,
             title,
+            document: doc,
             text: lines.join('\n'),
             truncated: bytes.length > maxBytes,
             format: 'hex',
@@ -158,6 +159,7 @@ export function useBuildWizardDocumentPreview({
           mode: 'plan',
           src,
           title,
+          document: doc,
           text: truncated ? `${text.slice(0, maxChars)}\n\n...truncated for preview...` : text,
           truncated,
           format: 'text',
@@ -178,13 +180,14 @@ export function useBuildWizardDocumentPreview({
         mode: 'text',
         src,
         title,
+        document: doc,
         text: boundedText,
         truncated,
         taskPreview: parseTaskDocumentPreview(boundedText),
       });
     } catch (err: any) {
       const detail = String(err?.message || '').trim() || 'Failed to load file preview';
-      setLightboxDoc({ mode: 'error', src, title, message: detail });
+      setLightboxDoc({ mode: 'error', src, title, document: doc, message: detail });
       onToast?.({ tone: 'warning', message: `${title}: ${detail}` });
     }
   }, [

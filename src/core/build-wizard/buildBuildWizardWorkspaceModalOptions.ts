@@ -45,6 +45,7 @@ export function buildBuildWizardWorkspaceModalOptions(options: any) {
     onAttachExistingDocumentToReceipt: options.onAttachExistingDocumentToReceipt,
     onAutoAssignDeskStepsToTimeline: options.onAutoAssignDeskStepsToTimeline,
     onCompleteWithAi: options.onCompleteWithAi,
+    onStartEditReceiptForStep: options.onStartEditReceiptForStep,
     onLightboxWheelZoom: options.onLightboxWheelZoom,
     onMoveReceiptToStep: options.onMoveReceiptToStep,
     onMoveStepFromModal: options.onMoveStepFromModal,

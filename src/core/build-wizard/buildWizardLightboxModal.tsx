@@ -19,6 +19,7 @@ interface BuildWizardLightboxModalProps {
   open: boolean;
   resetLightboxZoom: () => void;
   setLightboxSpreadsheetSheetIndex: (index: number) => void;
+  onEditTaskFromPreview?: () => void;
   zoomLightboxBy: (delta: number) => void;
 }
 
@@ -35,6 +36,7 @@ export function BuildWizardLightboxModal({
   open,
   resetLightboxZoom,
   setLightboxSpreadsheetSheetIndex,
+  onEditTaskFromPreview,
   zoomLightboxBy,
 }: BuildWizardLightboxModalProps) {
   if (!open || !lightboxDoc) {
@@ -85,6 +87,15 @@ export function BuildWizardLightboxModal({
             href={withDownloadFlag(lightboxDoc.src)}
             className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-download"
           />
+          {onEditTaskFromPreview ? (
+            <StandardIconButton
+              iconKey="edit"
+              ariaLabel="Edit task"
+              title="Edit task"
+              className="btn btn-outline-secondary btn-sm catn8-action-icon-btn build-wizard-lightbox-edit"
+              onClick={onEditTaskFromPreview}
+            />
+          ) : null}
           <StandardIconButton
             iconKey="close"
             ariaLabel="Close preview"

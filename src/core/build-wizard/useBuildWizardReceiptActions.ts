@@ -131,6 +131,15 @@ export function useBuildWizardReceiptActions({
     setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: null }));
   }, [inlineReceiptDraftByDocId, onSaveDocument, setInlineEditingReceiptFieldByDocId]);
 
+  const toggleTaskCompleted = React.useCallback(async (doc: IBuildWizardDocument, parsed: { taskMeta: BuildWizardTaskMeta; plainNotes: string }, completed: boolean) => {
+    await onSaveDocument(doc.id, {
+      receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
+        ...parsed.taskMeta,
+        is_completed: completed,
+      }, parsed.plainNotes)),
+    });
+  }, [onSaveDocument]);
+
   const onSaveReceiptForStep = React.useCallback(async (step: IBuildWizardStep) => {
     if (projectId <= 0) return;
     const draft = receiptDraftByStep[step.id] || { receipt_title: '', receipt_vendor: '', receipt_date: '', receipt_amount: '', receipt_notes: '', task_meta: defaultTaskMeta((step.step_type || 'construction') as BuildWizardTaskType) };
@@ -207,5 +216,6 @@ export function useBuildWizardReceiptActions({
     onStartEditReceiptForStep,
     saveInlineReceiptEdit,
     startInlineReceiptEdit,
+    toggleTaskCompleted,
   };
 }

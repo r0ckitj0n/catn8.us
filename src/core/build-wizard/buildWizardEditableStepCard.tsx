@@ -128,7 +128,6 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   const draft = safeStepDrafts[step.id] || step;
   const parentStep = Number(draft.parent_step_id || 0) > 0 ? stepById.get(Number(draft.parent_step_id || 0)) : null;
   const incompleteDescendantCount = incompleteDescendantCountByStepId.get(step.id) || 0;
-  const completionLocked = Number(step.is_completed) !== 1 && incompleteDescendantCount > 0;
   const durationDays = calculateDurationDays(draft.expected_start_date, draft.expected_end_date) ?? (draft.expected_duration_days ?? null);
   const dependencyIds = Array.from(new Set((Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : []).map((rawId) => Number(rawId || 0)).filter((id) => id > 0 && id !== step.id)));
   const dependencyItems = dependencyIds.map((dependencyId) => {
@@ -145,8 +144,10 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   const isExpanded = safeExpandedStepById[step.id] === true;
   const stepDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id);
   const stepReceiptDocuments = stepDocuments.filter((doc) => doc.kind === 'receipt').sort((a, b) => {
-    const aDate = toStringOrNull(a.receipt_date || '');
-    const bDate = toStringOrNull(b.receipt_date || '');
+    const aTaskMeta = parseTaskMetaFromReceiptNotes(a.receipt_notes || '').taskMeta;
+    const bTaskMeta = parseTaskMetaFromReceiptNotes(b.receipt_notes || '').taskMeta;
+    const aDate = getTaskEffectiveDate(a, step, aTaskMeta);
+    const bDate = getTaskEffectiveDate(b, step, bTaskMeta);
     if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
     if (aDate && !bDate) return -1;
     if (!aDate && bDate) return 1;
@@ -155,6 +156,11 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
     return a.id - b.id;
   });
   const stepReceiptAttachmentDocuments = stepDocuments.filter((doc) => doc.kind === 'receipt_attachment');
+  const incompleteTaskCount = stepReceiptDocuments.reduce((count, doc) => {
+    const taskMeta = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta;
+    return count + (taskMeta.is_completed === true ? 0 : 1);
+  }, 0);
+  const completionLocked = Number(step.is_completed) !== 1 && (incompleteDescendantCount > 0 || incompleteTaskCount > 0);
   const stepNonReceiptDocuments = stepDocuments.filter((doc) => doc.kind !== 'receipt' && doc.kind !== 'receipt_attachment');
   const stepReceiptMetrics = safeReceiptMetricsByStepId.get(step.id) || {
     allCount: stepReceiptDocuments.length,
@@ -234,6 +240,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
         estimatedCost={draft.estimated_cost !== null ? Number(draft.estimated_cost || 0) : null}
         finishCurrencyEdit={context.finishCurrencyEdit}
         hasStepTasks={stepTaskCount > 0}
+        incompleteTaskCount={incompleteTaskCount}
         incompleteDescendantCount={incompleteDescendantCount}
         isActualCostVerified={isActualCostVerified}
         isExpanded={isExpanded}
@@ -297,7 +304,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
                 <div className="build-wizard-step-receipts-summary">{stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {context.formatCurrency(stepReceiptTotal)}</div>
               </div>
               <BuildWizardStepReceiptEditor authorityContacts={authorityContacts} autosaveExistingReceiptDraftForStep={autosaveExistingReceiptDraftForStep} editingReceiptDocumentIdByStep={editingReceiptDocumentIdByStep ?? {}} onSaveReceiptForStep={onSaveReceiptForStep} open={receiptEditorOpen} permitDocuments={permitDocuments} permitStatusOptions={permitStatusOptions} purchaseUnitOptions={purchaseUnitOptions} receiptDraft={receiptDraft} receiptDraftByStep={safeReceiptDraftByStep} receiptEditorRefByStepId={receiptEditorRefByStepId} setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep} setReceiptAttachmentDraftByStep={setReceiptAttachmentDraftByStep} setReceiptDraftByStep={setReceiptDraftByStep} setReceiptEditorOpenByStep={setReceiptEditorOpenByStep} step={step} taskTypeOptions={taskTypeOptions} />
-              <BuildWizardStepReceiptsList deletingDocumentId={deletingDocumentId} formatCurrency={context.formatCurrency} getTaskEffectiveDate={getTaskEffectiveDate} inlineEditingReceiptFieldByDocId={inlineEditingReceiptFieldByDocId ?? {}} inlineReceiptDraftByDocId={inlineReceiptDraftByDocId ?? {}} onDeleteDocument={onDeleteDocument} onOpenDocumentPreview={onOpenDocumentPreview} onStartEditReceiptForStep={onStartEditReceiptForStep} openMoveTaskModal={openMoveTaskModal} openTaskAttachmentsModal={openTaskAttachmentsModal} parseTaskMetaFromReceiptNotes={parseTaskMetaFromReceiptNotes} receiptRowRefByDocId={receiptRowRefByDocId} saveInlineReceiptEdit={saveInlineReceiptEdit} setInlineReceiptDraftByDocId={setInlineReceiptDraftByDocId} startInlineReceiptEdit={startInlineReceiptEdit} step={step} stepReadOnly={stepReadOnly} stepReceiptAttachmentDocuments={stepReceiptAttachmentDocuments} stepReceiptDocuments={stepReceiptDocuments} taskTypeOptions={taskTypeOptions} taskUsesManualDateOverride={taskUsesManualDateOverride} taskVendorOptions={taskVendorOptions} />
+              <BuildWizardStepReceiptsList deletingDocumentId={deletingDocumentId} formatCurrency={context.formatCurrency} getTaskEffectiveDate={getTaskEffectiveDate} inlineEditingReceiptFieldByDocId={inlineEditingReceiptFieldByDocId ?? {}} inlineReceiptDraftByDocId={inlineReceiptDraftByDocId ?? {}} onDeleteDocument={onDeleteDocument} onOpenDocumentPreview={onOpenDocumentPreview} onStartEditReceiptForStep={onStartEditReceiptForStep} openMoveTaskModal={openMoveTaskModal} openTaskAttachmentsModal={openTaskAttachmentsModal} parseTaskMetaFromReceiptNotes={parseTaskMetaFromReceiptNotes} receiptRowRefByDocId={receiptRowRefByDocId} saveInlineReceiptEdit={saveInlineReceiptEdit} setInlineReceiptDraftByDocId={setInlineReceiptDraftByDocId} startInlineReceiptEdit={startInlineReceiptEdit} step={step} stepReadOnly={stepReadOnly} stepReceiptAttachmentDocuments={stepReceiptAttachmentDocuments} stepReceiptDocuments={stepReceiptDocuments} toggleTaskCompleted={context.toggleTaskCompleted} taskTypeOptions={taskTypeOptions} taskUsesManualDateOverride={taskUsesManualDateOverride} taskVendorOptions={taskVendorOptions} />
             </div>
           ) : null}
 

@@ -11,6 +11,7 @@ interface BuildWizardEditableStepCardHeaderProps {
   estimatedCost: number | null;
   finishCurrencyEdit: (key: string, onCommit: (value: number | null) => void) => void;
   hasStepTasks: boolean;
+  incompleteTaskCount: number;
   incompleteDescendantCount: number;
   isActualCostVerified: boolean;
   isExpanded: boolean;
@@ -45,6 +46,7 @@ export function BuildWizardEditableStepCardHeader({
   effectiveActualCost,
   estimatedCost,
   hasStepTasks,
+  incompleteTaskCount,
   incompleteDescendantCount,
   isActualCostVerified,
   isExpanded,
@@ -158,7 +160,13 @@ export function BuildWizardEditableStepCardHeader({
             </div>
           </div>
         </div>
-        {completionLocked ? <span className="build-wizard-parent-lock-note">Complete {incompleteDescendantCount} child step{incompleteDescendantCount === 1 ? '' : 's'} first</span> : null}
+        {completionLocked ? (
+          <span className="build-wizard-parent-lock-note">
+            {incompleteDescendantCount > 0 ? `Complete ${incompleteDescendantCount} child step${incompleteDescendantCount === 1 ? '' : 's'} first` : null}
+            {incompleteDescendantCount > 0 && incompleteTaskCount > 0 ? ' • ' : null}
+            {incompleteTaskCount > 0 ? `Complete ${incompleteTaskCount} task${incompleteTaskCount === 1 ? '' : 's'} first` : null}
+          </span>
+        ) : null}
         {stepReadOnly ? <span className="build-wizard-step-readonly-note">Read-only (completed)</span> : null}
       </div>
       <div className="build-wizard-step-header-right">

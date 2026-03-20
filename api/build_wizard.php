@@ -2156,9 +2156,18 @@ function catn8_build_wizard_receipt_total_for_step(int $stepId): float
 
 function catn8_build_wizard_receipt_is_quote(string $receiptNotes): bool
 {
+    $decoded = catn8_build_wizard_decode_receipt_task_meta($receiptNotes);
+    if (!is_array($decoded)) {
+        return false;
+    }
+    return strtolower(trim((string)($decoded['task_type'] ?? ''))) === 'quote';
+}
+
+function catn8_build_wizard_decode_receipt_task_meta(string $receiptNotes): ?array
+{
     $trimmed = trim($receiptNotes);
     if ($trimmed === '' || !str_starts_with($trimmed, '[task_meta_json]')) {
-        return false;
+        return null;
     }
     $jsonPart = substr($trimmed, strlen('[task_meta_json]'));
     $newlinePos = strpos($jsonPart, "\n");
@@ -2166,10 +2175,28 @@ function catn8_build_wizard_receipt_is_quote(string $receiptNotes): bool
         $jsonPart = substr($jsonPart, 0, $newlinePos);
     }
     $decoded = json_decode(trim($jsonPart), true);
-    if (!is_array($decoded)) {
+    return is_array($decoded) ? $decoded : null;
+}
+
+function catn8_build_wizard_step_has_incomplete_tasks(int $stepId): bool
+{
+    if ($stepId <= 0) {
         return false;
     }
-    return strtolower(trim((string)($decoded['task_type'] ?? ''))) === 'quote';
+    $rows = Database::queryAll(
+        'SELECT receipt_notes
+         FROM build_wizard_documents
+         WHERE step_id = ? AND kind = ?',
+        [$stepId, 'receipt']
+    );
+    foreach ($rows as $row) {
+        $decoded = catn8_build_wizard_decode_receipt_task_meta((string)($row['receipt_notes'] ?? ''));
+        $isCompleted = is_array($decoded) ? !empty($decoded['is_completed']) : false;
+        if (!$isCompleted) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId, ?float $previousReceiptTotal = null): void
@@ -5922,6 +5949,9 @@ try {
             $isCompleted = ((int)$body['is_completed'] === 1) ? 1 : 0;
             if ($isCompleted === 1 && catn8_build_wizard_has_incomplete_descendants((int)$stepRow['project_id'], $stepId)) {
                 throw new RuntimeException('Complete all child steps before completing this parent step');
+            }
+            if ($isCompleted === 1 && catn8_build_wizard_step_has_incomplete_tasks($stepId)) {
+                throw new RuntimeException('Complete all tasks before completing this step');
             }
             $updates[] = 'is_completed = ?';
             $params[] = $isCompleted;

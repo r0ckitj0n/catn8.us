@@ -146,6 +146,7 @@ export interface BuildWizardEditableStepCardContext {
   taskTypeOptions: StepReceiptEditorProps['taskTypeOptions'];
   taskUsesManualDateOverride: StepReceiptsListProps['taskUsesManualDateOverride'];
   taskVendorOptions: StepReceiptsListProps['taskVendorOptions'];
+  toggleTaskCompleted: StepReceiptsListProps['toggleTaskCompleted'];
   toggleStep: (step: IBuildWizardStep, completed: boolean) => Promise<unknown>;
   updateStepDraft: (stepId: number, patch: Partial<IBuildWizardStep>) => void;
   uploadDocument: StepActionPanelProps['uploadDocument'];

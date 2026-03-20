@@ -37,6 +37,7 @@ interface BuildWizardStepReceiptsListProps {
   stepReadOnly: boolean;
   stepReceiptAttachmentDocuments: IBuildWizardDocument[];
   stepReceiptDocuments: IBuildWizardDocument[];
+  toggleTaskCompleted: (document: IBuildWizardDocument, parsedTask: ParsedTask, completed: boolean) => Promise<void>;
   taskUsesManualDateOverride: (document: IBuildWizardDocument, taskMeta: BuildWizardTaskMeta) => boolean;
   taskVendorOptions: string[];
   taskTypeOptions: Array<{ label: string; value: BuildWizardTaskType }>;
@@ -62,6 +63,7 @@ export function BuildWizardStepReceiptsList({
   stepReadOnly,
   stepReceiptAttachmentDocuments,
   stepReceiptDocuments,
+  toggleTaskCompleted,
   taskUsesManualDateOverride,
   taskVendorOptions,
   taskTypeOptions,
@@ -78,6 +80,7 @@ export function BuildWizardStepReceiptsList({
         const taskNotes = String(parsedTask.plainNotes || '').trim();
         const taskTypeLabel = taskTypeOptions.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
         const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
+        const taskCompleted = parsedTask.taskMeta.is_completed === true;
         return (
           <div
             className="build-wizard-step-receipt-row"
@@ -85,6 +88,15 @@ export function BuildWizardStepReceiptsList({
             ref={(el) => { receiptRowRefByDocId.current[doc.id] = el; }}
           >
             <div className="build-wizard-step-receipt-file">
+              <label className="build-wizard-inline-complete-toggle">
+                <input
+                  type="checkbox"
+                  checked={taskCompleted}
+                  disabled={stepReadOnly}
+                  onChange={(event) => { void toggleTaskCompleted(doc, parsedTask, event.target.checked); }}
+                />
+                <span>Complete</span>
+              </label>
               <button
                 type="button"
                 className="build-wizard-step-receipt-link"

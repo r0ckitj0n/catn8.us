@@ -81,6 +81,7 @@ export type BuildWizardTaskType = StepType | 'quote';
 
 export type BuildWizardTaskMeta = {
   task_type: BuildWizardTaskType;
+  is_completed: boolean;
   manual_date_override: boolean;
   permit_document_id: number | null;
   permit_name: string | null;

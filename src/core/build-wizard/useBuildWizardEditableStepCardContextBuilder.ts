@@ -99,6 +99,7 @@ export function useBuildWizardEditableStepCardContextBuilder(options: any): Buil
     taskTypeOptions: options.taskTypeOptions,
     taskUsesManualDateOverride: options.taskUsesManualDateOverride,
     taskVendorOptions: options.taskVendorOptions,
+    toggleTaskCompleted: options.toggleTaskCompleted,
     toggleStep: options.toggleStep,
     updateStepDraft: options.updateStepDraft,
     uploadDocument: options.uploadDocument,

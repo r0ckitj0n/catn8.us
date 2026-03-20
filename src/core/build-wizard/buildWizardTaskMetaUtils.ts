@@ -8,6 +8,7 @@ export const TASK_TYPE_OPTIONS: Array<{ value: BuildWizardTaskType; label: strin
 
 export const defaultTaskMeta = (taskType: BuildWizardTaskType = 'construction'): BuildWizardTaskMeta => ({
   task_type: taskType,
+  is_completed: false,
   manual_date_override: false,
   permit_document_id: null,
   permit_name: null,
@@ -38,7 +39,15 @@ export const parseTaskMetaFromReceiptNotes = (notes: string | null | undefined, 
     const seed = defaultTaskMeta();
     if (!decoded || typeof decoded !== 'object') return { taskMeta: seed, plainNotes };
     const taskType = String((decoded as Record<string, unknown>).task_type || '').trim() as BuildWizardTaskType;
-    return { taskMeta: { ...seed, ...(decoded as Partial<BuildWizardTaskMeta>), task_type: (allowedTaskTypes.includes(taskType) ? taskType : 'construction') }, plainNotes };
+    return {
+      taskMeta: {
+        ...seed,
+        ...(decoded as Partial<BuildWizardTaskMeta>),
+        is_completed: Boolean((decoded as Record<string, unknown>).is_completed),
+        task_type: (allowedTaskTypes.includes(taskType) ? taskType : 'construction'),
+      },
+      plainNotes,
+    };
   } catch {
     return { taskMeta: defaultTaskMeta(), plainNotes: raw };
   }

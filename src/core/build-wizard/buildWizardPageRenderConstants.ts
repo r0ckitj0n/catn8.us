@@ -14,6 +14,7 @@ export const LIGHTBOX_TEXT_PREVIEW_MAX_CHARS = 120000;
 
 export const TASK_META_FIELD_LABELS: Record<keyof BuildWizardTaskMeta, string> = {
   task_type: 'Task Type',
+  is_completed: 'Completed',
   manual_date_override: 'Manual Date Override',
   permit_document_id: 'Permit Document',
   permit_name: 'Permit Name',

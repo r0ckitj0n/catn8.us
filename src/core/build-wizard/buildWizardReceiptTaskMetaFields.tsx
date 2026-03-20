@@ -34,6 +34,20 @@ export function BuildWizardReceiptTaskMetaFields({
 }: BuildWizardReceiptTaskMetaFieldsProps) {
   return (
     <>
+      <label className="build-wizard-inline-complete-toggle">
+        <input
+          type="checkbox"
+          checked={receiptDraft.task_meta.is_completed === true}
+          onChange={(e) => setReceiptDraftByStep((prev) => ({
+            ...prev,
+            [stepId]: {
+              ...receiptDraft,
+              task_meta: { ...receiptDraft.task_meta, is_completed: e.target.checked },
+            },
+          }))}
+        />
+        <span>Complete</span>
+      </label>
       {receiptDraft.task_meta.task_type === 'permit' ? (
         <>
           <label>

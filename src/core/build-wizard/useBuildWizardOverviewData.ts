@@ -89,7 +89,7 @@ export function useBuildWizardOverviewData({
             widthPercent = (widthDays / totalDays) * 100;
           }
         }
-        const actualCost = Number(step.actual_cost);
+        const actualCost = getStepActualExcludingQuotes(step);
         const estimatedCost = Number(step.estimated_cost);
         const costMode: ProjectOverviewStepRow['costMode'] = Number.isFinite(actualCost) && actualCost > 0 ? 'actual' : (Number.isFinite(estimatedCost) && estimatedCost > 0 ? 'estimated' : 'missing');
         return {
@@ -173,7 +173,7 @@ export function useBuildWizardOverviewData({
       projectedTotal,
       remainingProjected: Math.max(0, projectedTotal - spentActual),
       aiEstimatedCostSteps: steps.filter((step) => isAiEstimatedField(step, 'estimated_cost')).length,
-      missingEstimateCount: steps.filter((step) => Number(step.actual_cost ?? 0) <= 0 && Number(step.estimated_cost ?? 0) <= 0).length,
+      missingEstimateCount: steps.filter((step) => getStepActualExcludingQuotes(step) <= 0 && Number(step.estimated_cost ?? 0) <= 0).length,
       missingTimelineCount: steps.filter((step) => !step.expected_start_date || !step.expected_end_date).length,
     };
   }, [getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, isAiEstimatedField, project?.target_completion_date, project?.target_start_date, stepPhaseBucket, steps]);

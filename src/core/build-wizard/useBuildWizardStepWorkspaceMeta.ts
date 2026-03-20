@@ -155,7 +155,13 @@ export function useBuildWizardStepWorkspaceMeta({
   }, [documents, parseTaskMetaFromReceiptNotes]);
 
   const getStepQuoteTotal = React.useCallback((stepId: number): number => receiptMetricsByStepId.get(stepId)?.quoteTotal || 0, [receiptMetricsByStepId]);
-  const getStepActualExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => Math.max(0, (Number.isFinite(Number(step.actual_cost)) && Number(step.actual_cost) > 0 ? Number(step.actual_cost) : 0) - getStepQuoteTotal(step.id)), [getStepQuoteTotal]);
+  const getStepActualExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => {
+    const receiptMetrics = receiptMetricsByStepId.get(step.id);
+    if (receiptMetrics && receiptMetrics.allCount > 0) {
+      return Math.max(0, receiptMetrics.nonQuoteTotal);
+    }
+    return Math.max(0, (Number.isFinite(Number(step.actual_cost)) && Number(step.actual_cost) > 0 ? Number(step.actual_cost) : 0) - getStepQuoteTotal(step.id));
+  }, [getStepQuoteTotal, receiptMetricsByStepId]);
   const getStepEstimatedExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => Math.max(0, (Number.isFinite(Number(step.estimated_cost)) && Number(step.estimated_cost) > 0 ? Number(step.estimated_cost) : 0) - getStepQuoteTotal(step.id)), [getStepQuoteTotal]);
 
   return { getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, moveStepPhaseOrderPreviewByTab, moveStepPhaseTabOptions, receiptMetricsByStepId, stepAssigneesByStepId, stepCardTextFilterTokens, stepDirectAssigneesByStepId, stepFilterContactOptions, stepSearchTextById };

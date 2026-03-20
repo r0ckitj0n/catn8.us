@@ -226,11 +226,13 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
     >
       <div className="build-wizard-step-phase-accent" style={{ background: stepPastelColor }} />
       <BuildWizardEditableStepCardHeader
+        changeCurrencyEdit={context.changeCurrencyEdit}
+        commitStep={context.commitStep}
         completionLocked={completionLocked}
         durationDays={durationDays}
         effectiveActualCost={effectiveActualCost}
-        estimatedCost={step.estimated_cost !== null ? Number(step.estimated_cost || 0) : null}
-        formatCurrency={context.formatCurrency}
+        estimatedCost={draft.estimated_cost !== null ? Number(draft.estimated_cost || 0) : null}
+        finishCurrencyEdit={context.finishCurrencyEdit}
         hasStepTasks={stepTaskCount > 0}
         incompleteDescendantCount={incompleteDescendantCount}
         isActualCostVerified={isActualCostVerified}
@@ -252,14 +254,19 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
         onRefreshActualCost={() => void onRefreshStepActualCost(step, refreshedActualCostVerificationSignature, recalculatedActualCost)}
         onSetExpanded={setExpandedStepById}
         onSetStepInfoModalStepId={setStepInfoModalStepId}
+        onTimelineStepChange={context.onTimelineStepChange}
         openStepEditModal={openStepEditModal}
+        renderCurrencyInputValue={context.renderCurrencyInputValue}
         rowLevel={row.level}
         step={step}
+        stepDraft={draft}
         stepAttachmentCount={stepDocuments.length}
         stepDisplayNumber={stepDisplayNumber}
         stepTaskCount={stepTaskCount}
         stepReadOnly={stepReadOnly}
+        startCurrencyEdit={context.startCurrencyEdit}
         toggleStep={toggleStep}
+        updateStepDraft={context.updateStepDraft}
       />
       {isExpanded ? (
         <>

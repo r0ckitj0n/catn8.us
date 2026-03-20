@@ -1,13 +1,16 @@
 import React from 'react';
 
+import { parseDate, toIsoDate } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardStep } from '../../types/buildWizard';
 
 interface BuildWizardEditableStepCardHeaderProps {
+  changeCurrencyEdit: (key: string, text: string) => void;
+  commitStep: (stepId: number, patch: Partial<IBuildWizardStep>) => Promise<void>;
   completionLocked: boolean;
   durationDays: number | null;
   effectiveActualCost: number | null;
   estimatedCost: number | null;
-  formatCurrency: (value: number) => string;
+  finishCurrencyEdit: (key: string, onCommit: (value: number | null) => void) => void;
   hasStepTasks: boolean;
   incompleteDescendantCount: number;
   isActualCostVerified: boolean;
@@ -18,22 +21,33 @@ interface BuildWizardEditableStepCardHeaderProps {
   onRefreshActualCost: () => void;
   onSetExpanded: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
   onSetStepInfoModalStepId: React.Dispatch<React.SetStateAction<number>>;
+  onTimelineStepChange: (stepId: number, patch: {
+    expected_start_date: string | null;
+    expected_end_date: string | null;
+    expected_duration_days: number | null;
+  }) => void;
   openStepEditModal: (step: IBuildWizardStep) => void;
+  renderCurrencyInputValue: (key: string, value: number | null | undefined) => string;
   rowLevel: number;
   step: IBuildWizardStep;
+  stepDraft: IBuildWizardStep;
   stepAttachmentCount: number;
   stepDisplayNumber: number;
   stepTaskCount: number;
   stepReadOnly: boolean;
+  startCurrencyEdit: (key: string, value: number | null | undefined) => void;
   toggleStep: (step: IBuildWizardStep, completed: boolean) => Promise<unknown>;
+  updateStepDraft: (stepId: number, patch: Partial<IBuildWizardStep>) => void;
 }
 
 export function BuildWizardEditableStepCardHeader({
+  changeCurrencyEdit,
+  commitStep,
   completionLocked,
   durationDays,
   effectiveActualCost,
   estimatedCost,
-  formatCurrency,
+  finishCurrencyEdit,
   hasStepTasks,
   incompleteDescendantCount,
   isActualCostVerified,
@@ -44,15 +58,78 @@ export function BuildWizardEditableStepCardHeader({
   onRefreshActualCost,
   onSetExpanded,
   onSetStepInfoModalStepId,
+  onTimelineStepChange,
   openStepEditModal,
+  renderCurrencyInputValue,
   rowLevel,
   step,
+  stepDraft,
   stepAttachmentCount,
   stepDisplayNumber,
   stepTaskCount,
   stepReadOnly,
+  startCurrencyEdit,
   toggleStep,
+  updateStepDraft,
 }: BuildWizardEditableStepCardHeaderProps) {
+  const estimatedCostKey = `step-${step.id}-estimated_cost`;
+  const actualCostKey = `step-${step.id}-actual_cost`;
+
+  const applyDatePatch = React.useCallback((patch: {
+    expected_start_date: string | null;
+    expected_end_date: string | null;
+    expected_duration_days: number | null;
+  }) => {
+    updateStepDraft(step.id, patch);
+    onTimelineStepChange(step.id, patch);
+  }, [onTimelineStepChange, step.id, updateStepDraft]);
+
+  const handleDurationChange = React.useCallback((rawValue: string) => {
+    const nextDuration = rawValue.trim() === '' ? null : Math.max(1, Math.round(Number(rawValue)));
+    if (nextDuration === null || !Number.isFinite(nextDuration)) {
+      return;
+    }
+    const currentStart = stepDraft.expected_start_date || stepDraft.expected_end_date || null;
+    const currentEnd = stepDraft.expected_end_date || stepDraft.expected_start_date || null;
+    const anchorDate = parseDate(currentStart || currentEnd);
+    if (!anchorDate) {
+      updateStepDraft(step.id, { expected_duration_days: nextDuration });
+      return;
+    }
+    const nextEndDate = new Date(anchorDate);
+    nextEndDate.setDate(nextEndDate.getDate() + Math.max(0, nextDuration - 1));
+    applyDatePatch({
+      expected_start_date: currentStart || toIsoDate(anchorDate),
+      expected_end_date: toIsoDate(nextEndDate),
+      expected_duration_days: nextDuration,
+    });
+  }, [applyDatePatch, step.id, stepDraft.expected_end_date, stepDraft.expected_start_date, updateStepDraft]);
+
+  const handleStartDateChange = React.useCallback((nextStartValue: string) => {
+    const nextStart = nextStartValue || null;
+    const nextEnd = stepDraft.expected_end_date || nextStart;
+    applyDatePatch({
+      expected_start_date: nextStart,
+      expected_end_date: nextEnd,
+      expected_duration_days: durationDays,
+    });
+  }, [applyDatePatch, durationDays, stepDraft.expected_end_date]);
+
+  const handleEndDateChange = React.useCallback((nextEndValue: string) => {
+    const nextEnd = nextEndValue || null;
+    const nextStart = stepDraft.expected_start_date || nextEnd;
+    applyDatePatch({
+      expected_start_date: nextStart,
+      expected_end_date: nextEnd,
+      expected_duration_days: durationDays,
+    });
+  }, [applyDatePatch, durationDays, stepDraft.expected_start_date]);
+
+  const commitCurrencyField = React.useCallback((field: 'estimated_cost' | 'actual_cost', value: number | null) => {
+    updateStepDraft(step.id, { [field]: value });
+    void commitStep(step.id, { [field]: value });
+  }, [commitStep, step.id, updateStepDraft]);
+
   return (
     <div className="build-wizard-step-header">
       <div className="build-wizard-step-header-left">
@@ -72,12 +149,49 @@ export function BuildWizardEditableStepCardHeader({
           <span className="build-wizard-step-order-pill" title="Step number is automatically set from timeline order">#{stepDisplayNumber}</span>
         </div>
         <div className="build-wizard-step-metrics-panel">
-          <div className="build-wizard-step-title-display">{step.title || 'Untitled Step'}</div>
+          <div className="build-wizard-step-title-display">{stepDraft.title || 'Untitled Step'}</div>
           <div className="build-wizard-inline-metrics">
-            <div className="build-wizard-date-inline"><span>Duration (Days)</span><strong>{durationDays ?? '-'}</strong></div>
-            <div className="build-wizard-date-inline"><span>Start</span><strong>{step.expected_start_date || '-'}</strong></div>
-            <div className="build-wizard-date-inline"><span>End</span><strong>{step.expected_end_date || '-'}</strong></div>
-            <div className="build-wizard-date-inline"><span>Estimated Cost</span><strong>{estimatedCost !== null ? formatCurrency(Number(estimatedCost || 0)) : '-'}</strong></div>
+            <label className="build-wizard-duration-inline">
+              <span>Duration (Days)</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={durationDays ?? ''}
+                disabled={stepReadOnly}
+                onChange={(e) => handleDurationChange(e.target.value)}
+              />
+            </label>
+            <label className="build-wizard-date-inline">
+              <span>Start</span>
+              <input
+                type="date"
+                value={stepDraft.expected_start_date || ''}
+                disabled={stepReadOnly}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+              />
+            </label>
+            <label className="build-wizard-date-inline">
+              <span>End</span>
+              <input
+                type="date"
+                value={stepDraft.expected_end_date || ''}
+                disabled={stepReadOnly}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+              />
+            </label>
+            <label className="build-wizard-date-inline">
+              <span>Estimated Cost</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={renderCurrencyInputValue(estimatedCostKey, estimatedCost)}
+                disabled={stepReadOnly}
+                onFocus={() => startCurrencyEdit(estimatedCostKey, estimatedCost)}
+                onChange={(e) => changeCurrencyEdit(estimatedCostKey, e.target.value)}
+                onBlur={() => finishCurrencyEdit(estimatedCostKey, (value) => commitCurrencyField('estimated_cost', value))}
+              />
+            </label>
             <div className="build-wizard-date-inline">
               <span className="build-wizard-cost-label-row">
                 <span>Actual Cost</span>
@@ -88,7 +202,15 @@ export function BuildWizardEditableStepCardHeader({
                   {isActualCostVerified ? <span className="build-wizard-actual-cost-check" aria-label="Actual cost is up to date" title="Actual cost is up to date">✓</span> : null}
                 </span>
               </span>
-              <strong>{effectiveActualCost !== null ? formatCurrency(Number(effectiveActualCost || 0)) : '-'}</strong>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={renderCurrencyInputValue(actualCostKey, effectiveActualCost)}
+                disabled={stepReadOnly}
+                onFocus={() => startCurrencyEdit(actualCostKey, effectiveActualCost)}
+                onChange={(e) => changeCurrencyEdit(actualCostKey, e.target.value)}
+                onBlur={() => finishCurrencyEdit(actualCostKey, (value) => commitCurrencyField('actual_cost', value))}
+              />
             </div>
           </div>
         </div>

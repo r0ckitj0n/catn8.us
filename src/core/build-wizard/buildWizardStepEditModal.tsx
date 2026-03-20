@@ -100,109 +100,6 @@ export function BuildWizardStepEditModal({
         </div>
 
         <fieldset className="build-wizard-step-fields build-wizard-step-edit-fields">
-          <div className="build-wizard-step-edit-summary">
-            <div className="build-wizard-step-edit-summary-card">
-              <span>Dependencies</span>
-              <strong>{dependencyCount}</strong>
-            </div>
-            <div className="build-wizard-step-edit-summary-card">
-              <span>Estimated</span>
-              <strong>{summaryEstimatedCost ?? '-'}</strong>
-            </div>
-            <div className="build-wizard-step-edit-summary-card">
-              <span>Actual</span>
-              <strong>{summaryActualCost ?? '-'}</strong>
-            </div>
-            <div className="build-wizard-step-edit-summary-card">
-              <span>Window</span>
-              <strong>{stepDraft.expected_start_date || 'TBD'} to {stepDraft.expected_end_date || 'TBD'}</strong>
-            </div>
-          </div>
-
-          <section className="build-wizard-step-edit-section">
-            <div className="build-wizard-step-edit-section-head">
-              <h4>Dependencies</h4>
-              <p>Track prerequisite work before this step moves forward.</p>
-            </div>
-            <div className="build-wizard-step-grid">
-              <div className={`build-wizard-type-note build-wizard-dependency-note build-wizard-step-edit-dependency-panel ${stepEditModalDependencyIds.length > 0 ? '' : 'is-empty-inline'}`}>
-              <div className="build-wizard-dependency-head">
-                <span>Depends on:</span>
-                {stepEditModalDependencyIds.length > 0 ? (
-                  <button
-                    type="button"
-                    className="btn btn-link btn-sm"
-                    onClick={() => updateStepDraft(step.id, { depends_on_step_ids: [] })}
-                  >
-                    Clear
-                  </button>
-                ) : null}
-              </div>
-              {stepEditModalDependencyIds.length > 0 ? (
-                <div className="build-wizard-dependency-chip-list">
-                  {stepEditModalDependencyIds.map((dependencyId) => {
-                    const dependency = stepById.get(dependencyId) || null;
-                    const phaseId = dependency ? stepPhaseBucket(dependency) : null;
-                    const phase = phaseId ? BUILD_TABS.find((tab) => tab.id === phaseId) : null;
-                    const label = dependency
-                      ? `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phase ? phase.label : prettyPhaseLabel(dependency.phase_key)})`
-                      : `#${dependencyId} (missing step)`;
-                    return (
-                      <span key={`step-edit-dependency-${dependencyId}`} className="build-wizard-dependency-chip">
-                        {label}
-                        <button
-                          type="button"
-                          className="build-wizard-dependency-chip-remove"
-                          aria-label={`Remove dependency ${label}`}
-                          title="Remove dependency"
-                          onClick={() => updateStepDraft(step.id, {
-                            depends_on_step_ids: stepEditModalDependencyIds.filter((id) => id !== dependencyId),
-                          })}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="build-wizard-dependency-empty">No dependencies set.</div>
-              )}
-              <div className="build-wizard-dependency-controls">
-                <select
-                  value={dependencyCandidateByStepId[step.id] || ''}
-                  onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
-                >
-                  <option value="">Add dependency step...</option>
-                  {stepEditModalDependencyOptions.map((candidate) => {
-                    const phaseId = stepPhaseBucket(candidate);
-                    const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
-                    const label = `#${activeTabStepNumbers.get(candidate.id) || candidate.step_order} ${candidate.title} (${phase ? phase.label : prettyPhaseLabel(candidate.phase_key)})`;
-                    return <option key={candidate.id} value={String(candidate.id)}>{label}</option>;
-                  })}
-                </select>
-                <button
-                  type="button"
-                  className="btn btn-outline-primary btn-sm"
-                  disabled={Number(dependencyCandidateByStepId[step.id] || 0) <= 0}
-                  onClick={() => {
-                    const selectedId = Number(dependencyCandidateByStepId[step.id] || 0);
-                    if (selectedId <= 0 || stepEditModalDependencyIds.includes(selectedId)) {
-                      return;
-                    }
-                    updateStepDraft(step.id, {
-                      depends_on_step_ids: [...stepEditModalDependencyIds, selectedId],
-                    });
-                    setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: '' }));
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-            </div>
-          </section>
-
           <section className="build-wizard-step-edit-section">
             <div className="build-wizard-step-edit-section-head build-wizard-step-edit-section-head-details">
               <div className="build-wizard-step-edit-section-head-copy">
@@ -287,6 +184,109 @@ export function BuildWizardStepEditModal({
               </label>
             </div>
           </section>
+
+          <section className="build-wizard-step-edit-section">
+            <div className="build-wizard-step-edit-section-head">
+              <h4>Dependencies</h4>
+              <p>Track prerequisite work before this step moves forward.</p>
+            </div>
+            <div className="build-wizard-step-grid">
+              <div className={`build-wizard-type-note build-wizard-dependency-note build-wizard-step-edit-dependency-panel ${stepEditModalDependencyIds.length > 0 ? '' : 'is-empty-inline'}`}>
+                <div className="build-wizard-dependency-head">
+                  <span>Depends on:</span>
+                  {stepEditModalDependencyIds.length > 0 ? (
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm"
+                      onClick={() => updateStepDraft(step.id, { depends_on_step_ids: [] })}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                {stepEditModalDependencyIds.length > 0 ? (
+                  <div className="build-wizard-dependency-chip-list">
+                    {stepEditModalDependencyIds.map((dependencyId) => {
+                      const dependency = stepById.get(dependencyId) || null;
+                      const phaseId = dependency ? stepPhaseBucket(dependency) : null;
+                      const phase = phaseId ? BUILD_TABS.find((tab) => tab.id === phaseId) : null;
+                      const label = dependency
+                        ? `#${activeTabStepNumbers.get(dependency.id) || dependency.step_order} ${dependency.title} (${phase ? phase.label : prettyPhaseLabel(dependency.phase_key)})`
+                        : `#${dependencyId} (missing step)`;
+                      return (
+                        <span key={`step-edit-dependency-${dependencyId}`} className="build-wizard-dependency-chip">
+                          {label}
+                          <button
+                            type="button"
+                            className="build-wizard-dependency-chip-remove"
+                            aria-label={`Remove dependency ${label}`}
+                            title="Remove dependency"
+                            onClick={() => updateStepDraft(step.id, {
+                              depends_on_step_ids: stepEditModalDependencyIds.filter((id) => id !== dependencyId),
+                            })}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="build-wizard-dependency-empty">No dependencies set.</div>
+                )}
+                <div className="build-wizard-dependency-controls">
+                  <select
+                    value={dependencyCandidateByStepId[step.id] || ''}
+                    onChange={(e) => setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))}
+                  >
+                    <option value="">Add dependency step...</option>
+                    {stepEditModalDependencyOptions.map((candidate) => {
+                      const phaseId = stepPhaseBucket(candidate);
+                      const phase = BUILD_TABS.find((tab) => tab.id === phaseId);
+                      const label = `#${activeTabStepNumbers.get(candidate.id) || candidate.step_order} ${candidate.title} (${phase ? phase.label : prettyPhaseLabel(candidate.phase_key)})`;
+                      return <option key={candidate.id} value={String(candidate.id)}>{label}</option>;
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    disabled={Number(dependencyCandidateByStepId[step.id] || 0) <= 0}
+                    onClick={() => {
+                      const selectedId = Number(dependencyCandidateByStepId[step.id] || 0);
+                      if (selectedId <= 0 || stepEditModalDependencyIds.includes(selectedId)) {
+                        return;
+                      }
+                      updateStepDraft(step.id, {
+                        depends_on_step_ids: [...stepEditModalDependencyIds, selectedId],
+                      });
+                      setDependencyCandidateByStepId((prev) => ({ ...prev, [step.id]: '' }));
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="build-wizard-step-edit-summary">
+            <div className="build-wizard-step-edit-summary-card">
+              <span>Dependencies</span>
+              <strong>{dependencyCount}</strong>
+            </div>
+            <div className="build-wizard-step-edit-summary-card">
+              <span>Estimated</span>
+              <strong>{summaryEstimatedCost ?? '-'}</strong>
+            </div>
+            <div className="build-wizard-step-edit-summary-card">
+              <span>Actual</span>
+              <strong>{summaryActualCost ?? '-'}</strong>
+            </div>
+            <div className="build-wizard-step-edit-summary-card">
+              <span>Window</span>
+              <strong>{stepDraft.expected_start_date || 'TBD'} to {stepDraft.expected_end_date || 'TBD'}</strong>
+            </div>
+          </div>
         </fieldset>
 
         <div className="build-wizard-doc-manager-actions build-wizard-step-edit-actions">

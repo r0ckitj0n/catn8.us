@@ -12,6 +12,7 @@ export function buildBuildWizardWorkspaceModalOptions(options: any) {
     attachExistingDocFilterByReceiptId: options.attachExistingDocFilterByReceiptId,
     closeConfirmation: options.closeConfirmation,
     closeLightbox: options.closeLightbox,
+    closeStepEditModal: options.closeStepEditModal,
     confirmState: options.confirmState,
     dependencyCandidateByStepId: options.dependencyCandidateByStepId,
     deskAutoAssignBusy: options.deskAutoAssignBusy,

@@ -43,6 +43,8 @@ export interface BuildWizardEditableStepCardContext {
   authorityContacts: StepReceiptEditorProps['authorityContacts'];
   autosaveExistingReceiptDraftForStep: StepReceiptEditorProps['autosaveExistingReceiptDraftForStep'];
   beginStepDrag: (event: React.DragEvent<HTMLElement>, stepId: number, stepReadOnly: boolean) => void;
+  changeCurrencyEdit: (key: string, text: string) => void;
+  commitStep: (stepId: number, patch: Partial<IBuildWizardStep>) => Promise<void>;
   clearStepDragState: () => void;
   contactTypeChipClass: StepAssigneesProps['contactTypeChipClass'];
   contactTypeLabel: StepActionPanelProps['contactTypeLabel'];
@@ -76,6 +78,11 @@ export interface BuildWizardEditableStepCardContext {
   onOpenDocumentPreview: StepReceiptsListProps['onOpenDocumentPreview'];
   onOpenMoveStepModal: (stepId: number) => void;
   onRefreshStepActualCost: (step: IBuildWizardStep, verificationSignature: string, recalculatedActualCost: number | null) => Promise<void>;
+  onTimelineStepChange: (stepId: number, patch: {
+    expected_start_date: string | null;
+    expected_end_date: string | null;
+    expected_duration_days: number | null;
+  }) => void;
   onSaveEditedNote: StepNotesProps['onSaveEditedNote'];
   onSaveReceiptForStep: StepReceiptEditorProps['onSaveReceiptForStep'];
   onStartEditNote: StepNotesProps['onStartEditNote'];
@@ -102,6 +109,7 @@ export interface BuildWizardEditableStepCardContext {
   receiptRowRefByDocId: StepReceiptsListProps['receiptRowRefByDocId'];
   refreshingActualCostByStepId: Record<number, boolean>;
   renderDocumentGallery: (items: IBuildWizardDocument[], emptyText: string, readOnly?: boolean) => React.ReactNode;
+  renderCurrencyInputValue: (key: string, value: number | null | undefined) => string;
   requestConfirmation: (config: {
     title: string;
     message: string;
@@ -127,6 +135,7 @@ export interface BuildWizardEditableStepCardContext {
   setStepContactCandidateByStepId: StepActionPanelProps['setStepContactCandidateByStepId'];
   setStepContactPickerOpenByStepId: StepActionPanelProps['setStepContactPickerOpenByStepId'];
   setStepInfoModalStepId: React.Dispatch<React.SetStateAction<number>>;
+  startCurrencyEdit: (key: string, value: number | null | undefined) => void;
   startInlineReceiptEdit: StepReceiptsListProps['startInlineReceiptEdit'];
   stepAssigneesByStepId: Map<number, StepAssigneesProps['allStepAssignees']>;
   stepById: Map<number, IBuildWizardStep>;
@@ -138,6 +147,8 @@ export interface BuildWizardEditableStepCardContext {
   taskUsesManualDateOverride: StepReceiptsListProps['taskUsesManualDateOverride'];
   taskVendorOptions: StepReceiptsListProps['taskVendorOptions'];
   toggleStep: (step: IBuildWizardStep, completed: boolean) => Promise<unknown>;
+  updateStepDraft: (stepId: number, patch: Partial<IBuildWizardStep>) => void;
   uploadDocument: StepActionPanelProps['uploadDocument'];
   verifiedActualCostSignatureByStepId: Record<number, string>;
+  finishCurrencyEdit: (key: string, onCommit: (value: number | null) => void) => void;
 }

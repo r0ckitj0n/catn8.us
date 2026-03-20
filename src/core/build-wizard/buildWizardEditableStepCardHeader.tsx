@@ -74,6 +74,7 @@ export function BuildWizardEditableStepCardHeader({
 }: BuildWizardEditableStepCardHeaderProps) {
   const estimatedCostKey = `step-${step.id}-estimated_cost`;
   const actualCostKey = `step-${step.id}-actual_cost`;
+  const [editingField, setEditingField] = React.useState<'duration' | 'start' | 'end' | 'estimated_cost' | 'actual_cost' | null>(null);
 
   const applyDatePatch = React.useCallback((patch: {
     expected_start_date: string | null;
@@ -130,6 +131,10 @@ export function BuildWizardEditableStepCardHeader({
     void commitStep(step.id, { [field]: value });
   }, [commitStep, step.id, updateStepDraft]);
 
+  const closeInlineEditor = React.useCallback(() => {
+    setEditingField(null);
+  }, []);
+
   return (
     <div className="build-wizard-step-header">
       <div className="build-wizard-step-header-left">
@@ -153,44 +158,130 @@ export function BuildWizardEditableStepCardHeader({
           <div className="build-wizard-inline-metrics">
             <label className="build-wizard-duration-inline">
               <span>Duration (Days)</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={durationDays ?? ''}
-                disabled={stepReadOnly}
-                onChange={(e) => handleDurationChange(e.target.value)}
-              />
+              {editingField === 'duration' ? (
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  autoFocus
+                  value={durationDays ?? ''}
+                  disabled={stepReadOnly}
+                  onChange={(e) => handleDurationChange(e.target.value)}
+                  onBlur={closeInlineEditor}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      closeInlineEditor();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="build-wizard-inline-edit-trigger"
+                  disabled={stepReadOnly}
+                  onClick={() => setEditingField('duration')}
+                >
+                  {durationDays ?? '-'}
+                </button>
+              )}
             </label>
             <label className="build-wizard-date-inline">
               <span>Start</span>
-              <input
-                type="date"
-                value={stepDraft.expected_start_date || ''}
-                disabled={stepReadOnly}
-                onChange={(e) => handleStartDateChange(e.target.value)}
-              />
+              {editingField === 'start' ? (
+                <input
+                  type="date"
+                  autoFocus
+                  value={stepDraft.expected_start_date || ''}
+                  disabled={stepReadOnly}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  onBlur={closeInlineEditor}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      closeInlineEditor();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="build-wizard-inline-edit-trigger"
+                  disabled={stepReadOnly}
+                  onClick={() => setEditingField('start')}
+                >
+                  {stepDraft.expected_start_date || '-'}
+                </button>
+              )}
             </label>
             <label className="build-wizard-date-inline">
               <span>End</span>
-              <input
-                type="date"
-                value={stepDraft.expected_end_date || ''}
-                disabled={stepReadOnly}
-                onChange={(e) => handleEndDateChange(e.target.value)}
-              />
+              {editingField === 'end' ? (
+                <input
+                  type="date"
+                  autoFocus
+                  value={stepDraft.expected_end_date || ''}
+                  disabled={stepReadOnly}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  onBlur={closeInlineEditor}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      closeInlineEditor();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="build-wizard-inline-edit-trigger"
+                  disabled={stepReadOnly}
+                  onClick={() => setEditingField('end')}
+                >
+                  {stepDraft.expected_end_date || '-'}
+                </button>
+              )}
             </label>
             <label className="build-wizard-date-inline">
               <span>Estimated Cost</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={renderCurrencyInputValue(estimatedCostKey, estimatedCost)}
-                disabled={stepReadOnly}
-                onFocus={() => startCurrencyEdit(estimatedCostKey, estimatedCost)}
-                onChange={(e) => changeCurrencyEdit(estimatedCostKey, e.target.value)}
-                onBlur={() => finishCurrencyEdit(estimatedCostKey, (value) => commitCurrencyField('estimated_cost', value))}
-              />
+              {editingField === 'estimated_cost' ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={renderCurrencyInputValue(estimatedCostKey, estimatedCost)}
+                  disabled={stepReadOnly}
+                  onFocus={() => startCurrencyEdit(estimatedCostKey, estimatedCost)}
+                  onChange={(e) => changeCurrencyEdit(estimatedCostKey, e.target.value)}
+                  onBlur={() => {
+                    finishCurrencyEdit(estimatedCostKey, (value) => commitCurrencyField('estimated_cost', value));
+                    closeInlineEditor();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      closeInlineEditor();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="build-wizard-inline-edit-trigger"
+                  disabled={stepReadOnly}
+                  onClick={() => setEditingField('estimated_cost')}
+                >
+                  {estimatedCost !== null ? renderCurrencyInputValue(estimatedCostKey, estimatedCost) : '-'}
+                </button>
+              )}
             </label>
             <div className="build-wizard-date-inline">
               <span className="build-wizard-cost-label-row">
@@ -202,15 +293,38 @@ export function BuildWizardEditableStepCardHeader({
                   {isActualCostVerified ? <span className="build-wizard-actual-cost-check" aria-label="Actual cost is up to date" title="Actual cost is up to date">✓</span> : null}
                 </span>
               </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={renderCurrencyInputValue(actualCostKey, effectiveActualCost)}
-                disabled={stepReadOnly}
-                onFocus={() => startCurrencyEdit(actualCostKey, effectiveActualCost)}
-                onChange={(e) => changeCurrencyEdit(actualCostKey, e.target.value)}
-                onBlur={() => finishCurrencyEdit(actualCostKey, (value) => commitCurrencyField('actual_cost', value))}
-              />
+              {editingField === 'actual_cost' ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={renderCurrencyInputValue(actualCostKey, effectiveActualCost)}
+                  disabled={stepReadOnly}
+                  onFocus={() => startCurrencyEdit(actualCostKey, effectiveActualCost)}
+                  onChange={(e) => changeCurrencyEdit(actualCostKey, e.target.value)}
+                  onBlur={() => {
+                    finishCurrencyEdit(actualCostKey, (value) => commitCurrencyField('actual_cost', value));
+                    closeInlineEditor();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      closeInlineEditor();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="build-wizard-inline-edit-trigger"
+                  disabled={stepReadOnly}
+                  onClick={() => setEditingField('actual_cost')}
+                >
+                  {effectiveActualCost !== null ? renderCurrencyInputValue(actualCostKey, effectiveActualCost) : '-'}
+                </button>
+              )}
             </div>
           </div>
         </div>

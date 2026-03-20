@@ -2106,10 +2106,10 @@ function catn8_build_wizard_step_receipt_totals(int $projectId): array
         return [];
     }
     $rows = Database::queryAll(
-        'SELECT step_id, COUNT(*) AS receipt_count, SUM(COALESCE(receipt_amount, 0)) AS receipt_total
+        'SELECT step_id, receipt_amount, receipt_notes
          FROM build_wizard_documents
          WHERE project_id = ? AND step_id IS NOT NULL AND kind = ?
-         GROUP BY step_id',
+         ORDER BY step_id ASC, id ASC',
         [$projectId, 'receipt']
     );
     $out = [];
@@ -2118,10 +2118,17 @@ function catn8_build_wizard_step_receipt_totals(int $projectId): array
         if ($stepId <= 0) {
             continue;
         }
-        $out[$stepId] = [
-            'receipt_count' => (int)($row['receipt_count'] ?? 0),
-            'receipt_total' => (float)($row['receipt_total'] ?? 0),
-        ];
+        if (!isset($out[$stepId])) {
+            $out[$stepId] = [
+                'receipt_count' => 0,
+                'receipt_total' => 0.0,
+            ];
+        }
+        $out[$stepId]['receipt_count'] += 1;
+        if (catn8_build_wizard_receipt_is_quote((string)($row['receipt_notes'] ?? ''))) {
+            continue;
+        }
+        $out[$stepId]['receipt_total'] += (float)($row['receipt_amount'] ?? 0);
     }
     return $out;
 }
@@ -2131,13 +2138,38 @@ function catn8_build_wizard_receipt_total_for_step(int $stepId): float
     if ($stepId <= 0) {
         return 0.0;
     }
-    $row = Database::queryOne(
-        'SELECT COALESCE(SUM(COALESCE(receipt_amount, 0)), 0) AS receipt_total
+    $rows = Database::queryAll(
+        'SELECT receipt_amount, receipt_notes
          FROM build_wizard_documents
          WHERE step_id = ? AND kind = ?',
         [$stepId, 'receipt']
     );
-    return (float)($row['receipt_total'] ?? 0);
+    $total = 0.0;
+    foreach ($rows as $row) {
+        if (catn8_build_wizard_receipt_is_quote((string)($row['receipt_notes'] ?? ''))) {
+            continue;
+        }
+        $total += (float)($row['receipt_amount'] ?? 0);
+    }
+    return $total;
+}
+
+function catn8_build_wizard_receipt_is_quote(string $receiptNotes): bool
+{
+    $trimmed = trim($receiptNotes);
+    if ($trimmed === '' || !str_starts_with($trimmed, '[task_meta_json]')) {
+        return false;
+    }
+    $jsonPart = substr($trimmed, strlen('[task_meta_json]'));
+    $newlinePos = strpos($jsonPart, "\n");
+    if ($newlinePos !== false) {
+        $jsonPart = substr($jsonPart, 0, $newlinePos);
+    }
+    $decoded = json_decode(trim($jsonPart), true);
+    if (!is_array($decoded)) {
+        return false;
+    }
+    return strtolower(trim((string)($decoded['task_type'] ?? ''))) === 'quote';
 }
 
 function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId, ?float $previousReceiptTotal = null): void

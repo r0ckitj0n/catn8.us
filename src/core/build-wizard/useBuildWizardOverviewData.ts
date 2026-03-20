@@ -43,13 +43,13 @@ export function useBuildWizardOverviewData({
       return { phaseTotal: 0, projectToDateTotal: 0 };
     }
     const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
-    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + stepCostTotalExcludingQuotes(step), 0);
+    const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + getStepActualExcludingQuotes(step), 0);
     const projectToDateTotal = steps.reduce((sum, step) => {
       const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhaseBucket(step));
-      return stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex ? sum + stepCostTotalExcludingQuotes(step) : sum;
+      return stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex ? sum + getStepActualExcludingQuotes(step) : sum;
     }, 0);
     return { phaseTotal, projectToDateTotal };
-  }, [activeTab, filteredTabSteps, stepCostTotalExcludingQuotes, stepPhaseBucket, steps]);
+  }, [activeTab, filteredTabSteps, getStepActualExcludingQuotes, stepPhaseBucket, steps]);
 
   const stepDocumentCountByStepId = React.useMemo(() => {
     const map = new Map<number, number>();

@@ -75,17 +75,55 @@ export function useBuildWizardStepEditActions({
     }
   }, [compareStepsByTimeline, reorderSteps, steps]);
 
+  const syncPhaseActualCostsFromReceipts = React.useCallback(async (phaseKey: string) => {
+    const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
+    const phaseSteps = steps.filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase);
+    let updatedCount = 0;
+    for (const step of phaseSteps) {
+      const receiptActualCostTotal = documents.reduce((sum, doc) => {
+        if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') return sum;
+        const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
+        if (parsed.taskMeta.task_type === 'quote') return sum;
+        return sum + Number(doc.receipt_amount || 0);
+      }, 0);
+      const nextActualCost = receiptActualCostTotal > 0 ? receiptActualCostTotal : null;
+      const currentActualCost = Number.isFinite(Number(step.actual_cost)) && Number(step.actual_cost) > 0 ? Number(step.actual_cost) : null;
+      const unchanged = currentActualCost === null
+        ? nextActualCost === null
+        : nextActualCost !== null && Math.abs(currentActualCost - nextActualCost) < 0.005;
+      if (unchanged) {
+        continue;
+      }
+      const nextStep = await updateStep(step.id, { actual_cost: nextActualCost });
+      if (nextStep) {
+        updatedCount += 1;
+      }
+    }
+    return updatedCount;
+  }, [documents, parseTaskMetaFromReceiptNotes, steps, updateStep]);
+
   const refreshPhaseTimelineOrder = React.useCallback(async (phaseKey: string) => {
     const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
+    const recalculatedCostCount = await syncPhaseActualCostsFromReceipts(normalizedPhase);
     const phaseStepCount = steps.filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase).length;
-    if (phaseStepCount <= 1) {
-      onToast?.({ tone: 'info', message: 'Not enough dated steps in this phase to reorder.' });
-      return false;
+    if (phaseStepCount > 1) {
+      await autoReorderPhaseByTimeline(normalizedPhase);
     }
-    await autoReorderPhaseByTimeline(normalizedPhase);
-    onToast?.({ tone: 'success', message: 'Step order refreshed from timeline dates.' });
-    return true;
-  }, [autoReorderPhaseByTimeline, onToast, steps]);
+    if (recalculatedCostCount > 0 && phaseStepCount > 1) {
+      onToast?.({ tone: 'success', message: `Step order refreshed from timeline dates. Recalculated ${recalculatedCostCount} step cost${recalculatedCostCount === 1 ? '' : 's'} from task totals.` });
+      return true;
+    }
+    if (recalculatedCostCount > 0) {
+      onToast?.({ tone: 'success', message: `Recalculated ${recalculatedCostCount} step cost${recalculatedCostCount === 1 ? '' : 's'} from task totals.` });
+      return true;
+    }
+    if (phaseStepCount > 1) {
+      onToast?.({ tone: 'success', message: 'Step order refreshed from timeline dates.' });
+      return true;
+    }
+    onToast?.({ tone: 'info', message: 'No phase cost or timeline order changes were needed.' });
+    return false;
+  }, [autoReorderPhaseByTimeline, onToast, steps, syncPhaseActualCostsFromReceipts]);
 
   const saveStepEditModal = React.useCallback(async () => {
     if (!stepEditModalStep || stepEditSaving) return;

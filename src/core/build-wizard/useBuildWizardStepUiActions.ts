@@ -7,6 +7,7 @@ import { formatCurrencyForInput, parseCurrencyText } from './buildWizardCurrency
 interface UseBuildWizardStepUiActionsOptions {
   activeCurrencyInputKey: string;
   currencyInputByKey: Record<string, string>;
+  reorderSteps: (phaseKey: string, orderedIds: number[]) => Promise<unknown>;
   setActiveCurrencyInputKey: React.Dispatch<React.SetStateAction<string>>;
   setCurrencyInputByKey: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setRefreshingActualCostByStepId: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
@@ -16,6 +17,7 @@ interface UseBuildWizardStepUiActionsOptions {
   stepById: Map<number, IBuildWizardStep>;
   stepDrafts: Record<number, IBuildWizardStep>;
   stepEditModalStepId: number;
+  steps: IBuildWizardStep[];
   updateStep: (stepId: number, patch: Partial<IBuildWizardStep>) => Promise<IBuildWizardStep | null | undefined>;
   onToast?: (t: { tone: 'success' | 'error' | 'info' | 'warning'; message: string }) => void;
 }
@@ -24,6 +26,7 @@ export function useBuildWizardStepUiActions({
   activeCurrencyInputKey,
   currencyInputByKey,
   onToast,
+  reorderSteps,
   setActiveCurrencyInputKey,
   setCurrencyInputByKey,
   setRefreshingActualCostByStepId,
@@ -33,6 +36,7 @@ export function useBuildWizardStepUiActions({
   stepById,
   stepDrafts,
   stepEditModalStepId,
+  steps,
   updateStep,
 }: UseBuildWizardStepUiActionsOptions) {
   const updateStepDraft = React.useCallback((stepId: number, patch: Partial<IBuildWizardStep>) => {
@@ -75,6 +79,44 @@ export function useBuildWizardStepUiActions({
   const commitStep = React.useCallback(async (stepId: number, patch: Partial<IBuildWizardStep>) => {
     await updateStep(stepId, patch);
   }, [updateStep]);
+
+  const compareStepsByTimeline = React.useCallback((
+    left: IBuildWizardStep,
+    right: IBuildWizardStep,
+    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
+  ): number => {
+    const leftStart = toStringOrNull((overridesByStepId?.get(left.id)?.expected_start_date ?? left.expected_start_date) || '');
+    const leftEnd = toStringOrNull((overridesByStepId?.get(left.id)?.expected_end_date ?? left.expected_end_date) || '');
+    const rightStart = toStringOrNull((overridesByStepId?.get(right.id)?.expected_start_date ?? right.expected_start_date) || '');
+    const rightEnd = toStringOrNull((overridesByStepId?.get(right.id)?.expected_end_date ?? right.expected_end_date) || '');
+    const leftAnchor = leftStart || leftEnd;
+    const rightAnchor = rightStart || rightEnd;
+    if (leftAnchor === null && rightAnchor !== null) return 1;
+    if (leftAnchor !== null && rightAnchor === null) return -1;
+    if (leftAnchor !== null && rightAnchor !== null && leftAnchor !== rightAnchor) return leftAnchor.localeCompare(rightAnchor);
+    if (leftStart === null && rightStart !== null) return 1;
+    if (leftStart !== null && rightStart === null) return -1;
+    if (leftStart !== null && rightStart !== null && leftStart !== rightStart) return leftStart.localeCompare(rightStart);
+    if (leftEnd === null && rightEnd !== null) return 1;
+    if (leftEnd !== null && rightEnd === null) return -1;
+    if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd) return leftEnd.localeCompare(rightEnd);
+    if (left.step_order !== right.step_order) return left.step_order - right.step_order;
+    return left.id - right.id;
+  }, []);
+
+  const autoReorderPhaseByTimeline = React.useCallback(async (
+    phaseKey: string,
+    overridesByStepId?: Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>,
+  ) => {
+    const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
+    const phaseSteps = steps
+      .filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase)
+      .sort((a, b) => compareStepsByTimeline(a, b, overridesByStepId));
+    const orderedIds = phaseSteps.map((candidate) => candidate.id);
+    if (orderedIds.length > 1) {
+      await reorderSteps(normalizedPhase, orderedIds);
+    }
+  }, [compareStepsByTimeline, reorderSteps, steps]);
 
   const clearCurrencyEdit = React.useCallback((key: string): void => {
     if (activeCurrencyInputKey === key) {
@@ -141,8 +183,13 @@ export function useBuildWizardStepUiActions({
       expected_duration_days: calculateDurationDays(nextStart, normalizedEnd) ?? patch.expected_duration_days,
     };
     updateStepDraft(stepId, nextPatch);
-    void commitStep(stepId, nextPatch);
-  }, [commitStep, stepById, updateStepDraft]);
+    void (async () => {
+      await commitStep(stepId, nextPatch);
+      const timelineOverrides = new Map<number, Pick<IBuildWizardStep, 'expected_start_date' | 'expected_end_date'>>();
+      timelineOverrides.set(step.id, { expected_start_date: nextStart, expected_end_date: normalizedEnd });
+      await autoReorderPhaseByTimeline(step.phase_key, timelineOverrides);
+    })();
+  }, [autoReorderPhaseByTimeline, commitStep, stepById, updateStepDraft]);
 
   const noteEditedAtLabel = React.useCallback((note: { created_at: string; updated_at?: string | null }): string => {
     const createdAt = String(note.created_at || '').trim();

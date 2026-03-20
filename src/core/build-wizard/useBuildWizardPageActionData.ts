@@ -38,6 +38,7 @@ export function useBuildWizardPageActionData(options: any) {
     activeCurrencyInputKey: options.state.activeCurrencyInputKey,
     currencyInputByKey: options.state.currencyInputByKey,
     onToast: options.onToast,
+    reorderSteps: options.buildWizard.reorderSteps,
     setActiveCurrencyInputKey: options.state.setActiveCurrencyInputKey,
     setCurrencyInputByKey: options.state.setCurrencyInputByKey,
     setRefreshingActualCostByStepId: options.state.setRefreshingActualCostByStepId,
@@ -47,6 +48,7 @@ export function useBuildWizardPageActionData(options: any) {
     stepById: options.workspace.workspaceData.stepById,
     stepDrafts: options.state.stepDrafts,
     stepEditModalStepId: options.state.stepEditModalStepId,
+    steps: options.buildWizard.steps,
     updateStep: options.buildWizard.updateStep,
   });
   const noteDocumentActions = useBuildWizardNoteDocumentActions({

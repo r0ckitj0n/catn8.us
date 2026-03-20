@@ -88,15 +88,6 @@ export function BuildWizardStepReceiptsList({
             ref={(el) => { receiptRowRefByDocId.current[doc.id] = el; }}
           >
             <div className="build-wizard-step-receipt-file">
-              <label className="build-wizard-inline-complete-toggle">
-                <input
-                  type="checkbox"
-                  checked={taskCompleted}
-                  disabled={stepReadOnly}
-                  onChange={(event) => { void toggleTaskCompleted(doc, parsedTask, event.target.checked); }}
-                />
-                <span>Complete</span>
-              </label>
               <button
                 type="button"
                 className="build-wizard-step-receipt-link"
@@ -138,6 +129,15 @@ export function BuildWizardStepReceiptsList({
               ) : null}
             </div>
             <div className="build-wizard-step-receipt-actions">
+              <label className="build-wizard-inline-complete-toggle">
+                <input
+                  type="checkbox"
+                  checked={taskCompleted}
+                  disabled={stepReadOnly}
+                  onChange={(event) => { void toggleTaskCompleted(doc, parsedTask, event.target.checked); }}
+                />
+                <span>Complete</span>
+              </label>
               <button
                 type="button"
                 className="btn btn-outline-primary btn-sm"

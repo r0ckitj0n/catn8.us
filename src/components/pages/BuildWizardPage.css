@@ -1666,6 +1666,28 @@
   min-width: 160px;
 }
 
+.build-wizard-step-receipt-actions .build-wizard-inline-complete-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: flex-end;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #223a57;
+  white-space: nowrap;
+}
+
+.build-wizard-step-receipt-actions .build-wizard-inline-complete-toggle input[type="checkbox"] {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  margin: 0;
+  transform: translateY(-1px);
+}
+
 .build-wizard-step-receipt-actions .btn {
   width: 100%;
 }

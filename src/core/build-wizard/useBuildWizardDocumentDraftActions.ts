@@ -2,6 +2,8 @@ import React from 'react';
 
 import { toNumberOrNull, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
+import { BuildWizardTaskMeta } from './buildWizardPageRenderTypes';
+import { taskUsesManualDateOverride as resolveTaskManualDateOverride } from './buildWizardTaskMetaUtils';
 
 type DocumentDraftState = {
   kind: string;
@@ -19,9 +21,9 @@ interface UseBuildWizardDocumentDraftActionsOptions {
   attachExistingDocByStepId: Record<number, string>;
   buildDocumentDraftDeps: {
     documentDrafts: Record<number, DocumentDraftState>;
-    parseTaskMetaFromReceiptNotes: (notes: string) => { taskMeta: unknown };
+    parseTaskMetaFromReceiptNotes: (notes: string) => { taskMeta: BuildWizardTaskMeta };
     setTaskDateOverrideInReceiptNotes: (notes: string | null | undefined, taskDate: string | null | undefined) => string;
-    taskUsesManualDateOverride: (doc: IBuildWizardDocument, taskMeta: any) => boolean;
+    taskUsesManualDateOverride?: (doc: IBuildWizardDocument, taskMeta: BuildWizardTaskMeta) => boolean;
   };
   documents: IBuildWizardDocument[];
   moveTaskModalDoc: IBuildWizardDocument | null;
@@ -88,6 +90,7 @@ export function useBuildWizardDocumentDraftActions({
 
   const buildDocumentDraft = React.useCallback((doc: IBuildWizardDocument): DocumentDraftState => {
     const { documentDrafts, parseTaskMetaFromReceiptNotes, taskUsesManualDateOverride } = buildDocumentDraftDeps;
+    const usesManualDateOverride = taskUsesManualDateOverride ?? resolveTaskManualDateOverride;
     return documentDrafts[doc.id] || {
       kind: doc.kind || 'other',
       caption: doc.caption || '',
@@ -95,7 +98,7 @@ export function useBuildWizardDocumentDraftActions({
       receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
       receipt_title: doc.receipt_title || '',
       receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: taskUsesManualDateOverride(doc, parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta) ? (doc.receipt_date || '') : '',
+      receipt_date: usesManualDateOverride(doc, parseTaskMetaFromReceiptNotes(doc.receipt_notes || '').taskMeta) ? (doc.receipt_date || '') : '',
       receipt_notes: doc.receipt_notes || '',
     };
   }, [buildDocumentDraftDeps]);

@@ -3,7 +3,7 @@ import React from 'react';
 import { toNumberOrNull, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { BuildWizardTaskMeta, BuildWizardTaskType, InlineReceiptField } from './buildWizardPageRenderTypes';
-import { composeReceiptNotesWithTaskMeta, defaultTaskMeta } from './buildWizardTaskMetaUtils';
+import { composeReceiptNotesWithTaskMeta, defaultTaskMeta, taskUsesManualDateOverride as resolveTaskManualDateOverride } from './buildWizardTaskMetaUtils';
 
 type InlineReceiptDraft = {
   vendor: string;
@@ -53,7 +53,7 @@ interface UseBuildWizardReceiptActionsOptions {
   setReceiptAttachmentDraftByStep: React.Dispatch<React.SetStateAction<Record<number, File[]>>>;
   setReceiptDraftByStep: React.Dispatch<React.SetStateAction<Record<number, ReceiptDraftState>>>;
   setReceiptEditorOpenByStep: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
-  taskUsesManualDateOverride: (doc: IBuildWizardDocument, taskMeta: BuildWizardTaskMeta) => boolean;
+  taskUsesManualDateOverride?: (doc: IBuildWizardDocument, taskMeta: BuildWizardTaskMeta) => boolean;
   uploadDocument: (kind: string, file: File, stepId?: number, caption?: string, phaseKey?: string, arg6?: undefined, options?: { receipt_parent_document_id?: number }) => Promise<unknown>;
 }
 
@@ -80,6 +80,8 @@ export function useBuildWizardReceiptActions({
   taskUsesManualDateOverride,
   uploadDocument,
 }: UseBuildWizardReceiptActionsOptions) {
+  const usesManualDateOverride = taskUsesManualDateOverride ?? resolveTaskManualDateOverride;
+
   React.useEffect(() => {
     if (pendingScrollReceiptId <= 0) return;
     const rowEl = receiptRowRefByDocId.current[pendingScrollReceiptId];
@@ -101,7 +103,7 @@ export function useBuildWizardReceiptActions({
       ...prev,
       [doc.id]: {
         vendor: doc.receipt_vendor || '',
-        date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
+        date: usesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
         amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
         taskType: parsed.taskMeta.task_type,
         plainNotes: parsed.plainNotes || '',
@@ -109,7 +111,7 @@ export function useBuildWizardReceiptActions({
       },
     }));
     setInlineEditingReceiptFieldByDocId((prev) => ({ ...prev, [doc.id]: field }));
-  }, [setInlineEditingReceiptFieldByDocId, setInlineReceiptDraftByDocId, taskUsesManualDateOverride]);
+  }, [setInlineEditingReceiptFieldByDocId, setInlineReceiptDraftByDocId, usesManualDateOverride]);
 
   const saveInlineReceiptEdit = React.useCallback(async (doc: IBuildWizardDocument, field: InlineReceiptField, overrides?: Partial<{ vendor: string; date: string; amount: string; taskType: BuildWizardTaskType }>) => {
     const baseDraft = inlineReceiptDraftByDocId[doc.id];
@@ -186,7 +188,7 @@ export function useBuildWizardReceiptActions({
     setReceiptDraftByStep((prev) => ({ ...prev, [step.id]: {
       receipt_title: doc.receipt_title || '',
       receipt_vendor: doc.receipt_vendor || '',
-      receipt_date: taskUsesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
+      receipt_date: usesManualDateOverride(doc, parsed.taskMeta) ? (doc.receipt_date || '') : '',
       receipt_amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
       receipt_notes: parsed.plainNotes || '',
       task_meta: parsed.taskMeta,
@@ -197,7 +199,7 @@ export function useBuildWizardReceiptActions({
       const editorEl = receiptEditorRefByStepId.current[step.id];
       if (editorEl) editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
-  }, [parseTaskMetaFromReceiptNotes, receiptEditorRefByStepId, setEditingReceiptDocumentIdByStep, setReceiptAttachmentDraftByStep, setReceiptDraftByStep, setReceiptEditorOpenByStep, taskUsesManualDateOverride]);
+  }, [parseTaskMetaFromReceiptNotes, receiptEditorRefByStepId, setEditingReceiptDocumentIdByStep, setReceiptAttachmentDraftByStep, setReceiptDraftByStep, setReceiptEditorOpenByStep, usesManualDateOverride]);
 
   return {
     autosaveExistingReceiptDraftForStep,

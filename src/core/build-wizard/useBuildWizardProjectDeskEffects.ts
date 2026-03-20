@@ -3,6 +3,8 @@ import React from 'react';
 import { DocumentDraftMap } from '../../types/pages/buildWizardPage';
 
 export function useBuildWizardProjectDeskEffects(options: any) {
+  const filteredDeskContacts = Array.isArray(options.filteredDeskContacts) ? options.filteredDeskContacts : [];
+
   React.useEffect(() => {
     if (options.docStepId <= 0) {
       return;
@@ -74,14 +76,14 @@ export function useBuildWizardProjectDeskEffects(options: any) {
     if (!options.projectDeskOpen || options.deskCreateMode || options.deskSelectedContactId <= 0) {
       return;
     }
-    if (!options.filteredDeskContacts.length) {
+    if (!filteredDeskContacts.length) {
       return;
     }
-    if (options.filteredDeskContacts.some((contact: any) => contact.id === options.deskSelectedContactId)) {
+    if (filteredDeskContacts.some((contact: any) => contact.id === options.deskSelectedContactId)) {
       return;
     }
-    options.setDeskSelectedContactId(options.filteredDeskContacts[0].id);
-  }, [options.deskCreateMode, options.deskSelectedContactId, options.filteredDeskContacts, options.projectDeskOpen, options.setDeskSelectedContactId]);
+    options.setDeskSelectedContactId(filteredDeskContacts[0].id);
+  }, [filteredDeskContacts, options.deskCreateMode, options.deskSelectedContactId, options.projectDeskOpen, options.setDeskSelectedContactId]);
 
   React.useEffect(() => {
     if (!options.projectDeskOpen) {

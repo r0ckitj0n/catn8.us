@@ -18,13 +18,8 @@ export function useBuildWizardSelectionEffects(options: any) {
     const selected = options.stepById.get(options.moveStepModalStepId);
     if (!selected) {
       options.setMoveStepModalStepId(0);
-      return;
     }
-    const tab = options.stepPhaseBucket(selected);
-    if (options.phaseProgressOrder.includes(tab)) {
-      options.setMoveStepModalTargetTab(tab);
-    }
-  }, [options]);
+  }, [options.moveStepModalStepId, options.setMoveStepModalStepId, options.stepById]);
 
   React.useEffect(() => {
     if (options.stepEditModalStepId <= 0) {

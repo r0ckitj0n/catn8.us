@@ -74,6 +74,7 @@ export function useBuildWizardPageEffects(options: any) {
     documentManagerStepFilter: options.state.documentManagerStepFilter,
     documents: options.buildWizard.documents,
     docStepId: options.state.docStepId,
+    filteredDeskContacts: options.workspaceData.filteredDeskContacts,
     normalizeContactType: options.normalizeContactType,
     parseTaskMetaFromReceiptNotes: options.parseTaskMetaFromReceiptNotes,
     projectDeskOpen: options.state.projectDeskOpen,

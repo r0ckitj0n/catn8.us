@@ -2912,9 +2912,13 @@
 }
 
 .build-wizard-step-edit-modal {
-  width: min(980px, 100%);
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(94vh, 1100px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 0;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .build-wizard-step-edit-grid {
@@ -2964,6 +2968,10 @@
   display: grid;
   gap: 16px;
   padding: 18px 20px 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .build-wizard-step-edit-summary {
@@ -3722,6 +3730,11 @@
 }
 
 @media (max-width: 640px) {
+  .build-wizard-step-edit-modal {
+    width: min(100vw - 20px, 1120px);
+    max-height: calc(100vh - 20px);
+  }
+
   .build-wizard-step-edit-head,
   .build-wizard-step-edit-fields,
   .build-wizard-step-edit-actions {

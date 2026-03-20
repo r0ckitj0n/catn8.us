@@ -83,6 +83,7 @@ export function buildBuildWizardWorkspaceMainOptions(options: any) {
     projectId: options.projectId,
     projectPhotosSection: options.projectPhotosSection,
     projectTotals: options.projectTotals,
+    refreshPhaseTimelineOrder: options.refreshPhaseTimelineOrder,
     renderCurrencyInputValue: options.renderCurrencyInputValue,
     renderDocumentGallery: options.renderDocumentGallery,
     replaceFileInputByDocId: options.replaceFileInputByDocId,

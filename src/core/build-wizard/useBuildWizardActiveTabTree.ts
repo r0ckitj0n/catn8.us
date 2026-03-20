@@ -4,10 +4,30 @@ import { IBuildWizardStep } from '../../types/buildWizard';
 
 export function useBuildWizardActiveTabTree(filteredTabSteps: IBuildWizardStep[]) {
   const activeTabTreeRows = React.useMemo(() => {
+    const compareStepsByTimeline = (left: IBuildWizardStep, right: IBuildWizardStep): number => {
+      const leftStart = String(left.expected_start_date || '').trim() || null;
+      const leftEnd = String(left.expected_end_date || '').trim() || null;
+      const rightStart = String(right.expected_start_date || '').trim() || null;
+      const rightEnd = String(right.expected_end_date || '').trim() || null;
+      const leftAnchor = leftStart || leftEnd;
+      const rightAnchor = rightStart || rightEnd;
+      if (leftAnchor === null && rightAnchor !== null) return 1;
+      if (leftAnchor !== null && rightAnchor === null) return -1;
+      if (leftAnchor !== null && rightAnchor !== null && leftAnchor !== rightAnchor) return leftAnchor.localeCompare(rightAnchor);
+      if (leftStart === null && rightStart !== null) return 1;
+      if (leftStart !== null && rightStart === null) return -1;
+      if (leftStart !== null && rightStart !== null && leftStart !== rightStart) return leftStart.localeCompare(rightStart);
+      if (leftEnd === null && rightEnd !== null) return 1;
+      if (leftEnd !== null && rightEnd === null) return -1;
+      if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd) return leftEnd.localeCompare(rightEnd);
+      if (left.step_order !== right.step_order) return left.step_order - right.step_order;
+      return left.id - right.id;
+    };
+
     const stepIdsInTab = new Set(filteredTabSteps.map((step) => step.id));
     const childrenByParent = new Map<number, IBuildWizardStep[]>();
     const roots: IBuildWizardStep[] = [];
-    const sortedTabSteps = [...filteredTabSteps].sort((a, b) => (a.step_order - b.step_order) || (a.id - b.id));
+    const sortedTabSteps = [...filteredTabSteps].sort(compareStepsByTimeline);
     sortedTabSteps.forEach((step) => {
       const parentStepId = Number(step.parent_step_id || 0);
       if (parentStepId > 0 && stepIdsInTab.has(parentStepId)) {
@@ -24,7 +44,7 @@ export function useBuildWizardActiveTabTree(filteredTabSteps: IBuildWizardStep[]
       if (visited.has(node.id)) return;
       visited.add(node.id);
       rows.push({ step: node, level });
-      (childrenByParent.get(node.id) || []).forEach((child) => walk(child, level + 1));
+      (childrenByParent.get(node.id) || []).sort(compareStepsByTimeline).forEach((child) => walk(child, level + 1));
     };
     roots.forEach((root) => walk(root, 0));
     sortedTabSteps.forEach((step) => {

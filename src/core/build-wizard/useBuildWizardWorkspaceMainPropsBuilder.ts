@@ -20,6 +20,7 @@ export function useBuildWizardWorkspaceMainPropsBuilder(options: any): React.Com
       onOpenProjectDesk: () => options.setProjectDeskOpen(true),
       onOpenProjectOverview: () => options.setProjectOverviewOpen(true),
       onPhaseDateRangeChange: options.onPhaseDateRangeChange,
+      onRefreshPhaseOrder: () => options.refreshPhaseTimelineOrder(options.TAB_DEFAULT_PHASE_KEY[options.activeTab] || 'general'),
       onResetFilters: () => {
         options.setStepCardAssigneeTypeFilter('all');
         options.setStepCardAssigneeIdFilter(0);

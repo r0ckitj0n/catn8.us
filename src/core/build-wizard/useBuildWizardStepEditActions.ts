@@ -75,6 +75,18 @@ export function useBuildWizardStepEditActions({
     }
   }, [compareStepsByTimeline, reorderSteps, steps]);
 
+  const refreshPhaseTimelineOrder = React.useCallback(async (phaseKey: string) => {
+    const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
+    const phaseStepCount = steps.filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase).length;
+    if (phaseStepCount <= 1) {
+      onToast?.({ tone: 'info', message: 'Not enough dated steps in this phase to reorder.' });
+      return false;
+    }
+    await autoReorderPhaseByTimeline(normalizedPhase);
+    onToast?.({ tone: 'success', message: 'Step order refreshed from timeline dates.' });
+    return true;
+  }, [autoReorderPhaseByTimeline, onToast, steps]);
+
   const saveStepEditModal = React.useCallback(async () => {
     if (!stepEditModalStep || stepEditSaving) return;
     const step = stepEditModalStep;
@@ -131,5 +143,5 @@ export function useBuildWizardStepEditActions({
     }
   }, [autoReorderPhaseByTimeline, clearStepDraft, documents, expandPhaseRangeForStep, onToast, parseTaskMetaFromReceiptNotes, setStepEditModalStepId, setStepEditSaving, stepDrafts, stepEditModalStep, stepEditSaving, updateStep]);
 
-  return { autoReorderPhaseByTimeline, compareStepsByTimeline, saveStepEditModal };
+  return { autoReorderPhaseByTimeline, compareStepsByTimeline, refreshPhaseTimelineOrder, saveStepEditModal };
 }

@@ -20,6 +20,7 @@ interface BuildWizardWorkspaceChromeProps {
   onOpenProjectDesk: () => void;
   onOpenProjectOverview: () => void;
   onPhaseDateRangeChange: (patch: { start?: string | null; end?: string | null }) => void;
+  onRefreshPhaseOrder: () => Promise<unknown>;
   onResetFilters: () => void;
   onSaveTemplate: () => Promise<unknown>;
   onSelectTab: (tab: BuildTabId) => void;
@@ -62,6 +63,7 @@ export function BuildWizardWorkspaceChrome({
   onOpenProjectDesk,
   onOpenProjectOverview,
   onPhaseDateRangeChange,
+  onRefreshPhaseOrder,
   onResetFilters,
   onSaveTemplate,
   onSelectTab,
@@ -221,6 +223,15 @@ export function BuildWizardWorkspaceChrome({
                   Clear Filters
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="build-wizard-phase-add build-wizard-phase-refresh build-wizard-phase-add-in-filters"
+                title="Refresh step order from dates"
+                aria-label="Refresh step order from dates"
+                onClick={() => { void onRefreshPhaseOrder(); }}
+              >
+                🔄
+              </button>
               <button type="button" className="build-wizard-phase-add build-wizard-phase-add-in-filters" title="Add step" aria-label="Add step" onClick={() => { void onAddStep(); }}>
                 +
               </button>

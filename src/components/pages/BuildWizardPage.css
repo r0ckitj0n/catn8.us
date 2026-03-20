@@ -1376,6 +1376,10 @@
   border-color: #7ba3d9;
 }
 
+.build-wizard-phase-refresh {
+  font-size: 0.95rem;
+}
+
 .build-wizard-step-drag-hint {
   margin: 8px 0 10px;
   font-size: 0.82rem;

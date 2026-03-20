@@ -1,12 +1,11 @@
 import React from 'react';
 
-import { Accumul8EntityAliasEditor } from '../../accumul8/Accumul8EntityAliasEditor';
 import { Accumul8TableHeaderCell } from '../../accumul8/Accumul8TableHeaderCell';
-import { ACCUMUL8_EDIT_BUTTON_EMOJI, ACCUMUL8_SAVE_BUTTON_EMOJI, ACCUMUL8_VIEW_BUTTON_EMOJI } from '../../accumul8/accumul8Ui';
+import { ACCUMUL8_EDIT_BUTTON_EMOJI, ACCUMUL8_VIEW_BUTTON_EMOJI } from '../../accumul8/accumul8Ui';
 import { PriorityTableSortState } from '../../../hooks/usePriorityTableLayout';
-import { Accumul8ContactType, Accumul8Entity, Accumul8EntityAliasDraft } from '../../../types/accumul8';
+import { Accumul8Entity, Accumul8EntityAliasDraft } from '../../../types/accumul8';
 import { formatInlineDate, formatInlineText } from './accumul8PageDateSearchUtils';
-import { formatEntityContactSummary, formatEntityRoles, getActiveFilterClass, normalizeEntityContactType, normalizeEntityKind } from './accumul8PageEntityUtils';
+import { formatEntityContactSummary, formatEntityRoles, getActiveFilterClass } from './accumul8PageEntityUtils';
 
 type EntityInlineDraft = Partial<Pick<Accumul8Entity, 'display_name' | 'notes' | 'entity_kind' | 'contact_type' | 'is_vendor' | 'phone_number' | 'email' | 'street_address' | 'city' | 'state' | 'zip' | 'default_amount' | 'is_active'>>;
 type EntityTransactionSummary = { count: number; lastAmount: number | null; lastDate: string };
@@ -14,6 +13,7 @@ type EntityTransactionSummary = { count: number; lastAmount: number | null; last
 interface Accumul8ContactsTabProps {
   activeEntityRowId: number | null;
   busy: boolean;
+  beginEditEntity: (id: number) => void;
   defaultEntityAliasDraft: Accumul8EntityAliasDraft;
   entities: Accumul8Entity[];
   entitiesTable: {
@@ -45,6 +45,7 @@ interface Accumul8ContactsTabProps {
 export function Accumul8ContactsTab({
   activeEntityRowId,
   activateEntityRow,
+  beginEditEntity,
   busy,
   defaultEntityAliasDraft,
   entities,
@@ -84,10 +85,7 @@ export function Accumul8ContactsTab({
       <div className="table-responsive accumul8-scroll-area accumul8-scroll-area--list">
         <table
           ref={entitiesTableRef}
-          className={[
-            'table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head',
-            activeEntityRowId !== null ? 'has-active-inline-edit' : '',
-          ].filter(Boolean).join(' ')}
+          className="table table-sm accumul8-table accumul8-table--measured accumul8-table--entities accumul8-sticky-head"
           style={entitiesTable.tableStyle}
         >
           <colgroup>
@@ -132,83 +130,25 @@ export function Accumul8ContactsTab({
                   ].filter(Boolean).join(' ')}
                 >
                   <td>
-                    {activeEntityRowId === entity.id ? (
-                      <div className="accumul8-inline-stack">
-                        <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text" value={entityDraft?.display_name ?? entity.display_name} onChange={(e) => setEntityRowDraft(entity, { display_name: e.target.value })} disabled={busy} />
-                        <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.notes ?? entity.notes ?? ''} onChange={(e) => setEntityRowDraft(entity, { notes: e.target.value })} disabled={busy} placeholder="Notes" />
-                        <Accumul8EntityAliasEditor
-                          entity={entity}
-                          entities={entities}
-                          draft={entityAliasDraftById[entity.id] || defaultEntityAliasDraft}
-                          busy={busy}
-                          onDraftChange={(draft) => setEntityAliasDraftById((prev) => ({ ...prev, [entity.id]: draft }))}
-                          onAddAlias={() => saveEntityAlias(entity)}
-                          onRemoveAlias={(aliasId) => removeEntityAlias(aliasId, entity.id)}
-                        />
-                      </div>
-                    ) : (
-                      <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
-                        <span>{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
-                        {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
-                        {entity.aliases.length > 0 ? (
-                          <span className="small text-muted d-block accumul8-entity-alias-summary">
-                            Aliases: {entity.aliases.map((alias) => alias.alias_name).join(' | ')}
-                          </span>
-                        ) : null}
-                      </button>
-                    )}
+                    <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditEntity(entity.id)} disabled={busy}>
+                      <span>{formatInlineText(entity.display_name, 'Unnamed entity')}</span>
+                      {entity.notes ? <span className="small text-muted d-block">{entity.notes}</span> : null}
+                      {entity.aliases.length > 0 ? (
+                        <span className="small text-muted d-block accumul8-entity-alias-summary">
+                          Aliases: {entity.aliases.map((alias) => alias.alias_name).join(' | ')}
+                        </span>
+                      ) : null}
+                    </button>
                   </td>
                   <td>
-                    {activeEntityRowId === entity.id ? (
-                      <div className="accumul8-inline-stack">
-                        <select
-                          className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select"
-                          value={entityDraft?.contact_type ?? normalizeEntityContactType(entity)}
-                          onChange={(e) => setEntityRowDraft(entity, { contact_type: e.target.value as Accumul8ContactType })}
-                          disabled={busy}
-                        >
-                          <option value="payee">Payee</option>
-                          <option value="payer">Payer</option>
-                          <option value="repayment">Repayment</option>
-                        </select>
-                        <div className="accumul8-inline-check-grid">
-                          <label className="accumul8-inline-check">
-                            <input
-                              type="checkbox"
-                              checked={normalizeEntityKind(entityDraft?.entity_kind ?? entity.entity_kind, entityDraft?.is_vendor ?? entity.is_vendor) === 'business'}
-                              onChange={(e) => setEntityRowDraft(entity, {
-                                entity_kind: e.target.checked ? 'business' : 'contact',
-                                is_vendor: e.target.checked ? 1 : 0,
-                              })}
-                              disabled={busy}
-                            />
-                            <span>Business</span>
-                          </label>
-                        </div>
-                      </div>
-                    ) : (
-                      <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>
-                    )}
+                    <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditEntity(entity.id)} disabled={busy}>{formatEntityRoles(entity)}</button>
                   </td>
                   <td>
-                    {activeEntityRowId === entity.id ? (
-                      <div className="accumul8-inline-stack">
-                        <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.phone_number ?? entity.phone_number ?? ''} onChange={(e) => setEntityRowDraft(entity, { phone_number: e.target.value })} disabled={busy} placeholder="Phone" />
-                        <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.email ?? entity.email ?? ''} onChange={(e) => setEntityRowDraft(entity, { email: e.target.value })} disabled={busy} placeholder="Email" />
-                        <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.street_address ?? entity.street_address ?? ''} onChange={(e) => setEntityRowDraft(entity, { street_address: e.target.value })} disabled={busy} placeholder="Street address" />
-                        <div className="accumul8-inline-grid accumul8-inline-grid--triple">
-                          <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.city ?? entity.city ?? ''} onChange={(e) => setEntityRowDraft(entity, { city: e.target.value })} disabled={busy} placeholder="City" />
-                          <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.state ?? entity.state ?? ''} onChange={(e) => setEntityRowDraft(entity, { state: e.target.value })} disabled={busy} placeholder="State" />
-                          <input className="form-control form-control-sm accumul8-inline-editor accumul8-inline-editor--text accumul8-inline-editor--muted" value={entityDraft?.zip ?? entity.zip ?? ''} onChange={(e) => setEntityRowDraft(entity, { zip: e.target.value })} disabled={busy} placeholder="ZIP" />
-                        </div>
-                      </div>
-                    ) : (
-                      <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>
-                        {entityContactSummary.length > 0 ? entityContactSummary.map((line) => (
-                          <span key={line} className="small text-muted d-block">{line}</span>
-                        )) : <span className="small text-muted">No phone or email</span>}
-                      </button>
-                    )}
+                    <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditEntity(entity.id)} disabled={busy}>
+                      {entityContactSummary.length > 0 ? entityContactSummary.map((line) => (
+                        <span key={line} className="small text-muted d-block">{line}</span>
+                      )) : <span className="small text-muted">No phone or email</span>}
+                    </button>
                   </td>
                   <td className="text-end">
                     <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => setEntityHistoryEntityId(entity.id)} disabled={busy}>
@@ -219,25 +159,15 @@ export function Accumul8ContactsTab({
                     </button>
                   </td>
                   <td>
-                    {activeEntityRowId === entity.id ? (
-                      <select className="form-select form-select-sm accumul8-inline-editor accumul8-inline-editor--select" value={String(entityDraft?.is_active ?? entity.is_active)} onChange={(e) => setEntityRowDraft(entity, { is_active: Number(e.target.value) })} disabled={busy}>
-                        <option value="1">Active</option>
-                        <option value="0">Paused</option>
-                      </select>
-                    ) : (
-                      <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateEntityRow(entity.id)} disabled={busy}>{Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused'}</button>
-                    )}
+                    <button type="button" className="accumul8-inline-cell-trigger" onClick={() => beginEditEntity(entity.id)} disabled={busy}>{Number(entity.is_active || 0) === 1 ? 'Active' : 'Paused'}</button>
                   </td>
                   <td className="text-end is-compact-actions">
                     <div className="accumul8-row-actions accumul8-row-actions--always-on">
                       <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => setEntityHistoryEntityId(entity.id)} disabled={busy} aria-label={`View transactions for ${entity.display_name}`} title={`View transactions for ${entity.display_name}`}>
                         <span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span>
                       </button>
-                      <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => activateEntityRow(entity.id)} disabled={busy} aria-label={`Edit ${entity.display_name}`} title={`Edit ${entity.display_name}`}>
+                      <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginEditEntity(entity.id)} disabled={busy} aria-label={`Edit ${entity.display_name}`} title={`Edit ${entity.display_name}`}>
                         <span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span>
-                      </button>
-                      <button type="button" className={`btn btn-sm btn-outline-primary accumul8-icon-action${flashingSaveButtonKey === `entity-${entity.id}` ? ' is-flashing' : ''}`} onClick={() => void saveEntityRow(entity)} disabled={busy || !entityDraft} aria-label={`Save ${entity.display_name}`} title={entityDraft ? `Save ${entity.display_name}` : `No changes to save for ${entity.display_name}`}>
-                        <span aria-hidden="true">{ACCUMUL8_SAVE_BUTTON_EMOJI}</span>
                       </button>
                     </div>
                   </td>

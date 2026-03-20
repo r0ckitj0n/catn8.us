@@ -22,6 +22,7 @@ export function buildAccumul8PrimaryTabProps(options: any) {
     contactsTabProps: {
       activeEntityRowId: options.activeEntityRowId,
       activateEntityRow: options.activateEntityRow,
+      beginEditEntity: options.beginEditEntity,
       busy: options.busy,
       defaultEntityAliasDraft: options.DEFAULT_ENTITY_ALIAS_DRAFT,
       entities: options.entities,

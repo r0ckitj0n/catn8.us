@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { StandardIconButton } from '../../components/common/StandardIconButton';
 import { composeReceiptNotesWithTaskMeta } from './buildWizardTaskMetaUtils';
 import { toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardContact, IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
@@ -45,142 +46,190 @@ export function BuildWizardStepReceiptEditor({
   step,
   taskTypeOptions,
 }: BuildWizardStepReceiptEditorProps) {
+  const handleClose = React.useCallback(() => {
+    setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
+    setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
+  }, [setEditingReceiptDocumentIdByStep, setReceiptEditorOpenByStep, step.id]);
+
+  React.useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose, open]);
+
   if (!open) {
     return null;
   }
 
   return (
     <div
-      className="build-wizard-note-editor"
-      ref={(el) => { receiptEditorRefByStepId.current[step.id] = el; }}
+      className="build-wizard-doc-manager"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          handleClose();
+        }
+      }}
     >
-      <div className="build-wizard-muted">
-        {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing task' : 'New task'}
-      </div>
-      <div className="build-wizard-step-receipt-upload-grid">
-        <label>
-          Title
-          <input
-            type="text"
-            value={receiptDraft.receipt_title}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: { ...receiptDraft, receipt_title: e.target.value },
-            }))}
-          />
-        </label>
-        <label>
-          Vendor
-          <input
-            type="text"
-            value={receiptDraft.receipt_vendor}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: { ...receiptDraft, receipt_vendor: e.target.value },
-            }))}
-          />
-        </label>
-        <label>
-          Task Date Override
-          <input
-            type="date"
-            value={receiptDraft.receipt_date}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: { ...receiptDraft, receipt_date: e.target.value },
-            }))}
-            onBlur={() => {
-              const activeDraft = receiptDraftByStep[step.id] ?? receiptDraft;
-              void autosaveExistingReceiptDraftForStep(step, {
-                receipt_date: toStringOrNull(activeDraft.receipt_date || ''),
-                receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
-                  ...activeDraft.task_meta,
-                  manual_date_override: Boolean(toStringOrNull(activeDraft.receipt_date || '')),
-                }, activeDraft.receipt_notes)),
-              });
-            }}
-          />
-        </label>
-        <label>
-          Amount
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={receiptDraft.receipt_amount}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: { ...receiptDraft, receipt_amount: e.target.value },
-            }))}
-          />
-        </label>
-        <label>
-          Type
-          <select
-            value={receiptDraft.task_meta.task_type}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: {
-                ...receiptDraft,
-                task_meta: {
-                  ...receiptDraft.task_meta,
-                  task_type: e.target.value as BuildWizardTaskType,
-                },
-              },
-            }))}
-          >
-            {taskTypeOptions.map((opt) => (
-              <option key={`task-type-${opt.value}`} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </label>
-        <BuildWizardReceiptTaskMetaFields
-          authorityContacts={authorityContacts}
-          permitDocuments={permitDocuments}
-          permitStatusOptions={permitStatusOptions}
-          purchaseUnitOptions={purchaseUnitOptions}
-          receiptDraft={receiptDraft}
-          setReceiptDraftByStep={setReceiptDraftByStep}
-          stepId={step.id}
-        />
-        <label className="is-wide">
-          Notes
-          <input
-            type="text"
-            value={receiptDraft.receipt_notes}
-            onChange={(e) => setReceiptDraftByStep((prev) => ({
-              ...prev,
-              [step.id]: { ...receiptDraft, receipt_notes: e.target.value },
-            }))}
-          />
-        </label>
-        <label className="is-wide">
-          Task Attachment(s)
-          <input
-            type="file"
-            accept="image/*,.pdf"
-            multiple
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: files }));
-            }}
-          />
-        </label>
-      </div>
-      <div className="build-wizard-note-editor-actions">
-        <button className="btn btn-primary btn-sm" onClick={() => { void onSaveReceiptForStep(step); }}>
-          {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Task' : 'Save Task'}
-        </button>
-        <button
-          className="btn btn-outline-secondary btn-sm"
-          onClick={() => {
-            setEditingReceiptDocumentIdByStep((prev) => ({ ...prev, [step.id]: 0 }));
-            setReceiptEditorOpenByStep((prev) => ({ ...prev, [step.id]: false }));
-          }}
-        >
-          Cancel
-        </button>
+      <div
+        className="build-wizard-doc-manager-inner build-wizard-step-edit-modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`build-wizard-task-editor-title-${step.id}`}
+        ref={(el) => { receiptEditorRefByStepId.current[step.id] = el; }}
+      >
+        <div className="build-wizard-doc-manager-head build-wizard-step-edit-head">
+          <div className="build-wizard-step-edit-head-copy">
+            <span className="build-wizard-step-edit-kicker">
+              {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Editing Task' : 'New Task'}
+            </span>
+            <h3 id={`build-wizard-task-editor-title-${step.id}`}>
+              {receiptDraft.receipt_title?.trim() || step.title || 'Task Editor'}
+            </h3>
+            <p>Update all task fields in one dialog.</p>
+          </div>
+          <div className="build-wizard-doc-manager-actions">
+            <StandardIconButton
+              iconKey="close"
+              ariaLabel="Close task editor"
+              title="Close"
+              className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
+              onClick={handleClose}
+            />
+          </div>
+        </div>
+        <div className="build-wizard-note-editor">
+          <div className="build-wizard-step-receipt-upload-grid">
+            <label>
+              Title
+              <input
+                type="text"
+                value={receiptDraft.receipt_title}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: { ...receiptDraft, receipt_title: e.target.value },
+                }))}
+              />
+            </label>
+            <label>
+              Vendor
+              <input
+                type="text"
+                value={receiptDraft.receipt_vendor}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: { ...receiptDraft, receipt_vendor: e.target.value },
+                }))}
+              />
+            </label>
+            <label>
+              Task Date Override
+              <input
+                type="date"
+                value={receiptDraft.receipt_date}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: { ...receiptDraft, receipt_date: e.target.value },
+                }))}
+                onBlur={() => {
+                  const activeDraft = receiptDraftByStep[step.id] ?? receiptDraft;
+                  void autosaveExistingReceiptDraftForStep(step, {
+                    receipt_date: toStringOrNull(activeDraft.receipt_date || ''),
+                    receipt_notes: toStringOrNull(composeReceiptNotesWithTaskMeta({
+                      ...activeDraft.task_meta,
+                      manual_date_override: Boolean(toStringOrNull(activeDraft.receipt_date || '')),
+                    }, activeDraft.receipt_notes)),
+                  });
+                }}
+              />
+            </label>
+            <label>
+              Amount
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={receiptDraft.receipt_amount}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: { ...receiptDraft, receipt_amount: e.target.value },
+                }))}
+              />
+            </label>
+            <label>
+              Type
+              <select
+                value={receiptDraft.task_meta.task_type}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: {
+                    ...receiptDraft,
+                    task_meta: {
+                      ...receiptDraft.task_meta,
+                      task_type: e.target.value as BuildWizardTaskType,
+                    },
+                  },
+                }))}
+              >
+                {taskTypeOptions.map((opt) => (
+                  <option key={`task-type-${opt.value}`} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+            <BuildWizardReceiptTaskMetaFields
+              authorityContacts={authorityContacts}
+              permitDocuments={permitDocuments}
+              permitStatusOptions={permitStatusOptions}
+              purchaseUnitOptions={purchaseUnitOptions}
+              receiptDraft={receiptDraft}
+              setReceiptDraftByStep={setReceiptDraftByStep}
+              stepId={step.id}
+            />
+            <label className="is-wide">
+              Notes
+              <input
+                type="text"
+                value={receiptDraft.receipt_notes}
+                onChange={(e) => setReceiptDraftByStep((prev) => ({
+                  ...prev,
+                  [step.id]: { ...receiptDraft, receipt_notes: e.target.value },
+                }))}
+              />
+            </label>
+            <label className="is-wide">
+              Task Attachment(s)
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setReceiptAttachmentDraftByStep((prev) => ({ ...prev, [step.id]: files }));
+                }}
+              />
+            </label>
+          </div>
+          <div className="build-wizard-note-editor-actions">
+            <button className="btn btn-primary btn-sm" onClick={() => { void onSaveReceiptForStep(step); }}>
+              {Number(editingReceiptDocumentIdByStep[step.id] || 0) > 0 ? 'Update Task' : 'Save Task'}
+            </button>
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={handleClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

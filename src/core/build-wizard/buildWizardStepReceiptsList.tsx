@@ -78,16 +78,6 @@ export function BuildWizardStepReceiptsList({
         const taskNotes = String(parsedTask.plainNotes || '').trim();
         const taskTypeLabel = taskTypeOptions.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
         const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
-        const inlineEditingField = inlineEditingReceiptFieldByDocId[doc.id] || null;
-        const inlineDraft = inlineReceiptDraftByDocId[doc.id] || {
-          vendor: doc.receipt_vendor || '',
-          date: taskUsesManualDateOverride(doc, parsedTask.taskMeta) ? (doc.receipt_date || '') : '',
-          amount: doc.receipt_amount !== null && Number.isFinite(Number(doc.receipt_amount)) ? String(doc.receipt_amount) : '',
-          taskType: parsedTask.taskMeta.task_type,
-          plainNotes: parsedTask.plainNotes || '',
-          taskMeta: parsedTask.taskMeta,
-        };
-
         return (
           <div
             className="build-wizard-step-receipt-row"
@@ -104,127 +94,10 @@ export function BuildWizardStepReceiptsList({
                 {doc.receipt_title?.trim() || doc.caption || doc.original_name}
               </button>
               <span>
-                Vendor:{' '}
-                {inlineEditingField === 'vendor' ? (
-                  <select
-                    autoFocus
-                    value={inlineDraft.vendor}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      setInlineReceiptDraftByDocId((prev) => ({
-                        ...prev,
-                        [doc.id]: { ...inlineDraft, vendor: nextValue },
-                      }));
-                      void saveInlineReceiptEdit(doc, 'vendor', { vendor: nextValue });
-                    }}
-                    onBlur={() => { void saveInlineReceiptEdit(doc, 'vendor'); }}
-                  >
-                    <option value="">-</option>
-                    {taskVendorOptions.map((vendorName) => (
-                      <option key={`vendor-opt-${doc.id}-${vendorName}`} value={vendorName}>{vendorName}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <button
-                    type="button"
-                    className="build-wizard-inline-edit-trigger"
-                    onClick={() => startInlineReceiptEdit(doc, parsedTask, 'vendor')}
-                  >
-                    {doc.receipt_vendor || '-'}
-                  </button>
-                )}
-                {' '}| Date:{' '}
-                {inlineEditingField === 'date' ? (
-                  <input
-                    type="date"
-                    autoFocus
-                    value={inlineDraft.date}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      setInlineReceiptDraftByDocId((prev) => ({
-                        ...prev,
-                        [doc.id]: { ...inlineDraft, date: nextValue },
-                      }));
-                    }}
-                    onBlur={() => { void saveInlineReceiptEdit(doc, 'date'); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                      }
-                    }}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="build-wizard-inline-edit-trigger"
-                    onClick={() => startInlineReceiptEdit(doc, parsedTask, 'date')}
-                  >
-                    {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'}
-                  </button>
-                )}
-                {' '}| Amount:{' '}
-                {inlineEditingField === 'amount' ? (
-                  <input
-                    type="number"
-                    autoFocus
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={inlineDraft.amount}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      setInlineReceiptDraftByDocId((prev) => ({
-                        ...prev,
-                        [doc.id]: { ...inlineDraft, amount: nextValue },
-                      }));
-                    }}
-                    onBlur={() => { void saveInlineReceiptEdit(doc, 'amount'); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                      }
-                    }}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="build-wizard-inline-edit-trigger"
-                    onClick={() => startInlineReceiptEdit(doc, parsedTask, 'amount')}
-                  >
-                    <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
-                  </button>
-                )}
+                Vendor: {doc.receipt_vendor || '-'} | Date: {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'} | Amount:{' '}
+                <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
               </span>
-              <span>
-                Type:{' '}
-                {inlineEditingField === 'type' ? (
-                  <select
-                    autoFocus
-                    value={inlineDraft.taskType}
-                    onChange={(e) => {
-                      const nextType = e.target.value as BuildWizardTaskType;
-                      setInlineReceiptDraftByDocId((prev) => ({
-                        ...prev,
-                        [doc.id]: { ...inlineDraft, taskType: nextType },
-                      }));
-                      void saveInlineReceiptEdit(doc, 'type', { taskType: nextType });
-                    }}
-                    onBlur={() => { void saveInlineReceiptEdit(doc, 'type'); }}
-                  >
-                    {taskTypeOptions.map((opt) => (
-                      <option key={`inline-task-type-${doc.id}-${opt.value}`} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <button
-                    type="button"
-                    className="build-wizard-inline-edit-trigger"
-                    onClick={() => startInlineReceiptEdit(doc, parsedTask, 'type')}
-                  >
-                    {taskTypeLabel}
-                  </button>
-                )}
-              </span>
+              <span>Type: {taskTypeLabel}</span>
               {taskNotes ? (
                 <div className="build-wizard-step-receipt-notes">
                   <div className="build-wizard-step-receipt-notes-label">Notes</div>

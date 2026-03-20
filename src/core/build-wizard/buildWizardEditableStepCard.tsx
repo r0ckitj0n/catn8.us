@@ -168,7 +168,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   const stepReceiptTotal = stepReceiptMetrics.nonQuoteTotal;
   const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
   const derivedActualCost = stepReceiptMetrics.allCount > 0 ? Math.max(0, stepReceiptTotal) : null;
-  const effectiveActualCost = derivedActualCost ?? draftActualCost;
+  const effectiveActualCost = draftActualCost ?? derivedActualCost;
   const recalculatedActualCost = derivedActualCost !== null ? (derivedActualCost > 0 ? derivedActualCost : null) : null;
   const actualCostVerificationSignature = buildStepCostVerificationSignature(step, safeStepDrafts[step.id], stepDocuments, effectiveActualCost);
   const refreshedActualCostVerificationSignature = buildStepCostVerificationSignature(step, safeStepDrafts[step.id], stepDocuments, recalculatedActualCost);

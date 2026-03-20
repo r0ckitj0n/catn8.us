@@ -38,6 +38,7 @@ export function useBuildWizardWorkspaceModalSetup(options: any) {
     lightboxSupportsZoom: options.lightboxSupportsZoom,
     lightboxZoom: options.lightboxZoom,
     moveStepModalStep: options.moveStepModalStep,
+    moveStepPhaseOrderPreviewByTab: options.moveStepPhaseOrderPreviewByTab,
     moveStepModalTargetTab: options.moveStepModalTargetTab,
     moveStepPhaseTabOptions: options.moveStepPhaseTabOptions,
     moveTaskModalDoc: options.moveTaskModalDoc,

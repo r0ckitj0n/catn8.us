@@ -35,10 +35,36 @@ export function useBuildWizardWorkspaceSelectionData({
     setFooterRange(next);
   }, [footerTimelineSteps, setFooterRange, steps]);
 
+  const compareStepsByTimeline = React.useCallback((left: IBuildWizardStep, right: IBuildWizardStep): number => {
+    const leftStart = String(left.expected_start_date || '').trim() || null;
+    const leftEnd = String(left.expected_end_date || '').trim() || null;
+    const rightStart = String(right.expected_start_date || '').trim() || null;
+    const rightEnd = String(right.expected_end_date || '').trim() || null;
+    const leftAnchor = leftStart || leftEnd;
+    const rightAnchor = rightStart || rightEnd;
+    if (leftAnchor === null && rightAnchor !== null) return 1;
+    if (leftAnchor !== null && rightAnchor === null) return -1;
+    if (leftAnchor !== null && rightAnchor !== null && leftAnchor !== rightAnchor) return leftAnchor.localeCompare(rightAnchor);
+    if (leftStart === null && rightStart !== null) return 1;
+    if (leftStart !== null && rightStart === null) return -1;
+    if (leftStart !== null && rightStart !== null && leftStart !== rightStart) return leftStart.localeCompare(rightStart);
+    if (leftEnd === null && rightEnd !== null) return 1;
+    if (leftEnd !== null && rightEnd === null) return -1;
+    if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd) return leftEnd.localeCompare(rightEnd);
+    if (left.step_order !== right.step_order) return left.step_order - right.step_order;
+    return left.id - right.id;
+  }, []);
+
   const selectableDocSteps = React.useMemo(() => {
     const filtered = !docPhaseKey || docPhaseKey === 'general' ? steps : steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
-    return [...filtered].sort((a, b) => sortAlpha(`${prettyPhaseLabel(a.phase_key)} ${a.title}`, `${prettyPhaseLabel(b.phase_key)} ${b.title}`));
-  }, [docPhaseKey, steps]);
+    return [...filtered].sort((a, b) => {
+      const phaseCmp = sortAlpha(prettyPhaseLabel(a.phase_key), prettyPhaseLabel(b.phase_key));
+      if (phaseCmp !== 0) {
+        return phaseCmp;
+      }
+      return compareStepsByTimeline(a, b);
+    });
+  }, [compareStepsByTimeline, docPhaseKey, steps]);
 
   const linkedStepOptions = React.useMemo(() => {
     const tabOrder = new Map<BuildTabId, number>();
@@ -56,15 +82,7 @@ export function useBuildWizardWorkspaceSelectionData({
       const bOrder = tabOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
       return aOrder !== bOrder ? aOrder - bOrder : sortAlpha(tabLabelShort(a[0]), tabLabelShort(b[0]));
     }).forEach(([tabId, tabSteps]) => {
-      const ordered = [...tabSteps].sort((a, b) => {
-        const aOrder = Number(a.step_order) || 0;
-        const bOrder = Number(b.step_order) || 0;
-        const aHasOrder = aOrder > 0;
-        const bHasOrder = bOrder > 0;
-        if (aHasOrder && bHasOrder && aOrder !== bOrder) return aOrder - bOrder;
-        if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
-        return a.id - b.id;
-      });
+      const ordered = [...tabSteps].sort(compareStepsByTimeline);
       const tabLabel = BUILD_TABS.find((candidate) => candidate.id === tabId)?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId);
       const phaseNumberMatch = tabLabel.match(/^(\d+)\./);
       const phasePrefix = phaseNumberMatch ? `Phase ${phaseNumberMatch[1]}` : (tabId === 'desk' ? 'Project Desk' : tabLabel);
@@ -73,7 +91,7 @@ export function useBuildWizardWorkspaceSelectionData({
       });
     });
     return options;
-  }, [stepPhaseBucket, steps]);
+  }, [compareStepsByTimeline, stepPhaseBucket, steps]);
 
   const linkedStepDisplayNumberById = React.useMemo(() => {
     const next = new Map<number, number>();

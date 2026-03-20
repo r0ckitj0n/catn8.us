@@ -72,6 +72,7 @@ export function useBuildWizardPageWorkspaceData(options: any) {
     filteredTabSteps: workspaceData.filteredTabSteps,
     parseTaskMetaFromReceiptNotes: options.parseTaskMetaFromReceiptNotes,
     stepCardTextFilter: options.state.stepCardTextFilter,
+    stepPhaseBucket: options.stepPhaseBucket,
     steps: options.buildWizard.steps,
   });
   const overviewData = useBuildWizardOverviewData({

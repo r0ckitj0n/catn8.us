@@ -3231,6 +3231,30 @@
   width: 100%;
 }
 
+.build-wizard-move-modal-phase-preview {
+  margin-top: 12px;
+  border: 1px solid #d6e1ef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
+.build-wizard-move-modal-phase-preview-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #435772;
+  margin-bottom: 6px;
+}
+
+.build-wizard-move-modal-phase-preview-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+
 .build-wizard-task-attachments-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

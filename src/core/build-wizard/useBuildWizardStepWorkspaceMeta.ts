@@ -14,6 +14,7 @@ export function useBuildWizardStepWorkspaceMeta({
   filteredTabSteps,
   parseTaskMetaFromReceiptNotes,
   stepCardTextFilter,
+  stepPhaseBucket,
   steps,
 }: {
   contactAssignments: IBuildWizardContactAssignment[];
@@ -22,6 +23,7 @@ export function useBuildWizardStepWorkspaceMeta({
   filteredTabSteps: IBuildWizardStep[];
   parseTaskMetaFromReceiptNotes: (notes: string) => { plainNotes: string; taskMeta: BuildWizardTaskMeta };
   stepCardTextFilter: string;
+  stepPhaseBucket: (step: IBuildWizardStep) => BuildTabId;
   steps: IBuildWizardStep[];
 }) {
   const stepAssigneesByStepId = React.useMemo(() => {
@@ -75,6 +77,37 @@ export function useBuildWizardStepWorkspaceMeta({
     return { value: tabId, label: tab?.label || prettyPhaseLabel(TAB_DEFAULT_PHASE_KEY[tabId] || tabId) };
   }), []);
 
+  const moveStepPhaseOrderPreviewByTab = React.useMemo(() => {
+    const compareStepsByTimeline = (left: IBuildWizardStep, right: IBuildWizardStep): number => {
+      const leftStart = String(left.expected_start_date || '').trim() || null;
+      const leftEnd = String(left.expected_end_date || '').trim() || null;
+      const rightStart = String(right.expected_start_date || '').trim() || null;
+      const rightEnd = String(right.expected_end_date || '').trim() || null;
+      const leftAnchor = leftStart || leftEnd;
+      const rightAnchor = rightStart || rightEnd;
+      if (leftAnchor === null && rightAnchor !== null) return 1;
+      if (leftAnchor !== null && rightAnchor === null) return -1;
+      if (leftAnchor !== null && rightAnchor !== null && leftAnchor !== rightAnchor) return leftAnchor.localeCompare(rightAnchor);
+      if (leftStart === null && rightStart !== null) return 1;
+      if (leftStart !== null && rightStart === null) return -1;
+      if (leftStart !== null && rightStart !== null && leftStart !== rightStart) return leftStart.localeCompare(rightStart);
+      if (leftEnd === null && rightEnd !== null) return 1;
+      if (leftEnd !== null && rightEnd === null) return -1;
+      if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd) return leftEnd.localeCompare(rightEnd);
+      if (left.step_order !== right.step_order) return left.step_order - right.step_order;
+      return left.id - right.id;
+    };
+
+    const previewByTab = {} as Partial<Record<BuildTabId, Array<{ id: number; label: string }>>>;
+    PHASE_PROGRESS_ORDER.forEach((tabId) => {
+      const orderedSteps = steps
+        .filter((step) => stepPhaseBucket(step) === tabId)
+        .sort(compareStepsByTimeline);
+      previewByTab[tabId] = orderedSteps.map((step, index) => ({ id: step.id, label: `#${index + 1} ${String(step.title || '').trim() || 'Untitled step'}` }));
+    });
+    return previewByTab;
+  }, [stepPhaseBucket, steps]);
+
   const stepCardTextFilterTokens = React.useMemo(() => stepCardTextFilter.trim().toLowerCase().split(/\s+/g).filter(Boolean), [stepCardTextFilter]);
 
   const stepSearchTextById = React.useMemo(() => {
@@ -125,5 +158,5 @@ export function useBuildWizardStepWorkspaceMeta({
   const getStepActualExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => Math.max(0, (Number.isFinite(Number(step.actual_cost)) && Number(step.actual_cost) > 0 ? Number(step.actual_cost) : 0) - getStepQuoteTotal(step.id)), [getStepQuoteTotal]);
   const getStepEstimatedExcludingQuotes = React.useCallback((step: IBuildWizardStep): number => Math.max(0, (Number.isFinite(Number(step.estimated_cost)) && Number(step.estimated_cost) > 0 ? Number(step.estimated_cost) : 0) - getStepQuoteTotal(step.id)), [getStepQuoteTotal]);
 
-  return { getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, moveStepPhaseTabOptions, receiptMetricsByStepId, stepAssigneesByStepId, stepCardTextFilterTokens, stepDirectAssigneesByStepId, stepFilterContactOptions, stepSearchTextById };
+  return { getStepActualExcludingQuotes, getStepEstimatedExcludingQuotes, moveStepPhaseOrderPreviewByTab, moveStepPhaseTabOptions, receiptMetricsByStepId, stepAssigneesByStepId, stepCardTextFilterTokens, stepDirectAssigneesByStepId, stepFilterContactOptions, stepSearchTextById };
 }

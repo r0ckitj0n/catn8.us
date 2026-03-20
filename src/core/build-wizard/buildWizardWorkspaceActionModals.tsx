@@ -14,6 +14,7 @@ interface BuildWizardWorkspaceActionModalsProps {
   documentSavingId: number;
   documents: IBuildWizardDocument[];
   moveStepModalStep: IBuildWizardStep | null;
+  moveStepPhaseOrderPreviewByTab: Partial<Record<BuildTabId, Array<{ id: number; label: string }>>>;
   moveStepModalTargetTab: BuildTabId;
   moveStepPhaseTabOptions: Array<{ label: string; value: BuildTabId }>;
   moveTaskModalDoc: IBuildWizardDocument | null;
@@ -46,6 +47,7 @@ export function BuildWizardWorkspaceActionModals({
   documentSavingId,
   documents,
   moveStepModalStep,
+  moveStepPhaseOrderPreviewByTab,
   moveStepModalTargetTab,
   moveStepPhaseTabOptions,
   moveTaskModalDoc,
@@ -69,6 +71,7 @@ export function BuildWizardWorkspaceActionModals({
   taskAttachmentsModalDoc,
   taskAttachmentsModalStep,
 }: BuildWizardWorkspaceActionModalsProps) {
+  const targetPhaseOrderPreview = moveStepPhaseOrderPreviewByTab[moveStepModalTargetTab] || [];
   return (
     <>
       {confirmState ? (
@@ -135,6 +138,18 @@ export function BuildWizardWorkspaceActionModals({
                 ))}
               </select>
             </label>
+            <div className="build-wizard-move-modal-phase-preview">
+              <div className="build-wizard-move-modal-phase-preview-title">Current step order</div>
+              {targetPhaseOrderPreview.length > 0 ? (
+                <ol className="build-wizard-move-modal-phase-preview-list">
+                  {targetPhaseOrderPreview.map((entry) => (
+                    <li key={`move-step-preview-${moveStepModalTargetTab}-${entry.id}`}>{entry.label.replace(/^#\d+\s/, '')}</li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="build-wizard-muted">No steps in this phase yet.</div>
+              )}
+            </div>
             <div className="build-wizard-confirm-actions">
               <button type="button" className="btn btn-outline-secondary" onClick={onCloseMoveStep} disabled={movingStep}>
                 Cancel

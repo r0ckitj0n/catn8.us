@@ -112,6 +112,7 @@ export function useBuildWizardWorkspaceModalPropsBuilder(options: any): React.Co
       documentSavingId: options.documentSavingId,
       documents: options.documents,
       moveStepModalStep: options.moveStepModalStep,
+      moveStepPhaseOrderPreviewByTab: options.moveStepPhaseOrderPreviewByTab,
       moveStepModalTargetTab: options.moveStepModalTargetTab,
       moveStepPhaseTabOptions: options.moveStepPhaseTabOptions,
       moveTaskModalDoc: options.moveTaskModalDoc,

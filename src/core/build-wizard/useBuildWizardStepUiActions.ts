@@ -64,9 +64,10 @@ export function useBuildWizardStepUiActions({
     setStepEditModalStepId(step.id);
   }, [setStepDrafts, setStepEditModalStepId]);
 
-  const closeStepEditModal = React.useCallback(() => {
-    if (stepEditModalStepId > 0) {
-      clearStepDraft(stepEditModalStepId);
+  const closeStepEditModal = React.useCallback((stepId?: number) => {
+    const targetStepId = typeof stepId === 'number' && stepId > 0 ? stepId : stepEditModalStepId;
+    if (targetStepId > 0) {
+      clearStepDraft(targetStepId);
     }
     setStepEditModalStepId(0);
   }, [clearStepDraft, setStepEditModalStepId, stepEditModalStepId]);

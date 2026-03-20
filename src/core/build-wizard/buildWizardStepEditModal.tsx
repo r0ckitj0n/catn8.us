@@ -7,7 +7,7 @@ import { IBuildWizardStep } from '../../types/buildWizard';
 
 interface BuildWizardStepEditModalProps {
   activeTabStepNumbers: Map<number, number>;
-  closeStepEditModal: () => void;
+  closeStepEditModal: (stepId?: number) => void;
   dependencyCandidateByStepId: Record<number, string>;
   setDependencyCandidateByStepId: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   open: boolean;
@@ -36,6 +36,14 @@ export function BuildWizardStepEditModal({
   stepEditModalDependencyOptions,
   updateStepDraft,
 }: BuildWizardStepEditModalProps) {
+  const handleClose = React.useCallback(() => {
+    if (step) {
+      closeStepEditModal(step.id);
+      return;
+    }
+    closeStepEditModal();
+  }, [closeStepEditModal, step]);
+
   React.useEffect(() => {
     if (!open) {
       return undefined;
@@ -43,12 +51,12 @@ export function BuildWizardStepEditModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        closeStepEditModal();
+        handleClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeStepEditModal, open]);
+  }, [handleClose, open]);
 
   if (!open || !step || !stepDraft) {
     return null;
@@ -63,7 +71,7 @@ export function BuildWizardStepEditModal({
       className="build-wizard-doc-manager"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          closeStepEditModal();
+          handleClose();
         }
       }}
     >
@@ -86,7 +94,7 @@ export function BuildWizardStepEditModal({
               ariaLabel="Close step editor"
               title="Close"
               className="btn btn-outline-secondary btn-sm catn8-build-wizard-close-btn"
-              onClick={closeStepEditModal}
+              onClick={handleClose}
             />
           </div>
         </div>
@@ -196,74 +204,80 @@ export function BuildWizardStepEditModal({
           </section>
 
           <section className="build-wizard-step-edit-section">
-            <div className="build-wizard-step-edit-section-head">
-              <h4>Step Details</h4>
-              <p>Set the title, dates, budget, and description for this work item.</p>
-            </div>
-            <div className="build-wizard-doc-manager-grid build-wizard-step-edit-grid">
-              <label className="is-wide">
-                Title
+            <div className="build-wizard-step-edit-section-head build-wizard-step-edit-section-head-details">
+              <div className="build-wizard-step-edit-section-head-copy">
+                <h4>Step Details</h4>
+                <p>Set the title, dates, budget, and description for this work item.</p>
+              </div>
+              <label className="build-wizard-step-edit-title-field">
+                <span>Title</span>
                 <input
                   type="text"
                   value={stepDraft.title || ''}
                   onChange={(e) => updateStepDraft(step.id, { title: e.target.value })}
                 />
               </label>
-              <label>
-                Start Date
-                <input
-                  type="date"
-                  value={stepDraft.expected_start_date || ''}
-                  onChange={(e) => {
-                    const nextStartDate = toStringOrNull(e.target.value);
-                    const nextDuration = calculateDurationDays(nextStartDate, stepDraft.expected_end_date)
-                      ?? stepDraft.expected_duration_days;
-                    updateStepDraft(step.id, {
-                      expected_start_date: nextStartDate,
-                      expected_duration_days: nextDuration,
-                    });
-                  }}
-                />
-              </label>
-              <label>
-                End Date
-                <input
-                  type="date"
-                  value={stepDraft.expected_end_date || ''}
-                  onChange={(e) => {
-                    const nextEndDate = toStringOrNull(e.target.value);
-                    const nextDuration = calculateDurationDays(stepDraft.expected_start_date, nextEndDate)
-                      ?? stepDraft.expected_duration_days;
-                    updateStepDraft(step.id, {
-                      expected_end_date: nextEndDate,
-                      expected_duration_days: nextDuration,
-                    });
-                  }}
-                />
-              </label>
-              <label>
-                Estimated Cost
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={stepDraft.estimated_cost ?? ''}
-                  onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
-                />
-              </label>
-              <label>
-                Actual Cost
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={stepDraft.actual_cost ?? ''}
-                  onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
-                />
-              </label>
-              <label className="is-wide">
+            </div>
+            <div className="build-wizard-step-edit-grid">
+              <div className="build-wizard-step-edit-column">
+                <label>
+                  Start Date
+                  <input
+                    type="date"
+                    value={stepDraft.expected_start_date || ''}
+                    onChange={(e) => {
+                      const nextStartDate = toStringOrNull(e.target.value);
+                      const nextDuration = calculateDurationDays(nextStartDate, stepDraft.expected_end_date)
+                        ?? stepDraft.expected_duration_days;
+                      updateStepDraft(step.id, {
+                        expected_start_date: nextStartDate,
+                        expected_duration_days: nextDuration,
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  End Date
+                  <input
+                    type="date"
+                    value={stepDraft.expected_end_date || ''}
+                    onChange={(e) => {
+                      const nextEndDate = toStringOrNull(e.target.value);
+                      const nextDuration = calculateDurationDays(stepDraft.expected_start_date, nextEndDate)
+                        ?? stepDraft.expected_duration_days;
+                      updateStepDraft(step.id, {
+                        expected_end_date: nextEndDate,
+                        expected_duration_days: nextDuration,
+                      });
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="build-wizard-step-edit-column">
+                <label>
+                  Estimated Cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={stepDraft.estimated_cost ?? ''}
+                    onChange={(e) => updateStepDraft(step.id, { estimated_cost: toNumberOrNull(e.target.value) })}
+                  />
+                </label>
+                <label>
+                  Actual Cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={stepDraft.actual_cost ?? ''}
+                    onChange={(e) => updateStepDraft(step.id, { actual_cost: toNumberOrNull(e.target.value) })}
+                  />
+                </label>
+              </div>
+              <label className="build-wizard-step-edit-notes-field">
                 Step Description
                 <textarea
                   rows={5}
@@ -287,7 +301,7 @@ export function BuildWizardStepEditModal({
           <button
             type="button"
             className="btn btn-outline-secondary btn-sm"
-            onClick={closeStepEditModal}
+            onClick={handleClose}
           >
             Cancel
           </button>

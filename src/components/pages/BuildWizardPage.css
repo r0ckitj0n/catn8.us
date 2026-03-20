@@ -2919,6 +2919,10 @@
 
 .build-wizard-step-edit-grid {
   margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 18px;
+  min-width: 0;
 }
 
 .build-wizard-step-edit-head {
@@ -2998,11 +3002,37 @@
   border: 1px solid #d7e2f0;
   border-radius: 14px;
   background: #fbfdff;
+  min-width: 0;
 }
 
 .build-wizard-step-edit-section-head {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.build-wizard-step-edit-section-head-details {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  align-items: end;
+  gap: 16px;
+}
+
+.build-wizard-step-edit-section-head-copy {
+  min-width: 0;
+}
+
+.build-wizard-step-edit-title-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.build-wizard-step-edit-title-field span {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #59708b;
 }
 
 .build-wizard-step-edit-section-head h4 {
@@ -3017,10 +3047,74 @@
   color: #5a6f88;
 }
 
+.build-wizard-step-edit-column {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.build-wizard-step-edit-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.build-wizard-step-edit-grid input,
+.build-wizard-step-edit-grid textarea,
+.build-wizard-step-edit-title-field input,
+.build-wizard-dependency-controls select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.build-wizard-step-edit-notes-field {
+  grid-column: 1 / -1;
+}
+
+.build-wizard-step-edit-notes-field textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
 .build-wizard-step-edit-dependency-panel {
   margin: 0;
   border-radius: 12px;
   background: linear-gradient(180deg, #eef5fd 0%, #f7fbff 100%);
+  min-width: 0;
+}
+
+.build-wizard-step-edit-dependency-panel.is-empty-inline {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  overflow: hidden;
+}
+
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-head,
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-empty,
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-controls,
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-chip-list,
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-chip {
+  min-width: 0;
+}
+
+.build-wizard-step-edit-dependency-panel.is-empty-inline .build-wizard-dependency-controls {
+  margin-left: 0;
+  flex-wrap: wrap;
+}
+
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-chip {
+  max-width: 100%;
+}
+
+.build-wizard-step-edit-dependency-panel .build-wizard-dependency-controls select,
+.build-wizard-step-edit-dependency-panel.is-empty-inline .build-wizard-dependency-controls select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .build-wizard-step-edit-actions {
@@ -3537,6 +3631,11 @@
 
   .build-wizard-step-edit-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .build-wizard-step-edit-section-head-details,
+  .build-wizard-step-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .build-wizard-project-overview-step-row {

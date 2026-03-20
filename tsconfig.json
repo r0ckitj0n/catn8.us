@@ -11,7 +11,16 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": false,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "incremental": true,
+    "tsBuildInfoFile": "./.local/state/typescript/tsconfig.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/**/*.bak",
+    "src/**/.DS_Store",
+    "src/**/*.tmp",
+    "src/**/*.old",
+    "src/**/*.orig"
+  ]
 }

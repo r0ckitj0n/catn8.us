@@ -97,19 +97,8 @@ export function BuildWizardEditableStepCardHeader({
           <div className="build-wizard-step-title-row">
             <div className="build-wizard-step-title-display">{stepDraft.title || 'Untitled Step'}</div>
             <div className="build-wizard-inline-metrics">
-              <label className="build-wizard-duration-inline">
-                <span className="build-wizard-inline-metric-label">Duration:</span>
-                <button
-                  type="button"
-                  className="build-wizard-inline-edit-trigger"
-                  disabled={stepReadOnly}
-                  onClick={openEditor}
-                >
-                  {durationDays ?? '-'}
-                </button>
-              </label>
               <label className="build-wizard-date-inline">
-                <span className="build-wizard-inline-metric-label">Start Date:</span>
+                <span className="build-wizard-inline-metric-label">Start:</span>
                 <button
                   type="button"
                   className="build-wizard-inline-edit-trigger"
@@ -120,7 +109,7 @@ export function BuildWizardEditableStepCardHeader({
                 </button>
               </label>
               <label className="build-wizard-date-inline">
-                <span className="build-wizard-inline-metric-label">End Date:</span>
+                <span className="build-wizard-inline-metric-label">End:</span>
                 <button
                   type="button"
                   className="build-wizard-inline-edit-trigger"
@@ -172,6 +161,7 @@ export function BuildWizardEditableStepCardHeader({
               <button type="button" className="build-wizard-step-icon-btn" aria-label="Step information" title="Step information" onClick={() => onSetStepInfoModalStepId(step.id)}>ℹ️</button>
               <button type="button" className="build-wizard-step-icon-btn is-danger" aria-label="Delete step" title="Delete step" disabled={stepReadOnly} onClick={onDeleteStep}>🗑️</button>
             </div>
+            {durationDays !== null ? <span className="build-wizard-step-duration-chip">Duration: {durationDays}</span> : null}
           </div>
         </div>
         {completionLocked ? (

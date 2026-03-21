@@ -1014,6 +1014,14 @@
   white-space: nowrap;
 }
 
+.build-wizard-step-duration-chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: #4f6076;
+}
+
 .build-wizard-inline-field-label {
   font-weight: 600;
   color: #32465f;
@@ -1035,6 +1043,7 @@
   gap: 12px;
   min-width: 0;
   white-space: nowrap;
+  justify-content: flex-start;
 }
 
 .build-wizard-date-inline {
@@ -1043,16 +1052,7 @@
   gap: 6px;
   margin: 0;
   min-width: max-content;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.build-wizard-duration-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  min-width: max-content;
+  flex: 0 0 auto;
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -1060,6 +1060,12 @@
 .build-wizard-inline-metric-label {
   font-weight: 600;
   color: #32465f;
+  white-space: nowrap;
+}
+
+.build-wizard-inline-edit-trigger {
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
 }
 
@@ -1075,6 +1081,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
@@ -3754,11 +3761,6 @@
   .build-wizard-date-inline {
     width: 100%;
     min-width: 0;
-    justify-content: space-between;
-  }
-
-  .build-wizard-duration-inline {
-    width: 100%;
     justify-content: space-between;
   }
 

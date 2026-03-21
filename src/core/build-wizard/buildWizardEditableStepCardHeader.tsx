@@ -74,6 +74,8 @@ export function BuildWizardEditableStepCardHeader({
     }
   }, [openStepEditModal, step, stepReadOnly]);
   const attachmentLabel = `${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'} on this step`;
+  const showEstimatedCost = estimatedCost !== null && Math.abs(estimatedCost) >= 0.005;
+  const showActualCost = effectiveActualCost !== null && Math.abs(effectiveActualCost) >= 0.005;
 
   return (
     <div className="build-wizard-step-header">
@@ -119,36 +121,40 @@ export function BuildWizardEditableStepCardHeader({
                   {stepDraft.expected_end_date || '-'}
                 </button>
               </label>
-              <label className="build-wizard-date-inline">
-                <span className="build-wizard-inline-metric-label">Estimated Cost:</span>
-                <button
-                  type="button"
-                  className="build-wizard-inline-edit-trigger"
-                  disabled={stepReadOnly}
-                  onClick={openEditor}
-                >
-                  {estimatedCost !== null ? renderCurrencyInputValue(`step-${step.id}-estimated_cost`, estimatedCost) : '-'}
-                </button>
-              </label>
-              <div className="build-wizard-date-inline">
-                <span className="build-wizard-cost-label-row">
-                  <span className="build-wizard-inline-metric-label">Actual Cost:</span>
-                  <span className="build-wizard-cost-actions">
-                    <button type="button" className="build-wizard-actual-cost-refresh-btn" disabled={stepReadOnly || isRefreshingActualCost} aria-label="Recalculate actual cost from tasks" title="Recalculate actual cost from tasks" onClick={onRefreshActualCost}>
-                      {isRefreshingActualCost ? '⏳' : '🔄'}
-                    </button>
-                    {isActualCostVerified ? <span className="build-wizard-actual-cost-check" aria-label="Actual cost is up to date" title="Actual cost is up to date">✓</span> : null}
+              {showEstimatedCost ? (
+                <label className="build-wizard-date-inline">
+                  <span className="build-wizard-inline-metric-label">Estimated Cost:</span>
+                  <button
+                    type="button"
+                    className="build-wizard-inline-edit-trigger"
+                    disabled={stepReadOnly}
+                    onClick={openEditor}
+                  >
+                    {renderCurrencyInputValue(`step-${step.id}-estimated_cost`, estimatedCost)}
+                  </button>
+                </label>
+              ) : null}
+              {showActualCost ? (
+                <div className="build-wizard-date-inline">
+                  <span className="build-wizard-cost-label-row">
+                    <span className="build-wizard-inline-metric-label">Actual Cost:</span>
+                    <span className="build-wizard-cost-actions">
+                      <button type="button" className="build-wizard-actual-cost-refresh-btn" disabled={stepReadOnly || isRefreshingActualCost} aria-label="Recalculate actual cost from tasks" title="Recalculate actual cost from tasks" onClick={onRefreshActualCost}>
+                        {isRefreshingActualCost ? '⏳' : '🔄'}
+                      </button>
+                      {isActualCostVerified ? <span className="build-wizard-actual-cost-check" aria-label="Actual cost is up to date" title="Actual cost is up to date">✓</span> : null}
+                    </span>
                   </span>
-                </span>
-                <button
-                  type="button"
-                  className="build-wizard-inline-edit-trigger"
-                  disabled={stepReadOnly}
-                  onClick={openEditor}
-                >
-                  {effectiveActualCost !== null ? renderCurrencyInputValue(`step-${step.id}-actual_cost`, effectiveActualCost) : '-'}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className="build-wizard-inline-edit-trigger"
+                    disabled={stepReadOnly}
+                    onClick={openEditor}
+                  >
+                    {renderCurrencyInputValue(`step-${step.id}-actual_cost`, effectiveActualCost)}
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="build-wizard-step-header-right">
               <button type="button" className="build-wizard-step-icon-btn" aria-label="Edit step" title="Edit step" disabled={stepReadOnly} onClick={openEditor}>✏️</button>

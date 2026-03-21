@@ -81,6 +81,8 @@ export function BuildWizardStepReceiptsList({
         const taskTypeLabel = taskTypeOptions.find((option) => option.value === parsedTask.taskMeta.task_type)?.label || 'Construction';
         const isQuoteTask = parsedTask.taskMeta.task_type === 'quote';
         const taskCompleted = parsedTask.taskMeta.is_completed === true;
+        const taskAmount = Number(doc.receipt_amount || 0);
+        const showTaskAmount = Number.isFinite(taskAmount) && Math.abs(taskAmount) >= 0.005;
         return (
           <div
             className="build-wizard-step-receipt-row"
@@ -97,8 +99,13 @@ export function BuildWizardStepReceiptsList({
                 {doc.receipt_title?.trim() || doc.caption || doc.original_name}
               </button>
               <span>
-                Vendor: {doc.receipt_vendor || '-'} | Date: {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'} | Amount:{' '}
-                <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(Number(doc.receipt_amount || 0))}</span>
+                Vendor: {doc.receipt_vendor || '-'} | Date: {getTaskEffectiveDate(doc, step, parsedTask.taskMeta) || '-'}
+                {showTaskAmount ? (
+                  <>
+                    {' '}| Amount:{' '}
+                    <span className={isQuoteTask ? 'build-wizard-quote-amount' : ''}>{formatCurrency(taskAmount)}</span>
+                  </>
+                ) : null}
               </span>
               <span>Type: {taskTypeLabel}</span>
               {taskNotes ? (

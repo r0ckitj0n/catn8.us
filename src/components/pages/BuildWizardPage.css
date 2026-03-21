@@ -1046,8 +1046,10 @@
   justify-content: flex-start;
 }
 
+.build-wizard-step-header .build-wizard-inline-metrics label,
 .build-wizard-date-inline {
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   gap: 6px;
   margin: 0;
@@ -1055,6 +1057,13 @@
   flex: 0 0 auto;
   font-size: 0.85rem;
   white-space: nowrap;
+}
+
+.build-wizard-step-header .build-wizard-inline-metrics .build-wizard-duration-inline,
+.build-wizard-step-header .build-wizard-inline-metrics .build-wizard-date-inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
 }
 
 .build-wizard-inline-metric-label {

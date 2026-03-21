@@ -811,7 +811,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
   min-width: 0;
 }
@@ -909,12 +909,13 @@
 }
 
 .build-wizard-inline-check {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .build-wizard-inline-check label.build-wizard-inline-complete-toggle {
@@ -992,22 +993,25 @@
 }
 
 .build-wizard-step-metrics-panel {
-  display: grid;
-  gap: 8px;
-  flex: 1 1 820px;
-  min-width: min(100%, 520px);
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .build-wizard-step-title-row {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 .build-wizard-step-title-display {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  white-space: nowrap;
 }
 
 .build-wizard-inline-field-label {
@@ -1025,10 +1029,12 @@
 
 .build-wizard-inline-metrics {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 12px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .build-wizard-date-inline {
@@ -1036,7 +1042,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  min-width: 0;
+  min-width: max-content;
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -1046,7 +1052,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  min-width: 0;
+  min-width: max-content;
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -3616,19 +3622,23 @@
     flex-direction: column;
   }
 
+  .build-wizard-step-header-left {
+    flex-wrap: wrap;
+  }
+
   .build-wizard-step-title-row {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .build-wizard-step-header-right {
-    margin-left: 0;
-    justify-content: flex-start;
-  }
-
   .build-wizard-step-metrics-panel {
     width: 100%;
     min-width: 0;
+  }
+
+  .build-wizard-step-header-right {
+    margin-left: 0;
+    justify-content: flex-start;
   }
 
   .build-wizard-title-inline-compact {
@@ -3639,6 +3649,7 @@
   .build-wizard-inline-metrics {
     width: 100%;
     grid-template-columns: 1fr;
+    flex-wrap: wrap;
   }
 
   .build-wizard-step-grid {

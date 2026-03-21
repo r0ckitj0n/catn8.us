@@ -1725,10 +1725,51 @@
   gap: 6px;
 }
 
+.build-wizard-step-receipt-attachments-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.build-wizard-step-receipt-complete-toggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #32465f;
+  white-space: nowrap;
+}
+
+.build-wizard-step-receipt-attachments-head label.build-wizard-step-receipt-complete-toggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.build-wizard-step-receipt-complete-toggle input[type="checkbox"] {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
 .build-wizard-step-receipt-attachments-label {
   font-size: 0.8rem;
   color: #4b6078;
   font-weight: 600;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: right;
+}
+
+.build-wizard-step-receipt-attachments-label:hover {
+  color: #1f4f95;
+  text-decoration: underline;
 }
 
 .build-wizard-step-receipt-attachments-list {

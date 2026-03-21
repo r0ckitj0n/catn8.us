@@ -116,8 +116,23 @@ export function BuildWizardStepReceiptsList({
               ) : null}
             </div>
             <div className="build-wizard-step-receipt-attachments">
-              <div className="build-wizard-step-receipt-attachments-label">
-                Attachments ({attachments.length})
+              <div className="build-wizard-step-receipt-attachments-head">
+                <label className="build-wizard-step-receipt-complete-toggle">
+                  <input
+                    type="checkbox"
+                    checked={taskCompleted}
+                    disabled={stepReadOnly}
+                    onChange={(event) => { void toggleTaskCompleted(doc, parsedTask, event.target.checked); }}
+                  />
+                  <span>Complete</span>
+                </label>
+                <button
+                  type="button"
+                  className="build-wizard-step-receipt-attachments-label"
+                  onClick={() => openTaskAttachmentsModal(doc)}
+                >
+                  Attachments ({attachments.length})
+                </button>
               </div>
               {attachments.length > 0 ? (
                 <div className="build-wizard-step-receipt-attachments-list">
@@ -138,16 +153,6 @@ export function BuildWizardStepReceiptsList({
             <div className="build-wizard-step-receipt-actions">
               <button
                 type="button"
-                className={`build-wizard-task-icon-btn${taskCompleted ? ' is-active' : ''}`}
-                aria-label={taskCompleted ? 'Mark task incomplete' : 'Mark task complete'}
-                title={taskCompleted ? 'Mark task incomplete' : 'Mark task complete'}
-                disabled={stepReadOnly}
-                onClick={() => { void toggleTaskCompleted(doc, parsedTask, !taskCompleted); }}
-              >
-                {taskCompleted ? '☑️' : '⬜'}
-              </button>
-              <button
-                type="button"
                 className="build-wizard-task-icon-btn"
                 aria-label="Edit task"
                 title="Edit task"
@@ -165,15 +170,6 @@ export function BuildWizardStepReceiptsList({
                 disabled={stepReadOnly}
               >
                 ↔️
-              </button>
-              <button
-                type="button"
-                className="build-wizard-task-icon-btn"
-                aria-label={`Task attachments (${attachments.length})`}
-                title={`Task attachments (${attachments.length})`}
-                onClick={() => openTaskAttachmentsModal(doc)}
-              >
-                📎
               </button>
               <button
                 type="button"

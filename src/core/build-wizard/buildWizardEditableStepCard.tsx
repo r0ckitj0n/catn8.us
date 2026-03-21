@@ -172,6 +172,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   };
   const stepTaskCount = Math.max(stepReceiptDocuments.length, Number(draft.receipt_count || 0));
   const stepReceiptTotal = stepReceiptMetrics.nonQuoteTotal;
+  const showStepReceiptTotal = Math.abs(stepReceiptTotal) >= 0.005;
   const draftActualCost = toNumberOrNull(String(draft.actual_cost ?? ''));
   const derivedActualCost = stepReceiptMetrics.allCount > 0 ? Math.max(0, stepReceiptTotal) : null;
   const effectiveActualCost = draftActualCost ?? derivedActualCost;
@@ -284,7 +285,12 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
                 {dependencyItems.length ? <div className="build-wizard-dependency-chip-list">{dependencyItems.map((dependencyItem) => <span key={`${step.id}-dependency-${dependencyItem.id}`} className="build-wizard-dependency-chip">{dependencyItem.label}</span>)}</div> : <div className="build-wizard-dependency-empty">No dependencies set.</div>}
               </div>
               {parentStep ? <div className="build-wizard-type-note">Child of: #{activeTabStepNumbers.get(parentStep.id) || parentStep.step_order} {parentStep.title}</div> : null}
-              {(stepReceiptDocuments.length > 0 || stepReceiptTotal > 0) ? <div className="build-wizard-type-note">Tasks: {stepTaskCount} file{stepTaskCount === 1 ? '' : 's'} | Total {context.formatCurrency(stepReceiptTotal)}</div> : null}
+              {(stepReceiptDocuments.length > 0 || showStepReceiptTotal) ? (
+                <div className="build-wizard-type-note">
+                  Tasks: {stepTaskCount} file{stepTaskCount === 1 ? '' : 's'}
+                  {showStepReceiptTotal ? ` | Total ${context.formatCurrency(stepReceiptTotal)}` : ''}
+                </div>
+              ) : null}
             </div>
 
             <label className="build-wizard-notes-field">
@@ -301,7 +307,10 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
             <div className="build-wizard-step-receipts">
               <div className="build-wizard-step-receipts-head">
                 <div className="build-wizard-step-assignees-label">Tasks</div>
-                <div className="build-wizard-step-receipts-summary">{stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'} | {context.formatCurrency(stepReceiptTotal)}</div>
+                <div className="build-wizard-step-receipts-summary">
+                  {stepReceiptDocuments.length} file{stepReceiptDocuments.length === 1 ? '' : 's'}
+                  {showStepReceiptTotal ? ` | ${context.formatCurrency(stepReceiptTotal)}` : ''}
+                </div>
               </div>
               <BuildWizardStepReceiptEditor authorityContacts={authorityContacts} autosaveExistingReceiptDraftForStep={autosaveExistingReceiptDraftForStep} editingReceiptDocumentIdByStep={editingReceiptDocumentIdByStep ?? {}} onSaveReceiptForStep={onSaveReceiptForStep} open={receiptEditorOpen} permitDocuments={permitDocuments} permitStatusOptions={permitStatusOptions} purchaseUnitOptions={purchaseUnitOptions} receiptDraft={receiptDraft} receiptDraftByStep={safeReceiptDraftByStep} receiptEditorRefByStepId={receiptEditorRefByStepId} setEditingReceiptDocumentIdByStep={setEditingReceiptDocumentIdByStep} setReceiptAttachmentDraftByStep={setReceiptAttachmentDraftByStep} setReceiptDraftByStep={setReceiptDraftByStep} setReceiptEditorOpenByStep={setReceiptEditorOpenByStep} step={step} taskTypeOptions={taskTypeOptions} />
               <BuildWizardStepReceiptsList deletingDocumentId={deletingDocumentId} formatCurrency={context.formatCurrency} getTaskEffectiveDate={getTaskEffectiveDate} inlineEditingReceiptFieldByDocId={inlineEditingReceiptFieldByDocId ?? {}} inlineReceiptDraftByDocId={inlineReceiptDraftByDocId ?? {}} onDeleteDocument={onDeleteDocument} onOpenDocumentPreview={onOpenDocumentPreview} onStartEditReceiptForStep={onStartEditReceiptForStep} openMoveTaskModal={openMoveTaskModal} openTaskAttachmentsModal={openTaskAttachmentsModal} parseTaskMetaFromReceiptNotes={parseTaskMetaFromReceiptNotes} receiptRowRefByDocId={receiptRowRefByDocId} saveInlineReceiptEdit={saveInlineReceiptEdit} setInlineReceiptDraftByDocId={setInlineReceiptDraftByDocId} startInlineReceiptEdit={startInlineReceiptEdit} step={step} stepReadOnly={stepReadOnly} stepReceiptAttachmentDocuments={stepReceiptAttachmentDocuments} stepReceiptDocuments={stepReceiptDocuments} toggleTaskCompleted={context.toggleTaskCompleted} taskTypeOptions={taskTypeOptions} taskUsesManualDateOverride={taskUsesManualDateOverride} taskVendorOptions={taskVendorOptions} />

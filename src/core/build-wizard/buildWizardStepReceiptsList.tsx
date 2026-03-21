@@ -129,45 +129,54 @@ export function BuildWizardStepReceiptsList({
               ) : null}
             </div>
             <div className="build-wizard-step-receipt-actions">
-              <label className="build-wizard-inline-complete-toggle">
-                <input
-                  type="checkbox"
-                  checked={taskCompleted}
-                  disabled={stepReadOnly}
-                  onChange={(event) => { void toggleTaskCompleted(doc, parsedTask, event.target.checked); }}
-                />
-                <span>Complete</span>
-              </label>
               <button
                 type="button"
-                className="btn btn-outline-primary btn-sm"
+                className={`build-wizard-task-icon-btn${taskCompleted ? ' is-active' : ''}`}
+                aria-label={taskCompleted ? 'Mark task incomplete' : 'Mark task complete'}
+                title={taskCompleted ? 'Mark task incomplete' : 'Mark task complete'}
+                disabled={stepReadOnly}
+                onClick={() => { void toggleTaskCompleted(doc, parsedTask, !taskCompleted); }}
+              >
+                {taskCompleted ? '☑️' : '⬜'}
+              </button>
+              <button
+                type="button"
+                className="build-wizard-task-icon-btn"
+                aria-label="Edit task"
+                title="Edit task"
                 onClick={() => onStartEditReceiptForStep(step, doc)}
                 disabled={stepReadOnly}
               >
-                Edit
+                ✏️
               </button>
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm"
+                className="build-wizard-task-icon-btn"
+                aria-label="Move task"
+                title="Move task"
                 onClick={() => openMoveTaskModal(doc)}
                 disabled={stepReadOnly}
               >
-                Move
+                ↔️
               </button>
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm"
+                className="build-wizard-task-icon-btn"
+                aria-label={`Task attachments (${attachments.length})`}
+                title={`Task attachments (${attachments.length})`}
                 onClick={() => openTaskAttachmentsModal(doc)}
               >
-                Attachments
+                📎
               </button>
               <button
                 type="button"
-                className="btn btn-outline-danger btn-sm"
+                className="build-wizard-task-icon-btn is-danger"
+                aria-label={deletingDocumentId === doc.id ? 'Deleting task' : 'Delete task'}
+                title={deletingDocumentId === doc.id ? 'Deleting task' : 'Delete task'}
                 onClick={() => { void onDeleteDocument(doc.id, doc.original_name); }}
                 disabled={deletingDocumentId === doc.id}
               >
-                {deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+                {deletingDocumentId === doc.id ? '⏳' : '🗑️'}
               </button>
             </div>
           </div>

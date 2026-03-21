@@ -793,17 +793,18 @@
 
 .build-wizard-step-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 8px;
 }
 
 .build-wizard-step-header-right {
   display: inline-flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 5px;
+  margin-left: auto;
 }
 
 .build-wizard-step-header-left {
@@ -997,6 +998,18 @@
   min-width: min(100%, 520px);
 }
 
+.build-wizard-step-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.build-wizard-step-title-display {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .build-wizard-inline-field-label {
   font-weight: 600;
   color: #32465f;
@@ -1013,23 +1026,35 @@
 .build-wizard-inline-metrics {
   display: grid;
   grid-template-columns:
-    minmax(130px, 0.8fr)
-    minmax(170px, 1fr)
-    minmax(170px, 1fr)
-    minmax(190px, 1fr)
-    minmax(210px, 1.1fr);
-  align-items: flex-end;
+    minmax(120px, max-content)
+    minmax(150px, max-content)
+    minmax(150px, max-content)
+    minmax(165px, max-content)
+    minmax(175px, max-content);
+  align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
 .build-wizard-date-inline {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   min-width: 0;
-  width: 100%;
+  width: auto;
+  font-size: 0.85rem;
+}
+
+.build-wizard-duration-inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  width: auto;
   font-size: 0.85rem;
 }
 
@@ -1043,8 +1068,7 @@
 .build-wizard-cost-label-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1093,71 +1117,72 @@
   color: #4f6076;
 }
 
-.build-wizard-step-info-btn {
-  width: 24px;
-  height: 24px;
+.build-wizard-step-icon-btn,
+.build-wizard-task-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c3d2e7;
   border-radius: 999px;
-  border: 1px solid #b9cce6;
-  background: #eff6ff;
+  background: #f3f8ff;
   color: #284a71;
-  font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   line-height: 1;
   padding: 0;
 }
 
-.build-wizard-step-info-btn:hover {
-  background: #e1eeff;
+.build-wizard-step-icon-btn:hover:not(:disabled),
+.build-wizard-task-icon-btn:hover:not(:disabled) {
+  background: #e4efff;
+  border-color: #9fb8dd;
 }
 
-.build-wizard-step-attachment-indicator {
-  width: 24px;
-  height: 24px;
+.build-wizard-step-icon-btn:disabled,
+.build-wizard-task-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.build-wizard-step-icon-btn.is-danger,
+.build-wizard-task-icon-btn.is-danger {
+  background: #fff7f8;
+  color: #8c1730;
+  border-color: #e1b7c1;
+}
+
+.build-wizard-step-icon-btn.is-danger:hover:not(:disabled),
+.build-wizard-task-icon-btn.is-danger:hover:not(:disabled) {
+  background: #fff0f2;
+  border-color: #c54a66;
+}
+
+.build-wizard-task-icon-btn.is-active {
+  background: #eaf8ef;
+  border-color: #8fd0a5;
+  color: #17653a;
+}
+
+.build-wizard-step-icon-badge {
+  min-width: 36px;
+  height: 28px;
+  padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid #b9cce6;
+  border: 1px solid #c3d2e7;
   background: #f2f8ff;
   color: #2e4f74;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
-.build-wizard-step-attachment-indicator svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.build-wizard-step-delete {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #d0dae9;
-  border-radius: 999px;
-  background: var(--catn8-bw-surface-0);
-  color: #7f1228;
-  padding: 0;
-}
-
-.build-wizard-step-delete svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.build-wizard-step-delete:hover {
-  background: #fff1f3;
-  border-color: #c54a66;
+.build-wizard-step-icon-badge span {
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .build-wizard-step-grid {
@@ -1659,37 +1684,17 @@
 .build-wizard-step-receipt-actions {
   grid-area: actions;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 6px;
-  align-items: stretch;
-  justify-self: end;
-  min-width: 160px;
-}
-
-.build-wizard-step-receipt-actions .build-wizard-inline-complete-toggle {
-  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  align-self: flex-end;
-  gap: 6px;
-  margin: 0 0 2px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  line-height: 1;
-  color: #223a57;
-  white-space: nowrap;
+  justify-self: end;
+  min-width: auto;
+  max-width: 160px;
 }
 
-.build-wizard-step-receipt-actions .build-wizard-inline-complete-toggle input[type="checkbox"] {
-  width: 14px;
-  min-width: 14px;
-  height: 14px;
-  margin: 0;
-  transform: translateY(-1px);
-}
-
-.build-wizard-step-receipt-actions .btn {
-  width: 100%;
+.build-wizard-step-receipt-actions .build-wizard-task-icon-btn {
+  flex: 0 0 auto;
 }
 
 .build-wizard-step-receipt-attachments {
@@ -3611,6 +3616,16 @@
     flex-direction: column;
   }
 
+  .build-wizard-step-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .build-wizard-step-header-right {
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
   .build-wizard-step-metrics-panel {
     width: 100%;
     min-width: 0;
@@ -3623,7 +3638,7 @@
 
   .build-wizard-inline-metrics {
     width: 100%;
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .build-wizard-step-grid {
@@ -3728,6 +3743,17 @@
   .build-wizard-date-inline {
     width: 100%;
     min-width: 0;
+    justify-content: space-between;
+  }
+
+  .build-wizard-duration-inline {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .build-wizard-step-receipt-actions {
+    justify-self: start;
+    max-width: none;
   }
 
   .build-wizard-phase-ticks .is-mid {

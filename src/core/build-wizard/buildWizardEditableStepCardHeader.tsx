@@ -73,6 +73,7 @@ export function BuildWizardEditableStepCardHeader({
       openStepEditModal(step);
     }
   }, [openStepEditModal, step, stepReadOnly]);
+  const attachmentLabel = `${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'} on this step`;
 
   return (
     <div className="build-wizard-step-header">
@@ -93,10 +94,23 @@ export function BuildWizardEditableStepCardHeader({
           <span className="build-wizard-step-order-pill" title="Step number is automatically set from timeline order">#{stepDisplayNumber}</span>
         </div>
         <div className="build-wizard-step-metrics-panel">
-          <div className="build-wizard-step-title-display">{stepDraft.title || 'Untitled Step'}</div>
+          <div className="build-wizard-step-title-row">
+            <div className="build-wizard-step-title-display">{stepDraft.title || 'Untitled Step'}</div>
+            <div className="build-wizard-step-header-right">
+              <button type="button" className="build-wizard-step-icon-btn" aria-label="Edit step" title="Edit step" disabled={stepReadOnly} onClick={openEditor}>✏️</button>
+              {stepAttachmentCount > 0 ? (
+                <span className="build-wizard-step-icon-badge" aria-label={attachmentLabel} title={attachmentLabel}>
+                  📎<span>{stepAttachmentCount}</span>
+                </span>
+              ) : null}
+              <button type="button" className="build-wizard-step-icon-btn" aria-label="Move step to another phase" title="Move step to another phase" disabled={stepReadOnly} onClick={() => onOpenMoveStepModal(step.id)}>↔️</button>
+              <button type="button" className="build-wizard-step-icon-btn" aria-label="Step information" title="Step information" onClick={() => onSetStepInfoModalStepId(step.id)}>ℹ️</button>
+              <button type="button" className="build-wizard-step-icon-btn is-danger" aria-label="Delete step" title="Delete step" disabled={stepReadOnly} onClick={onDeleteStep}>🗑️</button>
+            </div>
+          </div>
           <div className="build-wizard-inline-metrics">
             <label className="build-wizard-duration-inline">
-              <span>Duration (Days)</span>
+              <span className="build-wizard-inline-metric-label">Duration:</span>
               <button
                 type="button"
                 className="build-wizard-inline-edit-trigger"
@@ -107,7 +121,7 @@ export function BuildWizardEditableStepCardHeader({
               </button>
             </label>
             <label className="build-wizard-date-inline">
-              <span>Start</span>
+              <span className="build-wizard-inline-metric-label">Start:</span>
               <button
                 type="button"
                 className="build-wizard-inline-edit-trigger"
@@ -118,7 +132,7 @@ export function BuildWizardEditableStepCardHeader({
               </button>
             </label>
             <label className="build-wizard-date-inline">
-              <span>End</span>
+              <span className="build-wizard-inline-metric-label">End:</span>
               <button
                 type="button"
                 className="build-wizard-inline-edit-trigger"
@@ -129,7 +143,7 @@ export function BuildWizardEditableStepCardHeader({
               </button>
             </label>
             <label className="build-wizard-date-inline">
-              <span>Estimated Cost</span>
+              <span className="build-wizard-inline-metric-label">Estimated:</span>
               <button
                 type="button"
                 className="build-wizard-inline-edit-trigger"
@@ -141,7 +155,7 @@ export function BuildWizardEditableStepCardHeader({
             </label>
             <div className="build-wizard-date-inline">
               <span className="build-wizard-cost-label-row">
-                <span>Actual Cost</span>
+                <span className="build-wizard-inline-metric-label">Actual:</span>
                 <span className="build-wizard-cost-actions">
                   <button type="button" className="build-wizard-actual-cost-refresh-btn" disabled={stepReadOnly || isRefreshingActualCost} aria-label="Recalculate actual cost from tasks" title="Recalculate actual cost from tasks" onClick={onRefreshActualCost}>
                     {isRefreshingActualCost ? '⏳' : '🔄'}
@@ -168,23 +182,6 @@ export function BuildWizardEditableStepCardHeader({
           </span>
         ) : null}
         {stepReadOnly ? <span className="build-wizard-step-readonly-note">Read-only (completed)</span> : null}
-      </div>
-      <div className="build-wizard-step-header-right">
-        <button type="button" className="btn btn-outline-primary btn-sm" aria-label="Edit step" title="Edit step" disabled={stepReadOnly} onClick={openEditor}>Edit</button>
-        {stepAttachmentCount > 0 ? (
-          <span className="build-wizard-step-attachment-indicator" aria-label={`${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'} on this step`} title={`${stepAttachmentCount} attachment${stepAttachmentCount === 1 ? '' : 's'}`}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5l6.2-6.2a3.5 3.5 0 0 1 5 5l-8.4 8.4a5.5 5.5 0 1 1-7.8-7.8L13.1 1.8" /></svg>
-          </span>
-        ) : null}
-        <button type="button" className="btn btn-outline-primary btn-sm" aria-label="Move step" title="Move step to another phase" disabled={stepReadOnly} onClick={() => onOpenMoveStepModal(step.id)}>Move</button>
-        <button type="button" className="build-wizard-step-info-btn" aria-label="Step information" title="Step information" onClick={() => onSetStepInfoModalStepId(step.id)}>i</button>
-        <button type="button" className="build-wizard-step-delete" aria-label="Delete step" title="Delete step" disabled={stepReadOnly} onClick={onDeleteStep}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            <line x1="10" y1="11" x2="10" y2="17" />
-            <line x1="14" y1="11" x2="14" y2="17" />
-          </svg>
-        </button>
       </div>
     </div>
   );

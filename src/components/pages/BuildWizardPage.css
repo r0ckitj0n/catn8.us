@@ -1024,38 +1024,37 @@
 }
 
 .build-wizard-inline-metrics {
-  display: grid;
-  grid-template-columns:
-    minmax(120px, max-content)
-    minmax(150px, max-content)
-    minmax(150px, max-content)
-    minmax(165px, max-content)
-    minmax(175px, max-content);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 
 .build-wizard-date-inline {
-  display: flex;
-  flex-direction: row;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   margin: 0;
   min-width: 0;
-  width: auto;
   font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .build-wizard-duration-inline {
-  display: flex;
-  flex-direction: row;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   margin: 0;
   min-width: 0;
-  width: auto;
   font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.build-wizard-inline-metric-label {
+  font-weight: 600;
+  color: #32465f;
+  white-space: nowrap;
 }
 
 .build-wizard-inline-metrics input,
@@ -1066,10 +1065,11 @@
 }
 
 .build-wizard-cost-label-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .build-wizard-cost-actions {
@@ -1580,7 +1580,7 @@
   background: #ffffff;
   padding: 8px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
   grid-template-areas:
     "file actions"
     "attachments attachments";
@@ -1685,12 +1685,12 @@
   grid-area: actions;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   align-items: center;
   justify-self: end;
-  min-width: auto;
-  max-width: 160px;
+  min-width: 170px;
+  max-width: none;
 }
 
 .build-wizard-step-receipt-actions .build-wizard-task-icon-btn {

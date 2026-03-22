@@ -4,6 +4,7 @@ import { DocumentDraftMap } from '../../types/pages/buildWizardPage';
 
 export function useBuildWizardProjectDeskEffects(options: any) {
   const filteredDeskContacts = Array.isArray(options.filteredDeskContacts) ? options.filteredDeskContacts : [];
+  const wasProjectDeskOpenRef = React.useRef<boolean>(false);
 
   React.useEffect(() => {
     if (options.docStepId <= 0) {
@@ -22,9 +23,12 @@ export function useBuildWizardProjectDeskEffects(options: any) {
   }, [options.projectDeskOpen, options.setDeskCreateMode]);
 
   React.useEffect(() => {
-    if (!options.projectDeskOpen) {
+    const isOpening = options.projectDeskOpen && !wasProjectDeskOpenRef.current;
+    wasProjectDeskOpenRef.current = options.projectDeskOpen;
+    if (!isOpening) {
       return;
     }
+
     const nextDrafts: DocumentDraftMap = {};
     options.documents.forEach((doc: any) => {
       nextDrafts[doc.id] = {
@@ -55,7 +59,23 @@ export function useBuildWizardProjectDeskEffects(options: any) {
       return;
     }
     options.setDeskSelectedContactId(options.deskContacts[0]?.id || 0);
-  }, [options]);
+  }, [
+    options.deskContacts,
+    options.deskCreateMode,
+    options.deskSelectedContactId,
+    options.documents,
+    options.parseTaskMetaFromReceiptNotes,
+    options.projectDeskOpen,
+    options.setDeskSelectedContactId,
+    options.setDocumentDrafts,
+    options.setDocumentManagerKindFilter,
+    options.setDocumentManagerPhaseFilter,
+    options.setDocumentManagerQuery,
+    options.setDocumentManagerStepFilter,
+    options.setDocumentUploadFile,
+    options.setDocumentUploadModalOpen,
+    options.taskUsesManualDateOverride,
+  ]);
 
   React.useEffect(() => {
     if (options.documentManagerStepFilter === 'all' || options.documentManagerStepFilter === 'unlinked') {
@@ -126,5 +146,12 @@ export function useBuildWizardProjectDeskEffects(options: any) {
       vendor_trade: options.selectedDeskContact.vendor_trade || '',
       vendor_website: options.selectedDeskContact.vendor_website || '',
     });
-  }, [options]);
+  }, [
+    options.deskCreateMode,
+    options.normalizeContactType,
+    options.projectDeskOpen,
+    options.selectedDeskContact,
+    options.setDeskContactDraft,
+    options.setDeskCreateMode,
+  ]);
 }

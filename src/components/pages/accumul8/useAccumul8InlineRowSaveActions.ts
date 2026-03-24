@@ -11,6 +11,7 @@ import {
   Accumul8Transaction,
   Accumul8TransactionUpsertRequest,
 } from '../../../types/accumul8';
+import { getAccumul8TransactionEditPolicy } from '../../../utils/accumul8TransactionPolicy';
 import { LedgerInlineDraft } from './accumul8PageFormUtils';
 import { normalizeEntityContactType, normalizeEntityKind } from './accumul8PageEntityUtils';
 import { DebtorInlineDraft, EntityInlineDraft, RecurringInlineDraft } from './useAccumul8InlineRowActions';
@@ -62,6 +63,14 @@ export function useAccumul8InlineRowSaveActions({
   updateRecurring,
   updateTransaction,
 }: UseAccumul8InlineRowSaveActionsOptions) {
+  const shouldSkipRecurringTemplateSync = React.useCallback((tx: Accumul8Transaction): number => {
+    const isRecurringLinked = Number(tx.recurring_payment_id || 0) > 0;
+    if (!isRecurringLinked) {
+      return 0;
+    }
+    return getAccumul8TransactionEditPolicy(tx).isImported ? 0 : 1;
+  }, []);
+
   const saveLedgerRow = React.useCallback(async (tx: Accumul8Transaction) => {
     const draft = ledgerDraftById[tx.id];
     if (!draft) return;
@@ -80,10 +89,11 @@ export function useAccumul8InlineRowSaveActions({
       entity_id: draft.entity_id ?? tx.entity_id ?? null,
       account_id: draft.account_id ?? tx.account_id ?? null,
       balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
+      skip_recurring_template_sync: shouldSkipRecurringTemplateSync(tx),
     });
     setLedgerDraftById((prev) => { const next = { ...prev }; delete next[tx.id]; return next; });
     setActiveLedgerRowId((current) => (current === tx.id ? null : current));
-  }, [ledgerDraftById, setActiveLedgerRowId, setLedgerDraftById, updateTransaction]);
+  }, [ledgerDraftById, setActiveLedgerRowId, setLedgerDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
   const savePayBillRow = React.useCallback(async (tx: Accumul8Transaction) => {
     const draft = payBillDraftById[tx.id];
     if (!draft) return;
@@ -102,10 +112,11 @@ export function useAccumul8InlineRowSaveActions({
       entity_id: draft.entity_id ?? tx.entity_id ?? null,
       account_id: draft.account_id ?? tx.account_id ?? null,
       balance_entity_id: draft.balance_entity_id ?? tx.balance_entity_id ?? null,
+      skip_recurring_template_sync: shouldSkipRecurringTemplateSync(tx),
     });
     setPayBillDraftById((prev) => { const next = { ...prev }; delete next[tx.id]; return next; });
     setActivePayBillRowId((current) => (current === tx.id ? null : current));
-  }, [payBillDraftById, setActivePayBillRowId, setPayBillDraftById, updateTransaction]);
+  }, [payBillDraftById, setActivePayBillRowId, setPayBillDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
   const saveDebtorRow = React.useCallback(async (row: Accumul8Debtor) => {
     const draft = debtorDraftById[row.id];
     if (!draft) return;

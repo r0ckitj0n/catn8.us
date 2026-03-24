@@ -84,7 +84,8 @@ export function Accumul8TransactionModal({
     account_id: form.account_id ? Number(form.account_id) : null,
     balance_entity_id: isIouVariant ? null : (form.balance_entity_id ? Number(form.balance_entity_id) : null),
     debtor_id: isIouVariant ? (form.debtor_id ? Number(form.debtor_id) : null) : undefined,
-  }), [form, isIouVariant, signedAmount]);
+    skip_recurring_template_sync: !editPolicy.isImported && Number(transaction?.recurring_payment_id || 0) > 0 ? 1 : 0,
+  }), [editPolicy.isImported, form, isIouVariant, signedAmount, transaction?.recurring_payment_id]);
   const isDirty = React.useMemo(
     () => JSON.stringify(buildPayload()) !== JSON.stringify({
       transaction_date: String(initialForm.transaction_date || ''),

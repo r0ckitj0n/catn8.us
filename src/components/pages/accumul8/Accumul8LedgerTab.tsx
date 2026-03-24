@@ -110,6 +110,10 @@ export function Accumul8LedgerTab({
   setLedgerRowDraft,
   setListSearchQuery,
 }: Accumul8LedgerTabProps) {
+  const flushAmountSave = React.useCallback((tx: Accumul8Transaction, amount: number) => {
+    void saveLedgerRow(tx, { ...(ledgerDraftById[tx.id] || {}), amount });
+  }, [ledgerDraftById, saveLedgerRow]);
+
   return (
     <div className="accumul8-panel accumul8-panel--viewport-fill">
       <div className="accumul8-panel-toolbar accumul8-panel-toolbar--ledger">
@@ -213,7 +217,7 @@ export function Accumul8LedgerTab({
                     )}
                   </td>
                   <td>{activeLedgerRowId === tx.id ? <input className="form-control form-control-sm accumul8-month-table-input" value={ledgerDraftById[tx.id]?.memo ?? tx.memo} onChange={(e) => setLedgerRowDraft(tx, { memo: e.target.value })} disabled={busy} /> : <button type="button" className="accumul8-inline-cell-trigger" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{formatInlineText(tx.memo, '-')}</button>}</td>
-                  <td className="text-end">{activeLedgerRowId === tx.id ? <input className="form-control form-control-sm accumul8-month-table-input" type="number" step="0.01" value={ledgerDraftById[tx.id]?.amount ?? tx.amount} onChange={(e) => setLedgerRowDraft(tx, { amount: Number(e.target.value) })} onBlur={() => { if (!busy && ledgerDraftById[tx.id]) { void saveLedgerRow(tx, ledgerDraftById[tx.id]); } }} disabled={busy || !txEditPolicy.canEditCoreFields} /> : <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.amount.toFixed(2)}</button>}</td>
+                  <td className="text-end">{activeLedgerRowId === tx.id ? <input className="form-control form-control-sm accumul8-month-table-input" type="number" step="0.01" value={ledgerDraftById[tx.id]?.amount ?? tx.amount} onChange={(e) => { const amount = Number(e.target.value); setLedgerRowDraft(tx, { amount }); }} onBlur={(e) => { if (busy) return; const amount = Number(e.currentTarget.value); if (!Number.isFinite(amount)) return; setLedgerRowDraft(tx, { amount }); flushAmountSave(tx, amount); }} onKeyDown={(e) => { if (e.key === 'Enter' && !busy) { e.preventDefault(); const amount = Number(e.currentTarget.value); if (!Number.isFinite(amount)) return; setLedgerRowDraft(tx, { amount }); flushAmountSave(tx, amount); } }} disabled={busy || !txEditPolicy.canEditCoreFields} /> : <button type="button" className="accumul8-inline-cell-trigger accumul8-inline-cell-trigger--numeric" onClick={() => activateLedgerRow(tx.id)} disabled={busy}>{tx.amount.toFixed(2)}</button>}</td>
                   <td className="text-end">{Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2)}</td>
                   <td className="text-center accumul8-ledger-toggle-cell">
                     <input className="form-check-input accumul8-ledger-checkbox" type="checkbox" checked={Number(ledgerDraftById[tx.id]?.is_paid ?? tx.is_paid) === 1} onChange={(e) => setLedgerRowDraft(tx, { is_paid: e.target.checked ? 1 : 0 })} disabled={busy || !txEditPolicy.canEditPaidState} aria-label={`Mark ${tx.description} as paid`} />
@@ -222,7 +226,7 @@ export function Accumul8LedgerTab({
                     <input className="form-check-input accumul8-ledger-checkbox" type="checkbox" checked={Number(ledgerDraftById[tx.id]?.is_reconciled ?? tx.is_reconciled) === 1} onChange={(e) => setLedgerRowDraft(tx, { is_reconciled: e.target.checked ? 1 : 0 })} disabled={busy} aria-label={`Mark ${tx.description} as reconciled`} />
                   </td>
                   <td className="text-end is-compact-actions">
-                    <div className="accumul8-row-actions">
+                    <div className="accumul8-row-actions accumul8-row-actions--always-on">
                       <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => beginViewTransaction(tx.id)} disabled={busy} aria-label={`View ${tx.description}`} title={`View ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_VIEW_BUTTON_EMOJI}</span></button>
                       <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => (Number(tx.debtor_id || 0) > 0 ? beginEditTransaction(tx.id) : activateLedgerRow(tx.id))} disabled={busy} aria-label={`Edit ${tx.description}`} title={`Edit ${tx.description}`}><span aria-hidden="true">{ACCUMUL8_EDIT_BUTTON_EMOJI}</span></button>
                       {Number(tx.debtor_id || 0) <= 0 ? <button type="button" className="btn btn-sm btn-outline-primary accumul8-icon-action" onClick={() => openLedgerEntityModal(tx.id)} disabled={busy} aria-label={`Map ${tx.description} to an entity alias`} title={`Map ${tx.description} to an entity alias`}><span aria-hidden="true">{ACCUMUL8_MAP_BUTTON_EMOJI}</span></button> : null}

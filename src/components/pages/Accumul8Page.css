@@ -2527,6 +2527,12 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   line-height: 1;
 }
 
+.accumul8-list-item .accumul8-row-actions.accumul8-row-actions--always-on {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
 .accumul8-scroll-area {
   overflow: auto;
   scrollbar-color: rgba(212, 175, 55, 0.56) rgba(15, 20, 24, 0.86);

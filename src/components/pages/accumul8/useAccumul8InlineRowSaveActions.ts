@@ -63,6 +63,17 @@ export function useAccumul8InlineRowSaveActions({
   updateRecurring,
   updateTransaction,
 }: UseAccumul8InlineRowSaveActionsOptions) {
+  const ledgerDraftByIdRef = React.useRef(ledgerDraftById);
+  const payBillDraftByIdRef = React.useRef(payBillDraftById);
+
+  React.useLayoutEffect(() => {
+    ledgerDraftByIdRef.current = ledgerDraftById || {};
+  }, [ledgerDraftById]);
+
+  React.useLayoutEffect(() => {
+    payBillDraftByIdRef.current = payBillDraftById || {};
+  }, [payBillDraftById]);
+
   const shouldSkipRecurringTemplateSync = React.useCallback((tx: Accumul8Transaction): number => {
     const isRecurringLinked = Number(tx.recurring_payment_id || 0) > 0;
     if (!isRecurringLinked) {
@@ -71,8 +82,8 @@ export function useAccumul8InlineRowSaveActions({
     return getAccumul8TransactionEditPolicy(tx).isImported ? 0 : 1;
   }, []);
 
-  const saveLedgerRow = React.useCallback(async (tx: Accumul8Transaction) => {
-    const draft = ledgerDraftById[tx.id];
+  const saveLedgerRow = React.useCallback(async (tx: Accumul8Transaction, draftOverride?: LedgerInlineDraft) => {
+    const draft = draftOverride ?? ledgerDraftByIdRef.current[tx.id];
     if (!draft) return;
     await updateTransaction(tx.id, {
       transaction_date: draft.transaction_date ?? tx.transaction_date,
@@ -93,9 +104,9 @@ export function useAccumul8InlineRowSaveActions({
     });
     setLedgerDraftById((prev) => { const next = { ...prev }; delete next[tx.id]; return next; });
     setActiveLedgerRowId((current) => (current === tx.id ? null : current));
-  }, [ledgerDraftById, setActiveLedgerRowId, setLedgerDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
-  const savePayBillRow = React.useCallback(async (tx: Accumul8Transaction) => {
-    const draft = payBillDraftById[tx.id];
+  }, [setActiveLedgerRowId, setLedgerDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
+  const savePayBillRow = React.useCallback(async (tx: Accumul8Transaction, draftOverride?: LedgerInlineDraft) => {
+    const draft = draftOverride ?? payBillDraftByIdRef.current[tx.id];
     if (!draft) return;
     await updateTransaction(tx.id, {
       transaction_date: draft.transaction_date ?? tx.transaction_date,
@@ -116,7 +127,7 @@ export function useAccumul8InlineRowSaveActions({
     });
     setPayBillDraftById((prev) => { const next = { ...prev }; delete next[tx.id]; return next; });
     setActivePayBillRowId((current) => (current === tx.id ? null : current));
-  }, [payBillDraftById, setActivePayBillRowId, setPayBillDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
+  }, [setActivePayBillRowId, setPayBillDraftById, shouldSkipRecurringTemplateSync, updateTransaction]);
   const saveDebtorRow = React.useCallback(async (row: Accumul8Debtor) => {
     const draft = debtorDraftById[row.id];
     if (!draft) return;

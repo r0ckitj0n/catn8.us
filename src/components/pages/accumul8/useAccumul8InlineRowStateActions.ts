@@ -53,9 +53,12 @@ export function useAccumul8InlineRowStateActions({
   const activateEntityRow = React.useCallback((id: number) => setActiveEntityRowId(id), [setActiveEntityRowId]);
   const activateRecurringRow = React.useCallback((id: number) => setActiveRecurringRowId(id), [setActiveRecurringRowId]);
   const setLedgerRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
-    const normalizedPatch = normalizePaidStateDraft(tx, ledgerDraftById[tx.id], patch);
-    setLedgerDraftById((prev) => ({ ...prev, [tx.id]: { ...prev[tx.id], ...normalizedPatch } }));
-  }, [ledgerDraftById, setLedgerDraftById]);
+    setLedgerDraftById((prev) => {
+      const draftById = prev || {};
+      const normalizedPatch = normalizePaidStateDraft(tx, draftById[tx.id], patch);
+      return { ...draftById, [tx.id]: { ...draftById[tx.id], ...normalizedPatch } };
+    });
+  }, [setLedgerDraftById]);
   const setDebtorRowDraft = React.useCallback((row: Accumul8Debtor, patch: DebtorInlineDraft) => {
     setDebtorDraftById((prev) => ({ ...prev, [row.id]: { ...prev[row.id], ...patch } }));
   }, [setDebtorDraftById]);
@@ -63,9 +66,12 @@ export function useAccumul8InlineRowStateActions({
     setEntityDraftById((prev) => ({ ...prev, [row.id]: { ...prev[row.id], ...patch } }));
   }, [setEntityDraftById]);
   const setPayBillRowDraft = React.useCallback((tx: Accumul8Transaction, patch: LedgerInlineDraft) => {
-    const normalizedPatch = normalizePaidStateDraft(tx, payBillDraftById[tx.id], patch);
-    setPayBillDraftById((prev) => ({ ...prev, [tx.id]: { ...prev[tx.id], ...normalizedPatch } }));
-  }, [payBillDraftById, setPayBillDraftById]);
+    setPayBillDraftById((prev) => {
+      const draftById = prev || {};
+      const normalizedPatch = normalizePaidStateDraft(tx, draftById[tx.id], patch);
+      return { ...draftById, [tx.id]: { ...draftById[tx.id], ...normalizedPatch } };
+    });
+  }, [setPayBillDraftById]);
   const setRecurringRowDraft = React.useCallback((row: Accumul8RecurringPayment, patch: RecurringInlineDraft) => {
     setRecurringDraftById((prev) => ({ ...prev, [row.id]: { ...prev[row.id], ...patch } }));
   }, [setRecurringDraftById]);

@@ -135,6 +135,7 @@ export function useAccumul8PagePresentationSetup(options: any) {
     runConnectionSync: options.runConnectionSync,
     runEntityMaintenanceAliasScan: options.runEntityMaintenanceAliasScan,
     runTellerConnect: options.runTellerConnect,
+    runTellerReconnect: options.runTellerReconnect,
     runningAIcountantHousekeeping: options.runningAIcountantHousekeeping,
     runningAIcountantWatchlist: options.runningAIcountantWatchlist,
     saveDebtorRow: options.saveDebtorRow,

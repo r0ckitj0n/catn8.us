@@ -1219,6 +1219,13 @@
   table-layout: fixed;
 }
 
+.accumul8-table--ledger {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
 .accumul8-table--measured .accumul8-col--flex-100 {
   width: max(0px, calc(100% - var(--accumul8-col-fit-total, 0px)));
 }
@@ -1508,6 +1515,17 @@ body.accumul8-column-resize-active {
 
 .accumul8-month-table th:nth-child(11),
 .accumul8-month-table td:nth-child(11) {
+  min-width: 0;
+}
+
+.accumul8-table--ledger th:nth-child(3),
+.accumul8-table--ledger td:nth-child(3),
+.accumul8-table--ledger th:nth-child(4),
+.accumul8-table--ledger td:nth-child(4),
+.accumul8-table--ledger th:nth-child(5),
+.accumul8-table--ledger td:nth-child(5) {
+  white-space: normal;
+  overflow-wrap: anywhere;
   min-width: 0;
 }
 
@@ -2120,6 +2138,13 @@ body.accumul8-column-resize-active {
   white-space: nowrap;
 }
 
+.accumul8-table--ledger td:nth-child(3) .accumul8-inline-cell-trigger,
+.accumul8-table--ledger td:nth-child(4) .accumul8-inline-cell-trigger,
+.accumul8-table--ledger td:nth-child(5) .accumul8-inline-cell-trigger {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger,
 .accumul8-spreadsheet-table tbody .accumul8-inline-cell-trigger:disabled,
 .accumul8-spreadsheet-table tbody .accumul8-month-table-input,
@@ -2565,6 +2590,11 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   min-height: 0;
 }
 
+.accumul8-scroll-area--ledger {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
 .accumul8-scroll-area--list,
 .accumul8-scroll-area--cards {
   flex: 1 1 auto;
@@ -2626,6 +2656,7 @@ button.accumul8-entity-endex-guide-card:focus-visible {
 .accumul8-panel .table-responsive {
   border: 1px solid rgba(212, 175, 55, 0.18);
   background: linear-gradient(180deg, rgba(10, 16, 22, 0.92), rgba(7, 12, 17, 0.96));
+  min-width: 0;
 }
 
 .accumul8-panel .accumul8-table tbody tr,

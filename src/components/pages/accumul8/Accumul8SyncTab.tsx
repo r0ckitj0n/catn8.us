@@ -36,6 +36,7 @@ interface Accumul8SyncTabProps {
   openSyncHelp: () => void;
   runConnectionSync: (connectionId: number, institutionName: string) => Promise<void>;
   runTellerConnect: () => Promise<void>;
+  runTellerReconnect: (connection: Accumul8BankConnection) => Promise<void>;
   summaryFormatAccountBackfillNote: (account: Accumul8TellerSyncAccountSummary) => string;
   summaryFormatAccountLabel: (account: Accumul8TellerSyncAccountSummary) => string;
   syncProvider: SyncProvider;
@@ -58,6 +59,7 @@ export function Accumul8SyncTab({
   openSyncHelp,
   runConnectionSync,
   runTellerConnect,
+  runTellerReconnect,
   summaryFormatAccountBackfillNote,
   summaryFormatAccountLabel,
   syncProvider,
@@ -83,6 +85,7 @@ export function Accumul8SyncTab({
           onDelete={async (id) => {
             await deleteBankConnection({ id });
           }}
+          onReconnect={runTellerReconnect}
           onSync={runConnectionSync}
           formatAccountMappingLabel={formatAccountMappingLabel}
           formatAccountBackfillNote={formatAccountBackfillNote}

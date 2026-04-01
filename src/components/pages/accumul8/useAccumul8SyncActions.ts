@@ -4,6 +4,7 @@ import { ApiClient } from '../../../core/ApiClient';
 import { openTellerConnect } from '../../../core/tellerConnect';
 import { isWatchedTellerInstitution, logTellerDiagnostic } from '../../../core/tellerDiagnostics';
 import {
+  Accumul8BankConnection,
   Accumul8TellerConnectTokenResponse,
   Accumul8TellerEnrollmentResponse,
   Accumul8TellerSyncResponse,
@@ -64,12 +65,14 @@ export function useAccumul8SyncActions({
     }
   }, [setLastSyncReport, setSyncingConnectionId, syncBankConnection]);
 
-  const runTellerConnect = React.useCallback(async () => {
+  const runTellerConnectFlow = React.useCallback(async (existingConnection?: Accumul8BankConnection | null) => {
     if (!onToast) return;
     if (!syncProvider.configured) {
       onToast({ tone: 'error', message: 'Teller is not configured. Save credentials in Settings first.' });
       return;
     }
+    const existingConnectionId = Number(existingConnection?.id || 0);
+    const existingInstitutionName = String(existingConnection?.institution_name || existingConnection?.institution_id || '').trim();
     let connectedInstitutionName = '';
     let connectedInstitutionId = '';
     let connectedEnrollmentId = '';
@@ -78,7 +81,14 @@ export function useAccumul8SyncActions({
       const applicationId = String(tokenRes?.application_id || '');
       const environment = String(tokenRes?.environment || syncProvider.env || 'sandbox') as 'sandbox' | 'development' | 'production';
       if (!applicationId) throw new Error('No Teller application id returned');
-      void logTellerDiagnostic({ source: 'accumul8-sync-page', event_name: 'open_requested', message: 'Teller Connect requested from Accumul8 sync page', meta: { environment, application_id_prefix: applicationId.slice(0, 12), select_account: 'disabled' } });
+      void logTellerDiagnostic({
+        source: 'accumul8-sync-page',
+        event_name: 'open_requested',
+        institution_name: existingInstitutionName || undefined,
+        connection_id: existingConnectionId > 0 ? existingConnectionId : undefined,
+        message: existingConnectionId > 0 ? 'Teller reconnect requested from Accumul8 sync page' : 'Teller Connect requested from Accumul8 sync page',
+        meta: { environment, application_id_prefix: applicationId.slice(0, 12), select_account: 'disabled', reconnect: existingConnectionId > 0 ? 1 : 0 },
+      });
       setSyncHelpError('');
       setSyncHelpToken(applicationId);
       const linkResult = await openTellerConnect(applicationId, environment, {
@@ -91,11 +101,22 @@ export function useAccumul8SyncActions({
           const institutionName = String((payload as any)?.enrollment?.institution?.name || connectedInstitutionName || '');
           const enrollmentId = String((payload as any)?.enrollment?.id || connectedEnrollmentId || '');
           const failureMessage = String((payload as any)?.message || (payload as any)?.code || '');
-          void logTellerDiagnostic({ source: 'accumul8-sync-page', event_name: event.name === 'failure' ? 'failure' : event.name, institution_id: institutionId || undefined, institution_name: institutionName || undefined, enrollment_id: enrollmentId || undefined, message: failureMessage || `Teller Connect ${event.name}`, meta: { select_account: 'disabled', event_payload: payload, watched_institution: isWatchedTellerInstitution(institutionId, institutionName) ? 1 : 0 } });
+          void logTellerDiagnostic({
+            source: 'accumul8-sync-page',
+            event_name: event.name === 'failure' ? 'failure' : event.name,
+            institution_id: institutionId || undefined,
+            institution_name: institutionName || existingInstitutionName || undefined,
+            enrollment_id: enrollmentId || undefined,
+            connection_id: existingConnectionId > 0 ? existingConnectionId : undefined,
+            message: failureMessage || `Teller Connect ${event.name}`,
+            meta: { select_account: 'disabled', event_payload: payload, reconnect: existingConnectionId > 0 ? 1 : 0, watched_institution: isWatchedTellerInstitution(institutionId, institutionName || existingInstitutionName) ? 1 : 0 },
+          });
         },
       });
       if (linkResult.outcome === 'cancelled') {
-        const exitMessage = 'Teller Connect closed without linking an account. If Teller showed "no suitable accounts," that means the bank/login is not exposing any eligible accounts for sync right now. Use the Bank Statements tab as the fallback import path.';
+        const exitMessage = existingConnectionId > 0
+          ? `Teller reconnect closed without finishing for ${existingInstitutionName || 'this institution'}. If Teller showed "no suitable accounts," that means the bank/login is not exposing any eligible accounts for sync right now. Use the Bank Statements tab as the fallback import path.`
+          : 'Teller Connect closed without linking an account. If Teller showed "no suitable accounts," that means the bank/login is not exposing any eligible accounts for sync right now. Use the Bank Statements tab as the fallback import path.';
         openSyncHelp({ error: exitMessage });
         onToast({ tone: 'info', message: exitMessage });
         return;
@@ -109,22 +130,45 @@ export function useAccumul8SyncActions({
         user_id: String(linkResult.payload?.user?.id || ''),
         institution_id: connectedInstitutionId,
         institution_name: connectedInstitutionName,
+        existing_connection_id: existingConnectionId > 0 ? existingConnectionId : undefined,
       });
       const connectionId = Number(exchangeRes?.connection_id || 0);
       if (connectionId <= 0) throw new Error('Teller enrollment did not return a valid connection id');
       const syncRes = await ApiClient.post<Accumul8TellerSyncResponse>(scopedActionUrl('teller_sync_transactions'), { connection_id: connectionId });
       setLastSyncReport({ connectionId, institutionName: connectedInstitutionName || 'Connected institution', syncedAt: new Date().toISOString(), result: syncRes });
       const added = Number(syncRes?.added || 0);
-      onToast({ tone: 'success', message: `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).` });
+      onToast({
+        tone: 'success',
+        message: existingConnectionId > 0
+          ? `Reconnected ${connectedInstitutionName || existingInstitutionName || 'bank connection'} and synced (${added} transaction${added === 1 ? '' : 's'} imported).`
+          : `Teller connected and synced (${added} transaction${added === 1 ? '' : 's'} imported).`,
+      });
       await load();
     } catch (error: any) {
       const rawMessage = String(error?.message || 'Failed to start Teller Connect');
-      void logTellerDiagnostic({ source: 'accumul8-sync-page', event_name: connectedInstitutionId || connectedInstitutionName ? 'sync_error' : 'error', institution_id: connectedInstitutionId || undefined, institution_name: connectedInstitutionName || undefined, enrollment_id: connectedEnrollmentId || undefined, message: rawMessage, meta: { select_account: 'disabled', watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName) ? 1 : 0 } });
-      const message = formatTellerConnectError(rawMessage, connectedInstitutionName);
+      void logTellerDiagnostic({
+        source: 'accumul8-sync-page',
+        event_name: connectedInstitutionId || connectedInstitutionName ? 'sync_error' : 'error',
+        institution_id: connectedInstitutionId || undefined,
+        institution_name: connectedInstitutionName || existingInstitutionName || undefined,
+        enrollment_id: connectedEnrollmentId || undefined,
+        connection_id: existingConnectionId > 0 ? existingConnectionId : undefined,
+        message: rawMessage,
+        meta: { select_account: 'disabled', reconnect: existingConnectionId > 0 ? 1 : 0, watched_institution: isWatchedTellerInstitution(connectedInstitutionId, connectedInstitutionName || existingInstitutionName) ? 1 : 0 },
+      });
+      const message = formatTellerConnectError(rawMessage, connectedInstitutionName || existingInstitutionName);
       openSyncHelp({ error: message });
       onToast({ tone: isTellerEligibilityFailure(rawMessage) ? 'warning' : 'error', message });
     }
   }, [load, onToast, openSyncHelp, scopedActionUrl, setLastSyncReport, setSyncHelpError, setSyncHelpToken, syncProvider.configured, syncProvider.env]);
 
-  return { openStatementImportFallback, openSyncHelp, runConnectionSync, runTellerConnect };
+  const runTellerConnect = React.useCallback(async () => {
+    await runTellerConnectFlow(null);
+  }, [runTellerConnectFlow]);
+
+  const runTellerReconnect = React.useCallback(async (connection: Accumul8BankConnection) => {
+    await runTellerConnectFlow(connection);
+  }, [runTellerConnectFlow]);
+
+  return { openStatementImportFallback, openSyncHelp, runConnectionSync, runTellerConnect, runTellerReconnect };
 }

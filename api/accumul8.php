@@ -19814,12 +19814,16 @@ if ($action === 'teller_enroll') {
     $institutionId = accumul8_normalize_text($body['institution_id'] ?? '', 64);
     $institutionName = accumul8_normalize_text($body['institution_name'] ?? '', 191);
     $userId = accumul8_normalize_text($body['user_id'] ?? '', 191);
+    $existingConnectionId = (int)($body['existing_connection_id'] ?? 0);
 
     if ($accessToken === '') {
         catn8_json_response(['success' => false, 'error' => 'access_token is required'], 400);
     }
     if ($enrollmentId === '') {
         catn8_json_response(['success' => false, 'error' => 'enrollment_id is required'], 400);
+    }
+    if ($existingConnectionId > 0) {
+        accumul8_require_owned_id('bank_connections', $viewerId, $existingConnectionId);
     }
 
     $watchedInstitution = accumul8_teller_is_watched_institution($institutionId, $institutionName);
@@ -19841,17 +19845,31 @@ if ($action === 'teller_enroll') {
         catn8_json_response(['success' => false, 'error' => 'Failed to persist Teller access token'], 500);
     }
 
-    $existing = Database::queryOne(
-        'SELECT id
+    $existing = null;
+    if ($existingConnectionId > 0) {
+        $existing = Database::queryOne(
+            'SELECT id, teller_access_token_secret_key
+             FROM accumul8_bank_connections
+             WHERE id = ?
+               AND owner_user_id = ?
+             LIMIT 1',
+            [$existingConnectionId, $viewerId]
+        );
+    }
+    if (!$existing) {
+        $existing = Database::queryOne(
+            'SELECT id, teller_access_token_secret_key
          FROM accumul8_bank_connections
          WHERE owner_user_id = ?
            AND provider_name = ?
            AND teller_enrollment_id = ?
          LIMIT 1',
-        [$viewerId, 'teller', $enrollmentId]
-    );
+            [$viewerId, 'teller', $enrollmentId]
+        );
+    }
 
     if ($existing) {
+        $previousSecretKey = accumul8_normalize_text((string)($existing['teller_access_token_secret_key'] ?? ''), 191);
         Database::execute(
             'UPDATE accumul8_bank_connections
              SET institution_id = ?, institution_name = ?, teller_enrollment_id = ?, teller_user_id = ?, teller_access_token_secret_key = ?, status = ?, updated_at = NOW()
@@ -19859,6 +19877,9 @@ if ($action === 'teller_enroll') {
             [$institutionId === '' ? null : $institutionId, $institutionName === '' ? null : $institutionName, $enrollmentId, $userId === '' ? null : $userId, $secretKey, 'connected', (int)$existing['id'], $viewerId]
         );
         $connectionId = (int)$existing['id'];
+        if ($previousSecretKey !== '' && $previousSecretKey !== $secretKey) {
+            secret_delete($previousSecretKey);
+        }
     } else {
         Database::execute(
             'INSERT INTO accumul8_bank_connections

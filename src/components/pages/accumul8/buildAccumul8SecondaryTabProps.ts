@@ -157,6 +157,7 @@ export function buildAccumul8SecondaryTabProps(options: any) {
       openSyncHelp: options.openSyncHelp,
       runConnectionSync: options.runConnectionSync,
       runTellerConnect: options.runTellerConnect,
+      runTellerReconnect: options.runTellerReconnect,
       summaryFormatAccountBackfillNote: options.formatSyncSummaryBackfillNote,
       summaryFormatAccountLabel: options.formatSyncSummaryAccountLabel,
       syncProvider: options.syncProvider,

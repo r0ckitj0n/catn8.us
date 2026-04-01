@@ -1546,7 +1546,7 @@ body.accumul8-column-resize-active {
 }
 
 .accumul8-month-table-col--actions {
-  width: calc(7% + 50px);
+  width: calc(7% + 90px);
 }
 
 .accumul8-spreadsheet-table {
@@ -2364,6 +2364,7 @@ button.accumul8-entity-endex-guide-card:focus-visible {
 
 .accumul8-month-table td.is-compact-actions {
   white-space: nowrap;
+  min-width: 11.75rem;
   padding-right: 1px;
 }
 
@@ -2461,9 +2462,11 @@ button.accumul8-entity-endex-guide-card:focus-visible {
 }
 
 .accumul8-month-table .accumul8-row-actions--always-on {
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
   transition: opacity 160ms ease;
 }
 

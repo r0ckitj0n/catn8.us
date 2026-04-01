@@ -147,6 +147,7 @@ export function buildAccumul8PresentationOptions(options: any) {
     runConnectionSync: actions.runConnectionSync,
     runEntityMaintenanceAliasScan: actions.runEntityMaintenanceAliasScan,
     runTellerConnect: actions.runTellerConnect,
+    runTellerReconnect: actions.runTellerReconnect,
     runningAIcountantHousekeeping: ui.runningAIcountantHousekeeping,
     runningAIcountantWatchlist: ui.runningAIcountantWatchlist,
     saveDebtorRow: actions.saveDebtorRow,

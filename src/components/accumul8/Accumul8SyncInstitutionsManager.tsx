@@ -21,6 +21,7 @@ interface Accumul8SyncInstitutionsManagerProps {
   onCreate: (payload: ReturnType<typeof toSyncInstitutionPayload>) => Promise<void>;
   onUpdate: (id: number, payload: ReturnType<typeof toSyncInstitutionPayload>) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  onReconnect: (connection: Accumul8BankConnection) => Promise<void>;
   onSync: (connectionId: number, institutionName: string) => Promise<void>;
   formatAccountMappingLabel: (account: Accumul8Account) => string;
   formatAccountBackfillNote: (account: Accumul8Account) => string;
@@ -37,6 +38,7 @@ export function Accumul8SyncInstitutionsManager({
   onCreate,
   onUpdate,
   onDelete,
+  onReconnect,
   onSync,
   formatAccountMappingLabel,
   formatAccountBackfillNote,
@@ -229,8 +231,23 @@ export function Accumul8SyncInstitutionsManager({
                         >
                           {syncingConnectionId === Number(connection.id || 0) ? 'Syncing...' : 'Sync'}
                         </button>
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => beginEdit(connection)} disabled={busy}>
-                          {isEditing ? 'Editing' : 'Edit'}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => void onReconnect(connection)}
+                          disabled={busy}
+                          title={`Reconnect ${connection.institution_name || connection.institution_id || 'Institution'} through Teller`}
+                        >
+                          Reconnect
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => beginEdit(connection)}
+                          disabled={busy}
+                          title={`Advanced metadata edit for ${connection.institution_name || connection.institution_id || 'Institution'}`}
+                        >
+                          {isEditing ? 'Advanced' : 'Advanced'}
                         </button>
                         <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => void deleteConnection(connection)} disabled={busy}>
                           Delete

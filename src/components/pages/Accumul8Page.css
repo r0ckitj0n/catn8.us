@@ -622,6 +622,51 @@
   line-height: 1.6;
 }
 
+.accumul8-message-board-rich-text {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.accumul8-message-board-rich-row {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.accumul8-message-board-rich-label {
+  font-family: 'Lexend Exa', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accumul8-deco-muted);
+}
+
+.accumul8-message-board-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.accumul8-message-board-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(96, 74, 25, 0.2);
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.accumul8-message-board-list-block {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.accumul8-message-board-list-block li {
+  line-height: 1.5;
+}
+
 .accumul8-message-board-item-meta {
   display: flex;
   flex-wrap: wrap;
@@ -2393,6 +2438,13 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   padding-right: 1px;
 }
 
+.accumul8-table--ledger td.is-compact-actions,
+.accumul8-table--ledger th.is-compact-actions {
+  white-space: nowrap;
+  min-width: 10.75rem;
+  padding-right: 1px;
+}
+
 .accumul8-icon-action {
   min-width: 1.82rem;
   min-height: 1.82rem;
@@ -2472,6 +2524,13 @@ button.accumul8-entity-endex-guide-card:focus-visible {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+}
+
+.accumul8-table--ledger .accumul8-row-actions--always-on {
+  display: inline-flex;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  min-width: max-content;
 }
 
 .accumul8-row-actions--entity-name {

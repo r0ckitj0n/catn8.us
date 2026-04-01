@@ -45,6 +45,126 @@ function renderOpeningBalanceMeta(meta: OpeningBalanceMessageMeta) {
   );
 }
 
+type ParsedMessageSection =
+  | { type: 'paragraph'; text: string }
+  | { type: 'label'; label: string; value: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'chips'; label: string; items: string[] };
+
+function normalizeMessageParagraphs(body: string): string[] {
+  return body
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function parseMessageParagraph(paragraph: string): ParsedMessageSection[] {
+  const trimmed = paragraph.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const bulletLines = trimmed
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (bulletLines.every((line) => /^-\s+/.test(line))) {
+    return [{
+      type: 'list',
+      items: bulletLines.map((line) => line.replace(/^-+\s*/, '').trim()).filter(Boolean),
+    }];
+  }
+
+  const labelMatch = trimmed.match(/^([^:\n]{2,40}):\s*(.+)$/s);
+  if (labelMatch) {
+    const label = String(labelMatch[1] || '').trim();
+    const value = String(labelMatch[2] || '').trim();
+    if (label !== '' && value !== '') {
+      if (/;\s*/.test(value) && /top|spending|sent|failed|accounts|recipients/i.test(label)) {
+        const items = value.split(/\s*;\s*/).map((item) => item.trim()).filter(Boolean);
+        if (items.length > 1) {
+          return [{ type: 'chips', label, items }];
+        }
+      }
+      return [{ type: 'label', label, value }];
+    }
+  }
+
+  const inlineBulletSplit = trimmed
+    .split(/\s+-\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (inlineBulletSplit.length > 1) {
+    const [intro, ...items] = inlineBulletSplit;
+    const sections: ParsedMessageSection[] = [];
+    if (intro) {
+      sections.push({ type: 'paragraph', text: intro });
+    }
+    if (items.length > 0) {
+      sections.push({ type: 'list', items });
+    }
+    return sections;
+  }
+
+  return [{ type: 'paragraph', text: trimmed }];
+}
+
+function renderParsedMessageBody(message: Accumul8MessageBoardMessage) {
+  const body = String(message.body_text || '').trim();
+  if (!body) {
+    return null;
+  }
+
+  const sections = normalizeMessageParagraphs(body).flatMap(parseMessageParagraph);
+  if (sections.length === 0) {
+    return <div className="accumul8-message-board-item-text">{body}</div>;
+  }
+
+  return (
+    <div className="accumul8-message-board-rich-text">
+      {sections.map((section, index) => {
+        if (section.type === 'paragraph') {
+          return (
+            <div key={`section-${index}`} className="accumul8-message-board-item-text">
+              {section.text}
+            </div>
+          );
+        }
+        if (section.type === 'label') {
+          return (
+            <div key={`section-${index}`} className="accumul8-message-board-rich-row">
+              <div className="accumul8-message-board-rich-label">{section.label}</div>
+              <div className="accumul8-message-board-item-text">{section.value}</div>
+            </div>
+          );
+        }
+        if (section.type === 'chips') {
+          return (
+            <div key={`section-${index}`} className="accumul8-message-board-rich-row">
+              <div className="accumul8-message-board-rich-label">{section.label}</div>
+              <div className="accumul8-message-board-chip-list">
+                {section.items.map((item, itemIndex) => (
+                  <span key={`chip-${index}-${itemIndex}`} className="accumul8-message-board-chip">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <ul key={`section-${index}`} className="accumul8-message-board-list-block">
+            {section.items.map((item, itemIndex) => (
+              <li key={`item-${index}-${itemIndex}`}>{item}</li>
+            ))}
+          </ul>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Accumul8MessageBoardOverlay({
   acknowledgeAllMessageBoardMessages,
   acknowledgeMessageBoardMessage,
@@ -113,7 +233,7 @@ export function Accumul8MessageBoardOverlay({
                     </strong>
                     <span>{formatInlineDateTime(message.created_at)}</span>
                   </div>
-                  <div className="accumul8-message-board-item-text">{message.body_text}</div>
+                  {renderParsedMessageBody(message)}
                   {openingBalanceMeta ? renderOpeningBalanceMeta(openingBalanceMeta) : null}
                   {openingBalanceMeta?.transactionId ? (
                     <div className="accumul8-message-board-item-actions">

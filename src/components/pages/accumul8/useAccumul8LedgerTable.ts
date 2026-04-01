@@ -52,7 +52,7 @@ export function useAccumul8LedgerTable({
     { key: 'balance', header: 'Bal', minWidth: 88, maxAutoWidth: 116, sortable: true, defaultSortDirection: 'desc', sortAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0), contentAccessor: (tx) => Number(ledgerDisplayBalanceById.get(tx.id) ?? tx.running_balance ?? 0).toFixed(2) },
     { key: 'paid', header: 'Paid', minWidth: 64, maxAutoWidth: 88, sortable: true, sortAccessor: (tx) => Number(tx.is_paid || 0), contentAccessor: (tx) => Number(tx.is_paid || 0) === 1 ? 'Paid' : 'Unpaid' },
     { key: 'reconciled', header: "Rec'd", minWidth: 64, maxAutoWidth: 92, sortable: true, sortAccessor: (tx) => Number(tx.is_reconciled || 0), contentAccessor: (tx) => Number(tx.is_reconciled || 0) === 1 ? 'Reconciled' : 'Open' },
-    { key: 'actions', header: 'Actions', minWidth: 104, maxAutoWidth: 120, sortable: false, contentAccessor: () => 'Actions' },
+    { key: 'actions', header: 'Actions', minWidth: 168, maxAutoWidth: 188, sortable: false, contentAccessor: () => 'Actions' },
   ]), [getAccountDisplayName, ledgerDisplayBalanceById]);
 
   const ledgerTable = usePriorityTableLayout({ tableRef: ledgerTableRef, rows: ledgerRows, columns: ledgerTableColumns });

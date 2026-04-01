@@ -11796,10 +11796,47 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
         [$viewerId, 'teller', $tellerAccountId]
     );
 
+    if (!$existing && $connectionId > 0) {
+        $fallbackParams = [$viewerId, 'teller', $connectionId, $accountName, $accountType];
+        $fallbackWhere = '
+         WHERE owner_user_id = ?
+           AND provider_name = ?
+           AND bank_connection_id = ?
+           AND account_name = ?
+           AND account_type = ?';
+
+        if ($maskLast4 !== '') {
+            $fallbackWhere .= '
+           AND COALESCE(mask_last4, "") = ?';
+            $fallbackParams[] = $maskLast4;
+        }
+
+        if ($institutionName !== '') {
+            $fallbackWhere .= '
+           AND COALESCE(institution_name, "") = ?';
+            $fallbackParams[] = $institutionName;
+        }
+
+        $existing = Database::queryOne(
+            'SELECT id,
+                    ' . accumul8_optional_select('accumul8_accounts', 'teller_sync_anchor_date', 'teller_sync_anchor_date', 'NULL AS teller_sync_anchor_date') . ',
+                    ' . accumul8_optional_select('accumul8_accounts', 'teller_backfill_cursor_id', 'teller_backfill_cursor_id', 'NULL AS teller_backfill_cursor_id') . ',
+                    ' . accumul8_optional_select('accumul8_accounts', 'teller_backfill_complete', 'teller_backfill_complete', '0 AS teller_backfill_complete') . ',
+                    ' . accumul8_optional_select('accumul8_accounts', 'teller_history_start_date', 'teller_history_start_date', 'NULL AS teller_history_start_date') . ',
+                    ' . accumul8_optional_select('accumul8_accounts', 'teller_history_end_date', 'teller_history_end_date', 'NULL AS teller_history_end_date') . '
+             FROM accumul8_accounts'
+             . $fallbackWhere . '
+             ORDER BY id ASC
+             LIMIT 1',
+            $fallbackParams
+        );
+    }
+
     if ($existing) {
         Database::execute(
             'UPDATE accumul8_accounts
              SET account_group_id = ?, bank_connection_id = ?, provider_name = ?, teller_account_id = ?, teller_enrollment_id = ?,
+                 account_name = ?,
                  account_type = ?, account_subtype = ?, institution_name = ?, account_number_mask = ?,
                  mask_last4 = ?, routing_number = ?, currency_code = ?, current_balance = ?, available_balance = ?, is_active = 1
              WHERE id = ? AND owner_user_id = ?',
@@ -11809,6 +11846,7 @@ function accumul8_upsert_teller_account(int $viewerId, int $connectionId, array 
                 'teller',
                 $tellerAccountId,
                 $enrollmentId === '' ? null : $enrollmentId,
+                $accountName,
                 $accountType,
                 $accountSubtype,
                 $institutionName,

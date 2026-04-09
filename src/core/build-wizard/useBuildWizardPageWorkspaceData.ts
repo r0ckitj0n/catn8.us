@@ -82,6 +82,7 @@ export function useBuildWizardPageWorkspaceData(options: any) {
     getStepActualExcludingQuotes: stepWorkspaceMeta.getStepActualExcludingQuotes,
     getStepEstimatedExcludingQuotes: stepWorkspaceMeta.getStepEstimatedExcludingQuotes,
     isAiEstimatedField: options.isAiEstimatedField,
+    parseTaskMetaFromReceiptNotes: options.parseTaskMetaFromReceiptNotes,
     project: options.buildWizard.project,
     stepAssigneesByStepId: stepWorkspaceMeta.stepAssigneesByStepId,
     stepPhaseBucket: options.stepPhaseBucket,

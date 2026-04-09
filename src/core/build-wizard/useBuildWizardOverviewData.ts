@@ -2,6 +2,7 @@ import React from 'react';
 
 import { BUILD_TABS, PHASE_PROGRESS_ORDER, TAB_PHASE_COLORS } from '../../components/pages/build-wizard/buildWizardConstants';
 import { calculateDurationDays, getDefaultRange, parseDate, stepDateRange, tabLabelShort, toIsoDate } from '../../components/pages/build-wizard/buildWizardUtils';
+import { BuildWizardTaskMeta } from './buildWizardPageRenderTypes';
 import { IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId } from '../../types/pages/buildWizardPage';
 import { ProjectOverviewPhaseSection, ProjectOverviewStepRow } from './buildWizardPageRenderTypes';
@@ -10,11 +11,12 @@ const PROJECT_OVERVIEW_TAB_ORDER: BuildTabId[] = [...PHASE_PROGRESS_ORDER, 'desk
 
 interface UseBuildWizardOverviewDataOptions {
   activeTab: BuildTabId;
-  documents: Array<{ step_id?: number | null }>;
+  documents: Array<{ kind?: string | null; receipt_amount?: number | null; receipt_notes?: string | null; step_id?: number | null }>;
   filteredTabSteps: IBuildWizardStep[];
   getStepActualExcludingQuotes: (step: IBuildWizardStep) => number;
   getStepEstimatedExcludingQuotes: (step: IBuildWizardStep) => number;
   isAiEstimatedField: (step: IBuildWizardStep, field: string) => boolean;
+  parseTaskMetaFromReceiptNotes: (notes: string) => { plainNotes: string; taskMeta: BuildWizardTaskMeta };
   project: { target_start_date?: string | null; target_completion_date?: string | null } | null;
   stepAssigneesByStepId: Map<number, unknown[]>;
   stepPhaseBucket: (step: IBuildWizardStep) => BuildTabId;
@@ -28,6 +30,7 @@ export function useBuildWizardOverviewData({
   getStepActualExcludingQuotes,
   getStepEstimatedExcludingQuotes,
   isAiEstimatedField,
+  parseTaskMetaFromReceiptNotes,
   project,
   stepAssigneesByStepId,
   stepPhaseBucket,
@@ -40,16 +43,43 @@ export function useBuildWizardOverviewData({
 
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return { phaseTotal: 0, projectToDateTotal: 0 };
+      return { pendingPhaseTotal: 0, phaseTotal: 0, projectToDateTotal: 0 };
     }
+
+    const receiptDocumentsByStepId = new Map<number, Array<{ receipt_amount?: number | null; receipt_notes?: string | null; kind?: string | null }>>();
+    documents.forEach((documentItem) => {
+      if (String(documentItem.kind || '').trim() !== 'receipt') return;
+      const stepId = Number(documentItem.step_id || 0);
+      if (stepId <= 0) return;
+      const rows = receiptDocumentsByStepId.get(stepId) || [];
+      rows.push(documentItem);
+      receiptDocumentsByStepId.set(stepId, rows);
+    });
+
+    const pendingPhaseTotal = filteredTabSteps.reduce((sum, step) => {
+      const receiptDocs = receiptDocumentsByStepId.get(step.id) || [];
+      const incompleteTaskTotal = receiptDocs.reduce((taskSum, documentItem) => {
+        const parsed = parseTaskMetaFromReceiptNotes(documentItem.receipt_notes || '');
+        if (parsed.taskMeta.task_type === 'quote' || parsed.taskMeta.is_completed === true) {
+          return taskSum;
+        }
+        const amount = Number(documentItem.receipt_amount || 0);
+        return taskSum + (Number.isFinite(amount) ? amount : 0);
+      }, 0);
+      if (receiptDocs.length > 0) {
+        return sum + Math.max(0, incompleteTaskTotal);
+      }
+      return Number(step.is_completed) === 1 ? sum : sum + getStepActualExcludingQuotes(step);
+    }, 0);
+
     const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
     const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + getStepActualExcludingQuotes(step), 0);
     const projectToDateTotal = steps.reduce((sum, step) => {
       const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhaseBucket(step));
       return stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex ? sum + getStepActualExcludingQuotes(step) : sum;
     }, 0);
-    return { phaseTotal, projectToDateTotal };
-  }, [activeTab, filteredTabSteps, getStepActualExcludingQuotes, stepPhaseBucket, steps]);
+    return { pendingPhaseTotal, phaseTotal, projectToDateTotal };
+  }, [activeTab, documents, filteredTabSteps, getStepActualExcludingQuotes, parseTaskMetaFromReceiptNotes, stepPhaseBucket, steps]);
 
   const stepDocumentCountByStepId = React.useMemo(() => {
     const map = new Map<number, number>();

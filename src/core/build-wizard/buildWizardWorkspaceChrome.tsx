@@ -30,7 +30,7 @@ interface BuildWizardWorkspaceChromeProps {
   onTopbarSearchQueryChange: (value: string) => void;
   onTopbarSearchSelect: (result: { id: string; kind: 'document' | 'step' | 'phase'; title: string; subtitle: string }) => void;
   onTopbarSearchToggle: (open: boolean) => void;
-  phaseTotals: { pendingPhaseTotal: number; phaseTotal: number; projectToDateTotal: number };
+  phaseTotals: { pendingPhaseTotal: number; phaseTotal: number; pendingProjectTotal: number; projectToDateTotal: number };
   project: { title?: string | null } | null;
   projectId: number;
   savePhaseDateRange: (projectId: number, phaseKey: 'land' | 'permits' | 'site' | 'framing' | 'mep' | 'finishes', start: string | null, end: string | null) => Promise<unknown>;
@@ -172,9 +172,10 @@ export function BuildWizardWorkspaceChrome({
             <div className="build-wizard-phase-head">
               <h2>{BUILD_TABS.find((t) => t.id === activeTab)?.label}</h2>
               <div className="build-wizard-phase-totals">
-                <span>Pending Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.pendingPhaseTotal)}</span></span>
                 <span>Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.phaseTotal)}</span></span>
                 <span>Project Total To Date: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.projectToDateTotal)}</span></span>
+                <span>Pending Phase Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.pendingPhaseTotal)}</span></span>
+                <span>Pending Project Total: <span className="build-wizard-phase-total-value">{formatCurrency(phaseTotals.pendingProjectTotal)}</span></span>
               </div>
               <div className="build-wizard-phase-date-range">
                 <label>

@@ -1362,9 +1362,11 @@
 
 .build-wizard-phase-totals {
   justify-self: center;
-  display: inline-flex;
-  align-items: center;
+  display: inline-grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: start;
   gap: 16px;
+  row-gap: 4px;
   font-size: 1.5rem;
   color: #3f536e;
   white-space: nowrap;

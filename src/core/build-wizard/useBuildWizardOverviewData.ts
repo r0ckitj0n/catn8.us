@@ -43,7 +43,7 @@ export function useBuildWizardOverviewData({
 
   const phaseTotals = React.useMemo(() => {
     if (!PHASE_PROGRESS_ORDER.includes(activeTab)) {
-      return { pendingPhaseTotal: 0, phaseTotal: 0, projectToDateTotal: 0 };
+      return { pendingPhaseTotal: 0, phaseTotal: 0, pendingProjectTotal: 0, projectToDateTotal: 0 };
     }
 
     const receiptDocumentsByStepId = new Map<number, Array<{ receipt_amount?: number | null; receipt_notes?: string | null; kind?: string | null }>>();
@@ -56,7 +56,7 @@ export function useBuildWizardOverviewData({
       receiptDocumentsByStepId.set(stepId, rows);
     });
 
-    const pendingPhaseTotal = filteredTabSteps.reduce((sum, step) => {
+    const getPendingStepTotal = (step: IBuildWizardStep): number => {
       const receiptDocs = receiptDocumentsByStepId.get(step.id) || [];
       const incompleteTaskTotal = receiptDocs.reduce((taskSum, documentItem) => {
         const parsed = parseTaskMetaFromReceiptNotes(documentItem.receipt_notes || '');
@@ -67,18 +67,23 @@ export function useBuildWizardOverviewData({
         return taskSum + (Number.isFinite(amount) ? amount : 0);
       }, 0);
       if (receiptDocs.length > 0) {
-        return sum + Math.max(0, incompleteTaskTotal);
+        return Math.max(0, incompleteTaskTotal);
       }
-      return Number(step.is_completed) === 1 ? sum : sum + getStepActualExcludingQuotes(step);
-    }, 0);
+      return Number(step.is_completed) === 1 ? 0 : getStepActualExcludingQuotes(step);
+    };
 
     const phaseOrderIndex = PHASE_PROGRESS_ORDER.indexOf(activeTab);
+    const pendingPhaseTotal = filteredTabSteps.reduce((sum, step) => sum + getPendingStepTotal(step), 0);
     const phaseTotal = filteredTabSteps.reduce((sum, step) => sum + getStepActualExcludingQuotes(step), 0);
+    const pendingProjectTotal = steps.reduce((sum, step) => {
+      const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhaseBucket(step));
+      return stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex ? sum + getPendingStepTotal(step) : sum;
+    }, 0);
     const projectToDateTotal = steps.reduce((sum, step) => {
       const stepOrderIndex = PHASE_PROGRESS_ORDER.indexOf(stepPhaseBucket(step));
       return stepOrderIndex >= 0 && stepOrderIndex <= phaseOrderIndex ? sum + getStepActualExcludingQuotes(step) : sum;
     }, 0);
-    return { pendingPhaseTotal, phaseTotal, projectToDateTotal };
+    return { pendingPhaseTotal, phaseTotal, pendingProjectTotal, projectToDateTotal };
   }, [activeTab, documents, filteredTabSteps, getStepActualExcludingQuotes, parseTaskMetaFromReceiptNotes, stepPhaseBucket, steps]);
 
   const stepDocumentCountByStepId = React.useMemo(() => {

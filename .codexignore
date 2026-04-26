@@ -32,3 +32,5 @@ current_css_counts.txt
 tmp/
 coverage/
 *.map
+
+# Keep parity with Cursor context exclusions where possible.

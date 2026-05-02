@@ -25,9 +25,9 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
   const pendingTransactionsRequestRef = React.useRef<string>('');
 
   React.useEffect(() => {
-    if (state.tab !== 'statements' || session.statementsLoaded) return;
+    if (state.tab !== 'statements' || session.statementsLoaded || session.loading) return;
     void session.loadStatementWorkspace();
-  }, [session.statementsLoaded, session.selectedOwnerUserId, state.tab]);
+  }, [session.statementsLoaded, session.selectedOwnerUserId, session.loading, state.tab, session.loadStatementWorkspace]);
 
   const shouldHydrateFullTransactions = React.useMemo(() => (
     state.tab !== 'ledger'

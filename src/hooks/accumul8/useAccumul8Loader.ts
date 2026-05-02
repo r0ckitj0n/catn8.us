@@ -12,6 +12,8 @@ export function useAccumul8Loader(args: {
 }) {
   const { state, handleError, scopedActionUrl } = args;
   const DEFAULT_PAGE_SIZE = 250;
+  /** Ignores stale HTTP completions when the user switches owner scope faster than bootstrap returns. */
+  const bootstrapGenerationRef = React.useRef(0);
 
   const applyTransactionPayload = React.useCallback((res?: Partial<Accumul8BootstrapResponse> | { transactions?: unknown; transactions_pagination?: Partial<Accumul8TransactionsPagination> } | null) => {
     state.setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
@@ -101,10 +103,19 @@ export function useAccumul8Loader(args: {
   }, [applyTransactionPayload, handleError, scopedActionUrl, state]);
 
   const load = React.useCallback(async () => {
+    const generation = ++bootstrapGenerationRef.current;
+    state.setLoaded(false);
+    state.setStatementsLoaded(false);
+    state.setStatementUploads([]);
+    state.setArchivedStatementUploads([]);
+    state.setStatementAuditRuns([]);
     state.setLoading(true);
     try {
       const bootstrapUrl = `${scopedActionUrl('bootstrap')}&transaction_page=1&transaction_page_size=${DEFAULT_PAGE_SIZE}`;
       const res = await ApiClient.get<Accumul8BootstrapResponse>(bootstrapUrl);
+      if (generation !== bootstrapGenerationRef.current) {
+        return;
+      }
       state.setActiveOwnerUserId(Number(res?.selected_owner_user_id || 0));
       state.setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
       state.setEntities(Array.isArray(res?.entities) ? res.entities : []);
@@ -133,9 +144,13 @@ export function useAccumul8Loader(args: {
       }
       state.setLoaded(true);
     } catch (error: any) {
-      handleError(error, 'Failed to load Accumul8 data');
+      if (generation === bootstrapGenerationRef.current) {
+        handleError(error, 'Failed to load Accumul8 data');
+      }
     } finally {
-      state.setLoading(false);
+      if (generation === bootstrapGenerationRef.current) {
+        state.setLoading(false);
+      }
     }
   }, [applyStatementWorkspace, applyTransactionPayload, handleError, scopedActionUrl, state]);
 

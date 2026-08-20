@@ -1,0 +1,20 @@
+{
+  "name": "catn8.us",
+  "user": "node",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "php-backend",
+      "command": "php -S 127.0.0.1:8888 router.php"
+    },
+    {
+      "name": "vite-dev",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [5178, 8888]
+}

@@ -394,15 +394,38 @@ try {
 $projectTitle = (string)$opt['project_title'];
 $ownerUserId = $opt['owner_user_id'];
 
-$projectSql = 'SELECT id, owner_user_id, title, blueprint_document_id
-               FROM build_wizard_projects
-               WHERE title = ?';
-$projectParams = [$projectTitle];
+$projectSql = 'SELECT p.id, p.owner_user_id, p.title, p.blueprint_document_id,
+                      (SELECT COUNT(*) FROM build_wizard_documents d WHERE d.project_id = p.id) AS document_count
+               FROM build_wizard_projects p
+               WHERE (
+                   p.title = ?
+                   OR p.title LIKE ?
+                   OR p.title LIKE ?
+                   OR p.title LIKE ?
+                   OR p.lot_address LIKE ?
+               )';
+$projectParams = [
+    $projectTitle,
+    '%Papa%Cabin%',
+    '%Cabin%',
+    '%Singletree%',
+    '%Singletree%',
+];
 if (is_int($ownerUserId) && $ownerUserId > 0) {
-    $projectSql .= ' AND owner_user_id = ?';
+    $projectSql .= ' AND p.owner_user_id = ?';
     $projectParams[] = $ownerUserId;
 }
-$projectSql .= ' ORDER BY id DESC LIMIT 1';
+$projectSql .= ' ORDER BY
+    CASE
+        WHEN p.title = ? THEN 0
+        WHEN LOWER(p.title) LIKE \'%papa%cabin%\' THEN 1
+        WHEN LOWER(p.title) LIKE \'%singletree%\' THEN 2
+        ELSE 3
+    END,
+    document_count DESC,
+    p.id DESC
+    LIMIT 1';
+$projectParams[] = $projectTitle;
 
 $project = bw_recover_query_one($pdo, $projectSql, $projectParams);
 if (!$project) {

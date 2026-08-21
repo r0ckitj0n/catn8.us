@@ -8,6 +8,16 @@ import {
   IBuildWizardStep,
 } from './buildWizardCore';
 
+export interface IBuildWizardCabinRepairSummary {
+  project_id: number;
+  sibling_projects: number[];
+  moved_documents: number;
+  remapped_step_ids: number;
+  moved_contacts: number;
+  moved_assignments: number;
+  search_index_updated: number;
+}
+
 export interface IBuildWizardBootstrapResponse {
   success: boolean;
   selected_project_id: number;
@@ -19,6 +29,7 @@ export interface IBuildWizardBootstrapResponse {
   contact_assignments: IBuildWizardContactAssignment[];
   phase_date_ranges: IBuildWizardPhaseDateRange[];
   leading_questions: string[];
+  cabin_repair?: IBuildWizardCabinRepairSummary | null;
 }
 
 export interface IBuildWizardMissingDocumentRef {

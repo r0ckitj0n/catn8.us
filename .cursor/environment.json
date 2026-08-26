@@ -16,5 +16,14 @@
       "command": "npm run dev"
     }
   ],
-  "ports": [5178, 8888]
+  "ports": [
+    {
+      "name": "vite-dev",
+      "port": 5178
+    },
+    {
+      "name": "php-backend",
+      "port": 8888
+    }
+  ]
 }

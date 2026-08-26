@@ -225,10 +225,278 @@ function catn8_build_wizard_cabin_sibling_ids(int $uid, int $canonicalProjectId,
     return $ids;
 }
 
+function catn8_build_wizard_cabin_resequence_step_orders(int $projectId): void
+{
+    if ($projectId <= 0) {
+        return;
+    }
+
+    $rows = Database::queryAll(
+        'SELECT id, step_order
+         FROM build_wizard_steps
+         WHERE project_id = ?
+         ORDER BY step_order ASC, id ASC',
+        [$projectId]
+    );
+
+    foreach ($rows as $idx => $row) {
+        $stepId = (int)($row['id'] ?? 0);
+        if ($stepId <= 0) {
+            continue;
+        }
+        $nextOrder = $idx + 1;
+        $currentOrder = (int)($row['step_order'] ?? 0);
+        if ($currentOrder !== $nextOrder) {
+            Database::execute(
+                'UPDATE build_wizard_steps SET step_order = ? WHERE id = ?',
+                [$nextOrder, $stepId]
+            );
+        }
+    }
+}
+
+function catn8_build_wizard_cabin_step_title_key(string $title): string
+{
+    $normalized = preg_replace('/\s+/', ' ', trim($title));
+    if (!is_string($normalized)) {
+        return '';
+    }
+    return strtolower($normalized);
+}
+
+/**
+ * @return array{merged_steps:int,moved_steps:int,step_id_remap:array<int,int>}
+ */
+function catn8_build_wizard_cabin_merge_sibling_steps(int $canonicalProjectId, array $siblingIds): array
+{
+    $stats = [
+        'merged_steps' => 0,
+        'moved_steps' => 0,
+        'step_id_remap' => [],
+    ];
+    if ($canonicalProjectId <= 0 || !$siblingIds) {
+        return $stats;
+    }
+
+    $canonicalSteps = Database::queryAll(
+        'SELECT id, title FROM build_wizard_steps WHERE project_id = ? ORDER BY step_order ASC, id ASC',
+        [$canonicalProjectId]
+    );
+    $canonicalByTitle = [];
+    foreach ($canonicalSteps as $row) {
+        $stepId = (int)($row['id'] ?? 0);
+        $titleKey = catn8_build_wizard_cabin_step_title_key((string)($row['title'] ?? ''));
+        if ($stepId > 0 && $titleKey !== '' && !isset($canonicalByTitle[$titleKey])) {
+            $canonicalByTitle[$titleKey] = $stepId;
+        }
+    }
+
+    $siblingPlaceholders = implode(',', array_fill(0, count($siblingIds), '?'));
+    $siblingSteps = Database::queryAll(
+        'SELECT * FROM build_wizard_steps WHERE project_id IN (' . $siblingPlaceholders . ') ORDER BY project_id ASC, step_order ASC, id ASC',
+        $siblingIds
+    );
+
+    $stepsToMove = [];
+    foreach ($siblingSteps as $siblingStep) {
+        $siblingStepId = (int)($siblingStep['id'] ?? 0);
+        if ($siblingStepId <= 0) {
+            continue;
+        }
+        $titleKey = catn8_build_wizard_cabin_step_title_key((string)($siblingStep['title'] ?? ''));
+        $keeperId = $titleKey !== '' ? (int)($canonicalByTitle[$titleKey] ?? 0) : 0;
+        if ($keeperId > 0) {
+            $mergeSets = [
+                "t.description = CASE
+                     WHEN (t.description IS NULL OR TRIM(t.description) = '') AND s.description IS NOT NULL AND TRIM(s.description) <> ''
+                       THEN s.description
+                     ELSE t.description
+                   END",
+                't.expected_start_date = COALESCE(t.expected_start_date, s.expected_start_date)',
+                't.expected_end_date = COALESCE(t.expected_end_date, s.expected_end_date)',
+                't.is_completed = GREATEST(COALESCE(t.is_completed, 0), COALESCE(s.is_completed, 0))',
+                't.source_ref = COALESCE(t.source_ref, s.source_ref)',
+            ];
+            foreach ([
+                'expected_duration_days',
+                'estimated_cost',
+                'actual_cost',
+                'completed_at',
+                'purchase_category',
+                'purchase_brand',
+                'purchase_model',
+                'purchase_sku',
+                'purchase_unit',
+                'purchase_qty',
+                'purchase_unit_price',
+                'purchase_vendor',
+                'purchase_url',
+                'permit_name',
+                'permit_authority',
+                'permit_status',
+                'permit_application_url',
+            ] as $column) {
+                if (catn8_build_wizard_cabin_column_exists('build_wizard_steps', $column)) {
+                    $mergeSets[] = 't.' . $column . ' = COALESCE(t.' . $column . ', s.' . $column . ')';
+                }
+            }
+            Database::execute(
+                'UPDATE build_wizard_steps t
+                 JOIN build_wizard_steps s ON s.id = ?
+                 SET ' . implode(', ', $mergeSets) . '
+                 WHERE t.id = ?',
+                [$siblingStepId, $keeperId]
+            );
+            $stats['step_id_remap'][$siblingStepId] = $keeperId;
+            $stats['merged_steps']++;
+            continue;
+        }
+
+        $stepsToMove[] = $siblingStepId;
+    }
+
+    if ($stepsToMove) {
+        $maxOrderRow = Database::queryOne(
+            'SELECT COALESCE(MAX(step_order), 0) AS max_order FROM build_wizard_steps WHERE project_id = ?',
+            [$canonicalProjectId]
+        );
+        $nextOrder = (int)($maxOrderRow['max_order'] ?? 0);
+        foreach ($stepsToMove as $movingStepId) {
+            $nextOrder++;
+            Database::execute(
+                'UPDATE build_wizard_steps SET project_id = ?, step_order = ? WHERE id = ?',
+                [$canonicalProjectId, $nextOrder, $movingStepId]
+            );
+            $stats['step_id_remap'][$movingStepId] = $movingStepId;
+            $stats['moved_steps']++;
+        }
+        catn8_build_wizard_cabin_resequence_step_orders($canonicalProjectId);
+    }
+
+    $duplicateIds = array_keys($stats['step_id_remap']);
+    $duplicateIds = array_values(array_filter($duplicateIds, static fn(int $id): bool => $id > 0 && (($stats['step_id_remap'][$id] ?? $id) !== $id)));
+    if ($duplicateIds) {
+        $dupPlaceholders = implode(',', array_fill(0, count($duplicateIds), '?'));
+        Database::execute('DELETE FROM build_wizard_steps WHERE id IN (' . $dupPlaceholders . ')', $duplicateIds);
+    }
+
+    return $stats;
+}
+
+function catn8_build_wizard_cabin_apply_step_id_remap(int $canonicalProjectId, array $stepIdRemap): int
+{
+    $updated = 0;
+    if ($canonicalProjectId <= 0 || !$stepIdRemap) {
+        return $updated;
+    }
+
+    foreach ($stepIdRemap as $fromId => $toId) {
+        $fromId = (int)$fromId;
+        $toId = (int)$toId;
+        if ($fromId <= 0 || $toId <= 0 || $fromId === $toId) {
+            continue;
+        }
+
+        $updated += Database::execute(
+            'UPDATE build_wizard_documents SET step_id = ? WHERE step_id = ?',
+            [$toId, $fromId]
+        );
+        $updated += Database::execute(
+            'UPDATE build_wizard_contact_assignments SET step_id = ? WHERE step_id = ?',
+            [$toId, $fromId]
+        );
+        if (catn8_build_wizard_cabin_table_exists('build_wizard_step_notes')) {
+            $updated += Database::execute(
+                'UPDATE build_wizard_step_notes SET step_id = ? WHERE step_id = ?',
+                [$toId, $fromId]
+            );
+        }
+        if (catn8_build_wizard_cabin_table_exists('build_wizard_step_audit_logs')) {
+            $updated += Database::execute(
+                'UPDATE build_wizard_step_audit_logs SET step_id = ?, project_id = ? WHERE step_id = ?',
+                [$toId, $canonicalProjectId, $fromId]
+            );
+        }
+    }
+
+    $canonicalSteps = Database::queryAll(
+        'SELECT id, parent_step_id, depends_on_step_ids_json FROM build_wizard_steps WHERE project_id = ?',
+        [$canonicalProjectId]
+    );
+    foreach ($canonicalSteps as $row) {
+        $stepId = (int)($row['id'] ?? 0);
+        if ($stepId <= 0) {
+            continue;
+        }
+        $parentId = $row['parent_step_id'] !== null ? (int)$row['parent_step_id'] : 0;
+        $nextParentId = $parentId > 0 ? (int)($stepIdRemap[$parentId] ?? $parentId) : 0;
+        $depends = json_decode((string)($row['depends_on_step_ids_json'] ?? '[]'), true);
+        if (!is_array($depends)) {
+            $depends = [];
+        }
+        $nextDepends = [];
+        $dependsChanged = false;
+        foreach ($depends as $dep) {
+            $depId = (int)$dep;
+            if ($depId <= 0) {
+                continue;
+            }
+            $mapped = (int)($stepIdRemap[$depId] ?? $depId);
+            $nextDepends[] = $mapped;
+            if ($mapped !== $depId) {
+                $dependsChanged = true;
+            }
+        }
+        if ($nextParentId !== $parentId || $dependsChanged) {
+            Database::execute(
+                'UPDATE build_wizard_steps
+                 SET parent_step_id = ?, depends_on_step_ids_json = ?
+                 WHERE id = ?',
+                [
+                    $nextParentId > 0 ? $nextParentId : null,
+                    json_encode(array_values(array_unique($nextDepends)), JSON_UNESCAPED_SLASHES),
+                    $stepId,
+                ]
+            );
+            $updated++;
+        }
+    }
+
+    return $updated;
+}
+
+function catn8_build_wizard_cabin_table_exists(string $tableName): bool
+{
+    $row = Database::queryOne(
+        'SELECT 1 AS present
+         FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+         LIMIT 1',
+        [$tableName]
+    );
+    return (bool)$row;
+}
+
+function catn8_build_wizard_cabin_column_exists(string $tableName, string $columnName): bool
+{
+    $row = Database::queryOne(
+        'SELECT 1 AS present
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+         LIMIT 1',
+        [$tableName, $columnName]
+    );
+    return (bool)$row;
+}
+
 /**
  * @return array{
  *   project_id:int,
  *   sibling_projects:int[],
+ *   merged_steps:int,
+ *   moved_steps:int,
+ *   remapped_step_references:int,
+ *   merged_phase_ranges:int,
  *   moved_documents:int,
  *   remapped_step_ids:int,
  *   moved_contacts:int,
@@ -249,6 +517,10 @@ function catn8_build_wizard_repair_cabin_references(int $uid, int $canonicalProj
     $stats = [
         'project_id' => $canonicalProjectId,
         'sibling_projects' => [],
+        'merged_steps' => 0,
+        'moved_steps' => 0,
+        'remapped_step_references' => 0,
+        'merged_phase_ranges' => 0,
         'moved_documents' => 0,
         'remapped_step_ids' => 0,
         'moved_contacts' => 0,
@@ -281,6 +553,73 @@ function catn8_build_wizard_repair_cabin_references(int $uid, int $canonicalProj
     Database::beginTransaction();
     try {
         if ($siblingIds) {
+            $stepMerge = catn8_build_wizard_cabin_merge_sibling_steps($canonicalProjectId, $siblingIds);
+            $stats['merged_steps'] = (int)($stepMerge['merged_steps'] ?? 0);
+            $stats['moved_steps'] = (int)($stepMerge['moved_steps'] ?? 0);
+            $stepIdRemap = is_array($stepMerge['step_id_remap'] ?? null) ? $stepMerge['step_id_remap'] : [];
+            if ($stepIdRemap) {
+                $stats['remapped_step_references'] = catn8_build_wizard_cabin_apply_step_id_remap($canonicalProjectId, $stepIdRemap);
+            }
+
+            foreach ($siblingIds as $siblingId) {
+                Database::execute(
+                    'UPDATE build_wizard_projects t
+                     JOIN build_wizard_projects s ON s.id = ?
+                     SET
+                       t.target_start_date = COALESCE(t.target_start_date, s.target_start_date),
+                       t.target_completion_date = COALESCE(t.target_completion_date, s.target_completion_date),
+                       t.wizard_notes = CASE
+                         WHEN (t.wizard_notes IS NULL OR TRIM(t.wizard_notes) = \'\') AND s.wizard_notes IS NOT NULL AND TRIM(s.wizard_notes) <> \'\'
+                           THEN s.wizard_notes
+                         ELSE t.wizard_notes
+                       END
+                     WHERE t.id = ?',
+                    [$siblingId, $canonicalProjectId]
+                );
+            }
+
+            if (catn8_build_wizard_cabin_table_exists('build_wizard_phase_date_ranges')) {
+                $siblingPlaceholders = implode(',', array_fill(0, count($siblingIds), '?'));
+                $ranges = Database::queryAll(
+                    'SELECT phase_tab, start_date, end_date
+                     FROM build_wizard_phase_date_ranges
+                     WHERE project_id IN (' . $siblingPlaceholders . ')',
+                    $siblingIds
+                );
+                foreach ($ranges as $range) {
+                    $phaseTab = trim((string)($range['phase_tab'] ?? ''));
+                    if ($phaseTab === '') {
+                        continue;
+                    }
+                    Database::execute(
+                        'INSERT INTO build_wizard_phase_date_ranges (project_id, phase_tab, start_date, end_date)
+                         VALUES (?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE
+                           start_date = COALESCE(build_wizard_phase_date_ranges.start_date, VALUES(start_date)),
+                           end_date = COALESCE(build_wizard_phase_date_ranges.end_date, VALUES(end_date))',
+                        [
+                            $canonicalProjectId,
+                            $phaseTab,
+                            $range['start_date'] ?? null,
+                            $range['end_date'] ?? null,
+                        ]
+                    );
+                    $stats['merged_phase_ranges']++;
+                }
+            }
+
+            $validStepIds = [];
+            $stepRows = Database::queryAll(
+                'SELECT id FROM build_wizard_steps WHERE project_id = ?',
+                [$canonicalProjectId]
+            );
+            foreach ($stepRows as $row) {
+                $sid = (int)($row['id'] ?? 0);
+                if ($sid > 0) {
+                    $validStepIds[$sid] = true;
+                }
+            }
+
             $siblingPlaceholders = implode(',', array_fill(0, count($siblingIds), '?'));
             $stats['moved_documents'] = Database::execute(
                 'UPDATE build_wizard_documents SET project_id = ? WHERE project_id IN (' . $siblingPlaceholders . ')',

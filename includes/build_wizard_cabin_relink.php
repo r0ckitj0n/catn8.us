@@ -7,6 +7,7 @@ declare(strict_types=1);
  * but point at the wrong project or at leftover step ids from the
  * template-migration ("new 65") work.
  */
+const CATN8_CABIN_RELINK_VERSION = '2026-08-27-full-repair-v1';
 
 function catn8_build_wizard_cabin_filename_canonical(string $name): string
 {

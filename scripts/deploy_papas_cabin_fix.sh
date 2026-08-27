@@ -31,6 +31,8 @@ PASS="${CATN8_DEPLOY_PASS}"
 FILES=(
   "includes/build_wizard_cabin_relink.php"
   "api/build_wizard.php"
+  "api/build_wizard_repair_papas_cabin.php"
+  "api/build_wizard_diagnostics.php"
 )
 
 for f in "${FILES[@]}"; do
@@ -41,14 +43,21 @@ for f in "${FILES[@]}"; do
 done
 
 echo "Uploading Papa's Cabin repair files to ${HOST}..."
-lftp -u "${USER}","${PASS}" "sftp://${HOST}" <<LFTP
-set sftp:auto-confirm yes
+LFTP_CMDS="set sftp:auto-confirm yes
 set ssl:verify-certificate no
-set cmd:fail-exit yes
-put includes/build_wizard_cabin_relink.php -o includes/build_wizard_cabin_relink.php
-put api/build_wizard.php -o api/build_wizard.php
-bye
+set cmd:fail-exit yes"
+for f in "${FILES[@]}"; do
+  LFTP_CMDS="${LFTP_CMDS}
+put ${f} -o ${f}"
+done
+LFTP_CMDS="${LFTP_CMDS}
+bye"
+
+lftp -u "${USER}","${PASS}" "sftp://${HOST}" <<LFTP
+${LFTP_CMDS}
 LFTP
 
-echo "Done. Open https://catn8.us/fabric8 and select Papa's Cabin to run auto-repair on bootstrap."
-echo "Or POST /api/build_wizard.php?action=repair_cabin_references with {\"project_id\":65} while logged in."
+echo "Done."
+echo "1) Diagnose: https://catn8.us/api/build_wizard_repair_papas_cabin.php?action=diagnose&admin_token=YOUR_TOKEN&q=Papa"
+echo "2) Repair all cabin projects: https://catn8.us/api/build_wizard_repair_papas_cabin.php?action=repair_all&admin_token=YOUR_TOKEN"
+echo "3) Then open https://catn8.us/fabric8 and select Papa's Cabin"

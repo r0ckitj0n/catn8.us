@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # Upload Papa's Cabin repair PHP files from GitHub main (no local git required).
-set -euo pipefail
+set -eo pipefail
 
 if [[ -z "${CATN8_DEPLOY_PASS:-}" ]]; then
   echo "Set CATN8_DEPLOY_PASS first (from CATN8 Deployment.rtf)." >&2
   exit 1
 fi
 
-HOST="${CATN8_DEPLOY_HOST:-home419172903.1and1-data.host}"
-USER="${CATN8_DEPLOY_USER:-acc899014616}"
-PASS="${CATN8_DEPLOY_PASS}"
+DEPLOY_HOST="${CATN8_DEPLOY_HOST:-home419172903.1and1-data.host}"
+DEPLOY_USER="${CATN8_DEPLOY_USER:-acc899014616}"
 BASE="https://raw.githubusercontent.com/r0ckitj0n/catn8.us/main"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
@@ -27,19 +26,16 @@ for f in "${FILES[@]}"; do
   curl -fsSL "${BASE}/${f}" -o "${TMP}/${f}"
 done
 
-echo "Uploading to ${HOST}..."
-LFTP_CMDS="set sftp:auto-confirm yes
+echo "Uploading to ${DEPLOY_HOST}..."
+lftp -u "${DEPLOY_USER},${CATN8_DEPLOY_PASS}" "sftp://${DEPLOY_HOST}" <<LFTP
+set sftp:auto-confirm yes
 set ssl:verify-certificate no
-set cmd:fail-exit yes"
-for f in "${FILES[@]}"; do
-  LFTP_CMDS="${LFTP_CMDS}
-put ${TMP}/${f} -o ${f}"
-done
-LFTP_CMDS="${LFTP_CMDS}
-bye"
-
-lftp -u "${USER}","${PASS}" "sftp://${HOST}" <<LFTP
-${LFTP_CMDS}
+set cmd:fail-exit yes
+put ${TMP}/includes/build_wizard_cabin_relink.php -o includes/build_wizard_cabin_relink.php
+put ${TMP}/api/build_wizard.php -o api/build_wizard.php
+put ${TMP}/api/build_wizard_repair_papas_cabin.php -o api/build_wizard_repair_papas_cabin.php
+put ${TMP}/api/build_wizard_diagnostics.php -o api/build_wizard_diagnostics.php
+bye
 LFTP
 
 echo "Upload complete."

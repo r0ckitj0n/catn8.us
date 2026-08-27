@@ -1,0 +1,37 @@
+name: Deploy Papa Cabin Fix (PHP only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type deploy to confirm surgical PHP-only upload (no DB, no full mirror)'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Upload cabin repair PHP files only
+        env:
+          CATN8_DEPLOY_HOST: home419172903.1and1-data.host
+          CATN8_DEPLOY_USER: acc899014616
+          CATN8_DEPLOY_PASS: ${{ secrets.CATN8_DEPLOY_PASS }}
+        run: |
+          if [ -z "${CATN8_DEPLOY_PASS}" ]; then
+            echo "Missing GitHub secret CATN8_DEPLOY_PASS"
+            exit 1
+          fi
+          bash scripts/deploy_papas_cabin_fix.sh
+
+      - name: Verify live site responds
+        run: |
+          curl -fsS -o /dev/null -w "fabric8 HTTP %{http_code}\n" "https://catn8.us/fabric8"
+          curl -fsS -o /dev/null -w "home HTTP %{http_code}\n" "https://catn8.us/"

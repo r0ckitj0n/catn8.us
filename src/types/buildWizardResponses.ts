@@ -11,6 +11,10 @@ import {
 export interface IBuildWizardCabinRepairSummary {
   project_id: number;
   sibling_projects: number[];
+  merged_steps: number;
+  moved_steps: number;
+  remapped_step_references: number;
+  merged_phase_ranges: number;
   moved_documents: number;
   remapped_step_ids: number;
   moved_contacts: number;

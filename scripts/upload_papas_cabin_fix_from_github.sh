@@ -9,6 +9,7 @@ fi
 
 HOST="${CATN8_DEPLOY_HOST:-home419172903.1and1-data.host}"
 USER="${CATN8_DEPLOY_USER:-acc899014616}"
+PASS="${CATN8_DEPLOY_PASS}"
 BASE="https://raw.githubusercontent.com/r0ckitj0n/catn8.us/main"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT

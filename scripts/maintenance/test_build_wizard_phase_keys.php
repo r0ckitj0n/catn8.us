@@ -40,4 +40,34 @@ assert_true(catn8_build_wizard_is_task_document_kind('event'), 'leftover event d
 assert_true(catn8_build_wizard_is_task_document_kind('receipt'), 'receipt documents are tasks');
 assert_true(!catn8_build_wizard_is_task_document_kind('blueprint'), 'blueprints are not tasks');
 
-echo json_encode(['success' => true, 'cases' => count($cases)], JSON_UNESCAPED_SLASHES) . "\n";
+$tabForPhase = static function (string $phaseKey): string {
+    $canonical = catn8_build_wizard_canonical_phase_key($phaseKey);
+    return match ($canonical) {
+        'design_preconstruction' => 'land',
+        'site_preparation' => 'permits',
+        'framing_shell' => 'site',
+        'mep_rough_in' => 'framing',
+        'interior_finishes' => 'mep',
+        'inspections_closeout' => 'finishes',
+        default => 'desk',
+    };
+};
+
+$tabCases = [
+    ['land_due_diligence', 'land'],
+    ['dawson_county_permits', 'land'],
+    ['foundation', 'permits'],
+    ['move_in', 'mep'],
+    ['framing_shell', 'site'],
+    ['event', 'desk'],
+];
+foreach ($tabCases as [$input, $expectedTab]) {
+    $actualTab = $tabForPhase($input);
+    assert_true($actualTab === $expectedTab, "tab({$input}) should be {$expectedTab}, got {$actualTab}");
+}
+
+echo json_encode([
+    'success' => true,
+    'cases' => count($cases),
+    'tab_cases' => count($tabCases),
+], JSON_UNESCAPED_SLASHES) . "\n";

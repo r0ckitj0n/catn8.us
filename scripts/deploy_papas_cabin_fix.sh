@@ -6,6 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT}"
 
+# Preserve Cloud Agent / shell-injected secrets so empty .env placeholders
+# cannot clobber them (common on Coden8r VMs).
+_PRESERVE_KEYS=(CATN8_DEPLOY_HOST CATN8_DEPLOY_USER CATN8_DEPLOY_PASS CATN8_ADMIN_TOKEN CATN8_DEPLOY_BASE_URL)
+declare -A _PRESERVED=()
+for _k in "${_PRESERVE_KEYS[@]}"; do
+  if [[ -n "${!_k:-}" ]]; then
+    _PRESERVED["$_k"]="${!_k}"
+  fi
+done
+
 ENV_FILE_LOCAL="${ROOT}/.env.local"
 ENV_FILE="${ROOT}/.env"
 if [[ -f "${ENV_FILE_LOCAL}" ]]; then
@@ -19,6 +29,11 @@ elif [[ -f "${ENV_FILE}" ]]; then
   . "${ENV_FILE}"
   set +a
 fi
+
+for _k in "${!_PRESERVED[@]}"; do
+  export "${_k}=${_PRESERVED[$_k]}"
+done
+unset _k _PRESERVE_KEYS _PRESERVED
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/secrets/env_or_keychain.sh"
@@ -46,7 +61,8 @@ done
 echo "Uploading Papa's Cabin repair files to ${HOST}..."
 LFTP_CMDS="set sftp:auto-confirm yes
 set ssl:verify-certificate no
-set cmd:fail-exit yes"
+set cmd:fail-exit yes
+set sftp:connect-program ssh -a -x -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
 for f in "${FILES[@]}"; do
   LFTP_CMDS="${LFTP_CMDS}
 put ${f} -o ${f}"

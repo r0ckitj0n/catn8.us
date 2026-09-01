@@ -1,7 +1,9 @@
 <?php
-require_once __DIR__ . '/api/bootstrap.php';
-$_GET['action'] = 'list_master_characters';
-$_GET['mystery_id'] = '5';
-$isAdmin = true;
-$viewerId = 1; // Assuming 1 is admin
-require_once __DIR__ . '/api/mystery/admin.php';
+
+declare(strict_types=1);
+
+// Intentionally disabled: this local test script previously forced admin context.
+http_response_code(404);
+header('Content-Type: text/plain; charset=UTF-8');
+echo "Not found\n";
+exit;

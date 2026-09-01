@@ -1,14 +1,26 @@
 DirectoryIndex index.html index.php
 
-Options -MultiViews
+Options -MultiViews -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
+  # Pass Authorization through to PHP (IONOS/CGI strips it otherwise).
+  CGIPassAuth On
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   # Keep a single canonical host to avoid split cookies/cache and stale host-level fallbacks.
   RewriteCond %{HTTP_HOST} ^www\.catn8\.us$ [NC]
   RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
+
+  # Block sensitive trees before any file/dir passthrough.
+  RewriteRule ^(?:includes|vendor|scripts|src|tmp|logs|backups|\.git|\.githooks|\.local)/ - [F,L]
+
+  # Block leftover local-dev / debug / one-off maintenance entrypoints.
+  RewriteRule ^(?:debug_data|debug_schema|verify_inclusions|repro_list_weapons|test_list_api|router)\.php$ - [F,L]
+  RewriteRule ^api/\.accumul8_lib_test\.php$ - [F,L]
 
   # Retire legacy clean slugs instead of silently serving the SPA home shell.
   RewriteRule ^(?:about|activities|arcade|coloring|games|stories|wordsearch|mystery|photo-albums|build-wizard|build_wizard)/?$ - [R=404,L,NC]
@@ -50,6 +62,13 @@ Options -MultiViews
   RewriteRule ^ index.html [L]
 </IfModule>
 
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
 <IfModule mod_authz_core.c>
   <FilesMatch "^(\.env|\.env\.local|\.env\..+)$">
     Require all denied
@@ -57,7 +76,10 @@ Options -MultiViews
   <FilesMatch "^(\.git|\.gitignore|\.githooks|\.windsurfrules|composer\.(json|lock)|package(-lock)?\.json)$">
     Require all denied
   </FilesMatch>
-  <FilesMatch "\.key\.json$">
+  <FilesMatch "\.(key\.json|sql|sqlite|db|log|sh)$">
+    Require all denied
+  </FilesMatch>
+  <FilesMatch "^(debug_data|debug_schema|verify_inclusions|repro_list_weapons|test_list_api|router)\.php$">
     Require all denied
   </FilesMatch>
 </IfModule>
@@ -71,7 +93,11 @@ Options -MultiViews
     Order allow,deny
     Deny from all
   </FilesMatch>
-  <FilesMatch "\.key\.json$">
+  <FilesMatch "\.(key\.json|sql|sqlite|db|log|sh)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+  <FilesMatch "^(debug_data|debug_schema|verify_inclusions|repro_list_weapons|test_list_api|router)\.php$">
     Order allow,deny
     Deny from all
   </FilesMatch>

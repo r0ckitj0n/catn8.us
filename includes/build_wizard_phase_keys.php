@@ -48,11 +48,14 @@ function catn8_build_wizard_phase_key_alias_map(): array
         'sitework' => 'site_preparation',
         'foundation' => 'site_preparation',
         'site_prep' => 'site_preparation',
+        'site_prep_foundation' => 'site_preparation',
         'framing_shell' => 'framing_shell',
         'framing' => 'framing_shell',
         'enclosure' => 'framing_shell',
         'roofing' => 'framing_shell',
         'site' => 'framing_shell',
+        'framing_exterior' => 'framing_shell',
+        'exterior_finish' => 'framing_shell',
         'mep_rough_in' => 'mep_rough_in',
         'plumbing' => 'mep_rough_in',
         'electrical' => 'mep_rough_in',
@@ -61,11 +64,13 @@ function catn8_build_wizard_phase_key_alias_map(): array
         'interior' => 'interior_finishes',
         'move_in' => 'interior_finishes',
         'mep' => 'interior_finishes',
+        'interior_finish' => 'interior_finishes',
         'inspections_closeout' => 'inspections_closeout',
         'closeout' => 'inspections_closeout',
         'finishes' => 'inspections_closeout',
         'general' => 'general',
         'desk' => 'general',
+        'construction' => 'general',
     ];
 }
 
@@ -116,15 +121,71 @@ function catn8_build_wizard_legacy_phase_key_rewrites(): array
 function catn8_build_wizard_is_task_document_kind(string $kind): bool
 {
     $normalized = strtolower(trim($kind));
+    // Receipt documents are the task containers; leftover event labels still appear in old rows.
     return in_array($normalized, ['receipt', 'event', 'events'], true);
+}
+
+function catn8_build_wizard_table_exists(string $table): bool
+{
+    $table = trim($table);
+    if ($table === '' || !preg_match('/^[a-z0-9_]+$/', $table)) {
+        return false;
+    }
+    $row = Database::queryOne(
+        'SELECT 1 AS ok
+         FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = ?
+         LIMIT 1',
+        [$table]
+    );
+    return (bool)$row;
+}
+
+/**
+ * Live still has build_wizard_events; current code prefers build_wizard_steps.
+ * Prefer steps when present so local/dev and migrated hosts keep working.
+ */
+function catn8_build_wizard_timeline_table_name(): string
+{
+    if (catn8_build_wizard_table_exists('build_wizard_steps')) {
+        return 'build_wizard_steps';
+    }
+    if (catn8_build_wizard_table_exists('build_wizard_events')) {
+        return 'build_wizard_events';
+    }
+    return 'build_wizard_steps';
+}
+
+function catn8_build_wizard_timeline_type_column(string $timelineTable): string
+{
+    return $timelineTable === 'build_wizard_events' ? 'event_type' : 'step_type';
 }
 
 function catn8_build_wizard_canonicalize_persisted_phase_vocab(): void
 {
+    $timelineTable = catn8_build_wizard_timeline_table_name();
+    $typeColumn = catn8_build_wizard_timeline_type_column($timelineTable);
+
     foreach (catn8_build_wizard_legacy_phase_key_rewrites() as $from => $to) {
-        Database::execute('UPDATE build_wizard_steps SET phase_key = ? WHERE phase_key = ?', [$to, $from]);
-        Database::execute('UPDATE build_wizard_contact_assignments SET phase_key = ? WHERE phase_key = ?', [$to, $from]);
+        Database::execute(
+            "UPDATE {$timelineTable} SET phase_key = ? WHERE phase_key = ?",
+            [$to, $from]
+        );
+        if (catn8_build_wizard_table_exists('build_wizard_contact_assignments')) {
+            Database::execute(
+                'UPDATE build_wizard_contact_assignments SET phase_key = ? WHERE phase_key = ?',
+                [$to, $from]
+            );
+        }
     }
-    Database::execute("UPDATE build_wizard_steps SET step_type = 'milestone' WHERE step_type IN ('event', 'events')");
-    Database::execute("UPDATE build_wizard_documents SET kind = 'receipt' WHERE kind IN ('event', 'events')");
+
+    Database::execute(
+        "UPDATE {$timelineTable} SET {$typeColumn} = 'milestone' WHERE {$typeColumn} IN ('event', 'events')"
+    );
+
+    if (catn8_build_wizard_table_exists('build_wizard_documents')) {
+        Database::execute(
+            "UPDATE build_wizard_documents SET kind = 'receipt' WHERE kind IN ('event', 'events')"
+        );
+    }
 }

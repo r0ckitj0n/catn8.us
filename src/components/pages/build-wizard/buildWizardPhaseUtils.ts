@@ -24,11 +24,14 @@ const PHASE_KEY_ALIASES: Record<string, string> = {
   sitework: 'site_preparation',
   foundation: 'site_preparation',
   site_prep: 'site_preparation',
+  site_prep_foundation: 'site_preparation',
   framing_shell: 'framing_shell',
   framing: 'framing_shell',
   enclosure: 'framing_shell',
   roofing: 'framing_shell',
   site: 'framing_shell',
+  framing_exterior: 'framing_shell',
+  exterior_finish: 'framing_shell',
   mep_rough_in: 'mep_rough_in',
   plumbing: 'mep_rough_in',
   electrical: 'mep_rough_in',
@@ -37,11 +40,13 @@ const PHASE_KEY_ALIASES: Record<string, string> = {
   interior: 'interior_finishes',
   move_in: 'interior_finishes',
   mep: 'interior_finishes',
+  interior_finish: 'interior_finishes',
   inspections_closeout: 'inspections_closeout',
   closeout: 'inspections_closeout',
   finishes: 'inspections_closeout',
   general: 'general',
   desk: 'general',
+  construction: 'general',
 };
 
 function includesAny(haystack: string, needles: string[]): boolean {
@@ -66,6 +71,7 @@ export function phaseKeysMatch(left: string | null | undefined, right: string | 
 
 export function isBuildWizardTaskDocumentKind(kind: string | null | undefined): boolean {
   const value = String(kind || '').trim().toLowerCase();
+  // Receipt documents are the task containers; leftover event labels still appear in old rows.
   return value === 'receipt' || value === 'event' || value === 'events';
 }
 

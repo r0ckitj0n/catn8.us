@@ -22,6 +22,11 @@ $cases = [
     ['mep', 'interior_finishes'],
     ['finishes', 'inspections_closeout'],
     ['desk', 'general'],
+    ['site_prep_foundation', 'site_preparation'],
+    ['framing_exterior', 'framing_shell'],
+    ['exterior_finish', 'framing_shell'],
+    ['interior_finish', 'interior_finishes'],
+    ['construction', 'general'],
     ['design_preconstruction', 'design_preconstruction'],
     ['', 'general'],
 ];

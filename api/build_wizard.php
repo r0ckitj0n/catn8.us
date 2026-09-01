@@ -649,16 +649,18 @@ function catn8_build_wizard_normalize_contact_type($value, int $isVendor = 0): s
     };
 }
 
-function catn8_build_wizard_table_exists(string $tableName): bool
-{
-    if ($tableName === '') {
-        return false;
+if (!function_exists('catn8_build_wizard_table_exists')) {
+    function catn8_build_wizard_table_exists(string $tableName): bool
+    {
+        if ($tableName === '') {
+            return false;
+        }
+        $row = Database::queryOne(
+            'SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
+            [$tableName]
+        );
+        return $row !== null;
     }
-    $row = Database::queryOne(
-        'SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
-        [$tableName]
-    );
-    return $row !== null;
 }
 
 function catn8_build_wizard_upload_roots(): array

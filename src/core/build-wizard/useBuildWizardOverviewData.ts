@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { BUILD_TABS, PHASE_PROGRESS_ORDER, TAB_PHASE_COLORS } from '../../components/pages/build-wizard/buildWizardConstants';
-import { calculateDurationDays, getDefaultRange, parseDate, stepDateRange, tabLabelShort, toIsoDate } from '../../components/pages/build-wizard/buildWizardUtils';
+import { calculateDurationDays, getDefaultRange, isBuildWizardTaskDocumentKind, parseDate, stepDateRange, tabLabelShort, toIsoDate } from '../../components/pages/build-wizard/buildWizardUtils';
 import { BuildWizardTaskMeta } from './buildWizardPageRenderTypes';
 import { IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId } from '../../types/pages/buildWizardPage';
@@ -48,7 +48,7 @@ export function useBuildWizardOverviewData({
 
     const receiptDocumentsByStepId = new Map<number, Array<{ receipt_amount?: number | null; receipt_notes?: string | null; kind?: string | null }>>();
     documents.forEach((documentItem) => {
-      if (String(documentItem.kind || '').trim() !== 'receipt') return;
+      if (!isBuildWizardTaskDocumentKind(documentItem.kind)) return;
       const stepId = Number(documentItem.step_id || 0);
       if (stepId <= 0) return;
       const rows = receiptDocumentsByStepId.get(stepId) || [];

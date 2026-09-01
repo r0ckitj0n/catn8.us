@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/api/config.php';
+require_once dirname(__DIR__, 2) . '/includes/build_wizard_phase_keys.php';
 
 function usage(): void
 {
@@ -136,26 +137,7 @@ function load_template_steps(string $repoRoot, string $wastewaterKind, string $w
 
 function phase_key_bucket(string $phase): string
 {
-    $p = strtolower(trim($phase));
-    $map = [
-        'land_due_diligence' => 'land_due_diligence',
-        'design_preconstruction' => 'design_preconstruction',
-        'dawson_county_permits' => 'dawson_county_permits',
-        'site_preparation' => 'site_preparation',
-        'foundation' => 'foundation',
-        'framing_shell' => 'framing_shell',
-        'mep_rough_in' => 'mep_rough_in',
-        'interior_finishes' => 'interior_finishes',
-        'move_in' => 'move_in',
-        'inspections_closeout' => 'inspections_closeout',
-        'general' => 'general',
-        'permits' => 'dawson_county_permits',
-        'sitework' => 'site_preparation',
-        'framing' => 'framing_shell',
-        'plumbing' => 'mep_rough_in',
-        'mep' => 'mep_rough_in',
-    ];
-    return $map[$p] ?? 'general';
+    return catn8_build_wizard_canonical_phase_key($phase);
 }
 
 function step_type_norm(string $type, string $title): string

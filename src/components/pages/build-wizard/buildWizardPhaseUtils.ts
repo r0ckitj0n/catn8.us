@@ -2,38 +2,89 @@ import { IBuildWizardStep } from '../../../types/buildWizard';
 import { BuildTabId } from '../../../types/pages/buildWizardPage';
 import { BUILD_TABS } from './buildWizardConstants';
 
+const CANONICAL_PHASE_KEYS = new Set([
+  'design_preconstruction',
+  'site_preparation',
+  'framing_shell',
+  'mep_rough_in',
+  'interior_finishes',
+  'inspections_closeout',
+  'general',
+]);
+
+const PHASE_KEY_ALIASES: Record<string, string> = {
+  land_due_diligence: 'design_preconstruction',
+  design_preconstruction: 'design_preconstruction',
+  dawson_county_permits: 'design_preconstruction',
+  permits: 'design_preconstruction',
+  land: 'design_preconstruction',
+  planning: 'design_preconstruction',
+  preconstruction: 'design_preconstruction',
+  site_preparation: 'site_preparation',
+  sitework: 'site_preparation',
+  foundation: 'site_preparation',
+  site_prep: 'site_preparation',
+  site_prep_foundation: 'site_preparation',
+  framing_shell: 'framing_shell',
+  framing: 'framing_shell',
+  enclosure: 'framing_shell',
+  roofing: 'framing_shell',
+  site: 'framing_shell',
+  framing_exterior: 'framing_shell',
+  exterior_finish: 'framing_shell',
+  mep_rough_in: 'mep_rough_in',
+  plumbing: 'mep_rough_in',
+  electrical: 'mep_rough_in',
+  hvac: 'mep_rough_in',
+  interior_finishes: 'interior_finishes',
+  interior: 'interior_finishes',
+  move_in: 'interior_finishes',
+  mep: 'interior_finishes',
+  interior_finish: 'interior_finishes',
+  inspections_closeout: 'inspections_closeout',
+  closeout: 'inspections_closeout',
+  finishes: 'inspections_closeout',
+  general: 'general',
+  desk: 'general',
+  construction: 'general',
+};
+
 function includesAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
 }
 
+function slugPhaseKey(rawPhaseKey: string | null | undefined): string {
+  return String(rawPhaseKey || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+export function canonicalPhaseKey(rawPhaseKey: string | null | undefined): string {
+  const phaseKey = slugPhaseKey(rawPhaseKey);
+  if (!phaseKey) {
+    return 'general';
+  }
+  return PHASE_KEY_ALIASES[phaseKey] || phaseKey;
+}
+
+export function phaseKeysMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  return canonicalPhaseKey(left) === canonicalPhaseKey(right);
+}
+
+export function isBuildWizardTaskDocumentKind(kind: string | null | undefined): boolean {
+  const value = String(kind || '').trim().toLowerCase();
+  // Receipt documents are the task containers; leftover event labels still appear in old rows.
+  return value === 'receipt' || value === 'event' || value === 'events';
+}
+
 function normalizePhaseKeyHint(rawPhaseKey: string | null | undefined): string | null {
-  const phaseKey = String(rawPhaseKey || '').trim().toLowerCase();
+  const phaseKey = slugPhaseKey(rawPhaseKey);
   if (!phaseKey) {
     return null;
   }
-  const phaseMap: Record<string, string> = {
-    land_due_diligence: 'design_preconstruction',
-    design_preconstruction: 'design_preconstruction',
-    dawson_county_permits: 'design_preconstruction',
-    permits: 'design_preconstruction',
-    site_preparation: 'site_preparation',
-    sitework: 'site_preparation',
-    foundation: 'site_preparation',
-    framing_shell: 'framing_shell',
-    framing: 'framing_shell',
-    enclosure: 'framing_shell',
-    roofing: 'framing_shell',
-    mep_rough_in: 'mep_rough_in',
-    plumbing: 'mep_rough_in',
-    electrical: 'mep_rough_in',
-    hvac: 'mep_rough_in',
-    interior_finishes: 'interior_finishes',
-    interior: 'interior_finishes',
-    move_in: 'interior_finishes',
-    inspections_closeout: 'inspections_closeout',
-    closeout: 'inspections_closeout',
-  };
-  return phaseMap[phaseKey] || null;
+  const mapped = PHASE_KEY_ALIASES[phaseKey] || (CANONICAL_PHASE_KEYS.has(phaseKey) ? phaseKey : null);
+  if (!mapped || mapped === 'general') {
+    return null;
+  }
+  return mapped;
 }
 
 export function tabLabelShort(tabId: BuildTabId): string {

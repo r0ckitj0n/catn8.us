@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { BUILD_TABS, TAB_DEFAULT_PHASE_KEY } from '../../components/pages/build-wizard/buildWizardConstants';
-import { getDefaultRange, prettyPhaseLabel, sortAlpha, tabLabelShort } from '../../components/pages/build-wizard/buildWizardUtils';
+import { getDefaultRange, phaseKeysMatch, prettyPhaseLabel, sortAlpha, tabLabelShort } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId } from '../../types/pages/buildWizardPage';
 
@@ -56,7 +56,7 @@ export function useBuildWizardWorkspaceSelectionData({
   }, []);
 
   const selectableDocSteps = React.useMemo(() => {
-    const filtered = !docPhaseKey || docPhaseKey === 'general' ? steps : steps.filter((step) => String(step.phase_key || 'general') === docPhaseKey);
+    const filtered = !docPhaseKey || docPhaseKey === 'general' ? steps : steps.filter((step) => phaseKeysMatch(step.phase_key, docPhaseKey));
     return [...filtered].sort((a, b) => {
       const phaseCmp = sortAlpha(prettyPhaseLabel(a.phase_key), prettyPhaseLabel(b.phase_key));
       if (phaseCmp !== 0) {

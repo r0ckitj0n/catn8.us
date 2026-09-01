@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { BUILD_TABS } from '../../components/pages/build-wizard/buildWizardConstants';
-import { calculateDurationDays, prettyPhaseLabel, sortAlpha, stepPhaseBucket, toNumberOrNull, toStringOrNull, getStepPastelColor } from '../../components/pages/build-wizard/buildWizardUtils';
+import { calculateDurationDays, isBuildWizardTaskDocumentKind, prettyPhaseLabel, sortAlpha, stepPhaseBucket, toNumberOrNull, toStringOrNull, getStepPastelColor } from '../../components/pages/build-wizard/buildWizardUtils';
 import { buildWizardTokenLabel } from '../buildWizardDropdownSettings';
 import { buildStepCostVerificationSignature } from './buildWizardSearchCostUtils';
 import { defaultTaskMeta } from './buildWizardTaskMetaUtils';
@@ -143,7 +143,7 @@ export function BuildWizardEditableStepCard({ context, row }: BuildWizardEditabl
   const stepPastelColor = getStepPastelColor(step.id);
   const isExpanded = safeExpandedStepById[step.id] === true;
   const stepDocuments = documents.filter((doc) => Number(doc.step_id || 0) === step.id);
-  const stepReceiptDocuments = stepDocuments.filter((doc) => doc.kind === 'receipt').sort((a, b) => {
+  const stepReceiptDocuments = stepDocuments.filter((doc) => isBuildWizardTaskDocumentKind(doc.kind)).sort((a, b) => {
     const aTaskMeta = parseTaskMetaFromReceiptNotes(a.receipt_notes || '').taskMeta;
     const bTaskMeta = parseTaskMetaFromReceiptNotes(b.receipt_notes || '').taskMeta;
     const aDate = getTaskEffectiveDate(a, step, aTaskMeta);

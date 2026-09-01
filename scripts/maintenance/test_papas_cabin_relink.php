@@ -2,12 +2,38 @@
 
 declare(strict_types=1);
 
-putenv('CATN8_DB_LOCAL_SOCKET=/run/mysqld/mysqld.sock');
-$_ENV['CATN8_DB_LOCAL_SOCKET'] = '/run/mysqld/mysqld.sock';
-$_SERVER['CATN8_DB_LOCAL_SOCKET'] = '/run/mysqld/mysqld.sock';
+$socketCandidates = [
+    getenv('CATN8_DB_LOCAL_SOCKET') ?: '',
+    '/run/mysqld/mysqld.sock',
+    (getenv('HOME') ?: '/home/node') . '/.catn8/mysqld.sock',
+];
+$localSocket = '';
+foreach ($socketCandidates as $candidate) {
+    $candidate = trim((string)$candidate);
+    if ($candidate !== '' && file_exists($candidate)) {
+        $localSocket = $candidate;
+        break;
+    }
+}
+if ($localSocket === '') {
+    $localSocket = '/run/mysqld/mysqld.sock';
+}
+putenv('CATN8_DB_LOCAL_SOCKET=' . $localSocket);
+$_ENV['CATN8_DB_LOCAL_SOCKET'] = $localSocket;
+$_SERVER['CATN8_DB_LOCAL_SOCKET'] = $localSocket;
 
 require_once dirname(__DIR__, 2) . '/api/config.php';
 require_once dirname(__DIR__, 2) . '/includes/build_wizard_cabin_relink.php';
+
+Database::execute("CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    email VARCHAR(191) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    is_admin TINYINT(1) NOT NULL DEFAULT 0,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    email_verified TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
 function assert_true(bool $cond, string $message): void
 {
@@ -256,7 +282,10 @@ $plat = Database::queryOne(
      WHERE d.project_id = ? AND d.original_name = 'JGraves Plat.pdf'",
     [$newProjectId]
 );
-assert_true(($plat['phase_key'] ?? '') === 'land_due_diligence', 'plat should land on a land-due-diligence step');
+assert_true(
+    catn8_build_wizard_phase_keys_match((string)($plat['phase_key'] ?? ''), 'design_preconstruction'),
+    'plat should land on a planning / pre-construction step'
+);
 
 echo json_encode([
     'success' => true,

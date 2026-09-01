@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { PHASE_PROGRESS_ORDER } from '../../components/pages/build-wizard/buildWizardConstants';
-import { calculateDurationDays, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
+import { calculateDurationDays, isBuildWizardTaskDocumentKind, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardContact, IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId } from '../../types/pages/buildWizardPage';
 
@@ -84,7 +84,7 @@ export function useBuildWizardDocumentStepData({
       if (company) names.add(company);
     });
     documents.forEach((doc) => {
-      if (String(doc.kind || '').trim() !== 'receipt') {
+      if (!isBuildWizardTaskDocumentKind(doc.kind)) {
         return;
       }
       const vendor = String(doc.receipt_vendor || '').trim();

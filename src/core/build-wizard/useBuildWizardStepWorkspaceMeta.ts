@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { BUILD_TABS, PHASE_PROGRESS_ORDER, TAB_DEFAULT_PHASE_KEY } from '../../components/pages/build-wizard/buildWizardConstants';
-import { prettyPhaseLabel, sortAlpha } from '../../components/pages/build-wizard/buildWizardUtils';
+import { isBuildWizardTaskDocumentKind, phaseKeysMatch, prettyPhaseLabel, sortAlpha } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardContact, IBuildWizardContactAssignment, IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId } from '../../types/pages/buildWizardPage';
 import { BuildWizardTaskMeta, normalizeContactType } from './buildWizardPageRenderTypes';
@@ -37,7 +37,7 @@ export function useBuildWizardStepWorkspaceMeta({
         const assignmentStepId = Number(assignment.step_id || 0);
         const assignmentPhaseKey = normalizePhaseKey(assignment.phase_key || '');
         const isStepMatch = assignmentStepId > 0 && assignmentStepId === step.id;
-        const isPhaseMatch = assignmentStepId <= 0 && assignmentPhaseKey !== '' && assignmentPhaseKey === phaseKey;
+        const isPhaseMatch = assignmentStepId <= 0 && assignmentPhaseKey !== '' && phaseKeysMatch(assignmentPhaseKey, phaseKey);
         if (!isStepMatch && !isPhaseMatch) return;
         const contact = contactMap.get(assignment.contact_id);
         if (!contact) return;
@@ -123,7 +123,7 @@ export function useBuildWizardStepWorkspaceMeta({
     steps.forEach((step) => {
       const stepDocuments = documentsByStepId.get(step.id) || [];
       const stepAssignees = stepAssigneesByStepId.get(step.id) || [];
-      const parsedReceiptData = stepDocuments.filter((documentItem) => String(documentItem.kind || '').trim() === 'receipt').map((documentItem) => parseTaskMetaFromReceiptNotes(documentItem.receipt_notes));
+      const parsedReceiptData = stepDocuments.filter((documentItem) => isBuildWizardTaskDocumentKind(documentItem.kind)).map((documentItem) => parseTaskMetaFromReceiptNotes(documentItem.receipt_notes));
       byId.set(step.id, buildSearchText(step, stepDocuments, stepAssignees.map((entry) => entry.contact), parsedReceiptData, prettyPhaseLabel(step.phase_key)));
     });
     return byId;
@@ -132,7 +132,7 @@ export function useBuildWizardStepWorkspaceMeta({
   const receiptMetricsByStepId = React.useMemo(() => {
     const map = new Map<number, { allCount: number; nonQuoteCount: number; quoteCount: number; allTotal: number; nonQuoteTotal: number; quoteTotal: number }>();
     documents.forEach((documentItem) => {
-      if (String(documentItem.kind || '').trim() !== 'receipt') return;
+      if (!isBuildWizardTaskDocumentKind(documentItem.kind)) return;
       const stepId = Number(documentItem.step_id || 0);
       if (stepId <= 0) return;
       const existing = map.get(stepId) || { allCount: 0, nonQuoteCount: 0, quoteCount: 0, allTotal: 0, nonQuoteTotal: 0, quoteTotal: 0 };

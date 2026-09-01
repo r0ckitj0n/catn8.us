@@ -1,5 +1,5 @@
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
-import { toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
+import { isBuildWizardTaskDocumentKind, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { BuildWizardTaskMeta, BuildWizardTaskType, TaskDocumentField, TaskDocumentPreview } from './buildWizardPageRenderTypes';
 
 export const BUILD_WIZARD_TASK_META_PREFIX = '[task_meta_json]';
@@ -60,7 +60,7 @@ export const composeReceiptNotesWithTaskMeta = (taskMeta: BuildWizardTaskMeta, p
 };
 
 export const isLegacyAutoStampedTaskDate = (doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>, taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null): boolean => {
-  if (String(doc.kind || '').trim() !== 'receipt' || taskMeta?.manual_date_override === true) return false;
+  if (!isBuildWizardTaskDocumentKind(doc.kind) || taskMeta?.manual_date_override === true) return false;
   const taskDate = toStringOrNull(doc.receipt_date || '');
   const uploadedDate = toStringOrNull(String(doc.uploaded_at || '').slice(0, 10));
   return Boolean(taskDate && uploadedDate && taskDate === uploadedDate);
@@ -68,7 +68,7 @@ export const isLegacyAutoStampedTaskDate = (doc: Pick<IBuildWizardDocument, 'kin
 
 export const taskUsesManualDateOverride = (doc: Pick<IBuildWizardDocument, 'kind' | 'receipt_date' | 'uploaded_at'>, taskMeta?: Pick<BuildWizardTaskMeta, 'manual_date_override'> | null): boolean => {
   const taskDate = toStringOrNull(doc.receipt_date || '');
-  if (!taskDate || String(doc.kind || '').trim() !== 'receipt') return false;
+  if (!taskDate || !isBuildWizardTaskDocumentKind(doc.kind)) return false;
   if (taskMeta?.manual_date_override === true) return true;
   return !isLegacyAutoStampedTaskDate(doc, taskMeta);
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { PHASE_PROGRESS_ORDER } from '../../components/pages/build-wizard/buildWizardConstants';
-import { calculateDurationDays, stepPhaseBucket, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
+import { calculateDurationDays, isBuildWizardTaskDocumentKind, phaseKeysMatch, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardDocument, IBuildWizardStep } from '../../types/buildWizard';
 import { BuildTabId, StepDraftMap } from '../../types/pages/buildWizardPage';
 import { BuildWizardTaskMeta } from './buildWizardPageRenderTypes';
@@ -67,7 +67,7 @@ export function useBuildWizardStepEditActions({
   ) => {
     const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
     const phaseSteps = steps
-      .filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase)
+      .filter((candidate) => phaseKeysMatch(candidate.phase_key, normalizedPhase))
       .sort((a, b) => compareStepsByTimeline(a, b, overridesByStepId));
     const orderedIds = phaseSteps.map((candidate) => candidate.id);
     if (orderedIds.length > 1) {
@@ -77,11 +77,11 @@ export function useBuildWizardStepEditActions({
 
   const syncPhaseActualCostsFromReceipts = React.useCallback(async (phaseKey: string) => {
     const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
-    const phaseSteps = steps.filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase);
+    const phaseSteps = steps.filter((candidate) => phaseKeysMatch(candidate.phase_key, normalizedPhase));
     let updatedCount = 0;
     for (const step of phaseSteps) {
       const receiptActualCostTotal = documents.reduce((sum, doc) => {
-        if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') return sum;
+        if (Number(doc.step_id || 0) !== step.id || !isBuildWizardTaskDocumentKind(doc.kind)) return sum;
         const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
         if (parsed.taskMeta.task_type === 'quote') return sum;
         return sum + Number(doc.receipt_amount || 0);
@@ -105,7 +105,7 @@ export function useBuildWizardStepEditActions({
   const refreshPhaseTimelineOrder = React.useCallback(async (phaseKey: string) => {
     const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
     const recalculatedCostCount = await syncPhaseActualCostsFromReceipts(normalizedPhase);
-    const phaseStepCount = steps.filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase).length;
+    const phaseStepCount = steps.filter((candidate) => phaseKeysMatch(candidate.phase_key, normalizedPhase)).length;
     if (phaseStepCount > 1) {
       await autoReorderPhaseByTimeline(normalizedPhase);
     }
@@ -140,7 +140,7 @@ export function useBuildWizardStepEditActions({
     const nextDurationDays = calculateDurationDays(nextStartDate, nextEndDate) ?? (draft.expected_duration_days ?? null);
     const nextDependencyIds = Array.from(new Set((Array.isArray(draft.depends_on_step_ids) ? draft.depends_on_step_ids : []).map((rawId) => Number(rawId || 0)).filter((id) => id > 0 && id !== step.id)));
     const receiptActualCostTotal = documents.reduce((sum, doc) => {
-      if (Number(doc.step_id || 0) !== step.id || String(doc.kind || '').trim() !== 'receipt') return sum;
+      if (Number(doc.step_id || 0) !== step.id || !isBuildWizardTaskDocumentKind(doc.kind)) return sum;
       const parsed = parseTaskMetaFromReceiptNotes(doc.receipt_notes || '');
       if (parsed.taskMeta.task_type === 'quote') return sum;
       return sum + Number(doc.receipt_amount || 0);

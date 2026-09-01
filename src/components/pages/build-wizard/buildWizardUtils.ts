@@ -14,6 +14,9 @@ import {
   toNumberOrNull,
 } from './buildWizardDateUtils';
 import {
+  canonicalPhaseKey,
+  isBuildWizardTaskDocumentKind,
+  phaseKeysMatch,
   prettyPhaseLabel,
   recommendPhaseKeyForStep,
   stepPhaseBucket,
@@ -74,6 +77,9 @@ export {
   mimeGroupLabel,
   parseDate,
   parseUrlState,
+  canonicalPhaseKey,
+  isBuildWizardTaskDocumentKind,
+  phaseKeysMatch,
   prettyPhaseLabel,
   pushUrlState,
   recommendPhaseKeyForStep,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
+require_once __DIR__ . '/../includes/build_wizard_phase_keys.php';
 require_once __DIR__ . '/../includes/build_wizard_cabin_relink.php';
 
 function catn8_build_wizard_tables_ensure(): void
@@ -495,6 +496,8 @@ function catn8_build_wizard_tables_ensure(): void
 
     // Normalize legacy "receipt" step types into "purchase" now that receipts live inside steps.
     Database::execute("UPDATE build_wizard_steps SET step_type = 'purchase' WHERE step_type = 'receipt'");
+    // Leftover from the steps→events / 10-phase collapse: keep old keys and event labels reachable.
+    catn8_build_wizard_canonicalize_persisted_phase_vocab();
 }
 
 function catn8_build_wizard_step_type(string $value): string
@@ -502,6 +505,9 @@ function catn8_build_wizard_step_type(string $value): string
     $t = strtolower(trim($value));
     if ($t === 'receipt') {
         return 'purchase';
+    }
+    if ($t === 'event' || $t === 'events') {
+        return 'milestone';
     }
     return match ($t) {
         'permit', 'purchase', 'inspection', 'documentation', 'construction', 'photos', 'blueprints', 'utility', 'delivery', 'milestone', 'closeout', 'other' => $t,
@@ -512,6 +518,9 @@ function catn8_build_wizard_step_type(string $value): string
 function catn8_build_wizard_document_kind($value): string
 {
     $raw = strtolower(trim((string)$value));
+    if ($raw === 'event' || $raw === 'events') {
+        return 'receipt';
+    }
     return match ($raw) {
         'blueprint', 'document', 'home_photo', 'other', 'permit', 'photo', 'progress_photo', 'receipt', 'receipt_attachment', 'site_photo', 'spec_sheet', 'survey' => $raw,
         default => 'other',
@@ -827,19 +836,19 @@ function catn8_build_wizard_house_template_override_paths(string $wastewaterKind
 function catn8_build_wizard_default_house_template_steps(): array
 {
     return [
-        ['template_step_key' => 'land_contract', 'phase_key' => 'land_due_diligence', 'step_type' => 'documentation', 'title' => 'Confirm lot ownership, zoning, setbacks, and deed restrictions', 'description' => 'Verify legal build rights before spending on design and permitting.', 'permit_required' => 0, 'expected_duration_days' => 5],
-        ['template_step_key' => 'survey_topo', 'phase_key' => 'land_due_diligence', 'step_type' => 'documentation', 'title' => 'Complete boundary and topographic survey', 'description' => 'Establish buildable area, elevations, and utility tie-in constraints.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['land_contract']],
-        ['template_step_key' => 'soil_eval', 'phase_key' => 'land_due_diligence', 'step_type' => 'inspection', 'title' => 'Perform soil/percolation and geotechnical checks', 'description' => 'Validate foundation strategy and septic feasibility.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['survey_topo']],
+        ['template_step_key' => 'land_contract', 'phase_key' => 'design_preconstruction', 'step_type' => 'documentation', 'title' => 'Confirm lot ownership, zoning, setbacks, and deed restrictions', 'description' => 'Verify legal build rights before spending on design and permitting.', 'permit_required' => 0, 'expected_duration_days' => 5],
+        ['template_step_key' => 'survey_topo', 'phase_key' => 'design_preconstruction', 'step_type' => 'documentation', 'title' => 'Complete boundary and topographic survey', 'description' => 'Establish buildable area, elevations, and utility tie-in constraints.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['land_contract']],
+        ['template_step_key' => 'soil_eval', 'phase_key' => 'design_preconstruction', 'step_type' => 'inspection', 'title' => 'Perform soil/percolation and geotechnical checks', 'description' => 'Validate foundation strategy and septic feasibility.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['survey_topo']],
         ['template_step_key' => 'plans_engineering', 'phase_key' => 'design_preconstruction', 'step_type' => 'blueprints', 'title' => 'Finalize architectural and engineered plan set', 'description' => 'Stamped plans with site plan, structural schedule, and MEP intent.', 'permit_required' => 0, 'expected_duration_days' => 14, 'depends_on_keys' => ['soil_eval']],
-        ['template_step_key' => 'permit_packet', 'phase_key' => 'dawson_county_permits', 'step_type' => 'permit', 'title' => 'Obtain municipal and state permits', 'description' => 'Submit complete package to local authority having jurisdiction.', 'permit_required' => 1, 'permit_name' => 'Residential Building Permit', 'expected_duration_days' => 14, 'depends_on_keys' => ['plans_engineering']],
-        ['template_step_key' => 'driveway_approval', 'phase_key' => 'dawson_county_permits', 'step_type' => 'permit', 'title' => 'Obtain driveway/right-of-way approval', 'description' => 'Secure transportation access permits where required.', 'permit_required' => 1, 'permit_name' => 'Driveway / Encroachment Permit', 'expected_duration_days' => 7, 'depends_on_keys' => ['plans_engineering']],
-        ['template_step_key' => 'utility_approvals', 'phase_key' => 'dawson_county_permits', 'step_type' => 'permit', 'title' => 'Obtain utility and septic/sewer approvals', 'description' => 'Finalize utility letters and environmental approvals before excavation.', 'permit_required' => 1, 'permit_name' => 'Utility/Septic Approval', 'expected_duration_days' => 10, 'depends_on_keys' => ['plans_engineering']],
+        ['template_step_key' => 'permit_packet', 'phase_key' => 'design_preconstruction', 'step_type' => 'permit', 'title' => 'Obtain municipal and state permits', 'description' => 'Submit complete package to local authority having jurisdiction.', 'permit_required' => 1, 'permit_name' => 'Residential Building Permit', 'expected_duration_days' => 14, 'depends_on_keys' => ['plans_engineering']],
+        ['template_step_key' => 'driveway_approval', 'phase_key' => 'design_preconstruction', 'step_type' => 'permit', 'title' => 'Obtain driveway/right-of-way approval', 'description' => 'Secure transportation access permits where required.', 'permit_required' => 1, 'permit_name' => 'Driveway / Encroachment Permit', 'expected_duration_days' => 7, 'depends_on_keys' => ['plans_engineering']],
+        ['template_step_key' => 'utility_approvals', 'phase_key' => 'design_preconstruction', 'step_type' => 'permit', 'title' => 'Obtain utility and septic/sewer approvals', 'description' => 'Finalize utility letters and environmental approvals before excavation.', 'permit_required' => 1, 'permit_name' => 'Utility/Septic Approval', 'expected_duration_days' => 10, 'depends_on_keys' => ['plans_engineering']],
         ['template_step_key' => 'erosion_plan', 'phase_key' => 'site_preparation', 'step_type' => 'permit', 'title' => 'Erosion controls in place.', 'description' => 'Install BMPs and get approval before grading and excavation.', 'permit_required' => 1, 'permit_name' => 'Erosion / Land Disturbance Approval', 'expected_duration_days' => 5, 'depends_on_keys' => ['permit_packet', 'utility_approvals']],
         ['template_step_key' => 'site_clear_grade', 'phase_key' => 'site_preparation', 'step_type' => 'construction', 'title' => 'Begin site work and excavation', 'description' => 'Prepare pad and verify finished floor elevations.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['erosion_plan']],
-        ['template_step_key' => 'footings', 'phase_key' => 'foundation', 'step_type' => 'construction', 'title' => 'Excavate and pour footings', 'description' => 'Footing trenching, reinforcement, and concrete placement.', 'permit_required' => 0, 'expected_duration_days' => 4, 'depends_on_keys' => ['site_clear_grade']],
-        ['template_step_key' => 'footing_inspection', 'phase_key' => 'foundation', 'step_type' => 'inspection', 'title' => 'Pass footing inspection', 'description' => 'Required inspection before foundation walls/slab progression.', 'permit_required' => 1, 'permit_name' => 'Footing Inspection', 'expected_duration_days' => 2, 'depends_on_keys' => ['footings']],
-        ['template_step_key' => 'foundation_pour', 'phase_key' => 'foundation', 'step_type' => 'construction', 'title' => 'Slab poured.', 'description' => 'Walls/slab, moisture barrier, and anchor details.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['footing_inspection']],
-        ['template_step_key' => 'foundation_inspection', 'phase_key' => 'foundation', 'step_type' => 'inspection', 'title' => 'Pass foundation inspection', 'description' => 'Approval required before framing starts.', 'permit_required' => 1, 'permit_name' => 'Foundation Inspection', 'expected_duration_days' => 2, 'depends_on_keys' => ['foundation_pour']],
+        ['template_step_key' => 'footings', 'phase_key' => 'site_preparation', 'step_type' => 'construction', 'title' => 'Excavate and pour footings', 'description' => 'Footing trenching, reinforcement, and concrete placement.', 'permit_required' => 0, 'expected_duration_days' => 4, 'depends_on_keys' => ['site_clear_grade']],
+        ['template_step_key' => 'footing_inspection', 'phase_key' => 'site_preparation', 'step_type' => 'inspection', 'title' => 'Pass footing inspection', 'description' => 'Required inspection before foundation walls/slab progression.', 'permit_required' => 1, 'permit_name' => 'Footing Inspection', 'expected_duration_days' => 2, 'depends_on_keys' => ['footings']],
+        ['template_step_key' => 'foundation_pour', 'phase_key' => 'site_preparation', 'step_type' => 'construction', 'title' => 'Slab poured.', 'description' => 'Walls/slab, moisture barrier, and anchor details.', 'permit_required' => 0, 'expected_duration_days' => 7, 'depends_on_keys' => ['footing_inspection']],
+        ['template_step_key' => 'foundation_inspection', 'phase_key' => 'site_preparation', 'step_type' => 'inspection', 'title' => 'Pass foundation inspection', 'description' => 'Approval required before framing starts.', 'permit_required' => 1, 'permit_name' => 'Foundation Inspection', 'expected_duration_days' => 2, 'depends_on_keys' => ['foundation_pour']],
         ['template_step_key' => 'framing_shell', 'phase_key' => 'framing_shell', 'step_type' => 'construction', 'title' => 'Frame walls, roof and ceilings, including all door and window rough openings', 'description' => 'Structural frame, roof deck, windows, weather barrier.', 'permit_required' => 0, 'expected_duration_days' => 14, 'depends_on_keys' => ['foundation_inspection']],
         ['template_step_key' => 'roofing_material_order', 'phase_key' => 'framing_shell', 'step_type' => 'purchase', 'title' => 'Order roofing materials after foundation completion', 'description' => 'Procure shingles/metal, underlayment, and flashing.', 'permit_required' => 0, 'expected_duration_days' => 2, 'depends_on_keys' => ['foundation_inspection']],
         ['template_step_key' => 'framing_inspection', 'phase_key' => 'framing_shell', 'step_type' => 'inspection', 'title' => 'Rough frame inspections (municipal inspections: mechanical, plumbing, electrical and frame) completed.', 'description' => 'Inspection gate before rough-in trades.', 'permit_required' => 1, 'permit_name' => 'Framing Inspection', 'expected_duration_days' => 2, 'depends_on_keys' => ['framing_shell']],
@@ -847,10 +856,10 @@ function catn8_build_wizard_default_house_template_steps(): array
         ['template_step_key' => 'mep_inspection', 'phase_key' => 'mep_rough_in', 'step_type' => 'inspection', 'title' => 'Pre-drywall Inspections', 'description' => 'Required before insulation and drywall.', 'permit_required' => 1, 'permit_name' => 'Rough MEP Inspection', 'expected_duration_days' => 3, 'depends_on_keys' => ['mep_rough']],
         ['template_step_key' => 'insulation_drywall', 'phase_key' => 'interior_finishes', 'step_type' => 'construction', 'title' => 'Drywall installed throughout the home.', 'description' => 'Thermal envelope and drywall finish sequence.', 'permit_required' => 0, 'expected_duration_days' => 10, 'depends_on_keys' => ['mep_inspection']],
         ['template_step_key' => 'interior_finishes', 'phase_key' => 'interior_finishes', 'step_type' => 'construction', 'title' => 'Finish plumbing and electrical work', 'description' => 'Cabinets, flooring, trim, paint, and final fixture installation.', 'permit_required' => 0, 'expected_duration_days' => 21, 'depends_on_keys' => ['insulation_drywall']],
-        ['template_step_key' => 'exterior_site_finishes', 'phase_key' => 'move_in', 'step_type' => 'construction', 'title' => 'Exterior finishes will be started (brick, cementatious finish, stone or siding).', 'description' => 'Siding/paint/touch-up, driveway, drainage, and landscaping minimums.', 'permit_required' => 0, 'expected_duration_days' => 8, 'depends_on_keys' => ['roofing_material_order', 'interior_finishes']],
+        ['template_step_key' => 'exterior_site_finishes', 'phase_key' => 'interior_finishes', 'step_type' => 'construction', 'title' => 'Exterior finishes will be started (brick, cementatious finish, stone or siding).', 'description' => 'Siding/paint/touch-up, driveway, drainage, and landscaping minimums.', 'permit_required' => 0, 'expected_duration_days' => 8, 'depends_on_keys' => ['roofing_material_order', 'interior_finishes']],
         ['template_step_key' => 'final_inspections', 'phase_key' => 'inspections_closeout', 'step_type' => 'inspection', 'title' => 'Final Inspection', 'description' => 'Clear punch items and obtain all trade finals.', 'permit_required' => 1, 'permit_name' => 'Final Inspections', 'expected_duration_days' => 4, 'depends_on_keys' => ['exterior_site_finishes']],
         ['template_step_key' => 'certificate_occupancy', 'phase_key' => 'inspections_closeout', 'step_type' => 'permit', 'title' => 'Receive certificate of occupancy', 'description' => 'Legal occupancy approval after final inspection.', 'permit_required' => 1, 'permit_name' => 'Certificate of Occupancy', 'expected_duration_days' => 2, 'depends_on_keys' => ['final_inspections']],
-        ['template_step_key' => 'closeout_docs', 'phase_key' => 'move_in', 'step_type' => 'closeout', 'title' => 'Owner final walk-through', 'description' => 'Store permits, inspection records, manuals, and warranty data.', 'permit_required' => 0, 'expected_duration_days' => 3, 'depends_on_keys' => ['certificate_occupancy']],
+        ['template_step_key' => 'closeout_docs', 'phase_key' => 'inspections_closeout', 'step_type' => 'closeout', 'title' => 'Owner final walk-through', 'description' => 'Store permits, inspection records, manuals, and warranty data.', 'permit_required' => 0, 'expected_duration_days' => 3, 'depends_on_keys' => ['certificate_occupancy']],
     ];
 }
 
@@ -1025,22 +1034,7 @@ function catn8_build_wizard_to_decimal_or_null($value): ?string
 
 function catn8_build_wizard_normalize_phase_key($value): string
 {
-    $raw = strtolower(trim((string)$value));
-    if ($raw === '') {
-        return 'general';
-    }
-    $raw = preg_replace('/[^a-z0-9_ -]+/', '', $raw);
-    if (!is_string($raw)) {
-        return 'general';
-    }
-    $raw = str_replace(' ', '_', trim($raw));
-    if ($raw === '') {
-        return 'general';
-    }
-    if (strlen($raw) > 64) {
-        $raw = substr($raw, 0, 64);
-    }
-    return $raw;
+    return catn8_build_wizard_canonical_phase_key($value);
 }
 
 function catn8_build_wizard_normalize_phase_tab($value): string
@@ -1055,8 +1049,8 @@ function catn8_build_wizard_normalize_phase_tab($value): string
 function catn8_build_wizard_default_phase_for_kind(string $kind): string
 {
     return match (catn8_build_wizard_document_kind($kind)) {
-        'survey' => 'land_due_diligence',
-        'permit' => 'dawson_county_permits',
+        'survey' => 'design_preconstruction',
+        'permit' => 'design_preconstruction',
         'blueprint', 'spec_sheet' => 'design_preconstruction',
         'photo', 'site_photo', 'home_photo', 'progress_photo' => 'site_preparation',
         default => 'general',
@@ -1075,8 +1069,9 @@ function catn8_build_wizard_pick_step_for_phase(int $projectId, string $phaseKey
             FROM build_wizard_steps
             WHERE project_id = ?';
     if ($normalized !== '' && $normalized !== 'general') {
-        $sql .= ' AND phase_key = ?';
-        $params[] = $normalized;
+        $aliases = catn8_build_wizard_phase_key_aliases($normalized);
+        $sql .= ' AND phase_key IN (' . implode(',', array_fill(0, count($aliases), '?')) . ')';
+        array_push($params, ...$aliases);
     }
     $sql .= ' ORDER BY is_completed ASC, step_order ASC, id ASC LIMIT 1';
 
@@ -1140,7 +1135,7 @@ function catn8_build_wizard_reorder_phase_steps(int $projectId, string $phaseKey
     foreach ($allRows as $row) {
         $stepId = (int)($row['id'] ?? 0);
         $rowPhase = catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? 'general'));
-        if ($stepId > 0 && $rowPhase === $normalizedPhase) {
+        if ($stepId > 0 && catn8_build_wizard_phase_keys_match($rowPhase, $normalizedPhase)) {
             $phaseStepIds[] = $stepId;
         }
     }
@@ -2067,7 +2062,7 @@ function catn8_build_wizard_steps_for_project(int $projectId): array
             'id' => $sid,
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_order' => (int)($r['step_order'] ?? 0),
-            'phase_key' => (string)($r['phase_key'] ?? ''),
+            'phase_key' => catn8_build_wizard_normalize_phase_key($r['phase_key'] ?? 'general'),
             'parent_step_id' => $r['parent_step_id'] !== null ? (int)$r['parent_step_id'] : null,
             'depends_on_step_ids' => catn8_build_wizard_normalize_int_array(catn8_build_wizard_decode_json_array($r['depends_on_step_ids_json'] ?? null)),
             'step_type' => catn8_build_wizard_step_type((string)($r['step_type'] ?? '')),
@@ -2118,9 +2113,9 @@ function catn8_build_wizard_step_receipt_totals(int $projectId): array
     $rows = Database::queryAll(
         'SELECT step_id, receipt_amount, receipt_notes
          FROM build_wizard_documents
-         WHERE project_id = ? AND step_id IS NOT NULL AND kind = ?
+         WHERE project_id = ? AND step_id IS NOT NULL AND kind IN (?, ?)
          ORDER BY step_id ASC, id ASC',
-        [$projectId, 'receipt']
+        [$projectId, 'receipt', 'event']
     );
     $out = [];
     foreach ($rows as $row) {
@@ -2266,9 +2261,9 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_id' => $r['step_id'] !== null ? (int)$r['step_id'] : null,
             'receipt_parent_document_id' => $r['receipt_parent_document_id'] !== null ? (int)$r['receipt_parent_document_id'] : null,
-            'step_phase_key' => $r['step_phase_key'] !== null ? (string)$r['step_phase_key'] : null,
+            'step_phase_key' => $r['step_phase_key'] !== null ? catn8_build_wizard_normalize_phase_key($r['step_phase_key']) : null,
             'step_title' => $r['step_title'] !== null ? (string)$r['step_title'] : null,
-            'kind' => (string)($r['kind'] ?? ''),
+            'kind' => catn8_build_wizard_document_kind($r['kind'] ?? 'other'),
             'original_name' => (string)($r['original_name'] ?? ''),
             'mime_type' => $mimeType,
             'storage_path' => (string)($r['storage_path'] ?? ''),
@@ -4732,15 +4727,11 @@ function catn8_build_wizard_align_project_to_template(int $projectId): array
 function catn8_build_wizard_refine_phase_order(): array
 {
     return [
-        'land_due_diligence',
         'design_preconstruction',
-        'dawson_county_permits',
         'site_preparation',
-        'foundation',
         'framing_shell',
         'mep_rough_in',
         'interior_finishes',
-        'move_in',
         'inspections_closeout',
         'general',
     ];
@@ -4748,36 +4739,11 @@ function catn8_build_wizard_refine_phase_order(): array
 
 function catn8_build_wizard_refine_phase_key_hint(string $phaseKeyRaw): ?string
 {
-    $phaseKey = strtolower(trim($phaseKeyRaw));
-    if ($phaseKey === '') {
+    $slug = catn8_build_wizard_slug_phase_key($phaseKeyRaw);
+    if ($slug === '') {
         return null;
     }
-
-    $phaseMap = [
-        'land_due_diligence' => 'land_due_diligence',
-        'design_preconstruction' => 'design_preconstruction',
-        'dawson_county_permits' => 'dawson_county_permits',
-        'permits' => 'dawson_county_permits',
-        'site_preparation' => 'site_preparation',
-        'sitework' => 'site_preparation',
-        'foundation' => 'foundation',
-        'framing_shell' => 'framing_shell',
-        'framing' => 'framing_shell',
-        'enclosure' => 'framing_shell',
-        'roofing' => 'framing_shell',
-        'mep_rough_in' => 'mep_rough_in',
-        'plumbing' => 'mep_rough_in',
-        'electrical' => 'mep_rough_in',
-        'hvac' => 'mep_rough_in',
-        'interior_finishes' => 'interior_finishes',
-        'interior' => 'interior_finishes',
-        'move_in' => 'move_in',
-        'inspections_closeout' => 'inspections_closeout',
-        'closeout' => 'inspections_closeout',
-        'general' => 'general',
-    ];
-
-    return $phaseMap[$phaseKey] ?? null;
+    return catn8_build_wizard_phase_key_alias_map()[$slug] ?? null;
 }
 
 function catn8_build_wizard_refine_legacy_phase_key(array $step): string
@@ -4818,7 +4784,7 @@ function catn8_build_wizard_refine_legacy_phase_key(array $step): string
         || str_contains($text, 'percolation')
         || str_contains($text, 'geotechnical')
     ) {
-        return 'land_due_diligence';
+        return 'design_preconstruction';
     }
 
     if (
@@ -4844,7 +4810,7 @@ function catn8_build_wizard_refine_legacy_phase_key(array $step): string
         if (str_contains($text, 'final') || str_contains($text, 'certificate of occupancy') || str_contains($text, 'co ')) {
             return 'inspections_closeout';
         }
-        return 'dawson_county_permits';
+        return 'design_preconstruction';
     }
 
     if (
@@ -4868,7 +4834,7 @@ function catn8_build_wizard_refine_legacy_phase_key(array $step): string
         || str_contains($text, 'vapor barrier')
         || str_contains($text, 'concrete')
     ) {
-        return 'foundation';
+        return 'site_preparation';
     }
 
     if (
@@ -4925,7 +4891,7 @@ function catn8_build_wizard_refine_legacy_phase_key(array $step): string
         || str_contains($text, 'driveway')
         || str_contains($text, 'closing')
     ) {
-        return 'move_in';
+        return 'interior_finishes';
     }
 
     return 'general';
@@ -5061,15 +5027,11 @@ function catn8_build_wizard_refine_legacy_steps(int $projectId): array
     }
 
     $phaseGateway = [
-        'design_preconstruction' => 'land_due_diligence',
-        'dawson_county_permits' => 'design_preconstruction',
-        'site_preparation' => 'dawson_county_permits',
-        'foundation' => 'site_preparation',
-        'framing_shell' => 'foundation',
+        'site_preparation' => 'design_preconstruction',
+        'framing_shell' => 'site_preparation',
         'mep_rough_in' => 'framing_shell',
         'interior_finishes' => 'mep_rough_in',
-        'move_in' => 'interior_finishes',
-        'inspections_closeout' => 'move_in',
+        'inspections_closeout' => 'interior_finishes',
     ];
 
     $newOrderByStepId = [];

@@ -256,7 +256,10 @@ $plat = Database::queryOne(
      WHERE d.project_id = ? AND d.original_name = 'JGraves Plat.pdf'",
     [$newProjectId]
 );
-assert_true(($plat['phase_key'] ?? '') === 'land_due_diligence', 'plat should land on a land-due-diligence step');
+assert_true(
+    catn8_build_wizard_phase_keys_match((string)($plat['phase_key'] ?? ''), 'design_preconstruction'),
+    'plat should land on a planning / pre-construction step'
+);
 
 echo json_encode([
     'success' => true,

@@ -621,7 +621,7 @@ Business term: Banking Organizations
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
 - `step_order` (INT)
 - `template_step_key` (VARCHAR(128), NULLABLE)
-- `phase_key` (VARCHAR(64))
+- `phase_key` (VARCHAR(64)) - Canonical values: `design_preconstruction`, `site_preparation`, `framing_shell`, `mep_rough_in`, `interior_finishes`, `inspections_closeout`, `general`. Older aliases (`land_due_diligence`, `dawson_county_permits`, `foundation`, `move_in`) remap to those keys.
 - `parent_step_id` (INT, NULLABLE)
 - `depends_on_step_ids_json` (LONGTEXT, NULLABLE)
 - `step_type` (VARCHAR(32))
@@ -712,7 +712,7 @@ Business term: Banking Organizations
 - `project_id` (INT, FOREIGN KEY -> build_wizard_projects.id)
 - `step_id` (INT, NULLABLE)
 - `receipt_parent_document_id` (INT, NULLABLE)
-- `kind` (VARCHAR(32))
+- `kind` (VARCHAR(32)) - Task rows use `receipt`. Leftover `event` / `events` kinds remap to `receipt`.
 - `original_name` (VARCHAR(255))
 - `mime_type` (VARCHAR(120))
 - `storage_path` (VARCHAR(255))

@@ -7,7 +7,9 @@ declare(strict_types=1);
  * but point at the wrong project or at leftover step ids from the
  * template-migration ("new 65") work.
  */
-const CATN8_CABIN_RELINK_VERSION = '2026-08-27-full-repair-v1';
+require_once __DIR__ . '/build_wizard_phase_keys.php';
+
+const CATN8_CABIN_RELINK_VERSION = '2026-08-31-phase-canonical-v1';
 
 function catn8_build_wizard_cabin_filename_canonical(string $name): string
 {
@@ -40,13 +42,13 @@ function catn8_build_wizard_cabin_guess_phase_key(string $kind, string $name): s
 {
     $ctx = strtolower($kind . ' ' . $name);
     if (str_contains($ctx, 'plat') || str_contains($ctx, 'survey') || str_contains($ctx, 'legal') || str_contains($ctx, 'buy_offer') || str_contains($ctx, 'buy offer')) {
-        return 'land_due_diligence';
+        return 'design_preconstruction';
     }
     if (str_contains($ctx, 'permit') || str_contains($ctx, 'setback') || str_contains($ctx, 'siteplan') || str_contains($ctx, 'site plan')) {
-        return 'dawson_county_permits';
+        return 'design_preconstruction';
     }
     if (str_contains($ctx, 'foundation')) {
-        return 'foundation';
+        return 'site_preparation';
     }
     if (str_contains($ctx, 'framing') || str_contains($ctx, 'gable') || str_contains($ctx, 'dimension') || str_contains($ctx, 'porch')) {
         return 'framing_shell';
@@ -58,10 +60,10 @@ function catn8_build_wizard_cabin_guess_phase_key(string $kind, string $name): s
         return 'design_preconstruction';
     }
     if (in_array($kind, ['survey'], true)) {
-        return 'land_due_diligence';
+        return 'design_preconstruction';
     }
     if (in_array($kind, ['permit'], true)) {
-        return 'dawson_county_permits';
+        return 'design_preconstruction';
     }
     if (in_array($kind, ['site_photo', 'home_photo', 'progress_photo', 'photo'], true)) {
         return 'site_preparation';
@@ -89,9 +91,7 @@ function catn8_build_wizard_cabin_pick_step_id(int $projectId, string $phaseKey,
         return null;
     }
 
-    $phaseKey = function_exists('catn8_build_wizard_normalize_phase_key')
-        ? catn8_build_wizard_normalize_phase_key($phaseKey)
-        : strtolower(trim($phaseKey));
+    $phaseKey = catn8_build_wizard_canonical_phase_key($phaseKey);
     $prefer = strtolower(trim($preferKeyword));
     $bestId = 0;
     $bestScore = -1;
@@ -100,9 +100,7 @@ function catn8_build_wizard_cabin_pick_step_id(int $projectId, string $phaseKey,
         if ($sid <= 0) {
             continue;
         }
-        $rowPhase = function_exists('catn8_build_wizard_normalize_phase_key')
-            ? catn8_build_wizard_normalize_phase_key((string)($row['phase_key'] ?? ''))
-            : strtolower(trim((string)($row['phase_key'] ?? '')));
+        $rowPhase = catn8_build_wizard_canonical_phase_key((string)($row['phase_key'] ?? ''));
         $title = strtolower((string)($row['title'] ?? ''));
         $score = 0;
         if ($phaseKey !== '' && $phaseKey !== 'general' && $rowPhase === $phaseKey) {
@@ -734,6 +732,8 @@ function catn8_build_wizard_repair_cabin_references(int $uid, int $canonicalProj
                 );
             }
         }
+
+        catn8_build_wizard_canonicalize_persisted_phase_vocab();
 
         Database::commit();
     } catch (Throwable $e) {

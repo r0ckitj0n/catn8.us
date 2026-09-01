@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { phaseKeysMatch } from '../../components/pages/build-wizard/buildWizardUtils';
 import { IBuildWizardStep } from '../../types/buildWizard';
 
 interface UseBuildWizardStepDragActionsOptions {
@@ -50,7 +51,7 @@ export function useBuildWizardStepDragActions({
   const buildPhaseReorderIds = React.useCallback((phaseKey: string, preferredIds: number[], movedStepId: number, movedStepPhaseKey: string): number[] => {
     const normalizedPhase = String(phaseKey || '').trim();
     if (!normalizedPhase) return [];
-    const phaseMembers = [...steps].filter((candidate) => candidate.id === movedStepId ? movedStepPhaseKey === normalizedPhase : (candidate.phase_key || '') === normalizedPhase).sort((a, b) => (a.step_order - b.step_order) || (a.id - b.id)).map((candidate) => candidate.id);
+    const phaseMembers = [...steps].filter((candidate) => candidate.id === movedStepId ? phaseKeysMatch(movedStepPhaseKey, normalizedPhase) : phaseKeysMatch(candidate.phase_key, normalizedPhase)).sort((a, b) => (a.step_order - b.step_order) || (a.id - b.id)).map((candidate) => candidate.id);
     const memberSet = new Set(phaseMembers);
     const preferredUnique: number[] = [];
     preferredIds.forEach((id) => {
@@ -85,10 +86,10 @@ export function useBuildWizardStepDragActions({
       clearStepDragState();
       return;
     }
-    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === destinationPhaseKey);
+    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || phaseKeysMatch(stepById.get(id)?.phase_key, destinationPhaseKey));
     const phaseOrderedIds = buildPhaseReorderIds(destinationPhaseKey, preferredPhaseOrder, draggingStepId, destinationPhaseKey);
     try {
-      if (draggedStep.phase_key !== destinationPhaseKey || Number(draggedStep.parent_step_id || 0) > 0) {
+      if (!phaseKeysMatch(draggedStep.phase_key, destinationPhaseKey) || Number(draggedStep.parent_step_id || 0) > 0) {
         await updateStep(draggingStepId, { phase_key: destinationPhaseKey, parent_step_id: null });
       }
       if (phaseOrderedIds.length > 0) {
@@ -128,10 +129,10 @@ export function useBuildWizardStepDragActions({
     const withoutDragged = flatIds.filter((id) => id !== draggingStepId);
     const targetIndex = withoutDragged.indexOf(targetStepId);
     withoutDragged.splice(targetIndex >= 0 ? targetIndex + 1 : withoutDragged.length, 0, draggingStepId);
-    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || (stepById.get(id)?.phase_key || '') === targetPhaseKey);
+    const preferredPhaseOrder = withoutDragged.filter((id) => id === draggingStepId || phaseKeysMatch(stepById.get(id)?.phase_key, targetPhaseKey));
     const phaseOrderedIds = buildPhaseReorderIds(targetPhaseKey, preferredPhaseOrder, draggingStepId, targetPhaseKey);
     try {
-      if (draggedStep.phase_key !== targetPhaseKey) await updateStep(draggingStepId, { phase_key: targetPhaseKey });
+      if (!phaseKeysMatch(draggedStep.phase_key, targetPhaseKey)) await updateStep(draggingStepId, { phase_key: targetPhaseKey });
       await updateStep(draggingStepId, { ...(clampStepDatesWithinRange(draggedStep, targetStep.expected_start_date, targetStep.expected_end_date) || {}), parent_step_id: targetStepId });
       if (phaseOrderedIds.length > 0) await reorderSteps(targetPhaseKey, phaseOrderedIds);
     } finally {

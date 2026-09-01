@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/api/config.php';
+require_once dirname(__DIR__, 2) . '/includes/build_wizard_phase_keys.php';
 
 function bw_recover_usage(): void
 {
@@ -241,14 +242,14 @@ function bw_recover_guess_phase_key(string $kind, string $path): string
 {
     $ctx = strtolower($path);
     if ($kind === 'survey') {
-        return 'land_due_diligence';
+        return 'design_preconstruction';
     }
     if ($kind === 'permit') {
-        return 'dawson_county_permits';
+        return 'design_preconstruction';
     }
     if ($kind === 'blueprint' || $kind === 'spec_sheet') {
         if (str_contains($ctx, 'foundation')) {
-            return 'foundation';
+            return 'site_preparation';
         }
         if (str_contains($ctx, 'framing') || str_contains($ctx, 'gable') || str_contains($ctx, 'dimension')) {
             return 'framing_shell';

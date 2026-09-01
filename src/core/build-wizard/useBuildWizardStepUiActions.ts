@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { IBuildWizardStep } from '../../types/buildWizard';
-import { calculateDurationDays, formatDate, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
+import { calculateDurationDays, formatDate, phaseKeysMatch, toStringOrNull } from '../../components/pages/build-wizard/buildWizardUtils';
 import { formatCurrencyForInput, parseCurrencyText } from './buildWizardCurrencyAuditUtils';
 
 interface UseBuildWizardStepUiActionsOptions {
@@ -110,7 +110,7 @@ export function useBuildWizardStepUiActions({
   ) => {
     const normalizedPhase = String(phaseKey || '').trim().toLowerCase() || 'general';
     const phaseSteps = steps
-      .filter((candidate) => (String(candidate.phase_key || '').trim().toLowerCase() || 'general') === normalizedPhase)
+      .filter((candidate) => phaseKeysMatch(candidate.phase_key, normalizedPhase))
       .sort((a, b) => compareStepsByTimeline(a, b, overridesByStepId));
     const orderedIds = phaseSteps.map((candidate) => candidate.id);
     if (orderedIds.length > 1) {

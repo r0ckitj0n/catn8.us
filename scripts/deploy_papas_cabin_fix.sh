@@ -29,6 +29,7 @@ catn8_secret_require CATN8_DEPLOY_PASS
 PASS="${CATN8_DEPLOY_PASS}"
 
 FILES=(
+  "includes/build_wizard_phase_keys.php"
   "includes/build_wizard_cabin_relink.php"
   "api/build_wizard.php"
   "api/build_wizard_repair_papas_cabin.php"

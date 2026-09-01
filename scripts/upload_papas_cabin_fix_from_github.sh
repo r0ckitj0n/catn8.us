@@ -14,6 +14,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
 FILES=(
+  "includes/build_wizard_phase_keys.php"
   "includes/build_wizard_cabin_relink.php"
   "api/build_wizard.php"
   "api/build_wizard_repair_papas_cabin.php"
@@ -27,16 +28,15 @@ for f in "${FILES[@]}"; do
 done
 
 echo "Uploading to ${DEPLOY_HOST}..."
-lftp -u "${DEPLOY_USER},${CATN8_DEPLOY_PASS}" "sftp://${DEPLOY_HOST}" <<LFTP
-set sftp:auto-confirm yes
-set ssl:verify-certificate no
-set cmd:fail-exit yes
-put ${TMP}/includes/build_wizard_cabin_relink.php -o includes/build_wizard_cabin_relink.php
-put ${TMP}/api/build_wizard.php -o api/build_wizard.php
-put ${TMP}/api/build_wizard_repair_papas_cabin.php -o api/build_wizard_repair_papas_cabin.php
-put ${TMP}/api/build_wizard_diagnostics.php -o api/build_wizard_diagnostics.php
-bye
-LFTP
+{
+  echo "set sftp:auto-confirm yes"
+  echo "set ssl:verify-certificate no"
+  echo "set cmd:fail-exit yes"
+  for f in "${FILES[@]}"; do
+    echo "put ${TMP}/${f} -o ${f}"
+  done
+  echo "bye"
+} | lftp -u "${DEPLOY_USER},${CATN8_DEPLOY_PASS}" "sftp://${DEPLOY_HOST}"
 
 echo "Upload complete."
 echo "Open in browser (replace YOUR_ADMIN_TOKEN):"

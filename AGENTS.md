@@ -111,12 +111,16 @@
 - Log auth failures, access denials, validation failures, and destructive admin actions.
 
 ## 8. Quality, Verification, and Hygiene
-- Verify relevant changes with browser preview or `curl` as appropriate.
-- Never claim a fix without verification evidence.
-- If checks fail, continue iterating until resolved or blocked.
+- **Default: skip verification.** Do not run browser preview, GUI walkthroughs, computer-use sessions, screen recordings, or other end-to-end UI verification unless the user explicitly asks to verify, test in the browser, or demo the change.
+- Lightweight non-browser checks (TypeScript/lint, targeted unit tests, or a quick `curl` against an API you changed) are fine when they are fast and clearly useful; do not expand into full verification suites unprompted.
+- When the user does explicitly request verification: never claim a fix without evidence; if checks fail, continue iterating until resolved or blocked.
 - Store runtime/script state artifacts only under `/.local/state/`.
 - Keep runtime artifacts/logs/secrets out of git.
-- For gated live-site verification, first try the saved admin credentials already stored in the browser login form before assuming live access is blocked.
+- For gated live-site verification (only when explicitly requested), first try the saved admin credentials already stored in the browser login form before assuming live access is blocked.
+
+## Cursor Cloud specific instructions
+- Cloud agents must not spend time on browser/GUI verification by default. Skip `computerUse`, RecordScreen walkthroughs, and live-site browser checks unless the user message explicitly asks to verify, test, or demo in the browser.
+- Prefer shipping the code change and PR; leave browser validation to the user unless they opt in.
 
 ### Cleanup Protocol
 - Run repository hygiene checks before finalizing substantial refactors.

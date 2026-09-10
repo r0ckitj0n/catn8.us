@@ -100,3 +100,8 @@ if [[ "$count_only_local" -gt 0 ]]; then
 else
   echo "  (none)"
 fi
+
+echo
+echo "Next steps:"
+echo "  • Pull/refresh local from live: ./scripts/sync_from_live.sh"
+echo "  • Docs: documentation/sync-dev-from-live.md"

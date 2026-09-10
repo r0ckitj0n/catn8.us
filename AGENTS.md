@@ -126,6 +126,11 @@
 - Before finalizing work, scan media and source trees for duplicate-suffix artifacts that have an unsuffixed counterpart and clean them up or archive them instead of leaving both copies in the repo.
 - If intentionally unreferenced files are required, document/whitelist with rationale.
 
+### Keep Dev Current with Live
+- Prefer `./scripts/sync_from_live.sh` (or `npm run sync:from-live`) before working with images so local matches production.
+- Default deploy refreshes local images from live, then uploads **missing images only** (existing live images are not overwritten). Use `--force-image-updates` only when intentionally replacing live images.
+- See `documentation/sync-dev-from-live.md`.
+
 ## 9. Documentation Standards
 - Prefer project documentation under `documentation/` with clear categorization.
 - Use kebab-case for new documentation filenames.

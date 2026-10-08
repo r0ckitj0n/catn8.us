@@ -1158,3 +1158,120 @@ Business term: Banking Organizations
 - `is_active` (TINYINT(1))
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
+
+## Celebr8 Tables
+
+### celebr8_events
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(96), UNIQUE)
+- `title` (VARCHAR(191))
+- `tagline` (VARCHAR(255))
+- `theme` (VARCHAR(255))
+- `event_date` (VARCHAR(64))
+- `event_time` (VARCHAR(128))
+- `arrival_time_kids` (VARCHAR(64))
+- `arrival_time_adults` (VARCHAR(64))
+- `location` (VARCHAR(512))
+- `food` (TEXT)
+- `schedule` (TEXT)
+- `rsvp_deadline` (VARCHAR(64))
+- `invite_text` (TEXT)
+- `flyer_image_url` (VARCHAR(512))
+- `notes` (TEXT)
+- `template_id` (INT, NULLABLE → celebr8_party_templates.id)
+- `starts_on` (DATE, NULLABLE) — parsed from `event_date` for upcoming/past sorting
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_party_templates
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(96), UNIQUE)
+- `name` (VARCHAR(191))
+- `description` (TEXT)
+- `theme` (TEXT)
+- `taglines_json` (LONGTEXT)
+- `usual_timing` (VARCHAR(255))
+- `food_notes` (TEXT)
+- `byob_notes` (TEXT)
+- `music_playlist_json` (LONGTEXT)
+- `hero_image_path` (VARCHAR(512)) — relative under `private/celebr8/`, served via `/api/celebr8_media.php`
+- `gallery_json` (LONGTEXT)
+- `past_venue_notes` (TEXT) — never auto-copied into event location
+- `default_activity_names_json` (LONGTEXT)
+- `is_suggested` (TINYINT(1))
+- `notes` (TEXT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_activities
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `name` (VARCHAR(191), UNIQUE)
+- `party_types_json` (LONGTEXT) — legacy seed labels; not used to restrict parties
+- `preferred_holiday` (VARCHAR(64): Any|Halloween|New Year's Eve|Labor Day|Birthday|Game Night) — filter label only
+- `copied_from_activity_id` (INT, NULLABLE)
+- `category` (VARCHAR(64): contest|music|food|game|kids|other)
+- `description` (TEXT)
+- `ages` (VARCHAR(32): all|kids|adults)
+- `supplies_json` (LONGTEXT)
+- `prizes` (TEXT, NULLABLE)
+- `setup_notes` (TEXT)
+- `source` (VARCHAR(512))
+- `is_suggested` (TINYINT(1))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_event_activities
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `event_id` (INT, FOREIGN KEY → celebr8_events.id)
+- `activity_id` (INT, FOREIGN KEY → celebr8_activities.id)
+- `time_slot` (VARCHAR(128))
+- `run_by` (VARCHAR(191))
+- `prizes` (TEXT, NULLABLE)
+- `supplies_checklist_json` (LONGTEXT)
+- `sort_order` (INT)
+- `notes` (TEXT)
+- Unique: (`event_id`, `activity_id`)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_guests
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `event_id` (INT, FOREIGN KEY -> celebr8_events.id)
+- `name` (VARCHAR(191))
+- `phone` (VARCHAR(64))
+- `email` (VARCHAR(191))
+- `rsvp_status` (VARCHAR(32): going|not_going|maybe|no_reply)
+- `party_size` (INT)
+- `kids_count` (INT)
+- `invited_via` (VARCHAR(191))
+- `relation_label` (VARCHAR(255))
+- `bringing_chili` (TINYINT(1))
+- `bringing` (VARCHAR(255))
+- `phone_unverified` (TINYINT(1))
+- `invite_send_status` (VARCHAR(32): none|sent|failed)
+- `invite_send_error` (TEXT, NULLABLE)
+- `notes` (TEXT)
+- `rsvp_updated_at` (DATETIME, NULLABLE)
+- `rsvp_updated_by` (VARCHAR(191))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_text_messages
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `event_id` (INT, FOREIGN KEY -> celebr8_events.id)
+- `guest_id` (INT, NULLABLE, FOREIGN KEY -> celebr8_guests.id)
+- `to_address` (VARCHAR(191))
+- `body` (TEXT)
+- `status` (VARCHAR(32): queued|claimed|sent|failed)
+- `claimed_at` (DATETIME, NULLABLE)
+- `claimed_by` (VARCHAR(191))
+- `sent_at` (DATETIME, NULLABLE)
+- `failed_at` (DATETIME, NULLABLE)
+- `error_text` (TEXT, NULLABLE)
+- `created_by_user_id` (INT, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+Agent/relay API token SHA-256 hashes are stored in `secrets` under keys:
+- `celebr8.agent.api_token_hash`
+- `celebr8.relay.api_token_hash`

@@ -56,6 +56,14 @@
         '/valid8/': 'valid8',
         '/valid8.php': 'valid8',
         '/valid8/index.php': 'valid8',
+        '/celebr8': 'celebr8',
+        '/celebr8/': 'celebr8',
+        '/celebr8.php': 'celebr8',
+        '/celebr8/index.php': 'celebr8',
+        '/celebr8/templates': 'celebr8_templates',
+        '/celebr8/templates/': 'celebr8_templates',
+        '/celebr8/activities': 'celebr8_activities',
+        '/celebr8/activities/': 'celebr8_activities',
         '/illumin8': 'illumin8',
         '/illumin8.php': 'illumin8',
         '/fabric8': 'fabric8',
@@ -96,7 +104,9 @@
         '/reset.php': 'reset'
       };
 
-      if (routes[path]) {
+      if (/^\/celebr8\/party(?:\/\d+)?\/?$/.test(path)) {
+        page = 'celebr8_party';
+      } else if (routes[path]) {
         page = routes[path];
       } else if (path.endsWith('.php')) {
         page = path.replace(/^\//, '').replace(/\.php$/, '') || 'home';

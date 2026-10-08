@@ -23,10 +23,11 @@ $readActions = [
     'list_templates', 'get_template', 'list_activities', 'get_activity', 'list_event_activities',
 ];
 $writeActions = [
-    'update_event', 'create_guest', 'update_guest', 'delete_guest',
+    'update_event', 'create_event', 'delete_event', 'duplicate_event',
+    'create_guest', 'update_guest', 'delete_guest',
     'set_rsvp', 'queue_texts',
     'upsert_template', 'delete_template', 'create_event_from_template', 'link_event_template',
-    'upsert_activity', 'delete_activity',
+    'upsert_activity', 'delete_activity', 'copy_activity', 'copy_event_activity',
     'attach_event_activity', 'update_event_activity', 'detach_event_activity',
 ];
 
@@ -128,10 +129,12 @@ try {
         catn8_json_response([
             'success' => true,
             'activities' => Celebr8CatalogModel::listActivities(
-                trim((string)($_GET['party_type'] ?? '')) ?: null,
+                trim((string)($_GET['preferred_holiday'] ?? $_GET['holiday'] ?? '')) ?: null,
                 trim((string)($_GET['category'] ?? '')) ?: null,
-                trim((string)($_GET['ages'] ?? '')) ?: null
+                trim((string)($_GET['ages'] ?? '')) ?: null,
+                trim((string)($_GET['party_type'] ?? '')) ?: null
             ),
+            'holidays' => Celebr8CatalogModel::HOLIDAYS,
         ]);
     }
 
@@ -167,6 +170,32 @@ try {
             catn8_json_response(['success' => false, 'error' => 'Event not found'], 404);
         }
         catn8_json_response(['success' => true, 'event' => $event]);
+    }
+
+    if ($action === 'create_event') {
+        $event = Celebr8Model::createEvent($body);
+        catn8_json_response(['success' => true, 'event' => $event]);
+    }
+
+    if ($action === 'delete_event') {
+        $eventId = (int)($body['event_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0 || !Celebr8Model::deleteEvent($eventId)) {
+            catn8_json_response(['success' => false, 'error' => 'Event not found'], 404);
+        }
+        catn8_json_response(['success' => true]);
+    }
+
+    if ($action === 'duplicate_event') {
+        $eventId = (int)($body['event_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id required'], 400);
+        }
+        $dup = Celebr8Model::duplicateEvent($eventId);
+        catn8_json_response([
+            'success' => true,
+            'event' => $dup['event'],
+            'activities' => $dup['activities'],
+        ]);
     }
 
     if ($action === 'create_guest' || $action === 'update_guest') {
@@ -288,6 +317,29 @@ try {
     if ($action === 'upsert_activity') {
         $act = Celebr8CatalogModel::upsertActivity($body);
         catn8_json_response(['success' => true, 'activity' => $act]);
+    }
+
+    if ($action === 'copy_activity') {
+        $id = (int)($body['activity_id'] ?? $body['id'] ?? 0);
+        if ($id <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'activity_id required'], 400);
+        }
+        $copy = Celebr8CatalogModel::copyActivity($id, isset($body['name']) ? (string)$body['name'] : null);
+        catn8_json_response(['success' => true, 'activity' => $copy]);
+    }
+
+    if ($action === 'copy_event_activity') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $eaId = (int)($body['event_activity_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0 || $eaId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id and event_activity_id required'], 400);
+        }
+        $copied = Celebr8CatalogModel::copyEventActivityInPlace($eventId, $eaId);
+        catn8_json_response([
+            'success' => true,
+            'activity' => $copied['activity'],
+            'event_activity' => $copied['event_activity'],
+        ]);
     }
 
     if ($action === 'delete_activity') {

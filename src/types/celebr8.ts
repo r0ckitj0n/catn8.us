@@ -22,6 +22,14 @@ export interface Celebr8Event {
   flyer_image_url: string;
   notes: string;
   template_id?: number | null;
+  starts_on?: string | null;
+  is_past?: boolean;
+  totals?: {
+    going: number;
+    maybe: number;
+    not_going: number;
+    no_reply: number;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +66,7 @@ export interface Celebr8PartyTemplate {
 export interface Celebr8Activity {
   id: number;
   name: string;
+  preferred_holiday: string;
   party_types: string[];
   category: string;
   description: string;
@@ -67,9 +76,12 @@ export interface Celebr8Activity {
   setup_notes: string;
   source: string;
   is_suggested: number;
+  copied_from_activity_id: number | null;
   created_at: string;
   updated_at: string;
 }
+
+export const CELEBR8_HOLIDAYS = ['Any', 'Halloween', "New Year's Eve", 'Labor Day', 'Birthday', 'Game Night'] as const;
 
 export interface Celebr8EventActivity {
   id: number;

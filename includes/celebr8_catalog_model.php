@@ -11,6 +11,7 @@ final class Celebr8CatalogModel
 
     public const ACTIVITY_CATEGORIES = ['contest', 'music', 'food', 'game', 'kids', 'other'];
     public const ACTIVITY_AGES = ['all', 'kids', 'adults'];
+    public const HOLIDAYS = ['Any', 'Halloween', "New Year's Eve", 'Labor Day', 'Birthday', 'Game Night'];
 
     public static function ensureSchema(): void
     {
@@ -82,8 +83,74 @@ final class Celebr8CatalogModel
             'template_id',
             'INT NULL DEFAULT NULL'
         );
+        self::ensureColumn(
+            'celebr8_activities',
+            'preferred_holiday',
+            "VARCHAR(64) NOT NULL DEFAULT 'Any'"
+        );
+        self::ensureColumn(
+            'celebr8_activities',
+            'copied_from_activity_id',
+            'INT NULL DEFAULT NULL'
+        );
+        self::backfillPreferredHoliday();
 
         self::$schemaEnsured = true;
+    }
+
+    public static function holidayFromPartyType(string $type): string
+    {
+        $type = strtolower(trim($type));
+        return match ($type) {
+            'halloween' => 'Halloween',
+            'new-years-eve', 'new_years_eve', 'nye' => "New Year's Eve",
+            'labor-day', 'labor_day' => 'Labor Day',
+            'milestone-birthday', 'birthday' => 'Birthday',
+            'poker-ping-pong', 'game-night', 'game_night' => 'Game Night',
+            'any', '' => 'Any',
+            default => 'Any',
+        };
+    }
+
+    public static function normalizeHoliday(string $holiday): string
+    {
+        $holiday = trim($holiday);
+        if ($holiday === '') {
+            return 'Any';
+        }
+        foreach (self::HOLIDAYS as $allowed) {
+            if (strcasecmp($allowed, $holiday) === 0) {
+                return $allowed;
+            }
+        }
+        return self::holidayFromPartyType($holiday);
+    }
+
+    private static function backfillPreferredHoliday(): void
+    {
+        $rows = Database::queryAll(
+            "SELECT id, party_types_json, preferred_holiday
+             FROM celebr8_activities
+             WHERE preferred_holiday IS NULL OR preferred_holiday = '' OR preferred_holiday = 'Any'"
+        );
+        foreach ($rows as $row) {
+            $current = trim((string)($row['preferred_holiday'] ?? ''));
+            if ($current !== '' && $current !== 'Any') {
+                continue;
+            }
+            $types = self::decodeJson($row['party_types_json'] ?? null);
+            $first = is_array($types) && isset($types[0]) ? (string)$types[0] : '';
+            $holiday = self::holidayFromPartyType($first);
+            if ($holiday === 'Any' && ($current === 'Any' || $current === '')) {
+                if ($current === 'Any') {
+                    continue;
+                }
+            }
+            Database::execute(
+                'UPDATE celebr8_activities SET preferred_holiday = ? WHERE id = ?',
+                [$holiday, (int)$row['id']]
+            );
+        }
     }
 
     private static function ensureColumn(string $table, string $column, string $ddl): void
@@ -201,10 +268,20 @@ final class Celebr8CatalogModel
 
     public static function toActivity(array $row): array
     {
+        $types = self::decodeJson($row['party_types_json'] ?? null);
+        $holiday = trim((string)($row['preferred_holiday'] ?? ''));
+        if ($holiday === '' && is_array($types) && isset($types[0])) {
+            $holiday = self::holidayFromPartyType((string)$types[0]);
+        }
+        $holiday = self::normalizeHoliday($holiday);
+        $copiedFrom = isset($row['copied_from_activity_id']) && $row['copied_from_activity_id'] !== null
+            ? (int)$row['copied_from_activity_id']
+            : null;
         return [
             'id' => (int)($row['id'] ?? 0),
             'name' => (string)($row['name'] ?? ''),
-            'party_types' => self::decodeJson($row['party_types_json'] ?? null),
+            'preferred_holiday' => $holiday,
+            'party_types' => $types,
             'category' => (string)($row['category'] ?? 'other'),
             'description' => (string)($row['description'] ?? ''),
             'ages' => (string)($row['ages'] ?? 'all'),
@@ -213,6 +290,7 @@ final class Celebr8CatalogModel
             'setup_notes' => (string)($row['setup_notes'] ?? ''),
             'source' => (string)($row['source'] ?? ''),
             'is_suggested' => (int)($row['is_suggested'] ?? 0),
+            'copied_from_activity_id' => $copiedFrom,
             'created_at' => (string)($row['created_at'] ?? ''),
             'updated_at' => (string)($row['updated_at'] ?? ''),
         ];
@@ -342,15 +420,23 @@ final class Celebr8CatalogModel
     /**
      * @return list<array<string,mixed>>
      */
-    public static function listActivities(?string $partyType = null, ?string $category = null, ?string $ages = null): array
+    public static function listActivities(?string $holiday = null, ?string $category = null, ?string $ages = null, ?string $partyType = null): array
     {
         self::ensureSchema();
         $rows = Database::queryAll('SELECT * FROM celebr8_activities ORDER BY name ASC, id ASC');
+        $holidayFilter = $holiday;
+        if (($holidayFilter === null || $holidayFilter === '') && $partyType) {
+            $holidayFilter = self::holidayFromPartyType($partyType);
+        }
+        if ($holidayFilter !== null && $holidayFilter !== '') {
+            $holidayFilter = self::normalizeHoliday($holidayFilter);
+        }
         $out = [];
         foreach ($rows as $row) {
             $activity = self::toActivity($row);
-            if ($partyType !== null && $partyType !== '') {
-                if (!in_array($partyType, $activity['party_types'], true)) {
+            // Preferred holiday is a label/filter only — never a membership constraint.
+            if ($holidayFilter !== null && $holidayFilter !== '') {
+                if ($activity['preferred_holiday'] !== $holidayFilter) {
                     continue;
                 }
             }
@@ -399,6 +485,12 @@ final class Celebr8CatalogModel
         if (!is_array($partyTypes)) {
             $partyTypes = [];
         }
+        $holiday = '';
+        if (array_key_exists('preferred_holiday', $fields)) {
+            $holiday = self::normalizeHoliday((string)$fields['preferred_holiday']);
+        } elseif ($partyTypes !== []) {
+            $holiday = self::holidayFromPartyType((string)$partyTypes[0]);
+        }
         $supplies = $fields['supplies'] ?? [];
         if (!is_array($supplies)) {
             $supplies = [];
@@ -406,6 +498,9 @@ final class Celebr8CatalogModel
         $source = (string)($fields['source'] ?? '');
         $isSuggested = !empty($fields['is_suggested']) || strtolower(trim($source)) === 'suggested' ? 1 : 0;
         $prizes = array_key_exists('prizes', $fields) ? ($fields['prizes'] !== null ? (string)$fields['prizes'] : null) : null;
+        $copiedFrom = array_key_exists('copied_from_activity_id', $fields)
+            ? ((int)$fields['copied_from_activity_id'] ?: null)
+            : null;
 
         if ($id > 0) {
             $existing = self::getActivity($id);
@@ -415,14 +510,25 @@ final class Celebr8CatalogModel
             if ($prizes === null && !array_key_exists('prizes', $fields)) {
                 $prizes = $existing['prizes'];
             }
+            if ($holiday === '' && !array_key_exists('preferred_holiday', $fields)) {
+                $holiday = (string)$existing['preferred_holiday'];
+            }
+            if ($holiday === '') {
+                $holiday = 'Any';
+            }
+            if ($copiedFrom === null && !array_key_exists('copied_from_activity_id', $fields)) {
+                $copiedFrom = $existing['copied_from_activity_id'] ?? null;
+            }
             Database::execute(
                 'UPDATE celebr8_activities SET
-                    name = ?, party_types_json = ?, category = ?, description = ?, ages = ?,
-                    supplies_json = ?, prizes = ?, setup_notes = ?, source = ?, is_suggested = ?
+                    name = ?, party_types_json = ?, preferred_holiday = ?, category = ?, description = ?, ages = ?,
+                    supplies_json = ?, prizes = ?, setup_notes = ?, source = ?, is_suggested = ?,
+                    copied_from_activity_id = ?
                  WHERE id = ?',
                 [
                     $name,
                     self::encodeJson($partyTypes),
+                    $holiday,
                     $category,
                     (string)($fields['description'] ?? ''),
                     $ages,
@@ -431,24 +537,31 @@ final class Celebr8CatalogModel
                     (string)($fields['setup_notes'] ?? ''),
                     $source,
                     $isSuggested,
+                    $copiedFrom,
                     $id,
                 ]
             );
             $out = self::getActivity($id);
         } else {
-            $byName = self::getActivityByName($name);
-            if ($byName) {
-                $fields['id'] = (int)$byName['id'];
-                return self::upsertActivity($fields);
+            if (empty($fields['force_insert'])) {
+                $byName = self::getActivityByName($name);
+                if ($byName) {
+                    $fields['id'] = (int)$byName['id'];
+                    return self::upsertActivity($fields);
+                }
+            }
+            if ($holiday === '') {
+                $holiday = 'Any';
             }
             Database::execute(
                 'INSERT INTO celebr8_activities (
-                    name, party_types_json, category, description, ages, supplies_json,
-                    prizes, setup_notes, source, is_suggested
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    name, party_types_json, preferred_holiday, category, description, ages, supplies_json,
+                    prizes, setup_notes, source, is_suggested, copied_from_activity_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [
                     $name,
                     self::encodeJson($partyTypes),
+                    $holiday,
                     $category,
                     (string)($fields['description'] ?? ''),
                     $ages,
@@ -457,6 +570,7 @@ final class Celebr8CatalogModel
                     (string)($fields['setup_notes'] ?? ''),
                     $source,
                     $isSuggested,
+                    $copiedFrom,
                 ]
             );
             $out = self::getActivity((int)Database::getInstance()->lastInsertId());
@@ -471,6 +585,77 @@ final class Celebr8CatalogModel
     {
         self::ensureSchema();
         return Database::execute('DELETE FROM celebr8_activities WHERE id = ?', [$id]) > 0;
+    }
+
+    public static function uniqueActivityName(string $base): string
+    {
+        $base = trim($base) !== '' ? trim($base) : 'Activity copy';
+        $name = $base;
+        $n = 2;
+        while (self::getActivityByName($name)) {
+            $name = $base . ' ' . $n;
+            $n++;
+        }
+        return $name;
+    }
+
+    public static function copyActivity(int $id, ?string $newName = null): array
+    {
+        $src = self::getActivity($id);
+        if (!$src) {
+            throw new InvalidArgumentException('Activity not found');
+        }
+        $base = $newName !== null && trim($newName) !== ''
+            ? trim($newName)
+            : ($src['name'] . ' (copy)');
+        return self::upsertActivity([
+            'name' => self::uniqueActivityName($base),
+            'preferred_holiday' => $src['preferred_holiday'],
+            'party_types' => $src['party_types'],
+            'category' => $src['category'],
+            'description' => $src['description'],
+            'ages' => $src['ages'],
+            'supplies' => $src['supplies'],
+            'prizes' => $src['prizes'],
+            'setup_notes' => $src['setup_notes'],
+            'source' => 'Copied from activity #' . $id . ' (' . $src['name'] . ')',
+            'is_suggested' => 0,
+            'copied_from_activity_id' => $id,
+            'force_insert' => true,
+        ]);
+    }
+
+    /**
+     * Copy a library activity from within a party: add the copy on the party and remove the original link.
+     *
+     * @return array{activity: array<string,mixed>, event_activity: array<string,mixed>}
+     */
+    public static function copyEventActivityInPlace(int $eventId, int $eventActivityId): array
+    {
+        $current = null;
+        foreach (self::listEventActivities($eventId) as $row) {
+            if ((int)$row['id'] === $eventActivityId) {
+                $current = $row;
+                break;
+            }
+        }
+        if (!$current) {
+            throw new InvalidArgumentException('Event activity not found');
+        }
+        $copy = self::copyActivity((int)$current['activity_id']);
+        $attached = self::attachActivityToEvent($eventId, (int)$copy['id'], [
+            'time_slot' => $current['time_slot'],
+            'run_by' => $current['run_by'],
+            'prizes' => $current['prizes'],
+            'supplies_checklist' => $current['supplies_checklist'],
+            'sort_order' => $current['sort_order'],
+            'notes' => $current['notes'],
+        ]);
+        self::detachEventActivity($eventId, $eventActivityId);
+        return [
+            'activity' => $copy,
+            'event_activity' => $attached,
+        ];
     }
 
     /** @return list<array<string,mixed>> */
@@ -647,35 +832,24 @@ final class Celebr8CatalogModel
             $notes = trim("[Suggested template — edit freely]\n" . $notes);
         }
 
-        Database::execute(
-            'INSERT INTO celebr8_events (
-                slug, title, tagline, theme, event_date, event_time, arrival_time_kids, arrival_time_adults,
-                location, food, schedule, rsvp_deadline, invite_text, flyer_image_url, notes, template_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                $slug,
-                (string)($overrides['title'] ?? $template['name']),
-                $tagline,
-                (string)($overrides['theme'] ?? $template['theme']),
-                (string)($overrides['event_date'] ?? $template['usual_timing']),
-                (string)($overrides['event_time'] ?? ''),
-                (string)($overrides['arrival_time_kids'] ?? ''),
-                (string)($overrides['arrival_time_adults'] ?? ''),
-                '', // never copy past venues into location
-                (string)($overrides['food'] ?? $food),
-                (string)($overrides['schedule'] ?? $schedule),
-                '',
-                (string)($overrides['invite_text'] ?? $tagline),
-                (string)($overrides['flyer_image_url'] ?? ($template['hero_image_url'] ?? '')),
-                (string)($overrides['notes'] ?? $notes),
-                $templateId,
-            ]
-        );
-        $eventId = (int)Database::getInstance()->lastInsertId();
-        $event = Celebr8Model::getEvent($eventId);
-        if (!$event) {
-            throw new RuntimeException('Failed to create event from template');
-        }
+        $event = Celebr8Model::createEvent([
+            'slug' => $slug,
+            'title' => (string)($overrides['title'] ?? $template['name']),
+            'tagline' => $tagline,
+            'theme' => (string)($overrides['theme'] ?? $template['theme']),
+            'event_date' => (string)($overrides['event_date'] ?? ''),
+            'event_time' => (string)($overrides['event_time'] ?? ''),
+            'arrival_time_kids' => (string)($overrides['arrival_time_kids'] ?? ''),
+            'arrival_time_adults' => (string)($overrides['arrival_time_adults'] ?? ''),
+            'location' => '', // never copy past venues into location
+            'food' => (string)($overrides['food'] ?? $food),
+            'schedule' => (string)($overrides['schedule'] ?? $schedule),
+            'invite_text' => (string)($overrides['invite_text'] ?? $tagline),
+            'flyer_image_url' => (string)($overrides['flyer_image_url'] ?? ($template['hero_image_url'] ?? '')),
+            'notes' => (string)($overrides['notes'] ?? $notes),
+            'template_id' => $templateId,
+        ]);
+        $eventId = (int)$event['id'];
 
         $sort = 0;
         foreach ($template['default_activity_names'] as $name) {

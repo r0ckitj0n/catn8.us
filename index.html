@@ -104,7 +104,9 @@
         '/reset.php': 'reset'
       };
 
-      if (routes[path]) {
+      if (/^\/celebr8\/party(?:\/\d+)?\/?$/.test(path)) {
+        page = 'celebr8_party';
+      } else if (routes[path]) {
         page = routes[path];
       } else if (path.endsWith('.php')) {
         page = path.replace(/^\//, '').replace(/\.php$/, '') || 'home';

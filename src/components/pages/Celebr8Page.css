@@ -276,6 +276,200 @@
   background: rgba(255, 252, 247, 0.65);
 }
 
+.celebr8-hero-home {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.celebr8-new-party-btn {
+  font-size: 1.05rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: 999px;
+}
+
+.celebr8-section-label {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b5a4e;
+  margin: 1.25rem 0 0.6rem;
+}
+
+.celebr8-party-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.celebr8-party-card {
+  background: rgba(255, 252, 247, 0.92);
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(58, 42, 34, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.celebr8-party-card-cover,
+.celebr8-party-cover {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: linear-gradient(135deg, #3a2a22, #9a6b12);
+}
+
+.celebr8-party-card-cover img,
+.celebr8-party-cover img,
+.celebr8-party-card-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.celebr8-party-card-body {
+  padding: 0.85rem 1rem 1rem;
+}
+
+.celebr8-party-card-body h3 {
+  font-size: 1.05rem;
+  margin: 0 0 0.2rem;
+}
+
+.celebr8-party-card-body a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.celebr8-party-card-meta,
+.celebr8-party-card-rsvp {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: #6b5a4e;
+}
+
+.celebr8-party-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+}
+
+.celebr8-party-cover {
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+}
+
+.celebr8-party-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.celebr8-party-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.celebr8-party-facts div {
+  background: rgba(255, 252, 247, 0.9);
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(58, 42, 34, 0.1);
+}
+
+.celebr8-party-facts span {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b5a4e;
+}
+
+.celebr8-party-facts em {
+  display: block;
+  font-style: normal;
+  font-size: 0.85rem;
+  color: #6b5a4e;
+}
+
+.celebr8-rsvp-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.celebr8-rsvp-row div {
+  text-align: center;
+  background: rgba(255, 252, 247, 0.9);
+  border-radius: 0.85rem;
+  padding: 0.7rem 0.4rem;
+  border: 1px solid rgba(58, 42, 34, 0.1);
+}
+
+.celebr8-rsvp-row strong {
+  display: block;
+  font-size: 1.25rem;
+}
+
+.celebr8-rsvp-row span {
+  font-size: 0.75rem;
+  color: #6b5a4e;
+}
+
+.celebr8-guest-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.celebr8-guest-chip {
+  border: 1px solid rgba(58, 42, 34, 0.15);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.celebr8-guest-chip small {
+  font-size: 0.7rem;
+  color: #6b5a4e;
+}
+
+.celebr8-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.celebr8-picker-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(58, 42, 34, 0.12);
+  border-radius: 0.6rem;
+}
+
 @media (max-width: 768px) {
   .celebr8-hero {
     padding: 1.15rem;
@@ -283,5 +477,10 @@
 
   .celebr8-split {
     grid-template-columns: 1fr;
+  }
+
+  .celebr8-party-facts,
+  .celebr8-rsvp-row {
+    grid-template-columns: 1fr 1fr;
   }
 }

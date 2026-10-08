@@ -52,7 +52,7 @@ export function Celebr8TemplatesPage({
         { template_id: selected.id },
       );
       onToast?.({ tone: 'success', message: `Created “${res.event.title}” (location left blank)` });
-      window.location.href = '/celebr8';
+      window.location.href = `/celebr8/party/${res.event.id}`;
     } catch (error: any) {
       onToast?.({ tone: 'error', message: error?.message || 'Failed to create event' });
     } finally {

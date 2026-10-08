@@ -1,82 +1,21 @@
 import React from 'react';
 
 import { ApiClient } from '../../core/ApiClient';
-import { useCelebr8 } from '../../hooks/useCelebr8';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
-import { Celebr8EventActivity, Celebr8Guest, Celebr8RsvpStatus } from '../../types/celebr8';
+import { Celebr8Event, Celebr8PartyTemplate } from '../../types/celebr8';
 import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
 import { PageLayout } from '../layout/PageLayout';
 import './Celebr8Page.css';
 
-const RSVP_OPTIONS: Array<{ value: Celebr8RsvpStatus; label: string }> = [
-  { value: 'going', label: 'Going' },
-  { value: 'maybe', label: 'Maybe' },
-  { value: 'not_going', label: 'Not going' },
-  { value: 'no_reply', label: 'No reply' },
-];
-
-function looksLikePlaceholder(value: string): boolean {
-  return /\[PLACEHOLDER/i.test(value || '');
+function coverUrl(event: Celebr8Event): string {
+  return event.flyer_image_url || '';
 }
 
-function FieldValue({ value }: { value: string }) {
-  if (!value) return <span className="text-muted">—</span>;
-  if (looksLikePlaceholder(value)) {
-    return <span className="celebr8-placeholder">{value}</span>;
-  }
-  return <span>{value}</span>;
-}
-
-type GuestDraft = {
-  id?: number;
-  name: string;
-  phone: string;
-  email: string;
-  rsvp_status: Celebr8RsvpStatus;
-  party_size: number;
-  kids_count: number;
-  invited_via: string;
-  relation_label: string;
-  bringing_chili: number;
-  bringing: string;
-  phone_unverified: number;
-  notes: string;
-};
-
-function blankGuest(): GuestDraft {
-  return {
-    name: '',
-    phone: '',
-    email: '',
-    rsvp_status: 'no_reply',
-    party_size: 1,
-    kids_count: 0,
-    invited_via: '',
-    relation_label: '',
-    bringing_chili: 0,
-    bringing: '',
-    phone_unverified: 0,
-    notes: '',
-  };
-}
-
-function guestToDraft(guest: Celebr8Guest): GuestDraft {
-  return {
-    id: guest.id,
-    name: guest.name,
-    phone: guest.phone,
-    email: guest.email,
-    rsvp_status: (guest.rsvp_status as Celebr8RsvpStatus) || 'no_reply',
-    party_size: guest.party_size || 1,
-    kids_count: guest.kids_count || 0,
-    invited_via: guest.invited_via || '',
-    relation_label: guest.relation_label || '',
-    bringing_chili: Number(guest.bringing_chili || 0),
-    bringing: guest.bringing || '',
-    phone_unverified: Number(guest.phone_unverified || 0),
-    notes: guest.notes || '',
-  };
+function rsvpLine(event: Celebr8Event): string {
+  const t = event.totals;
+  if (!t) return 'No RSVPs yet';
+  return `${t.going} going · ${t.maybe} maybe · ${t.not_going} can't · ${t.no_reply} no reply`;
 }
 
 export function Celebr8Page({
@@ -93,97 +32,136 @@ export function Celebr8Page({
     || Number(viewer?.is_administrator || 0) === 1
     || String(viewer?.username || '').toLowerCase() === 'admin'
   );
-  const {
-    busy,
-    loaded,
-    events,
-    event,
-    guests,
-    messages,
-    totals,
-    load,
-    setEventId,
-    updateEvent,
-    saveGuest,
-    deleteGuest,
-    queueTexts,
-  } = useCelebr8(isAuthed, onToast);
+  const { confirm, confirmDialog } = useBrandedConfirm();
+  const [busy, setBusy] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
+  const [events, setEvents] = React.useState<Celebr8Event[]>([]);
+  const [templates, setTemplates] = React.useState<Celebr8PartyTemplate[]>([]);
+  const [creating, setCreating] = React.useState(false);
+  const [draftTitle, setDraftTitle] = React.useState('');
+  const [draftDate, setDraftDate] = React.useState('');
+  const [draftTemplate, setDraftTemplate] = React.useState('');
 
-  const [eventActivities, setEventActivities] = React.useState<Celebr8EventActivity[]>([]);
-  const [attachActivityId, setAttachActivityId] = React.useState('');
-  const [libraryActivities, setLibraryActivities] = React.useState<Array<{ id: number; name: string }>>([]);
+  const load = React.useCallback(async () => {
+    if (!isAuthed) return;
+    setBusy(true);
+    try {
+      const [eventsRes, tplRes] = await Promise.all([
+        ApiClient.get<{ success: boolean; events: Celebr8Event[] }>('/api/celebr8.php?action=list_events'),
+        ApiClient.get<{ success: boolean; templates: Celebr8PartyTemplate[] }>('/api/celebr8.php?action=list_templates'),
+      ]);
+      setEvents(eventsRes.events || []);
+      setTemplates(tplRes.templates || []);
+      setLoaded(true);
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || 'Failed to load parties' });
+    } finally {
+      setBusy(false);
+    }
+  }, [isAuthed, onToast]);
 
   React.useEffect(() => {
-    if (!event?.id || !isAuthed) {
-      setEventActivities([]);
+    void load();
+  }, [load]);
+
+  const upcoming = events.filter((e) => !e.is_past);
+  const past = events.filter((e) => e.is_past);
+
+  const createParty = async () => {
+    const title = draftTitle.trim();
+    if (!title && !draftTemplate) {
+      onToast?.({ tone: 'error', message: 'Give the party a name, or pick a template' });
       return;
     }
-    void (async () => {
-      try {
-        const res = await ApiClient.get<{ success: boolean; activities: Celebr8EventActivity[] }>(
-          `/api/celebr8.php?action=list_event_activities&event_id=${event.id}`,
+    setBusy(true);
+    try {
+      let event: Celebr8Event;
+      if (draftTemplate) {
+        const res = await ApiClient.post<{ success: boolean; event: Celebr8Event }>(
+          '/api/celebr8.php?action=create_event_from_template',
+          {
+            template_id: Number(draftTemplate),
+            title: title || undefined,
+            event_date: draftDate || undefined,
+          },
         );
-        setEventActivities(res.activities || []);
-      } catch {
-        setEventActivities([]);
-      }
-    })();
-  }, [event?.id, isAuthed]);
-
-  React.useEffect(() => {
-    if (!isAuthed) return;
-    void (async () => {
-      try {
-        const res = await ApiClient.get<{ success: boolean; activities: Array<{ id: number; name: string }> }>(
-          '/api/celebr8.php?action=list_activities',
+        event = res.event;
+      } else {
+        const res = await ApiClient.post<{ success: boolean; event: Celebr8Event }>(
+          '/api/celebr8.php?action=create_event',
+          { title, event_date: draftDate },
         );
-        setLibraryActivities((res.activities || []).map((a) => ({ id: a.id, name: a.name })));
-      } catch {
-        setLibraryActivities([]);
+        event = res.event;
       }
-    })();
-  }, [isAuthed]);
-  const { confirm, confirmDialog } = useBrandedConfirm();
-
-  const [editingDetails, setEditingDetails] = React.useState(false);
-  const [detailsDraft, setDetailsDraft] = React.useState<Record<string, string>>({});
-  const [guestDraft, setGuestDraft] = React.useState<GuestDraft | null>(null);
-  const [selectedGuestIds, setSelectedGuestIds] = React.useState<number[]>([]);
-  const [textBody, setTextBody] = React.useState('');
-  const [textFilter, setTextFilter] = React.useState('');
-  const [guestFilter, setGuestFilter] = React.useState('');
-
-  React.useEffect(() => {
-    if (!event) return;
-    setDetailsDraft({
-      title: event.title,
-      tagline: event.tagline || '',
-      theme: event.theme,
-      event_date: event.event_date,
-      event_time: event.event_time,
-      arrival_time_kids: event.arrival_time_kids || '',
-      arrival_time_adults: event.arrival_time_adults || '',
-      location: event.location,
-      food: event.food || '',
-      schedule: event.schedule || '',
-      rsvp_deadline: event.rsvp_deadline,
-      invite_text: event.invite_text || '',
-      flyer_image_url: event.flyer_image_url || '',
-      notes: event.notes || '',
-    });
-    if (event.invite_text && !textBody) {
-      setTextBody(event.invite_text);
+      window.location.href = `/celebr8/party/${event.id}`;
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || 'Could not create party' });
+      setBusy(false);
     }
-  }, [event]); // eslint-disable-line react-hooks/exhaustive-deps -- seed compose box once per event load
+  };
 
-  const filteredGuests = React.useMemo(() => {
-    const q = guestFilter.trim().toLowerCase();
-    if (!q) return guests;
-    return guests.filter((g) => {
-      const hay = `${g.name} ${g.phone} ${g.email} ${g.notes} ${g.rsvp_status} ${g.relation_label} ${g.invited_via} ${g.bringing}`.toLowerCase();
-      return hay.includes(q);
+  const duplicateParty = async (event: Celebr8Event) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; event: Celebr8Event }>(
+        '/api/celebr8.php?action=duplicate_event',
+        { event_id: event.id },
+      );
+      onToast?.({ tone: 'success', message: 'Party duplicated — guests were not copied' });
+      window.location.href = `/celebr8/party/${res.event.id}`;
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || 'Duplicate failed' });
+      setBusy(false);
+    }
+  };
+
+  const deleteParty = async (event: Celebr8Event) => {
+    const ok = await confirm({
+      title: 'Delete this party?',
+      message: `Delete “${event.title}”? Guests, RSVPs, and queued texts for it will be removed. Activities in the shared library stay.`,
+      confirmLabel: 'Delete party',
     });
-  }, [guestFilter, guests]);
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await ApiClient.post('/api/celebr8.php?action=delete_event', { event_id: event.id });
+      onToast?.({ tone: 'success', message: 'Party deleted' });
+      await load();
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || 'Delete failed' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renderCard = (event: Celebr8Event) => (
+    <article key={event.id} className="celebr8-party-card">
+      <a className="celebr8-party-card-cover" href={`/celebr8/party/${event.id}`}>
+        {coverUrl(event) ? (
+          <img src={coverUrl(event)} alt="" />
+        ) : (
+          <div className="celebr8-party-card-placeholder" aria-hidden="true" />
+        )}
+      </a>
+      <div className="celebr8-party-card-body">
+        <a href={`/celebr8/party/${event.id}`}>
+          <h3>{event.title}</h3>
+        </a>
+        {event.tagline ? <p className="celebr8-tagline">{event.tagline}</p> : null}
+        <p className="celebr8-party-card-meta">{event.event_date || 'Date TBD'}</p>
+        <p className="celebr8-party-card-rsvp">{rsvpLine(event)}</p>
+        {isAdmin ? (
+          <div className="celebr8-party-card-actions">
+            <a className="btn btn-sm btn-outline-secondary" href={`/celebr8/party/${event.id}`}>Open</a>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => void duplicateParty(event)}>Duplicate</button>
+            <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void deleteParty(event)}>Delete</button>
+          </div>
+        ) : (
+          <a className="btn btn-sm btn-outline-secondary" href={`/celebr8/party/${event.id}`}>Open</a>
+        )}
+      </div>
+    </article>
+  );
 
   if (!isAuthed) {
     return (
@@ -192,7 +170,7 @@ export function Celebr8Page({
           <div className="container">
             <div className="celebr8-hero">
               <h1>CELEBR8</h1>
-              <p>Party planning is for signed-in family only. Log in to continue.</p>
+              <p>Party planning is for signed-in family only.</p>
             </div>
             <button type="button" className="btn btn-primary" onClick={onLoginClick}>Log in</button>
           </div>
@@ -201,485 +179,75 @@ export function Celebr8Page({
     );
   }
 
-  const toggleGuest = (id: number) => {
-    setSelectedGuestIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
-  const selectFiltered = () => {
-    setSelectedGuestIds(filteredGuests.map((g) => g.id));
-  };
-
-  const onSaveDetails = async () => {
-    if (!event) return;
-    await updateEvent({ event_id: event.id, ...detailsDraft });
-    setEditingDetails(false);
-  };
-
-  const onSaveGuest = async () => {
-    if (!event || !guestDraft) return;
-    await saveGuest({
-      event_id: event.id,
-      ...guestDraft,
-    });
-    setGuestDraft(null);
-  };
-
-  const onDeleteGuest = async (guest: Celebr8Guest) => {
-    if (!event) return;
-    const ok = await confirm({
-      title: 'Remove guest?',
-      message: `Remove ${guest.name} from this event?`,
-      confirmLabel: 'Remove',
-    });
-    if (!ok) return;
-    await deleteGuest(event.id, guest.id);
-    setSelectedGuestIds((prev) => prev.filter((id) => id !== guest.id));
-  };
-
-  const onQueueTexts = async (mode: 'selected' | 'all') => {
-    if (!event) return;
-    const body = textBody.trim();
-    if (!body) {
-      onToast?.({ tone: 'error', message: 'Write a message first' });
-      return;
-    }
-    if (mode === 'selected' && selectedGuestIds.length === 0) {
-      onToast?.({ tone: 'error', message: 'Select at least one guest' });
-      return;
-    }
-    const label = mode === 'all'
-      ? (textFilter ? `everyone with RSVP "${textFilter}"` : 'everyone')
-      : `${selectedGuestIds.length} selected guest(s)`;
-    const ok = await confirm({
-      title: 'Queue iMessage texts?',
-      message: `Queue this message for ${label}? The Mac relay will send from Jon's iMessage.`,
-      confirmLabel: 'Queue texts',
-    });
-    if (!ok) return;
-    await queueTexts({
-      event_id: event.id,
-      body,
-      all_guests: mode === 'all',
-      guest_ids: mode === 'selected' ? selectedGuestIds : undefined,
-      rsvp_status: textFilter || undefined,
-    });
-  };
-
   return (
     <PageLayout page="celebr8" title="CELEBR8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section celebr8-page">
         <div className="container">
-          <div className="celebr8-hero">
-            <h1>CELEBR8</h1>
-            <p>Plan the party, track RSVPs, and queue texts that send from Jon&apos;s Mac via iMessage.</p>
+          <div className="celebr8-hero celebr8-hero-home">
+            <div>
+              <h1>My Parties</h1>
+              <p className="mb-0">Upcoming and past get-togethers — tap a card to open it.</p>
+            </div>
+            {isAdmin ? (
+              <button type="button" className="btn btn-primary celebr8-new-party-btn" onClick={() => setCreating(true)}>
+                + New Party
+              </button>
+            ) : null}
           </div>
-          <Celebr8SubNav active="event" />
+          <Celebr8SubNav active="parties" />
 
           {!loaded ? (
-            <div className="celebr8-panel">Loading Celebr8…</div>
+            <div className="celebr8-panel">Loading parties…</div>
           ) : (
             <>
-              <div className="celebr8-toolbar">
-                <label className="visually-hidden" htmlFor="celebr8-event-select">Event</label>
-                <select
-                  id="celebr8-event-select"
-                  className="form-select"
-                  value={event?.id || ''}
-                  onChange={(e) => setEventId(Number(e.target.value))}
-                  disabled={busy || events.length === 0}
-                >
-                  {events.map((ev) => (
-                    <option key={ev.id} value={ev.id}>{ev.title}</option>
-                  ))}
-                </select>
-                {busy ? <span className="text-muted small">Working…</span> : null}
-              </div>
-
-              {event ? (
-                <>
-                  <div className="celebr8-panel">
-                    <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                      <div>
-                        <h2 className="mb-0">{event.title}</h2>
-                        {event.tagline ? <p className="celebr8-tagline mb-0">{event.tagline}</p> : null}
-                      </div>
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => setEditingDetails((v) => !v)}
-                        >
-                          {editingDetails ? 'Cancel edit' : 'Edit details'}
-                        </button>
-                      ) : null}
-                    </div>
-
-                    {event.flyer_image_url ? (
-                      <div className="celebr8-flyer mt-3">
-                        <picture>
-                          <source srcSet={event.flyer_image_url.replace(/\.jpg$/i, '.webp')} type="image/webp" />
-                          <img
-                            src={event.flyer_image_url.replace(/\.webp$/i, '.jpg')}
-                            alt={`${event.title} invite flyer`}
-                            loading="lazy"
-                          />
-                        </picture>
-                      </div>
-                    ) : null}
-
-                    {!editingDetails ? (
-                      <dl className="row mb-0 mt-3">
-                        <dt className="col-sm-3">Date</dt><dd className="col-sm-9"><FieldValue value={event.event_date} /></dd>
-                        <dt className="col-sm-3">Little bats</dt><dd className="col-sm-9"><FieldValue value={event.arrival_time_kids || event.event_time} /></dd>
-                        <dt className="col-sm-3">Big monsters</dt><dd className="col-sm-9"><FieldValue value={event.arrival_time_adults || ''} /></dd>
-                        <dt className="col-sm-3">Location</dt><dd className="col-sm-9">{event.location ? <FieldValue value={event.location} /> : <span className="text-muted">TBD (editable)</span>}</dd>
-                        <dt className="col-sm-3">Theme</dt><dd className="col-sm-9"><FieldValue value={event.theme} /></dd>
-                        <dt className="col-sm-3">Food</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.food || ''} /></dd>
-                        <dt className="col-sm-3">Schedule</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.schedule || ''} /></dd>
-                        <dt className="col-sm-3">RSVP deadline</dt><dd className="col-sm-9">{event.rsvp_deadline ? <FieldValue value={event.rsvp_deadline} /> : <span className="text-muted">Not set</span>}</dd>
-                        <dt className="col-sm-3">Invite text</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.invite_text || ''} /></dd>
-                        <dt className="col-sm-3">Notes</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.notes || ''} /></dd>
-                      </dl>
-                    ) : (
-                      <div className="row g-2 mt-2">
-                        {(['title', 'tagline', 'event_date', 'arrival_time_kids', 'arrival_time_adults', 'event_time', 'location', 'theme', 'rsvp_deadline', 'flyer_image_url'] as const).map((key) => (
-                          <div className="col-md-6" key={key}>
-                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key.replaceAll('_', ' ')}</label>
-                            <input
-                              id={`celebr8-${key}`}
-                              className="form-control"
-                              value={detailsDraft[key] || ''}
-                              onChange={(e) => setDetailsDraft((d) => ({ ...d, [key]: e.target.value }))}
-                            />
-                          </div>
-                        ))}
-                        {(['food', 'schedule', 'invite_text', 'notes'] as const).map((key) => (
-                          <div className="col-12" key={key}>
-                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key.replaceAll('_', ' ')}</label>
-                            <textarea
-                              id={`celebr8-${key}`}
-                              className="form-control"
-                              rows={3}
-                              value={detailsDraft[key] || ''}
-                              onChange={(e) => setDetailsDraft((d) => ({ ...d, [key]: e.target.value }))}
-                            />
-                          </div>
-                        ))}
-                        <div className="col-12">
-                          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onSaveDetails()}>
-                            Save event details
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="celebr8-panel">
-                    <h2>Head count</h2>
-                    <div className="celebr8-totals">
-                      <div className="celebr8-total-chip"><strong>{totals.going_headcount}</strong><span>Going seats</span></div>
-                      <div className="celebr8-total-chip"><strong>{totals.by_status?.going?.guest_count || 0}</strong><span>Going guests</span></div>
-                      <div className="celebr8-total-chip"><strong>{totals.by_status?.maybe?.guest_count || 0}</strong><span>Maybe</span></div>
-                      <div className="celebr8-total-chip"><strong>{totals.by_status?.not_going?.guest_count || 0}</strong><span>Not going</span></div>
-                      <div className="celebr8-total-chip"><strong>{totals.by_status?.no_reply?.guest_count || 0}</strong><span>No reply</span></div>
-                      <div className="celebr8-total-chip"><strong>{totals.total_kids}</strong><span>Kids total</span></div>
-                    </div>
-                  </div>
-
-                  <div className="celebr8-panel">
-                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                      <h2 className="mb-0">Event activities</h2>
-                      <a className="btn btn-sm btn-outline-secondary" href="/celebr8/activities">Browse library</a>
-                    </div>
-                    {eventActivities.length === 0 ? (
-                      <p className="text-muted mb-2">No activities attached yet.</p>
-                    ) : (
-                      <ul className="celebr8-event-activities">
-                        {eventActivities.map((ea) => (
-                          <li key={ea.id}>
-                            <strong>{ea.activity?.name || 'Activity'}</strong>
-                            {ea.time_slot ? <span className="celebr8-flag ms-1">{ea.time_slot}</span> : null}
-                            <div className="small text-muted">{ea.activity?.description}</div>
-                            {ea.run_by ? <div className="small">Run by: {ea.run_by}</div> : null}
-                            {ea.prizes ? <div className="small">Prizes: {ea.prizes}</div> : null}
-                            {Array.isArray(ea.supplies_checklist) && ea.supplies_checklist.length > 0 ? (
-                              <ul className="small mb-0">
-                                {ea.supplies_checklist.map((s, idx) => (
-                                  <li key={`${ea.id}-${idx}`}>{Number(s.done) === 1 ? '✓' : '○'} {s.item}</li>
-                                ))}
-                              </ul>
-                            ) : null}
-                            {isAdmin ? (
-                              <button
-                                type="button"
-                                className="btn btn-link btn-sm text-danger px-0"
-                                onClick={() => {
-                                  void (async () => {
-                                    await ApiClient.post('/api/celebr8.php?action=detach_event_activity', {
-                                      event_id: event.id,
-                                      event_activity_id: ea.id,
-                                    });
-                                    setEventActivities((prev) => prev.filter((x) => x.id !== ea.id));
-                                    onToast?.({ tone: 'success', message: 'Activity removed from event' });
-                                  })();
-                                }}
-                              >
-                                Remove
-                              </button>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {isAdmin ? (
-                      <div className="celebr8-toolbar mt-2">
-                        <select
-                          className="form-select"
-                          style={{ maxWidth: 320 }}
-                          value={attachActivityId}
-                          onChange={(e) => setAttachActivityId(e.target.value)}
-                        >
-                          <option value="">Attach from library…</option>
-                          {libraryActivities.map((a) => (
-                            <option key={a.id} value={a.id}>{a.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary"
-                          disabled={!attachActivityId || busy}
-                          onClick={() => {
-                            void (async () => {
-                              const res = await ApiClient.post<{ success: boolean; event_activity: Celebr8EventActivity }>(
-                                '/api/celebr8.php?action=attach_event_activity',
-                                { event_id: event.id, activity_id: Number(attachActivityId) },
-                              );
-                              setEventActivities((prev) => {
-                                const next = prev.filter((x) => x.activity_id !== res.event_activity.activity_id);
-                                return [...next, res.event_activity].sort((a, b) => a.sort_order - b.sort_order);
-                              });
-                              setAttachActivityId('');
-                              onToast?.({ tone: 'success', message: 'Activity attached' });
-                              void load(event.id);
-                            })();
-                          }}
-                        >
-                          Attach
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="celebr8-panel">
-                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                      <h2 className="mb-0">Guest list</h2>
-                      {isAdmin ? (
-                        <button type="button" className="btn btn-sm btn-primary" onClick={() => setGuestDraft(blankGuest())}>
-                          Add guest
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="celebr8-toolbar">
-                      <input
-                        className="form-control"
-                        placeholder="Filter guests"
-                        value={guestFilter}
-                        onChange={(e) => setGuestFilter(e.target.value)}
-                      />
-                      {isAdmin ? (
-                        <>
-                          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectFiltered}>Select filtered</button>
-                          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedGuestIds([])}>Clear selection</button>
-                        </>
-                      ) : null}
-                    </div>
-                    <div className="celebr8-guest-table-wrap">
-                      <table className="table table-sm align-middle celebr8-guest-table">
-                        <thead>
-                          <tr>
-                            {isAdmin ? <th scope="col"></th> : null}
-                            <th scope="col">Name</th>
-                            <th scope="col">Phone</th>
-                            <th scope="col">RSVP</th>
-                            <th scope="col">Invite</th>
-                            <th scope="col">Family</th>
-                            <th scope="col">Bringing</th>
-                            <th scope="col">Notes</th>
-                            {isAdmin ? <th scope="col">Actions</th> : null}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredGuests.length === 0 ? (
-                            <tr><td colSpan={isAdmin ? 9 : 7} className="text-muted">No guests yet.</td></tr>
-                          ) : filteredGuests.map((guest) => (
-                            <tr key={guest.id}>
-                              {isAdmin ? (
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedGuestIds.includes(guest.id)}
-                                    onChange={() => toggleGuest(guest.id)}
-                                    aria-label={`Select ${guest.name}`}
-                                  />
-                                </td>
-                              ) : null}
-                              <td>
-                                {guest.name}
-                                {Number(guest.phone_unverified) === 1 ? <span className="celebr8-flag ms-1">phone unverified</span> : null}
-                              </td>
-                              <td>{guest.phone || '—'}</td>
-                              <td className={`celebr8-status-${guest.rsvp_status}`}>{guest.rsvp_status}</td>
-                              <td className={`celebr8-invite-${guest.invite_send_status || 'none'}`}>{guest.invite_send_status || 'none'}</td>
-                              <td className="small">{guest.relation_label || (guest.invited_via ? `via ${guest.invited_via}` : '—')}</td>
-                              <td className="small">
-                                {Number(guest.bringing_chili) === 1 ? 'Chili' : ''}
-                                {guest.bringing ? `${Number(guest.bringing_chili) === 1 ? '; ' : ''}${guest.bringing}` : (Number(guest.bringing_chili) === 1 ? '' : '—')}
-                              </td>
-                              <td className="celebr8-notes-cell">{guest.notes || ''}</td>
-                              {isAdmin ? (
-                                <td>
-                                  <button type="button" className="btn btn-sm btn-outline-secondary me-1" onClick={() => setGuestDraft(guestToDraft(guest))}>Edit</button>
-                                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => void onDeleteGuest(guest)}>Remove</button>
-                                </td>
-                              ) : null}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {isAdmin ? (
-                    <div className="celebr8-panel">
-                      <h2>Text guests (iMessage outbox)</h2>
-                      <p className="small text-muted">
-                        Messages are queued here, then a Mac relay sends them with <code>imsg</code> from Jon&apos;s Messages account.
-                      </p>
-                      <textarea
-                        className="form-control mb-2"
-                        rows={4}
-                        placeholder="Message body"
-                        value={textBody}
-                        onChange={(e) => setTextBody(e.target.value)}
-                      />
-                      <div className="celebr8-toolbar">
-                        <select className="form-select" value={textFilter} onChange={(e) => setTextFilter(e.target.value)}>
-                          <option value="">All RSVP statuses</option>
-                          {RSVP_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onQueueTexts('selected')}>
-                          Queue selected ({selectedGuestIds.length})
-                        </button>
-                        <button type="button" className="btn btn-outline-primary" disabled={busy} onClick={() => void onQueueTexts('all')}>
-                          Queue filtered / everyone
-                        </button>
-                      </div>
-
-                      <h3 className="h6 mt-3">Recent outbox</h3>
-                      <div className="celebr8-guest-table-wrap">
-                        <table className="table table-sm">
-                          <thead>
-                            <tr>
-                              <th scope="col">ID</th>
-                              <th scope="col">To</th>
-                              <th scope="col">Status</th>
-                              <th scope="col">Created</th>
-                              <th scope="col">Error</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {messages.length === 0 ? (
-                              <tr><td colSpan={5} className="text-muted">No messages queued yet.</td></tr>
-                            ) : messages.slice(0, 40).map((msg) => (
-                              <tr key={msg.id}>
-                                <td>{msg.id}</td>
-                                <td>{msg.to_address}</td>
-                                <td className={`celebr8-message-status-${msg.status}`}>{msg.status}</td>
-                                <td className="small">{msg.created_at}</td>
-                                <td className="small text-danger">{msg.error_text || ''}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : null}
-                </>
+              <h2 className="celebr8-section-label">Upcoming</h2>
+              {upcoming.length === 0 ? (
+                <p className="text-muted">No upcoming parties yet.</p>
               ) : (
-                <div className="celebr8-panel">No events found.</div>
+                <div className="celebr8-party-grid">{upcoming.map(renderCard)}</div>
+              )}
+              <h2 className="celebr8-section-label">Past</h2>
+              {past.length === 0 ? (
+                <p className="text-muted">No past parties yet.</p>
+              ) : (
+                <div className="celebr8-party-grid">{past.map(renderCard)}</div>
               )}
             </>
           )}
         </div>
       </section>
 
-      {guestDraft && event ? (
+      {creating ? (
         <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.45)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h2 className="modal-title h5">{guestDraft.id ? 'Edit guest' : 'Add guest'}</h2>
-                <button type="button" className="btn-close" aria-label="Close" onClick={() => setGuestDraft(null)} />
+                <h2 className="modal-title h5">New party</h2>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setCreating(false)} />
               </div>
               <div className="modal-body">
                 <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-name">Name</label>
-                  <input id="celebr8-guest-name" className="form-control" value={guestDraft.name} onChange={(e) => setGuestDraft({ ...guestDraft, name: e.target.value })} />
+                  <label className="form-label" htmlFor="c8-new-title">Name</label>
+                  <input id="c8-new-title" className="form-control" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} placeholder="Halloween Bash" />
                 </div>
                 <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-phone">Phone</label>
-                  <input id="celebr8-guest-phone" className="form-control" value={guestDraft.phone} onChange={(e) => setGuestDraft({ ...guestDraft, phone: e.target.value })} />
+                  <label className="form-label" htmlFor="c8-new-date">Date</label>
+                  <input id="c8-new-date" className="form-control" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} placeholder="Friday, Oct 30, 2026" />
                 </div>
-                <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-email">Email</label>
-                  <input id="celebr8-guest-email" className="form-control" value={guestDraft.email} onChange={(e) => setGuestDraft({ ...guestDraft, email: e.target.value })} />
-                </div>
-                <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-rsvp">RSVP</label>
-                  <select id="celebr8-guest-rsvp" className="form-select" value={guestDraft.rsvp_status} onChange={(e) => setGuestDraft({ ...guestDraft, rsvp_status: e.target.value as Celebr8RsvpStatus })}>
-                    {RSVP_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                <div className="mb-0">
+                  <label className="form-label" htmlFor="c8-new-tpl">Start from a template (optional)</label>
+                  <select id="c8-new-tpl" className="form-select" value={draftTemplate} onChange={(e) => setDraftTemplate(e.target.value)}>
+                    <option value="">Blank party</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}{t.is_suggested ? ' (suggested)' : ''}</option>
+                    ))}
                   </select>
-                </div>
-                <div className="row g-2">
-                  <div className="col-6">
-                    <label className="form-label" htmlFor="celebr8-guest-party">Party size</label>
-                    <input id="celebr8-guest-party" type="number" min={1} className="form-control" value={guestDraft.party_size} onChange={(e) => setGuestDraft({ ...guestDraft, party_size: Number(e.target.value) || 1 })} />
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label" htmlFor="celebr8-guest-kids">Kids</label>
-                    <input id="celebr8-guest-kids" type="number" min={0} className="form-control" value={guestDraft.kids_count} onChange={(e) => setGuestDraft({ ...guestDraft, kids_count: Number(e.target.value) || 0 })} />
-                  </div>
-                </div>
-                <div className="mb-2 mt-2">
-                  <label className="form-label" htmlFor="celebr8-guest-relation">Family relation</label>
-                  <input id="celebr8-guest-relation" className="form-control" value={guestDraft.relation_label} onChange={(e) => setGuestDraft({ ...guestDraft, relation_label: e.target.value })} />
-                </div>
-                <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-via">Invited via</label>
-                  <input id="celebr8-guest-via" className="form-control" value={guestDraft.invited_via} onChange={(e) => setGuestDraft({ ...guestDraft, invited_via: e.target.value })} />
-                </div>
-                <div className="form-check mb-2">
-                  <input id="celebr8-guest-chili" className="form-check-input" type="checkbox" checked={Number(guestDraft.bringing_chili) === 1} onChange={(e) => setGuestDraft({ ...guestDraft, bringing_chili: e.target.checked ? 1 : 0 })} />
-                  <label className="form-check-label" htmlFor="celebr8-guest-chili">Bringing chili</label>
-                </div>
-                <div className="mb-2">
-                  <label className="form-label" htmlFor="celebr8-guest-bringing">Bringing (appetizer / dessert / other)</label>
-                  <input id="celebr8-guest-bringing" className="form-control" value={guestDraft.bringing} onChange={(e) => setGuestDraft({ ...guestDraft, bringing: e.target.value })} />
-                </div>
-                <div className="form-check mb-2">
-                  <input id="celebr8-guest-phone-unverified" className="form-check-input" type="checkbox" checked={Number(guestDraft.phone_unverified) === 1} onChange={(e) => setGuestDraft({ ...guestDraft, phone_unverified: e.target.checked ? 1 : 0 })} />
-                  <label className="form-check-label" htmlFor="celebr8-guest-phone-unverified">Phone unverified</label>
-                </div>
-                <div className="mt-2">
-                  <label className="form-label" htmlFor="celebr8-guest-notes">Notes</label>
-                  <textarea id="celebr8-guest-notes" className="form-control" rows={3} value={guestDraft.notes} onChange={(e) => setGuestDraft({ ...guestDraft, notes: e.target.value })} />
+                  <p className="small text-muted mt-2 mb-0">Templates pre-fill details and suggest activities from the shared library. Location stays blank.</p>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setGuestDraft(null)}>Cancel</button>
-                <button type="button" className="btn btn-primary" disabled={busy || !guestDraft.name.trim()} onClick={() => void onSaveGuest()}>Save guest</button>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setCreating(false)}>Cancel</button>
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createParty()}>Create party</button>
               </div>
             </div>
           </div>

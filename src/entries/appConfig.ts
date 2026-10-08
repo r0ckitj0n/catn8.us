@@ -13,6 +13,7 @@ import { StoriesPage } from '../components/pages/StoriesPage';
 import { TetrisPage } from '../components/pages/TetrisPage';
 import { Celebr8ActivitiesPage } from '../components/pages/Celebr8ActivitiesPage';
 import { Celebr8Page } from '../components/pages/Celebr8Page';
+import { Celebr8PartyPage } from '../components/pages/Celebr8PartyPage';
 import { Celebr8TemplatesPage } from '../components/pages/Celebr8TemplatesPage';
 import { Valid8Page } from '../components/pages/Valid8Page';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
@@ -27,6 +28,7 @@ export type AppPage =
   | 'accumul8'
   | 'valid8'
   | 'celebr8'
+  | 'celebr8_party'
   | 'celebr8_templates'
   | 'celebr8_activities'
   | 'illumin8'
@@ -68,6 +70,7 @@ export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType
   activ8: ActivitiesPage,
   valid8: Valid8Page,
   celebr8: Celebr8Page,
+  celebr8_party: Celebr8PartyPage,
   celebr8_templates: Celebr8TemplatesPage,
   celebr8_activities: Celebr8ActivitiesPage,
   illumin8: ColoringPage,

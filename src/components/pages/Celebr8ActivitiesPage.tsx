@@ -4,12 +4,13 @@ import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
 import { PageLayout } from '../layout/PageLayout';
 import { ApiClient } from '../../core/ApiClient';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
-import { Celebr8Activity } from '../../types/celebr8';
+import { CELEBR8_HOLIDAYS, Celebr8Activity } from '../../types/celebr8';
 import './Celebr8Page.css';
 
 const EMPTY_DRAFT = {
   id: 0,
   name: '',
+  preferred_holiday: 'Any',
   party_types: '' as string,
   category: 'other',
   description: '',
@@ -33,7 +34,7 @@ export function Celebr8ActivitiesPage({
   const isAdmin = Number(viewer?.is_admin) === 1 || Number(viewer?.is_administrator) === 1;
   const [busy, setBusy] = React.useState(false);
   const [activities, setActivities] = React.useState<Celebr8Activity[]>([]);
-  const [partyType, setPartyType] = React.useState('');
+  const [holiday, setHoliday] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [ages, setAges] = React.useState('');
   const [q, setQ] = React.useState('');
@@ -45,7 +46,7 @@ export function Celebr8ActivitiesPage({
     setBusy(true);
     try {
       const params = new URLSearchParams({ action: 'list_activities' });
-      if (partyType) params.set('party_type', partyType);
+      if (holiday) params.set('preferred_holiday', holiday);
       if (category) params.set('category', category);
       if (ages) params.set('ages', ages);
       const res = await ApiClient.get<{ success: boolean; activities: Celebr8Activity[] }>(
@@ -57,7 +58,7 @@ export function Celebr8ActivitiesPage({
     } finally {
       setBusy(false);
     }
-  }, [ages, category, isAuthed, onToast, partyType]);
+  }, [ages, category, holiday, isAuthed, onToast]);
 
   React.useEffect(() => {
     void load();
@@ -67,7 +68,7 @@ export function Celebr8ActivitiesPage({
     const needle = q.trim().toLowerCase();
     if (!needle) return activities;
     return activities.filter((a) => {
-      const hay = `${a.name} ${a.description} ${a.category} ${a.source} ${(a.party_types || []).join(' ')}`.toLowerCase();
+      const hay = `${a.name} ${a.description} ${a.category} ${a.source} ${a.preferred_holiday} ${(a.party_types || []).join(' ')}`.toLowerCase();
       return hay.includes(needle);
     });
   }, [activities, q]);
@@ -81,6 +82,7 @@ export function Celebr8ActivitiesPage({
     setDraft({
       id: a.id,
       name: a.name,
+      preferred_holiday: a.preferred_holiday || 'Any',
       party_types: (a.party_types || []).join(', '),
       category: a.category || 'other',
       description: a.description || '',
@@ -100,6 +102,7 @@ export function Celebr8ActivitiesPage({
       await ApiClient.post('/api/celebr8.php?action=upsert_activity', {
         id: draft.id || undefined,
         name: draft.name,
+        preferred_holiday: draft.preferred_holiday,
         party_types: draft.party_types.split(',').map((s) => s.trim()).filter(Boolean),
         category: draft.category,
         description: draft.description,
@@ -115,6 +118,23 @@ export function Celebr8ActivitiesPage({
       await load();
     } catch (error: any) {
       onToast?.({ tone: 'error', message: error?.message || 'Save failed' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyActivity = async (a: Celebr8Activity) => {
+    setBusy(true);
+    try {
+      const res = await ApiClient.post<{ success: boolean; activity: Celebr8Activity }>(
+        '/api/celebr8.php?action=copy_activity',
+        { activity_id: a.id },
+      );
+      onToast?.({ tone: 'success', message: 'Copied — re-theme this copy' });
+      openEdit(res.activity);
+      await load();
+    } catch (error: any) {
+      onToast?.({ tone: 'error', message: error?.message || 'Copy failed' });
     } finally {
       setBusy(false);
     }
@@ -149,20 +169,16 @@ export function Celebr8ActivitiesPage({
       <section className="section celebr8-page">
         <div className="celebr8-hero">
           <h1>CELEBR8</h1>
-          <p className="mb-0">Activity library — filter by party type, category, and ages.</p>
+          <p className="mb-0">Shared activity library — available to every party. Preferred holiday is only a label.</p>
         </div>
         <Celebr8SubNav active="activities" />
 
         <div className="celebr8-panel">
           <div className="celebr8-toolbar">
             <input className="form-control" style={{ maxWidth: 220 }} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-            <select className="form-select" style={{ maxWidth: 180 }} value={partyType} onChange={(e) => setPartyType(e.target.value)}>
-              <option value="">All party types</option>
-              <option value="halloween">halloween</option>
-              <option value="new-years-eve">new-years-eve</option>
-              <option value="poker-ping-pong">poker-ping-pong</option>
-              <option value="labor-day">labor-day</option>
-              <option value="milestone-birthday">milestone-birthday</option>
+            <select className="form-select" style={{ maxWidth: 180 }} value={holiday} onChange={(e) => setHoliday(e.target.value)}>
+              <option value="">All holidays</option>
+              {CELEBR8_HOLIDAYS.map((h) => <option key={h} value={h}>{h}</option>)}
             </select>
             <select className="form-select" style={{ maxWidth: 140 }} value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">All categories</option>
@@ -185,7 +201,7 @@ export function Celebr8ActivitiesPage({
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Types</th>
+                  <th>Holiday</th>
                   <th>Category</th>
                   <th>Ages</th>
                   <th>Source</th>
@@ -200,7 +216,7 @@ export function Celebr8ActivitiesPage({
                       {Number(a.is_suggested) === 1 ? <span className="celebr8-flag ms-1">suggested</span> : null}
                       <div className="small text-muted">{a.description}</div>
                     </td>
-                    <td className="small">{(a.party_types || []).join(', ')}</td>
+                    <td className="small">{a.preferred_holiday || 'Any'}{a.copied_from_activity_id ? <div className="text-muted">copy of #{a.copied_from_activity_id}</div> : null}</td>
                     <td>{a.category}</td>
                     <td>{a.ages}</td>
                     <td className="small celebr8-notes-cell">{a.source}</td>
@@ -208,6 +224,7 @@ export function Celebr8ActivitiesPage({
                       {isAdmin ? (
                         <>
                           <button type="button" className="btn btn-link btn-sm" onClick={() => openEdit(a)}>Edit</button>
+                          <button type="button" className="btn btn-link btn-sm" onClick={() => void copyActivity(a)}>Copy</button>
                           <button type="button" className="btn btn-link btn-sm text-danger" onClick={() => void remove(a)}>Delete</button>
                         </>
                       ) : null}
@@ -234,8 +251,10 @@ export function Celebr8ActivitiesPage({
                   </div>
                   <div className="row g-2">
                     <div className="col-md-6">
-                      <label className="form-label">Party types (comma-separated)</label>
-                      <input className="form-control" value={draft.party_types} onChange={(e) => setDraft({ ...draft, party_types: e.target.value })} />
+                      <label className="form-label">Preferred holiday</label>
+                      <select className="form-select" value={draft.preferred_holiday} onChange={(e) => setDraft({ ...draft, preferred_holiday: e.target.value })}>
+                        {CELEBR8_HOLIDAYS.map((h) => <option key={h} value={h}>{h}</option>)}
+                      </select>
                     </div>
                     <div className="col-md-3">
                       <label className="form-label">Category</label>

@@ -1,14 +1,14 @@
 import React from 'react';
 
 type Props = {
-  active: 'event' | 'templates' | 'activities';
+  active: 'parties' | 'templates' | 'activities';
 };
 
 export function Celebr8SubNav({ active }: Props) {
   const links: Array<{ key: Props['active']; href: string; label: string }> = [
-    { key: 'event', href: '/celebr8', label: 'Event' },
-    { key: 'templates', href: '/celebr8/templates', label: 'Party Templates' },
+    { key: 'parties', href: '/celebr8', label: 'My Parties' },
     { key: 'activities', href: '/celebr8/activities', label: 'Activities' },
+    { key: 'templates', href: '/celebr8/templates', label: 'Templates' },
   ];
 
   return (

@@ -107,6 +107,7 @@ final class Celebr8Model
             'invite_text' => 'TEXT NULL',
             'flyer_image_url' => "VARCHAR(512) NOT NULL DEFAULT ''",
             'template_id' => 'INT NULL DEFAULT NULL',
+            'starts_on' => 'DATE NULL DEFAULT NULL',
         ];
         foreach ($cols as $name => $ddl) {
             self::ensureColumn('celebr8_events', $name, $ddl);
@@ -115,6 +116,21 @@ final class Celebr8Model
         self::widenColumn('celebr8_events', 'event_date', "VARCHAR(255) NOT NULL DEFAULT ''");
         self::widenColumn('celebr8_events', 'arrival_time_kids', "VARCHAR(128) NOT NULL DEFAULT ''");
         self::widenColumn('celebr8_events', 'arrival_time_adults', "VARCHAR(128) NOT NULL DEFAULT ''");
+        self::backfillStartsOn();
+    }
+
+    private static function backfillStartsOn(): void
+    {
+        $rows = Database::queryAll(
+            "SELECT id, event_date FROM celebr8_events WHERE starts_on IS NULL AND event_date <> ''"
+        );
+        foreach ($rows as $row) {
+            $parsed = self::parseStartsOn((string)($row['event_date'] ?? ''));
+            if ($parsed === null) {
+                continue;
+            }
+            Database::execute('UPDATE celebr8_events SET starts_on = ? WHERE id = ?', [$parsed, (int)$row['id']]);
+        }
     }
 
     private static function widenColumn(string $table, string $column, string $ddl): void
@@ -334,9 +350,59 @@ final class Celebr8Model
             'flyer_image_url' => (string)($row['flyer_image_url'] ?? ''),
             'notes' => (string)($row['notes'] ?? ''),
             'template_id' => isset($row['template_id']) && $row['template_id'] !== null ? (int)$row['template_id'] : null,
+            'starts_on' => isset($row['starts_on']) && $row['starts_on'] !== null && $row['starts_on'] !== ''
+                ? (string)$row['starts_on']
+                : null,
+            'is_past' => self::eventIsPast($row),
+            'totals' => isset($row['going_count']) ? [
+                'going' => (int)($row['going_count'] ?? 0),
+                'maybe' => (int)($row['maybe_count'] ?? 0),
+                'not_going' => (int)($row['not_going_count'] ?? 0),
+                'no_reply' => (int)($row['no_reply_count'] ?? 0),
+            ] : null,
             'created_at' => (string)($row['created_at'] ?? ''),
             'updated_at' => (string)($row['updated_at'] ?? ''),
         ];
+    }
+
+    public static function parseStartsOn(string $eventDate): ?string
+    {
+        $eventDate = trim($eventDate);
+        if ($eventDate === '') {
+            return null;
+        }
+        $t = strtotime($eventDate);
+        if ($t === false) {
+            return null;
+        }
+        return date('Y-m-d', $t);
+    }
+
+    /** @param array<string,mixed> $row */
+    private static function eventIsPast(array $row): bool
+    {
+        $starts = (string)($row['starts_on'] ?? '');
+        if ($starts === '') {
+            $parsed = self::parseStartsOn((string)($row['event_date'] ?? ''));
+            $starts = $parsed ?? '';
+        }
+        if ($starts === '') {
+            return false;
+        }
+        return $starts < date('Y-m-d');
+    }
+
+    public static function uniqueEventSlug(string $base): string
+    {
+        $slug = strtolower((string)preg_replace('/[^a-z0-9]+/i', '-', $base));
+        $slug = trim($slug, '-') ?: 'party';
+        $try = $slug;
+        $n = 2;
+        while (self::getEventBySlug($try)) {
+            $try = $slug . '-' . $n;
+            $n++;
+        }
+        return $try;
     }
 
     public static function toGuest(array $row): array
@@ -389,8 +455,35 @@ final class Celebr8Model
     public static function listEvents(): array
     {
         self::ensureSchema();
-        $rows = Database::queryAll('SELECT * FROM celebr8_events ORDER BY id ASC');
-        return array_map([self::class, 'toEvent'], $rows);
+        $rows = Database::queryAll(
+            'SELECT e.*,
+                    COALESCE(SUM(g.rsvp_status = "going"), 0) AS going_count,
+                    COALESCE(SUM(g.rsvp_status = "maybe"), 0) AS maybe_count,
+                    COALESCE(SUM(g.rsvp_status = "not_going"), 0) AS not_going_count,
+                    COALESCE(SUM(g.rsvp_status = "no_reply"), 0) AS no_reply_count
+             FROM celebr8_events e
+             LEFT JOIN celebr8_guests g ON g.event_id = e.id
+             GROUP BY e.id
+             ORDER BY (e.starts_on IS NULL) ASC, e.starts_on ASC, e.id ASC'
+        );
+        $events = array_map([self::class, 'toEvent'], $rows);
+        usort($events, static function (array $a, array $b): int {
+            $ap = !empty($a['is_past']) ? 1 : 0;
+            $bp = !empty($b['is_past']) ? 1 : 0;
+            if ($ap !== $bp) {
+                return $ap <=> $bp;
+            }
+            $ad = (string)($a['starts_on'] ?? '');
+            $bd = (string)($b['starts_on'] ?? '');
+            if ($ap === 1) {
+                return $bd <=> $ad;
+            }
+            if ($ad !== '' && $bd !== '') {
+                return $ad <=> $bd;
+            }
+            return ((int)$a['id']) <=> ((int)$b['id']);
+        });
+        return $events;
     }
 
     public static function getEvent(int $eventId): ?array
@@ -424,6 +517,10 @@ final class Celebr8Model
             $sets[] = "`{$key}` = ?";
             $params[] = (string)$fields[$key];
         }
+        if (array_key_exists('event_date', $fields)) {
+            $sets[] = '`starts_on` = ?';
+            $params[] = self::parseStartsOn((string)$fields['event_date']);
+        }
         if ($sets === []) {
             return self::getEvent($eventId);
         }
@@ -433,6 +530,110 @@ final class Celebr8Model
             $params
         );
         return self::getEvent($eventId);
+    }
+
+    public static function createEvent(array $fields): array
+    {
+        self::ensureSchema();
+        $title = trim((string)($fields['title'] ?? ''));
+        if ($title === '') {
+            throw new InvalidArgumentException('title is required');
+        }
+        $slug = trim((string)($fields['slug'] ?? ''));
+        if ($slug === '') {
+            $slug = self::uniqueEventSlug($title);
+        } else {
+            $slug = self::uniqueEventSlug($slug);
+        }
+        $eventDate = (string)($fields['event_date'] ?? '');
+        Database::execute(
+            'INSERT INTO celebr8_events (
+                slug, title, tagline, theme, event_date, event_time, arrival_time_kids, arrival_time_adults,
+                location, food, schedule, rsvp_deadline, invite_text, flyer_image_url, notes, template_id, starts_on
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $slug,
+                $title,
+                (string)($fields['tagline'] ?? ''),
+                (string)($fields['theme'] ?? ''),
+                $eventDate,
+                (string)($fields['event_time'] ?? ''),
+                (string)($fields['arrival_time_kids'] ?? ''),
+                (string)($fields['arrival_time_adults'] ?? ''),
+                (string)($fields['location'] ?? ''),
+                (string)($fields['food'] ?? ''),
+                (string)($fields['schedule'] ?? ''),
+                (string)($fields['rsvp_deadline'] ?? ''),
+                (string)($fields['invite_text'] ?? ''),
+                (string)($fields['flyer_image_url'] ?? ''),
+                (string)($fields['notes'] ?? ''),
+                isset($fields['template_id']) && (int)$fields['template_id'] > 0 ? (int)$fields['template_id'] : null,
+                self::parseStartsOn($eventDate),
+            ]
+        );
+        $event = self::getEvent((int)Database::getInstance()->lastInsertId());
+        if (!$event) {
+            throw new RuntimeException('Failed to create party');
+        }
+        return $event;
+    }
+
+    public static function deleteEvent(int $eventId): bool
+    {
+        self::ensureSchema();
+        return Database::execute('DELETE FROM celebr8_events WHERE id = ?', [$eventId]) > 0;
+    }
+
+    /**
+     * Duplicate a party for reuse next year: copies details and activity picks, not guests.
+     *
+     * @return array{event: array<string,mixed>, activities: list<array<string,mixed>>}
+     */
+    public static function duplicateEvent(int $eventId): array
+    {
+        self::ensureSchema();
+        require_once __DIR__ . '/celebr8_catalog_model.php';
+        $src = Database::queryOne('SELECT * FROM celebr8_events WHERE id = ? LIMIT 1', [$eventId]);
+        if (!$src) {
+            throw new InvalidArgumentException('Event not found');
+        }
+        $title = trim((string)$src['title']);
+        if (!preg_match('/\(copy/i', $title)) {
+            $title .= ' (copy)';
+        }
+        $created = self::createEvent([
+            'title' => $title,
+            'slug' => (string)$src['slug'] . '-copy',
+            'tagline' => (string)($src['tagline'] ?? ''),
+            'theme' => (string)($src['theme'] ?? ''),
+            'event_date' => (string)($src['event_date'] ?? ''),
+            'event_time' => (string)($src['event_time'] ?? ''),
+            'arrival_time_kids' => (string)($src['arrival_time_kids'] ?? ''),
+            'arrival_time_adults' => (string)($src['arrival_time_adults'] ?? ''),
+            'location' => (string)($src['location'] ?? ''),
+            'food' => (string)($src['food'] ?? ''),
+            'schedule' => (string)($src['schedule'] ?? ''),
+            'rsvp_deadline' => '',
+            'invite_text' => (string)($src['invite_text'] ?? ''),
+            'flyer_image_url' => (string)($src['flyer_image_url'] ?? ''),
+            'notes' => (string)($src['notes'] ?? ''),
+            'template_id' => $src['template_id'] ?? null,
+        ]);
+        $newId = (int)$created['id'];
+        foreach (Celebr8CatalogModel::listEventActivities($eventId) as $ea) {
+            Celebr8CatalogModel::attachActivityToEvent($newId, (int)$ea['activity_id'], [
+                'time_slot' => $ea['time_slot'],
+                'run_by' => $ea['run_by'],
+                'prizes' => $ea['prizes'],
+                'supplies_checklist' => $ea['supplies_checklist'],
+                'sort_order' => $ea['sort_order'],
+                'notes' => $ea['notes'],
+            ]);
+        }
+        return [
+            'event' => $created,
+            'activities' => Celebr8CatalogModel::listEventActivities($newId),
+        ];
     }
 
     public static function listGuests(int $eventId, ?string $rsvpFilter = null): array

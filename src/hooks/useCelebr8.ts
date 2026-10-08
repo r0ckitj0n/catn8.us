@@ -29,7 +29,7 @@ function emptyTotals(): Celebr8Totals {
   };
 }
 
-export function useCelebr8(enabled: boolean, onToast?: (toast: IToast) => void) {
+export function useCelebr8(enabled: boolean, onToast?: (toast: IToast) => void, lockedEventId?: number) {
   const [busy, setBusy] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
   const [events, setEvents] = React.useState<Celebr8Event[]>([]);
@@ -50,9 +50,8 @@ export function useCelebr8(enabled: boolean, onToast?: (toast: IToast) => void) 
       const nextEvents = eventsRes.events || [];
       setEvents(nextEvents);
       const chosenId = preferredEventId
+        || lockedEventId
         || event?.id
-        || nextEvents.find((e) => e.slug === 'halloween-party-2026')?.id
-        || nextEvents[0]?.id
         || 0;
       if (chosenId <= 0) {
         setEvent(null);
@@ -78,7 +77,7 @@ export function useCelebr8(enabled: boolean, onToast?: (toast: IToast) => void) 
     } finally {
       setBusy(false);
     }
-  }, [enabled, event?.id, toast]);
+  }, [enabled, event?.id, lockedEventId, toast]);
 
   React.useEffect(() => {
     if (enabled) {

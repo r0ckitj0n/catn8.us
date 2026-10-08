@@ -1179,6 +1179,7 @@ Business term: Banking Organizations
 - `flyer_image_url` (VARCHAR(512))
 - `notes` (TEXT)
 - `template_id` (INT, NULLABLE → celebr8_party_templates.id)
+- `starts_on` (DATE, NULLABLE) — parsed from `event_date` for upcoming/past sorting
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
@@ -1205,7 +1206,9 @@ Business term: Banking Organizations
 ### celebr8_activities
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `name` (VARCHAR(191), UNIQUE)
-- `party_types_json` (LONGTEXT)
+- `party_types_json` (LONGTEXT) — legacy seed labels; not used to restrict parties
+- `preferred_holiday` (VARCHAR(64): Any|Halloween|New Year's Eve|Labor Day|Birthday|Game Night) — filter label only
+- `copied_from_activity_id` (INT, NULLABLE)
 - `category` (VARCHAR(64): contest|music|food|game|kids|other)
 - `description` (TEXT)
 - `ages` (VARCHAR(32): all|kids|adults)

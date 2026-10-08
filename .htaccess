@@ -40,6 +40,7 @@ Options -MultiViews -Indexes
   RewriteRule ^accumul8/?$ /accumul8.php [L,NC,QSA]
   RewriteRule ^valid8/?$ /valid8.php [L,NC,QSA]
   RewriteRule ^celebr8/?$ /celebr8.php [L,NC,QSA]
+  RewriteRule ^celebr8/party(?:/([0-9]+))?/?$ /celebr8.php [L,NC,QSA]
   RewriteRule ^celebr8/(templates|activities)/?$ /celebr8.php [L,NC,QSA]
   RewriteRule ^login/?$ /login.php [L,NC,QSA]
   RewriteRule ^sheriff_station/?$ /sheriff_station.php [L,NC,QSA]

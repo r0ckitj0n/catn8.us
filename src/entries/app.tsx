@@ -95,7 +95,7 @@ function App({ page }: { page: AppPage }) {
   }, [refreshViewer]);
 
   React.useEffect(() => {
-    if ((page === 'valid8' || page === 'celebr8') && viewerResolved && !viewer) {
+    if ((page === 'valid8' || page === 'celebr8' || page === 'celebr8_templates' || page === 'celebr8_activities') && viewerResolved && !viewer) {
       setLoginOpen(true);
     }
   }, [page, viewer, viewerResolved]);

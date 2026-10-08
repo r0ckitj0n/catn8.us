@@ -21,8 +21,67 @@ export interface Celebr8Event {
   invite_text: string;
   flyer_image_url: string;
   notes: string;
+  template_id?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Celebr8TemplateGalleryItem {
+  path: string;
+  url: string;
+  label: string;
+  is_suggested: number;
+}
+
+export interface Celebr8PartyTemplate {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  theme: string;
+  taglines: string[];
+  usual_timing: string;
+  food_notes: string;
+  byob_notes: string;
+  music_playlist: string[];
+  hero_image_path: string;
+  hero_image_url: string;
+  gallery: Celebr8TemplateGalleryItem[];
+  past_venue_notes: string;
+  default_activity_names: string[];
+  is_suggested: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Celebr8Activity {
+  id: number;
+  name: string;
+  party_types: string[];
+  category: string;
+  description: string;
+  ages: string;
+  supplies: string[];
+  prizes: string | null;
+  setup_notes: string;
+  source: string;
+  is_suggested: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Celebr8EventActivity {
+  id: number;
+  event_id: number;
+  activity_id: number;
+  time_slot: string;
+  run_by: string;
+  prizes: string | null;
+  supplies_checklist: Array<{ item: string; done: number }>;
+  sort_order: number;
+  notes: string;
+  activity: Celebr8Activity;
 }
 
 export interface Celebr8Guest {

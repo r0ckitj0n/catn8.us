@@ -24,10 +24,10 @@ final class Celebr8Model
             title VARCHAR(191) NOT NULL,
             tagline VARCHAR(255) NOT NULL DEFAULT '',
             theme VARCHAR(255) NOT NULL DEFAULT '',
-            event_date VARCHAR(64) NOT NULL DEFAULT '',
+            event_date VARCHAR(255) NOT NULL DEFAULT '',
             event_time VARCHAR(128) NOT NULL DEFAULT '',
-            arrival_time_kids VARCHAR(64) NOT NULL DEFAULT '',
-            arrival_time_adults VARCHAR(64) NOT NULL DEFAULT '',
+            arrival_time_kids VARCHAR(128) NOT NULL DEFAULT '',
+            arrival_time_adults VARCHAR(128) NOT NULL DEFAULT '',
             location VARCHAR(512) NOT NULL DEFAULT '',
             food TEXT NULL,
             schedule TEXT NULL,
@@ -93,6 +93,8 @@ final class Celebr8Model
         self::ensureGuestColumns();
         // Mark ensured before seed so updateEvent/getEvent do not recurse.
         self::$schemaEnsured = true;
+        require_once __DIR__ . '/celebr8_catalog_model.php';
+        Celebr8CatalogModel::ensureSchema();
         self::seedHalloween2026IfNeeded();
     }
 
@@ -104,9 +106,32 @@ final class Celebr8Model
             'arrival_time_adults' => "VARCHAR(64) NOT NULL DEFAULT ''",
             'invite_text' => 'TEXT NULL',
             'flyer_image_url' => "VARCHAR(512) NOT NULL DEFAULT ''",
+            'template_id' => 'INT NULL DEFAULT NULL',
         ];
         foreach ($cols as $name => $ddl) {
             self::ensureColumn('celebr8_events', $name, $ddl);
+        }
+        // Widen timing fields for template-sourced wording.
+        self::widenColumn('celebr8_events', 'event_date', "VARCHAR(255) NOT NULL DEFAULT ''");
+        self::widenColumn('celebr8_events', 'arrival_time_kids', "VARCHAR(128) NOT NULL DEFAULT ''");
+        self::widenColumn('celebr8_events', 'arrival_time_adults', "VARCHAR(128) NOT NULL DEFAULT ''");
+    }
+
+    private static function widenColumn(string $table, string $column, string $ddl): void
+    {
+        $row = Database::queryOne(
+            'SELECT CHARACTER_MAXIMUM_LENGTH AS len
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [$table, $column]
+        );
+        $len = (int)($row['len'] ?? 0);
+        $want = 0;
+        if (preg_match('/VARCHAR\((\d+)\)/i', $ddl, $m)) {
+            $want = (int)$m[1];
+        }
+        if ($want > 0 && $len > 0 && $len < $want) {
+            Database::execute("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` {$ddl}");
         }
     }
 
@@ -308,6 +333,7 @@ final class Celebr8Model
             'invite_text' => (string)($row['invite_text'] ?? ''),
             'flyer_image_url' => (string)($row['flyer_image_url'] ?? ''),
             'notes' => (string)($row['notes'] ?? ''),
+            'template_id' => isset($row['template_id']) && $row['template_id'] !== null ? (int)$row['template_id'] : null,
             'created_at' => (string)($row['created_at'] ?? ''),
             'updated_at' => (string)($row['updated_at'] ?? ''),
         ];

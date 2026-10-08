@@ -1,9 +1,11 @@
 import React from 'react';
 
+import { ApiClient } from '../../core/ApiClient';
 import { useCelebr8 } from '../../hooks/useCelebr8';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
-import { Celebr8Guest, Celebr8RsvpStatus } from '../../types/celebr8';
+import { Celebr8EventActivity, Celebr8Guest, Celebr8RsvpStatus } from '../../types/celebr8';
+import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
 import { PageLayout } from '../layout/PageLayout';
 import './Celebr8Page.css';
 
@@ -99,12 +101,48 @@ export function Celebr8Page({
     guests,
     messages,
     totals,
+    load,
     setEventId,
     updateEvent,
     saveGuest,
     deleteGuest,
     queueTexts,
   } = useCelebr8(isAuthed, onToast);
+
+  const [eventActivities, setEventActivities] = React.useState<Celebr8EventActivity[]>([]);
+  const [attachActivityId, setAttachActivityId] = React.useState('');
+  const [libraryActivities, setLibraryActivities] = React.useState<Array<{ id: number; name: string }>>([]);
+
+  React.useEffect(() => {
+    if (!event?.id || !isAuthed) {
+      setEventActivities([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await ApiClient.get<{ success: boolean; activities: Celebr8EventActivity[] }>(
+          `/api/celebr8.php?action=list_event_activities&event_id=${event.id}`,
+        );
+        setEventActivities(res.activities || []);
+      } catch {
+        setEventActivities([]);
+      }
+    })();
+  }, [event?.id, isAuthed]);
+
+  React.useEffect(() => {
+    if (!isAuthed) return;
+    void (async () => {
+      try {
+        const res = await ApiClient.get<{ success: boolean; activities: Array<{ id: number; name: string }> }>(
+          '/api/celebr8.php?action=list_activities',
+        );
+        setLibraryActivities((res.activities || []).map((a) => ({ id: a.id, name: a.name })));
+      } catch {
+        setLibraryActivities([]);
+      }
+    })();
+  }, [isAuthed]);
   const { confirm, confirmDialog } = useBrandedConfirm();
 
   const [editingDetails, setEditingDetails] = React.useState(false);
@@ -235,6 +273,7 @@ export function Celebr8Page({
             <h1>CELEBR8</h1>
             <p>Plan the party, track RSVPs, and queue texts that send from Jon&apos;s Mac via iMessage.</p>
           </div>
+          <Celebr8SubNav active="event" />
 
           {!loaded ? (
             <div className="celebr8-panel">Loading Celebr8…</div>
@@ -345,6 +384,90 @@ export function Celebr8Page({
                       <div className="celebr8-total-chip"><strong>{totals.by_status?.no_reply?.guest_count || 0}</strong><span>No reply</span></div>
                       <div className="celebr8-total-chip"><strong>{totals.total_kids}</strong><span>Kids total</span></div>
                     </div>
+                  </div>
+
+                  <div className="celebr8-panel">
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                      <h2 className="mb-0">Event activities</h2>
+                      <a className="btn btn-sm btn-outline-secondary" href="/celebr8/activities">Browse library</a>
+                    </div>
+                    {eventActivities.length === 0 ? (
+                      <p className="text-muted mb-2">No activities attached yet.</p>
+                    ) : (
+                      <ul className="celebr8-event-activities">
+                        {eventActivities.map((ea) => (
+                          <li key={ea.id}>
+                            <strong>{ea.activity?.name || 'Activity'}</strong>
+                            {ea.time_slot ? <span className="celebr8-flag ms-1">{ea.time_slot}</span> : null}
+                            <div className="small text-muted">{ea.activity?.description}</div>
+                            {ea.run_by ? <div className="small">Run by: {ea.run_by}</div> : null}
+                            {ea.prizes ? <div className="small">Prizes: {ea.prizes}</div> : null}
+                            {Array.isArray(ea.supplies_checklist) && ea.supplies_checklist.length > 0 ? (
+                              <ul className="small mb-0">
+                                {ea.supplies_checklist.map((s, idx) => (
+                                  <li key={`${ea.id}-${idx}`}>{Number(s.done) === 1 ? '✓' : '○'} {s.item}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {isAdmin ? (
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm text-danger px-0"
+                                onClick={() => {
+                                  void (async () => {
+                                    await ApiClient.post('/api/celebr8.php?action=detach_event_activity', {
+                                      event_id: event.id,
+                                      event_activity_id: ea.id,
+                                    });
+                                    setEventActivities((prev) => prev.filter((x) => x.id !== ea.id));
+                                    onToast?.({ tone: 'success', message: 'Activity removed from event' });
+                                  })();
+                                }}
+                              >
+                                Remove
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {isAdmin ? (
+                      <div className="celebr8-toolbar mt-2">
+                        <select
+                          className="form-select"
+                          style={{ maxWidth: 320 }}
+                          value={attachActivityId}
+                          onChange={(e) => setAttachActivityId(e.target.value)}
+                        >
+                          <option value="">Attach from library…</option>
+                          {libraryActivities.map((a) => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          disabled={!attachActivityId || busy}
+                          onClick={() => {
+                            void (async () => {
+                              const res = await ApiClient.post<{ success: boolean; event_activity: Celebr8EventActivity }>(
+                                '/api/celebr8.php?action=attach_event_activity',
+                                { event_id: event.id, activity_id: Number(attachActivityId) },
+                              );
+                              setEventActivities((prev) => {
+                                const next = prev.filter((x) => x.activity_id !== res.event_activity.activity_id);
+                                return [...next, res.event_activity].sort((a, b) => a.sort_order - b.sort_order);
+                              });
+                              setAttachActivityId('');
+                              onToast?.({ tone: 'success', message: 'Activity attached' });
+                              void load(event.id);
+                            })();
+                          }}
+                        >
+                          Attach
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="celebr8-panel">

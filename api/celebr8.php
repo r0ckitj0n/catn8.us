@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../includes/celebr8_model.php';
+require_once __DIR__ . '/../includes/celebr8_catalog_model.php';
 
 catn8_session_start();
 Celebr8Model::ensureSchema();
+Celebr8CatalogModel::ensureSchema();
 
 $uid = catn8_auth_user_id();
 if ($uid === null) {
@@ -16,10 +18,16 @@ if ($uid === null) {
 $action = trim((string)($_GET['action'] ?? ''));
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
-$readActions = ['list_events', 'get_event', 'list_guests', 'list_messages', 'totals'];
+$readActions = [
+    'list_events', 'get_event', 'list_guests', 'list_messages', 'totals',
+    'list_templates', 'get_template', 'list_activities', 'get_activity', 'list_event_activities',
+];
 $writeActions = [
     'update_event', 'create_guest', 'update_guest', 'delete_guest',
     'set_rsvp', 'queue_texts',
+    'upsert_template', 'delete_template', 'create_event_from_template', 'link_event_template',
+    'upsert_activity', 'delete_activity',
+    'attach_event_activity', 'update_event_activity', 'detach_event_activity',
 ];
 
 if ($action === '' || (!in_array($action, $readActions, true) && !in_array($action, $writeActions, true))) {
@@ -62,6 +70,7 @@ try {
             'success' => true,
             'event' => $event,
             'totals' => Celebr8Model::guestTotals((int)$event['id']),
+            'activities' => Celebr8CatalogModel::listEventActivities((int)$event['id']),
         ]);
     }
 
@@ -96,6 +105,53 @@ try {
         catn8_json_response([
             'success' => true,
             'messages' => Celebr8Model::listMessages($eventId, $status === '' ? null : $status),
+        ]);
+    }
+
+    if ($action === 'list_templates') {
+        catn8_json_response(['success' => true, 'templates' => Celebr8CatalogModel::listTemplates()]);
+    }
+
+    if ($action === 'get_template') {
+        $id = (int)($_GET['template_id'] ?? $_GET['id'] ?? 0);
+        $slug = trim((string)($_GET['slug'] ?? ''));
+        $tpl = $id > 0
+            ? Celebr8CatalogModel::getTemplate($id)
+            : ($slug !== '' ? Celebr8CatalogModel::getTemplateBySlug($slug) : null);
+        if (!$tpl) {
+            catn8_json_response(['success' => false, 'error' => 'Template not found'], 404);
+        }
+        catn8_json_response(['success' => true, 'template' => $tpl]);
+    }
+
+    if ($action === 'list_activities') {
+        catn8_json_response([
+            'success' => true,
+            'activities' => Celebr8CatalogModel::listActivities(
+                trim((string)($_GET['party_type'] ?? '')) ?: null,
+                trim((string)($_GET['category'] ?? '')) ?: null,
+                trim((string)($_GET['ages'] ?? '')) ?: null
+            ),
+        ]);
+    }
+
+    if ($action === 'get_activity') {
+        $id = (int)($_GET['activity_id'] ?? $_GET['id'] ?? 0);
+        $act = $id > 0 ? Celebr8CatalogModel::getActivity($id) : null;
+        if (!$act) {
+            catn8_json_response(['success' => false, 'error' => 'Activity not found'], 404);
+        }
+        catn8_json_response(['success' => true, 'activity' => $act]);
+    }
+
+    if ($action === 'list_event_activities') {
+        $eventId = (int)($_GET['event_id'] ?? 0);
+        if ($eventId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id required'], 400);
+        }
+        catn8_json_response([
+            'success' => true,
+            'activities' => Celebr8CatalogModel::listEventActivities($eventId),
         ]);
     }
 
@@ -191,6 +247,84 @@ try {
             'skipped' => $result['skipped'],
             'queued_count' => count($result['queued']),
         ]);
+    }
+
+    if ($action === 'upsert_template') {
+        $tpl = Celebr8CatalogModel::upsertTemplate($body);
+        catn8_json_response(['success' => true, 'template' => $tpl]);
+    }
+
+    if ($action === 'delete_template') {
+        $id = (int)($body['template_id'] ?? $body['id'] ?? 0);
+        if ($id <= 0 || !Celebr8CatalogModel::deleteTemplate($id)) {
+            catn8_json_response(['success' => false, 'error' => 'Template not found'], 404);
+        }
+        catn8_json_response(['success' => true]);
+    }
+
+    if ($action === 'create_event_from_template') {
+        $templateId = (int)($body['template_id'] ?? 0);
+        if ($templateId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'template_id required'], 400);
+        }
+        $created = Celebr8CatalogModel::createEventFromTemplate($templateId, $body);
+        catn8_json_response([
+            'success' => true,
+            'event' => $created['event'],
+            'activities' => $created['activities'],
+        ]);
+    }
+
+    if ($action === 'link_event_template') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $templateId = (int)($body['template_id'] ?? 0);
+        $event = Celebr8CatalogModel::linkEventToTemplate($eventId, $templateId);
+        if (!$event) {
+            catn8_json_response(['success' => false, 'error' => 'Event or template not found'], 404);
+        }
+        catn8_json_response(['success' => true, 'event' => $event]);
+    }
+
+    if ($action === 'upsert_activity') {
+        $act = Celebr8CatalogModel::upsertActivity($body);
+        catn8_json_response(['success' => true, 'activity' => $act]);
+    }
+
+    if ($action === 'delete_activity') {
+        $id = (int)($body['activity_id'] ?? $body['id'] ?? 0);
+        if ($id <= 0 || !Celebr8CatalogModel::deleteActivity($id)) {
+            catn8_json_response(['success' => false, 'error' => 'Activity not found'], 404);
+        }
+        catn8_json_response(['success' => true]);
+    }
+
+    if ($action === 'attach_event_activity') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $activityId = (int)($body['activity_id'] ?? 0);
+        if ($eventId <= 0 || $activityId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id and activity_id required'], 400);
+        }
+        $ea = Celebr8CatalogModel::attachActivityToEvent($eventId, $activityId, $body);
+        catn8_json_response(['success' => true, 'event_activity' => $ea]);
+    }
+
+    if ($action === 'update_event_activity') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $eaId = (int)($body['event_activity_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0 || $eaId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id and event_activity_id required'], 400);
+        }
+        $ea = Celebr8CatalogModel::updateEventActivity($eventId, $eaId, $body);
+        catn8_json_response(['success' => true, 'event_activity' => $ea]);
+    }
+
+    if ($action === 'detach_event_activity') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $eaId = (int)($body['event_activity_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0 || $eaId <= 0 || !Celebr8CatalogModel::detachEventActivity($eventId, $eaId)) {
+            catn8_json_response(['success' => false, 'error' => 'Event activity not found'], 404);
+        }
+        catn8_json_response(['success' => true]);
     }
 
     catn8_json_response(['success' => false, 'error' => 'Unhandled action'], 500);

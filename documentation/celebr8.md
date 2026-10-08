@@ -25,13 +25,22 @@ Actions:
 
 Token hash key in `secrets`: `celebr8.agent.api_token_hash`.
 
-Generate locally:
+Generate locally (against local DB secret store):
 
 ```bash
 php scripts/celebr8/generate_api_tokens.php --agent-only
 ```
 
-Plaintext path (gitignored): `.local/state/celebr8/agent-api-token`
+Mint / rotate on **live** (admin token):
+
+```bash
+curl -X POST "https://catn8.us/api/celebr8_setup.php?admin_token=$CATN8_ADMIN_TOKEN"
+```
+
+Plaintext paths on this Mac (gitignored; never commit):
+
+- `/Users/coden8r/agent-work/catn8.us/.local/state/celebr8/agent-api-token`
+- `/Users/coden8r/.local/state/catn8/celebr8/agent-api-token`
 
 ## Relay API (iMessage outbox)
 

@@ -32,7 +32,7 @@ function catn8_session_start(): void
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Lax',
-            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'secure' => catn8_request_is_https() || (function_exists('catn8_is_local_request') && !catn8_is_local_request()),
         ]);
         session_start();
     }

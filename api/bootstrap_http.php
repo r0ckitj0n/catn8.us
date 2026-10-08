@@ -120,3 +120,31 @@ function catn8_is_mutation_method(string $method): bool
     $m = strtoupper(trim($method));
     return $m !== 'GET' && $m !== 'HEAD' && $m !== 'OPTIONS';
 }
+
+function catn8_request_is_https(): bool
+{
+    $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+    if ($https !== '' && $https !== 'off' && $https !== '0') {
+        return true;
+    }
+    $fwd = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($fwd !== '') {
+        $fwd = trim(explode(',', $fwd)[0]);
+        if ($fwd === 'https') {
+            return true;
+        }
+    }
+    return (string)($_SERVER['SERVER_PORT'] ?? '') === '443';
+}
+
+function catn8_public_origin(): string
+{
+    if (function_exists('catn8_is_local_request') && catn8_is_local_request()) {
+        return 'http://localhost:8888';
+    }
+    $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? 'catn8.us')));
+    if ($host === '' || strpos($host, 'www.catn8.us') === 0) {
+        $host = 'catn8.us';
+    }
+    return 'https://' . $host;
+}

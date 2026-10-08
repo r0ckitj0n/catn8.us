@@ -123,6 +123,11 @@ if (!$isPhpRoute) {
         require $root . $appPhpRoutes[$canonical];
         exit;
     }
+    if ($canonical === '/celebr8/templates' || $canonical === '/celebr8/activities'
+        || preg_match('#^/celebr8/party(?:/[0-9]+)?$#', $canonical) === 1) {
+        require $root . '/celebr8.php';
+        exit;
+    }
 }
 
 if ($isPhpRoute) {

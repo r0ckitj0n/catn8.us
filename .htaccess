@@ -11,7 +11,20 @@ Options -MultiViews -Indexes
   RewriteCond %{HTTP:Authorization} .
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+  # Force HTTP to HTTPS without looping behind IONOS's TLS proxy.
+  # Redirect only when every signal still says the client used HTTP:
+  # Apache %{HTTPS}, %{ENV:HTTPS}, X-Forwarded-Proto, and port 443.
+  # Skip local dev hosts so Apache/PHP on localhost stays on HTTP.
+  RewriteCond %{HTTP_HOST} !^localhost(:[0-9]+)?$ [NC]
+  RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:[0-9]+)?$
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{ENV:HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+  RewriteCond %{SERVER_PORT} !=443
+  RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
+
   # Keep a single canonical host to avoid split cookies/cache and stale host-level fallbacks.
+  # www always lands on https://catn8.us (covers https://www and any leftover http://www).
   RewriteCond %{HTTP_HOST} ^www\.catn8\.us$ [NC]
   RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
 
@@ -71,7 +84,8 @@ Options -MultiViews -Indexes
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  # Modest HSTS only. omit includeSubDomains until every subdomain (mail/ftp/etc.) serves HTTPS.
+  Header always set Strict-Transport-Security "max-age=86400"
 </IfModule>
 
 <IfModule mod_authz_core.c>

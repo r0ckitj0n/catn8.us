@@ -4,6 +4,7 @@ import { ApiClient } from '../../core/ApiClient';
 import { useBrandedConfirm } from '../../hooks/useBrandedConfirm';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { Celebr8Event, Celebr8PartyTemplate } from '../../types/celebr8';
+import { Celebr8AskPanel } from '../celebr8/Celebr8AskPanel';
 import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
 import { PageLayout } from '../layout/PageLayout';
 import './Celebr8Page.css';
@@ -195,6 +196,8 @@ export function Celebr8Page({
             ) : null}
           </div>
           <Celebr8SubNav active="parties" />
+
+          <Celebr8AskPanel isAdmin={isAdmin} onToast={onToast} />
 
           {!loaded ? (
             <div className="celebr8-panel">Loading parties…</div>

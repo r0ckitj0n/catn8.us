@@ -95,6 +95,8 @@ final class Celebr8Model
         self::$schemaEnsured = true;
         require_once __DIR__ . '/celebr8_catalog_model.php';
         Celebr8CatalogModel::ensureSchema();
+        require_once __DIR__ . '/celebr8_agent_model.php';
+        Celebr8AgentModel::ensureSchema();
         self::seedHalloween2026IfNeeded();
     }
 
@@ -437,6 +439,7 @@ final class Celebr8Model
             'id' => (int)($row['id'] ?? 0),
             'event_id' => (int)($row['event_id'] ?? 0),
             'guest_id' => isset($row['guest_id']) && $row['guest_id'] !== null ? (int)$row['guest_id'] : null,
+            'request_id' => isset($row['request_id']) && $row['request_id'] !== null ? (int)$row['request_id'] : null,
             'to_address' => (string)($row['to_address'] ?? ''),
             'body' => (string)($row['body'] ?? ''),
             'status' => (string)($row['status'] ?? 'queued'),
@@ -998,7 +1001,8 @@ final class Celebr8Model
         array $guestIds,
         ?string $rsvpFilter,
         bool $allGuests,
-        int $createdByUserId
+        int $createdByUserId,
+        ?int $requestId = null
     ): array {
         self::ensureSchema();
         $body = trim($body);
@@ -1026,6 +1030,14 @@ final class Celebr8Model
         $queued = [];
         $skipped = [];
         foreach ($guests as $guest) {
+            if (self::isBlockedGuestName((string)$guest['name'])) {
+                $skipped[] = [
+                    'guest_id' => (int)$guest['id'],
+                    'name' => (string)$guest['name'],
+                    'reason' => 'blocked_guest',
+                ];
+                continue;
+            }
             $to = trim((string)$guest['phone']);
             if ($to === '' || !self::isValidPhoneOrEmail($to)) {
                 $skipped[] = [
@@ -1037,9 +1049,9 @@ final class Celebr8Model
             }
             Database::execute(
                 'INSERT INTO celebr8_text_messages (
-                    event_id, guest_id, to_address, body, status, created_by_user_id
-                ) VALUES (?, ?, ?, ?, ?, ?)',
-                [$eventId, (int)$guest['id'], $to, $body, 'queued', $createdByUserId]
+                    event_id, guest_id, to_address, body, status, created_by_user_id, request_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$eventId, (int)$guest['id'], $to, $body, 'queued', $createdByUserId, $requestId]
             );
             $id = (int)Database::getInstance()->lastInsertId();
             $msg = Database::queryOne('SELECT * FROM celebr8_text_messages WHERE id = ?', [$id]);

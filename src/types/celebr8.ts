@@ -131,6 +131,7 @@ export interface Celebr8TextMessage {
   id: number;
   event_id: number;
   guest_id: number | null;
+  request_id?: number | null;
   to_address: string;
   body: string;
   status: Celebr8MessageStatus | string;
@@ -140,6 +141,57 @@ export interface Celebr8TextMessage {
   failed_at: string | null;
   error_text: string | null;
   created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type Celebr8RequestStatus =
+  | 'pending'
+  | 'notified'
+  | 'working'
+  | 'needs_jon'
+  | 'done'
+  | 'failed';
+
+export type Celebr8AudienceType = 'none' | 'guests' | 'rsvp' | 'group';
+
+export interface Celebr8Request {
+  id: number;
+  party_id: number | null;
+  party_title?: string;
+  request_text: string;
+  preview?: string;
+  show_before_sending: number;
+  audience_type: Celebr8AudienceType | string;
+  audience_guest_ids: number[];
+  audience_rsvp_status: string;
+  audience_group_id: number | null;
+  status: Celebr8RequestStatus | string;
+  created_by_user_id: number | null;
+  notify_count: number;
+  notified_at: string | null;
+  claimed_at: string | null;
+  claimed_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Celebr8RequestMessage {
+  id: number;
+  request_id: number;
+  author_role: 'jon' | 'celebr8r' | 'system' | string;
+  body: string;
+  created_by_user_id: number | null;
+  created_at: string;
+}
+
+export interface Celebr8GuestGroup {
+  id: number;
+  event_id: number;
+  name: string;
+  notes: string;
+  guest_ids: number[];
+  member_count: number;
   created_at: string;
   updated_at: string;
 }

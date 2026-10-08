@@ -470,6 +470,105 @@
   border-radius: 0.6rem;
 }
 
+.celebr8-ask-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 0.75rem;
+}
+
+.celebr8-ask-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.celebr8-ask-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(58, 42, 34, 0.12);
+  background: #fff;
+  border-radius: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.celebr8-ask-item.is-active {
+  border-color: var(--celebr8-ember);
+  box-shadow: 0 0 0 1px rgba(196, 92, 38, 0.25);
+}
+
+.celebr8-ask-item strong {
+  font-size: 0.92rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.celebr8-ask-item small {
+  color: #6b5a4e;
+}
+
+.celebr8-ask-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b5a4e;
+}
+
+.celebr8-ask-status-pending,
+.celebr8-ask-status-notified { color: #a15c12; }
+.celebr8-ask-status-working { color: #1d5f9c; }
+.celebr8-ask-status-needs_jon { color: #9b2c2c; }
+.celebr8-ask-status-done { color: #2f6b3a; }
+.celebr8-ask-status-failed { color: #9b2c2c; }
+
+.celebr8-ask-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.celebr8-ask-msg {
+  border-radius: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  background: rgba(255, 252, 247, 0.95);
+  border: 1px solid rgba(58, 42, 34, 0.1);
+}
+
+.celebr8-ask-msg-jon {
+  background: rgba(196, 92, 38, 0.08);
+}
+
+.celebr8-ask-msg-celebr8r {
+  background: rgba(29, 95, 156, 0.08);
+}
+
+.celebr8-ask-msg span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.celebr8-ask-msg p {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+}
+
+.celebr8-ask-msg small {
+  color: #6b5a4e;
+}
+
 @media (max-width: 768px) {
   .celebr8-hero {
     padding: 1.15rem;
@@ -482,5 +581,9 @@
   .celebr8-party-facts,
   .celebr8-rsvp-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .celebr8-ask-layout {
+    grid-template-columns: 1fr;
   }
 }

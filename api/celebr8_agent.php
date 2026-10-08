@@ -5,9 +5,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../includes/celebr8_model.php';
 require_once __DIR__ . '/../includes/celebr8_catalog_model.php';
+require_once __DIR__ . '/../includes/celebr8_agent_model.php';
 
 Celebr8Model::ensureSchema();
 Celebr8CatalogModel::ensureSchema();
+Celebr8AgentModel::ensureSchema();
 
 function celebr8_agent_extract_token(): string
 {
@@ -32,6 +34,8 @@ $action = trim((string)($_GET['action'] ?? ''));
 $readActions = [
     'list_events', 'get_event', 'list_guests',
     'list_templates', 'get_template', 'list_activities', 'get_activity', 'list_event_activities',
+    'list_requests', 'get_request',
+    'list_guest_groups', 'get_guest_group',
 ];
 $writeActions = [
     'update_event', 'create_event', 'delete_event', 'duplicate_event',
@@ -39,6 +43,8 @@ $writeActions = [
     'upsert_template', 'delete_template', 'create_event_from_template', 'link_event_template',
     'upsert_activity', 'delete_activity', 'copy_activity', 'copy_event_activity',
     'attach_event_activity', 'update_event_activity', 'detach_event_activity',
+    'claim_request', 'reply_request', 'set_request_status', 'queue_outbound_texts',
+    'upsert_guest_group', 'delete_guest_group',
 ];
 $allowed = array_merge($readActions, $writeActions);
 
@@ -137,6 +143,57 @@ try {
             'success' => true,
             'activities' => Celebr8CatalogModel::listEventActivities($eventId),
         ]);
+    }
+
+    if ($action === 'list_requests') {
+        $partyRaw = $_GET['party_id'] ?? $_GET['event_id'] ?? null;
+        $partyId = null;
+        if ($partyRaw !== null && $partyRaw !== '') {
+            $partyId = (int)$partyRaw;
+        }
+        $statusRaw = trim((string)($_GET['status'] ?? 'pending,notified'));
+        $statuses = $statusRaw === '' ? null : array_map('trim', explode(',', $statusRaw));
+        $limit = (int)($_GET['limit'] ?? 50);
+        catn8_json_response([
+            'success' => true,
+            'requests' => Celebr8AgentModel::listRequests($partyId, $statuses, $limit),
+            'queue_cap_per_request' => Celebr8AgentModel::queueCapPerRequest(),
+        ]);
+    }
+
+    if ($action === 'get_request') {
+        $id = (int)($_GET['request_id'] ?? $_GET['id'] ?? 0);
+        if ($id <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $detail = Celebr8AgentModel::getRequestDetail($id);
+        if (!$detail) {
+            catn8_json_response(['success' => false, 'error' => 'Request not found'], 404);
+        }
+        catn8_json_response(['success' => true] + $detail);
+    }
+
+    if ($action === 'list_guest_groups') {
+        $eventId = (int)($_GET['event_id'] ?? $_GET['party_id'] ?? 0);
+        if ($eventId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id required'], 400);
+        }
+        catn8_json_response([
+            'success' => true,
+            'groups' => Celebr8AgentModel::listGroups($eventId),
+        ]);
+    }
+
+    if ($action === 'get_guest_group') {
+        $id = (int)($_GET['group_id'] ?? $_GET['id'] ?? 0);
+        if ($id <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'group_id required'], 400);
+        }
+        $group = Celebr8AgentModel::getGroup($id);
+        if (!$group) {
+            catn8_json_response(['success' => false, 'error' => 'Group not found'], 404);
+        }
+        catn8_json_response(['success' => true, 'group' => $group]);
     }
 
     $body = catn8_read_json_body(false);
@@ -341,6 +398,105 @@ try {
         $eaId = (int)($body['event_activity_id'] ?? $body['id'] ?? 0);
         if ($eventId <= 0 || $eaId <= 0 || !Celebr8CatalogModel::detachEventActivity($eventId, $eaId)) {
             catn8_json_response(['success' => false, 'error' => 'Event activity not found'], 404);
+        }
+        catn8_json_response(['success' => true]);
+    }
+
+    if ($action === 'claim_request') {
+        $requestId = (int)($body['request_id'] ?? $body['id'] ?? 0);
+        if ($requestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $claimedBy = trim((string)($body['claimed_by'] ?? 'celebr8r'));
+        $req = Celebr8AgentModel::claimRequest($requestId, $claimedBy);
+        if (!$req) {
+            catn8_json_response(['success' => false, 'error' => 'Request not found'], 404);
+        }
+        catn8_json_response([
+            'success' => true,
+            'request' => $req,
+            'thread' => Celebr8AgentModel::listThread($requestId),
+        ]);
+    }
+
+    if ($action === 'reply_request') {
+        $requestId = (int)($body['request_id'] ?? $body['id'] ?? 0);
+        if ($requestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $role = strtolower(trim((string)($body['author_role'] ?? $body['role'] ?? 'celebr8r')));
+        if ($role === 'jon') {
+            // Agent should not impersonate Jon; use needs_jon / set_request_status instead.
+            catn8_json_response(['success' => false, 'error' => 'Agent cannot post as jon'], 400);
+        }
+        if (!in_array($role, ['celebr8r', 'system'], true)) {
+            $role = 'celebr8r';
+        }
+        $msg = Celebr8AgentModel::addThreadMessage(
+            $requestId,
+            $role,
+            (string)($body['body'] ?? $body['text'] ?? ''),
+            null
+        );
+        $status = trim((string)($body['status'] ?? ''));
+        $req = null;
+        if ($status !== '') {
+            $req = Celebr8AgentModel::setRequestStatus($requestId, $status);
+        } else {
+            $req = Celebr8AgentModel::getRequest($requestId);
+        }
+        catn8_json_response([
+            'success' => true,
+            'message' => $msg,
+            'request' => $req,
+            'thread' => Celebr8AgentModel::listThread($requestId),
+        ]);
+    }
+
+    if ($action === 'set_request_status') {
+        $requestId = (int)($body['request_id'] ?? $body['id'] ?? 0);
+        if ($requestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $req = Celebr8AgentModel::setRequestStatus($requestId, (string)($body['status'] ?? ''));
+        catn8_json_response(['success' => true, 'request' => $req]);
+    }
+
+    if ($action === 'queue_outbound_texts') {
+        $requestId = (int)($body['request_id'] ?? $body['id'] ?? 0);
+        if ($requestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $messages = $body['messages'] ?? $body['texts'] ?? null;
+        if (!is_array($messages)) {
+            catn8_json_response(['success' => false, 'error' => 'messages array required'], 400);
+        }
+        $result = Celebr8AgentModel::queueOutboundForRequest($requestId, $messages);
+        catn8_json_response([
+            'success' => true,
+            'queued' => $result['queued'],
+            'skipped' => $result['skipped'],
+            'queued_count' => count($result['queued']),
+            'queue_cap' => $result['queue_cap'],
+            'queued_for_request' => $result['queued_for_request'],
+            'request' => Celebr8AgentModel::getRequest($requestId),
+        ]);
+    }
+
+    if ($action === 'upsert_guest_group') {
+        $eventId = (int)($body['event_id'] ?? $body['party_id'] ?? 0);
+        if ($eventId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id required'], 400);
+        }
+        $group = Celebr8AgentModel::upsertGroup($eventId, $body);
+        catn8_json_response(['success' => true, 'group' => $group]);
+    }
+
+    if ($action === 'delete_guest_group') {
+        $eventId = (int)($body['event_id'] ?? $body['party_id'] ?? 0);
+        $groupId = (int)($body['group_id'] ?? $body['id'] ?? 0);
+        if ($eventId <= 0 || $groupId <= 0 || !Celebr8AgentModel::deleteGroup($eventId, $groupId)) {
+            catn8_json_response(['success' => false, 'error' => 'Group not found'], 404);
         }
         catn8_json_response(['success' => true]);
     }

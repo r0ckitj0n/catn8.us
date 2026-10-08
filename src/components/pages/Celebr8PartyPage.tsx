@@ -9,8 +9,10 @@ import {
   Celebr8Activity,
   Celebr8EventActivity,
   Celebr8Guest,
+  Celebr8GuestGroup,
   Celebr8RsvpStatus,
 } from '../../types/celebr8';
+import { Celebr8AskPanel } from '../celebr8/Celebr8AskPanel';
 import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
 import { PageLayout } from '../layout/PageLayout';
 import './Celebr8Page.css';
@@ -101,9 +103,12 @@ export function Celebr8PartyPage({
   const [editingParty, setEditingParty] = React.useState(false);
   const [detailsDraft, setDetailsDraft] = React.useState<Record<string, string>>({});
   const [guestDraft, setGuestDraft] = React.useState<GuestDraft | null>(null);
-  const [selectedGuestIds, setSelectedGuestIds] = React.useState<number[]>([]);
   const [textBody, setTextBody] = React.useState('');
   const [textOpen, setTextOpen] = React.useState(false);
+  const [exactGuestId, setExactGuestId] = React.useState<number | ''>('');
+  const [groups, setGroups] = React.useState<Celebr8GuestGroup[]>([]);
+  const [groupDraft, setGroupDraft] = React.useState<{ id?: number; name: string; guest_ids: number[] } | null>(null);
+  const [guestGroupIds, setGuestGroupIds] = React.useState<number[]>([]);
   const [eaEdit, setEaEdit] = React.useState<Celebr8EventActivity | null>(null);
   const [copiedEdit, setCopiedEdit] = React.useState<Celebr8Activity | null>(null);
 
@@ -118,9 +123,19 @@ export function Celebr8PartyPage({
     setEventActivities(res.activities || []);
   }, []);
 
+  const refreshGroups = React.useCallback(async (id: number) => {
+    const res = await ApiClient.get<{ success: boolean; groups: Celebr8GuestGroup[] }>(
+      `/api/celebr8.php?action=list_guest_groups&event_id=${id}`,
+    );
+    setGroups(res.groups || []);
+  }, []);
+
   React.useEffect(() => {
-    if (event?.id) void refreshActivities(event.id);
-  }, [event?.id, refreshActivities]);
+    if (event?.id) {
+      void refreshActivities(event.id);
+      void refreshGroups(event.id);
+    }
+  }, [event?.id, refreshActivities, refreshGroups]);
 
   React.useEffect(() => {
     if (!event) return;
@@ -213,7 +228,7 @@ export function Celebr8PartyPage({
                 {isAdmin ? (
                   <div className="celebr8-toolbar">
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditingParty(true)}>Edit</button>
-                    <button type="button" className="btn btn-sm btn-primary" onClick={() => setTextOpen(true)}>Text guests</button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setTextOpen(true)}>Send exact text</button>
                   </div>
                 ) : null}
               </header>
@@ -241,15 +256,41 @@ export function Celebr8PartyPage({
                 <div><strong>{totals.by_status?.no_reply?.guest_count || 0}</strong><span>No reply</span></div>
               </div>
 
+              <Celebr8AskPanel
+                isAdmin={isAdmin}
+                partyId={event.id}
+                guests={guests}
+                groups={groups}
+                onToast={onToast}
+              />
+
               <div className="celebr8-panel">
-                <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                   <h2 className="h5 mb-0">Guests</h2>
-                  {isAdmin ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setGuestDraft(blankGuest())}>Add guest</button> : null}
+                  {isAdmin ? (
+                    <div className="celebr8-toolbar">
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setGroupDraft({ name: '', guest_ids: [] })}>Groups</button>
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => { setGuestDraft(blankGuest()); setGuestGroupIds([]); }}>Add guest</button>
+                    </div>
+                  ) : null}
                 </div>
+                {groups.length > 0 ? (
+                  <p className="small text-muted mb-2">
+                    Groups: {groups.map((g) => `${g.name} (${g.member_count})`).join(' · ')}
+                  </p>
+                ) : null}
                 <ul className="celebr8-guest-chips">
                   {guests.length === 0 ? <li className="text-muted">No guests yet.</li> : guests.map((g) => (
                     <li key={g.id}>
-                      <button type="button" className={`celebr8-guest-chip celebr8-status-${g.rsvp_status}`} onClick={() => isAdmin && setGuestDraft(guestToDraft(g))}>
+                      <button
+                        type="button"
+                        className={`celebr8-guest-chip celebr8-status-${g.rsvp_status}`}
+                        onClick={() => {
+                          if (!isAdmin) return;
+                          setGuestDraft(guestToDraft(g));
+                          setGuestGroupIds(groups.filter((gr) => gr.guest_ids.includes(g.id)).map((gr) => gr.id));
+                        }}
+                      >
                         {g.name}
                         <small>{g.rsvp_status.replace('_', ' ')}</small>
                       </button>
@@ -504,52 +545,45 @@ export function Celebr8PartyPage({
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h2 className="modal-title h5">Text guests</h2>
+                <h2 className="modal-title h5">Send exact text</h2>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setTextOpen(false)} />
               </div>
               <div className="modal-body">
+                <p className="small text-muted">Secondary escape hatch. Prefer Ask Celebr8r for most messaging.</p>
                 <textarea className="form-control mb-2" rows={4} value={textBody} onChange={(e) => setTextBody(e.target.value)} />
-                <p className="small text-muted">{selectedGuestIds.length} selected · {messages.length} in outbox</p>
-                <div className="celebr8-toolbar">
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedGuestIds(guests.map((g) => g.id))}>Select all</button>
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedGuestIds([])}>Clear</button>
-                </div>
-                <ul className="small mt-2 mb-0" style={{ maxHeight: 160, overflow: 'auto' }}>
-                  {guests.map((g) => (
-                    <li key={g.id}>
-                      <label>
-                        <input type="checkbox" checked={selectedGuestIds.includes(g.id)} onChange={() => setSelectedGuestIds((prev) => prev.includes(g.id) ? prev.filter((id) => id !== g.id) : [...prev, g.id])} />
-                        {' '}{g.name}{g.phone ? '' : ' (no phone)'}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                <label className="form-label">One guest</label>
+                <select className="form-select" value={exactGuestId} onChange={(e) => setExactGuestId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">Pick guest…</option>
+                  {guests.map((g) => <option key={g.id} value={g.id}>{g.name}{g.phone ? '' : ' (no phone)'}</option>)}
+                </select>
+                <p className="small text-muted mt-2 mb-0">{messages.length} messages in outbox</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline-secondary" onClick={() => setTextOpen(false)}>Close</button>
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={busy || !textBody.trim()}
+                  disabled={busy || !textBody.trim() || !exactGuestId}
                   onClick={() => {
                     void (async () => {
+                      const guest = guests.find((g) => g.id === exactGuestId);
+                      if (!guest) return;
                       const ok = await confirm({
-                        title: 'Queue iMessage texts?',
-                        message: `Queue this for ${selectedGuestIds.length || 'everyone'}?`,
-                        confirmLabel: 'Queue texts',
+                        title: 'Queue exact text?',
+                        message: `Send this exact body to ${guest.name}?`,
+                        confirmLabel: 'Queue text',
                       });
                       if (!ok) return;
                       await queueTexts({
                         event_id: event.id,
                         body: textBody.trim(),
-                        all_guests: selectedGuestIds.length === 0,
-                        guest_ids: selectedGuestIds.length ? selectedGuestIds : undefined,
+                        guest_ids: [guest.id],
                       });
                       setTextOpen(false);
                     })();
                   }}
                 >
-                  Queue texts
+                  Queue text
                 </button>
               </div>
             </div>
@@ -575,6 +609,27 @@ export function Celebr8PartyPage({
                   </select>
                 </div>
                 <div className="mb-2"><label className="form-label">Notes</label><textarea className="form-control" rows={2} value={guestDraft.notes} onChange={(e) => setGuestDraft({ ...guestDraft, notes: e.target.value })} /></div>
+                {guestDraft.id && groups.length > 0 ? (
+                  <div className="mb-0">
+                    <label className="form-label">Groups</label>
+                    <ul className="small mb-0">
+                      {groups.map((g) => (
+                        <li key={g.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={guestGroupIds.includes(g.id)}
+                              onChange={() => setGuestGroupIds((prev) => (
+                                prev.includes(g.id) ? prev.filter((id) => id !== g.id) : [...prev, g.id]
+                              ))}
+                            />
+                            {' '}{g.name}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
               <div className="modal-footer">
                 {guestDraft.id ? (
@@ -593,7 +648,124 @@ export function Celebr8PartyPage({
                   </button>
                 ) : null}
                 <button type="button" className="btn btn-outline-secondary" onClick={() => setGuestDraft(null)}>Cancel</button>
-                <button type="button" className="btn btn-primary" disabled={busy || !guestDraft.name.trim()} onClick={() => void saveGuest({ event_id: event.id, ...guestDraft }).then(() => setGuestDraft(null))}>Save</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy || !guestDraft.name.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      const guest = await saveGuest({ event_id: event.id, ...guestDraft });
+                      if (guest?.id && groups.length > 0) {
+                        await Promise.all(groups.map((g) => {
+                          const members = new Set(g.guest_ids);
+                          if (guestGroupIds.includes(g.id)) members.add(guest.id);
+                          else members.delete(guest.id);
+                          return ApiClient.post('/api/celebr8.php?action=upsert_guest_group', {
+                            event_id: event.id,
+                            id: g.id,
+                            name: g.name,
+                            guest_ids: Array.from(members),
+                          });
+                        }));
+                        await refreshGroups(event.id);
+                      }
+                      setGuestDraft(null);
+                    })();
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {groupDraft && event ? (
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.45)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2 className="modal-title h5">Guest groups</h2>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setGroupDraft(null)} />
+              </div>
+              <div className="modal-body">
+                <p className="small text-muted">Name a subset (Ingram family, Neighbors, Kids&apos; parents) for Celebr8r targeting.</p>
+                {groups.length > 0 ? (
+                  <ul className="small mb-3">
+                    {groups.map((g) => (
+                      <li key={g.id} className="d-flex justify-content-between gap-2 mb-1">
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm px-0"
+                          onClick={() => setGroupDraft({ id: g.id, name: g.name, guest_ids: [...g.guest_ids] })}
+                        >
+                          {g.name} ({g.member_count})
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm text-danger"
+                          onClick={() => {
+                            void (async () => {
+                              const ok = await confirm({ title: 'Delete group?', message: `Delete “${g.name}”?`, confirmLabel: 'Delete' });
+                              if (!ok) return;
+                              await ApiClient.post('/api/celebr8.php?action=delete_guest_group', { event_id: event.id, group_id: g.id });
+                              await refreshGroups(event.id);
+                            })();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mb-2">
+                  <label className="form-label">{groupDraft.id ? 'Edit group name' : 'New group name'}</label>
+                  <input className="form-control" value={groupDraft.name} onChange={(e) => setGroupDraft({ ...groupDraft, name: e.target.value })} placeholder="Ingram family" />
+                </div>
+                <ul className="small mb-0" style={{ maxHeight: 180, overflow: 'auto' }}>
+                  {guests.map((g) => (
+                    <li key={g.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={groupDraft.guest_ids.includes(g.id)}
+                          onChange={() => setGroupDraft({
+                            ...groupDraft,
+                            guest_ids: groupDraft.guest_ids.includes(g.id)
+                              ? groupDraft.guest_ids.filter((id) => id !== g.id)
+                              : [...groupDraft.guest_ids, g.id],
+                          })}
+                        />
+                        {' '}{g.name}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setGroupDraft(null)}>Close</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy || !groupDraft.name.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      await ApiClient.post('/api/celebr8.php?action=upsert_guest_group', {
+                        event_id: event.id,
+                        id: groupDraft.id,
+                        name: groupDraft.name.trim(),
+                        guest_ids: groupDraft.guest_ids,
+                      });
+                      await refreshGroups(event.id);
+                      setGroupDraft({ name: '', guest_ids: [] });
+                      onToast?.({ tone: 'success', message: 'Group saved' });
+                    })();
+                  }}
+                >
+                  Save group
+                </button>
               </div>
             </div>
           </div>

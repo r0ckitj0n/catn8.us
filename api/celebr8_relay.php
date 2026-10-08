@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../includes/celebr8_model.php';
+require_once __DIR__ . '/../includes/celebr8_agent_model.php';
 
 Celebr8Model::ensureSchema();
+Celebr8AgentModel::ensureSchema();
 
 function celebr8_relay_extract_token(): string
 {
@@ -27,7 +29,10 @@ if (!Celebr8Model::verifyApiToken($token, Celebr8Model::RELAY_TOKEN_SECRET_KEY))
 }
 
 $action = trim((string)($_GET['action'] ?? ''));
-$allowed = ['fetch_queued', 'claim', 'mark_sent', 'mark_failed'];
+$allowed = [
+    'fetch_queued', 'claim', 'mark_sent', 'mark_failed',
+    'list_pending_requests', 'mark_request_notified',
+];
 if ($action === '' || !in_array($action, $allowed, true)) {
     catn8_json_response(['success' => false, 'error' => 'Unknown or missing action'], 400);
 }
@@ -39,6 +44,15 @@ try {
         catn8_json_response([
             'success' => true,
             'messages' => Celebr8Model::fetchQueuedForRelay($limit),
+        ]);
+    }
+
+    if ($action === 'list_pending_requests') {
+        catn8_require_method('GET', false);
+        $limit = (int)($_GET['limit'] ?? 20);
+        catn8_json_response([
+            'success' => true,
+            'requests' => Celebr8AgentModel::listRequestsNeedingNotify($limit),
         ]);
     }
 
@@ -83,6 +97,18 @@ try {
             catn8_json_response(['success' => false, 'error' => 'Message not found'], 404);
         }
         catn8_json_response(['success' => true, 'message' => $msg]);
+    }
+
+    if ($action === 'mark_request_notified') {
+        $id = (int)($body['request_id'] ?? $body['id'] ?? 0);
+        if ($id <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'request_id required'], 400);
+        }
+        $req = Celebr8AgentModel::markRequestNotified($id);
+        if (!$req) {
+            catn8_json_response(['success' => false, 'error' => 'Request not found'], 404);
+        }
+        catn8_json_response(['success' => true, 'request' => $req]);
     }
 
     catn8_json_response(['success' => false, 'error' => 'Unhandled action'], 500);

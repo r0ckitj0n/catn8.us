@@ -1,0 +1,164 @@
+.celebr8-page {
+  --celebr8-ember: #c45c26;
+  --celebr8-night: #1c1420;
+  --celebr8-mist: rgba(255, 248, 240, 0.92);
+  --celebr8-glow: rgba(196, 92, 38, 0.28);
+}
+
+.celebr8-page .section {
+  position: relative;
+}
+
+.celebr8-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--catn8-radius-xl, 1rem);
+  padding: 1.5rem 1.5rem 1.25rem;
+  margin-bottom: 1.25rem;
+  background:
+    radial-gradient(ellipse at 12% 20%, rgba(196, 92, 38, 0.35), transparent 55%),
+    radial-gradient(ellipse at 90% 10%, rgba(40, 20, 50, 0.45), transparent 50%),
+    linear-gradient(145deg, rgba(28, 20, 32, 0.88), rgba(55, 28, 18, 0.82));
+  color: #fff8f0;
+  box-shadow: 0 12px 32px rgba(28, 20, 32, 0.28);
+  animation: celebr8-hero-in 700ms ease-out both;
+}
+
+.celebr8-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -10% -40% 40%;
+  height: 120%;
+  background: radial-gradient(circle, var(--celebr8-glow), transparent 65%);
+  pointer-events: none;
+  animation: celebr8-glow-drift 8s ease-in-out infinite alternate;
+}
+
+.celebr8-hero h1 {
+  position: relative;
+  z-index: 1;
+  font-family: 'Comic Neue', cursive;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.35rem;
+}
+
+.celebr8-hero p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 42rem;
+  opacity: 0.92;
+}
+
+.celebr8-panel {
+  background: var(--celebr8-mist);
+  border: 2px solid rgba(28, 20, 32, 0.12);
+  border-radius: var(--catn8-radius-lg, 0.75rem);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  animation: celebr8-panel-in 500ms ease-out both;
+}
+
+.celebr8-panel + .celebr8-panel {
+  animation-delay: 80ms;
+}
+
+.celebr8-panel h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  color: var(--celebr8-night);
+}
+
+.celebr8-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.celebr8-total-chip {
+  min-width: 6.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(28, 20, 32, 0.06);
+  border: 1px solid rgba(28, 20, 32, 0.08);
+}
+
+.celebr8-total-chip strong {
+  display: block;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--celebr8-ember);
+}
+
+.celebr8-total-chip span {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.celebr8-placeholder {
+  color: #8a5a3a;
+  font-style: italic;
+}
+
+.celebr8-guest-table-wrap {
+  overflow-x: auto;
+}
+
+.celebr8-guest-table th,
+.celebr8-guest-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.celebr8-guest-table td.celebr8-notes-cell {
+  white-space: normal;
+  min-width: 10rem;
+}
+
+.celebr8-status-going { color: #1f7a3f; font-weight: 700; }
+.celebr8-status-not_going { color: #9b2c2c; font-weight: 700; }
+.celebr8-status-maybe { color: #9a6b12; font-weight: 700; }
+.celebr8-status-no_reply { color: #6b6b6b; font-weight: 600; }
+
+.celebr8-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.celebr8-toolbar .form-control,
+.celebr8-toolbar .form-select {
+  max-width: 16rem;
+}
+
+.celebr8-message-status-queued { color: #9a6b12; }
+.celebr8-message-status-claimed { color: #3b5bdb; }
+.celebr8-message-status-sent { color: #1f7a3f; }
+.celebr8-message-status-failed { color: #9b2c2c; }
+
+@keyframes celebr8-hero-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes celebr8-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes celebr8-glow-drift {
+  from { transform: translateX(0); opacity: 0.7; }
+  to { transform: translateX(-12%); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .celebr8-hero {
+    padding: 1.15rem;
+  }
+}

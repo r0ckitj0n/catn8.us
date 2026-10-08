@@ -82,6 +82,7 @@ $appPhpRoutes = [
     '/photo-m8' => '/photo-m8.php',
     '/accumul8' => '/accumul8.php',
     '/valid8' => '/valid8.php',
+    '/celebr8' => '/celebr8.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',

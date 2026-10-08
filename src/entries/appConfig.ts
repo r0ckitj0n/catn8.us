@@ -11,6 +11,7 @@ import { HomePage } from '../components/pages/HomePage';
 import { PhotoAlbumsPage } from '../components/pages/PhotoAlbumsPage';
 import { StoriesPage } from '../components/pages/StoriesPage';
 import { TetrisPage } from '../components/pages/TetrisPage';
+import { Celebr8Page } from '../components/pages/Celebr8Page';
 import { Valid8Page } from '../components/pages/Valid8Page';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
 
@@ -23,6 +24,7 @@ export type AppPage =
   | 'activ8'
   | 'accumul8'
   | 'valid8'
+  | 'celebr8'
   | 'illumin8'
   | 'fabric8'
   | 'login'
@@ -61,6 +63,7 @@ export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType
   recre8: ArcadePage,
   activ8: ActivitiesPage,
   valid8: Valid8Page,
+  celebr8: Celebr8Page,
   illumin8: ColoringPage,
   loc8: WordsearchPage,
   photo_m8: PhotoAlbumsPage,

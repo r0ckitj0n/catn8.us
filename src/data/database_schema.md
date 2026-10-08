@@ -1158,3 +1158,55 @@ Business term: Banking Organizations
 - `is_active` (TINYINT(1))
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
+
+## Celebr8 Tables
+
+### celebr8_events
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `slug` (VARCHAR(96), UNIQUE)
+- `title` (VARCHAR(191))
+- `theme` (VARCHAR(255))
+- `event_date` (VARCHAR(64))
+- `event_time` (VARCHAR(64))
+- `location` (VARCHAR(512))
+- `food` (TEXT)
+- `schedule` (TEXT)
+- `rsvp_deadline` (VARCHAR(64))
+- `notes` (TEXT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_guests
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `event_id` (INT, FOREIGN KEY -> celebr8_events.id)
+- `name` (VARCHAR(191))
+- `phone` (VARCHAR(64))
+- `email` (VARCHAR(191))
+- `rsvp_status` (VARCHAR(32): going|not_going|maybe|no_reply)
+- `party_size` (INT)
+- `kids_count` (INT)
+- `notes` (TEXT)
+- `rsvp_updated_at` (DATETIME, NULLABLE)
+- `rsvp_updated_by` (VARCHAR(191))
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+### celebr8_text_messages
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `event_id` (INT, FOREIGN KEY -> celebr8_events.id)
+- `guest_id` (INT, NULLABLE, FOREIGN KEY -> celebr8_guests.id)
+- `to_address` (VARCHAR(191))
+- `body` (TEXT)
+- `status` (VARCHAR(32): queued|claimed|sent|failed)
+- `claimed_at` (DATETIME, NULLABLE)
+- `claimed_by` (VARCHAR(191))
+- `sent_at` (DATETIME, NULLABLE)
+- `failed_at` (DATETIME, NULLABLE)
+- `error_text` (TEXT, NULLABLE)
+- `created_by_user_id` (INT, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+
+Agent/relay API token SHA-256 hashes are stored in `secrets` under keys:
+- `celebr8.agent.api_token_hash`
+- `celebr8.relay.api_token_hash`

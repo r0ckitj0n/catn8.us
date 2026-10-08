@@ -66,6 +66,9 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     ...(canUseValid8
       ? [{ key: 'valid8', label: 'VALID8', href: '/valid8' }]
       : []),
+    ...(isAuthed
+      ? [{ key: 'celebr8', label: 'CELEBR8', href: '/celebr8' }]
+      : []),
     ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [
           {

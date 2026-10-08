@@ -142,6 +142,35 @@
 .celebr8-message-status-sent { color: #1f7a3f; }
 .celebr8-message-status-failed { color: #9b2c2c; }
 
+.celebr8-tagline {
+  font-style: italic;
+  opacity: 0.9;
+  margin-top: 0.25rem;
+}
+
+.celebr8-flyer img {
+  display: block;
+  width: 100%;
+  max-height: 28rem;
+  object-fit: cover;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(28, 20, 32, 0.15);
+}
+
+.celebr8-flag {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  background: rgba(154, 107, 18, 0.15);
+  color: #9a6b12;
+  vertical-align: middle;
+}
+
+.celebr8-invite-sent { color: #1f7a3f; font-weight: 600; }
+.celebr8-invite-failed { color: #9b2c2c; font-weight: 600; }
+.celebr8-invite-none { color: #6b6b6b; }
+
 @keyframes celebr8-hero-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

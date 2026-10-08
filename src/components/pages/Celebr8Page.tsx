@@ -34,6 +34,11 @@ type GuestDraft = {
   rsvp_status: Celebr8RsvpStatus;
   party_size: number;
   kids_count: number;
+  invited_via: string;
+  relation_label: string;
+  bringing_chili: number;
+  bringing: string;
+  phone_unverified: number;
   notes: string;
 };
 
@@ -45,6 +50,11 @@ function blankGuest(): GuestDraft {
     rsvp_status: 'no_reply',
     party_size: 1,
     kids_count: 0,
+    invited_via: '',
+    relation_label: '',
+    bringing_chili: 0,
+    bringing: '',
+    phone_unverified: 0,
     notes: '',
   };
 }
@@ -58,6 +68,11 @@ function guestToDraft(guest: Celebr8Guest): GuestDraft {
     rsvp_status: (guest.rsvp_status as Celebr8RsvpStatus) || 'no_reply',
     party_size: guest.party_size || 1,
     kids_count: guest.kids_count || 0,
+    invited_via: guest.invited_via || '',
+    relation_label: guest.relation_label || '',
+    bringing_chili: Number(guest.bringing_chili || 0),
+    bringing: guest.bringing || '',
+    phone_unverified: Number(guest.phone_unverified || 0),
     notes: guest.notes || '',
   };
 }
@@ -104,22 +119,30 @@ export function Celebr8Page({
     if (!event) return;
     setDetailsDraft({
       title: event.title,
+      tagline: event.tagline || '',
       theme: event.theme,
       event_date: event.event_date,
       event_time: event.event_time,
+      arrival_time_kids: event.arrival_time_kids || '',
+      arrival_time_adults: event.arrival_time_adults || '',
       location: event.location,
       food: event.food || '',
       schedule: event.schedule || '',
       rsvp_deadline: event.rsvp_deadline,
+      invite_text: event.invite_text || '',
+      flyer_image_url: event.flyer_image_url || '',
       notes: event.notes || '',
     });
-  }, [event]);
+    if (event.invite_text && !textBody) {
+      setTextBody(event.invite_text);
+    }
+  }, [event]); // eslint-disable-line react-hooks/exhaustive-deps -- seed compose box once per event load
 
   const filteredGuests = React.useMemo(() => {
     const q = guestFilter.trim().toLowerCase();
     if (!q) return guests;
     return guests.filter((g) => {
-      const hay = `${g.name} ${g.phone} ${g.email} ${g.notes} ${g.rsvp_status}`.toLowerCase();
+      const hay = `${g.name} ${g.phone} ${g.email} ${g.notes} ${g.rsvp_status} ${g.relation_label} ${g.invited_via} ${g.bringing}`.toLowerCase();
       return hay.includes(q);
     });
   }, [guestFilter, guests]);
@@ -237,7 +260,10 @@ export function Celebr8Page({
                 <>
                   <div className="celebr8-panel">
                     <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                      <h2 className="mb-0">{event.title}</h2>
+                      <div>
+                        <h2 className="mb-0">{event.title}</h2>
+                        {event.tagline ? <p className="celebr8-tagline mb-0">{event.tagline}</p> : null}
+                      </div>
                       {isAdmin ? (
                         <button
                           type="button"
@@ -249,22 +275,37 @@ export function Celebr8Page({
                       ) : null}
                     </div>
 
+                    {event.flyer_image_url ? (
+                      <div className="celebr8-flyer mt-3">
+                        <picture>
+                          <source srcSet={event.flyer_image_url.replace(/\.jpg$/i, '.webp')} type="image/webp" />
+                          <img
+                            src={event.flyer_image_url.replace(/\.webp$/i, '.jpg')}
+                            alt={`${event.title} invite flyer`}
+                            loading="lazy"
+                          />
+                        </picture>
+                      </div>
+                    ) : null}
+
                     {!editingDetails ? (
                       <dl className="row mb-0 mt-3">
                         <dt className="col-sm-3">Date</dt><dd className="col-sm-9"><FieldValue value={event.event_date} /></dd>
-                        <dt className="col-sm-3">Time</dt><dd className="col-sm-9"><FieldValue value={event.event_time} /></dd>
-                        <dt className="col-sm-3">Location</dt><dd className="col-sm-9"><FieldValue value={event.location} /></dd>
+                        <dt className="col-sm-3">Little bats</dt><dd className="col-sm-9"><FieldValue value={event.arrival_time_kids || event.event_time} /></dd>
+                        <dt className="col-sm-3">Big monsters</dt><dd className="col-sm-9"><FieldValue value={event.arrival_time_adults || ''} /></dd>
+                        <dt className="col-sm-3">Location</dt><dd className="col-sm-9">{event.location ? <FieldValue value={event.location} /> : <span className="text-muted">TBD (editable)</span>}</dd>
                         <dt className="col-sm-3">Theme</dt><dd className="col-sm-9"><FieldValue value={event.theme} /></dd>
-                        <dt className="col-sm-3">Food</dt><dd className="col-sm-9"><FieldValue value={event.food || ''} /></dd>
-                        <dt className="col-sm-3">Schedule</dt><dd className="col-sm-9"><FieldValue value={event.schedule || ''} /></dd>
-                        <dt className="col-sm-3">RSVP deadline</dt><dd className="col-sm-9"><FieldValue value={event.rsvp_deadline} /></dd>
-                        <dt className="col-sm-3">Notes</dt><dd className="col-sm-9"><FieldValue value={event.notes || ''} /></dd>
+                        <dt className="col-sm-3">Food</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.food || ''} /></dd>
+                        <dt className="col-sm-3">Schedule</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.schedule || ''} /></dd>
+                        <dt className="col-sm-3">RSVP deadline</dt><dd className="col-sm-9">{event.rsvp_deadline ? <FieldValue value={event.rsvp_deadline} /> : <span className="text-muted">Not set</span>}</dd>
+                        <dt className="col-sm-3">Invite text</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.invite_text || ''} /></dd>
+                        <dt className="col-sm-3">Notes</dt><dd className="col-sm-9" style={{ whiteSpace: 'pre-wrap' }}><FieldValue value={event.notes || ''} /></dd>
                       </dl>
                     ) : (
                       <div className="row g-2 mt-2">
-                        {(['title', 'event_date', 'event_time', 'location', 'theme', 'rsvp_deadline'] as const).map((key) => (
+                        {(['title', 'tagline', 'event_date', 'arrival_time_kids', 'arrival_time_adults', 'event_time', 'location', 'theme', 'rsvp_deadline', 'flyer_image_url'] as const).map((key) => (
                           <div className="col-md-6" key={key}>
-                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key.replace('_', ' ')}</label>
+                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key.replaceAll('_', ' ')}</label>
                             <input
                               id={`celebr8-${key}`}
                               className="form-control"
@@ -273,9 +314,9 @@ export function Celebr8Page({
                             />
                           </div>
                         ))}
-                        {(['food', 'schedule', 'notes'] as const).map((key) => (
+                        {(['food', 'schedule', 'invite_text', 'notes'] as const).map((key) => (
                           <div className="col-12" key={key}>
-                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key}</label>
+                            <label className="form-label text-capitalize" htmlFor={`celebr8-${key}`}>{key.replaceAll('_', ' ')}</label>
                             <textarea
                               id={`celebr8-${key}`}
                               className="form-control"
@@ -336,18 +377,17 @@ export function Celebr8Page({
                             {isAdmin ? <th scope="col"></th> : null}
                             <th scope="col">Name</th>
                             <th scope="col">Phone</th>
-                            <th scope="col">Email</th>
                             <th scope="col">RSVP</th>
-                            <th scope="col">Party</th>
-                            <th scope="col">Kids</th>
-                            <th scope="col">Updated</th>
+                            <th scope="col">Invite</th>
+                            <th scope="col">Family</th>
+                            <th scope="col">Bringing</th>
                             <th scope="col">Notes</th>
                             {isAdmin ? <th scope="col">Actions</th> : null}
                           </tr>
                         </thead>
                         <tbody>
                           {filteredGuests.length === 0 ? (
-                            <tr><td colSpan={isAdmin ? 10 : 8} className="text-muted">No guests yet.</td></tr>
+                            <tr><td colSpan={isAdmin ? 9 : 7} className="text-muted">No guests yet.</td></tr>
                           ) : filteredGuests.map((guest) => (
                             <tr key={guest.id}>
                               {isAdmin ? (
@@ -360,15 +400,17 @@ export function Celebr8Page({
                                   />
                                 </td>
                               ) : null}
-                              <td>{guest.name}</td>
-                              <td>{guest.phone || '—'}</td>
-                              <td>{guest.email || '—'}</td>
-                              <td className={`celebr8-status-${guest.rsvp_status}`}>{guest.rsvp_status}</td>
-                              <td>{guest.party_size}</td>
-                              <td>{guest.kids_count}</td>
                               <td>
-                                <div className="small">{guest.rsvp_updated_at || '—'}</div>
-                                <div className="small text-muted">{guest.rsvp_updated_by || ''}</div>
+                                {guest.name}
+                                {Number(guest.phone_unverified) === 1 ? <span className="celebr8-flag ms-1">phone unverified</span> : null}
+                              </td>
+                              <td>{guest.phone || '—'}</td>
+                              <td className={`celebr8-status-${guest.rsvp_status}`}>{guest.rsvp_status}</td>
+                              <td className={`celebr8-invite-${guest.invite_send_status || 'none'}`}>{guest.invite_send_status || 'none'}</td>
+                              <td className="small">{guest.relation_label || (guest.invited_via ? `via ${guest.invited_via}` : '—')}</td>
+                              <td className="small">
+                                {Number(guest.bringing_chili) === 1 ? 'Chili' : ''}
+                                {guest.bringing ? `${Number(guest.bringing_chili) === 1 ? '; ' : ''}${guest.bringing}` : (Number(guest.bringing_chili) === 1 ? '' : '—')}
                               </td>
                               <td className="celebr8-notes-cell">{guest.notes || ''}</td>
                               {isAdmin ? (
@@ -486,6 +528,26 @@ export function Celebr8Page({
                     <label className="form-label" htmlFor="celebr8-guest-kids">Kids</label>
                     <input id="celebr8-guest-kids" type="number" min={0} className="form-control" value={guestDraft.kids_count} onChange={(e) => setGuestDraft({ ...guestDraft, kids_count: Number(e.target.value) || 0 })} />
                   </div>
+                </div>
+                <div className="mb-2 mt-2">
+                  <label className="form-label" htmlFor="celebr8-guest-relation">Family relation</label>
+                  <input id="celebr8-guest-relation" className="form-control" value={guestDraft.relation_label} onChange={(e) => setGuestDraft({ ...guestDraft, relation_label: e.target.value })} />
+                </div>
+                <div className="mb-2">
+                  <label className="form-label" htmlFor="celebr8-guest-via">Invited via</label>
+                  <input id="celebr8-guest-via" className="form-control" value={guestDraft.invited_via} onChange={(e) => setGuestDraft({ ...guestDraft, invited_via: e.target.value })} />
+                </div>
+                <div className="form-check mb-2">
+                  <input id="celebr8-guest-chili" className="form-check-input" type="checkbox" checked={Number(guestDraft.bringing_chili) === 1} onChange={(e) => setGuestDraft({ ...guestDraft, bringing_chili: e.target.checked ? 1 : 0 })} />
+                  <label className="form-check-label" htmlFor="celebr8-guest-chili">Bringing chili</label>
+                </div>
+                <div className="mb-2">
+                  <label className="form-label" htmlFor="celebr8-guest-bringing">Bringing (appetizer / dessert / other)</label>
+                  <input id="celebr8-guest-bringing" className="form-control" value={guestDraft.bringing} onChange={(e) => setGuestDraft({ ...guestDraft, bringing: e.target.value })} />
+                </div>
+                <div className="form-check mb-2">
+                  <input id="celebr8-guest-phone-unverified" className="form-check-input" type="checkbox" checked={Number(guestDraft.phone_unverified) === 1} onChange={(e) => setGuestDraft({ ...guestDraft, phone_unverified: e.target.checked ? 1 : 0 })} />
+                  <label className="form-check-label" htmlFor="celebr8-guest-phone-unverified">Phone unverified</label>
                 </div>
                 <div className="mt-2">
                   <label className="form-label" htmlFor="celebr8-guest-notes">Notes</label>

@@ -28,7 +28,7 @@ if (!Celebr8Model::verifyApiToken($token, Celebr8Model::AGENT_TOKEN_SECRET_KEY))
 
 $action = trim((string)($_GET['action'] ?? ''));
 $readActions = ['list_events', 'get_event', 'list_guests'];
-$writeActions = ['update_event', 'upsert_guest', 'set_rsvp'];
+$writeActions = ['update_event', 'upsert_guest', 'set_rsvp', 'record_historical_invite'];
 $allowed = array_merge($readActions, $writeActions);
 
 if ($action === '' || !in_array($action, $allowed, true)) {
@@ -138,6 +138,23 @@ try {
             'guest' => $guest,
             'totals' => Celebr8Model::guestTotals($eventId),
         ]);
+    }
+
+    if ($action === 'record_historical_invite') {
+        $eventId = (int)($body['event_id'] ?? 0);
+        $guestId = (int)($body['guest_id'] ?? 0);
+        if ($eventId <= 0 || $guestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'event_id and guest_id required'], 400);
+        }
+        Celebr8Model::recordHistoricalInvite(
+            $eventId,
+            $guestId,
+            (string)($body['to_address'] ?? ''),
+            (string)($body['body'] ?? ''),
+            (string)($body['status'] ?? ''),
+            (string)($body['error'] ?? $body['error_text'] ?? '')
+        );
+        catn8_json_response(['success' => true]);
     }
 
     catn8_json_response(['success' => false, 'error' => 'Unhandled action'], 500);

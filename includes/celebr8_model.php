@@ -22,13 +22,18 @@ final class Celebr8Model
             id INT AUTO_INCREMENT PRIMARY KEY,
             slug VARCHAR(96) NOT NULL,
             title VARCHAR(191) NOT NULL,
+            tagline VARCHAR(255) NOT NULL DEFAULT '',
             theme VARCHAR(255) NOT NULL DEFAULT '',
-            event_date VARCHAR(64) NOT NULL DEFAULT '[PLACEHOLDER: date]',
-            event_time VARCHAR(64) NOT NULL DEFAULT '[PLACEHOLDER: time]',
-            location VARCHAR(512) NOT NULL DEFAULT '[PLACEHOLDER: location]',
+            event_date VARCHAR(64) NOT NULL DEFAULT '',
+            event_time VARCHAR(128) NOT NULL DEFAULT '',
+            arrival_time_kids VARCHAR(64) NOT NULL DEFAULT '',
+            arrival_time_adults VARCHAR(64) NOT NULL DEFAULT '',
+            location VARCHAR(512) NOT NULL DEFAULT '',
             food TEXT NULL,
             schedule TEXT NULL,
-            rsvp_deadline VARCHAR(64) NOT NULL DEFAULT '[PLACEHOLDER: RSVP deadline]',
+            rsvp_deadline VARCHAR(64) NOT NULL DEFAULT '',
+            invite_text TEXT NULL,
+            flyer_image_url VARCHAR(512) NOT NULL DEFAULT '',
             notes TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -44,6 +49,13 @@ final class Celebr8Model
             rsvp_status VARCHAR(32) NOT NULL DEFAULT 'no_reply',
             party_size INT NOT NULL DEFAULT 1,
             kids_count INT NOT NULL DEFAULT 0,
+            invited_via VARCHAR(191) NOT NULL DEFAULT '',
+            relation_label VARCHAR(255) NOT NULL DEFAULT '',
+            bringing_chili TINYINT(1) NOT NULL DEFAULT 0,
+            bringing VARCHAR(255) NOT NULL DEFAULT '',
+            phone_unverified TINYINT(1) NOT NULL DEFAULT 0,
+            invite_send_status VARCHAR(32) NOT NULL DEFAULT 'none',
+            invite_send_error TEXT NULL,
             notes TEXT NULL,
             rsvp_updated_at DATETIME NULL,
             rsvp_updated_by VARCHAR(191) NOT NULL DEFAULT '',
@@ -77,37 +89,145 @@ final class Celebr8Model
             CONSTRAINT fk_celebr8_text_guest FOREIGN KEY (guest_id) REFERENCES celebr8_guests(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-        self::seedHalloween2026IfNeeded();
+        self::ensureEventColumns();
+        self::ensureGuestColumns();
+        // Mark ensured before seed so updateEvent/getEvent do not recurse.
         self::$schemaEnsured = true;
+        self::seedHalloween2026IfNeeded();
+    }
+
+    private static function ensureEventColumns(): void
+    {
+        $cols = [
+            'tagline' => "VARCHAR(255) NOT NULL DEFAULT ''",
+            'arrival_time_kids' => "VARCHAR(64) NOT NULL DEFAULT ''",
+            'arrival_time_adults' => "VARCHAR(64) NOT NULL DEFAULT ''",
+            'invite_text' => 'TEXT NULL',
+            'flyer_image_url' => "VARCHAR(512) NOT NULL DEFAULT ''",
+        ];
+        foreach ($cols as $name => $ddl) {
+            self::ensureColumn('celebr8_events', $name, $ddl);
+        }
+    }
+
+    private static function ensureGuestColumns(): void
+    {
+        $cols = [
+            'invited_via' => "VARCHAR(191) NOT NULL DEFAULT ''",
+            'relation_label' => "VARCHAR(255) NOT NULL DEFAULT ''",
+            'bringing_chili' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'bringing' => "VARCHAR(255) NOT NULL DEFAULT ''",
+            'phone_unverified' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'invite_send_status' => "VARCHAR(32) NOT NULL DEFAULT 'none'",
+            'invite_send_error' => 'TEXT NULL',
+        ];
+        foreach ($cols as $name => $ddl) {
+            self::ensureColumn('celebr8_guests', $name, $ddl);
+        }
+    }
+
+    private static function ensureColumn(string $table, string $column, string $ddl): void
+    {
+        $row = Database::queryOne(
+            'SELECT COUNT(*) AS c
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [$table, $column]
+        );
+        if ((int)($row['c'] ?? 0) > 0) {
+            return;
+        }
+        Database::execute("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$ddl}");
+    }
+
+    public static function halloweenEventDefaults(): array
+    {
+        return [
+            'slug' => 'halloween-party-2026',
+            'title' => 'Annual Halloween Bash',
+            'tagline' => 'A Graveyard Smash!',
+            'theme' => 'Annual Halloween Bash — costumes, chili, karaoke',
+            'event_date' => 'Friday, Oct 30, 2026',
+            'event_time' => '6 PM little bats / 7 PM big monsters',
+            'arrival_time_kids' => '6 PM (little bats — kids with early bedtimes)',
+            'arrival_time_adults' => '7 PM (big monsters)',
+            'location' => '',
+            'food' => "Chili Cook-Off: bring a pot — one is crowned champion.\nNot a Chili Chef?: bring an appetizer or dessert for the Monster Munchies table.",
+            'schedule' => "Activities:\n- Chili Cook-Off\n- Costume Contest (scariest, funniest, most creative)\n- Karaoke Kraziness (off-key screams encouraged)\n- Monster Munchies table",
+            'rsvp_deadline' => '',
+            'invite_text' => "🎃 The Graves Are Rising Again for Our Annual HALLOWEEN BASH! 👻",
+            'flyer_image_url' => '/images/celebr8/halloween-bash-2026.webp',
+            'notes' => 'Jon throws this every year. Location TBD (editable). RSVP deadline / full menu schedule not set yet.',
+        ];
     }
 
     private static function seedHalloween2026IfNeeded(): void
     {
+        $defaults = self::halloweenEventDefaults();
         $existing = Database::queryOne(
-            'SELECT id FROM celebr8_events WHERE slug = ? LIMIT 1',
-            ['halloween-party-2026']
+            'SELECT id, title, event_date, location, flyer_image_url, arrival_time_kids
+             FROM celebr8_events WHERE slug = ? LIMIT 1',
+            [$defaults['slug']]
         );
-        if ($existing) {
+        if (!$existing) {
+            Database::execute(
+                'INSERT INTO celebr8_events (
+                    slug, title, tagline, theme, event_date, event_time, arrival_time_kids, arrival_time_adults,
+                    location, food, schedule, rsvp_deadline, invite_text, flyer_image_url, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                    $defaults['slug'], $defaults['title'], $defaults['tagline'], $defaults['theme'],
+                    $defaults['event_date'], $defaults['event_time'], $defaults['arrival_time_kids'],
+                    $defaults['arrival_time_adults'], $defaults['location'], $defaults['food'],
+                    $defaults['schedule'], $defaults['rsvp_deadline'], $defaults['invite_text'],
+                    $defaults['flyer_image_url'], $defaults['notes'],
+                ]
+            );
             return;
         }
 
-        Database::execute(
-            'INSERT INTO celebr8_events (
-                slug, title, theme, event_date, event_time, location, food, schedule, rsvp_deadline, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                'halloween-party-2026',
-                'Halloween Party 2026',
-                '[PLACEHOLDER: theme — e.g. costume contest, haunted hayride]',
-                '[PLACEHOLDER: date — TBD from party agent]',
-                '[PLACEHOLDER: time — TBD from party agent]',
-                '[PLACEHOLDER: location — TBD from party agent]',
-                "[PLACEHOLDER: food — menu / potluck notes from party agent]",
-                "[PLACEHOLDER: schedule — arrival, activities, wrap-up from party agent]",
-                '[PLACEHOLDER: RSVP deadline — TBD from party agent]',
-                "[PLACEHOLDER: notes — anything else Jon's party agent will fill in]",
-            ]
-        );
+        // Upgrade placeholder / prior seed rows to the confirmed 2026 details.
+        // Explicit inbox seed / agent update_event owns later edits.
+        $title = (string)($existing['title'] ?? '');
+        $date = (string)($existing['event_date'] ?? '');
+        $flyer = (string)($existing['flyer_image_url'] ?? '');
+        $kidsArrival = (string)($existing['arrival_time_kids'] ?? '');
+        $needsUpgrade = str_contains($title, 'PLACEHOLDER')
+            || $title === 'Halloween Party 2026'
+            || str_contains($date, 'PLACEHOLDER')
+            || $date === ''
+            || $flyer === ''
+            || $kidsArrival === '';
+        if ($needsUpgrade) {
+            $patch = $defaults;
+            if (trim((string)($existing['location'] ?? '')) !== '') {
+                unset($patch['location']);
+            }
+            self::updateEvent((int)$existing['id'], $patch);
+        }
+    }
+
+    public static function isBlockedGuestName(string $name): bool
+    {
+        $normalized = strtolower(trim(preg_replace('/\s+/', ' ', $name) ?? ''));
+        $normalized = str_replace(['.', '-', '_'], '', $normalized);
+        $blocked = [
+            'jt whetstone',
+            'j t whetstone',
+            'jtwhetstone',
+            'jaytee whetstone',
+            'jay tee whetstone',
+        ];
+        foreach ($blocked as $bad) {
+            $badNorm = str_replace(' ', '', $bad);
+            if ($normalized === $bad || str_replace(' ', '', $normalized) === $badNorm) {
+                return true;
+            }
+            if (str_contains($normalized, 'whetstone') && (str_contains($normalized, 'jt') || str_contains($normalized, 'jaytee') || str_contains($normalized, 'jay tee'))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static function normalizeRsvpStatus(string $status): ?string
@@ -175,13 +295,18 @@ final class Celebr8Model
             'id' => (int)($row['id'] ?? 0),
             'slug' => (string)($row['slug'] ?? ''),
             'title' => (string)($row['title'] ?? ''),
+            'tagline' => (string)($row['tagline'] ?? ''),
             'theme' => (string)($row['theme'] ?? ''),
             'event_date' => (string)($row['event_date'] ?? ''),
             'event_time' => (string)($row['event_time'] ?? ''),
+            'arrival_time_kids' => (string)($row['arrival_time_kids'] ?? ''),
+            'arrival_time_adults' => (string)($row['arrival_time_adults'] ?? ''),
             'location' => (string)($row['location'] ?? ''),
             'food' => (string)($row['food'] ?? ''),
             'schedule' => (string)($row['schedule'] ?? ''),
             'rsvp_deadline' => (string)($row['rsvp_deadline'] ?? ''),
+            'invite_text' => (string)($row['invite_text'] ?? ''),
+            'flyer_image_url' => (string)($row['flyer_image_url'] ?? ''),
             'notes' => (string)($row['notes'] ?? ''),
             'created_at' => (string)($row['created_at'] ?? ''),
             'updated_at' => (string)($row['updated_at'] ?? ''),
@@ -199,6 +324,13 @@ final class Celebr8Model
             'rsvp_status' => (string)($row['rsvp_status'] ?? 'no_reply'),
             'party_size' => (int)($row['party_size'] ?? 1),
             'kids_count' => (int)($row['kids_count'] ?? 0),
+            'invited_via' => (string)($row['invited_via'] ?? ''),
+            'relation_label' => (string)($row['relation_label'] ?? ''),
+            'bringing_chili' => (int)($row['bringing_chili'] ?? 0),
+            'bringing' => (string)($row['bringing'] ?? ''),
+            'phone_unverified' => (int)($row['phone_unverified'] ?? 0),
+            'invite_send_status' => (string)($row['invite_send_status'] ?? 'none'),
+            'invite_send_error' => $row['invite_send_error'] !== null ? (string)$row['invite_send_error'] : null,
             'notes' => (string)($row['notes'] ?? ''),
             'rsvp_updated_at' => $row['rsvp_updated_at'] !== null ? (string)$row['rsvp_updated_at'] : null,
             'rsvp_updated_by' => (string)($row['rsvp_updated_by'] ?? ''),
@@ -253,8 +385,9 @@ final class Celebr8Model
     {
         self::ensureSchema();
         $allowed = [
-            'title', 'theme', 'event_date', 'event_time', 'location',
-            'food', 'schedule', 'rsvp_deadline', 'notes',
+            'title', 'tagline', 'theme', 'event_date', 'event_time',
+            'arrival_time_kids', 'arrival_time_adults', 'location',
+            'food', 'schedule', 'rsvp_deadline', 'invite_text', 'flyer_image_url', 'notes',
         ];
         $sets = [];
         $params = [];
@@ -366,6 +499,74 @@ final class Celebr8Model
         return $row ? self::toGuest($row) : null;
     }
 
+    public static function findGuestByName(int $eventId, string $name): ?array
+    {
+        self::ensureSchema();
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+        $row = Database::queryOne(
+            'SELECT * FROM celebr8_guests WHERE event_id = ? AND name = ? LIMIT 1',
+            [$eventId, $name]
+        );
+        return $row ? self::toGuest($row) : null;
+    }
+
+    public static function recordHistoricalInvite(
+        int $eventId,
+        int $guestId,
+        string $toAddress,
+        string $body,
+        string $status,
+        string $errorText = ''
+    ): void {
+        self::ensureSchema();
+        if (!in_array($status, ['sent', 'failed'], true)) {
+            throw new InvalidArgumentException('Historical invite status must be sent or failed');
+        }
+        $existing = Database::queryOne(
+            'SELECT id FROM celebr8_text_messages
+             WHERE event_id = ? AND guest_id = ? AND claimed_by = ? LIMIT 1',
+            [$eventId, $guestId, 'seed:invite-2026']
+        );
+        if ($existing) {
+            if ($status === 'sent') {
+                Database::execute(
+                    'UPDATE celebr8_text_messages
+                     SET to_address = ?, body = ?, status = ?, sent_at = COALESCE(sent_at, NOW()),
+                         failed_at = NULL, error_text = NULL, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?',
+                    [$toAddress, $body, 'sent', (int)$existing['id']]
+                );
+            } else {
+                Database::execute(
+                    'UPDATE celebr8_text_messages
+                     SET to_address = ?, body = ?, status = ?, failed_at = COALESCE(failed_at, NOW()),
+                         error_text = ?, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?',
+                    [$toAddress, $body, 'failed', $errorText, (int)$existing['id']]
+                );
+            }
+            return;
+        }
+        if ($status === 'sent') {
+            Database::execute(
+                'INSERT INTO celebr8_text_messages (
+                    event_id, guest_id, to_address, body, status, claimed_by, sent_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+                [$eventId, $guestId, $toAddress, $body, 'sent', 'seed:invite-2026']
+            );
+        } else {
+            Database::execute(
+                'INSERT INTO celebr8_text_messages (
+                    event_id, guest_id, to_address, body, status, claimed_by, failed_at, error_text
+                ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)',
+                [$eventId, $guestId, $toAddress, $body, 'failed', 'seed:invite-2026', $errorText]
+            );
+        }
+    }
+
     public static function upsertGuest(int $eventId, array $fields, string $actorLabel, bool $touchRsvp = false): array
     {
         self::ensureSchema();
@@ -375,24 +576,46 @@ final class Celebr8Model
 
         $guestId = isset($fields['id']) ? (int)$fields['id'] : 0;
         $name = trim((string)($fields['name'] ?? ''));
-        $phone = self::normalizePhone((string)($fields['phone'] ?? ''));
-        $email = trim((string)($fields['email'] ?? ''));
-        $notes = (string)($fields['notes'] ?? '');
-        $partySize = max(1, (int)($fields['party_size'] ?? 1));
-        $kidsCount = max(0, (int)($fields['kids_count'] ?? 0));
-        $rsvp = self::normalizeRsvpStatus((string)($fields['rsvp_status'] ?? 'no_reply')) ?? 'no_reply';
+        if ($name !== '' && self::isBlockedGuestName($name)) {
+            throw new InvalidArgumentException('Guest name is blocked');
+        }
+        $phone = array_key_exists('phone', $fields) ? self::normalizePhone((string)$fields['phone']) : null;
+        $email = array_key_exists('email', $fields) ? trim((string)$fields['email']) : null;
+        $notes = array_key_exists('notes', $fields) ? (string)$fields['notes'] : null;
+        $partySize = array_key_exists('party_size', $fields) ? max(1, (int)$fields['party_size']) : null;
+        $kidsCount = array_key_exists('kids_count', $fields) ? max(0, (int)$fields['kids_count']) : null;
+        $invitedVia = array_key_exists('invited_via', $fields) ? trim((string)$fields['invited_via']) : null;
+        $relation = array_key_exists('relation_label', $fields) ? trim((string)$fields['relation_label']) : null;
+        $bringingChili = array_key_exists('bringing_chili', $fields) ? ((int)$fields['bringing_chili'] ? 1 : 0) : null;
+        $bringing = array_key_exists('bringing', $fields) ? trim((string)$fields['bringing']) : null;
+        $phoneUnverified = array_key_exists('phone_unverified', $fields) ? ((int)$fields['phone_unverified'] ? 1 : 0) : null;
+        $inviteSendStatus = array_key_exists('invite_send_status', $fields) ? trim((string)$fields['invite_send_status']) : null;
+        $inviteSendError = array_key_exists('invite_send_error', $fields) ? (string)$fields['invite_send_error'] : null;
+        $rsvpProvided = array_key_exists('rsvp_status', $fields);
+        $rsvp = $rsvpProvided
+            ? (self::normalizeRsvpStatus((string)$fields['rsvp_status']) ?? 'no_reply')
+            : null;
 
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($email !== null && $email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException('Invalid email');
         }
-        if ($phone !== '' && !self::isValidPhoneOrEmail($phone)) {
+        if ($phone !== null && $phone !== '' && !self::isValidPhoneOrEmail($phone)) {
             throw new InvalidArgumentException('Invalid phone');
         }
+        if ($inviteSendStatus !== null && !in_array($inviteSendStatus, ['none', 'sent', 'failed'], true)) {
+            throw new InvalidArgumentException('Invalid invite_send_status');
+        }
 
-        if ($guestId <= 0 && $phone !== '') {
+        if ($guestId <= 0 && $phone) {
             $existingByPhone = self::findGuestByPhone($eventId, $phone);
             if ($existingByPhone) {
                 $guestId = (int)$existingByPhone['id'];
+            }
+        }
+        if ($guestId <= 0 && $name !== '') {
+            $existingByName = self::findGuestByName($eventId, $name);
+            if ($existingByName) {
+                $guestId = (int)$existingByName['id'];
             }
         }
 
@@ -404,43 +627,52 @@ final class Celebr8Model
             if ($name === '') {
                 $name = $existing['name'];
             }
-            if (!array_key_exists('phone', $fields)) {
-                $phone = (string)$existing['phone'];
+            if (self::isBlockedGuestName($name)) {
+                throw new InvalidArgumentException('Guest name is blocked');
             }
-            if (!array_key_exists('email', $fields)) {
-                $email = (string)$existing['email'];
-            }
-            if (!array_key_exists('notes', $fields)) {
-                $notes = (string)$existing['notes'];
-            }
-            if (!array_key_exists('party_size', $fields)) {
-                $partySize = (int)$existing['party_size'];
-            }
-            if (!array_key_exists('kids_count', $fields)) {
-                $kidsCount = (int)$existing['kids_count'];
-            }
-
-            $rsvpChanged = false;
-            if (array_key_exists('rsvp_status', $fields) || $touchRsvp) {
-                $rsvpChanged = true;
-            } else {
-                $rsvp = (string)$existing['rsvp_status'];
-            }
+            $phone = $phone ?? (string)$existing['phone'];
+            $email = $email ?? (string)$existing['email'];
+            $notes = $notes ?? (string)$existing['notes'];
+            $partySize = $partySize ?? (int)$existing['party_size'];
+            $kidsCount = $kidsCount ?? (int)$existing['kids_count'];
+            $invitedVia = $invitedVia ?? (string)$existing['invited_via'];
+            $relation = $relation ?? (string)$existing['relation_label'];
+            $bringingChili = $bringingChili ?? (int)$existing['bringing_chili'];
+            $bringing = $bringing ?? (string)$existing['bringing'];
+            $phoneUnverified = $phoneUnverified ?? (int)$existing['phone_unverified'];
+            $inviteSendStatus = $inviteSendStatus ?? (string)$existing['invite_send_status'];
+            $inviteSendError = $inviteSendError ?? (string)($existing['invite_send_error'] ?? '');
+            $rsvpChanged = $rsvpProvided || $touchRsvp;
+            $rsvp = $rsvpChanged ? ($rsvp ?? (string)$existing['rsvp_status']) : (string)$existing['rsvp_status'];
 
             if ($rsvpChanged) {
                 Database::execute(
                     'UPDATE celebr8_guests SET
-                        name = ?, phone = ?, email = ?, rsvp_status = ?, party_size = ?, kids_count = ?, notes = ?,
+                        name = ?, phone = ?, email = ?, rsvp_status = ?, party_size = ?, kids_count = ?,
+                        invited_via = ?, relation_label = ?, bringing_chili = ?, bringing = ?,
+                        phone_unverified = ?, invite_send_status = ?, invite_send_error = ?, notes = ?,
                         rsvp_updated_at = NOW(), rsvp_updated_by = ?
                      WHERE id = ? AND event_id = ?',
-                    [$name, $phone, $email, $rsvp, $partySize, $kidsCount, $notes, $actorLabel, $guestId, $eventId]
+                    [
+                        $name, $phone, $email, $rsvp, $partySize, $kidsCount,
+                        $invitedVia, $relation, $bringingChili, $bringing,
+                        $phoneUnverified, $inviteSendStatus, $inviteSendError, $notes,
+                        $actorLabel, $guestId, $eventId,
+                    ]
                 );
             } else {
                 Database::execute(
                     'UPDATE celebr8_guests SET
-                        name = ?, phone = ?, email = ?, party_size = ?, kids_count = ?, notes = ?
+                        name = ?, phone = ?, email = ?, party_size = ?, kids_count = ?,
+                        invited_via = ?, relation_label = ?, bringing_chili = ?, bringing = ?,
+                        phone_unverified = ?, invite_send_status = ?, invite_send_error = ?, notes = ?
                      WHERE id = ? AND event_id = ?',
-                    [$name, $phone, $email, $partySize, $kidsCount, $notes, $guestId, $eventId]
+                    [
+                        $name, $phone, $email, $partySize, $kidsCount,
+                        $invitedVia, $relation, $bringingChili, $bringing,
+                        $phoneUnverified, $inviteSendStatus, $inviteSendError, $notes,
+                        $guestId, $eventId,
+                    ]
                 );
             }
             $guest = self::getGuest($guestId);
@@ -456,10 +688,28 @@ final class Celebr8Model
 
         Database::execute(
             'INSERT INTO celebr8_guests (
-                event_id, name, phone, email, rsvp_status, party_size, kids_count, notes,
-                rsvp_updated_at, rsvp_updated_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)',
-            [$eventId, $name, $phone, $email, $rsvp, $partySize, $kidsCount, $notes, $actorLabel]
+                event_id, name, phone, email, rsvp_status, party_size, kids_count,
+                invited_via, relation_label, bringing_chili, bringing, phone_unverified,
+                invite_send_status, invite_send_error, notes, rsvp_updated_at, rsvp_updated_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)',
+            [
+                $eventId,
+                $name,
+                $phone ?? '',
+                $email ?? '',
+                $rsvp ?? 'no_reply',
+                $partySize ?? 1,
+                $kidsCount ?? 0,
+                $invitedVia ?? '',
+                $relation ?? '',
+                $bringingChili ?? 0,
+                $bringing ?? '',
+                $phoneUnverified ?? 0,
+                $inviteSendStatus ?? 'none',
+                $inviteSendError,
+                $notes ?? '',
+                $actorLabel,
+            ]
         );
         $id = (int)Database::getInstance()->lastInsertId();
         $guest = self::getGuest($id);

@@ -2,17 +2,24 @@ export type Celebr8RsvpStatus = 'going' | 'not_going' | 'maybe' | 'no_reply';
 
 export type Celebr8MessageStatus = 'queued' | 'claimed' | 'sent' | 'failed';
 
+export type Celebr8InviteSendStatus = 'none' | 'sent' | 'failed';
+
 export interface Celebr8Event {
   id: number;
   slug: string;
   title: string;
+  tagline: string;
   theme: string;
   event_date: string;
   event_time: string;
+  arrival_time_kids: string;
+  arrival_time_adults: string;
   location: string;
   food: string;
   schedule: string;
   rsvp_deadline: string;
+  invite_text: string;
+  flyer_image_url: string;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -27,6 +34,13 @@ export interface Celebr8Guest {
   rsvp_status: Celebr8RsvpStatus | string;
   party_size: number;
   kids_count: number;
+  invited_via: string;
+  relation_label: string;
+  bringing_chili: number;
+  bringing: string;
+  phone_unverified: number;
+  invite_send_status: Celebr8InviteSendStatus | string;
+  invite_send_error: string | null;
   notes: string;
   rsvp_updated_at: string | null;
   rsvp_updated_by: string;

@@ -271,7 +271,7 @@ function celebr8_seed_apply_via_api(string $inboxDir, string $baseUrl, string $t
         $raw = curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err = curl_error($ch);
-        curl_close($ch);
+        unset($ch);
         if ($raw === false) {
             throw new RuntimeException('API request failed: ' . $err);
         }

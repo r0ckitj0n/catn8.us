@@ -7,7 +7,7 @@
 - **Dev Site (Vite):** http://localhost:5178
 - **Dev Site (Backend):** http://localhost:8888
 - **Database:** MySQL (Single Source of Truth). Do NOT use SQLite.
-- **Codex Native Files:** Keep this file named `AGENTS.md` and the ignore file named `.codexignore` so Codex loads them.
+- **Cursor Native Files:** Keep this file named `AGENTS.md` and maintain `.cursorignore` for Cursor indexing/agent context hygiene.
 - **Secrets:** Never store plaintext credentials in repo rule files; use `.env` and local secret stores.
 
 ## 2. Tech Stack (Strict)
@@ -117,6 +117,23 @@
 - Store runtime/script state artifacts only under `/.local/state/`.
 - Keep runtime artifacts/logs/secrets out of git.
 - For gated live-site verification, first try the saved admin credentials already stored in the browser login form before assuming live access is blocked.
+
+## Cursor Runtime Workflow (Local + Live)
+- Primary IDE/runtime target is Cursor (not Codex).
+- Local frontend dev host: `http://localhost:5178` via `npm run dev`.
+- Local frontend preview host: `http://localhost:5179` via `npm run preview`.
+- Local backend host: `http://localhost:8888` (PHP/API testing path).
+- Before deploy, run `npm run typecheck` and `npm run build` (or use `./scripts/deploy.sh` to orchestrate build+deploy).
+- Preferred live deployment entrypoint: `./scripts/deploy.sh` with explicit flags (`--lite`, `--full`, `--dist-only`, `--env-only`) based on release scope.
+- Database-impacting deploys should route through the DB sync helpers under `scripts/db/` and/or `./scripts/deploy_db.sh`/`./scripts/deploy_full.sh` as needed.
+- Never hardcode deploy credentials; require env/keychain-backed secrets (`CATN8_DEPLOY_HOST`, `CATN8_DEPLOY_USER`, `CATN8_DEPLOY_PASS`, optional admin token variables).
+- Use `CATN8_DRY_RUN=1 ./scripts/deploy.sh ...` for non-destructive validation before sensitive live pushes.
+
+## GitHub + Cursor Expectations
+- Canonical remote is GitHub `origin` and should remain synced with `git@github.com:r0ckitj0n/catn8.us.git`.
+- Keep changes on feature branches when practical; avoid direct force-pushes to `main`.
+- Prefer `gh` CLI for PR/status/check workflows from Cursor when available.
+- If GitHub auth expires, re-auth using `gh auth login -h github.com` before release or PR operations.
 
 ### Cleanup Protocol
 - Run repository hygiene checks before finalizing substantial refactors.

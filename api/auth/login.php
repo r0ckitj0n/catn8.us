@@ -21,6 +21,9 @@ try {
         catn8_json_response(['success' => false, 'error' => 'Username and password are required'], 400);
     }
 
+    // Rate limit: 10 login attempts per 5 minutes per IP address
+    catn8_rate_limit_ip_require('login', 10, 300);
+
     $step = 'ensure-users-table';
     try {
         catn8_users_table_ensure();

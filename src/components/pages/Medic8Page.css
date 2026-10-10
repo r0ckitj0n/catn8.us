@@ -1,0 +1,188 @@
+.medic8-page {
+  --medic8-ink: #17324d;
+  --medic8-accent: #0f766e;
+  --medic8-warn: #b45309;
+  --medic8-soft: rgba(255, 255, 255, 0.86);
+  min-height: 100vh;
+  color: var(--medic8-ink);
+}
+
+.medic8-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.medic8-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.35rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.16), rgba(23, 50, 77, 0.08)),
+    var(--medic8-soft);
+  box-shadow: 0 10px 30px rgba(23, 50, 77, 0.08);
+}
+
+.medic8-hero h1 {
+  margin: 0;
+  font-family: "Comic Neue", "Segoe UI", sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  letter-spacing: 0.04em;
+}
+
+.medic8-hero p {
+  margin: 0.35rem 0 0;
+  max-width: 36rem;
+}
+
+.medic8-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.medic8-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.medic8-section {
+  padding: 1rem 1.1rem;
+  border-radius: 0.9rem;
+  background: var(--medic8-soft);
+  border: 1px solid rgba(23, 50, 77, 0.08);
+}
+
+.medic8-section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.medic8-count {
+  margin-left: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.68;
+}
+
+.medic8-docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.medic8-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: inherit;
+  text-decoration: none;
+}
+
+.medic8-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.medic8-item {
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 50, 77, 0.06);
+}
+
+.medic8-item strong {
+  display: block;
+}
+
+.medic8-meta,
+.medic8-source {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  opacity: 0.78;
+}
+
+.medic8-warn-text {
+  color: var(--medic8-warn);
+  font-weight: 700;
+}
+
+.medic8-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.medic8-empty {
+  opacity: 0.7;
+  font-size: 0.92rem;
+}
+
+.medic8-form-grid {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.medic8-form-grid input,
+.medic8-form-grid select,
+.medic8-form-grid textarea {
+  width: 100%;
+  border: 1px solid rgba(23, 50, 77, 0.18);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+}
+
+.medic8-print-only {
+  display: none;
+}
+
+@media print {
+  .navbar,
+  .medic8-toolbar,
+  .medic8-actions,
+  .medic8-no-print {
+    display: none !important;
+  }
+
+  .medic8-print-only {
+    display: block !important;
+  }
+
+  .medic8-page,
+  .medic8-section,
+  .medic8-item,
+  .medic8-hero {
+    background: #fff !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .medic8-shell {
+    padding: 0.85rem 0.75rem 2rem;
+  }
+
+  .medic8-hero {
+    padding: 1rem;
+  }
+}

@@ -4,6 +4,7 @@ vendor/
 
 # --- Build Outputs ---
 dist/
+dist_medic8_build/
 build/
 .cache/
 .local/
@@ -60,3 +61,5 @@ backups/**
 
 # --- Project docs with sensitive info ---
 /documentation/info.txt
+private/medic8/**
+!private/medic8/.htaccess

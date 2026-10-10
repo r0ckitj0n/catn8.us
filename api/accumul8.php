@@ -15,7 +15,8 @@ const ACCUMUL8_ENTITY_ALIAS_AI_BATCH_SIZE = 20;
 if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
     catn8_session_start();
     catn8_groups_seed_core();
-    $actorUserId = catn8_require_group_or_admin('accumul8-users');
+    // Session (browser) or CATN8_ADMIN_TOKEN via X-Api-Key / Bearer (Accumul8r).
+    $actorUserId = catn8_require_group_or_admin_or_api_token('accumul8-users');
 } else {
     $actorUserId = 0;
 }

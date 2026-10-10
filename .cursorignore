@@ -6,8 +6,28 @@ logs/
 .git/
 *.log
 *.sqlite
-# Tooling artifacts
 src_files.txt
 tsc_output.txt
 backup_css_counts.txt
 current_css_counts.txt
+.DS_Store
+.idea/
+.vscode/
+*.swp
+/reports/
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.key.json
+*.crt
+
+# Local tooling/cache noise
+.cache/
+.agent/
+.local/
+tmp/
+coverage/
+*.map

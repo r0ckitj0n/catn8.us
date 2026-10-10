@@ -82,6 +82,9 @@ $appPhpRoutes = [
     '/photo-m8' => '/photo-m8.php',
     '/accumul8' => '/accumul8.php',
     '/valid8' => '/valid8.php',
+    '/celebr8' => '/celebr8.php',
+    '/tabul8' => '/tabul8.php',
+    '/medic8' => '/medic8.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
@@ -120,6 +123,22 @@ if (!$isPhpRoute) {
     }
     if (isset($appPhpRoutes[$canonical])) {
         require $root . $appPhpRoutes[$canonical];
+        exit;
+    }
+    if ($canonical === '/celebr8/templates' || $canonical === '/celebr8/activities'
+        || preg_match('#^/celebr8/activities/[0-9]+$#', $canonical) === 1
+        || preg_match('#^/celebr8/party(?:/[0-9]+)?$#', $canonical) === 1) {
+        require $root . '/celebr8.php';
+        exit;
+    }
+    if ($canonical === '/tabul8'
+        || preg_match('#^/tabul8/party/[0-9]+(?:/(?:camera|display|vote))?$#', $canonical) === 1
+        || preg_match('#^/tabul8/vote/[^/]+$#', $canonical) === 1) {
+        require $root . '/tabul8.php';
+        exit;
+    }
+    if ($canonical === '/medic8' || preg_match('#^/medic8/#', $canonical) === 1) {
+        require $root . '/medic8.php';
         exit;
     }
 }

@@ -1158,3 +1158,7 @@ Business term: Banking Organizations
 - `is_active` (TINYINT(1))
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
+
+## Medic8
+
+See `scripts/db/migrations/2026_10_10_medic8.sql` and `documentation/medic8.md` for the full additive Medic8 schema (`medic8_people`, `medic8_medications`, `medic8_med_fills`, `medic8_appointments`, `medic8_providers`, `medic8_conditions`, `medic8_allergies`, `medic8_labs`, `medic8_procedures`, `medic8_encounters`, `medic8_disability_events`, `medic8_insurance`, `medic8_documents`, `medic8_portal_messages`, `medic8_invoices`, `medic8_sources`, `medic8_shares`, `medic8_invites`, `medic8_audit_log`, `medic8_ingest_queue`). Sensitive columns end in `_enc` and are encrypted with `secret_encrypt`.

@@ -27,6 +27,7 @@ $isPhotoAlbumsUser = catn8_user_in_group($uid, 'photo-albums-users') ? 1 : 0;
 $isPhotoAlbumsAdmin = catn8_user_in_group($uid, 'photo-albums-administrators') ? 1 : 0;
 $isAccumul8User = catn8_user_in_group($uid, 'accumul8-users') ? 1 : 0;
 $isValid8User = catn8_user_in_group($uid, 'valid8-users') ? 1 : 0;
+$isMedic8User = catn8_user_in_group($uid, 'medic8-users') ? 1 : 0;
 
 catn8_json_response(['success' => true, 'user' => [
     'id' => (int)$user['id'],
@@ -41,4 +42,5 @@ catn8_json_response(['success' => true, 'user' => [
     'is_photo_albums_admin' => $isPhotoAlbumsAdmin,
     'is_accumul8_user' => $isAccumul8User,
     'is_valid8_user' => $isValid8User,
+    'is_medic8_user' => $isMedic8User,
 ]]);

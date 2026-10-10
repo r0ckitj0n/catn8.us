@@ -60,3 +60,5 @@ backups/**
 
 # --- Project docs with sensitive info ---
 /documentation/info.txt
+private/medic8/**
+!private/medic8/.htaccess

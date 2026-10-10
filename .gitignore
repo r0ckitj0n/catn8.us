@@ -4,6 +4,7 @@ vendor/
 
 # --- Build Outputs ---
 dist/
+dist_medic8_build/
 build/
 .cache/
 .local/

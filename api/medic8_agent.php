@@ -97,7 +97,7 @@ try {
     }
 
     if ($action === 'upsert') {
-        $body = catn8_json_body();
+        $body = catn8_read_json_body(false);
         $entity = trim((string)($body['entity'] ?? ''));
         $record = $body['record'] ?? null;
         $dryRun = !empty($body['dry_run']);
@@ -109,7 +109,7 @@ try {
     }
 
     if ($action === 'import') {
-        $body = catn8_json_body();
+        $body = catn8_read_json_body(false);
         $entity = trim((string)($body['entity'] ?? ''));
         $rows = $body['records'] ?? $body['items'] ?? null;
         $dryRun = !empty($body['dry_run']);
@@ -149,6 +149,12 @@ try {
 } catch (RuntimeException $e) {
     catn8_json_response(['success' => false, 'error' => $e->getMessage()], 400);
 } catch (Throwable $e) {
-    catn8_log_error('medic8 agent error', ['action' => $action, 'error' => $e->getMessage()]);
+    catn8_log_error('medic8 agent error', [
+        'action' => $action,
+        'error' => $e->getMessage(),
+        'type' => get_class($e),
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine(),
+    ]);
     catn8_json_response(['success' => false, 'error' => 'Server error'], 500);
 }

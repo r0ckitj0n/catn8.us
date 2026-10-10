@@ -47,7 +47,7 @@ try {
         if (!Medic8Model::isSiteAdmin($actorUserId)) {
             catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
         }
-        $body = catn8_json_body();
+        $body = catn8_read_json_body();
         $name = trim((string)($body['display_name'] ?? 'Jon Graves'));
         $person = Medic8Model::ensureAdminPerson($actorUserId, $name !== '' ? $name : 'Jon Graves');
         catn8_json_response(['success' => true, 'person' => $person]);
@@ -123,7 +123,7 @@ try {
     }
 
     if ($action === 'upsert') {
-        $body = catn8_json_body();
+        $body = catn8_read_json_body();
         $entity = trim((string)($body['entity'] ?? ''));
         $record = $body['record'] ?? null;
         if (!is_array($record)) {
@@ -134,7 +134,7 @@ try {
     }
 
     if ($action === 'delete') {
-        $body = catn8_json_body();
+        $body = catn8_read_json_body();
         $entity = trim((string)($body['entity'] ?? ''));
         $id = (int)($body['id'] ?? 0);
         if ($id <= 0) {
@@ -145,7 +145,7 @@ try {
     }
 
     if ($action === 'reveal_sensitive') {
-        $body = catn8_json_body();
+        $body = catn8_read_json_body();
         $entity = trim((string)($body['entity'] ?? ''));
         $id = (int)($body['id'] ?? 0);
         if ($id <= 0) {

@@ -90,7 +90,13 @@ final class Medic8Model
             Database::execute($stmt);
         }
 
-        $people = Database::queryOne("SHOW TABLES LIKE 'medic8_people'");
+        $people = Database::queryOne(
+            "SELECT 1 AS ok
+             FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'medic8_people'
+             LIMIT 1"
+        );
         if (!$people) {
             throw new RuntimeException('Medic8 schema bootstrap failed (medic8_people missing)');
         }

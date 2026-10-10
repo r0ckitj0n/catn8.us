@@ -27,12 +27,19 @@ function catn8_require_csrf(): void
 function catn8_session_start(): void
 {
     if (session_status() === PHP_SESSION_NONE) {
+        $secure = false;
+        if (function_exists('catn8_request_is_https')) {
+            $secure = catn8_request_is_https()
+                || (function_exists('catn8_is_local_request') && !catn8_is_local_request());
+        } else {
+            $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        }
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Lax',
-            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'secure' => $secure,
         ]);
         session_start();
     }
@@ -77,6 +84,88 @@ function catn8_require_group_or_admin(string $groupSlug): int
     }
 
     return $uid;
+}
+
+/**
+ * Extract a presented admin API token from common agent headers/params.
+ * Does not validate — callers compare with hash_equals against CATN8_ADMIN_TOKEN.
+ */
+function catn8_presented_admin_api_token(): string
+{
+    // 1. X-Api-Key (Accumul8r / agent convention)
+    $apiKey = trim((string)($_SERVER['HTTP_X_API_KEY'] ?? ''));
+    if ($apiKey === '' && function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (is_array($headers)) {
+            foreach ($headers as $name => $value) {
+                if (strtolower((string)$name) === 'x-api-key') {
+                    $apiKey = trim((string)$value);
+                    break;
+                }
+            }
+        }
+    }
+    if ($apiKey !== '') {
+        return $apiKey;
+    }
+
+    // 2. Authorization: Bearer <token>
+    $authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+    if (preg_match('/^\s*Bearer\s+(\S+)\s*$/i', $authHeader, $matches)) {
+        $got = trim((string)($matches[1] ?? ''));
+        if ($got !== '') {
+            return $got;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Resolve the primary site-admin user id for API-token impersonation.
+ */
+function catn8_primary_admin_user_id(): ?int
+{
+    try {
+        $row = Database::queryOne('SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1');
+        if ($row && (int)($row['id'] ?? 0) > 0) {
+            return (int)$row['id'];
+        }
+    } catch (Throwable $e) {
+        // fall through
+    }
+    return null;
+}
+
+/**
+ * Session group/admin auth, or CATN8_ADMIN_TOKEN via X-Api-Key / Bearer.
+ * Used by Accumul8 agent/bootstrap callers (Accumul8r).
+ */
+function catn8_require_group_or_admin_or_api_token(string $groupSlug): int
+{
+    catn8_session_start();
+
+    $uid = catn8_auth_user_id();
+    if ($uid !== null) {
+        if (catn8_user_is_admin($uid)) {
+            return $uid;
+        }
+        if (catn8_user_in_group($uid, $groupSlug)) {
+            return $uid;
+        }
+        catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
+    }
+
+    $expected = trim((string)catn8_env('CATN8_ADMIN_TOKEN', ''));
+    $got = catn8_presented_admin_api_token();
+    if ($expected !== '' && $got !== '' && hash_equals($expected, $got)) {
+        $adminId = catn8_primary_admin_user_id();
+        if ($adminId !== null) {
+            return $adminId;
+        }
+    }
+
+    catn8_json_response(['success' => false, 'error' => 'Not authenticated'], 401);
 }
 
 /**
@@ -174,26 +263,25 @@ function catn8_rate_limit_ip_require(string $key, int $maxAttempts, int $windowS
 }
 
 /**
- * Validate the admin token from the Authorization: Bearer header.
+ * Validate the admin token from X-Api-Key / Authorization: Bearer.
  * For backward compatibility, also accepts admin_token in JSON body
- * or query string, but logs a deprecation warning when those are used.
+ * or query string.
  *
- * @return string The validated token (from header preferred).
+ * @return string The validated token (empty string if none matched).
  */
 function catn8_admin_token_from_request(): string
 {
-    $expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
-
-    // 1. Authorization: Bearer <token>  (preferred)
-    $authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
-    if (preg_match('/^\s*Bearer\s+(.+)\s*$/i', $authHeader, $matches)) {
-        $got = trim((string)($matches[1] ?? ''));
-        if ($expected !== '' && $got !== '' && hash_equals($expected, $got)) {
-            return $got;
-        }
+    $expected = trim((string)catn8_env('CATN8_ADMIN_TOKEN', ''));
+    if ($expected === '') {
+        return '';
     }
 
-    // 2. JSON body field (for POST endpoints)
+    $headerToken = catn8_presented_admin_api_token();
+    if ($headerToken !== '' && hash_equals($expected, $headerToken)) {
+        return $headerToken;
+    }
+
+    // JSON body field (for POST endpoints)
     $bodyToken = '';
     $raw = file_get_contents('php://input');
     if (is_string($raw) && trim($raw) !== '') {
@@ -202,22 +290,21 @@ function catn8_admin_token_from_request(): string
             $bodyToken = trim((string)$decoded['admin_token']);
         }
     }
-    if ($bodyToken !== '' && $expected !== '' && hash_equals($expected, $bodyToken)) {
+    if ($bodyToken !== '' && hash_equals($expected, $bodyToken)) {
         return $bodyToken;
     }
 
-    // 3. Query string (backward compat — least secure)
+    // Query string (backward compat — least secure)
     $queryToken = trim((string)($_GET['admin_token'] ?? ''));
-    if ($queryToken !== '' && $expected !== '' && hash_equals($expected, $queryToken)) {
+    if ($queryToken !== '' && hash_equals($expected, $queryToken)) {
         return $queryToken;
     }
 
-    // None matched
     return '';
 }
 
 /**
- * Require a valid admin token via Authorization: Bearer header (preferred)
+ * Require a valid admin token via X-Api-Key / Authorization: Bearer (preferred)
  * or backward-compatible query/body fallback.
  * Terminates with 403 if invalid.
  */

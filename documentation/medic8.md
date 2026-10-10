@@ -17,14 +17,14 @@ Private medical record hub at https://catn8.us/medic8 for Jon Graves (admin) and
 | Action | Method | Notes |
 |--------|--------|-------|
 | `bootstrap` | GET | people list, ensures Jon person for admin |
-| `dashboard` | GET | `person_id`. Lists are display-capped; true counts are `labs_total`, `procedures_total`, `encounters_total`, `documents_total`, `portal_messages_total`, `invoices_total` |
+| `dashboard` | GET | **Requires `person_id`**. Lists are display-capped; true counts are `labs_total`, `procedures_total`, `encounters_total`, `documents_total`, `portal_messages_total`, `invoices_total` |
 | `emergency_summary` | GET | printable med/allergy/condition summary |
 | `list` | GET | `entity`, optional `person_id`, `limit` (1–1000), `offset` or `cursor`. Returns `records`, `total`, `limit`, `offset`, `next` |
 | `get` | GET | `entity`, `id`. Clinical rows include `documents[]`. Document rows include `links[]` |
 | `upsert` | POST | `{ entity, record }` |
 | `delete` | POST | `{ entity, id or external_source_id, hard? }`. Default `hard=true`. Soft-delete sets `deleted_at` and suffixes the source id. Documents retire the file |
-| `link_document` | POST | `{ document_id, entity, record_id or external_source_id, role?, note? }` |
-| `unlink_document` | POST | `{ document_id, entity, record_id or external_source_id }` |
+| `link_document` | POST | `{ document_id, entity, record_id or external_source_id, role?, note?, dry_run? }` |
+| `unlink_document` | POST | `{ document_id, entity, record_id or external_source_id, dry_run? }` |
 | `reveal_sensitive` | POST | admin only, audited |
 | `upload_document` | POST multipart | `file`, `person_id`, `title`, optional `doc_type`, `external_source_id` / `source_id`, `source_json`, `links` JSON |
 | `list_audit` | GET | admin |
@@ -47,17 +47,23 @@ Generate/rotate: `php scripts/medic8/generate_api_token.php` (does not print the
 | `upsert` | POST | `{ "entity": "<type>", "record": { ... }, "dry_run": false }` |
 | `delete` | POST | `{ "entity": "<type>", "id": 1 }` or `{ "entity": "<type>", "external_source_id": "..." }`. Optional `hard` (default `true`). Soft-delete: `"hard": false` |
 | `upload_document` | POST multipart | `file`, `person_id`, `title`, optional `doc_type`, `external_source_id` / `source_id`, `source_json`, `links` JSON array |
-| `link_document` | POST | `{ "document_id": 12, "entity": "labs", "record_id": 44 }` or `external_source_id` / `source_id` instead of `record_id`. Optional `role`, `note` |
-| `unlink_document` | POST | `{ "document_id": 12, "entity": "labs", "record_id": 44 }` (or `external_source_id`) |
+| `link_document` | POST | `{ "document_id": 12, "entity": "labs", "record_id": 44 }` or `external_source_id` / `source_id` instead of `record_id`. Optional `role`, `note`, `dry_run` |
+| `unlink_document` | POST | `{ "document_id": 12, "entity": "labs", "record_id": 44 }` (or `external_source_id`). Optional `dry_run` |
 | `list` | GET | `entity`, optional `person_id`, `limit` (1–1000), `offset` or `cursor`. Returns `records`, `total`, `limit`, `offset`, `next` |
 | `get` | GET | `entity`, `id` or `external_source_id`. Clinical rows include `documents[]`. Document rows include `links[]` |
 | `list_people` | GET | optional paging. People include `external_source_id` and `source` |
-| `dashboard` | GET | `person_id` plus `*_total` count fields |
+| `dashboard` | GET | **Requires `person_id`** (400 without it). Returns display-capped lists plus `*_total` count fields |
 | `cleanup_duplicates` | POST | operator/import cleanup: synthetics, duplicate documents, duplicate people. Counts only |
 
-`import` / `upsert` are idempotent keyed by `external_source_id` (alias `source_id`). Returns `created`, `updated`, `error_count`, `errors[]`, `results[]`.
+`import` / `upsert` matching order for every entity (including **people**):
 
-`dry_run` writes **nothing** — including `medic8_sources` and audit rows. The batch runs inside a transaction that is always rolled back, and source upserts skip INSERT/UPDATE when `dry_run` is true.
+1. Match by `external_source_id` / `source_id` if provided and a live row has that key → **UPDATE**
+2. Else match by `id` if provided and that row exists → **UPDATE** (can attach/set `external_source_id` and source citation)
+3. Else **CREATE** (create still requires the entity’s required-on-create fields, e.g. people need `owner_user_id` + `display_name`)
+
+Returns `created`, `updated`, `error_count`, `errors[]`, `results[]`.
+
+`dry_run` on `import` / `upsert` / `link_document` / `unlink_document` writes **nothing** — including `medic8_sources` and audit rows. Import/upsert dry runs use a rolled-back transaction; source upserts also skip INSERT/UPDATE. Link/unlink dry runs return `{ created|updated|deleted, dry_run: true, link }` for what would happen.
 
 ### Document upsert and links (Medic8r re-link)
 

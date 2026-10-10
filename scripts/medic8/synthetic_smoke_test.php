@@ -25,6 +25,31 @@ $admin = Database::queryOne('SELECT id FROM users WHERE is_admin = 1 ORDER BY id
 assert_true((bool)$admin, 'admin user exists');
 $adminUid = (int)$admin['id'];
 
+// Create a person with no external_source_id, then attach one by id (the Medic8r bug case).
+$personBare = Medic8Model::upsertEntity('people', [
+    'owner_user_id' => $adminUid,
+    'display_name' => 'Synthetic Smoke Patient Bare',
+    'relation_to_admin' => 'synthetic-test',
+    'is_opted_in' => 1,
+], $adminUid, false, 'agent:medic8-test');
+$bareId = (int)($personBare['id'] ?? 0);
+assert_true($bareId > 0, 'bare person id');
+assert_true(!empty($personBare['created']), 'bare person created');
+
+$attachExt = Medic8Model::upsertEntity('people', [
+    'id' => $bareId,
+    'external_source_id' => 'synthetic:person:smoke-attach',
+    'source' => [
+        'source_type' => 'manual',
+        'record_type' => 'people',
+        'record_id' => 'smoke-attach',
+    ],
+], $adminUid, false, 'agent:medic8-test');
+assert_true(!empty($attachExt['updated']) && empty($attachExt['created']), 'attach ext by id updates');
+assert_true((int)$attachExt['id'] === $bareId, 'attach keeps same person id');
+$attachedRow = Medic8Model::getEntity('people', $bareId, $adminUid, false);
+assert_true(($attachedRow['external_source_id'] ?? '') === 'synthetic:person:smoke-attach', 'external_source_id set on person');
+
 $personResult = Medic8Model::upsertEntity('people', [
     'owner_user_id' => $adminUid,
     'display_name' => 'Synthetic Smoke Patient',
@@ -155,6 +180,15 @@ $replaced = Medic8Model::storeUploadedDocument([
 ], $adminUid, 'agent:medic8-test');
 assert_true((int)$replaced['id'] === $docId, 'hash-change upsert same id');
 assert_true(!empty($replaced['file_replaced']), 'different hash replaced file');
+
+$linkDry = Medic8Model::linkDocument($docId, 'medications', (int)($import['results'][0]['id'] ?? 0), 'attachment', null, $adminUid, 'agent:medic8-test', true);
+assert_true(!empty($linkDry['dry_run']) && !empty($linkDry['created']), 'link dry_run preview create');
+$medIdForLink = (int)($import['results'][0]['id'] ?? 0);
+$linksBefore = (int)(Database::queryOne(
+    'SELECT COUNT(*) AS c FROM medic8_record_documents WHERE document_id = ? AND entity = ? AND record_id = ?',
+    [$docId, 'medications', $medIdForLink]
+)['c'] ?? 0);
+assert_true($linksBefore === 0, 'link dry_run wrote nothing');
 
 $labGot = Medic8Model::getEntity('labs', $labId, $adminUid, false);
 assert_true(is_array($labGot) && !empty($labGot['documents']), 'lab get includes documents');

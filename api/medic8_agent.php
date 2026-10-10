@@ -167,10 +167,11 @@ try {
     if ($action === 'link_document') {
         $body = catn8_read_json_body(false);
         $documentId = (int)($body['document_id'] ?? 0);
+        $dryRun = !empty($body['dry_run']);
         if ($documentId <= 0) {
             catn8_json_response(['success' => false, 'error' => 'document_id required'], 400);
         }
-        $result = Medic8Model::linkFromSpec($documentId, $body, $actorUid, $actorLabel);
+        $result = Medic8Model::linkFromSpec($documentId, $body, $actorUid, $actorLabel, $dryRun);
         catn8_json_response(['success' => true] + $result);
     }
 
@@ -178,12 +179,13 @@ try {
         $body = catn8_read_json_body(false);
         $documentId = (int)($body['document_id'] ?? 0);
         $entity = trim((string)($body['entity'] ?? ''));
+        $dryRun = !empty($body['dry_run']);
         $recordId = Medic8Model::resolveRecordId(
             $entity,
             $body['record_id'] ?? null,
             $body['external_source_id'] ?? $body['source_id'] ?? null
         );
-        $result = Medic8Model::unlinkDocument($documentId, $entity, $recordId, $actorUid, $actorLabel);
+        $result = Medic8Model::unlinkDocument($documentId, $entity, $recordId, $actorUid, $actorLabel, $dryRun);
         catn8_json_response(['success' => true] + $result);
     }
 

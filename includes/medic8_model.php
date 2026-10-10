@@ -810,12 +810,14 @@ final class Medic8Model
         $table = self::ENTITY_TABLES[$entity];
         $existing = null;
         $live = self::liveSql($table);
+        // Match by external_source_id first, then by id. Only create when neither matches.
         if ($externalId !== null && self::hasColumn($table, 'external_source_id')) {
             $existing = Database::queryOne(
                 "SELECT * FROM {$table} WHERE external_source_id = ?" . $live . ' ORDER BY id DESC',
                 [$externalId]
             );
-        } elseif (!empty($input['id'])) {
+        }
+        if ($existing === null && !empty($input['id'])) {
             $existing = Database::queryOne("SELECT * FROM {$table} WHERE id = ?" . $live, [(int)$input['id']]);
         }
 
@@ -1689,7 +1691,7 @@ final class Medic8Model
         return (int)$row['id'];
     }
 
-    public static function linkFromSpec(int $documentId, array $spec, int $uid, ?string $actorLabel = null): array
+    public static function linkFromSpec(int $documentId, array $spec, int $uid, ?string $actorLabel = null, bool $dryRun = false): array
     {
         $entity = trim((string)($spec['entity'] ?? ''));
         if ($entity === '' || !isset(self::ENTITY_TABLES[$entity])) {
@@ -1698,16 +1700,27 @@ final class Medic8Model
         $recordId = self::resolveRecordId($entity, $spec['record_id'] ?? null, $spec['external_source_id'] ?? $spec['source_id'] ?? null);
         $role = self::nullableClip($spec['role'] ?? null, 96);
         $note = self::nullableClip($spec['note'] ?? null, 255);
-        return self::linkDocument($documentId, $entity, $recordId, $role, $note, $uid, $actorLabel);
+        return self::linkDocument($documentId, $entity, $recordId, $role, $note, $uid, $actorLabel, $dryRun);
     }
 
-    public static function linkDocument(int $documentId, string $entity, int $recordId, ?string $role, ?string $note, int $uid, ?string $actorLabel = null): array
-    {
+    public static function linkDocument(
+        int $documentId,
+        string $entity,
+        int $recordId,
+        ?string $role,
+        ?string $note,
+        int $uid,
+        ?string $actorLabel = null,
+        bool $dryRun = false
+    ): array {
         self::ensureSchema();
         if ($documentId <= 0 || $recordId <= 0 || !isset(self::ENTITY_TABLES[$entity])) {
             throw new InvalidArgumentException('document_id, entity, and record_id required');
         }
-        $doc = Database::queryOne('SELECT * FROM medic8_documents WHERE id = ?', [$documentId]);
+        $doc = Database::queryOne(
+            'SELECT * FROM medic8_documents WHERE id = ?' . self::liveSql('medic8_documents'),
+            [$documentId]
+        );
         if (!$doc) {
             throw new InvalidArgumentException('document not found');
         }
@@ -1716,12 +1729,28 @@ final class Medic8Model
             [$documentId, $entity, $recordId]
         );
         if ($existing) {
+            $preview = $existing;
+            $preview['role'] = $role !== null ? $role : ($existing['role'] ?? null);
+            $preview['note'] = $note !== null ? $note : ($existing['note'] ?? null);
+            if ($dryRun) {
+                return ['created' => false, 'updated' => true, 'dry_run' => true, 'link' => $preview];
+            }
             Database::execute(
                 'UPDATE medic8_record_documents SET role = COALESCE(?, role), note = COALESCE(?, note) WHERE id = ?',
                 [$role, $note, (int)$existing['id']]
             );
             $link = Database::queryOne('SELECT * FROM medic8_record_documents WHERE id = ?', [(int)$existing['id']]);
-            return ['created' => false, 'updated' => true, 'link' => $link];
+            return ['created' => false, 'updated' => true, 'dry_run' => false, 'link' => $link];
+        }
+        $preview = [
+            'document_id' => $documentId,
+            'entity' => $entity,
+            'record_id' => $recordId,
+            'role' => $role,
+            'note' => $note,
+        ];
+        if ($dryRun) {
+            return ['created' => true, 'updated' => false, 'dry_run' => true, 'link' => $preview];
         }
         Database::execute(
             'INSERT INTO medic8_record_documents (document_id, entity, record_id, role, note) VALUES (?, ?, ?, ?, ?)',
@@ -1730,11 +1759,17 @@ final class Medic8Model
         $id = (int)Database::lastInsertId();
         $link = Database::queryOne('SELECT * FROM medic8_record_documents WHERE id = ?', [$id]);
         self::audit($uid > 0 ? $uid : null, 'link_document', 'medic8_record_documents', $id, (int)($doc['person_id'] ?? 0) ?: null, null, $link, $actorLabel);
-        return ['created' => true, 'updated' => false, 'link' => $link];
+        return ['created' => true, 'updated' => false, 'dry_run' => false, 'link' => $link];
     }
 
-    public static function unlinkDocument(int $documentId, string $entity, int $recordId, int $uid, ?string $actorLabel = null): array
-    {
+    public static function unlinkDocument(
+        int $documentId,
+        string $entity,
+        int $recordId,
+        int $uid,
+        ?string $actorLabel = null,
+        bool $dryRun = false
+    ): array {
         self::ensureSchema();
         $existing = Database::queryOne(
             'SELECT * FROM medic8_record_documents WHERE document_id = ? AND entity = ? AND record_id = ?',
@@ -1743,9 +1778,12 @@ final class Medic8Model
         if (!$existing) {
             throw new InvalidArgumentException('link not found');
         }
+        if ($dryRun) {
+            return ['deleted' => true, 'dry_run' => true, 'link' => $existing];
+        }
         Database::execute('DELETE FROM medic8_record_documents WHERE id = ?', [(int)$existing['id']]);
         self::audit($uid > 0 ? $uid : null, 'unlink_document', 'medic8_record_documents', (int)$existing['id'], null, $existing, null, $actorLabel);
-        return ['deleted' => true, 'link' => $existing];
+        return ['deleted' => true, 'dry_run' => false, 'link' => $existing];
     }
 
     public static function privilegedUserId(): int

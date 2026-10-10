@@ -28,9 +28,32 @@ function sourceLabel(record: Medic8Record): string {
   return `Source: ${bits.join(' · ')}`;
 }
 
+function LinkedDocuments({ record }: { record: Medic8Record }) {
+  const docs = Array.isArray(record.documents) ? record.documents : [];
+  if (docs.length === 0) {
+    return null;
+  }
+  return (
+    <div className="medic8-docs">
+      {docs.map((doc) => {
+        const label = [doc.title || `Document ${doc.id}`, doc.link_role].filter(Boolean).join(' · ');
+        if (doc.media_url) {
+          return (
+            <a key={String(doc.id)} className="medic8-doc-chip" href={String(doc.media_url)} target="_blank" rel="noreferrer">
+              {label}
+            </a>
+          );
+        }
+        return <span key={String(doc.id)} className="medic8-doc-chip">{label}</span>;
+      })}
+    </div>
+  );
+}
+
 function RecordList({
   title,
   records,
+  total,
   primary,
   secondary,
   onDelete,
@@ -39,6 +62,7 @@ function RecordList({
 }: {
   title: string;
   records: Medic8Record[];
+  total?: number;
   primary: (r: Medic8Record) => string;
   secondary?: (r: Medic8Record) => string;
   onDelete?: (id: number) => void;
@@ -47,7 +71,10 @@ function RecordList({
 }) {
   return (
     <section className="medic8-section">
-      <h2>{title}</h2>
+      <h2>
+        {title}
+        {typeof total === 'number' ? <span className="medic8-count">{total} total</span> : null}
+      </h2>
       {records.length === 0 ? (
         <div className="medic8-empty">None on file.</div>
       ) : (
@@ -57,6 +84,7 @@ function RecordList({
               <strong>{primary(record)}</strong>
               {secondary ? <span className="medic8-meta">{secondary(record)}</span> : null}
               <span className="medic8-source">{sourceLabel(record)}</span>
+              <LinkedDocuments record={record} />
               {(canEdit && (onDelete || onReveal) && record.id) ? (
                 <div className="medic8-actions">
                   {onReveal ? (
@@ -295,6 +323,7 @@ export function Medic8Page({ viewer, isAdmin, onLoginClick, onLogout, onAccountC
               <RecordList
                 title="Recent labs"
                 records={dashboard.labs_recent}
+                total={dashboard.labs_total}
                 canEdit={canEdit}
                 primary={(r) => `${String(r.test)}: ${String(r.value || '')} ${String(r.unit || '')}`}
                 secondary={(r) => `${String(r.taken_at || '')}${r.flag ? ` · ${String(r.flag)}` : ''}`}
@@ -303,6 +332,7 @@ export function Medic8Page({ viewer, isAdmin, onLoginClick, onLogout, onAccountC
               <RecordList
                 title="Procedures"
                 records={dashboard.procedures}
+                total={dashboard.procedures_total}
                 canEdit={canEdit}
                 primary={(r) => String(r.name)}
                 secondary={(r) => `${String(r.performed_at || '')} · ${String(r.impression || '')}`}
@@ -311,6 +341,7 @@ export function Medic8Page({ viewer, isAdmin, onLoginClick, onLogout, onAccountC
               <RecordList
                 title="Encounters"
                 records={dashboard.encounters}
+                total={dashboard.encounters_total}
                 canEdit={canEdit}
                 primary={(r) => String(r.encounter_type || 'Encounter')}
                 secondary={(r) => `${String(r.occurred_at || '')} · ${String(r.summary || '')}`}
@@ -336,10 +367,29 @@ export function Medic8Page({ viewer, isAdmin, onLoginClick, onLogout, onAccountC
               <RecordList
                 title="Documents"
                 records={dashboard.documents}
+                total={dashboard.documents_total}
                 canEdit={canEdit}
                 primary={(r) => String(r.title)}
                 secondary={(r) => `${String(r.doc_type || '')}${r.media_url ? ` · ${String(r.media_url)}` : ''}`}
                 onDelete={(id) => void handleDelete('documents', id)}
+              />
+              <RecordList
+                title="Portal messages"
+                records={dashboard.portal_messages}
+                total={dashboard.portal_messages_total}
+                canEdit={canEdit}
+                primary={(r) => String(r.subject || 'Message')}
+                secondary={(r) => `${String(r.sent_at || '')} · ${String(r.direction || '')}`}
+                onDelete={(id) => void handleDelete('portal_messages', id)}
+              />
+              <RecordList
+                title="Invoices"
+                records={dashboard.invoices}
+                total={dashboard.invoices_total}
+                canEdit={canEdit}
+                primary={(r) => `${String(r.status || 'Invoice')} · ${String(r.amount || '')}`}
+                secondary={(r) => String(r.invoice_date || r.date || '')}
+                onDelete={(id) => void handleDelete('invoices', id)}
               />
             </div>
 

@@ -26,6 +26,27 @@ export type Medic8Person = {
   dob?: string | null;
   sensitivity_default?: string | null;
   is_opted_in?: number;
+  external_source_id?: string | null;
+  source_ref_id?: number | null;
+  source?: Medic8Source | null;
+};
+
+export type Medic8LinkedDocument = {
+  id: number;
+  title?: string;
+  doc_type?: string | null;
+  media_url?: string;
+  link_role?: string | null;
+  link_note?: string | null;
+};
+
+export type Medic8RecordLink = {
+  id?: number;
+  document_id: number;
+  entity: string;
+  record_id: number;
+  role?: string | null;
+  note?: string | null;
 };
 
 export type Medic8Source = {
@@ -46,6 +67,8 @@ export type Medic8Record = Record<string, unknown> & {
   person_id?: number;
   source?: Medic8Source | null;
   source_ref_id?: number | null;
+  documents?: Medic8LinkedDocument[];
+  links?: Medic8RecordLink[];
 };
 
 export type Medic8Dashboard = {
@@ -57,14 +80,20 @@ export type Medic8Dashboard = {
   appointments_upcoming: Medic8Record[];
   providers: Medic8Record[];
   labs_recent: Medic8Record[];
+  labs_total: number;
   lab_trends: Record<string, Array<{ taken_at?: string | null; value?: string | null; unit?: string | null; flag?: string | null }>>;
   procedures: Medic8Record[];
+  procedures_total: number;
   encounters: Medic8Record[];
+  encounters_total: number;
   insurance: Medic8Record[];
   disability_events: Medic8Record[];
   documents: Medic8Record[];
+  documents_total: number;
   portal_messages: Medic8Record[];
+  portal_messages_total: number;
   invoices: Medic8Record[];
+  invoices_total: number;
 };
 
 export type Medic8BootstrapResponse = {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 /**
  * Synthetic-only Medic8 smoke test. No real PHI.
+ * Uses a dedicated synthetic person (not the admin self row).
+ * Does not rotate the live agent token.
  * Usage: php scripts/medic8/synthetic_smoke_test.php
  */
 
@@ -23,8 +25,41 @@ $admin = Database::queryOne('SELECT id FROM users WHERE is_admin = 1 ORDER BY id
 assert_true((bool)$admin, 'admin user exists');
 $adminUid = (int)$admin['id'];
 
-$person = Medic8Model::ensureAdminPerson($adminUid, 'Synthetic Admin Patient');
-$personId = (int)$person['id'];
+$personResult = Medic8Model::upsertEntity('people', [
+    'owner_user_id' => $adminUid,
+    'display_name' => 'Synthetic Smoke Patient',
+    'relation_to_admin' => 'synthetic-test',
+    'is_opted_in' => 1,
+    'external_source_id' => 'synthetic:person:smoke',
+    'source' => [
+        'source_type' => 'manual',
+        'record_type' => 'people',
+        'record_id' => 'smoke',
+    ],
+], $adminUid, false, 'agent:medic8-test');
+$personId = (int)($personResult['id'] ?? 0);
+assert_true($personId > 0, 'synthetic person id');
+
+$sourcesBefore = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM medic8_sources')['c'] ?? 0);
+
+$dry = Medic8Model::importBatch('allergies', [[
+    'external_source_id' => 'synthetic:allergy:peanut-dry',
+    'person_id' => $personId,
+    'allergen' => 'Peanut (synthetic dry)',
+    'reaction' => 'hives',
+    'source' => [
+        'source_type' => 'manual',
+        'record_type' => 'allergies',
+        'record_id' => 'peanut-dry-' . bin2hex(random_bytes(4)),
+    ],
+]], $adminUid, true, 'agent:medic8-test');
+assert_true($dry['dry_run'] === true && $dry['created'] === 1, 'dry_run create preview');
+$sourcesAfterDry = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM medic8_sources')['c'] ?? 0);
+assert_true($sourcesAfterDry === $sourcesBefore, 'dry_run wrote no sources');
+$dryRow = Database::queryOne(
+    "SELECT id FROM medic8_allergies WHERE external_source_id = 'synthetic:allergy:peanut-dry'"
+);
+assert_true(!$dryRow, 'dry_run wrote no allergy row');
 
 $import = Medic8Model::importBatch('medications', [[
     'external_source_id' => 'synthetic:med:examplecillin',
@@ -44,7 +79,6 @@ $import = Medic8Model::importBatch('medications', [[
         'message_date' => '2026-09-01',
     ],
 ]], $adminUid, false, 'agent:medic8-test');
-
 assert_true($import['error_count'] === 0, 'med import errors');
 assert_true(($import['created'] + $import['updated']) === 1, 'med upsert count');
 
@@ -58,20 +92,21 @@ $again = Medic8Model::importBatch('medications', [[
 ]], $adminUid, false, 'agent:medic8-test');
 assert_true($again['updated'] === 1 && $again['created'] === 0, 'idempotent update');
 
-$dry = Medic8Model::importBatch('allergies', [[
-    'external_source_id' => 'synthetic:allergy:peanut',
-    'person_id' => $personId,
-    'allergen' => 'Peanut (synthetic)',
-    'reaction' => 'hives',
-]], $adminUid, true, 'agent:medic8-test');
-assert_true($dry['dry_run'] === true && $dry['created'] === 1, 'dry_run create preview');
-
 Medic8Model::importBatch('allergies', [[
     'external_source_id' => 'synthetic:allergy:peanut',
     'person_id' => $personId,
     'allergen' => 'Peanut (synthetic)',
     'reaction' => 'hives',
 ]], $adminUid, false, 'agent:medic8-test');
+
+$lab = Medic8Model::upsertEntity('labs', [
+    'external_source_id' => 'synthetic:lab:cbc',
+    'person_id' => $personId,
+    'test' => 'Synthetic CBC',
+    'value' => '5',
+    'unit' => 'k',
+], $adminUid, false, 'agent:medic8-test');
+$labId = (int)($lab['id'] ?? 0);
 
 $tmp = tempnam(sys_get_temp_dir(), 'm8doc');
 file_put_contents($tmp, 'synthetic medic8 document body');
@@ -85,13 +120,58 @@ $upload = Medic8Model::storeUploadedDocument([
     'doc_type' => 'note',
     'external_source_id' => 'synthetic:doc:note-1',
     'source' => ['source_type' => 'manual', 'record_type' => 'documents', 'record_id' => 'note-1'],
+    'links' => [['entity' => 'labs', 'record_id' => $labId, 'role' => 'result']],
 ], $adminUid, 'agent:medic8-test');
 assert_true(!empty($upload['id']), 'document upload id');
+$docId = (int)$upload['id'];
+assert_true(!empty($upload['links'][0]['created']) || !empty($upload['links'][0]['updated']), 'link created');
+
+$tmp2 = tempnam(sys_get_temp_dir(), 'm8doc');
+file_put_contents($tmp2, 'synthetic medic8 document body');
+$againUpload = Medic8Model::storeUploadedDocument([
+    'tmp_name' => $tmp2,
+    'name' => 'synthetic-note.txt',
+    'type' => 'text/plain',
+], [
+    'person_id' => $personId,
+    'title' => 'Synthetic note updated title',
+    'doc_type' => 'note',
+    'external_source_id' => 'synthetic:doc:note-1',
+], $adminUid, 'agent:medic8-test');
+assert_true((int)$againUpload['id'] === $docId, 'document upsert same id');
+assert_true(empty($againUpload['file_replaced']), 'same hash did not replace file');
+
+$tmp3 = tempnam(sys_get_temp_dir(), 'm8doc');
+file_put_contents($tmp3, 'synthetic medic8 document body CHANGED');
+$replaced = Medic8Model::storeUploadedDocument([
+    'tmp_name' => $tmp3,
+    'name' => 'synthetic-note.txt',
+    'type' => 'text/plain',
+], [
+    'person_id' => $personId,
+    'title' => 'Synthetic note replaced',
+    'doc_type' => 'note',
+    'external_source_id' => 'synthetic:doc:note-1',
+], $adminUid, 'agent:medic8-test');
+assert_true((int)$replaced['id'] === $docId, 'hash-change upsert same id');
+assert_true(!empty($replaced['file_replaced']), 'different hash replaced file');
+
+$labGot = Medic8Model::getEntity('labs', $labId, $adminUid, false);
+assert_true(is_array($labGot) && !empty($labGot['documents']), 'lab get includes documents');
+
+$docGot = Medic8Model::getEntity('documents', $docId, $adminUid, false);
+assert_true(is_array($docGot) && !empty($docGot['links']), 'document get includes links');
+
+$page = Medic8Model::listEntityPage('documents', $adminUid, $personId, 1, 0);
+assert_true($page['total'] >= 1, 'paging total');
+assert_true(count($page['records']) === 1, 'paging limit');
+assert_true($page['next'] === 1 || $page['total'] === 1, 'paging next');
 
 $dash = Medic8Model::dashboard($adminUid, $personId);
 assert_true(count($dash['medications_current']) >= 1, 'dashboard meds');
 assert_true(count($dash['allergies']) >= 1, 'dashboard allergies');
-assert_true(count($dash['documents']) >= 1, 'dashboard documents');
+assert_true(($dash['documents_total'] ?? 0) >= 1, 'dashboard documents_total');
+assert_true(($dash['labs_total'] ?? 0) >= 1, 'dashboard labs_total');
 
 $meds = Medic8Model::listEntity('medications', $adminUid, $personId, 20);
 $hasMasked = false;
@@ -103,12 +183,19 @@ foreach ($meds as $med) {
 }
 assert_true($hasMasked, 'rx masked present');
 
-$token = Medic8Model::rotateApiToken();
-$path = Medic8Model::writeLocalTokenFile($token);
-assert_true(is_file($path), 'token file exists');
-assert_true(Medic8Model::verifyApiToken($token), 'token verifies');
-assert_true(!Medic8Model::verifyApiToken('wrong-token'), 'bad token rejected');
+$soft = Medic8Model::deleteEntityByKey('allergies', null, 'synthetic:allergy:peanut', $adminUid, 'agent:medic8-test', false);
+assert_true(!empty($soft['deleted']) && empty($soft['hard']), 'soft delete');
+assert_true(Medic8Model::findEntityRow('allergies', null, 'synthetic:allergy:peanut') === null, 'soft-deleted hidden');
+
+try {
+    Medic8Model::deleteEntityByKey('conditions', null, 'synthetic:condition:missing', $adminUid, 'agent:medic8-test', true);
+    assert_true(false, 'missing delete should throw');
+} catch (InvalidArgumentException $e) {
+    assert_true(true, 'missing delete throws');
+}
+
+$cleanup = Medic8Model::deleteSyntheticTestRows($adminUid, 'agent:medic8-test');
+assert_true(($cleanup['deleted_count'] ?? 0) >= 1, 'synthetic cleanup');
 
 echo "Medic8 synthetic smoke test OK\n";
-echo "person_id={$personId}\n";
-echo "token_file={$path}\n";
+echo "cleaned_synthetic_rows=" . (int)$cleanup['deleted_count'] . "\n";

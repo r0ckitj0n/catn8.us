@@ -17,6 +17,7 @@ $readActions = [
 $writeActions = [
     'upsert', 'delete', 'reveal_sensitive',
     'upload_document', 'ensure_admin_person',
+    'link_document', 'unlink_document',
 ];
 $allowed = array_merge($readActions, $writeActions);
 
@@ -83,11 +84,12 @@ try {
         $entity = trim((string)($_GET['entity'] ?? ''));
         $personId = isset($_GET['person_id']) ? (int)$_GET['person_id'] : null;
         $limit = (int)($_GET['limit'] ?? 200);
+        $offset = (int)($_GET['offset'] ?? $_GET['cursor'] ?? 0);
+        $page = Medic8Model::listEntityPage($entity, $actorUserId, $personId, $limit, $offset);
         catn8_json_response([
             'success' => true,
             'entity' => $entity,
-            'records' => Medic8Model::listEntity($entity, $actorUserId, $personId, $limit),
-        ]);
+        ] + $page);
     }
 
     if ($action === 'get') {
@@ -137,11 +139,43 @@ try {
         $body = catn8_read_json_body();
         $entity = trim((string)($body['entity'] ?? ''));
         $id = (int)($body['id'] ?? 0);
-        if ($id <= 0) {
-            catn8_json_response(['success' => false, 'error' => 'id required'], 400);
+        $ext = trim((string)($body['external_source_id'] ?? $body['source_id'] ?? ''));
+        $hard = array_key_exists('hard', $body) ? !empty($body['hard']) : true;
+        if ($entity === '' || ($id <= 0 && $ext === '')) {
+            catn8_json_response(['success' => false, 'error' => 'entity and id or external_source_id required'], 400);
         }
-        Medic8Model::deleteEntity($entity, $id, $actorUserId, null);
-        catn8_json_response(['success' => true]);
+        $result = Medic8Model::deleteEntityByKey(
+            $entity,
+            $id > 0 ? $id : null,
+            $ext !== '' ? $ext : null,
+            $actorUserId,
+            null,
+            $hard
+        );
+        catn8_json_response(['success' => true] + $result);
+    }
+
+    if ($action === 'link_document') {
+        $body = catn8_read_json_body();
+        $documentId = (int)($body['document_id'] ?? 0);
+        if ($documentId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'document_id required'], 400);
+        }
+        $result = Medic8Model::linkFromSpec($documentId, $body, $actorUserId, null);
+        catn8_json_response(['success' => true] + $result);
+    }
+
+    if ($action === 'unlink_document') {
+        $body = catn8_read_json_body();
+        $documentId = (int)($body['document_id'] ?? 0);
+        $entity = trim((string)($body['entity'] ?? ''));
+        $recordId = Medic8Model::resolveRecordId(
+            $entity,
+            $body['record_id'] ?? null,
+            $body['external_source_id'] ?? $body['source_id'] ?? null
+        );
+        $result = Medic8Model::unlinkDocument($documentId, $entity, $recordId, $actorUserId, null);
+        catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'reveal_sensitive') {
@@ -165,6 +199,7 @@ try {
             'doc_type' => (string)($_POST['doc_type'] ?? ''),
             'external_source_id' => (string)($_POST['external_source_id'] ?? $_POST['source_id'] ?? ''),
             'source_ref_id' => (int)($_POST['source_ref_id'] ?? 0),
+            'links' => $_POST['links'] ?? $_POST['links_json'] ?? [],
         ];
         if (!empty($_POST['source_json'])) {
             $decoded = json_decode((string)$_POST['source_json'], true);

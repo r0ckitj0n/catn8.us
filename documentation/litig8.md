@@ -138,8 +138,10 @@ Dedupe key: `external_source_id` (preferred) or `source_id`.
 - **contacts**: **name**; optional `owner_user_id`, `contact_type` (`attorney|adjuster|agency|opposing|party|other`), organization, role_title, phone, email, address, notes, `ssn`, `account_number`
 - **matter_contacts**: **matter_id**, **contact_id**; optional role, notes
 - **documents**: prefer `upload_document`; metadata upsert needs **title**, **file_path**, `owner_user_id`
-- **categories**: **slug**, **label**; optional sort_order, active
+- **categories**: **slug**, **label**; optional sort_order, active, `external_source_id`, nested `source` / `source_ref_id`
 - **sources**: citation upsert via nested/flat fields on other entities
+
+`dry_run` on `import` / `upsert` executes the same INSERT/UPDATE SQL inside a rolled-back transaction (so a missing column cannot pass dry_run and fail on apply). Medic8’s dry_run still short-circuits before SQL — same class of gap there if you import entities whose columns are missing.
 
 Default categories (editable): disputes, contracts, property-deeds, cabin-permits-zoning, estate, tax, business-filings, insurance-claims, disability-legal, citations.
 

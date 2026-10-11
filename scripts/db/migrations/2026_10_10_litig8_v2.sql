@@ -1,8 +1,8 @@
 -- Litig8 additive follow-up (idempotent ALTERs applied in Litig8Model::ensureSchema).
 -- Do not DROP or rewrite existing tables.
--- Also added at runtime: deleted_at on entity tables (matters, events, deadlines,
--- contacts, matter_contacts, documents), unique external_source_id indexes, and
--- the default litig8_categories seed rows.
+-- Also added at runtime: external_source_id + source_ref_id on every entity table
+-- (including litig8_categories), deleted_at on non-category entities, unique
+-- external_source_id indexes, and the default litig8_categories seed rows.
 
 CREATE TABLE IF NOT EXISTS litig8_record_documents (
   id INT AUTO_INCREMENT PRIMARY KEY,

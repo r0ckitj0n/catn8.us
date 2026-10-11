@@ -91,6 +91,8 @@ final class Litig8Model
         }
 
         self::applyAdditiveSchema();
+        // Ensure vault root + deny-all .htaccess exist (self-heal after FTP deploys).
+        self::storageRoot();
         self::$schemaEnsured = true;
     }
 
@@ -116,10 +118,15 @@ final class Litig8Model
         }
 
         foreach (self::ENTITY_TABLES as $entity => $table) {
-            if ($entity === 'sources' || $entity === 'categories') {
+            if ($entity === 'sources') {
                 continue;
             }
-            self::ensureColumn($table, 'deleted_at', 'deleted_at DATETIME NULL');
+            // Citation / dedupe columns — additive on every entity table (incl. categories).
+            self::ensureColumn($table, 'external_source_id', 'external_source_id VARCHAR(191) NULL');
+            self::ensureColumn($table, 'source_ref_id', 'source_ref_id INT NULL');
+            if ($entity !== 'categories') {
+                self::ensureColumn($table, 'deleted_at', 'deleted_at DATETIME NULL');
+            }
         }
         self::ensureUniqueIndexes();
         self::seedDefaultCategories();
@@ -129,9 +136,12 @@ final class Litig8Model
     {
         self::ensureIndex('litig8_documents', 'idx_litig8_documents_sha', 'KEY idx_litig8_documents_sha (sha256)');
         self::ensureIndex('litig8_documents', 'uniq_litig8_documents_ext', 'UNIQUE KEY uniq_litig8_documents_ext (external_source_id)');
+        self::ensureIndex('litig8_matters', 'uniq_litig8_matters_ext', 'UNIQUE KEY uniq_litig8_matters_ext (external_source_id)');
         self::ensureIndex('litig8_events', 'uniq_litig8_events_ext', 'UNIQUE KEY uniq_litig8_events_ext (external_source_id)');
         self::ensureIndex('litig8_deadlines', 'uniq_litig8_deadlines_ext', 'UNIQUE KEY uniq_litig8_deadlines_ext (external_source_id)');
         self::ensureIndex('litig8_contacts', 'uniq_litig8_contacts_ext', 'UNIQUE KEY uniq_litig8_contacts_ext (external_source_id)');
+        self::ensureIndex('litig8_matter_contacts', 'uniq_litig8_matter_contacts_ext', 'UNIQUE KEY uniq_litig8_matter_contacts_ext (external_source_id)');
+        self::ensureIndex('litig8_categories', 'uniq_litig8_categories_ext', 'UNIQUE KEY uniq_litig8_categories_ext (external_source_id)');
     }
 
     private static function seedDefaultCategories(): void
@@ -183,15 +193,49 @@ final class Litig8Model
     public static function storageRoot(): string
     {
         $root = dirname(__DIR__) . '/private/litig8';
-        if (!is_dir($root) && !mkdir($root, 0700, true) && !is_dir($root)) {
-            throw new RuntimeException('Failed to create litig8 storage root');
-        }
+        self::ensureStorageDir($root, 'litig8 storage root');
         $ht = $root . '/.htaccess';
         if (!is_file($ht)) {
-            file_put_contents($ht, "Require all denied\n");
+            if (@file_put_contents($ht, "Require all denied\n") === false) {
+                throw new RuntimeException('Failed to write litig8 deny-all .htaccess at ' . $ht);
+            }
             @chmod($ht, 0644);
         }
         return $root;
+    }
+
+    /**
+     * Create a storage directory (recursive) with a clear error if the web user
+     * cannot write. Prefer 0750 so FTP-seeded parents remain traversable; fall
+     * back to 0700 when the process owns the tree (Medic8 pattern).
+     */
+    private static function ensureStorageDir(string $path, string $label): void
+    {
+        if (is_dir($path)) {
+            if (!is_writable($path)) {
+                throw new RuntimeException(
+                    'Litig8 ' . $label . ' is not writable by PHP: ' . $path
+                    . ' (fix ownership/mode; expected private/litig8 like private/medic8)'
+                );
+            }
+            return;
+        }
+        $ok = @mkdir($path, 0750, true);
+        if (!$ok && !is_dir($path)) {
+            $ok = @mkdir($path, 0700, true);
+        }
+        if (!$ok && !is_dir($path)) {
+            $err = error_get_last();
+            $detail = is_array($err) ? (string)($err['message'] ?? '') : '';
+            throw new RuntimeException(
+                'Failed to create litig8 ' . $label . ': ' . $path
+                . ($detail !== '' ? ' (' . $detail . ')' : '')
+            );
+        }
+        @chmod($path, 0750);
+        if (!is_writable($path)) {
+            throw new RuntimeException('Litig8 ' . $label . ' created but not writable: ' . $path);
+        }
     }
 
     public static function localTokenPath(): string
@@ -410,9 +454,7 @@ final class Litig8Model
         );
         if ($existing) {
             $id = (int)$existing['id'];
-            if ($dryRun) {
-                return $id;
-            }
+            // Always run the UPDATE (dry_run is rolled back by the caller).
             Database::execute(
                 'UPDATE litig8_sources
                  SET message_date = COALESCE(?, message_date), file_path = COALESCE(?, file_path), note = COALESCE(?, note)
@@ -420,9 +462,6 @@ final class Litig8Model
                 [$messageDate, $filePath, $note, $id]
             );
             return $id;
-        }
-        if ($dryRun) {
-            return 0;
         }
         Database::execute(
             'INSERT INTO litig8_sources (source_type, account, thread_id, message_id, message_date, file_path, record_type, record_id, note, fingerprint)
@@ -703,21 +742,8 @@ final class Litig8Model
             throw new InvalidArgumentException('matter_id not found');
         }
 
-        if ($dryRun) {
-            $preview = [
-                'id' => $existing ? (int)$existing['id'] : null,
-                'created' => $existing === null,
-                'updated' => $existing !== null,
-                'dry_run' => true,
-                'preview' => self::publicizeRow($entity, array_merge($existing ?: [], $normalized)),
-            ];
-            if ($entity === 'matters') {
-                $previewMatterId = $existing ? (int)$existing['id'] : 0;
-                $preview['nested_results'] = self::processNestedMatterImport($previewMatterId, $input, $uid, true, $actorLabel);
-            }
-            return $preview;
-        }
-
+        // Dry-run executes the same INSERT/UPDATE (and nested child writes) inside
+        // a rolled-back transaction so schema/SQL failures cannot be masked.
         if ($existing) {
             $sets = [];
             $params = [];
@@ -732,9 +758,18 @@ final class Litig8Model
             self::audit($uid, 'update', $table, $id, $matterId, self::publicizeRow($entity, $existing), self::publicizeRow($entity, $after ?: []), $actorLabel);
             $record = self::publicizeRow($entity, $after ?: []);
             $attached = self::attachDocumentsToRecords($entity, [$record]);
-            $result = ['id' => $id, 'created' => false, 'updated' => true, 'dry_run' => false, 'record' => $attached[0]];
+            $result = [
+                'id' => $id,
+                'created' => false,
+                'updated' => true,
+                'dry_run' => $dryRun,
+                'record' => $attached[0],
+            ];
+            if ($dryRun) {
+                $result['preview'] = $attached[0];
+            }
             if ($entity === 'matters') {
-                $result['nested_results'] = self::processNestedMatterImport($id, $input, $uid, false, $actorLabel);
+                $result['nested_results'] = self::processNestedMatterImport($id, $input, $uid, $dryRun, $actorLabel);
             }
             return $result;
         }
@@ -748,9 +783,18 @@ final class Litig8Model
         self::audit($uid, 'create', $table, $id, $matterId, null, self::publicizeRow($entity, $after ?: []), $actorLabel);
         $record = self::publicizeRow($entity, $after ?: []);
         $attached = self::attachDocumentsToRecords($entity, [$record]);
-        $result = ['id' => $id, 'created' => true, 'updated' => false, 'dry_run' => false, 'record' => $attached[0]];
+        $result = [
+            'id' => $id,
+            'created' => true,
+            'updated' => false,
+            'dry_run' => $dryRun,
+            'record' => $attached[0],
+        ];
+        if ($dryRun) {
+            $result['preview'] = $attached[0];
+        }
         if ($entity === 'matters') {
-            $result['nested_results'] = self::processNestedMatterImport($id, $input, $uid, false, $actorLabel);
+            $result['nested_results'] = self::processNestedMatterImport($id, $input, $uid, $dryRun, $actorLabel);
         }
         return $result;
     }
@@ -1078,10 +1122,15 @@ final class Litig8Model
             }
         }
 
-        if ($sourceRefId !== null && (int)$sourceRefId > 0) {
+        $table = self::ENTITY_TABLES[$entity] ?? '';
+        if ($table !== '' && self::hasColumn($table, 'source_ref_id')
+            && $sourceRefId !== null && (int)$sourceRefId > 0
+        ) {
             $out['source_ref_id'] = (int)$sourceRefId;
         }
-        if (array_key_exists('external_source_id', $map) || array_key_exists('external_source_id', $input) || array_key_exists('source_id', $input)) {
+        if ($table !== '' && self::hasColumn($table, 'external_source_id')
+            && (array_key_exists('external_source_id', $map) || array_key_exists('external_source_id', $input) || array_key_exists('source_id', $input))
+        ) {
             $ext = self::nullableClip($input['external_source_id'] ?? $input['source_id'] ?? null, 191);
             if ($ext !== null) {
                 $out['external_source_id'] = $ext;
@@ -1167,6 +1216,7 @@ final class Litig8Model
                 'label' => ['len' => 191, 'required_on_create' => true],
                 'sort_order' => ['type' => 'int'],
                 'active' => ['type' => 'bool'],
+                'external_source_id' => ['len' => 191],
             ],
             default => throw new InvalidArgumentException('Unsupported entity'),
         };
@@ -1263,9 +1313,7 @@ final class Litig8Model
         } else {
             $relDir = 'u' . $ownerUserId . '/' . date('Y/m');
             $absDir = self::storageRoot() . '/' . $relDir;
-            if (!is_dir($absDir) && !mkdir($absDir, 0700, true) && !is_dir($absDir)) {
-                throw new RuntimeException('Failed to create document directory');
-            }
+            self::ensureStorageDir($absDir, 'document directory');
             $basename = bin2hex(random_bytes(16)) . '.' . $ext;
             $abs = $absDir . '/' . $basename;
             $rel = $relDir . '/' . $basename;
@@ -1352,7 +1400,9 @@ final class Litig8Model
             return null;
         }
         $retiredDir = self::storageRoot() . '/retired/' . date('Y/m');
-        if (!is_dir($retiredDir) && !mkdir($retiredDir, 0700, true) && !is_dir($retiredDir)) {
+        try {
+            self::ensureStorageDir($retiredDir, 'retired document directory');
+        } catch (Throwable $e) {
             @unlink($full);
             return 'deleted';
         }
@@ -1546,20 +1596,57 @@ final class Litig8Model
     // ------------------------------------------------------------------
 
     /**
-     * Cleanup duplicate rows / orphan files. Full dedupe is not needed for a
-     * single-owner private hub; this stub keeps the API contract (counts only,
-     * no filenames or case data) so callers can wire it up later if needed.
+     * Maintenance cleanup: remove orphan matter_contacts (matter or contact gone)
+     * and ensure unique indexes. Counts only — no titles/names in the response.
      */
     public static function cleanupDuplicates(int $uid, ?string $actorLabel = null): array
     {
         self::ensureSchema();
         self::ensureUniqueIndexes();
+        $orphans = self::cleanupOrphanMatterContacts($uid, $actorLabel);
         return [
             'duplicate_groups' => 0,
             'duplicate_rows_removed' => 0,
             'duplicate_files_retired' => 0,
             'orphan_files_retired' => 0,
+            'orphan_matter_contacts_removed' => (int)($orphans['removed'] ?? 0),
         ];
+    }
+
+    /**
+     * Delete litig8_matter_contacts rows whose matter_id or contact_id no longer
+     * exists (or is soft-deleted).
+     */
+    public static function cleanupOrphanMatterContacts(int $uid, ?string $actorLabel = null): array
+    {
+        self::ensureSchema();
+        $matterLive = self::liveSql('litig8_matters', 'm');
+        $contactLive = self::liveSql('litig8_contacts', 'c');
+        $mcLive = self::liveSql('litig8_matter_contacts', 'mc');
+        $rows = Database::queryAll(
+            "SELECT mc.id
+             FROM litig8_matter_contacts mc
+             LEFT JOIN litig8_matters m ON m.id = mc.matter_id{$matterLive}
+             LEFT JOIN litig8_contacts c ON c.id = mc.contact_id{$contactLive}
+             WHERE 1=1{$mcLive}
+               AND (m.id IS NULL OR c.id IS NULL)"
+        );
+        $removed = 0;
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            try {
+                self::deleteEntityByKey('matter_contacts', $id, null, $uid, $actorLabel, true);
+                $removed++;
+                $ids[] = $id;
+            } catch (Throwable $e) {
+                // continue
+            }
+        }
+        return ['removed' => $removed, 'ids' => $ids];
     }
 
     public static function deleteSyntheticTestRows(int $uid, ?string $actorLabel = null): array

@@ -7,9 +7,12 @@ CREATE TABLE IF NOT EXISTS litig8_categories (
   label VARCHAR(191) NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   active TINYINT(1) NOT NULL DEFAULT 1,
+  source_ref_id INT NULL,
+  external_source_id VARCHAR(191) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_litig8_categories_slug (slug)
+  UNIQUE KEY uniq_litig8_categories_slug (slug),
+  UNIQUE KEY uniq_litig8_categories_ext (external_source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS litig8_sources (

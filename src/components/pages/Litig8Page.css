@@ -1,0 +1,188 @@
+@import url("https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap");
+
+.litig8-page {
+  --l8-ink: #1c2430;
+  --l8-muted: #5c6b7a;
+  --l8-paper: #f3f0e8;
+  --l8-panel: rgba(255, 252, 246, 0.92);
+  --l8-line: rgba(28, 36, 48, 0.12);
+  --l8-accent: #0f5c4c;
+  --l8-overdue: #8b2e2e;
+  --l8-warn: #8a5a12;
+  min-height: 100vh;
+  color: var(--l8-ink);
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(15, 92, 76, 0.16), transparent 60%),
+    linear-gradient(180deg, #e8e4d8 0%, var(--l8-paper) 40%, #ebe7dc 100%);
+  font-family: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+}
+
+.litig8-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.litig8-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--l8-line);
+  padding-bottom: 1rem;
+}
+
+.litig8-hero h1 {
+  font-family: "Libre Baskerville", "Source Serif 4", Georgia, serif;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  letter-spacing: 0.04em;
+  margin: 0;
+  color: var(--l8-accent);
+}
+
+.litig8-hero p {
+  margin: 0.35rem 0 0;
+  color: var(--l8-muted);
+  max-width: 36rem;
+}
+
+.litig8-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.litig8-tabs button {
+  border: 1px solid var(--l8-line);
+  background: transparent;
+  color: var(--l8-ink);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0;
+}
+
+.litig8-tabs button.active {
+  background: var(--l8-accent);
+  border-color: var(--l8-accent);
+  color: #f7f4ec;
+}
+
+.litig8-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.litig8-section {
+  background: var(--l8-panel);
+  border: 1px solid var(--l8-line);
+  padding: 0.9rem 1rem 1rem;
+}
+
+.litig8-section h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.65rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.litig8-count {
+  font-size: 0.8rem;
+  color: var(--l8-muted);
+  font-weight: 400;
+}
+
+.litig8-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.litig8-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--l8-line);
+}
+
+.litig8-item:first-child {
+  border-top: 0;
+}
+
+.litig8-item.overdue strong {
+  color: var(--l8-overdue);
+}
+
+.litig8-meta,
+.litig8-source {
+  color: var(--l8-muted);
+  font-size: 0.86rem;
+}
+
+.litig8-empty {
+  color: var(--l8-muted);
+  padding: 0.5rem 0;
+}
+
+.litig8-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  color: var(--l8-muted);
+  font-size: 0.95rem;
+}
+
+.litig8-totals strong {
+  color: var(--l8-ink);
+}
+
+.litig8-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.litig8-form-grid input,
+.litig8-form-grid select,
+.litig8-form-grid textarea {
+  width: 100%;
+  border: 1px solid var(--l8-line);
+  background: #fff;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+}
+
+.litig8-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.litig8-docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.litig8-doc-chip {
+  font-size: 0.8rem;
+  border: 1px solid var(--l8-line);
+  padding: 0.1rem 0.4rem;
+  color: var(--l8-accent);
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .litig8-hero {
+    align-items: start;
+  }
+}

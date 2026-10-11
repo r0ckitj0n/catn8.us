@@ -56,6 +56,9 @@
         '/valid8/': 'valid8',
         '/valid8.php': 'valid8',
         '/valid8/index.php': 'valid8',
+        '/litig8': 'litig8',
+        '/litig8/': 'litig8',
+        '/litig8.php': 'litig8',
         '/illumin8': 'illumin8',
         '/illumin8.php': 'illumin8',
         '/fabric8': 'fabric8',
@@ -98,6 +101,8 @@
 
       if (routes[path]) {
         page = routes[path];
+      } else if (/^\/litig8(?:\/|$)/.test(path)) {
+        page = 'litig8';
       } else if (path.endsWith('.php')) {
         page = path.replace(/^\//, '').replace(/\.php$/, '') || 'home';
       }
@@ -262,7 +267,12 @@
           throw new Error('manifest not found');
         }
         var manifest = await manifestResp.json();
-        var entry = manifest && (manifest['src/entries/app.tsx'] || manifest['index.html']);
+        var pageName = String(window.__CATN8_PAGE__ || 'home');
+        var entry = manifest && (
+          (pageName === 'litig8' && manifest['src/entries/litig8.tsx'])
+          || manifest['src/entries/app.tsx']
+          || manifest['index.html']
+        );
         if (!entry || !entry.file) {
           throw new Error('manifest entry missing');
         }

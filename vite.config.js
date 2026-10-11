@@ -24,6 +24,7 @@ export default defineConfig(({ command }) => ({
       input: {
         index: resolve(__dirname, 'index.html'),
         app: resolve(__dirname, 'src/entries/app.tsx'),
+        litig8: resolve(__dirname, 'src/entries/litig8.tsx'),
       },
       output: {
         manualChunks(id) {

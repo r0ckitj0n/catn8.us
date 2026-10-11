@@ -27,10 +27,12 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isPhotoAlbumsUser = Number(viewer?.is_photo_albums_user || 0) === 1;
   const isAccumul8User = Number(viewer?.is_accumul8_user || 0) === 1;
   const isValid8User = Number(viewer?.is_valid8_user || 0) === 1;
+  const isLitig8User = Number(viewer?.is_litig8_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
   const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
   const canUseAccumul8 = isAuthed && (isAdministrator || isAccumul8User);
   const canUseValid8 = isAuthed && (isAdministrator || isValid8User);
+  const canUseLitig8 = isAuthed && (isAdministrator || isLitig8User);
 
   const links = [
     { key: 'elucid8', href: '/elucid8', label: 'ELUCID8' },
@@ -65,6 +67,9 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       : []),
     ...(canUseValid8
       ? [{ key: 'valid8', label: 'VALID8', href: '/valid8' }]
+      : []),
+    ...(canUseLitig8
+      ? [{ key: 'litig8', label: 'LITIG8', href: '/litig8' }]
       : []),
     ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [

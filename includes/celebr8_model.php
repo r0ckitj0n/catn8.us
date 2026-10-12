@@ -194,6 +194,10 @@ final class Celebr8Model
             'costume_name' => "VARCHAR(191) NOT NULL DEFAULT '' AFTER bringing",
             'checked_in_at' => 'DATETIME NULL AFTER costume_name',
             'tabul8_identity_id' => 'INT NULL AFTER checked_in_at',
+            // Mid-party / kiosk walk-ins (stay on Celebr8 guest list).
+            'walk_in' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER tabul8_identity_id',
+            'walk_in_at' => 'DATETIME NULL AFTER walk_in',
+            'walk_in_board_id' => 'INT NULL AFTER walk_in_at',
         ];
         foreach ($cols as $name => $ddl) {
             self::ensureColumn('celebr8_guests', $name, $ddl);
@@ -475,6 +479,12 @@ final class Celebr8Model
             'checked_in_at' => $row['checked_in_at'] !== null ? (string)$row['checked_in_at'] : null,
             'tabul8_identity_id' => isset($row['tabul8_identity_id']) && $row['tabul8_identity_id'] !== null
                 ? (int)$row['tabul8_identity_id'] : null,
+            'walk_in' => (int)($row['walk_in'] ?? 0),
+            'walk_in_at' => isset($row['walk_in_at']) && $row['walk_in_at'] !== null
+                ? (string)$row['walk_in_at'] : null,
+            'walk_in_board_id' => isset($row['walk_in_board_id']) && $row['walk_in_board_id'] !== null
+                ? (int)$row['walk_in_board_id'] : null,
+            'added_at_party' => (int)($row['walk_in'] ?? 0),
             'phone_unverified' => (int)($row['phone_unverified'] ?? 0),
             'invite_send_status' => (string)($row['invite_send_status'] ?? 'none'),
             'invite_send_error' => $row['invite_send_error'] !== null ? (string)$row['invite_send_error'] : null,
@@ -833,24 +843,28 @@ final class Celebr8Model
         ];
     }
 
-    public static function listGuests(int $eventId, ?string $rsvpFilter = null): array
+    /**
+     * @param ?int $walkInFilter 1 = walk-ins only, 0 = non-walk-ins only, null = all
+     */
+    public static function listGuests(int $eventId, ?string $rsvpFilter = null, ?int $walkInFilter = null): array
     {
         self::ensureSchema();
+        $sql = 'SELECT * FROM celebr8_guests WHERE event_id = ?';
+        $params = [$eventId];
         if ($rsvpFilter !== null && $rsvpFilter !== '') {
             $status = self::normalizeRsvpStatus($rsvpFilter);
             if ($status === null) {
                 throw new InvalidArgumentException('Invalid rsvp_status filter');
             }
-            $rows = Database::queryAll(
-                'SELECT * FROM celebr8_guests WHERE event_id = ? AND rsvp_status = ? ORDER BY name ASC, id ASC',
-                [$eventId, $status]
-            );
-        } else {
-            $rows = Database::queryAll(
-                'SELECT * FROM celebr8_guests WHERE event_id = ? ORDER BY name ASC, id ASC',
-                [$eventId]
-            );
+            $sql .= ' AND rsvp_status = ?';
+            $params[] = $status;
         }
+        if ($walkInFilter !== null) {
+            $sql .= ' AND walk_in = ?';
+            $params[] = $walkInFilter ? 1 : 0;
+        }
+        $sql .= ' ORDER BY name ASC, id ASC';
+        $rows = Database::queryAll($sql, $params);
         return array_map([self::class, 'toGuest'], $rows);
     }
 
@@ -907,6 +921,142 @@ final class Celebr8Model
         self::ensureSchema();
         $row = Database::queryOne('SELECT * FROM celebr8_guests WHERE id = ?', [$guestId]);
         return $row ? self::toGuest($row) : null;
+    }
+
+    public static function findGuestByEmail(int $eventId, string $email): ?array
+    {
+        self::ensureSchema();
+        $normalized = strtolower(trim($email));
+        if ($normalized === '' || !filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+        $row = Database::queryOne(
+            'SELECT * FROM celebr8_guests WHERE event_id = ? AND LOWER(TRIM(email)) = ? LIMIT 1',
+            [$eventId, $normalized]
+        );
+        return $row ? self::toGuest($row) : null;
+    }
+
+    /**
+     * Match an existing guest by phone, email, or normalized name (never JT Whetstone).
+     *
+     * @return array{status:string,guest?:array,candidates?:list<array>,score?:float,match_by?:string}
+     */
+    public static function matchGuestContact(int $eventId, string $name, string $phone = '', string $email = ''): array
+    {
+        self::ensureSchema();
+        if (self::isBlockedGuestName($name)) {
+            return ['status' => 'blocked'];
+        }
+        $phoneNorm = self::normalizePhone($phone);
+        if ($phoneNorm !== '') {
+            $byPhone = self::findGuestByPhone($eventId, $phoneNorm);
+            if ($byPhone && !self::isBlockedGuestName((string)($byPhone['name'] ?? ''))) {
+                return ['status' => 'exact', 'guest' => $byPhone, 'score' => 100.0, 'match_by' => 'phone'];
+            }
+        }
+        $emailNorm = strtolower(trim($email));
+        if ($emailNorm !== '') {
+            $byEmail = self::findGuestByEmail($eventId, $emailNorm);
+            if ($byEmail && !self::isBlockedGuestName((string)($byEmail['name'] ?? ''))) {
+                return ['status' => 'exact', 'guest' => $byEmail, 'score' => 100.0, 'match_by' => 'email'];
+            }
+        }
+        $nameMatch = self::matchGuestName($eventId, $name);
+        if (($nameMatch['status'] ?? '') !== 'unmatched') {
+            $nameMatch['match_by'] = 'name';
+        }
+        return $nameMatch;
+    }
+
+    /**
+     * Create a walk-in / mid-party guest (or return confirmation payload for a likely match).
+     * Shared by Tabul8 admin "Add person" and kiosk unknown-voter registration.
+     *
+     * @param array<string,mixed> $fields name required; phone/email/costume_name optional
+     * @return array{status:string,guest?:array,candidates?:list<array>,created?:bool,match?:array}
+     */
+    public static function resolveWalkInGuest(
+        int $eventId,
+        array $fields,
+        string $actorLabel,
+        ?int $boardId = null,
+        ?int $confirmGuestId = null
+    ): array {
+        self::ensureSchema();
+        $name = trim((string)($fields['name'] ?? ''));
+        $phone = trim((string)($fields['phone'] ?? ''));
+        $email = trim((string)($fields['email'] ?? ''));
+        $costume = trim((string)($fields['costume_name'] ?? ''));
+        if ($name === '') {
+            throw new InvalidArgumentException('name is required');
+        }
+        if (self::isBlockedGuestName($name)) {
+            return ['status' => 'blocked'];
+        }
+
+        if ($confirmGuestId !== null && $confirmGuestId > 0) {
+            $guest = self::getGuest($confirmGuestId);
+            if (!$guest || (int)$guest['event_id'] !== $eventId) {
+                throw new InvalidArgumentException('Guest not found for event');
+            }
+            if (self::isBlockedGuestName((string)$guest['name'])) {
+                return ['status' => 'blocked'];
+            }
+            $patch = [];
+            if ($phone !== '' && (string)($guest['phone'] ?? '') === '') {
+                $patch['phone'] = $phone;
+            }
+            if ($email !== '' && (string)($guest['email'] ?? '') === '') {
+                $patch['email'] = $email;
+            }
+            if ($costume !== '') {
+                $patch['costume_name'] = $costume;
+            }
+            if ($patch !== []) {
+                $patch['id'] = $confirmGuestId;
+                $guest = self::upsertGuest($eventId, $patch, $actorLabel, false);
+            }
+            if ($costume !== '') {
+                $guest = self::setGuestCostume($confirmGuestId, $costume, null);
+            }
+            return ['status' => 'linked', 'guest' => $guest, 'created' => false];
+        }
+
+        $match = self::matchGuestContact($eventId, $name, $phone, $email);
+        $status = (string)($match['status'] ?? 'unmatched');
+        if ($status === 'blocked') {
+            return ['status' => 'blocked'];
+        }
+        if ($status === 'ambiguous') {
+            return ['status' => 'ambiguous', 'candidates' => $match['candidates'] ?? [], 'match' => $match];
+        }
+        if ($status === 'exact' || $status === 'fuzzy') {
+            return [
+                'status' => $status === 'exact' ? 'confirm_exact' : 'confirm_fuzzy',
+                'guest' => $match['guest'] ?? null,
+                'candidates' => isset($match['guest']) ? [$match['guest']] : ($match['candidates'] ?? []),
+                'match' => $match,
+                'created' => false,
+            ];
+        }
+
+        $guest = self::upsertGuest($eventId, [
+            'name' => $name,
+            'phone' => $phone,
+            'email' => $email,
+            'costume_name' => $costume,
+            'rsvp_status' => 'going',
+            'invited_via' => 'added_at_party',
+            'walk_in' => 1,
+            'walk_in_board_id' => $boardId,
+        ], $actorLabel, true);
+
+        if ($costume !== '') {
+            $guest = self::setGuestCostume((int)$guest['id'], $costume, null);
+        }
+
+        return ['status' => 'created', 'guest' => $guest, 'created' => true];
     }
 
     public static function findGuestByPhone(int $eventId, string $phone): ?array
@@ -1019,6 +1169,13 @@ final class Celebr8Model
         $rsvp = $rsvpProvided
             ? (self::normalizeRsvpStatus((string)$fields['rsvp_status']) ?? 'no_reply')
             : null;
+        $walkIn = array_key_exists('walk_in', $fields) ? ((int)$fields['walk_in'] ? 1 : 0) : null;
+        $walkInBoardId = array_key_exists('walk_in_board_id', $fields)
+            ? ($fields['walk_in_board_id'] !== null && $fields['walk_in_board_id'] !== ''
+                ? (int)$fields['walk_in_board_id'] : null)
+            : null;
+        $costumeName = array_key_exists('costume_name', $fields)
+            ? trim((string)$fields['costume_name']) : null;
 
         if ($email !== null && $email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException('Invalid email');
@@ -1110,12 +1267,15 @@ final class Celebr8Model
             throw new InvalidArgumentException('name is required');
         }
 
+        $isWalkIn = $walkIn ?? 0;
+        $walkInAtSql = $isWalkIn ? 'NOW()' : 'NULL';
         Database::execute(
-            'INSERT INTO celebr8_guests (
+            "INSERT INTO celebr8_guests (
                 event_id, name, phone, email, rsvp_status, party_size, kids_count,
-                invited_via, relation_label, bringing_chili, bringing, phone_unverified,
-                invite_send_status, invite_send_error, notes, rsvp_updated_at, rsvp_updated_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)',
+                invited_via, relation_label, bringing_chili, bringing, costume_name, phone_unverified,
+                invite_send_status, invite_send_error, notes, walk_in, walk_in_at, walk_in_board_id,
+                rsvp_updated_at, rsvp_updated_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {$walkInAtSql}, ?, NOW(), ?)",
             [
                 $eventId,
                 $name,
@@ -1128,10 +1288,13 @@ final class Celebr8Model
                 $relation ?? '',
                 $bringingChili ?? 0,
                 $bringing ?? '',
+                $costumeName ?? '',
                 $phoneUnverified ?? 0,
                 $inviteSendStatus ?? 'none',
                 $inviteSendError,
                 $notes ?? '',
+                $isWalkIn,
+                $isWalkIn ? $walkInBoardId : null,
                 $actorLabel,
             ]
         );

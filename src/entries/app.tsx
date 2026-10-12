@@ -95,8 +95,20 @@ function App({ page }: { page: AppPage }) {
   }, [refreshViewer]);
 
   React.useEffect(() => {
-    if ((page === 'valid8' || page === 'celebr8' || page === 'celebr8_party' || page === 'celebr8_templates' || page === 'celebr8_activities' || page === 'medic8') && viewerResolved && !viewer) {
-      setLoginOpen(true);
+    const gated = page === 'valid8'
+      || page === 'celebr8'
+      || page === 'celebr8_party'
+      || page === 'celebr8_templates'
+      || page === 'celebr8_activities'
+      || page === 'celebr8_activity_detail'
+      || page === 'tabul8'
+      || page === 'medic8';
+    if (gated && viewerResolved && !viewer) {
+      // Public Tabul8 vote links do not require login.
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (!(page === 'tabul8' && /^\/tabul8\/vote\//.test(path))) {
+        setLoginOpen(true);
+      }
     }
   }, [page, viewer, viewerResolved]);
 

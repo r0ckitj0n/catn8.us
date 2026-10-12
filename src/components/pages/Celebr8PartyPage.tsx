@@ -13,16 +13,14 @@ import {
   Celebr8RsvpStatus,
 } from '../../types/celebr8';
 import { Celebr8AskPanel } from '../celebr8/Celebr8AskPanel';
+import { Celebr8FlyerModal } from '../celebr8/Celebr8FlyerModal';
+import { Celebr8GuestDraft, Celebr8GuestModal } from '../celebr8/Celebr8GuestModal';
+import { Celebr8PartyActivityPacket } from '../celebr8/Celebr8ActivityPrintSheets';
+import { Celebr8PartyGallery } from '../celebr8/Celebr8PartyGallery';
 import { Celebr8SubNav } from '../celebr8/Celebr8SubNav';
+import { activityHref } from '../celebr8/celebr8ActivityFormat';
 import { PageLayout } from '../layout/PageLayout';
 import './Celebr8Page.css';
-
-const RSVP_OPTIONS: Array<{ value: Celebr8RsvpStatus; label: string }> = [
-  { value: 'going', label: 'Going' },
-  { value: 'maybe', label: 'Maybe' },
-  { value: 'not_going', label: "Can't go" },
-  { value: 'no_reply', label: 'No reply' },
-];
 
 function partyIdFromPath(): number {
   if (typeof window === 'undefined') return 0;
@@ -33,30 +31,14 @@ function partyIdFromPath(): number {
   return Number(new URLSearchParams(window.location.search).get('id') || 0) || 0;
 }
 
-type GuestDraft = {
-  id?: number;
-  name: string;
-  phone: string;
-  email: string;
-  rsvp_status: Celebr8RsvpStatus;
-  party_size: number;
-  kids_count: number;
-  invited_via: string;
-  relation_label: string;
-  bringing_chili: number;
-  bringing: string;
-  phone_unverified: number;
-  notes: string;
-};
-
-function blankGuest(): GuestDraft {
+function blankGuest(): Celebr8GuestDraft {
   return {
     name: '', phone: '', email: '', rsvp_status: 'no_reply', party_size: 1, kids_count: 0,
     invited_via: '', relation_label: '', bringing_chili: 0, bringing: '', phone_unverified: 0, notes: '',
   };
 }
 
-function guestToDraft(guest: Celebr8Guest): GuestDraft {
+function guestToDraft(guest: Celebr8Guest): Celebr8GuestDraft {
   return {
     id: guest.id,
     name: guest.name,
@@ -100,9 +82,12 @@ export function Celebr8PartyPage({
   const [pickerQ, setPickerQ] = React.useState('');
   const [pickerHoliday, setPickerHoliday] = React.useState('');
   const [pickerCategory, setPickerCategory] = React.useState('');
+  const [pickerSeniorOnly, setPickerSeniorOnly] = React.useState(false);
+  const [pickerSeatedOnly, setPickerSeatedOnly] = React.useState(false);
   const [editingParty, setEditingParty] = React.useState(false);
+  const [flyerOpen, setFlyerOpen] = React.useState(false);
   const [detailsDraft, setDetailsDraft] = React.useState<Record<string, string>>({});
-  const [guestDraft, setGuestDraft] = React.useState<GuestDraft | null>(null);
+  const [guestDraft, setGuestDraft] = React.useState<Celebr8GuestDraft | null>(null);
   const [textBody, setTextBody] = React.useState('');
   const [textOpen, setTextOpen] = React.useState(false);
   const [exactGuestId, setExactGuestId] = React.useState<number | ''>('');
@@ -111,6 +96,18 @@ export function Celebr8PartyPage({
   const [guestGroupIds, setGuestGroupIds] = React.useState<number[]>([]);
   const [eaEdit, setEaEdit] = React.useState<Celebr8EventActivity | null>(null);
   const [copiedEdit, setCopiedEdit] = React.useState<Celebr8Activity | null>(null);
+  const [printPacket, setPrintPacket] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!printPacket) return undefined;
+    const t = window.setTimeout(() => window.print(), 150);
+    const onAfter = () => setPrintPacket(false);
+    window.addEventListener('afterprint', onAfter);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('afterprint', onAfter);
+    };
+  }, [printPacket]);
 
   React.useEffect(() => {
     if (eventId > 0) void load(eventId);
@@ -164,13 +161,17 @@ export function Celebr8PartyPage({
   };
 
   const attachedIds = new Set(eventActivities.map((ea) => ea.activity_id));
+  const hasSeatedPick = eventActivities.some((ea) => Number(ea.activity?.seated_play || 0) === 1);
+  const hasSeniorPick = eventActivities.some((ea) => Number(ea.activity?.senior_friendly || 0) === 1);
   const pickerList = library.filter((a) => {
     if (attachedIds.has(a.id)) return false;
     if (pickerHoliday && a.preferred_holiday !== pickerHoliday) return false;
     if (pickerCategory && a.category !== pickerCategory) return false;
+    if (pickerSeniorOnly && Number(a.senior_friendly || 0) !== 1) return false;
+    if (pickerSeatedOnly && Number(a.seated_play || 0) !== 1) return false;
     const q = pickerQ.trim().toLowerCase();
     if (!q) return true;
-    return `${a.name} ${a.description} ${a.preferred_holiday}`.toLowerCase().includes(q);
+    return `${a.name} ${a.description} ${a.summary || ''} ${a.senior_role || ''} ${a.preferred_holiday}`.toLowerCase().includes(q);
   });
 
   const attach = async (activityId: number) => {
@@ -225,12 +226,16 @@ export function Celebr8PartyPage({
                   <h1>{event.title}</h1>
                   {event.tagline ? <p className="celebr8-tagline">{event.tagline}</p> : null}
                 </div>
-                {isAdmin ? (
-                  <div className="celebr8-toolbar">
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditingParty(true)}>Edit</button>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setTextOpen(true)}>Send exact text</button>
-                  </div>
-                ) : null}
+                <div className="celebr8-toolbar">
+                  <a className="btn btn-sm btn-outline-secondary" href={`/tabul8/party/${event.id}`}>Tabul8 voting</a>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFlyerOpen(true)}>Flyer</button>
+                  {isAdmin ? (
+                    <>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditingParty(true)}>Edit</button>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setTextOpen(true)}>Send exact text</button>
+                    </>
+                  ) : null}
+                </div>
               </header>
 
               <div className="celebr8-party-facts">
@@ -264,6 +269,13 @@ export function Celebr8PartyPage({
                 onToast={onToast}
               />
 
+              <Celebr8PartyGallery
+                isAdmin={isAdmin}
+                partyId={event.id}
+                onToast={onToast}
+                onCoverChange={() => { void load(event.id); }}
+              />
+
               <div className="celebr8-panel">
                 <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                   <h2 className="h5 mb-0">Guests</h2>
@@ -286,7 +298,6 @@ export function Celebr8PartyPage({
                         type="button"
                         className={`celebr8-guest-chip celebr8-status-${g.rsvp_status}`}
                         onClick={() => {
-                          if (!isAdmin) return;
                           setGuestDraft(guestToDraft(g));
                           setGuestGroupIds(groups.filter((gr) => gr.guest_ids.includes(g.id)).map((gr) => gr.id));
                         }}
@@ -299,21 +310,60 @@ export function Celebr8PartyPage({
                 </ul>
               </div>
 
-              <div className="celebr8-panel">
-                <div className="d-flex justify-content-between align-items-center mb-2">
+              <div className="celebr8-panel celebr8-no-print">
+                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                   <h2 className="h5 mb-0">Activities</h2>
-                  {isAdmin ? <button type="button" className="btn btn-sm btn-primary" onClick={() => void openPicker()}>Add activities</button> : null}
+                  <div className="celebr8-toolbar">
+                    {eventActivities.length > 0 ? (
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setPrintPacket(true)}>
+                        Print packet
+                      </button>
+                    ) : null}
+                    {isAdmin ? <button type="button" className="btn btn-sm btn-primary" onClick={() => void openPicker()}>Add activities</button> : null}
+                  </div>
                 </div>
+                {eventActivities.length > 0 ? (
+                  <div className={`celebr8-everyone-hint${hasSeatedPick ? ' celebr8-everyone-hint--ok' : ''}`}>
+                    <strong>Something for everyone:</strong>{' '}
+                    {hasSeatedPick
+                      ? 'This party includes at least one seated option for guests who prefer to stay seated.'
+                      : 'No seated activities yet — older guests may want a quiet station while kids do physical games.'}
+                    {!hasSeniorPick ? ' Tip: filter Senior-friendly when adding activities.' : ''}
+                    {isAdmin && !hasSeatedPick ? (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm px-0 align-baseline"
+                          onClick={() => {
+                            setPickerSeatedOnly(true);
+                            setPickerSeniorOnly(true);
+                            void openPicker();
+                          }}
+                        >
+                          Browse seated / senior-friendly
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
                 {eventActivities.length === 0 ? (
                   <p className="text-muted mb-0">None yet — pick from the shared library. Any activity can go in any party.</p>
                 ) : (
                   <ul className="celebr8-event-activities">
                     {eventActivities.map((ea) => (
                       <li key={ea.id}>
-                        <strong>{ea.activity?.name}</strong>
+                        <a href={activityHref(Number(ea.activity?.id || ea.activity_id))}>
+                          <strong>{ea.activity?.name}</strong>
+                        </a>
                         {ea.activity?.preferred_holiday ? <span className="celebr8-flag ms-1">{ea.activity.preferred_holiday}</span> : null}
+                        {Number(ea.activity?.seated_play || 0) === 1 ? <span className="celebr8-flag ms-1">seated</span> : null}
+                        {Number(ea.activity?.senior_friendly || 0) === 1 ? <span className="celebr8-flag ms-1">senior</span> : null}
                         {ea.time_slot ? <span className="celebr8-flag ms-1">{ea.time_slot}</span> : null}
-                        <div className="small text-muted">{ea.activity?.description}</div>
+                        <div className="small text-muted">{ea.activity?.summary || ea.activity?.description}</div>
+                        {ea.activity?.senior_role ? (
+                          <div className="small"><em>Elders&apos; role:</em> {ea.activity.senior_role}</div>
+                        ) : null}
                         {ea.run_by ? <div className="small">Run by: {ea.run_by}</div> : null}
                         {ea.prizes ? <div className="small">Prizes: {ea.prizes}</div> : null}
                         {ea.supplies_checklist?.length ? (
@@ -321,31 +371,43 @@ export function Celebr8PartyPage({
                             {ea.supplies_checklist.map((s, i) => <li key={i}>{Number(s.done) === 1 ? '✓' : '○'} {s.item}</li>)}
                           </ul>
                         ) : null}
-                        {isAdmin ? (
-                          <div className="celebr8-toolbar mt-1">
-                            <button type="button" className="btn btn-link btn-sm px-0" onClick={() => setEaEdit(ea)}>Details</button>
-                            <button type="button" className="btn btn-link btn-sm" onClick={() => void copyInParty(ea)}>Copy &amp; edit</button>
-                            <button
-                              type="button"
-                              className="btn btn-link btn-sm text-danger"
-                              onClick={() => {
-                                void (async () => {
-                                  await ApiClient.post('/api/celebr8.php?action=detach_event_activity', {
-                                    event_id: event.id, event_activity_id: ea.id,
-                                  });
-                                  await refreshActivities(event.id);
-                                })();
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : null}
+                        <div className="celebr8-toolbar mt-1">
+                          <a className="btn btn-link btn-sm px-0" href={activityHref(Number(ea.activity?.id || ea.activity_id))}>View details</a>
+                          {isAdmin ? (
+                            <>
+                              <button type="button" className="btn btn-link btn-sm" onClick={() => setEaEdit(ea)}>Party slot</button>
+                              <button type="button" className="btn btn-link btn-sm" onClick={() => void copyInParty(ea)}>Copy &amp; edit</button>
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm text-danger"
+                                onClick={() => {
+                                  void (async () => {
+                                    await ApiClient.post('/api/celebr8.php?action=detach_event_activity', {
+                                      event_id: event.id, event_activity_id: ea.id,
+                                    });
+                                    await refreshActivities(event.id);
+                                  })();
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
+
+              {printPacket ? (
+                <div className="celebr8-print-only">
+                  <Celebr8PartyActivityPacket
+                    partyTitle={event.title}
+                    activities={eventActivities.map((ea) => ea.activity).filter(Boolean) as Celebr8Activity[]}
+                  />
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -360,7 +422,7 @@ export function Celebr8PartyPage({
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setPickerOpen(false)} />
               </div>
               <div className="modal-body">
-                <p className="small text-muted">The whole library is available. Preferred holiday is only a filter.</p>
+                <p className="small text-muted">The whole library is available. Preferred holiday is only a filter. Use Senior-friendly / Seated to find quieter options for older guests.</p>
                 <div className="celebr8-toolbar mb-2">
                   <input className="form-control" placeholder="Search" value={pickerQ} onChange={(e) => setPickerQ(e.target.value)} />
                   <select className="form-select" value={pickerHoliday} onChange={(e) => setPickerHoliday(e.target.value)}>
@@ -371,6 +433,20 @@ export function Celebr8PartyPage({
                     <option value="">All categories</option>
                     {['contest', 'music', 'food', 'game', 'kids', 'other'].map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${pickerSeniorOnly ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setPickerSeniorOnly((v) => !v)}
+                  >
+                    Senior-friendly
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${pickerSeatedOnly ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setPickerSeatedOnly((v) => !v)}
+                  >
+                    Seated
+                  </button>
                 </div>
                 <ul className="celebr8-picker-list">
                   {pickerList.map((a) => (
@@ -378,7 +454,9 @@ export function Celebr8PartyPage({
                       <div>
                         <strong>{a.name}</strong>
                         <span className="celebr8-flag ms-1">{a.preferred_holiday || 'Any'}</span>
-                        <div className="small text-muted">{a.description}</div>
+                        {Number(a.senior_friendly || 0) === 1 ? <span className="celebr8-flag ms-1">senior</span> : null}
+                        {Number(a.seated_play || 0) === 1 ? <span className="celebr8-flag ms-1">seated</span> : null}
+                        <div className="small text-muted">{a.summary || a.description}</div>
                       </div>
                       <button type="button" className="btn btn-sm btn-primary" onClick={() => void attach(a.id)}>Add</button>
                     </li>
@@ -592,93 +670,47 @@ export function Celebr8PartyPage({
       ) : null}
 
       {guestDraft && event ? (
-        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.45)' }} role="dialog" aria-modal="true">
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h2 className="modal-title h5">{guestDraft.id ? 'Edit guest' : 'Add guest'}</h2>
-                <button type="button" className="btn-close" aria-label="Close" onClick={() => setGuestDraft(null)} />
-              </div>
-              <div className="modal-body">
-                <div className="mb-2"><label className="form-label">Name</label><input className="form-control" value={guestDraft.name} onChange={(e) => setGuestDraft({ ...guestDraft, name: e.target.value })} /></div>
-                <div className="mb-2"><label className="form-label">Phone</label><input className="form-control" value={guestDraft.phone} onChange={(e) => setGuestDraft({ ...guestDraft, phone: e.target.value })} /></div>
-                <div className="mb-2">
-                  <label className="form-label">RSVP</label>
-                  <select className="form-select" value={guestDraft.rsvp_status} onChange={(e) => setGuestDraft({ ...guestDraft, rsvp_status: e.target.value as Celebr8RsvpStatus })}>
-                    {RSVP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div className="mb-2"><label className="form-label">Notes</label><textarea className="form-control" rows={2} value={guestDraft.notes} onChange={(e) => setGuestDraft({ ...guestDraft, notes: e.target.value })} /></div>
-                {guestDraft.id && groups.length > 0 ? (
-                  <div className="mb-0">
-                    <label className="form-label">Groups</label>
-                    <ul className="small mb-0">
-                      {groups.map((g) => (
-                        <li key={g.id}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={guestGroupIds.includes(g.id)}
-                              onChange={() => setGuestGroupIds((prev) => (
-                                prev.includes(g.id) ? prev.filter((id) => id !== g.id) : [...prev, g.id]
-                              ))}
-                            />
-                            {' '}{g.name}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-              <div className="modal-footer">
-                {guestDraft.id ? (
-                  <button type="button" className="btn btn-outline-danger me-auto" onClick={() => {
-                    void (async () => {
-                      const g = guests.find((x) => x.id === guestDraft.id);
-                      if (!g) return;
-                      const ok = await confirm({ title: 'Remove guest?', message: `Remove ${g.name}?`, confirmLabel: 'Remove' });
-                      if (!ok) return;
-                      await deleteGuest(event.id, g.id);
-                      setGuestDraft(null);
-                    })();
-                  }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setGuestDraft(null)}>Cancel</button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={busy || !guestDraft.name.trim()}
-                  onClick={() => {
-                    void (async () => {
-                      const guest = await saveGuest({ event_id: event.id, ...guestDraft });
-                      if (guest?.id && groups.length > 0) {
-                        await Promise.all(groups.map((g) => {
-                          const members = new Set(g.guest_ids);
-                          if (guestGroupIds.includes(g.id)) members.add(guest.id);
-                          else members.delete(guest.id);
-                          return ApiClient.post('/api/celebr8.php?action=upsert_guest_group', {
-                            event_id: event.id,
-                            id: g.id,
-                            name: g.name,
-                            guest_ids: Array.from(members),
-                          });
-                        }));
-                        await refreshGroups(event.id);
-                      }
-                      setGuestDraft(null);
-                    })();
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Celebr8GuestModal
+          draft={guestDraft}
+          groups={groups}
+          guestGroupIds={guestGroupIds}
+          isAdmin={isAdmin}
+          busy={busy}
+          partyId={event.id}
+          onDraftChange={setGuestDraft}
+          onGuestGroupIdsChange={setGuestGroupIds}
+          onClose={() => setGuestDraft(null)}
+          onRemove={guestDraft.id ? () => {
+            void (async () => {
+              const g = guests.find((x) => x.id === guestDraft.id);
+              if (!g) return;
+              const ok = await confirm({ title: 'Remove guest?', message: `Remove ${g.name}?`, confirmLabel: 'Remove' });
+              if (!ok) return;
+              await deleteGuest(event.id, g.id);
+              setGuestDraft(null);
+            })();
+          } : undefined}
+          onSave={() => {
+            void (async () => {
+              const guest = await saveGuest({ event_id: event.id, ...guestDraft });
+              if (guest?.id && groups.length > 0) {
+                await Promise.all(groups.map((g) => {
+                  const members = new Set(g.guest_ids);
+                  if (guestGroupIds.includes(g.id)) members.add(guest.id);
+                  else members.delete(guest.id);
+                  return ApiClient.post('/api/celebr8.php?action=upsert_guest_group', {
+                    event_id: event.id,
+                    id: g.id,
+                    name: g.name,
+                    guest_ids: Array.from(members),
+                  });
+                }));
+                await refreshGroups(event.id);
+              }
+              setGuestDraft(null);
+            })();
+          }}
+        />
       ) : null}
 
       {groupDraft && event ? (
@@ -770,6 +802,18 @@ export function Celebr8PartyPage({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {event ? (
+        <Celebr8FlyerModal
+          open={flyerOpen}
+          partyId={event.id}
+          partyTitle={event.title}
+          isAdmin={isAdmin}
+          onClose={() => setFlyerOpen(false)}
+          onToast={onToast}
+          onFlyerChanged={() => { void load(event.id); }}
+        />
       ) : null}
 
       {confirmDialog}

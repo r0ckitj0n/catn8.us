@@ -153,7 +153,12 @@ try {
             catn8_json_response(['success' => false, 'error' => 'event_id required'], 400);
         }
         $rsvp = trim((string)($_GET['rsvp_status'] ?? ''));
-        $guests = Celebr8Model::listGuests($eventId, $rsvp === '' ? null : $rsvp);
+        $walkInRaw = $_GET['walk_in'] ?? $_GET['added_at_party'] ?? null;
+        $walkIn = null;
+        if ($walkInRaw !== null && $walkInRaw !== '') {
+            $walkIn = ((int)$walkInRaw === 1) ? 1 : 0;
+        }
+        $guests = Celebr8Model::listGuests($eventId, $rsvp === '' ? null : $rsvp, $walkIn);
         catn8_json_response([
             'success' => true,
             'guests' => $guests,

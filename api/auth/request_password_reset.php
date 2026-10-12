@@ -40,7 +40,7 @@ Database::execute(
     [(int)$user['id'], $tokenHash, $pendingHash, $expires]
 );
 
-$origin = (catn8_is_local_request() ? 'http://localhost:8888' : ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? ''));
+$origin = catn8_public_origin();
 $link = rtrim($origin, '/') . '/reset.php?token=' . urlencode($token);
 
 $html = '<p>A password reset was requested for your catn8.us account.</p>'

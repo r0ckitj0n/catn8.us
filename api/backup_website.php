@@ -10,7 +10,11 @@ $fail = static function (string $eventKey, int $status, string $error, array $me
     catn8_json_response(['success' => false, 'error' => $error], $status);
 };
 
-catn8_require_admin_token();
+$expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
+$got = (string)($_GET['admin_token'] ?? '');
+if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
+    $fail('backup_website', 403, 'Invalid admin token');
+}
 
 @set_time_limit(0);
 

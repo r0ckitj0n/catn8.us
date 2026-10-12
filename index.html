@@ -70,6 +70,9 @@
         '/medic8': 'medic8',
         '/medic8/': 'medic8',
         '/medic8.php': 'medic8',
+        '/litig8': 'litig8',
+        '/litig8/': 'litig8',
+        '/litig8.php': 'litig8',
         '/illumin8': 'illumin8',
         '/illumin8.php': 'illumin8',
         '/fabric8': 'fabric8',
@@ -118,6 +121,8 @@
         page = 'tabul8';
       } else if (/^\/medic8(?:\/|$)/.test(path)) {
         page = 'medic8';
+      } else if (/^\/litig8(?:\/|$)/.test(path)) {
+        page = 'litig8';
       } else if (routes[path]) {
         page = routes[path];
       } else if (path.endsWith('.php')) {
@@ -286,7 +291,8 @@
         var manifest = await manifestResp.json();
         var pageName = String(window.__CATN8_PAGE__ || 'home');
         var entry = manifest && (
-          (pageName === 'medic8' && manifest['src/entries/medic8.tsx'])
+          (pageName === 'litig8' && manifest['src/entries/litig8.tsx'])
+          || (pageName === 'medic8' && manifest['src/entries/medic8.tsx'])
           || manifest['src/entries/app.tsx']
           || manifest['index.html']
         );

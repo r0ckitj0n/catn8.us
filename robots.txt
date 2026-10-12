@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /includes/
+Disallow: /scripts/
+Disallow: /.local/
+Sitemap: https://catn8.us/sitemap.xml

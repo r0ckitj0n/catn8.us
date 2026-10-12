@@ -28,11 +28,13 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isAccumul8User = Number(viewer?.is_accumul8_user || 0) === 1;
   const isValid8User = Number(viewer?.is_valid8_user || 0) === 1;
   const isMedic8User = Number(viewer?.is_medic8_user || 0) === 1;
+  const isLitig8User = Number(viewer?.is_litig8_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
   const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
   const canUseAccumul8 = isAuthed && (isAdministrator || isAccumul8User);
   const canUseValid8 = isAuthed && (isAdministrator || isValid8User);
   const canUseMedic8 = isAuthed && (isAdministrator || isMedic8User);
+  const canUseLitig8 = isAuthed && (isAdministrator || isLitig8User);
 
   const links = [
     { key: 'elucid8', href: '/elucid8', label: 'ELUCID8' },

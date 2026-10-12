@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 
-catn8_require_admin_token();
+$expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
+$got = (string)($_GET['admin_token'] ?? '');
+if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
+    catn8_json_response(['success' => false, 'error' => 'Invalid admin token'], 403);
+}
 
 define('CATN8_ACCUMUL8_LIBRARY_ONLY', true);
 require_once __DIR__ . '/accumul8.php';

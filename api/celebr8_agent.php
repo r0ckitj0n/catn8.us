@@ -29,6 +29,10 @@ function celebr8_agent_extract_token(): string
     if ($alt !== '') {
         return $alt;
     }
+    $apiKey = trim((string)($_SERVER['HTTP_X_API_KEY'] ?? ''));
+    if ($apiKey !== '') {
+        return $apiKey;
+    }
     return trim((string)($_GET['token'] ?? ''));
 }
 

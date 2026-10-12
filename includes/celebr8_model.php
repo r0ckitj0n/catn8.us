@@ -1795,11 +1795,26 @@ final class Celebr8Model
 
     public static function localTokenPath(string $kind): string
     {
-        $root = dirname(__DIR__) . '/.local/state/celebr8';
+        // Canonical agent paths live under $HOME/.local/state/catn8/… (Compil8r/theM8rix).
+        // Repo-relative .local/state/celebr8 is invisible to agents and deploys.
+        $home = (string)(getenv('HOME') ?: '');
+        if ($home === '') {
+            $home = dirname(__DIR__);
+        }
+        $root = rtrim($home, '/') . '/.local/state/catn8/celebr8';
         if ($kind === 'relay') {
             return $root . '/relay-api-token';
         }
         return $root . '/agent-api-token';
+    }
+
+    public static function tabul8ConfigTokenPath(): string
+    {
+        $home = (string)(getenv('HOME') ?: '');
+        if ($home === '') {
+            $home = dirname(__DIR__);
+        }
+        return rtrim($home, '/') . '/.config/catn8/celebr8_agent.token';
     }
 
     public static function writeLocalTokenFile(string $kind, string $token): string
@@ -1809,10 +1824,25 @@ final class Celebr8Model
         if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new RuntimeException('Failed to create token directory');
         }
-        if (file_put_contents($path, $token . "\n") === false) {
+        if (file_put_contents($path, $token . "
+") === false) {
             throw new RuntimeException('Failed to write token file');
         }
         @chmod($path, 0600);
+
+        // Tabul8 face preload defaults to ~/.config/catn8/celebr8_agent.token
+        if ($kind === 'agent') {
+            $cfg = self::tabul8ConfigTokenPath();
+            $cfgDir = dirname($cfg);
+            if (!is_dir($cfgDir) && !mkdir($cfgDir, 0700, true) && !is_dir($cfgDir)) {
+                throw new RuntimeException('Failed to create tabul8 token config directory');
+            }
+            if (file_put_contents($cfg, $token . "
+") === false) {
+                throw new RuntimeException('Failed to write tabul8 celebr8_agent.token');
+            }
+            @chmod($cfg, 0600);
+        }
         return $path;
     }
 }

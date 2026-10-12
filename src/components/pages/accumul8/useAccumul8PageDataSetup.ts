@@ -25,9 +25,9 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
   const pendingTransactionsRequestRef = React.useRef<string>('');
 
   React.useEffect(() => {
-    if (state.tab !== 'statements' || session.statementsLoaded) return;
+    if (state.tab !== 'statements' || session.statementsLoaded || session.loading) return;
     void session.loadStatementWorkspace();
-  }, [session.statementsLoaded, session.selectedOwnerUserId, state.tab]);
+  }, [session.statementsLoaded, session.selectedOwnerUserId, session.loading, state.tab, session.loadStatementWorkspace]);
 
   const shouldHydrateFullTransactions = React.useMemo(() => (
     state.tab !== 'ledger'
@@ -101,7 +101,14 @@ export function useAccumul8PageDataSetup(session: any, state: any, onToast?: (to
     setMessageBoardMessages: state.setMessageBoardMessages, setMessageBoardUnacknowledgedCount: state.setMessageBoardUnacknowledgedCount,
     setRunningAIcountantHousekeeping: state.setRunningAIcountantHousekeeping, setRunningAIcountantWatchlist: state.setRunningAIcountantWatchlist,
   });
-  React.useEffect(() => { void messageBoardActions.loadMessageBoard(); }, [messageBoardActions.loadMessageBoard]);
+  // Key to owner scope so the message board loads once per owner change,
+  // instead of re-running on every render from callback identity churn.
+  const messageBoardOwnerKey = ownerScopeKey;
+  React.useEffect(() => {
+    if (Number(messageBoardOwnerKey) <= 0) return;
+    void messageBoardActions.loadMessageBoard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageBoardOwnerKey]);
   const todayDate = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const ledgerData = useAccumul8LedgerData({
     customLedgerEndDate: state.customLedgerEndDate, customLedgerStartDate: state.customLedgerStartDate, filteredTransactions: scopeData.filteredTransactions,

@@ -29,17 +29,7 @@ if ($method === 'POST') {
     $body = $_GET;
 }
 
-$authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
-$headerToken = '';
-if (preg_match('/^\s*Bearer\s+(.+)\s*$/i', $authHeader, $matches)) {
-    $headerToken = trim((string)($matches[1] ?? ''));
-}
-
-$expected = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
-$got = (string)($body['admin_token'] ?? $_GET['admin_token'] ?? $headerToken);
-if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
-    $fail('accumul8_housekeeping', 403, 'Invalid admin token');
-}
+catn8_require_admin_token();
 
 if ($method === 'GET') {
     header('Warning: 299 - "Deprecated: use POST with JSON body or Authorization header for accumul8_housekeeping."');

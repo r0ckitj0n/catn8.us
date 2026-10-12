@@ -27,10 +27,12 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isPhotoAlbumsUser = Number(viewer?.is_photo_albums_user || 0) === 1;
   const isAccumul8User = Number(viewer?.is_accumul8_user || 0) === 1;
   const isValid8User = Number(viewer?.is_valid8_user || 0) === 1;
+  const isMedic8User = Number(viewer?.is_medic8_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
   const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
   const canUseAccumul8 = isAuthed && (isAdministrator || isAccumul8User);
   const canUseValid8 = isAuthed && (isAdministrator || isValid8User);
+  const canUseMedic8 = isAuthed && (isAdministrator || isMedic8User);
 
   const links = [
     { key: 'elucid8', href: '/elucid8', label: 'ELUCID8' },
@@ -65,6 +67,15 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
       : []),
     ...(canUseValid8
       ? [{ key: 'valid8', label: 'VALID8', href: '/valid8' }]
+      : []),
+    ...(isAuthed
+      ? [
+          { key: 'celebr8', label: 'CELEBR8', href: '/celebr8' },
+          { key: 'tabul8', label: 'TABUL8', href: '/tabul8' },
+        ]
+      : []),
+    ...(canUseMedic8
+      ? [{ key: 'medic8', label: 'MEDIC8', href: '/medic8' }]
       : []),
     ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [

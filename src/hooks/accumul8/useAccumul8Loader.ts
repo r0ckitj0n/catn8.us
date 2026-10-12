@@ -12,30 +12,47 @@ export function useAccumul8Loader(args: {
 }) {
   const { state, handleError, scopedActionUrl } = args;
   const DEFAULT_PAGE_SIZE = 250;
+  /** Ignores stale HTTP completions when the user switches owner scope faster than bootstrap returns. */
+  const bootstrapGenerationRef = React.useRef(0);
+
+  // Destructure stable setters so callback identities don't churn on every state change.
+  // React's useState setters are referentially stable across renders by guarantee.
+  const {
+    setTransactions,
+    setDebtorLedger,
+    setTransactionsPagination,
+    setBusy,
+    setStatementUploads,
+    setArchivedStatementUploads,
+    setStatementAuditRuns,
+    setStatementsLoaded,
+    transactions,
+    transactionsPagination,
+  } = state;
 
   const applyTransactionPayload = React.useCallback((res?: Partial<Accumul8BootstrapResponse> | { transactions?: unknown; transactions_pagination?: Partial<Accumul8TransactionsPagination> } | null) => {
-    state.setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
-    state.setDebtorLedger(Array.isArray(res?.transactions)
+    setTransactions(Array.isArray(res?.transactions) ? res.transactions : []);
+    setDebtorLedger(Array.isArray(res?.transactions)
       ? res.transactions.filter((tx: any) => Number(tx?.debtor_id || 0) > 0)
       : []);
-    state.setTransactionsPagination({
+    setTransactionsPagination({
       current_page: Number(res?.transactions_pagination?.current_page || 1),
       page_size: Number(res?.transactions_pagination?.page_size || DEFAULT_PAGE_SIZE),
       total_pages: Number(res?.transactions_pagination?.total_pages || 1),
       total_rows: Number(res?.transactions_pagination?.total_rows || 0),
       is_full_dataset: Number(res?.transactions_pagination?.is_full_dataset ? 1 : 0) === 1,
     });
-  }, [state]);
+  }, [setTransactions, setDebtorLedger, setTransactionsPagination]);
 
   const applyStatementWorkspace = React.useCallback((res?: Partial<Accumul8StatementWorkspaceResponse> | null) => {
-    state.setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
-    state.setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
-    state.setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
-    state.setStatementsLoaded(true);
-  }, [state]);
+    setStatementUploads(Array.isArray(res?.statement_uploads) ? res.statement_uploads : []);
+    setArchivedStatementUploads(Array.isArray(res?.archived_statement_uploads) ? res.archived_statement_uploads : []);
+    setStatementAuditRuns(Array.isArray(res?.statement_audit_runs) ? res.statement_audit_runs : []);
+    setStatementsLoaded(true);
+  }, [setStatementUploads, setArchivedStatementUploads, setStatementAuditRuns, setStatementsLoaded]);
 
   const loadStatementWorkspace = React.useCallback(async () => {
-    state.setBusy(true);
+    setBusy(true);
     try {
       const res = await ApiClient.get<Accumul8StatementWorkspaceResponse>(scopedActionUrl('list_statement_workspace'));
       applyStatementWorkspace(res);
@@ -44,12 +61,12 @@ export function useAccumul8Loader(args: {
       handleError(error, 'Failed to load statement workspace');
       throw error;
     } finally {
-      state.setBusy(false);
+      setBusy(false);
     }
-  }, [applyStatementWorkspace, handleError, scopedActionUrl, state]);
+  }, [applyStatementWorkspace, handleError, scopedActionUrl, setBusy]);
 
   const loadTransactionsPage = React.useCallback(async (page = 1, pageSize = DEFAULT_PAGE_SIZE) => {
-    state.setBusy(true);
+    setBusy(true);
     try {
       const params = new URLSearchParams({
         action: 'list_transactions_page',
@@ -67,19 +84,19 @@ export function useAccumul8Loader(args: {
       handleError(error, 'Failed to load ledger page');
       throw error;
     } finally {
-      state.setBusy(false);
+      setBusy(false);
     }
-  }, [applyTransactionPayload, handleError, scopedActionUrl, state]);
+  }, [applyTransactionPayload, handleError, scopedActionUrl, setBusy]);
 
   const loadAllTransactions = React.useCallback(async () => {
-    if (state.transactionsPagination.is_full_dataset) {
+    if (transactionsPagination.is_full_dataset) {
       return {
         success: true,
-        transactions: state.transactions,
-        transactions_pagination: state.transactionsPagination,
+        transactions,
+        transactions_pagination: transactionsPagination,
       };
     }
-    state.setBusy(true);
+    setBusy(true);
     try {
       const params = new URLSearchParams({
         action: 'list_transactions_page',
@@ -96,15 +113,24 @@ export function useAccumul8Loader(args: {
       handleError(error, 'Failed to load full ledger history');
       throw error;
     } finally {
-      state.setBusy(false);
+      setBusy(false);
     }
-  }, [applyTransactionPayload, handleError, scopedActionUrl, state]);
+  }, [applyTransactionPayload, handleError, scopedActionUrl, setBusy, transactions, transactionsPagination]);
 
   const load = React.useCallback(async () => {
+    const generation = ++bootstrapGenerationRef.current;
+    state.setLoaded(false);
+    state.setStatementsLoaded(false);
+    state.setStatementUploads([]);
+    state.setArchivedStatementUploads([]);
+    state.setStatementAuditRuns([]);
     state.setLoading(true);
     try {
       const bootstrapUrl = `${scopedActionUrl('bootstrap')}&transaction_page=1&transaction_page_size=${DEFAULT_PAGE_SIZE}`;
       const res = await ApiClient.get<Accumul8BootstrapResponse>(bootstrapUrl);
+      if (generation !== bootstrapGenerationRef.current) {
+        return;
+      }
       state.setActiveOwnerUserId(Number(res?.selected_owner_user_id || 0));
       state.setAccessibleAccountOwners(Array.isArray(res?.accessible_account_owners) ? res.accessible_account_owners : []);
       state.setEntities(Array.isArray(res?.entities) ? res.entities : []);
@@ -133,9 +159,13 @@ export function useAccumul8Loader(args: {
       }
       state.setLoaded(true);
     } catch (error: any) {
-      handleError(error, 'Failed to load Accumul8 data');
+      if (generation === bootstrapGenerationRef.current) {
+        handleError(error, 'Failed to load Accumul8 data');
+      }
     } finally {
-      state.setLoading(false);
+      if (generation === bootstrapGenerationRef.current) {
+        state.setLoading(false);
+      }
     }
   }, [applyStatementWorkspace, applyTransactionPayload, handleError, scopedActionUrl, state]);
 

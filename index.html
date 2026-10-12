@@ -9,11 +9,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="catn8.us">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/x-icon" href="/dist/assets/favicon-DuB9_qjS.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/dist/assets/favicon-32x32-DCE5Babe.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/dist/assets/favicon-16x16-CTt9kW1C.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/dist/assets/apple-touch-icon-kBc7rIny.png">
+  <link rel="manifest" href="/dist/assets/manifest-Vu7OLbK6.webmanifest">
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-C3772BPC1N"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -56,6 +56,20 @@
         '/valid8/': 'valid8',
         '/valid8.php': 'valid8',
         '/valid8/index.php': 'valid8',
+        '/celebr8': 'celebr8',
+        '/celebr8/': 'celebr8',
+        '/celebr8.php': 'celebr8',
+        '/celebr8/index.php': 'celebr8',
+        '/celebr8/templates': 'celebr8_templates',
+        '/celebr8/templates/': 'celebr8_templates',
+        '/celebr8/activities': 'celebr8_activities',
+        '/celebr8/activities/': 'celebr8_activities',
+        '/tabul8': 'tabul8',
+        '/tabul8/': 'tabul8',
+        '/tabul8.php': 'tabul8',
+        '/medic8': 'medic8',
+        '/medic8/': 'medic8',
+        '/medic8.php': 'medic8',
         '/illumin8': 'illumin8',
         '/illumin8.php': 'illumin8',
         '/fabric8': 'fabric8',
@@ -96,7 +110,15 @@
         '/reset.php': 'reset'
       };
 
-      if (routes[path]) {
+      if (/^\/celebr8\/party(?:\/\d+)?\/?$/.test(path)) {
+        page = 'celebr8_party';
+      } else if (/^\/celebr8\/activities\/\d+\/?$/.test(path)) {
+        page = 'celebr8_activity_detail';
+      } else if (/^\/tabul8(?:\/|$)/.test(path)) {
+        page = 'tabul8';
+      } else if (/^\/medic8(?:\/|$)/.test(path)) {
+        page = 'medic8';
+      } else if (routes[path]) {
         page = routes[path];
       } else if (path.endsWith('.php')) {
         page = path.replace(/^\//, '').replace(/\.php$/, '') || 'home';
@@ -262,7 +284,12 @@
           throw new Error('manifest not found');
         }
         var manifest = await manifestResp.json();
-        var entry = manifest && (manifest['src/entries/app.tsx'] || manifest['index.html']);
+        var pageName = String(window.__CATN8_PAGE__ || 'home');
+        var entry = manifest && (
+          (pageName === 'medic8' && manifest['src/entries/medic8.tsx'])
+          || manifest['src/entries/app.tsx']
+          || manifest['index.html']
+        );
         if (!entry || !entry.file) {
           throw new Error('manifest entry missing');
         }

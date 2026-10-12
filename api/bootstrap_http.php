@@ -82,9 +82,9 @@ function catn8_json_response(array $payload, int $status = 200): void
     exit;
 }
 
-function catn8_read_json_body(): array
+function catn8_read_json_body(bool $requireCsrf = true): array
 {
-    if (catn8_is_mutation_method((string)($_SERVER['REQUEST_METHOD'] ?? ''))) {
+    if ($requireCsrf && catn8_is_mutation_method((string)($_SERVER['REQUEST_METHOD'] ?? ''))) {
         catn8_require_csrf();
     }
     $raw = file_get_contents('php://input');
@@ -105,12 +105,12 @@ function catn8_read_json_body(): array
     return is_array($data) ? $data : [];
 }
 
-function catn8_require_method(string $method): void
+function catn8_require_method(string $method, bool $requireCsrf = true): void
 {
     if (strtoupper($_SERVER['REQUEST_METHOD'] ?? '') !== strtoupper($method)) {
         catn8_json_response(['success' => false, 'error' => 'Method not allowed'], 405);
     }
-    if (catn8_is_mutation_method($method)) {
+    if ($requireCsrf && catn8_is_mutation_method($method)) {
         catn8_require_csrf();
     }
 }
@@ -119,4 +119,32 @@ function catn8_is_mutation_method(string $method): bool
 {
     $m = strtoupper(trim($method));
     return $m !== 'GET' && $m !== 'HEAD' && $m !== 'OPTIONS';
+}
+
+function catn8_request_is_https(): bool
+{
+    $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+    if ($https !== '' && $https !== 'off' && $https !== '0') {
+        return true;
+    }
+    $fwd = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($fwd !== '') {
+        $fwd = trim(explode(',', $fwd)[0]);
+        if ($fwd === 'https') {
+            return true;
+        }
+    }
+    return (string)($_SERVER['SERVER_PORT'] ?? '') === '443';
+}
+
+function catn8_public_origin(): string
+{
+    if (function_exists('catn8_is_local_request') && catn8_is_local_request()) {
+        return 'http://localhost:8888';
+    }
+    $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? 'catn8.us')));
+    if ($host === '' || strpos($host, 'www.catn8.us') === 0) {
+        $host = 'catn8.us';
+    }
+    return 'https://' . $host;
 }

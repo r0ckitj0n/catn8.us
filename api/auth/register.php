@@ -23,7 +23,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 catn8_users_table_ensure();
 
 $requireVerify = catn8_setting_bool('auth.require_email_verification', false);
-$allowPublicSignup = catn8_setting_bool('auth.allow_public_signup', true);
+$allowPublicSignup = catn8_setting_bool('auth.allow_public_signup', false);
 
 if (!$allowPublicSignup) {
     // Public signups create a disabled account until an admin enables it.

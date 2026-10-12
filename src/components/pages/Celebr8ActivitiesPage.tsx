@@ -5,22 +5,31 @@ import { PageLayout } from '../layout/PageLayout';
 import { ApiClient } from '../../core/ApiClient';
 import { AppShellPageProps } from '../../types/pages/commonPageProps';
 import { CELEBR8_HOLIDAYS, Celebr8Activity } from '../../types/celebr8';
+import {
+  activityHref,
+  costSortValue,
+  formatMinutes,
+  formatPlayers,
+  formatUsdRange,
+} from '../celebr8/celebr8ActivityFormat';
 import './Celebr8Page.css';
 
-const EMPTY_DRAFT = {
-  id: 0,
-  name: '',
-  preferred_holiday: 'Any',
-  party_types: '' as string,
-  category: 'other',
-  description: '',
-  ages: 'all',
-  supplies: '',
-  prizes: '',
-  setup_notes: '',
-  source: '',
-  is_suggested: 0,
-};
+type SortKey =
+  | 'name'
+  | 'holiday'
+  | 'category'
+  | 'cost'
+  | 'setup'
+  | 'play'
+  | 'players'
+  | 'ages'
+  | 'kid'
+  | 'senior'
+  | 'seated'
+  | 'mobility'
+  | 'location'
+  | 'mess'
+  | 'energy';
 
 export function Celebr8ActivitiesPage({
   viewer,
@@ -37,9 +46,14 @@ export function Celebr8ActivitiesPage({
   const [holiday, setHoliday] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [ages, setAges] = React.useState('');
+  const [location, setLocation] = React.useState('');
+  const [kidOnly, setKidOnly] = React.useState(false);
+  const [seniorOnly, setSeniorOnly] = React.useState(false);
+  const [seatedOnly, setSeatedOnly] = React.useState(false);
   const [q, setQ] = React.useState('');
-  const [draft, setDraft] = React.useState(EMPTY_DRAFT);
-  const [editing, setEditing] = React.useState(false);
+  const [view, setView] = React.useState<'cards' | 'compare'>('cards');
+  const [sortKey, setSortKey] = React.useState<SortKey>('name');
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc');
 
   const load = React.useCallback(async () => {
     if (!isAuthed) return;
@@ -66,61 +80,89 @@ export function Celebr8ActivitiesPage({
 
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return activities;
-    return activities.filter((a) => {
-      const hay = `${a.name} ${a.description} ${a.category} ${a.source} ${a.preferred_holiday} ${(a.party_types || []).join(' ')}`.toLowerCase();
+    let rows = activities.filter((a) => {
+      if (location) {
+        const loc = a.location_type || 'both';
+        if (location === 'both') {
+          if (loc !== 'both') return false;
+        } else if (loc !== location && loc !== 'both') {
+          return false;
+        }
+      }
+      if (kidOnly && Number(a.kid_friendly || 0) !== 1 && a.ages !== 'kids') return false;
+      if (seniorOnly && Number(a.senior_friendly || 0) !== 1) return false;
+      if (seatedOnly && Number(a.seated_play || 0) !== 1) return false;
+      if (!needle) return true;
+      const hay = `${a.name} ${a.description} ${a.summary || ''} ${a.senior_role || ''} ${a.category} ${a.source} ${a.preferred_holiday} ${(a.party_types || []).join(' ')}`.toLowerCase();
       return hay.includes(needle);
     });
-  }, [activities, q]);
 
-  const openCreate = () => {
-    setDraft(EMPTY_DRAFT);
-    setEditing(true);
-  };
-
-  const openEdit = (a: Celebr8Activity) => {
-    setDraft({
-      id: a.id,
-      name: a.name,
-      preferred_holiday: a.preferred_holiday || 'Any',
-      party_types: (a.party_types || []).join(', '),
-      category: a.category || 'other',
-      description: a.description || '',
-      ages: a.ages || 'all',
-      supplies: (a.supplies || []).join('\n'),
-      prizes: a.prizes || '',
-      setup_notes: a.setup_notes || '',
-      source: a.source || '',
-      is_suggested: Number(a.is_suggested || 0),
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const cmp = (x: string | number, y: string | number) => {
+        if (x < y) return -1 * dir;
+        if (x > y) return 1 * dir;
+        return 0;
+      };
+      switch (sortKey) {
+        case 'holiday': return cmp(a.preferred_holiday || '', b.preferred_holiday || '');
+        case 'category': return cmp(a.category || '', b.category || '');
+        case 'cost': return cmp(costSortValue(a), costSortValue(b));
+        case 'setup': return cmp(a.setup_minutes ?? 9999, b.setup_minutes ?? 9999);
+        case 'play': return cmp(a.play_minutes ?? 9999, b.play_minutes ?? 9999);
+        case 'players': return cmp(a.min_players ?? 0, b.min_players ?? 0);
+        case 'ages': return cmp(a.ages || '', b.ages || '');
+        case 'kid': return cmp(Number(a.kid_friendly || 0), Number(b.kid_friendly || 0));
+        case 'senior': return cmp(Number(a.senior_friendly || 0), Number(b.senior_friendly || 0));
+        case 'seated': return cmp(Number(a.seated_play || 0), Number(b.seated_play || 0));
+        case 'mobility': return cmp(a.mobility_level || '', b.mobility_level || '');
+        case 'location': return cmp(a.location_type || '', b.location_type || '');
+        case 'mess': return cmp(a.mess_level || '', b.mess_level || '');
+        case 'energy': return cmp(a.energy_level || '', b.energy_level || '');
+        default: return cmp(a.name.toLowerCase(), b.name.toLowerCase());
+      }
     });
-    setEditing(true);
+    return rows;
+  }, [activities, ages, kidOnly, location, q, seatedOnly, seniorOnly, sortDir, sortKey]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
   };
 
-  const save = async () => {
-    setBusy(true);
-    try {
-      await ApiClient.post('/api/celebr8.php?action=upsert_activity', {
-        id: draft.id || undefined,
-        name: draft.name,
-        preferred_holiday: draft.preferred_holiday,
-        party_types: draft.party_types.split(',').map((s) => s.trim()).filter(Boolean),
-        category: draft.category,
-        description: draft.description,
-        ages: draft.ages,
-        supplies: draft.supplies.split('\n').map((s) => s.trim()).filter(Boolean),
-        prizes: draft.prizes || null,
-        setup_notes: draft.setup_notes,
-        source: draft.source,
-        is_suggested: draft.is_suggested,
-      });
-      onToast?.({ tone: 'success', message: draft.id ? 'Activity updated' : 'Activity created' });
-      setEditing(false);
-      await load();
-    } catch (error: any) {
-      onToast?.({ tone: 'error', message: error?.message || 'Save failed' });
-    } finally {
-      setBusy(false);
+  const exportCsv = () => {
+    const headers = [
+      'Name', 'Holiday', 'Category', 'Ages', 'Kid-friendly', 'Senior-friendly', 'Seated', 'Mobility',
+      'Location', 'Cost low', 'Cost high',
+      'Setup min', 'Play min', 'Cleanup min', 'Min players', 'Max players', 'Energy', 'Mess', 'Space', 'Senior role',
+    ];
+    const lines = [headers.join(',')];
+    for (const a of filtered) {
+      const cells = [
+        a.name, a.preferred_holiday, a.category, a.ages,
+        Number(a.kid_friendly) === 1 ? 'yes' : 'no',
+        Number(a.senior_friendly) === 1 ? 'yes' : 'no',
+        Number(a.seated_play) === 1 ? 'yes' : 'no',
+        a.mobility_level || '',
+        a.location_type || '',
+        a.estimated_cost_low ?? '', a.estimated_cost_high ?? '',
+        a.setup_minutes ?? '', a.play_minutes ?? '', a.cleanup_minutes ?? '',
+        a.min_players ?? '', a.max_players ?? '',
+        a.energy_level || '', a.mess_level || '', a.space_needed || '',
+        a.senior_role || '',
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
+      lines.push(cells.join(','));
     }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'celebr8-activities-comparison.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const copyActivity = async (a: Celebr8Activity) => {
@@ -130,12 +172,10 @@ export function Celebr8ActivitiesPage({
         '/api/celebr8.php?action=copy_activity',
         { activity_id: a.id },
       );
-      onToast?.({ tone: 'success', message: 'Copied — re-theme this copy' });
-      openEdit(res.activity);
-      await load();
+      onToast?.({ tone: 'success', message: 'Copied' });
+      window.location.href = activityHref(res.activity.id);
     } catch (error: any) {
       onToast?.({ tone: 'error', message: error?.message || 'Copy failed' });
-    } finally {
       setBusy(false);
     }
   };
@@ -167,141 +207,173 @@ export function Celebr8ActivitiesPage({
   return (
     <PageLayout page="celebr8_activities" title="CELEBR8" viewer={viewer} onLoginClick={onLoginClick} onLogout={onLogout} onAccountClick={onAccountClick} mysteryTitle={mysteryTitle}>
       <section className="section celebr8-page">
-        <div className="celebr8-hero">
+        <div className="celebr8-hero celebr8-no-print">
           <h1>CELEBR8</h1>
-          <p className="mb-0">Shared activity library — available to every party. Preferred holiday is only a label.</p>
+          <p className="mb-0">Shared activity library — click any activity for full details, printables, and costs. Costs are 2026 USD estimates.</p>
         </div>
-        <Celebr8SubNav active="activities" />
+        <div className="celebr8-no-print"><Celebr8SubNav active="activities" /></div>
 
         <div className="celebr8-panel">
-          <div className="celebr8-toolbar">
-            <input className="form-control" style={{ maxWidth: 220 }} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-            <select className="form-select" style={{ maxWidth: 180 }} value={holiday} onChange={(e) => setHoliday(e.target.value)}>
+          <div className="celebr8-toolbar celebr8-no-print">
+            <input className="form-control" style={{ maxWidth: 200 }} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+            <select className="form-select" style={{ maxWidth: 160 }} value={holiday} onChange={(e) => setHoliday(e.target.value)}>
               <option value="">All holidays</option>
               {CELEBR8_HOLIDAYS.map((h) => <option key={h} value={h}>{h}</option>)}
             </select>
-            <select className="form-select" style={{ maxWidth: 140 }} value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select className="form-select" style={{ maxWidth: 130 }} value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">All categories</option>
               {['contest', 'music', 'food', 'game', 'kids', 'other'].map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select className="form-select" style={{ maxWidth: 120 }} value={ages} onChange={(e) => setAges(e.target.value)}>
+            <select className="form-select" style={{ maxWidth: 110 }} value={ages} onChange={(e) => setAges(e.target.value)}>
               <option value="">All ages</option>
               <option value="all">all</option>
               <option value="kids">kids</option>
               <option value="adults">adults</option>
             </select>
+            <select className="form-select" style={{ maxWidth: 120 }} value={location} onChange={(e) => setLocation(e.target.value)}>
+              <option value="">Indoor/outdoor</option>
+              <option value="indoor">indoor</option>
+              <option value="outdoor">outdoor</option>
+              <option value="both">both</option>
+            </select>
+            <label className="small mb-0">
+              <input type="checkbox" checked={kidOnly} onChange={(e) => setKidOnly(e.target.checked)} /> Kid-friendly
+            </label>
+            <button
+              type="button"
+              className={`btn btn-sm ${seniorOnly ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => setSeniorOnly((v) => !v)}
+            >
+              Senior-friendly
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${seatedOnly ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => setSeatedOnly((v) => !v)}
+            >
+              Seated
+            </button>
+            <button type="button" className={`btn btn-sm ${view === 'cards' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setView('cards')}>Cards</button>
+            <button type="button" className={`btn btn-sm ${view === 'compare' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setView('compare')}>Compare table</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={exportCsv}>Export CSV</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => window.print()}>Print table</button>
             {isAdmin ? (
-              <button type="button" className="btn btn-sm btn-primary" onClick={openCreate} disabled={busy}>Add activity</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    const name = window.prompt('New activity name?');
+                    if (!name || !name.trim()) return;
+                    setBusy(true);
+                    try {
+                      const res = await ApiClient.post<{ success: boolean; activity: Celebr8Activity }>(
+                        '/api/celebr8.php?action=upsert_activity',
+                        { name: name.trim(), category: 'other', ages: 'all', preferred_holiday: 'Any' },
+                      );
+                      window.location.href = activityHref(res.activity.id);
+                    } catch (error: any) {
+                      onToast?.({ tone: 'error', message: error?.message || 'Create failed' });
+                      setBusy(false);
+                    }
+                  })();
+                }}
+              >
+                Add activity
+              </button>
             ) : null}
-            <span className="small text-muted ms-auto">{filtered.length} shown</span>
+            <span className="small text-muted ms-auto">{filtered.length} shown{busy ? '…' : ''}</span>
           </div>
 
-          <div className="celebr8-guest-table-wrap">
-            <table className="table table-sm align-middle celebr8-guest-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Holiday</th>
-                  <th>Category</th>
-                  <th>Ages</th>
-                  <th>Source</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <strong>{a.name}</strong>
-                      {Number(a.is_suggested) === 1 ? <span className="celebr8-flag ms-1">suggested</span> : null}
-                      <div className="small text-muted">{a.description}</div>
-                    </td>
-                    <td className="small">{a.preferred_holiday || 'Any'}{a.copied_from_activity_id ? <div className="text-muted">copy of #{a.copied_from_activity_id}</div> : null}</td>
-                    <td>{a.category}</td>
-                    <td>{a.ages}</td>
-                    <td className="small celebr8-notes-cell">{a.source}</td>
-                    <td className="text-nowrap">
-                      {isAdmin ? (
-                        <>
-                          <button type="button" className="btn btn-link btn-sm" onClick={() => openEdit(a)}>Edit</button>
-                          <button type="button" className="btn btn-link btn-sm" onClick={() => void copyActivity(a)}>Copy</button>
-                          <button type="button" className="btn btn-link btn-sm text-danger" onClick={() => void remove(a)}>Delete</button>
-                        </>
-                      ) : null}
-                    </td>
+          {view === 'cards' ? (
+            <ul className="celebr8-activity-card-list">
+              {filtered.map((a) => (
+                <li key={a.id}>
+                  <a className="celebr8-activity-card" href={activityHref(a.id)}>
+                    <strong>{a.name}</strong>
+                    {Number(a.is_suggested) === 1 ? <span className="celebr8-flag ms-1">suggested</span> : null}
+                    <span className="small d-block text-muted">{a.preferred_holiday || 'Any'} · {a.category} · {a.ages}</span>
+                    <span className="small d-block">{a.summary || a.description}</span>
+                    <span className="small d-block mt-1">
+                      {formatUsdRange(a.estimated_cost_low, a.estimated_cost_high)}
+                      {' · '}setup {formatMinutes(a.setup_minutes)}
+                      {' · '}play {formatMinutes(a.play_minutes)}
+                      {' · '}{a.location_type || 'both'}
+                      {' · '}{Number(a.kid_friendly) === 1 ? 'kid-friendly' : 'adults ok'}
+                      {Number(a.senior_friendly) === 1 ? ' · senior-friendly' : ''}
+                      {Number(a.seated_play) === 1 ? ' · seated' : ''}
+                    </span>
+                  </a>
+                  {isAdmin ? (
+                    <div className="celebr8-toolbar mt-1 celebr8-no-print">
+                      <a className="btn btn-link btn-sm px-0" href={`${activityHref(a.id)}`}>Open</a>
+                      <button type="button" className="btn btn-link btn-sm" onClick={() => void copyActivity(a)}>Copy</button>
+                      <button type="button" className="btn btn-link btn-sm text-danger" onClick={() => void remove(a)}>Delete</button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="celebr8-guest-table-wrap celebr8-compare-print">
+              <table className="table table-sm align-middle celebr8-guest-table celebr8-compare-table">
+                <thead>
+                  <tr>
+                    {([
+                      ['name', 'Name'],
+                      ['holiday', 'Holiday'],
+                      ['category', 'Category'],
+                      ['cost', 'Cost'],
+                      ['setup', 'Setup'],
+                      ['play', 'Play'],
+                      ['players', 'Players'],
+                      ['ages', 'Ages'],
+                      ['kid', 'Kids'],
+                      ['senior', 'Senior'],
+                      ['seated', 'Seated'],
+                      ['mobility', 'Mobility'],
+                      ['location', 'In/Out'],
+                      ['energy', 'Energy'],
+                      ['mess', 'Mess'],
+                    ] as Array<[SortKey, string]>).map(([key, label]) => (
+                      <th key={key}>
+                        <button type="button" className="btn btn-link btn-sm px-0 celebr8-no-print" onClick={() => toggleSort(key)}>
+                          {label}{sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </button>
+                        <span className="celebr8-print-only">{label}</span>
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {editing ? (
-          <div className="modal show d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,.45)' }}>
-            <div className="modal-dialog modal-lg">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">{draft.id ? 'Edit activity' : 'New activity'}</h5>
-                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setEditing(false)} />
-                </div>
-                <div className="modal-body">
-                  <div className="mb-2">
-                    <label className="form-label">Name</label>
-                    <input className="form-control" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                  </div>
-                  <div className="row g-2">
-                    <div className="col-md-6">
-                      <label className="form-label">Preferred holiday</label>
-                      <select className="form-select" value={draft.preferred_holiday} onChange={(e) => setDraft({ ...draft, preferred_holiday: e.target.value })}>
-                        {CELEBR8_HOLIDAYS.map((h) => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-md-3">
-                      <label className="form-label">Category</label>
-                      <select className="form-select" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
-                        {['contest', 'music', 'food', 'game', 'kids', 'other'].map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-md-3">
-                      <label className="form-label">Ages</label>
-                      <select className="form-select" value={draft.ages} onChange={(e) => setDraft({ ...draft, ages: e.target.value })}>
-                        {['all', 'kids', 'adults'].map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mb-2 mt-2">
-                    <label className="form-label">Description</label>
-                    <textarea className="form-control" rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-                  </div>
-                  <div className="mb-2">
-                    <label className="form-label">Supplies (one per line)</label>
-                    <textarea className="form-control" rows={4} value={draft.supplies} onChange={(e) => setDraft({ ...draft, supplies: e.target.value })} />
-                  </div>
-                  <div className="mb-2">
-                    <label className="form-label">Prizes</label>
-                    <input className="form-control" value={draft.prizes} onChange={(e) => setDraft({ ...draft, prizes: e.target.value })} />
-                  </div>
-                  <div className="mb-2">
-                    <label className="form-label">Setup notes</label>
-                    <textarea className="form-control" rows={2} value={draft.setup_notes} onChange={(e) => setDraft({ ...draft, setup_notes: e.target.value })} />
-                  </div>
-                  <div className="mb-2">
-                    <label className="form-label">Source</label>
-                    <input className="form-control" value={draft.source} onChange={(e) => setDraft({ ...draft, source: e.target.value })} />
-                  </div>
-                  <div className="form-check">
-                    <input className="form-check-input" type="checkbox" id="act-suggested" checked={draft.is_suggested === 1} onChange={(e) => setDraft({ ...draft, is_suggested: e.target.checked ? 1 : 0 })} />
-                    <label className="form-check-label" htmlFor="act-suggested">Suggested / inferred</label>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-                  <button type="button" className="btn btn-primary" disabled={busy || !draft.name.trim()} onClick={() => void save()}>Save</button>
-                </div>
-              </div>
+                </thead>
+                <tbody>
+                  {filtered.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <a href={activityHref(a.id)}><strong>{a.name}</strong></a>
+                        {Number(a.is_suggested) === 1 ? <span className="celebr8-flag ms-1">suggested</span> : null}
+                      </td>
+                      <td className="small">{a.preferred_holiday || 'Any'}</td>
+                      <td>{a.category}</td>
+                      <td className="small">{formatUsdRange(a.estimated_cost_low, a.estimated_cost_high)}</td>
+                      <td>{formatMinutes(a.setup_minutes)}</td>
+                      <td>{formatMinutes(a.play_minutes)}</td>
+                      <td>{formatPlayers(a.min_players, a.max_players)}</td>
+                      <td>{a.ages}{a.age_range ? ` (${a.age_range})` : ''}</td>
+                      <td>{Number(a.kid_friendly) === 1 ? 'Yes' : 'No'}</td>
+                      <td>{Number(a.senior_friendly) === 1 ? 'Yes' : 'No'}</td>
+                      <td>{Number(a.seated_play) === 1 ? 'Yes' : 'No'}</td>
+                      <td>{a.mobility_level || '—'}</td>
+                      <td>{a.location_type || '—'}</td>
+                      <td>{a.energy_level || '—'}</td>
+                      <td>{a.mess_level || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-        ) : null}
+          )}
+        </div>
       </section>
     </PageLayout>
   );

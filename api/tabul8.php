@@ -32,6 +32,7 @@ $authRead = [
     'ensure_board', 'get_board', 'list_categories', 'list_entries', 'get_entry',
     'get_tallies', 'list_votes', 'list_vote_audit', 'kiosk_state',
     'list_identities', 'get_identity', 'party_identity_pack',
+    'list_board_participants',
 ];
 /** Admin writes. */
 $authAdminWrite = [
@@ -43,6 +44,7 @@ $authAdminWrite = [
     'upload_entry_photo',
     'name_identity', 'merge_identities', 'purge_identity', 'purge_all_identities',
     'confirm_pending_guest', 'unlink_identity_guest', 'link_identity_guest',
+    'set_participant_active', 'bulk_deactivate_absent', 'add_board_person',
 ];
 /** Logged-in station writes (any user — kiosk tablet / display QR mint / check-in). */
 $authKioskWrite = [
@@ -163,6 +165,72 @@ try {
             'board' => $board,
             'categories' => Tabul8Model::listCategories((int)$board['id']),
         ]);
+    }
+
+    if ($action === 'list_board_participants') {
+        $boardId = (int)($_GET['board_id'] ?? 0);
+        if ($boardId <= 0) {
+            $partyId = (int)($_GET['party_id'] ?? $_GET['event_id'] ?? 0);
+            $ensured = Tabul8Model::ensureBoard($partyId);
+            $boardId = (int)$ensured['board']['id'];
+        }
+        catn8_json_response([
+            'success' => true,
+            'participants' => Tabul8Model::listBoardParticipants($boardId),
+        ]);
+    }
+
+    if ($action === 'set_participant_active') {
+        $boardId = (int)($body['board_id'] ?? 0);
+        $guestId = (int)($body['guest_id'] ?? 0);
+        if (array_key_exists('is_active', $body)) {
+            $active = (int)$body['is_active'] === 1;
+        } elseif (array_key_exists('active', $body)) {
+            $active = (int)$body['active'] === 1;
+        } else {
+            catn8_json_response(['success' => false, 'error' => 'is_active required'], 400);
+        }
+        catn8_json_response([
+            'success' => true,
+            'participant' => Tabul8Model::setParticipantActive($boardId, $guestId, $active),
+            'participants' => Tabul8Model::listBoardParticipants($boardId),
+        ]);
+    }
+
+    if ($action === 'bulk_deactivate_absent') {
+        $boardId = (int)($body['board_id'] ?? 0);
+        catn8_json_response(['success' => true] + Tabul8Model::bulkDeactivateAbsent($boardId));
+    }
+
+    if ($action === 'add_board_person') {
+        $boardId = (int)($body['board_id'] ?? 0);
+        $confirmGuestId = isset($body['confirm_guest_id']) && $body['confirm_guest_id'] !== ''
+            ? (int)$body['confirm_guest_id'] : null;
+        $result = Tabul8Model::addBoardPerson(
+            $boardId,
+            [
+                'name' => (string)($body['name'] ?? ''),
+                'phone' => (string)($body['phone'] ?? ''),
+                'email' => (string)($body['email'] ?? ''),
+                'costume_name' => (string)($body['costume_name'] ?? ''),
+            ],
+            'tabul8:admin:' . $uid,
+            $confirmGuestId
+        );
+        $status = (string)($result['status'] ?? '');
+        if ($status === 'blocked') {
+            catn8_json_response(['success' => false, 'error' => 'That name cannot be used'], 400);
+        }
+        if (in_array($status, ['confirm_exact', 'confirm_fuzzy', 'ambiguous'], true)) {
+            catn8_json_response([
+                'success' => false,
+                'error' => $status === 'ambiguous' ? 'ambiguous_guest' : 'confirm_link',
+                'match' => $result['match'] ?? null,
+                'guest' => $result['guest'] ?? null,
+                'candidates' => $result['candidates'] ?? [],
+            ], 409);
+        }
+        catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'list_categories') {
@@ -483,9 +551,11 @@ try {
     }
 
     if ($action === 'register_voter') {
-        // Unrecognized kiosk voter: create/link guest, enroll face, optional costume.
+        // Unrecognized kiosk voter: create/link guest (same walk-in path as admin add), enroll face.
         $partyId = (int)($body['party_id'] ?? $body['event_id'] ?? 0);
         $name = trim((string)($body['name'] ?? ''));
+        $phone = trim((string)($body['phone'] ?? ''));
+        $email = trim((string)($body['email'] ?? ''));
         $costume = trim((string)($body['costume_name'] ?? ''));
         $vector = $body['embedding'] ?? $body['vector'] ?? null;
         $confirmGuestId = isset($body['confirm_guest_id']) && $body['confirm_guest_id'] !== ''
@@ -493,51 +563,66 @@ try {
         if ($partyId <= 0 || $name === '') {
             catn8_json_response(['success' => false, 'error' => 'party_id and name required'], 400);
         }
-        if (Celebr8Model::isBlockedGuestName($name)) {
-            catn8_json_response(['success' => false, 'error' => 'That name cannot be used'], 400);
-        }
         if (!is_array($vector)) {
             catn8_json_response(['success' => false, 'error' => 'embedding required'], 400);
         }
 
-        $guestId = $confirmGuestId;
-        $match = null;
-        if (!$guestId) {
-            $match = Celebr8Model::matchGuestName($partyId, $name);
-            if (($match['status'] ?? '') === 'ambiguous') {
-                catn8_json_response([
-                    'success' => false,
-                    'error' => 'ambiguous_guest',
-                    'match' => $match,
-                ], 409);
-            }
-            if (($match['status'] ?? '') === 'exact' || ($match['status'] ?? '') === 'fuzzy') {
-                // Fuzzy still requires client confirm unless they already sent confirm_guest_id.
-                if (($match['status'] ?? '') === 'fuzzy') {
-                    catn8_json_response([
-                        'success' => false,
-                        'error' => 'confirm_fuzzy',
-                        'match' => $match,
-                    ], 409);
-                }
-                $guestId = (int)($match['guest']['id'] ?? 0);
-            }
+        $board = Tabul8Model::getBoardByParty($partyId);
+        if (!$board) {
+            $ensured = Tabul8Model::ensureBoard($partyId);
+            $board = $ensured['board'];
         }
-        if (!$guestId) {
-            $guest = Celebr8Model::upsertGuest($partyId, [
-                'name' => $name,
-                'costume_name' => $costume,
-                'rsvp_status' => 'going',
-            ], 'tabul8:kiosk', true);
-            $guestId = (int)$guest['id'];
+        $boardId = (int)$board['id'];
+
+        // Auto-link exact name matches (legacy kiosk); still confirm fuzzy/ambiguous.
+        $resolved = Celebr8Model::resolveWalkInGuest(
+            $partyId,
+            ['name' => $name, 'phone' => $phone, 'email' => $email, 'costume_name' => $costume],
+            'tabul8:kiosk',
+            $boardId,
+            $confirmGuestId
+        );
+        $status = (string)($resolved['status'] ?? '');
+        if ($status === 'blocked') {
+            catn8_json_response(['success' => false, 'error' => 'That name cannot be used'], 400);
         }
+        if ($status === 'ambiguous') {
+            catn8_json_response([
+                'success' => false,
+                'error' => 'ambiguous_guest',
+                'match' => $resolved['match'] ?? ['candidates' => $resolved['candidates'] ?? []],
+            ], 409);
+        }
+        if ($status === 'confirm_fuzzy') {
+            catn8_json_response([
+                'success' => false,
+                'error' => 'confirm_fuzzy',
+                'match' => $resolved['match'] ?? ['guest' => $resolved['guest'] ?? null],
+            ], 409);
+        }
+        if ($status === 'confirm_exact' && !$confirmGuestId) {
+            // Preserve prior kiosk UX: exact name match links without a second tap.
+            $resolved = Celebr8Model::resolveWalkInGuest(
+                $partyId,
+                ['name' => $name, 'phone' => $phone, 'email' => $email, 'costume_name' => $costume],
+                'tabul8:kiosk',
+                $boardId,
+                (int)($resolved['guest']['id'] ?? 0)
+            );
+        }
+        $guest = $resolved['guest'] ?? null;
+        if (!is_array($guest) || (int)($guest['id'] ?? 0) <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'Failed to resolve guest'], 500);
+        }
+        $guestId = (int)$guest['id'];
+        // Present at kiosk ⇒ active on the board even if previously unchecked.
+        Tabul8Model::setParticipantActive($boardId, $guestId, true);
 
         $enroll = Tabul8IdentityModel::checkInEnroll($partyId, $vector, $guestId, $name);
         $identityId = (int)($enroll['identity']['id'] ?? 0);
         Celebr8Model::markGuestCheckedIn($guestId, $identityId > 0 ? $identityId : null);
         if ($costume !== '') {
             Celebr8Model::setGuestCostume($guestId, $costume, $identityId > 0 ? $identityId : null);
-            // Sync label onto existing costume-contest entries only (photos stay party-album owned).
             Tabul8Model::syncGuestCostumeLabels($partyId, $guestId, $costume);
         }
 

@@ -1,8 +1,24 @@
 export type Celebr8RsvpStatus = 'going' | 'not_going' | 'maybe' | 'no_reply';
 
+export type Celebr8RsvpNoteSource = 'text' | 'site' | 'manual';
+
 export type Celebr8MessageStatus = 'queued' | 'claimed' | 'sent' | 'failed';
 
 export type Celebr8InviteSendStatus = 'none' | 'sent' | 'failed';
+
+export interface Celebr8RsvpNote {
+  id: number;
+  guest_id: number;
+  event_id: number;
+  party_id?: number;
+  status: Celebr8RsvpStatus | string;
+  note: string;
+  quote: string | null;
+  received_at: string;
+  source: Celebr8RsvpNoteSource | string;
+  message_guid: string | null;
+  created_at: string;
+}
 
 export interface Celebr8Event {
   id: number;
@@ -20,6 +36,9 @@ export interface Celebr8Event {
   rsvp_deadline: string;
   invite_text: string;
   flyer_image_url: string;
+  cover_photo_id?: number | null;
+  flyer_brief?: string;
+  flyer_style_notes?: string;
   notes: string;
   template_id?: number | null;
   starts_on?: string | null;
@@ -63,6 +82,20 @@ export interface Celebr8PartyTemplate {
   updated_at: string;
 }
 
+export interface Celebr8ActivitySupplyDetail {
+  item: string;
+  qty: string;
+  unit_cost_est: number | null;
+  notes: string;
+  have: number;
+}
+
+export interface Celebr8ActivityPrintable {
+  title: string;
+  kind: string;
+  content: string;
+}
+
 export interface Celebr8Activity {
   id: number;
   name: string;
@@ -77,6 +110,41 @@ export interface Celebr8Activity {
   source: string;
   is_suggested: number;
   copied_from_activity_id: number | null;
+  summary?: string;
+  objective?: string;
+  how_to_play?: string[];
+  setup_instructions?: string[];
+  teardown?: string[];
+  rules_scoring?: string;
+  winning_notes?: string;
+  supplies_detail?: Celebr8ActivitySupplyDetail[];
+  estimated_cost_low?: number | null;
+  estimated_cost_high?: number | null;
+  setup_minutes?: number | null;
+  play_minutes?: number | null;
+  cleanup_minutes?: number | null;
+  min_players?: number | null;
+  max_players?: number | null;
+  age_range?: string;
+  kid_friendly?: number;
+  location_type?: string;
+  space_needed?: string;
+  energy_level?: string;
+  mess_level?: string;
+  tech_needs?: string;
+  volunteers_needed?: string;
+  safety_notes?: string;
+  variations?: Array<string | { title?: string; text?: string }>;
+  tips?: string;
+  printables?: Celebr8ActivityPrintable[];
+  details_filled_at?: string | null;
+  details_source?: string;
+  senior_friendly?: number;
+  seated_play?: number;
+  mobility_level?: 'none' | 'low' | 'moderate' | 'high' | string;
+  hearing_vision_notes?: string;
+  senior_role?: string;
+  has_details?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +177,15 @@ export interface Celebr8Guest {
   relation_label: string;
   bringing_chili: number;
   bringing: string;
+  costume_name?: string;
+  checked_in_at?: string | null;
+  tabul8_identity_id?: number | null;
+  /** 1 when added mid-party (Tabul8 admin or kiosk walk-in). */
+  walk_in?: number;
+  walk_in_at?: string | null;
+  walk_in_board_id?: number | null;
+  /** Alias of walk_in for agent/docs clarity. */
+  added_at_party?: number;
   phone_unverified: number;
   invite_send_status: Celebr8InviteSendStatus | string;
   invite_send_error: string | null;
@@ -155,11 +232,26 @@ export type Celebr8RequestStatus =
 
 export type Celebr8AudienceType = 'none' | 'guests' | 'rsvp' | 'group';
 
+export type Celebr8RequestType = 'text' | 'flyer' | 'rsvp';
+
+export interface Celebr8RsvpInboundMessage {
+  guest_id: number;
+  phone: string;
+  message_guid: string;
+  rowid: number;
+  date: string;
+  text: string;
+  is_reaction: boolean;
+}
+
 export interface Celebr8Request {
   id: number;
   party_id: number | null;
   party_title?: string;
+  request_type?: Celebr8RequestType | string;
+  type?: Celebr8RequestType | string;
   request_text: string;
+  payload?: Celebr8RsvpInboundMessage[] | unknown[] | null;
   preview?: string;
   show_before_sending: number;
   audience_type: Celebr8AudienceType | string;
@@ -174,6 +266,26 @@ export interface Celebr8Request {
   claimed_by: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Celebr8Flyer {
+  id: number | null;
+  party_id: number;
+  version: number;
+  is_current: boolean;
+  filename: string;
+  width: number;
+  height: number;
+  content_hash: string;
+  byte_size: number;
+  mime_type: string;
+  uploaded_by: string;
+  created_at: string;
+  external_url?: string | null;
+  source: 'private' | 'legacy' | 'legacy_archive' | string;
+  url?: string;
+  original_url?: string;
+  url_expires_at?: string | null;
 }
 
 export interface Celebr8RequestMessage {
@@ -194,6 +306,42 @@ export interface Celebr8GuestGroup {
   member_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Celebr8Album {
+  id: number;
+  party_id: number;
+  title: string;
+  cover_photo_id?: number | null;
+  cover_url?: string | null;
+  photo_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Celebr8Photo {
+  id: number;
+  album_id: number;
+  party_id: number;
+  filename: string;
+  caption: string;
+  capture_time: string | null;
+  uploaded_at: string;
+  source_uuid: string | null;
+  width: number;
+  height: number;
+  content_hash: string;
+  byte_size: number;
+  mime_type: string;
+  uploaded_by: string;
+  sort_order: number;
+  is_cover?: boolean;
+  created_at: string;
+  updated_at: string;
+  thumb_url?: string;
+  url?: string;
+  original_url?: string;
+  url_expires_at?: string;
 }
 
 export interface Celebr8EventsResponse {

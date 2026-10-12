@@ -156,6 +156,22 @@ final class Tabul8Model
         self::ensureColumn('tabul8_entries', 'owner_guest_id', 'INT NULL AFTER guest_id');
         self::backfillContestTypes();
 
+        Database::execute("CREATE TABLE IF NOT EXISTS tabul8_board_participants (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            board_id INT NOT NULL,
+            party_id INT NOT NULL,
+            guest_id INT NOT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_tabul8_board_guest (board_id, guest_id),
+            KEY idx_tabul8_part_party (party_id, is_active),
+            KEY idx_tabul8_part_guest (guest_id),
+            CONSTRAINT fk_tabul8_part_board FOREIGN KEY (board_id) REFERENCES tabul8_boards(id) ON DELETE CASCADE,
+            CONSTRAINT fk_tabul8_part_party FOREIGN KEY (party_id) REFERENCES celebr8_events(id) ON DELETE CASCADE,
+            CONSTRAINT fk_tabul8_part_guest FOREIGN KEY (guest_id) REFERENCES celebr8_guests(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
         require_once __DIR__ . '/tabul8_identity_model.php';
         Tabul8IdentityModel::ensureSchema();
 
@@ -267,11 +283,219 @@ final class Tabul8Model
             $created = true;
         }
 
+        // Prefill contestant/participant roster from ALL Celebr8 invited guests.
+        self::syncBoardParticipants((int)$board['id']);
+
         return [
             'board' => $board,
             'categories' => $cats,
             'contests' => $cats,
             'created' => $created,
+        ];
+    }
+
+    /**
+     * Ensure every Celebr8 guest for the party has a board participant row.
+     * New guests default to active=1; existing unchecked rows stay inactive.
+     */
+    public static function syncBoardParticipants(int $boardId): int
+    {
+        self::ensureSchema();
+        $board = self::getBoard($boardId);
+        if (!$board) {
+            throw new InvalidArgumentException('Board not found');
+        }
+        $partyId = (int)$board['party_id'];
+        $guests = Celebr8Model::listGuests($partyId);
+        $added = 0;
+        foreach ($guests as $g) {
+            $guestId = (int)($g['id'] ?? 0);
+            if ($guestId <= 0 || Celebr8Model::isBlockedGuestName((string)($g['name'] ?? ''))) {
+                continue;
+            }
+            $existing = Database::queryOne(
+                'SELECT id FROM tabul8_board_participants WHERE board_id = ? AND guest_id = ?',
+                [$boardId, $guestId]
+            );
+            if ($existing) {
+                continue;
+            }
+            Database::execute(
+                'INSERT INTO tabul8_board_participants (board_id, party_id, guest_id, is_active)
+                 VALUES (?, ?, ?, 1)',
+                [$boardId, $partyId, $guestId]
+            );
+            $added++;
+        }
+        return $added;
+    }
+
+    /** @return list<array> */
+    public static function listBoardParticipants(int $boardId): array
+    {
+        self::ensureSchema();
+        $board = self::getBoard($boardId);
+        if (!$board) {
+            throw new InvalidArgumentException('Board not found');
+        }
+        self::syncBoardParticipants($boardId);
+        $rows = Database::queryAll(
+            'SELECT p.*, g.name, g.phone, g.email, g.rsvp_status, g.walk_in, g.walk_in_at, g.walk_in_board_id,
+                    g.costume_name, g.checked_in_at
+             FROM tabul8_board_participants p
+             INNER JOIN celebr8_guests g ON g.id = p.guest_id
+             WHERE p.board_id = ?
+             ORDER BY g.name ASC, g.id ASC',
+            [$boardId]
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            if (Celebr8Model::isBlockedGuestName((string)($row['name'] ?? ''))) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int)$row['id'],
+                'board_id' => (int)$row['board_id'],
+                'party_id' => (int)$row['party_id'],
+                'guest_id' => (int)$row['guest_id'],
+                'is_active' => (int)$row['is_active'],
+                'name' => (string)$row['name'],
+                'phone' => (string)($row['phone'] ?? ''),
+                'email' => (string)($row['email'] ?? ''),
+                'rsvp_status' => (string)($row['rsvp_status'] ?? 'no_reply'),
+                'walk_in' => (int)($row['walk_in'] ?? 0),
+                'walk_in_at' => $row['walk_in_at'] !== null ? (string)$row['walk_in_at'] : null,
+                'walk_in_board_id' => $row['walk_in_board_id'] !== null ? (int)$row['walk_in_board_id'] : null,
+                'costume_name' => (string)($row['costume_name'] ?? ''),
+                'checked_in_at' => $row['checked_in_at'] !== null ? (string)$row['checked_in_at'] : null,
+                'created_at' => (string)($row['created_at'] ?? ''),
+                'updated_at' => (string)($row['updated_at'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    public static function setParticipantActive(int $boardId, int $guestId, bool $active): array
+    {
+        self::ensureSchema();
+        $board = self::getBoard($boardId);
+        if (!$board) {
+            throw new InvalidArgumentException('Board not found');
+        }
+        $guest = Celebr8Model::getGuest($guestId);
+        if (!$guest || (int)$guest['event_id'] !== (int)$board['party_id']) {
+            throw new InvalidArgumentException('Guest not found for this party');
+        }
+        $row = Database::queryOne(
+            'SELECT id FROM tabul8_board_participants WHERE board_id = ? AND guest_id = ?',
+            [$boardId, $guestId]
+        );
+        if (!$row) {
+            Database::execute(
+                'INSERT INTO tabul8_board_participants (board_id, party_id, guest_id, is_active)
+                 VALUES (?, ?, ?, ?)',
+                [$boardId, (int)$board['party_id'], $guestId, $active ? 1 : 0]
+            );
+        } else {
+            Database::execute(
+                'UPDATE tabul8_board_participants SET is_active = ? WHERE board_id = ? AND guest_id = ?',
+                [$active ? 1 : 0, $boardId, $guestId]
+            );
+        }
+        $parts = self::listBoardParticipants($boardId);
+        foreach ($parts as $p) {
+            if ((int)$p['guest_id'] === $guestId) {
+                return $p;
+            }
+        }
+        throw new RuntimeException('Failed to load participant');
+    }
+
+    /**
+     * Bulk-uncheck participants whose Celebr8 RSVP is not_going or no_reply.
+     *
+     * @return array{updated:int,participants:list<array>}
+     */
+    public static function bulkDeactivateAbsent(int $boardId): array
+    {
+        self::ensureSchema();
+        $board = self::getBoard($boardId);
+        if (!$board) {
+            throw new InvalidArgumentException('Board not found');
+        }
+        $affected = Database::execute(
+            "UPDATE tabul8_board_participants p
+             INNER JOIN celebr8_guests g ON g.id = p.guest_id
+             SET p.is_active = 0
+             WHERE p.board_id = ?
+               AND p.is_active = 1
+               AND g.rsvp_status IN ('not_going', 'no_reply')",
+            [$boardId]
+        );
+        return [
+            'updated' => (int)$affected,
+            'participants' => self::listBoardParticipants($boardId),
+        ];
+    }
+
+    public static function isGuestActiveOnBoard(int $boardId, int $guestId): bool
+    {
+        if ($boardId <= 0 || $guestId <= 0) {
+            return false;
+        }
+        self::ensureSchema();
+        $row = Database::queryOne(
+            'SELECT is_active FROM tabul8_board_participants WHERE board_id = ? AND guest_id = ?',
+            [$boardId, $guestId]
+        );
+        if (!$row) {
+            // Not yet synced — treat invited guests as active until explicitly unchecked.
+            return true;
+        }
+        return (int)$row['is_active'] === 1;
+    }
+
+    /**
+     * Add (or confirm-link) a person to the board + Celebr8 guest list.
+     *
+     * @param array<string,mixed> $fields
+     * @return array<string,mixed>
+     */
+    public static function addBoardPerson(
+        int $boardId,
+        array $fields,
+        string $actorLabel,
+        ?int $confirmGuestId = null
+    ): array {
+        self::ensureSchema();
+        $board = self::getBoard($boardId);
+        if (!$board) {
+            throw new InvalidArgumentException('Board not found');
+        }
+        $partyId = (int)$board['party_id'];
+        $resolved = Celebr8Model::resolveWalkInGuest(
+            $partyId,
+            $fields,
+            $actorLabel,
+            $boardId,
+            $confirmGuestId
+        );
+        $status = (string)($resolved['status'] ?? '');
+        if (in_array($status, ['confirm_exact', 'confirm_fuzzy', 'ambiguous', 'blocked'], true)) {
+            return $resolved;
+        }
+        $guest = $resolved['guest'] ?? null;
+        if (!is_array($guest) || (int)($guest['id'] ?? 0) <= 0) {
+            throw new RuntimeException('Failed to resolve guest');
+        }
+        $guestId = (int)$guest['id'];
+        $participant = self::setParticipantActive($boardId, $guestId, true);
+        return [
+            'status' => $status,
+            'guest' => Celebr8Model::getGuest($guestId),
+            'created' => !empty($resolved['created']),
+            'participant' => $participant,
+            'participants' => self::listBoardParticipants($boardId),
         ];
     }
 
@@ -634,6 +858,24 @@ final class Tabul8Model
         // Accept contest_id as alias for category_id
         if (!isset($fields['category_id']) && isset($fields['contest_id'])) {
             $fields['category_id'] = (int)$fields['contest_id'];
+        }
+
+        $boardIdForActive = (int)($fields['board_id'] ?? 0);
+        if ($boardIdForActive <= 0 && $id > 0) {
+            $tmpEntry = self::getEntry($id);
+            $boardIdForActive = (int)($tmpEntry['board_id'] ?? 0);
+        }
+        if ($boardIdForActive <= 0 && !empty($fields['category_id'])) {
+            $tmpCat = self::getCategory((int)$fields['category_id']);
+            $boardIdForActive = (int)($tmpCat['board_id'] ?? 0);
+        }
+        if ($boardIdForActive > 0) {
+            if ($guestId && !self::isGuestActiveOnBoard($boardIdForActive, $guestId)) {
+                throw new InvalidArgumentException('Guest is unchecked for this board (excluded from contests)');
+            }
+            if ($ownerGuestId && !self::isGuestActiveOnBoard($boardIdForActive, $ownerGuestId)) {
+                throw new InvalidArgumentException('Owner guest is unchecked for this board (excluded from contests)');
+            }
         }
 
         if ($id > 0) {
@@ -1208,6 +1450,9 @@ final class Tabul8Model
             ? (int)$resolved['identity']['guest_id'] : null;
         if (isset($fields['guest_id']) && $fields['guest_id'] !== null && $fields['guest_id'] !== '') {
             $guestId = (int)$fields['guest_id'];
+        }
+        if ($guestId && !self::isGuestActiveOnBoard((int)$board['id'], $guestId)) {
+            throw new InvalidArgumentException('This guest is unchecked for the board (excluded from voting)');
         }
         // Client may pass a pre-matched identity_id from kiosk greeting (still verify store).
         if (isset($fields['identity_id']) && (int)$fields['identity_id'] > 0) {

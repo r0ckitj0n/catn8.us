@@ -28,6 +28,15 @@ export default defineConfig(({ command }) => ({
         litig8: resolve(__dirname, 'src/entries/litig8.tsx'),
       },
       output: {
+        // Keep already-hashed static names (favicon-*.ico, manifest-*.webmanifest)
+        // so root index.html links stay stable and Vite does not double-hash them.
+        assetFileNames(assetInfo) {
+          const name = assetInfo.names?.[0] || assetInfo.name || 'asset';
+          if (/-[A-Za-z0-9_-]{6,}\.(png|ico|webmanifest|svg|webp|jpg|jpeg)$/i.test(name)) {
+            return `assets/${name}`;
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
         manualChunks(id) {
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
             return 'react-vendor';

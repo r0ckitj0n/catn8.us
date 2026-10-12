@@ -36,7 +36,7 @@
   - `admin_actions_*.php`: Administrative tools for content creation and cleanup.
   - `sheriff_live_bootstrap.php`: Initialization for the Sheriff's voice persona.
 - **`api/auth/`**: **Identity.** `login.php`, `register.php`, `me.php` (session check).
-- **`api/settings/`**: **Configuration.** `ai.php`, `db.php`, `mystery_gcp.php`.
+- **`api/settings/`**: **Configuration.** `ai.php`, `db.php`, `mystery_gcp.php`, `tabul8.php` (OpenAI contestant labels).
 - **`api/bootstrap*.php`**: System initialization (DB, HTTP, Handlers).
 
 #### Shared Infrastructure (`includes/`)

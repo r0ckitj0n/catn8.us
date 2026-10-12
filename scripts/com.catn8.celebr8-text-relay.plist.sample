@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Sample LaunchAgent for Celebr8 iMessage relay.
+  Do NOT install automatically — copy to ~/Library/LaunchAgents/ and load on the Mac
+  that should send from Jon's iMessage (imsg + Messages.app signed in).
+
+  Steps (manual):
+    1) php scripts/celebr8/generate_api_tokens.php --relay-only
+    2) Edit paths below to this machine's checkout
+    3) cp scripts/com.catn8.celebr8-text-relay.plist.sample ~/Library/LaunchAgents/com.catn8.celebr8-text-relay.plist
+    4) launchctl load ~/Library/LaunchAgents/com.catn8.celebr8-text-relay.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.catn8.celebr8-text-relay</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/coden8r/Documents/Websites/catn8.us/scripts/celebr8-text-relay.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/coden8r/Documents/Websites/catn8.us</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CELEBR8_RELAY_BASE_URL</key>
+    <string>https://catn8.us</string>
+    <key>CELEBR8_RELAY_TOKEN_FILE</key>
+    <string>/Users/coden8r/Documents/Websites/catn8.us/.local/state/celebr8/relay-api-token</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/coden8r/Library/Logs/celebr8-text-relay.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/coden8r/Library/Logs/celebr8-text-relay.err.log</string>
+</dict>
+</plist>

@@ -23,7 +23,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 catn8_users_table_ensure();
 
 $requireVerify = catn8_setting_bool('auth.require_email_verification', false);
-$allowPublicSignup = catn8_setting_bool('auth.allow_public_signup', false);
+$allowPublicSignup = catn8_setting_bool('auth.allow_public_signup', true);
 
 if (!$allowPublicSignup) {
     // Public signups create a disabled account until an admin enables it.
@@ -64,7 +64,7 @@ Database::execute(
     [$uid, $tokenHash, $expires]
 );
 
-$origin = (catn8_is_local_request() ? 'http://localhost:8888' : ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? ''));
+$origin = catn8_public_origin();
 $link = rtrim($origin, '/') . '/verify.php?token=' . urlencode($token);
 
 $html = '<p>Your catn8.us account was created.</p>'

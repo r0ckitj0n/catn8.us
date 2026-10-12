@@ -61,6 +61,8 @@ Options -MultiViews -Indexes
   RewriteRule ^tabul8/vote/([^/]+)/?$ /tabul8.php [L,NC,QSA]
   RewriteRule ^medic8/?$ /medic8.php [L,NC,QSA]
   RewriteRule ^medic8/.+$ /medic8.php [L,NC,QSA]
+  RewriteRule ^litig8/?$ /litig8.php [L,NC,QSA]
+  RewriteRule ^litig8/.+$ /litig8.php [L,NC,QSA]
   RewriteRule ^login/?$ /login.php [L,NC,QSA]
   RewriteRule ^sheriff_station/?$ /sheriff_station.php [L,NC,QSA]
   RewriteRule ^settings/?$ /settings.php [L,NC,QSA]

@@ -6,6 +6,9 @@ require_once __DIR__ . '/api/bootstrap.php';
 
 @set_time_limit(0);
 
+$expectedToken = (string)catn8_env('CATN8_ADMIN_TOKEN', '');
+$providedToken = (string)($_GET['admin_token'] ?? $_POST['admin_token'] ?? '');
+
 function bwm_session_admin(): bool
 {
     catn8_session_start();
@@ -16,11 +19,10 @@ function bwm_session_admin(): bool
     return catn8_user_is_admin($uid);
 }
 
-// Check admin session first (browser), then Bearer header, then query string (backward compat)
+$tokenAuthorized = $expectedToken !== '' && $providedToken !== '' && hash_equals($expectedToken, $providedToken);
 $sessionAuthorized = bwm_session_admin();
-$tokenAuthorized = catn8_admin_token_from_request() !== '';
 $authorized = $tokenAuthorized || $sessionAuthorized;
-$effectiveToken = $tokenAuthorized ? catn8_admin_token_from_request() : (string)catn8_env('CATN8_ADMIN_TOKEN', '');
+$effectiveToken = $tokenAuthorized ? $providedToken : $expectedToken;
 
 $status = 'idle';
 $message = '';
@@ -362,8 +364,8 @@ function h(string $v): string
   <?php if (!$authorized): ?>
     <div class="card err">
       <strong>Unauthorized</strong>
-      <p>Either log in as an admin user, or use a valid admin token via Authorization header:</p>
-      <pre>Authorization: Bearer YOUR_ADMIN_TOKEN</pre>
+      <p>Either log in as an admin user, or open this page with a valid admin token:</p>
+      <pre>?admin_token=YOUR_ADMIN_TOKEN</pre>
     </div>
   <?php else: ?>
     <?php if ($status === 'success'): ?>
@@ -386,9 +388,7 @@ function h(string $v): string
     <div class="card">
       <h2>Run Merge Import</h2>
       <form method="post" enctype="multipart/form-data">
-        <?php if ($tokenAuthorized): ?>
-        <input type="hidden" name="admin_token" value="<?= h(catn8_admin_token_from_request()) ?>">
-        <?php endif; ?>
+        <input type="hidden" name="admin_token" value="<?= h($providedToken) ?>">
 
         <label for="existing_file">Existing merge file on server (optional if uploading)</label>
         <select id="existing_file" name="existing_file">

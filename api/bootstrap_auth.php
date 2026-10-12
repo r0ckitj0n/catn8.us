@@ -14,8 +14,27 @@ function catn8_csrf_token(): string
     return $t;
 }
 
+/**
+ * True when the request presents a valid CATN8_ADMIN_TOKEN via X-Api-Key / Bearer.
+ * Token-authenticated agents are not cookie-session CSRF-vulnerable.
+ */
+function catn8_request_has_valid_admin_api_token(): bool
+{
+    $expected = trim((string)catn8_env('CATN8_ADMIN_TOKEN', ''));
+    if ($expected === '') {
+        return false;
+    }
+    $got = catn8_presented_admin_api_token();
+    return $got !== '' && hash_equals($expected, $got);
+}
+
 function catn8_require_csrf(): void
 {
+    // API-key / Bearer token callers (Accumul8r, Medic8r, etc.) skip CSRF.
+    // Browser session/cookie mutations still require X-CATN8-CSRF.
+    if (function_exists('catn8_presented_admin_api_token') && catn8_request_has_valid_admin_api_token()) {
+        return;
+    }
     catn8_session_start();
     $expected = catn8_csrf_token();
     $got = (string)($_SERVER['HTTP_X_CATN8_CSRF'] ?? '');

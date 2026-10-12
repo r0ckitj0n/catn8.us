@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
+require_once __DIR__ . '/../includes/build_wizard_cabin_relink.php';
 
 function catn8_build_wizard_tables_ensure(): void
 {
@@ -1689,6 +1690,15 @@ function catn8_build_wizard_get_or_create_project(int $uid, ?int $requestedProje
         }
     }
 
+    $preferredCabin = catn8_build_wizard_choose_cabin_project($uid, null);
+    $preferredId = (int)($preferredCabin['id'] ?? 0);
+    if ($preferredId > 0 && catn8_build_wizard_project_is_cabin_like($preferredCabin)) {
+        $preferred = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ? AND owner_user_id = ? LIMIT 1', [$preferredId, $uid]);
+        if ($preferred) {
+            return $preferred;
+        }
+    }
+
     $firstId = (int)($list[0]['id'] ?? 0);
     if ($firstId <= 0) {
         throw new RuntimeException('No build projects available');
@@ -2240,7 +2250,7 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
                 d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at,
                 CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
          FROM build_wizard_documents d
-         LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+         LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
          LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
          WHERE d.project_id = ?
          ORDER BY d.uploaded_at DESC, d.id DESC',
@@ -3382,7 +3392,7 @@ function catn8_build_wizard_search_documents(int $projectId, string $query, int 
                 si.extracted_text
          FROM build_wizard_documents d
          INNER JOIN build_wizard_projects p ON p.id = d.project_id
-         LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+         LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
          LEFT JOIN build_wizard_document_search_index si ON si.document_id = d.id
          WHERE d.project_id = ?
            AND p.owner_user_id IS NOT NULL
@@ -5422,6 +5432,11 @@ try {
             throw new RuntimeException('Build wizard project missing id');
         }
 
+        $cabinRepair = null;
+        if (catn8_build_wizard_project_is_cabin_like($project)) {
+            $cabinRepair = catn8_build_wizard_repair_cabin_references($viewerId, $projectId);
+        }
+
         $project = Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]) ?: $project;
 
         catn8_json_response([
@@ -5435,6 +5450,7 @@ try {
             'contact_assignments' => catn8_build_wizard_contact_assignments_for_project($projectId, $viewerId),
             'phase_date_ranges' => catn8_build_wizard_phase_date_ranges_for_project($projectId),
             'leading_questions' => catn8_build_wizard_default_questions(),
+            'cabin_repair' => $cabinRepair,
         ]);
     }
 
@@ -5458,6 +5474,26 @@ try {
             'success' => true,
             'project_id' => $projectId,
             'project' => $project,
+        ]);
+    }
+
+    if ($action === 'repair_cabin_references') {
+        catn8_require_method('POST');
+        $body = catn8_read_json_body();
+        $requestedProjectId = isset($body['project_id']) ? (int)$body['project_id'] : 0;
+        $project = catn8_build_wizard_get_or_create_project($viewerId, $requestedProjectId > 0 ? $requestedProjectId : null);
+        $projectId = (int)($project['id'] ?? 0);
+        if ($projectId <= 0) {
+            throw new RuntimeException('Build wizard project missing id');
+        }
+        $repair = catn8_build_wizard_repair_cabin_references($viewerId, $projectId);
+        catn8_json_response([
+            'success' => true,
+            'project_id' => $projectId,
+            'repair' => $repair,
+            'project' => Database::queryOne('SELECT * FROM build_wizard_projects WHERE id = ?', [$projectId]) ?: $project,
+            'documents' => catn8_build_wizard_documents_for_project($projectId),
+            'steps' => catn8_build_wizard_steps_for_project($projectId),
         ]);
     }
 
@@ -6603,7 +6639,7 @@ try {
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
-             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
              WHERE d.id = ?
              LIMIT 1',
             [$docId]
@@ -6999,7 +7035,7 @@ try {
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
-             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
              WHERE d.id = ?',
             [$docId]
         );
@@ -7148,7 +7184,7 @@ try {
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
-             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
              WHERE d.id = ? LIMIT 1',
             [$documentId]
         );
@@ -7335,7 +7371,7 @@ try {
             'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
                     d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at
              FROM build_wizard_documents d
-             LEFT JOIN build_wizard_steps s ON s.id = d.step_id
+             LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
              WHERE d.id = ? LIMIT 1',
             [$documentId]
         );

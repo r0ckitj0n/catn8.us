@@ -5907,6 +5907,44 @@ function accumul8_bank_connection_secret_key_for_row(array $row): string
     return 'accumul8.teller.access_token.' . $viewerId . '.' . preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $enrollmentId);
 }
 
+function accumul8_teller_access_token_for_connection(array $connection, int $viewerId): array
+{
+    $row = $connection;
+    if ((int)($row['owner_user_id'] ?? 0) <= 0) {
+        $row['owner_user_id'] = $viewerId;
+    }
+
+    $candidates = [];
+    $primary = accumul8_bank_connection_secret_key_for_row($row);
+    if ($primary !== '') {
+        $candidates[] = $primary;
+    }
+
+    $columnKey = accumul8_normalize_text((string)($row['teller_access_token_secret_key'] ?? ''), 191);
+    if ($columnKey !== '' && !in_array($columnKey, $candidates, true)) {
+        $candidates[] = $columnKey;
+    }
+
+    $enrollmentId = accumul8_normalize_text((string)($row['teller_enrollment_id'] ?? ''), 191);
+    if ($viewerId > 0 && $enrollmentId !== '') {
+        $derived = 'accumul8.teller.access_token.' . $viewerId . '.' . preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $enrollmentId);
+        if ($derived !== '' && !in_array($derived, $candidates, true)) {
+            $candidates[] = $derived;
+        }
+    }
+
+    foreach ($candidates as $secretKey) {
+        $accessToken = trim((string)(secret_get($secretKey) ?? ''));
+        if ($accessToken !== '') {
+            return [$secretKey, $accessToken];
+        }
+    }
+
+    return ['', ''];
+}
+
+
+
 function accumul8_account_has_associations(int $viewerId, int $accountId): bool
 {
     $transactionCount = accumul8_count_rows(
@@ -6482,7 +6520,7 @@ function accumul8_learn_entity_alias_from_description(int $viewerId, ?int $entit
 function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $actorUserId, int $connectionId): array
 {
     $connection = Database::queryOne(
-        'SELECT id, institution_id, institution_name, teller_enrollment_id, teller_access_token_secret_key
+        'SELECT id, owner_user_id, institution_id, institution_name, teller_enrollment_id, teller_access_token_secret_key
          FROM accumul8_bank_connections
          WHERE id = ? AND owner_user_id = ?
          LIMIT 1',
@@ -6510,8 +6548,7 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
         ]
     );
 
-    $secretKey = (string)($connection['teller_access_token_secret_key'] ?? '');
-    $accessToken = (string)(secret_get($secretKey) ?? '');
+    [$secretKey, $accessToken] = accumul8_teller_access_token_for_connection($connection, $viewerId);
     if ($secretKey === '' || $accessToken === '') {
         throw new RuntimeException('Stored Teller access token was not found');
     }
@@ -15155,11 +15192,14 @@ function accumul8_cash_display_balance(array $account): float
 {
     $available = (float)($account['available_balance'] ?? 0);
     $current = (float)($account['current_balance'] ?? 0);
-    // Prefer provider available balance; otherwise current/memo ledger balance.
-    if (is_finite($available) && abs($available) > 0.00001) {
-        return accumul8_money_round($available);
+    // Available-or-memo: use the greater of provider available and ledger/memo current.
+    if (!is_finite($available)) {
+        $available = 0.0;
     }
-    return accumul8_money_round($current);
+    if (!is_finite($current)) {
+        $current = 0.0;
+    }
+    return accumul8_money_round(max($available, $current));
 }
 
 function accumul8_header_accounts(int $viewerId): array
@@ -15205,15 +15245,16 @@ function accumul8_header_tile_totals(int $viewerId): array
     $leftoverCredit = 0.0;
     $cards = [];
     foreach ($accounts as $account) {
-        $balance = accumul8_cash_display_balance($account);
+        $cashBalance = accumul8_cash_display_balance($account);
         if (accumul8_is_cash_bank_account($account) && !accumul8_is_excluded_from_bank_balance($account)) {
-            $bankBalance += $balance;
+            $bankBalance += $cashBalance;
         }
         if (accumul8_is_household_bank_account($account)) {
-            $householdCash += $balance;
+            $householdCash += $cashBalance;
         }
         if (accumul8_is_credit_card_account($account)) {
-            $cardBalance = accumul8_money_round(-abs($balance));
+            // Credit cards: always use CURRENT balance owed, never available credit.
+            $cardBalance = accumul8_money_round(-abs((float)($account['current_balance'] ?? 0)));
             $cards[] = [
                 'name' => accumul8_header_card_name($account),
                 'last4' => accumul8_account_last4($account),
@@ -19495,13 +19536,22 @@ if ($action === 'delete_transaction') {
         catn8_json_response(['success' => false, 'error' => 'Transaction not found'], 404);
     }
     $editPolicy = accumul8_transaction_edit_policy($existingTx);
-    if (!$editPolicy['can_delete']) {
+    $forceDuplicateDelete = !empty($body['force']) || !empty($body['force_delete']) || !empty($body['duplicate']);
+    $adminApiToken = function_exists('catn8_request_has_valid_admin_api_token') && catn8_request_has_valid_admin_api_token();
+    $allowForcedBankSyncDelete = (
+        $forceDuplicateDelete
+        && $adminApiToken
+        && in_array((string)($editPolicy['source_kind'] ?? ''), ['teller', 'plaid'], true)
+    );
+    if (!$editPolicy['can_delete'] && !$allowForcedBankSyncDelete) {
         catn8_json_response(['success' => false, 'error' => ucfirst($editPolicy['source_label']) . ' transactions cannot be deleted here'], 403);
     }
-
     Database::execute('DELETE FROM accumul8_transactions WHERE id = ? AND owner_user_id = ?', [$id, $viewerId]);
     accumul8_recompute_running_balance($viewerId);
-    catn8_json_response(['success' => true]);
+    catn8_json_response([
+        'success' => true,
+        'forced_bank_sync_delete' => $allowForcedBankSyncDelete && !$editPolicy['can_delete'],
+    ]);
 }
 
 if ($action === 'move_transactions_to_account') {

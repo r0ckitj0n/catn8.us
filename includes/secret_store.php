@@ -39,9 +39,38 @@ function secret_load_key()
     return file_get_contents($path);
 }
 
+function secret_previous_key_path()
+{
+    return __DIR__ . '/../config/secret.key.previous';
+}
+
+/**
+ * Primary key first, then optional previous key for secrets encrypted before a key rotation.
+ * Never logs key material.
+ */
+function secret_load_key_candidates(): array
+{
+    $keys = [];
+    $primary = secret_load_key();
+    if (is_string($primary) && strlen($primary) === 32) {
+        $keys[] = $primary;
+    }
+    $prevPath = secret_previous_key_path();
+    if (is_file($prevPath)) {
+        $previous = file_get_contents($prevPath);
+        if (is_string($previous) && strlen($previous) === 32 && !in_array($previous, $keys, true)) {
+            $keys[] = $previous;
+        }
+    }
+    return $keys;
+}
+
 function secret_encrypt($plaintext)
 {
     $key = secret_load_key();
+    if (!is_string($key) || strlen($key) !== 32) {
+        throw new RuntimeException('secret key unavailable');
+    }
     if (function_exists('sodium_crypto_secretbox')) {
         $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $cipher = sodium_crypto_secretbox($plaintext, $nonce, $key);
@@ -53,11 +82,9 @@ function secret_encrypt($plaintext)
     return base64_encode($iv . $tag . $cipher);
 }
 
-function secret_decrypt($encoded)
+function secret_decrypt_with_key($raw, string $key)
 {
-    $key = secret_load_key();
-    $raw = base64_decode($encoded, true);
-    if ($raw === false) {
+    if (strlen($key) !== 32) {
         return null;
     }
     if (function_exists('sodium_crypto_secretbox_open')) {
@@ -78,6 +105,21 @@ function secret_decrypt($encoded)
     $cipher = substr($raw, 28);
     $plain = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
     return $plain === false ? null : $plain;
+}
+
+function secret_decrypt($encoded)
+{
+    $raw = base64_decode($encoded, true);
+    if ($raw === false) {
+        return null;
+    }
+    foreach (secret_load_key_candidates() as $key) {
+        $plain = secret_decrypt_with_key($raw, $key);
+        if ($plain !== null) {
+            return $plain;
+        }
+    }
+    return null;
 }
 
 function secret_get($key)

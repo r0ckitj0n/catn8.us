@@ -65,3 +65,4 @@ private/medic8/**
 !private/medic8/.htaccess
 scripts/tabul8/__pycache__/
 *.pyc
+config/secret.key.previous

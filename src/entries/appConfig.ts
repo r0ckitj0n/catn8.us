@@ -84,15 +84,25 @@ export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType
   tetris: TetrisPage,
 };
 
+/** Same-origin path-only redirect target from ?redirect= (blocks open redirects). */
 export function getLoginRedirectTarget(): string | null {
   if (typeof window === 'undefined') {
     return null;
   }
 
   const raw = new URLSearchParams(window.location.search).get('redirect') || '';
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\') || raw.includes(':')) {
     return null;
   }
 
-  return raw;
+  try {
+    const resolved = new URL(raw, window.location.origin);
+    if (resolved.origin !== window.location.origin) {
+      return null;
+    }
+    // Path + query + hash only; never return a full absolute URL to assign/replace.
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return null;
+  }
 }

@@ -43,6 +43,9 @@ if (!Celebr8Model::verifyApiToken($token, Celebr8Model::AGENT_TOKEN_SECRET_KEY))
 }
 
 $action = trim((string)($_GET['action'] ?? ''));
+if ($action === 'remove_guest_from_party') {
+    $action = 'delete_guest';
+}
 $readActions = [
     'list_events', 'get_event', 'list_guests',
     'list_templates', 'get_template', 'list_activities', 'get_activity', 'list_event_activities',
@@ -56,7 +59,7 @@ $readActions = [
 ];
 $writeActions = [
     'update_event', 'create_event', 'delete_event', 'duplicate_event',
-    'upsert_guest', 'set_rsvp', 'set_rsvp_note', 'record_historical_invite',
+    'upsert_guest', 'delete_guest', 'set_rsvp', 'set_rsvp_note', 'record_historical_invite',
     'upsert_template', 'delete_template', 'create_event_from_template', 'link_event_template',
     'upsert_activity', 'delete_activity', 'copy_activity', 'copy_event_activity',
     'attach_event_activity', 'update_event_activity', 'detach_event_activity',
@@ -406,7 +409,7 @@ try {
     }
 
     if ($action === 'upsert_guest') {
-        $eventId = (int)($body['event_id'] ?? 0);
+        $eventId = (int)($body['event_id'] ?? $body['party_id'] ?? 0);
         if ($eventId <= 0 && !empty($body['slug'])) {
             $found = Celebr8Model::getEventBySlug((string)$body['slug']);
             $eventId = $found ? (int)$found['id'] : 0;
@@ -415,10 +418,40 @@ try {
             catn8_json_response(['success' => false, 'error' => 'event_id or slug required'], 400);
         }
         $guest = Celebr8Model::upsertGuest($eventId, $body, $actorLabel, isset($body['rsvp_status']));
+        $warnings = Celebr8Model::guestPartySizeWarnings($guest);
         catn8_json_response([
             'success' => true,
             'guest' => $guest,
             'totals' => Celebr8Model::guestTotals($eventId),
+            'warnings' => $warnings,
+        ]);
+    }
+
+    if ($action === 'delete_guest') {
+        $guestId = (int)($body['guest_id'] ?? $body['id'] ?? 0);
+        $partyId = (int)($body['party_id'] ?? $body['event_id'] ?? 0);
+        $dryRun = !empty($body['dry_run']) && (
+            $body['dry_run'] === true
+            || $body['dry_run'] === 1
+            || $body['dry_run'] === '1'
+            || $body['dry_run'] === 'true'
+        );
+        if ($guestId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'guest_id required'], 400);
+        }
+        $result = Celebr8Model::deleteGuestDetailed($partyId, $guestId, $actorLabel, $dryRun);
+        $totalsEventId = $partyId > 0
+            ? $partyId
+            : (int)($result['guest']['event_id'] ?? 0);
+        catn8_json_response([
+            'success' => true,
+            'deleted' => (bool)$result['deleted'],
+            'dry_run' => (bool)$result['dry_run'],
+            'guest' => $result['guest'],
+            'dependents' => $result['dependents'],
+            'backup_path' => $result['backup_path'],
+            'warnings' => $result['warnings'],
+            'totals' => $totalsEventId > 0 ? Celebr8Model::guestTotals($totalsEventId) : null,
         ]);
     }
 

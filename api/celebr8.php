@@ -419,16 +419,29 @@ try {
     }
 
     if ($action === 'delete_guest') {
-        $eventId = (int)($body['event_id'] ?? 0);
+        $eventId = (int)($body['event_id'] ?? $body['party_id'] ?? 0);
         $guestId = (int)($body['guest_id'] ?? $body['id'] ?? 0);
+        $dryRun = !empty($body['dry_run']) && (
+            $body['dry_run'] === true
+            || $body['dry_run'] === 1
+            || $body['dry_run'] === '1'
+            || $body['dry_run'] === 'true'
+        );
         if ($eventId <= 0 || $guestId <= 0) {
             catn8_json_response(['success' => false, 'error' => 'event_id and guest_id required'], 400);
         }
-        if (!Celebr8Model::deleteGuest($eventId, $guestId)) {
-            catn8_json_response(['success' => false, 'error' => 'Guest not found'], 404);
+        try {
+            $result = Celebr8Model::deleteGuestDetailed($eventId, $guestId, $actorLabel, $dryRun);
+        } catch (InvalidArgumentException $e) {
+            catn8_json_response(['success' => false, 'error' => $e->getMessage()], 404);
         }
         catn8_json_response([
             'success' => true,
+            'deleted' => (bool)$result['deleted'],
+            'dry_run' => (bool)$result['dry_run'],
+            'guest' => $result['guest'],
+            'dependents' => $result['dependents'],
+            'backup_path' => $result['backup_path'],
             'totals' => Celebr8Model::guestTotals($eventId),
         ]);
     }

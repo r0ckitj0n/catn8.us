@@ -59,8 +59,18 @@ Idempotent backfill (empty fields only): `php scripts/celebr8/backfill_activity_
 
 Senior seated games seed (new activities + fill empty `senior_role` / set senior flags when currently off): `php scripts/celebr8/seed_senior_activities.php --via-agent --apply`
 - `POST update_event` / `create_event` / `delete_event` / `duplicate_event`
-- `POST upsert_guest` / `set_rsvp` / `set_rsvp_note` / `record_historical_invite`
+- `POST upsert_guest` / `delete_guest` (alias `remove_guest_from_party`) / `set_rsvp` / `set_rsvp_note` / `record_historical_invite`
 - Catalog write actions for templates and activities
+
+Guest writes:
+
+- `POST upsert_guest` — create/update by `id` / phone / name within a party (`event_id` or `party_id`, or `slug`).
+  - `party_size` may be **0** (invited but not coming / placeholder). Omitting `party_size` on create still defaults to **1**. Nothing in headcount math requires `>= 1`; `guestTotals` sums stored values, so 0 contributes 0. Response may include `warnings[]` when `party_size` is 0 or when `kids_count` exceeds `party_size` (values are still saved).
+- `POST delete_guest` (alias `remove_guest_from_party`) — soft/cascade-safe remove.
+  - Fields: `guest_id` (required), optional `party_id` / `event_id` (must match when provided), optional `dry_run` (`true`/`1` preview only).
+  - Writes a JSON backup under `~/.local/state/catn8/celebr8/guest-delete-backups/` (guest row + dependents) and logs the action before delete.
+  - Dependents: `celebr8_rsvp_notes`, `celebr8_guest_group_members`, and `tabul8_board_participants` cascade-delete; `celebr8_text_messages` / `tabul8_identities.guest_id` SET NULL; photo tags and `pending_guest_id` cleared explicitly.
+  - Response: `deleted`, `dry_run`, `guest`, `dependents` (counts), `backup_path`, `totals`.
 
 Guest RSVP history:
 

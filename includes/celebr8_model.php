@@ -1156,7 +1156,8 @@ final class Celebr8Model
         $phone = array_key_exists('phone', $fields) ? self::normalizePhone((string)$fields['phone']) : null;
         $email = array_key_exists('email', $fields) ? trim((string)$fields['email']) : null;
         $notes = array_key_exists('notes', $fields) ? (string)$fields['notes'] : null;
-        $partySize = array_key_exists('party_size', $fields) ? max(1, (int)$fields['party_size']) : null;
+        // party_size 0 = invited but not coming / placeholder headcount (allowed).
+        $partySize = array_key_exists('party_size', $fields) ? max(0, (int)$fields['party_size']) : null;
         $kidsCount = array_key_exists('kids_count', $fields) ? max(0, (int)$fields['kids_count']) : null;
         $invitedVia = array_key_exists('invited_via', $fields) ? trim((string)$fields['invited_via']) : null;
         $relation = array_key_exists('relation_label', $fields) ? trim((string)$fields['relation_label']) : null;
@@ -1308,12 +1309,223 @@ final class Celebr8Model
 
     public static function deleteGuest(int $eventId, int $guestId): bool
     {
+        $result = self::deleteGuestDetailed($eventId, $guestId, 'session', false);
+        return !empty($result['deleted']);
+    }
+
+    /**
+     * Cascade-safe guest delete with JSON backup + optional dry_run.
+     *
+     * FK behavior: rsvp_notes / guest_group_members / tabul8_board_participants CASCADE;
+     * text_messages + tabul8_identities.guest_id SET NULL; photos.tagged_guest_id and
+     * identities.pending_guest_id cleared explicitly (no FK).
+     *
+     * @return array{
+     *   deleted:bool,
+     *   dry_run:bool,
+     *   guest:?array,
+     *   dependents:array,
+     *   backup_path:?string,
+     *   warnings:list<string>
+     * }
+     */
+    public static function deleteGuestDetailed(
+        int $eventId,
+        int $guestId,
+        string $actorLabel,
+        bool $dryRun = false
+    ): array {
         self::ensureSchema();
+        if ($guestId <= 0) {
+            throw new InvalidArgumentException('guest_id required');
+        }
+        $guest = self::getGuest($guestId);
+        if (!$guest) {
+            throw new InvalidArgumentException('Guest not found');
+        }
+        if ($eventId > 0 && (int)$guest['event_id'] !== $eventId) {
+            throw new InvalidArgumentException('Guest not found for party');
+        }
+        $resolvedEventId = (int)$guest['event_id'];
+
+        $rsvpNotes = Database::queryAll(
+            'SELECT * FROM celebr8_rsvp_notes WHERE guest_id = ? ORDER BY id ASC',
+            [$guestId]
+        );
+        $groupMembers = Database::queryAll(
+            'SELECT * FROM celebr8_guest_group_members WHERE guest_id = ? ORDER BY group_id ASC',
+            [$guestId]
+        );
+        $textMessages = Database::queryAll(
+            'SELECT * FROM celebr8_text_messages WHERE guest_id = ? ORDER BY id ASC',
+            [$guestId]
+        );
+        $participants = [];
+        try {
+            $participants = Database::queryAll(
+                'SELECT * FROM tabul8_board_participants WHERE guest_id = ? ORDER BY id ASC',
+                [$guestId]
+            );
+        } catch (Throwable $e) {
+            // Table may not exist on older DBs.
+        }
+        $identities = [];
+        try {
+            $identities = Database::queryAll(
+                'SELECT * FROM tabul8_identities WHERE guest_id = ? OR pending_guest_id = ? ORDER BY id ASC',
+                [$guestId, $guestId]
+            );
+        } catch (Throwable $e) {
+            // optional
+        }
+        $photos = [];
+        try {
+            $photos = Database::queryAll(
+                'SELECT id, album_id, tagged_guest_id, caption FROM celebr8_photos WHERE tagged_guest_id = ? ORDER BY id ASC',
+                [$guestId]
+            );
+        } catch (Throwable $e) {
+            // optional
+        }
+
+        $dependents = [
+            'rsvp_notes' => $rsvpNotes,
+            'guest_group_members' => $groupMembers,
+            'text_messages' => $textMessages,
+            'tabul8_board_participants' => $participants,
+            'tabul8_identities' => $identities,
+            'celebr8_photos' => $photos,
+        ];
+        $backupPayload = [
+            'deleted_at' => date('c'),
+            'actor' => $actorLabel,
+            'dry_run' => $dryRun,
+            'party_id' => $resolvedEventId,
+            'guest' => $guest,
+            'dependents' => $dependents,
+        ];
+
+        $backupPath = self::writeGuestDeleteBackup($guestId, $backupPayload);
+        catn8_log_error('celebr8 guest delete' . ($dryRun ? ' dry_run' : ''), [
+            'guest_id' => $guestId,
+            'party_id' => $resolvedEventId,
+            'name' => (string)($guest['name'] ?? ''),
+            'actor' => $actorLabel,
+            'backup_path' => $backupPath,
+            'dependent_counts' => [
+                'rsvp_notes' => count($rsvpNotes),
+                'guest_group_members' => count($groupMembers),
+                'text_messages' => count($textMessages),
+                'tabul8_board_participants' => count($participants),
+                'tabul8_identities' => count($identities),
+                'celebr8_photos' => count($photos),
+            ],
+        ]);
+
+        if ($dryRun) {
+            return [
+                'deleted' => false,
+                'dry_run' => true,
+                'guest' => $guest,
+                'dependents' => [
+                    'rsvp_notes' => count($rsvpNotes),
+                    'guest_group_members' => count($groupMembers),
+                    'text_messages' => count($textMessages),
+                    'tabul8_board_participants' => count($participants),
+                    'tabul8_identities' => count($identities),
+                    'celebr8_photos' => count($photos),
+                ],
+                'backup_path' => $backupPath,
+                'warnings' => [],
+            ];
+        }
+
+        // Clear non-FK photo tags before delete.
+        if ($photos !== []) {
+            Database::execute(
+                'UPDATE celebr8_photos SET tagged_guest_id = NULL WHERE tagged_guest_id = ?',
+                [$guestId]
+            );
+        }
+        // Clear pending_guest_id (no FK).
+        try {
+            Database::execute(
+                'UPDATE tabul8_identities SET pending_guest_id = NULL WHERE pending_guest_id = ?',
+                [$guestId]
+            );
+        } catch (Throwable $e) {
+            // optional
+        }
+
         $affected = Database::execute(
             'DELETE FROM celebr8_guests WHERE id = ? AND event_id = ?',
-            [$guestId, $eventId]
+            [$guestId, $resolvedEventId]
         );
-        return $affected > 0;
+        if ($affected <= 0) {
+            throw new RuntimeException('Guest delete failed');
+        }
+
+        return [
+            'deleted' => true,
+            'dry_run' => false,
+            'guest' => $guest,
+            'dependents' => [
+                'rsvp_notes' => count($rsvpNotes),
+                'guest_group_members' => count($groupMembers),
+                'text_messages' => count($textMessages),
+                'tabul8_board_participants' => count($participants),
+                'tabul8_identities' => count($identities),
+                'celebr8_photos' => count($photos),
+            ],
+            'backup_path' => $backupPath,
+            'warnings' => [],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private static function writeGuestDeleteBackup(int $guestId, array $payload): ?string
+    {
+        $home = getenv('HOME') ?: (string)(isset($_SERVER['HOME']) ? $_SERVER['HOME'] : '');
+        $candidates = array_values(array_filter([
+            $home !== '' ? $home . '/.local/state/catn8/celebr8/guest-delete-backups' : null,
+            __DIR__ . '/../.local/state/catn8/celebr8/guest-delete-backups',
+        ]));
+        foreach ($candidates as $dir) {
+            if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+                continue;
+            }
+            $path = $dir . '/guest_' . $guestId . '_' . date('Ymd-His') . '.json';
+            $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($json === false) {
+                continue;
+            }
+            if (@file_put_contents($path, $json . "\n") !== false) {
+                @chmod($path, 0600);
+                return $path;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Warnings for party_size / kids_count combinations after upsert.
+     *
+     * @return list<string>
+     */
+    public static function guestPartySizeWarnings(array $guest): array
+    {
+        $warnings = [];
+        $partySize = (int)($guest['party_size'] ?? 0);
+        $kids = (int)($guest['kids_count'] ?? 0);
+        if ($partySize === 0) {
+            $warnings[] = 'party_size is 0 (invited but not coming / placeholder); guest stays listed and contributes 0 to headcount.';
+        }
+        if ($kids > $partySize) {
+            $warnings[] = 'kids_count exceeds party_size; headcount totals still use the stored values as-is.';
+        }
+        return $warnings;
     }
 
     public static function setRsvp(int $eventId, array $lookup, string $status, string $actorLabel, ?int $partySize = null, ?int $kidsCount = null): array

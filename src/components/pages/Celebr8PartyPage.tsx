@@ -45,7 +45,7 @@ function guestToDraft(guest: Celebr8Guest): Celebr8GuestDraft {
     phone: guest.phone,
     email: guest.email,
     rsvp_status: (guest.rsvp_status as Celebr8RsvpStatus) || 'no_reply',
-    party_size: guest.party_size || 1,
+    party_size: guest.party_size ?? 1,
     kids_count: guest.kids_count || 0,
     invited_via: guest.invited_via || '',
     relation_label: guest.relation_label || '',

@@ -63,6 +63,8 @@ export interface IBuildWizardDocument {
   id: number;
   project_id: number;
   step_id: number | null;
+  photo_section_id?: number | null;
+  photo_section_title?: string | null;
   receipt_parent_document_id: number | null;
   step_phase_key: string | null;
   step_title: string | null;
@@ -72,6 +74,9 @@ export interface IBuildWizardDocument {
   storage_path: string;
   file_size_bytes: number;
   caption: string | null;
+  content_hash?: string | null;
+  meta?: Record<string, unknown> | null;
+  meta_json?: string | null;
   receipt_amount: number | null;
   receipt_title: string | null;
   receipt_vendor: string | null;
@@ -81,6 +86,18 @@ export interface IBuildWizardDocument {
   public_url: string;
   thumbnail_url: string;
   is_image: number;
+}
+
+export interface IBuildWizardPhotoSection {
+  id: number;
+  project_id: number;
+  title: string;
+  slug: string;
+  sort_order: number;
+  notes: string | null;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IBuildWizardProject {

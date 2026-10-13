@@ -3,6 +3,22 @@ import { ApiClient } from '../../../core/ApiClient';
 import { getLoginRedirectTarget } from '../../../entries/appConfig';
 import { IToast } from '../../../types/common';
 
+function readLoginFields(form: HTMLFormElement | null, fallbackUser: string, fallbackPass: string): {
+  username: string;
+  password: string;
+} {
+  if (!form) {
+    return { username: fallbackUser, password: fallbackPass };
+  }
+  const fd = new FormData(form);
+  const username = String(fd.get('username') ?? fallbackUser).trim();
+  // Prefer the live DOM value so password-manager autofill (which often skips onChange) is honored.
+  const passwordInput = form.elements.namedItem('password');
+  const domPassword = passwordInput instanceof HTMLInputElement ? passwordInput.value : '';
+  const password = (domPassword || String(fd.get('password') ?? fallbackPass) || fallbackPass);
+  return { username, password };
+}
+
 export function useLogin(
   onClose: () => void,
   onLoggedIn: () => Promise<any>,
@@ -26,7 +42,14 @@ export function useLogin(
     setError('');
     setMessage('');
     try {
-      await ApiClient.post('/api/auth/login.php', { username: loginUsername, password: loginPassword });
+      const form = e.currentTarget instanceof HTMLFormElement ? e.currentTarget : null;
+      const { username, password } = readLoginFields(form, loginUsername, loginPassword);
+      if (username !== loginUsername) setLoginUsername(username);
+      if (password !== loginPassword) setLoginPassword(password);
+      if (!username || !password) {
+        throw new Error('Username and password are required');
+      }
+      await ApiClient.post('/api/auth/login.php', { username, password });
 
       let u = null;
       if (typeof onLoggedIn === 'function') {

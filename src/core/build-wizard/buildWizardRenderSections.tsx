@@ -120,6 +120,24 @@ export function BuildWizardProjectPhotosSection({
   updateProject,
   uploadDocument,
 }: BuildWizardProjectPhotosSectionProps) {
+  const sectioned = React.useMemo(() => {
+    const bySection = new Map<string, { title: string; items: IBuildWizardDocument[] }>();
+    const unsectioned: IBuildWizardDocument[] = [];
+    for (const doc of projectDocuments) {
+      const sectionId = Number(doc.photo_section_id || 0);
+      if (sectionId > 0) {
+        const key = String(sectionId);
+        const title = (doc.photo_section_title || 'Photo section').trim() || 'Photo section';
+        const bucket = bySection.get(key) || { title, items: [] };
+        bucket.items.push(doc);
+        bySection.set(key, bucket);
+      } else {
+        unsectioned.push(doc);
+      }
+    }
+    return { bySection: Array.from(bySection.values()), unsectioned };
+  }, [projectDocuments]);
+
   return (
     <>
       <div className="build-wizard-section-divider" />
@@ -161,7 +179,20 @@ export function BuildWizardProjectPhotosSection({
           </select>
         </label>
       </div>
-      {renderDocumentGallery(projectDocuments, 'No project media yet.')}
+      {sectioned.bySection.map((section) => (
+        <div key={section.title} className="build-wizard-photo-section" style={{ marginTop: '1.25rem' }}>
+          <h4>{section.title}</h4>
+          {renderDocumentGallery(section.items, 'No photos in this section yet.')}
+        </div>
+      ))}
+      {sectioned.bySection.length > 0 ? (
+        <>
+          <h4 style={{ marginTop: '1.25rem' }}>Other project media</h4>
+          {renderDocumentGallery(sectioned.unsectioned, 'No other project media yet.')}
+        </>
+      ) : (
+        renderDocumentGallery(projectDocuments, 'No project media yet.')
+      )}
     </>
   );
 }

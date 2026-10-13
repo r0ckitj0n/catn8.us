@@ -6,6 +6,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 require_once __DIR__ . '/../includes/build_wizard_cabin_relink.php';
+require_once __DIR__ . '/../includes/build_wizard_photo_sections.php';
 
 function catn8_build_wizard_tables_ensure(): void
 {
@@ -495,6 +496,8 @@ function catn8_build_wizard_tables_ensure(): void
 
     // Normalize legacy "receipt" step types into "purchase" now that receipts live inside steps.
     Database::execute("UPDATE build_wizard_steps SET step_type = 'purchase' WHERE step_type = 'receipt'");
+
+    catn8_build_wizard_photo_sections_ensure();
 }
 
 function catn8_build_wizard_step_type(string $value): string
@@ -658,6 +661,7 @@ function catn8_build_wizard_upload_roots(): array
     return [
         $projectRoot . '/images/build-wizard',
         $projectRoot . '/uploads/build-wizard',
+        $projectRoot . '/private/build-wizard',
     ];
 }
 
@@ -2246,11 +2250,14 @@ function catn8_build_wizard_sync_step_actual_cost_from_receipts(int $stepId, ?fl
 function catn8_build_wizard_documents_for_project(int $projectId): array
 {
     $rows = Database::queryAll(
-        'SELECT d.id, d.project_id, d.step_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
-                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at,
+        'SELECT d.id, d.project_id, d.step_id, d.photo_section_id, d.receipt_parent_document_id, s.phase_key AS step_phase_key, s.title AS step_title,
+                ps.title AS photo_section_title,
+                d.kind, d.original_name, d.mime_type, d.storage_path, d.file_size_bytes, d.caption, d.content_hash, d.meta_json,
+                d.receipt_amount, d.receipt_title, d.receipt_vendor, d.receipt_date, d.receipt_notes, d.uploaded_at,
                 CASE WHEN bi.document_id IS NULL THEN 0 ELSE 1 END AS has_image_blob
          FROM build_wizard_documents d
          LEFT JOIN build_wizard_steps s ON s.id = d.step_id AND s.project_id = d.project_id
+         LEFT JOIN build_wizard_photo_sections ps ON ps.id = d.photo_section_id
          LEFT JOIN build_wizard_document_images bi ON bi.document_id = d.id
          WHERE d.project_id = ?
          ORDER BY d.uploaded_at DESC, d.id DESC',
@@ -2261,7 +2268,7 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
     foreach ($rows as $r) {
         $docId = (int)($r['id'] ?? 0);
         $mimeType = (string)($r['mime_type'] ?? '');
-        $docs[] = [
+        $docs[] = array_merge([
             'id' => $docId,
             'project_id' => (int)($r['project_id'] ?? 0),
             'step_id' => $r['step_id'] !== null ? (int)$r['step_id'] : null,
@@ -2283,7 +2290,7 @@ function catn8_build_wizard_documents_for_project(int $projectId): array
             'public_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId,
             'thumbnail_url' => '/api/build_wizard.php?action=get_document&document_id=' . $docId . '&thumb=1',
             'is_image' => ((int)($r['has_image_blob'] ?? 0) === 1 || strpos(strtolower($mimeType), 'image/') === 0) ? 1 : 0,
-        ];
+        ], catn8_build_wizard_document_section_fields($r));
     }
     return $docs;
 }
@@ -5218,7 +5225,7 @@ try {
     catn8_build_wizard_tables_ensure();
 
     catn8_session_start();
-    $viewerId = catn8_require_group_or_admin('build-wizard-users');
+    $viewerId = catn8_require_group_or_admin_or_api_token('build-wizard-users');
 
     $action = trim((string)($_GET['action'] ?? 'bootstrap'));
 
@@ -5446,6 +5453,7 @@ try {
             'project' => $project,
             'steps' => catn8_build_wizard_steps_for_project($projectId),
             'documents' => catn8_build_wizard_documents_for_project($projectId),
+            'photo_sections' => catn8_build_wizard_list_photo_sections($projectId),
             'contacts' => catn8_build_wizard_contacts_for_project($projectId, $viewerId),
             'contact_assignments' => catn8_build_wizard_contact_assignments_for_project($projectId, $viewerId),
             'phase_date_ranges' => catn8_build_wizard_phase_date_ranges_for_project($projectId),

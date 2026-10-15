@@ -47,6 +47,12 @@
   align-items: center;
 }
 
+.medic8-toolbar a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .medic8-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -231,8 +231,16 @@ export function Medic8Page({ viewer, isAdmin, onLoginClick, onLogout, onAccountC
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => medic8.personId && void medic8.loadDashboard(medic8.personId)}>
               Refresh
             </button>
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => void handlePrint()}>
-              Print emergency / med list
+            {medic8.personId ? (
+              <a
+                className="btn btn-sm btn-primary"
+                href={`/medic8/med-list?person_id=${medic8.personId}`}
+              >
+                Current Medication List
+              </a>
+            ) : null}
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => void handlePrint()}>
+              Print emergency summary
             </button>
           </div>
         </header>

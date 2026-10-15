@@ -19,6 +19,7 @@ Private medical record hub at https://catn8.us/medic8 for Jon Graves (admin) and
 | `bootstrap` | GET | people list, ensures Jon person for admin |
 | `dashboard` | GET | **Requires `person_id`**. Lists are display-capped; true counts are `labs_total`, `procedures_total`, `encounters_total`, `documents_total`, `portal_messages_total`, `invoices_total` |
 | `emergency_summary` | GET | printable med/allergy/condition summary |
+| `med_list` | GET | **Requires `person_id`**. Print-safe current medication list JSON (no SSN/Medicare/member/Rx IDs). Also see page `/medic8/med-list?person_id=…` |
 | `list` | GET | `entity`, optional `person_id`, `limit` (1–1000), `offset` or `cursor`. Returns `records`, `total`, `limit`, `offset`, `next` |
 | `get` | GET | `entity`, `id`. Clinical rows include `documents[]`. Document rows include `links[]` |
 | `upsert` | POST | `{ entity, record }` |
@@ -53,7 +54,15 @@ Generate/rotate: `php scripts/medic8/generate_api_token.php` (does not print the
 | `get` | GET | `entity`, `id` or `external_source_id`. Clinical rows include `documents[]`. Document rows include `links[]` |
 | `list_people` | GET | optional paging. People include `external_source_id` and `source` |
 | `dashboard` | GET | **Requires `person_id`** (400 without it). Returns display-capped lists plus `*_total` count fields |
+| `med_list_pdf` | GET | **Requires `person_id`**. Returns printable HTML (`Content-Type: text/html`) because Dompdf/TCPDF are not available on IONOS. Optional `format=json` for the structured payload. Headers: `X-Medic8-Pdf-Available: 0`, `X-Medic8-Med-List-Format: html` |
 | `cleanup_duplicates` | POST | operator/import cleanup: synthetics, duplicate documents, duplicate people. Counts only |
+
+### Current Medication List (printable)
+
+- Browser page (login required): `https://catn8.us/medic8/med-list?person_id=<id>`
+- One-tap from the Medic8 dashboard toolbar (“Current Medication List”)
+- Live from DB: active/`current` meds, allergies, active conditions, primary neurologist, updated-as-of (latest med `updated_at` + print date)
+- Prescription vs OTC/supplement sections; never includes SSN, Medicare number, member IDs, or Rx numbers
 
 `import` / `upsert` matching order for every entity (including **people**):
 

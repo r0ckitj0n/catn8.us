@@ -47,6 +47,13 @@ Common options:
   --full           Full-replace mode
   --dist-only      Deploy dist assets only
   --env-only       Deploy .env.live only
+  --code-only      Deploy code/dist only; skip image upload/sync
+  --sync-from-live Refresh local images from LIVE before image upload (default on)
+  --no-sync-from-live
+                   Skip pre-deploy live→local image refresh
+  --force-image-updates
+                   Allow overwriting existing live images when local size differs
+                   (default: upload missing images only, never replace live copies)
   --pull-missing-from-live
                    Pull missing files from LIVE to local after deploy (explicit opt-in)
   --pull-missing-paths <paths>
@@ -108,6 +115,12 @@ PULL_MISSING_PATHS="images"
 PRESERVE_IMAGES=1
 PURGE_IMAGES=0
 CODE_ONLY=0
+# Keep local images current with LIVE before uploading, so stale local copies
+# cannot clobber newer live assets. Override with --no-sync-from-live.
+SYNC_FROM_LIVE="${CATN8_SYNC_FROM_LIVE_BEFORE_DEPLOY:-1}"
+# Default: never overwrite an existing live image (upload missing only).
+# Opt into replacements with --force-image-updates.
+FORCE_IMAGE_UPDATES="${CATN8_FORCE_IMAGE_UPDATES:-0}"
 BACKUP_LIVE="${CATN8_BACKUP_BEFORE_DEPLOY:-0}"
 
 detect_email_related_vendor_upload() {
@@ -168,6 +181,18 @@ while [[ $# -gt 0 ]]; do
       BACKUP_LIVE=0
       shift
       ;;
+    --sync-from-live)
+      SYNC_FROM_LIVE=1
+      shift
+      ;;
+    --no-sync-from-live)
+      SYNC_FROM_LIVE=0
+      shift
+      ;;
+    --force-image-updates)
+      FORCE_IMAGE_UPDATES=1
+      shift
+      ;;
     --full)
       MODE="full"
       export CATN8_FULL_REPLACE=1
@@ -216,6 +241,13 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --code-only skips image publish/sync paths entirely.
+if [[ "$CODE_ONLY" == "1" ]]; then
+  PRESERVE_IMAGES=1
+  SYNC_FROM_LIVE=0
+  FORCE_IMAGE_UPDATES=0
+fi
 
 if [[ -n "${UPLOAD_VENDOR}" ]]; then
   if [[ "${UPLOAD_VENDOR}" == "1" ]]; then
@@ -673,9 +705,32 @@ EOL
   fi
   rm -f "${DEPLOY_DIST_FILE}"
 
-  # In preserve-images mode, publish new/updated images without deleting remote files.
-  if [ "$MODE" != "dist-only" ] && [ "$PRESERVE_IMAGES" = "1" ]; then
-    echo -e "${GREEN}🖼️  Syncing images (upload/update only, no deletes)...${NC}"
+  # In preserve-images mode, publish images without deleting remote files.
+  # Default upload is missing-only so older/stale local copies cannot replace
+  # newer live images. Refresh local from live first (unless disabled).
+  if [ "$MODE" != "dist-only" ] && [ "$PRESERVE_IMAGES" = "1" ] && [ "$CODE_ONLY" != "1" ]; then
+    if [ "$SYNC_FROM_LIVE" = "1" ]; then
+      echo -e "${GREEN}⬇️  Refreshing local images from LIVE before upload...${NC}"
+      if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
+        bash scripts/sync_from_live.sh --images --refresh --dry-run || \
+          echo -e "${YELLOW}⚠️  Pre-deploy sync-from-live dry-run reported issues; continuing${NC}"
+      else
+        # Prefer SFTP when available; HTTP refresh still protects existing local paths.
+        if ! bash scripts/sync_from_live.sh --images --refresh; then
+          echo -e "${YELLOW}⚠️  Pre-deploy sync-from-live failed; continuing with safe missing-only image upload${NC}"
+        fi
+      fi
+    else
+      echo -e "${YELLOW}⏭️  Skipping pre-deploy sync-from-live (--no-sync-from-live)${NC}"
+    fi
+
+    if [ "$FORCE_IMAGE_UPDATES" = "1" ]; then
+      echo -e "${YELLOW}🖼️  Syncing images (upload/update; force overwrite when size differs)...${NC}"
+      IMAGE_MIRROR_FLAGS="--reverse --verbose --only-newer --ignore-time --no-perms"
+    else
+      echo -e "${GREEN}🖼️  Syncing images (upload missing only; will not overwrite live copies)...${NC}"
+      IMAGE_MIRROR_FLAGS="--reverse --verbose --only-missing --no-perms"
+    fi
     DEPLOY_IMAGES_FILE="$(mktemp /tmp/catn8_deploy_images.XXXXXX)"
     {
       printf '%s\n' "set sftp:auto-confirm yes"
@@ -683,7 +738,7 @@ EOL
       printf '%s\n' "set cmd:fail-exit yes"
       printf '%s\n' "${LFTP_NET_SETTINGS}"
       printf '%s\n' "open sftp://$USER:$PASS@$HOST"
-      printf '%s\n' "mirror --reverse --verbose --only-newer --ignore-time --no-perms \\"
+      printf '%s\n' "mirror ${IMAGE_MIRROR_FLAGS} \\"
     } > "${DEPLOY_IMAGES_FILE}"
     if [ -n "${IMAGE_SYNC_EXCLUDE_GLOBS}" ]; then
       declare -a IMAGE_EXCLUDES_ARR=()
@@ -712,13 +767,19 @@ EOL
     if [ "${CATN8_DRY_RUN:-0}" = "1" ]; then
       echo -e "${YELLOW}DRY-RUN: Skipping images sync${NC}"
     elif lftp -f "${DEPLOY_IMAGES_FILE}"; then
-      echo -e "${GREEN}✅ Images synced (upload/update only)${NC}"
+      if [ "$FORCE_IMAGE_UPDATES" = "1" ]; then
+        echo -e "${GREEN}✅ Images synced (upload/update)${NC}"
+      else
+        echo -e "${GREEN}✅ Images synced (missing-only; live copies preserved)${NC}"
+      fi
     else
       echo -e "${RED}❌ Images sync failed.${NC}"
       rm -f "${DEPLOY_IMAGES_FILE}"
       exit 1
     fi
     rm -f "${DEPLOY_IMAGES_FILE}"
+  elif [ "$CODE_ONLY" = "1" ] && [ "$MODE" != "dist-only" ]; then
+    echo -e "${YELLOW}⏭️  Skipping images sync (--code-only)${NC}"
   fi
 
   # Secondary passes are unnecessary in full-replace mode
@@ -937,7 +998,16 @@ echo -e "\n${GREEN}📊 Fast Deployment Summary:${NC}"
 echo -e "  • Files: ✅ Deployed to server"
 echo -e "  • Database: ⏭️  Skipped (use deploy_full.sh for database updates)"
 if [ "$PRESERVE_IMAGES" = "1" ]; then
-  echo -e "  • Images: ✅ Synced (upload/update only; no deletes under images/**)"
+  if [ "$CODE_ONLY" = "1" ]; then
+    echo -e "  • Images: ⏭️  Skipped (--code-only)"
+  elif [ "$FORCE_IMAGE_UPDATES" = "1" ]; then
+    echo -e "  • Images: ✅ Synced (upload/update; force overwrite when size differs; no deletes)"
+  else
+    echo -e "  • Images: ✅ Synced (missing-only; existing live images preserved)"
+  fi
+  if [ "$SYNC_FROM_LIVE" = "1" ] && [ "$CODE_ONLY" != "1" ] && [ "$MODE" != "dist-only" ] && [ "$MODE" != "env-only" ]; then
+    echo -e "  • Pre-deploy live→local image refresh: ✅"
+  fi
 else
   echo -e "  • Images: ✅ Included in deployment (with deletes)"
 fi
@@ -951,3 +1021,4 @@ fi
 
 echo -e "\n${GREEN}🎉 Fast deployment completed!${NC}"
 echo -e "${YELLOW}💡 Use ./deploy_full.sh when you need to update the database${NC}"
+echo -e "${YELLOW}💡 Refresh local from live anytime: ./scripts/sync_from_live.sh${NC}"

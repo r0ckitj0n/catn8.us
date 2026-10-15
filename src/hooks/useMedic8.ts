@@ -29,7 +29,9 @@ export function useMedic8() {
       }
       setPeople(res.people || []);
       setIsAdmin(Number(res.is_admin || 0) === 1);
-      const preferred = res.people?.[0]?.id ?? null;
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = Number(params.get('person_id') || 0);
+      const preferred = (fromQuery > 0 ? fromQuery : null) ?? res.people?.[0]?.id ?? null;
       setPersonId((current) => current ?? preferred);
       return res;
     } catch (err) {

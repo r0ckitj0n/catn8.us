@@ -11,7 +11,7 @@ $actorUserId = catn8_require_group_or_admin(Medic8Model::GROUP_SLUG);
 $action = trim((string)($_GET['action'] ?? ''));
 
 $readActions = [
-    'bootstrap', 'dashboard', 'emergency_summary',
+    'bootstrap', 'dashboard', 'emergency_summary', 'med_list',
     'list', 'get', 'lab_trends', 'list_audit',
 ];
 $writeActions = [
@@ -70,6 +70,19 @@ try {
         }
         Medic8Model::audit($actorUserId, 'view_emergency_summary', 'medic8_people', $personId, $personId, null, null);
         catn8_json_response(['success' => true, 'summary' => Medic8Model::emergencySummary($actorUserId, $personId)]);
+    }
+
+    if ($action === 'med_list') {
+        $personId = (int)($_GET['person_id'] ?? 0);
+        if ($personId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'person_id required'], 400);
+        }
+        Medic8Model::audit($actorUserId, 'view_med_list', 'medic8_people', $personId, $personId, null, null);
+        catn8_json_response([
+            'success' => true,
+            'med_list' => Medic8Model::medicationListSummary($actorUserId, $personId),
+            'print_url' => '/medic8/med-list?person_id=' . $personId,
+        ]);
     }
 
     if ($action === 'lab_trends') {

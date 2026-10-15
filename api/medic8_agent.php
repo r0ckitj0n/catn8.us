@@ -49,7 +49,7 @@ if (!Medic8Model::verifyApiToken($token)) {
 
 $action = trim((string)($_GET['action'] ?? ''));
 $readActions = [
-    'list', 'get', 'list_people', 'dashboard',
+    'list', 'get', 'list_people', 'dashboard', 'med_list_pdf',
 ];
 $writeActions = [
     'import', 'upsert', 'upload_document',
@@ -85,6 +85,36 @@ try {
         $uid = medic8_agent_uid();
         Medic8Model::audit(null, 'agent_view_dashboard', 'medic8_people', $personId, $personId, null, null, $actorLabel);
         catn8_json_response(['success' => true, 'dashboard' => Medic8Model::dashboard($uid, $personId)]);
+    }
+
+    if ($action === 'med_list_pdf') {
+        $personId = (int)($_GET['person_id'] ?? 0);
+        if ($personId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'person_id required'], 400);
+        }
+        $uid = medic8_agent_uid();
+        Medic8Model::audit(null, 'agent_med_list_pdf', 'medic8_people', $personId, $personId, null, null, $actorLabel);
+        // IONOS shared hosting has no Dompdf/TCPDF/wkhtmltopdf in this app.
+        // Return printable HTML the agent (or browser) can Save as PDF.
+        $format = strtolower(trim((string)($_GET['format'] ?? 'html')));
+        if ($format === 'json') {
+            catn8_json_response([
+                'success' => true,
+                'format' => 'json',
+                'pdf_available' => false,
+                'med_list' => Medic8Model::medicationListSummary($uid, $personId),
+                'print_url' => 'https://catn8.us/medic8/med-list?person_id=' . $personId,
+                'note' => 'PDF libraries are not available on this host; use format=html or the print_url.',
+            ]);
+        }
+        $html = Medic8Model::medicationListHtml($uid, $personId, true);
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: inline; filename="medic8-med-list-' . $personId . '.html"');
+        header('X-Medic8-Med-List-Format: html');
+        header('X-Medic8-Pdf-Available: 0');
+        header('Cache-Control: no-store');
+        echo $html;
+        exit;
     }
 
     if ($action === 'list') {

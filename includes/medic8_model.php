@@ -1005,6 +1005,509 @@ final class Medic8Model
         ];
     }
 
+    /**
+     * Printable current medication list (no SSN / Medicare / member IDs / Rx numbers).
+     * Active meds: status current|active. Rx vs OTC/supplement via prescriber + name heuristics.
+     *
+     * @return array<string,mixed>
+     */
+    public static function medicationListSummary(int $uid, int $personId): array
+    {
+        if (!self::userCanAccessPerson($uid, $personId, 'all', false)) {
+            throw new RuntimeException('Not authorized');
+        }
+
+        $person = self::personRow($personId);
+        if (!$person) {
+            throw new RuntimeException('Person not found');
+        }
+
+        $providers = self::listEntity('providers', $uid, $personId, 200);
+        $providerById = [];
+        foreach ($providers as $provider) {
+            $providerById[(int)($provider['id'] ?? 0)] = $provider;
+        }
+
+        $meds = self::listEntity('medications', $uid, $personId, 500);
+        $activeMeds = [];
+        $latestMedUpdatedAt = null;
+        foreach ($meds as $med) {
+            $status = strtolower(trim((string)($med['status'] ?? '')));
+            if (!in_array($status, ['current', 'active'], true)) {
+                continue;
+            }
+            $updatedAt = trim((string)($med['updated_at'] ?? ''));
+            if ($updatedAt !== '' && ($latestMedUpdatedAt === null || strcmp($updatedAt, $latestMedUpdatedAt) > 0)) {
+                $latestMedUpdatedAt = $updatedAt;
+            }
+            $prescriberId = (int)($med['prescriber_provider_id'] ?? 0);
+            $pharmacyId = (int)($med['pharmacy_provider_id'] ?? 0);
+            $prescriber = $prescriberId > 0 ? ($providerById[$prescriberId] ?? null) : null;
+            $pharmacy = $pharmacyId > 0 ? ($providerById[$pharmacyId] ?? null) : null;
+            $schedule = self::medicationScheduleLabel($med);
+            $activeMeds[] = [
+                'id' => (int)($med['id'] ?? 0),
+                'name' => (string)($med['name'] ?? ''),
+                'generic_name' => ($med['generic_name'] ?? null) !== null && trim((string)$med['generic_name']) !== ''
+                    ? (string)$med['generic_name'] : null,
+                'strength' => ($med['strength'] ?? null) !== null && trim((string)$med['strength']) !== ''
+                    ? (string)$med['strength'] : null,
+                'route' => ($med['route'] ?? null) !== null && trim((string)$med['route']) !== ''
+                    ? (string)$med['route'] : null,
+                'schedule' => $schedule,
+                'prescriber' => $prescriber ? trim((string)($prescriber['name'] ?? '')) : null,
+                'pharmacy' => $pharmacy ? trim((string)($pharmacy['name'] ?? '')) : null,
+                'is_otc_or_supplement' => self::medicationIsOtcOrSupplement($med),
+            ];
+        }
+
+        usort($activeMeds, static function (array $a, array $b): int {
+            return strcasecmp((string)$a['name'], (string)$b['name']);
+        });
+
+        $prescriptions = array_values(array_filter(
+            $activeMeds,
+            static fn(array $m): bool => empty($m['is_otc_or_supplement'])
+        ));
+        $otcSupplements = array_values(array_filter(
+            $activeMeds,
+            static fn(array $m): bool => !empty($m['is_otc_or_supplement'])
+        ));
+
+        $allergies = [];
+        foreach (self::listEntity('allergies', $uid, $personId, 200) as $allergy) {
+            $status = strtolower((string)($allergy['status'] ?? ''));
+            if ($status !== '' && !str_contains($status, 'active')) {
+                continue;
+            }
+            $allergen = trim((string)($allergy['allergen'] ?? ''));
+            if ($allergen === '') {
+                continue;
+            }
+            $allergies[] = [
+                'allergen' => $allergen,
+                'reaction' => trim((string)($allergy['reaction'] ?? '')) !== ''
+                    ? trim((string)$allergy['reaction']) : null,
+            ];
+        }
+        $hasDrugAllergy = false;
+        foreach ($allergies as $allergy) {
+            if (!preg_match('/\bno known (drug )?allerg/i', $allergy['allergen'])) {
+                $hasDrugAllergy = true;
+                break;
+            }
+        }
+        if ($hasDrugAllergy) {
+            $allergies = array_values(array_filter(
+                $allergies,
+                static fn(array $a): bool => !preg_match('/\bno known (drug )?allerg/i', $a['allergen'])
+            ));
+        }
+
+        $conditions = [];
+        foreach (self::listEntity('conditions', $uid, $personId, 300) as $condition) {
+            $status = strtolower((string)($condition['status'] ?? ''));
+            if (!str_contains($status, 'active')) {
+                continue;
+            }
+            $name = trim((string)($condition['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $conditions[] = [
+                'name' => $name,
+                'status' => trim((string)($condition['status'] ?? '')) !== ''
+                    ? trim((string)$condition['status']) : null,
+            ];
+        }
+        usort($conditions, static function (array $a, array $b): int {
+            return strcasecmp((string)$a['name'], (string)$b['name']);
+        });
+
+        $printDate = (new DateTimeImmutable('now', new DateTimeZone('America/New_York')))->format('Y-m-d');
+
+        return [
+            'person' => [
+                'id' => (int)($person['id'] ?? 0),
+                'display_name' => (string)($person['display_name'] ?? ''),
+                'dob' => ($person['dob'] ?? null) !== null && trim((string)$person['dob']) !== ''
+                    ? (string)$person['dob'] : null,
+            ],
+            'allergies' => $allergies,
+            'prescriptions' => array_map(static function (array $m): array {
+                unset($m['is_otc_or_supplement']);
+                return $m;
+            }, $prescriptions),
+            'otc_supplements' => array_map(static function (array $m): array {
+                unset($m['is_otc_or_supplement']);
+                return $m;
+            }, $otcSupplements),
+            'conditions' => $conditions,
+            'primary_neurologist' => self::pickPrimaryNeurologist($providers),
+            'updated_as_of' => [
+                'medications_updated_at' => $latestMedUpdatedAt,
+                'print_date' => $printDate,
+            ],
+            'generated_at' => gmdate('c'),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $med
+     */
+    private static function medicationScheduleLabel(array $med): string
+    {
+        $parts = [];
+        $dose = trim((string)($med['dose_per_admin'] ?? ''));
+        $freq = trim((string)($med['frequency'] ?? ''));
+        $route = trim((string)($med['route'] ?? ''));
+        if ($route !== '') {
+            $parts[] = $route;
+        }
+        if ($dose !== '') {
+            $parts[] = $dose;
+        }
+        if ($freq !== '') {
+            $parts[] = $freq;
+        }
+        if (!empty($med['prn'])) {
+            $parts[] = 'PRN';
+        }
+        $scheduleJson = $med['schedule_json'] ?? null;
+        if (is_string($scheduleJson) && trim($scheduleJson) !== '') {
+            $decoded = json_decode($scheduleJson, true);
+            if (is_array($decoded)) {
+                $hint = trim((string)($decoded['label'] ?? $decoded['text'] ?? $decoded['summary'] ?? ''));
+                if ($hint !== '') {
+                    $parts[] = $hint;
+                }
+            }
+        }
+        return implode(' · ', array_values(array_unique(array_filter($parts))));
+    }
+
+    /**
+     * @param array<string,mixed> $med
+     */
+    private static function medicationIsOtcOrSupplement(array $med): bool
+    {
+        if (!empty($med['rx_number_present']) || !empty($med['prescriber_provider_id'])) {
+            return false;
+        }
+        $blob = strtolower(trim(
+            (string)($med['name'] ?? '') . ' '
+            . (string)($med['generic_name'] ?? '') . ' '
+            . (string)($med['indication'] ?? '') . ' '
+            . (string)($med['notes'] ?? '')
+        ));
+        return (bool)preg_match(
+            '/\b(otc|over[\s-]?the[\s-]?counter|supplement|vitamin|coenzyme|coq10|probiotic|folic|methylcobalamin|cetirizine|zyrtec|loratadine|claritin|diphenhydramine|benadryl|nexium\s*24|esomeprazole\s*24|melatonin|magnesium|omega[\s-]?3|fish oil)\b/i',
+            $blob
+        );
+    }
+
+    /**
+     * @param list<array<string,mixed>> $providers
+     * @return array{name:string,specialty:?string,practice:?string}|null
+     */
+    private static function pickPrimaryNeurologist(array $providers): ?array
+    {
+        $candidates = [];
+        foreach ($providers as $provider) {
+            if (isset($provider['active']) && (int)$provider['active'] === 0) {
+                continue;
+            }
+            $name = trim((string)($provider['name'] ?? ''));
+            $specialty = strtolower(trim((string)($provider['specialty'] ?? '')));
+            $practice = trim((string)($provider['practice'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $isNeuro = str_contains($specialty, 'neurolog') || str_contains(strtolower($practice), 'neuroscience')
+                || str_contains(strtolower($practice), 'multiple sclerosis');
+            if (!$isNeuro && !preg_match('/\benglish\b/i', $name)) {
+                continue;
+            }
+            $score = 0;
+            if (preg_match('/\benglish\b/i', $name)) {
+                $score += 10;
+            }
+            if (str_contains($specialty, 'neurolog')) {
+                $score += 5;
+            }
+            if (str_contains(strtolower($practice), 'atlanta neuroscience') || str_contains(strtolower($practice), 'ani')) {
+                $score += 3;
+            }
+            if (preg_match('/\bmd\b|\bdo\b/i', $name)) {
+                $score += 1;
+            }
+            $candidates[] = [
+                'score' => $score,
+                'name' => $name,
+                'specialty' => trim((string)($provider['specialty'] ?? '')) !== ''
+                    ? trim((string)$provider['specialty']) : null,
+                'practice' => $practice !== '' ? $practice : null,
+            ];
+        }
+        if (!$candidates) {
+            return null;
+        }
+        usort($candidates, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
+        $best = $candidates[0];
+        return [
+            'name' => $best['name'],
+            'specialty' => $best['specialty'],
+            'practice' => $best['practice'],
+        ];
+    }
+
+    /**
+     * Printable HTML for med list (also used by agent when PDF is unavailable).
+     */
+    public static function medicationListHtml(int $uid, int $personId, bool $standalone = true): string
+    {
+        $data = self::medicationListSummary($uid, $personId);
+        $esc = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $person = $data['person'];
+        $updated = $data['updated_as_of'];
+        $neuro = $data['primary_neurologist'];
+
+        $allergyBits = [];
+        foreach ($data['allergies'] as $allergy) {
+            $line = $allergy['allergen'];
+            if (!empty($allergy['reaction'])) {
+                $line .= ' — ' . $allergy['reaction'];
+            }
+            $allergyBits[] = $line;
+        }
+        $allergyText = $allergyBits ? implode('; ', $allergyBits) : 'None on file';
+
+        $renderMedRows = static function (array $meds) use ($esc): string {
+            if (!$meds) {
+                return '<tr><td colspan="4">None on file.</td></tr>';
+            }
+            $html = '';
+            foreach ($meds as $med) {
+                $name = $esc($med['name']);
+                if (!empty($med['generic_name'])) {
+                    $name .= ' <span class="generic">(' . $esc($med['generic_name']) . ')</span>';
+                }
+                $strength = $esc($med['strength'] ?? '—');
+                $schedule = $esc($med['schedule'] !== '' ? $med['schedule'] : '—');
+                $who = trim((string)($med['prescriber'] ?? ''));
+                $pharm = trim((string)($med['pharmacy'] ?? ''));
+                $meta = $who !== '' ? $who : '—';
+                if ($pharm !== '') {
+                    $meta .= ' · ' . $pharm;
+                }
+                $html .= '<tr><td>' . $name . '</td><td>' . $strength . '</td><td>' . $schedule . '</td><td>'
+                    . $esc($meta) . '</td></tr>';
+            }
+            return $html;
+        };
+
+        $conditionItems = '';
+        if ($data['conditions']) {
+            foreach ($data['conditions'] as $condition) {
+                $conditionItems .= '<li>' . $esc($condition['name']) . '</li>';
+            }
+        } else {
+            $conditionItems = '<li>None on file.</li>';
+        }
+
+        $neuroLine = 'Not on file';
+        if (is_array($neuro)) {
+            $neuroLine = $neuro['name'];
+            if (!empty($neuro['specialty'])) {
+                $neuroLine .= ' — ' . $neuro['specialty'];
+            }
+            if (!empty($neuro['practice'])) {
+                $neuroLine .= ' (' . $neuro['practice'] . ')';
+            }
+        }
+
+        $medUpdated = $updated['medications_updated_at']
+            ? (string)$updated['medications_updated_at']
+            : 'unknown';
+        $printDate = (string)$updated['print_date'];
+
+        $body = <<<HTML
+<article class="medic8-med-list">
+  <header class="medic8-med-list__header">
+    <h1>Current Medication List</h1>
+    <p class="medic8-med-list__patient"><strong>{$esc($person['display_name'])}</strong>
+      · DOB {$esc($person['dob'] ?? '—')}</p>
+    <p class="medic8-med-list__allergies"><strong>Allergies:</strong> {$esc($allergyText)}</p>
+    <p class="medic8-med-list__updated">Updated as of medications {$esc($medUpdated)} · Printed {$esc($printDate)}</p>
+  </header>
+
+  <section>
+    <h2>Prescription medications</h2>
+    <table>
+      <thead><tr><th>Medication</th><th>Strength</th><th>Route / schedule</th><th>Prescriber / pharmacy</th></tr></thead>
+      <tbody>{$renderMedRows($data['prescriptions'])}</tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>OTC / supplements</h2>
+    <table>
+      <thead><tr><th>Medication</th><th>Strength</th><th>Route / schedule</th><th>Prescriber / pharmacy</th></tr></thead>
+      <tbody>{$renderMedRows($data['otc_supplements'])}</tbody>
+    </table>
+  </section>
+
+  <section class="medic8-med-list__two">
+    <div>
+      <h2>Active conditions</h2>
+      <ul>{$conditionItems}</ul>
+    </div>
+    <div>
+      <h2>Primary neurologist</h2>
+      <p>{$esc($neuroLine)}</p>
+    </div>
+  </section>
+</article>
+HTML;
+
+        if (!$standalone) {
+            return $body;
+        }
+
+        $css = self::medicationListPrintCss();
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Current Medication List</title>
+  <style>{$css}</style>
+</head>
+<body>
+  <div class="medic8-med-list-toolbar no-print">
+    <a class="btn" href="/medic8/?person_id={$esc((string)$personId)}">← Medic8</a>
+    <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  {$body}
+</body>
+</html>
+HTML;
+    }
+
+    public static function medicationListPrintCss(): string
+    {
+        return <<<'CSS'
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 12px/1.35 "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #142033;
+  background: #eef3f1;
+}
+.medic8-med-list-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  background: rgba(238, 243, 241, 0.95);
+  backdrop-filter: blur(4px);
+}
+.btn {
+  appearance: none;
+  border: 1px solid #29445f;
+  background: #fff;
+  color: #142033;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-primary {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  font-weight: 600;
+}
+.medic8-med-list {
+  max-width: 8.5in;
+  margin: 0 auto 1.5rem;
+  padding: 0.85rem 1rem 1rem;
+  background: #fff;
+  border: 1px solid #c9d4de;
+}
+.medic8-med-list h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+}
+.medic8-med-list h2 {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0f766e;
+  border-bottom: 1px solid #d7e2ea;
+  padding-bottom: 0.15rem;
+}
+.medic8-med-list__patient,
+.medic8-med-list__allergies,
+.medic8-med-list__updated {
+  margin: 0.15rem 0;
+}
+.medic8-med-list__updated { color: #4b5d70; font-size: 0.78rem; }
+.medic8-med-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.medic8-med-list th,
+.medic8-med-list td {
+  border: 1px solid #d5dee7;
+  padding: 0.22rem 0.35rem;
+  vertical-align: top;
+  text-align: left;
+}
+.medic8-med-list th {
+  background: #f3f7f6;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.medic8-med-list .generic { color: #4b5d70; font-weight: 400; }
+.medic8-med-list ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+}
+.medic8-med-list__two {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .medic8-med-list__two { grid-template-columns: 1fr; }
+  .medic8-med-list { margin: 0 0.5rem 1rem; }
+  .medic8-med-list table { font-size: 0.74rem; }
+}
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .medic8-med-list {
+    margin: 0;
+    border: 0;
+    max-width: none;
+    padding: 0;
+  }
+  @page { margin: 0.45in; size: letter; }
+}
+CSS;
+    }
+
+
     public static function storeUploadedDocument(array $file, array $meta, int $uid, ?string $actorLabel = null): array
     {
         self::ensureSchema();

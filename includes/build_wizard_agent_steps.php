@@ -105,6 +105,76 @@ function fabric8_agent_truthy($value): bool
     return in_array($s, ['1', 'true', 'yes', 'on'], true);
 }
 
+function fabric8_agent_to_decimal_or_null($value): ?string
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if (is_string($value)) {
+        $value = str_replace([',', '$', ' '], '', trim($value));
+    }
+    if (!is_numeric($value)) {
+        throw new InvalidArgumentException('cost must be numeric');
+    }
+    return number_format((float)$value, 2, '.', '');
+}
+
+/**
+ * @return array{id:int,step_id:int,note_text:string,created_at:string,updated_at:string}
+ */
+function fabric8_agent_replace_step_note(int $stepId, string $noteText, ?int $noteId = null): array
+{
+    $noteText = trim($noteText);
+    if ($noteText === '') {
+        throw new InvalidArgumentException('note_text required');
+    }
+    if ($noteId !== null && $noteId > 0) {
+        $existing = Database::queryOne(
+            'SELECT id FROM build_wizard_step_notes WHERE id = ? AND step_id = ? LIMIT 1',
+            [$noteId, $stepId]
+        );
+        if (!$existing) {
+            throw new InvalidArgumentException('note_id does not belong to step_id');
+        }
+        Database::execute(
+            'UPDATE build_wizard_step_notes SET note_text = ? WHERE id = ?',
+            [$noteText, $noteId]
+        );
+        $row = Database::queryOne(
+            'SELECT id, step_id, note_text, created_at, updated_at FROM build_wizard_step_notes WHERE id = ? LIMIT 1',
+            [$noteId]
+        );
+    } else {
+        $existing = Database::queryOne(
+            'SELECT id FROM build_wizard_step_notes WHERE step_id = ? ORDER BY id ASC LIMIT 1',
+            [$stepId]
+        );
+        if ($existing) {
+            $noteId = (int)$existing['id'];
+            Database::execute(
+                'UPDATE build_wizard_step_notes SET note_text = ? WHERE id = ?',
+                [$noteText, $noteId]
+            );
+            $row = Database::queryOne(
+                'SELECT id, step_id, note_text, created_at, updated_at FROM build_wizard_step_notes WHERE id = ? LIMIT 1',
+                [$noteId]
+            );
+        } else {
+            return fabric8_agent_add_step_note($stepId, $noteText);
+        }
+    }
+    if (!$row) {
+        throw new RuntimeException('Note not found after replace');
+    }
+    return [
+        'id' => (int)$row['id'],
+        'step_id' => (int)$row['step_id'],
+        'note_text' => (string)$row['note_text'],
+        'created_at' => (string)($row['created_at'] ?? ''),
+        'updated_at' => (string)($row['updated_at'] ?? ''),
+    ];
+}
+
 /**
  * @return array<string,mixed>|null
  */
@@ -457,6 +527,22 @@ function fabric8_agent_update_step(int $stepId, array $body, bool $dryRun = fals
         }
     }
 
+    $costAliases = [
+        'actual_cost' => ['actual_cost', 'cost', 'amount'],
+        'estimated_cost' => ['estimated_cost', 'estimate'],
+    ];
+    foreach ($costAliases as $column => $keys) {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $body)) {
+                $parsed = fabric8_agent_to_decimal_or_null($body[$key]);
+                $updates[] = "{$column} = ?";
+                $params[] = $parsed;
+                $changes[$column] = $parsed;
+                break;
+            }
+        }
+    }
+
     $noteText = null;
     if (array_key_exists('notes', $body) && is_string($body['notes'])) {
         $noteText = trim($body['notes']);
@@ -468,6 +554,9 @@ function fabric8_agent_update_step(int $stepId, array $body, bool $dryRun = fals
     if ($noteText === '') {
         $noteText = null;
     }
+    $replaceNote = fabric8_agent_truthy($body['replace_note'] ?? $body['replace_notes'] ?? false)
+        || (isset($body['note_id']) && (int)$body['note_id'] > 0);
+    $noteId = isset($body['note_id']) ? (int)$body['note_id'] : null;
 
     if (!$updates && $noteText === null) {
         throw new InvalidArgumentException('No step updates provided');
@@ -477,7 +566,12 @@ function fabric8_agent_update_step(int $stepId, array $body, bool $dryRun = fals
         return [
             'step' => fabric8_agent_format_step($before),
             'changes' => $changes,
-            'note' => $noteText !== null ? ['note_text' => $noteText, 'dry_run' => true] : null,
+            'note' => $noteText !== null ? [
+                'note_text' => $noteText,
+                'replace' => $replaceNote,
+                'note_id' => $noteId,
+                'dry_run' => true,
+            ] : null,
             'dry_run' => true,
         ];
     }
@@ -492,8 +586,13 @@ function fabric8_agent_update_step(int $stepId, array $body, bool $dryRun = fals
 
     $note = null;
     if ($noteText !== null) {
-        $note = fabric8_agent_add_step_note($stepId, $noteText);
-        $changes['note_added'] = $note['id'];
+        if ($replaceNote) {
+            $note = fabric8_agent_replace_step_note($stepId, $noteText, $noteId);
+            $changes['note_replaced'] = $note['id'];
+        } else {
+            $note = fabric8_agent_add_step_note($stepId, $noteText);
+            $changes['note_added'] = $note['id'];
+        }
     }
 
     $after = fabric8_agent_step_row($stepId);

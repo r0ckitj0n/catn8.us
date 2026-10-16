@@ -79,6 +79,7 @@ $readActions = [
 $writeActions = [
     'ensure_photo_section', 'upload_section_photo', 'attach_labeled_photos',
     'update_step', 'create_step', 'attach_step_document',
+    'delete_step', 'delete_note',
 ];
 $allowed = array_merge($readActions, $writeActions);
 if ($action === '' || !in_array($action, $allowed, true)) {
@@ -362,7 +363,42 @@ try {
         catn8_json_response(['success' => true] + $result);
     }
 
+    if ($action === 'delete_step') {
+        $body = catn8_read_json_body(false);
+        $stepId = (int)($body['step_id'] ?? 0);
+        if ($stepId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'step_id required'], 400);
+        }
+        $dryRun = fabric8_agent_request_dry_run($body);
+        $cascade = fabric8_agent_truthy($body['cascade'] ?? false);
+        $result = fabric8_agent_delete_step($stepId, $dryRun, $cascade);
+        catn8_json_response(['success' => true] + $result);
+    }
+
+    if ($action === 'delete_note') {
+        $body = catn8_read_json_body(false);
+        $noteId = (int)($body['note_id'] ?? 0);
+        $stepId = (int)($body['step_id'] ?? 0);
+        if ($noteId <= 0) {
+            catn8_json_response(['success' => false, 'error' => 'note_id required'], 400);
+        }
+        $dryRun = fabric8_agent_request_dry_run($body);
+        $result = fabric8_agent_delete_note($noteId, $dryRun, $stepId > 0 ? $stepId : null);
+        catn8_json_response(['success' => true] + $result);
+    }
+
     catn8_json_response(['success' => false, 'error' => 'Unhandled action'], 500);
+} catch (Fabric8AgentConflictException $e) {
+    catn8_log_error('fabric8 agent delete refused', [
+        'action' => $action,
+        'error' => $e->getMessage(),
+        'child_step_ids' => $e->childStepIds,
+    ]);
+    catn8_json_response([
+        'success' => false,
+        'error' => $e->getMessage(),
+        'child_step_ids' => $e->childStepIds,
+    ], 409);
 } catch (InvalidArgumentException $e) {
     catn8_json_response(['success' => false, 'error' => $e->getMessage()], 400);
 } catch (Throwable $e) {

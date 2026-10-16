@@ -30,6 +30,8 @@ php scripts/fabric8/generate_api_token.php
 | `update_step` | POST JSON | title/description/dates/status/costs; `notes` adds (or `replace_note:true` / `note_id` replaces) |
 | `create_step` | POST JSON | new step |
 | `attach_step_document` | POST multipart | receipt/doc attach |
+| `delete_step` | POST JSON | `{ step_id, dry_run?, cascade? }`. Backs up the step (notes, document metadata, assignments, audit) and logs it. Refuses with 409 when child steps exist unless `cascade:true`. Document files stay; their `step_id` is cleared. |
+| `delete_note` | POST JSON | `{ note_id, step_id?, dry_run? }`. Backs up the note row, writes a `note_deleted` audit log on the step, then deletes that note. |
 | `ensure_photo_section` | POST JSON | `{ project_id, title, notes? }` — idempotent by slug |
 | `upload_section_photo` | POST multipart | `project_id`, `section_id` or `section_title`, `file`, `caption?`, `kind?`, `meta_json?` — **idempotent** on SHA-256 `content_hash` |
 | `attach_labeled_photos` | POST | ensures section; upload files via `upload_section_photo` |

@@ -920,3 +920,304 @@ function fabric8_agent_attach_step_document(
         'dry_run' => false,
     ];
 }
+
+/**
+ * Raised when delete_step would remove or orphan child steps without cascade:true.
+ */
+class Fabric8AgentConflictException extends RuntimeException
+{
+    /** @var list<int> */
+    public array $childStepIds;
+
+    /**
+     * @param list<int> $childStepIds
+     */
+    public function __construct(string $message, array $childStepIds)
+    {
+        parent::__construct($message);
+        $this->childStepIds = array_values($childStepIds);
+    }
+}
+
+/**
+ * @return list<int>
+ */
+function fabric8_agent_child_step_ids(int $stepId): array
+{
+    if ($stepId <= 0) {
+        return [];
+    }
+    $rows = Database::queryAll(
+        'SELECT id FROM build_wizard_steps WHERE parent_step_id = ? ORDER BY id ASC',
+        [$stepId]
+    );
+    $ids = [];
+    foreach ($rows as $row) {
+        $id = (int)($row['id'] ?? 0);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    return $ids;
+}
+
+/**
+ * Depth-first descendant ids, deepest first so a caller can delete in array order.
+ *
+ * @return list<int>
+ */
+function fabric8_agent_descendant_step_ids(int $stepId): array
+{
+    $ordered = [];
+    $seen = [];
+    $walk = static function (int $id) use (&$walk, &$ordered, &$seen): void {
+        foreach (fabric8_agent_child_step_ids($id) as $childId) {
+            if (isset($seen[$childId])) {
+                continue;
+            }
+            $seen[$childId] = true;
+            $walk($childId);
+            $ordered[] = $childId;
+        }
+    };
+    $walk($stepId);
+    return $ordered;
+}
+
+/**
+ * @return array<string,mixed>|null
+ */
+function fabric8_agent_note_row(int $noteId): ?array
+{
+    if ($noteId <= 0) {
+        return null;
+    }
+    $row = Database::queryOne(
+        'SELECT id, step_id, note_text, created_at, updated_at
+         FROM build_wizard_step_notes WHERE id = ? LIMIT 1',
+        [$noteId]
+    );
+    return $row ?: null;
+}
+
+/**
+ * @param list<int> $stepIds
+ * @return array<string,mixed>
+ */
+function fabric8_agent_delete_backup(array $stepIds): array
+{
+    $backup = fabric8_agent_backup_steps($stepIds);
+    $ids = array_values(array_unique(array_filter(array_map('intval', $stepIds), static fn(int $id): bool => $id > 0)));
+    $assignments = [];
+    $auditLogs = [];
+    if ($ids) {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $assignments = Database::queryAll(
+            "SELECT id, project_id, contact_id, step_id, phase_key, created_at
+             FROM build_wizard_contact_assignments
+             WHERE step_id IN ({$placeholders})
+             ORDER BY id ASC",
+            $ids
+        );
+        $auditLogs = Database::queryAll(
+            "SELECT id, project_id, step_id, actor_user_id, action_key, changes_json, created_at
+             FROM build_wizard_step_audit_logs
+             WHERE step_id IN ({$placeholders})
+             ORDER BY id ASC",
+            $ids
+        );
+    }
+    $backup['contact_assignments'] = $assignments;
+    $backup['audit_logs'] = $auditLogs;
+    return $backup;
+}
+
+/**
+ * @param array<string,mixed> $context
+ */
+function fabric8_agent_log_delete(string $action, array $context): void
+{
+    $encoded = json_encode($context, JSON_UNESCAPED_SLASHES);
+    if (!is_string($encoded)) {
+        $encoded = '';
+    }
+    if (strlen($encoded) > 12000) {
+        $context['backup_truncated'] = true;
+        unset($context['backup']);
+    }
+    catn8_log_error('fabric8 agent ' . $action, $context);
+}
+
+function fabric8_agent_insert_step_audit(int $projectId, int $stepId, string $actionKey, array $changes): void
+{
+    if ($projectId <= 0 || $stepId <= 0) {
+        return;
+    }
+    $actionKey = strtolower(trim($actionKey));
+    if ($actionKey === '') {
+        $actionKey = 'updated';
+    }
+    if (strlen($actionKey) > 40) {
+        $actionKey = substr($actionKey, 0, 40);
+    }
+    Database::execute(
+        'INSERT INTO build_wizard_step_audit_logs (project_id, step_id, actor_user_id, action_key, changes_json)
+         VALUES (?, ?, NULL, ?, ?)',
+        [
+            $projectId,
+            $stepId,
+            $actionKey,
+            json_encode($changes, JSON_UNESCAPED_SLASHES),
+        ]
+    );
+}
+
+/**
+ * @param list<int> $stepIds
+ * @return list<int>
+ */
+function fabric8_agent_detach_step_documents(array $stepIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $stepIds), static fn(int $id): bool => $id > 0)));
+    if (!$ids) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $rows = Database::queryAll(
+        "SELECT id FROM build_wizard_documents WHERE step_id IN ({$placeholders}) ORDER BY id ASC",
+        $ids
+    );
+    $docIds = [];
+    foreach ($rows as $row) {
+        $docId = (int)($row['id'] ?? 0);
+        if ($docId > 0) {
+            $docIds[] = $docId;
+        }
+    }
+    if ($docIds) {
+        Database::execute(
+            "UPDATE build_wizard_documents SET step_id = NULL WHERE step_id IN ({$placeholders})",
+            $ids
+        );
+    }
+    return $docIds;
+}
+
+/**
+ * @return array{dry_run:bool,deleted:bool,deleted_note_id?:int,backup:array<string,mixed>}
+ */
+function fabric8_agent_delete_note(int $noteId, bool $dryRun = false, ?int $expectedStepId = null): array
+{
+    $row = fabric8_agent_note_row($noteId);
+    if (!$row) {
+        throw new InvalidArgumentException('Note not found');
+    }
+    $stepId = (int)$row['step_id'];
+    if ($expectedStepId !== null && $expectedStepId > 0 && $stepId !== $expectedStepId) {
+        throw new InvalidArgumentException('note_id does not belong to step_id');
+    }
+    $step = fabric8_agent_step_row($stepId);
+    if (!$step) {
+        throw new InvalidArgumentException('Step not found for note');
+    }
+    $backup = [
+        'note' => [
+            'id' => (int)$row['id'],
+            'step_id' => $stepId,
+            'note_text' => (string)$row['note_text'],
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'updated_at' => (string)($row['updated_at'] ?? ''),
+        ],
+        'project_id' => (int)$step['project_id'],
+        'backed_up_at' => gmdate('c'),
+    ];
+    fabric8_agent_log_delete('delete_note', [
+        'note_id' => (int)$row['id'],
+        'step_id' => $stepId,
+        'project_id' => (int)$step['project_id'],
+        'dry_run' => $dryRun,
+        'backup' => $backup,
+    ]);
+    if ($dryRun) {
+        return [
+            'dry_run' => true,
+            'deleted' => false,
+            'backup' => $backup,
+        ];
+    }
+    fabric8_agent_insert_step_audit((int)$step['project_id'], $stepId, 'note_deleted', [
+        'actor' => 'agent:fabric8',
+        'note' => $backup['note'],
+    ]);
+    Database::execute('DELETE FROM build_wizard_step_notes WHERE id = ?', [(int)$row['id']]);
+    return [
+        'dry_run' => false,
+        'deleted' => true,
+        'deleted_note_id' => (int)$row['id'],
+        'backup' => $backup,
+    ];
+}
+
+/**
+ * Delete one step. Child steps (parent_step_id) block the delete unless $cascade is true.
+ * Document files are kept: attached documents are detached (step_id set null) and included in the backup.
+ *
+ * @return array<string,mixed>
+ */
+function fabric8_agent_delete_step(int $stepId, bool $dryRun = false, bool $cascade = false): array
+{
+    $step = fabric8_agent_step_row($stepId);
+    if (!$step) {
+        throw new InvalidArgumentException('Step not found');
+    }
+    $directChildren = fabric8_agent_child_step_ids($stepId);
+    if ($directChildren && !$cascade) {
+        throw new Fabric8AgentConflictException(
+            'Step has child steps; pass cascade:true to delete them',
+            $directChildren
+        );
+    }
+    $descendantIds = $cascade ? fabric8_agent_descendant_step_ids($stepId) : [];
+    $deleteIds = array_merge($descendantIds, [$stepId]);
+    $backup = fabric8_agent_delete_backup($deleteIds);
+    fabric8_agent_log_delete('delete_step', [
+        'step_id' => $stepId,
+        'project_id' => (int)$step['project_id'],
+        'cascade' => $cascade,
+        'delete_step_ids' => $deleteIds,
+        'dry_run' => $dryRun,
+        'backup' => $backup,
+    ]);
+    if ($dryRun) {
+        return [
+            'dry_run' => true,
+            'deleted' => false,
+            'step_id' => $stepId,
+            'would_delete_step_ids' => $deleteIds,
+            'backup' => $backup,
+        ];
+    }
+
+    Database::beginTransaction();
+    try {
+        $detached = fabric8_agent_detach_step_documents($deleteIds);
+        foreach ($deleteIds as $id) {
+            Database::execute('DELETE FROM build_wizard_steps WHERE id = ?', [$id]);
+        }
+        Database::commit();
+    } catch (Throwable $e) {
+        if (Database::inTransaction()) {
+            Database::rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'dry_run' => false,
+        'deleted' => true,
+        'deleted_step_id' => $stepId,
+        'deleted_step_ids' => $deleteIds,
+        'documents_detached' => $detached,
+        'backup' => $backup,
+    ];
+}

@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { ApiClient } from '../../../core/ApiClient';
+import { promptMfaStepUp } from '../../../core/mfaStepUp';
 import { openPlaidLink } from '../../../core/plaidConnect';
 import {
   Accumul8BankConnection,
@@ -10,6 +11,7 @@ import {
   Accumul8PlaidExchangeResponse,
   Accumul8PlaidLinkTokenResponse,
 } from '../../../types/accumul8-plaid';
+import { AuthMfaChallengeResponse } from '../../../types/authMfa';
 
 interface UseAccumul8SyncActionsOptions {
   load: () => Promise<unknown>;
@@ -65,7 +67,7 @@ export function useAccumul8SyncActions({
     }
   }, [setLastSyncReport, setSyncingConnectionId, syncBankConnection]);
 
-  const runTellerConnectFlow = React.useCallback(async (existingConnection?: Accumul8BankConnection | null) => {
+  const runTellerConnectFlow = React.useCallback(async (existingConnection?: Accumul8BankConnection | null, isRetry = false) => {
     if (!onToast) return;
     if (!syncProvider.configured) {
       onToast({ tone: 'info', message: 'Plaid not configured — add keys in Settings' });
@@ -120,6 +122,17 @@ export function useAccumul8SyncActions({
       });
       await load();
     } catch (error: any) {
+      const payload = error?.payload as AuthMfaChallengeResponse | undefined;
+      if (!isRetry && payload?.mfa_step_up_required) {
+        const verified = await promptMfaStepUp(
+          String(payload.email_masked || ''),
+          'Connecting a bank needs a code from the last 12 hours, including on a trusted device.'
+        );
+        if (verified) {
+          await runTellerConnectFlow(existingConnection, true);
+          return;
+        }
+      }
       const message = String(error?.message || 'Failed to start Plaid Link');
       openSyncHelp({ error: message });
       onToast({ tone: 'error', message });

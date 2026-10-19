@@ -46,6 +46,30 @@ This file serves as the Single Source of Truth for the database structure, deriv
 - `used_at` (DATETIME)
 - `created_at` (TIMESTAMP)
 
+### auth_mfa_challenges
+Email MFA one-time codes. Only `code_hash` is stored.
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `purpose` (VARCHAR(16), `login` or `step_up`)
+- `code_hash` (VARCHAR(255))
+- `expires_at` (DATETIME)
+- `used_at` (DATETIME, NULLABLE)
+- `attempt_count` (INT, DEFAULT 0)
+- `created_at` (TIMESTAMP)
+- Key: (`user_id`, `purpose`, `id`)
+
+### auth_trusted_devices
+Revocable 30-day device trust cookies. The cookie stores a selector, verifier, expiry, and HMAC. The database stores the selector and a hash of the verifier.
+- `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
+- `user_id` (INT)
+- `selector` (VARCHAR(64), UNIQUE)
+- `token_hash` (VARBINARY(32))
+- `expires_at` (DATETIME)
+- `revoked_at` (DATETIME, NULLABLE)
+- `created_at` (TIMESTAMP)
+- `last_used_at` (DATETIME, NULLABLE)
+- `user_agent` (VARCHAR(255), NULLABLE)
+
 ### secrets
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `key` (VARCHAR(191), UNIQUE)

@@ -3,6 +3,7 @@ import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { IToast } from '../../types/common';
 import { useLogin } from './hooks/useLogin';
 import { LoginForm } from './sections/LoginForm';
+import { MfaCodeForm } from './sections/MfaCodeForm';
 import { SignupForm } from './sections/SignupForm';
 import './LoginModal.css';
 
@@ -87,6 +88,26 @@ export function LoginModal({ open, onClose, onLoggedIn, onToast }: LoginModalPro
       document.removeEventListener('mousedown', onPointerDown);
     };
   }, [open, onClose]);
+
+  if (open && state.mfaRequired) {
+    return (
+      <div className="catn8-mfa-overlay" role="presentation">
+        <div className="catn8-mfa-card card shadow" role="dialog" aria-modal="true" aria-label="Two-factor verification">
+          <MfaCodeForm
+            busy={state.busy}
+            emailMasked={state.mfaEmailMasked}
+            error={state.mfaError}
+            note=""
+            showTrustDevice
+            trustDevice={state.trustDevice}
+            onTrustDevice={state.setTrustDevice}
+            onResend={() => void state.resendMfa()}
+            onSubmit={(code) => void state.submitMfa(code)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (!open) {
     return <ForgotPasswordModal open={state.forgotOpen} onClose={() => state.setForgotOpen(false)} />;

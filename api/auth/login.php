@@ -86,6 +86,12 @@ try {
     if ($hasColumn('email_verified')) {
         $selectFields[] = 'email_verified';
     }
+    if ($hasColumn('email')) {
+        $selectFields[] = 'email';
+    }
+    if ($hasColumn('username')) {
+        $selectFields[] = 'username';
+    }
 
     $sql = 'SELECT ' . implode(', ', $selectFields) . ' FROM users WHERE `' . $loginColumn . '` = ?';
     $user = Database::queryOne($sql, [$username]);
@@ -107,10 +113,11 @@ try {
         catn8_json_response(['success' => false, 'error' => 'Invalid credentials'], 401);
     }
 
-    $step = 'session-write';
-    $_SESSION['catn8_user_id'] = (int)$user['id'];
-
-    catn8_json_response(['success' => true]);
+    $step = 'mfa';
+    require_once __DIR__ . '/../emailer.php';
+    require_once __DIR__ . '/../../includes/auth_mfa.php';
+    $mfa = catn8_mfa_after_password((int)$user['id']);
+    catn8_json_response($mfa['body'], $mfa['status']);
 } catch (Throwable $e) {
     catn8_log_error('login endpoint fatal', [
         'step' => $step,

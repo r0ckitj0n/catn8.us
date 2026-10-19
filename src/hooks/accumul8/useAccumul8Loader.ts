@@ -147,7 +147,7 @@ export function useAccumul8Loader(args: {
       applyTransactionPayload(res);
       state.setBudgetRows(Array.isArray(res?.budget_rows) ? res.budget_rows : []);
       state.setBankConnections(Array.isArray(res?.bank_connections) ? res.bank_connections : []);
-      state.setSyncProvider(res?.sync_provider || { provider: 'teller', env: 'sandbox', configured: 0 });
+      state.setSyncProvider(res?.sync_provider || { provider: 'plaid', env: 'sandbox', configured: 0 });
       state.setSummary(res?.summary || { net_amount: 0, inflow_total: 0, outflow_total: 0, unpaid_outflow_total: 0 });
       if (res?.statement_uploads || res?.archived_statement_uploads || res?.statement_audit_runs) {
         applyStatementWorkspace(res);

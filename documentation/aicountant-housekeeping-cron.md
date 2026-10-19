@@ -54,11 +54,15 @@ Legacy GET still works for now, but it is deprecated because it exposes the toke
 https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN&owner_user_id=OWNER_USER_ID&days_ahead=90&send_email=1&create_notification_rule=1&email_on_attention_only=1
 ```
 
-## Recommended IONOS cron setup
+## Scheduled run
 
-The twice-daily entries below are the Plaid fallback sync. Run both. The live SSH login is SFTP-only, so this deploy cannot read `crontab -l`. Confirm the jobs in the IONOS cron panel. If neither `run_aicountant_housekeeping.php` nor `accumul8_housekeeping.php` is scheduled, add both entries there.
+GitHub Actions workflow `.github/workflows/accumul8-housekeeping.yml` is the twice-daily fallback. It POSTs to `https://catn8.us/api/accumul8_housekeeping.php` at 14:00 and 19:00 UTC (10:00 and 15:00 America/New_York) and can also be started with `workflow_dispatch`. The admin token comes from the Actions secret `CATN8_ADMIN_TOKEN` and is sent only as an `Authorization: Bearer` header. The workflow fails when the endpoint returns a non-2xx status.
 
-If your IONOS package gives you SSH and server-side cron, use that path. If not, use the token-guarded URL form above in the IONOS cron UI.
+A second run the same day is safe if an IONOS cron is also installed. Plaid transaction sync continues from the saved cursor, the watchlist email is sent only for a new watchlist state, and the Plaid health email is sent only when a problem appears or clears.
+
+## Optional IONOS cron
+
+The live SSH login is SFTP-only, so the host crontab cannot be confirmed from deploy. The GitHub Actions schedule above does not depend on it. If you also add the host cron, use the header form and keep the token out of the URL.
 
 Recommended crontab:
 

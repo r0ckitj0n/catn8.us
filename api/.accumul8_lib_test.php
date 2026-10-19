@@ -4936,7 +4936,6 @@ function accumul8_tables_ensure(): void
                    AND source_kind IN ('plaid', 'teller', 'statement_upload')"
             );
         }
-        Database::execute("UPDATE accumul8_transactions SET source_kind = 'teller' WHERE source_kind = 'plaid'");
         accumul8_table_add_column_if_missing('accumul8_transactions', 'external_id', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'pending_status', 'TINYINT(1) NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'created_by_user_id', 'INT NOT NULL DEFAULT 0');
@@ -4952,7 +4951,6 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'status', "VARCHAR(32) NOT NULL DEFAULT 'setup_pending'");
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_sync_at', 'DATETIME NULL');
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_error', 'TEXT NULL');
-        Database::execute("UPDATE accumul8_bank_connections SET provider_name = 'teller' WHERE provider_name = 'plaid'");
         if (!accumul8_table_has_index('accumul8_bank_connections', 'uniq_accumul8_bank_enrollment')) {
             Database::execute('ALTER TABLE accumul8_bank_connections ADD UNIQUE KEY uniq_accumul8_bank_enrollment (owner_user_id, provider_name, teller_enrollment_id)');
         }
@@ -8894,3 +8892,10 @@ function accumul8_backfill_entities_for_owner(int $viewerId): array
              FROM accumul8_contacts
              WHERE owner_user_id = ?
              ORDER BY id ASC',
+            [$viewerId]
+        );
+        $stats['contacts_processed'] = is_array($contactRows) ? count($contactRows) : 0;
+    }
+
+    return $stats;
+}

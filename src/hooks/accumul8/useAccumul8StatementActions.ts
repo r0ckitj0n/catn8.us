@@ -29,7 +29,7 @@ export function useAccumul8StatementActions(args: {
   const syncBankConnection = React.useCallback(async (connectionId: number) => {
     setBusy(true);
     try {
-      const res = await ApiClient.post<any>(scopedActionUrl('teller_sync_transactions'), { connection_id: connectionId });
+      const res = await ApiClient.post<any>(scopedActionUrl('sync_transactions'), { connection_id: connectionId });
       if (onToast) onToast({ tone: 'success', message: `Synced bank transactions (added ${Number(res?.added || 0)}).` });
       await load();
       return res;

@@ -6,6 +6,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/emailer.php';
 require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
+require_once __DIR__ . '/../includes/accumul8_plaid.php';
 require_once __DIR__ . '/../includes/diagnostics_log.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
 
@@ -5329,7 +5330,7 @@ function accumul8_validate_bank_connection_provider($value): string
     if ($provider === '') {
         $provider = 'teller';
     }
-    if (!in_array($provider, ['teller'], true)) {
+    if (!in_array($provider, ['teller', 'plaid'], true)) {
         catn8_json_response(['success' => false, 'error' => 'Invalid provider_name'], 400);
     }
     return $provider;
@@ -6519,6 +6520,9 @@ function accumul8_learn_entity_alias_from_description(int $viewerId, ?int $entit
 
 function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $actorUserId, int $connectionId): array
 {
+    // Teller shut down its API. Stop before any api.teller.io call; history stays on the row.
+    throw new Accumul8ClientException(ACCUMUL8_TELLER_SHUTDOWN_ERROR, 409);
+
     $connection = Database::queryOne(
         'SELECT id, owner_user_id, institution_id, institution_name, teller_enrollment_id, teller_access_token_secret_key
          FROM accumul8_bank_connections
@@ -7091,16 +7095,26 @@ function accumul8_teller_sync_transactions_for_connection(int $viewerId, int $ac
 function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
 {
     $connections = Database::queryAll(
-        'SELECT id, institution_name, provider_name
+        'SELECT id, institution_name, provider_name, status
          FROM accumul8_bank_connections
          WHERE owner_user_id = ?
          ORDER BY institution_name ASC, id ASC',
         [$viewerId]
     );
-    $eligibleConnections = array_values(array_filter($connections, static function (array $connection): bool {
-        return (int)($connection['id'] ?? 0) > 0
-            && strtolower((string)($connection['provider_name'] ?? 'teller')) === 'teller';
-    }));
+    $eligibleConnections = [];
+    $skippedBeforeSync = 0;
+    foreach ($connections as $connection) {
+        $connectionId = (int)($connection['id'] ?? 0);
+        if ($connectionId <= 0) {
+            continue;
+        }
+        $route = accumul8_connection_sync_route($connection);
+        if ($route !== 'plaid') {
+            $skippedBeforeSync++;
+            continue;
+        }
+        $eligibleConnections[] = $connection;
+    }
 
     $beforeRows = Database::queryAll(
         'SELECT id, account_name, current_balance
@@ -7123,14 +7137,14 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
         'info',
         'Balance the Books started',
         $eligibleConnections !== []
-            ? 'AIcountant started a balance run across ' . count($eligibleConnections) . ' bank connection' . (count($eligibleConnections) === 1 ? '' : 's') . '.'
-            : 'AIcountant started a balance run but found no Teller bank connections to sync.'
+            ? 'AIcountant started a balance run across ' . count($eligibleConnections) . ' Plaid bank connection' . (count($eligibleConnections) === 1 ? '' : 's') . '.'
+            : 'AIcountant started a balance run but found no Plaid bank connections to sync.'
     );
 
     if ($eligibleConnections === []) {
         return [
             'synced_connection_count' => 0,
-            'skipped_connection_count' => 0,
+            'skipped_connection_count' => $skippedBeforeSync,
             'error_connection_count' => 0,
             'changed_accounts' => [],
         ];
@@ -7138,7 +7152,7 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
 
     $syncedCount = 0;
     $errorCount = 0;
-    $skippedCount = 0;
+    $skippedCount = $skippedBeforeSync;
     $connectionErrors = [];
 
     foreach ($eligibleConnections as $connection) {
@@ -7149,7 +7163,7 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
         }
 
         try {
-            $result = accumul8_teller_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
+            $result = accumul8_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
             $syncedCount++;
             $allAccountsSkipped = true;
             foreach (($result['accounts'] ?? []) as $accountSummary) {
@@ -9543,6 +9557,7 @@ function accumul8_tables_ensure(): void
         provider_name VARCHAR(32) NOT NULL DEFAULT '',
         teller_account_id VARCHAR(191) NULL,
         teller_enrollment_id VARCHAR(191) NULL,
+        plaid_account_id VARCHAR(191) NULL,
         account_name VARCHAR(191) NOT NULL,
         account_nickname VARCHAR(191) NOT NULL DEFAULT '',
         account_type VARCHAR(40) NOT NULL DEFAULT 'checking',
@@ -9860,6 +9875,9 @@ function accumul8_tables_ensure(): void
         teller_enrollment_id VARCHAR(191) NULL,
         teller_user_id VARCHAR(191) NULL,
         teller_access_token_secret_key VARCHAR(191) NULL,
+        plaid_item_id VARCHAR(191) NULL,
+        plaid_access_token_secret_key VARCHAR(191) NULL,
+        plaid_transactions_cursor TEXT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'setup_pending',
         last_sync_at DATETIME NULL,
         last_error TEXT NULL,
@@ -9867,6 +9885,7 @@ function accumul8_tables_ensure(): void
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_accumul8_bank_owner (owner_user_id),
         UNIQUE KEY uniq_accumul8_bank_enrollment (owner_user_id, provider_name, teller_enrollment_id),
+        UNIQUE KEY uniq_accumul8_bank_plaid_item (owner_user_id, provider_name, plaid_item_id),
         CONSTRAINT fk_accumul8_bank_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
@@ -10184,7 +10203,6 @@ function accumul8_tables_ensure(): void
                    AND source_kind IN ('plaid', 'teller', 'statement_upload')"
             );
         }
-        Database::execute("UPDATE accumul8_transactions SET source_kind = 'teller' WHERE source_kind = 'plaid'");
         accumul8_table_add_column_if_missing('accumul8_transactions', 'external_id', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'pending_status', 'TINYINT(1) NOT NULL DEFAULT 0');
         accumul8_table_add_column_if_missing('accumul8_transactions', 'created_by_user_id', 'INT NOT NULL DEFAULT 0');
@@ -10233,7 +10251,20 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'status', "VARCHAR(32) NOT NULL DEFAULT 'setup_pending'");
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_sync_at', 'DATETIME NULL');
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'last_error', 'TEXT NULL');
-        Database::execute("UPDATE accumul8_bank_connections SET provider_name = 'teller' WHERE provider_name = 'plaid'");
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_item_id', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_access_token_secret_key', 'VARCHAR(191) NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_transactions_cursor', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_accounts', 'plaid_account_id', 'VARCHAR(191) NULL');
+        if (!accumul8_table_has_index('accumul8_bank_connections', 'uniq_accumul8_bank_plaid_item')
+            && accumul8_table_has_column('accumul8_bank_connections', 'plaid_item_id')) {
+            Database::execute('ALTER TABLE accumul8_bank_connections ADD UNIQUE KEY uniq_accumul8_bank_plaid_item (owner_user_id, provider_name, plaid_item_id)');
+        }
+        Database::execute(
+            "UPDATE accumul8_bank_connections
+             SET status = 'retired_teller', updated_at = NOW()
+             WHERE provider_name = 'teller'
+               AND status <> 'retired_teller'"
+        );
         if (!accumul8_table_has_index('accumul8_bank_connections', 'uniq_accumul8_bank_enrollment')) {
             Database::execute('ALTER TABLE accumul8_bank_connections ADD UNIQUE KEY uniq_accumul8_bank_enrollment (owner_user_id, provider_name, teller_enrollment_id)');
         }
@@ -15411,30 +15442,15 @@ function accumul8_header_window_totals(int $viewerId, int $windowDays = 90): arr
 
 function accumul8_bootstrap_sync_provider(): array
 {
-    $plaidEnv = strtolower(accumul8_normalize_text((string)(secret_get(catn8_secret_key('accumul8.plaid.env')) ?? getenv('PLAID_ENV') ?? 'sandbox'), 16));
+    $plaidEnv = function_exists('accumul8_plaid_env') ? accumul8_plaid_env() : 'sandbox';
     if (!in_array($plaidEnv, ['sandbox', 'production'], true)) {
         $plaidEnv = 'sandbox';
     }
-    $plaidClient = trim((string)(secret_get(catn8_secret_key('accumul8.plaid.client_id')) ?? getenv('PLAID_CLIENT_ID') ?? ''));
-    $plaidSecretPresent = trim((string)(secret_get(catn8_secret_key('accumul8.plaid.secret')) ?? getenv('PLAID_SECRET') ?? '')) !== '';
-    $plaidConfigured = $plaidClient !== '' && $plaidSecretPresent;
-    if (function_exists('accumul8_plaid_is_configured') && accumul8_plaid_is_configured()) {
-        $plaidConfigured = true;
-        if (function_exists('accumul8_plaid_env')) {
-            $plaidEnv = accumul8_plaid_env();
-        }
-    }
-    if ($plaidConfigured) {
-        return [
-            'provider' => 'plaid',
-            'env' => $plaidEnv,
-            'configured' => 1,
-        ];
-    }
+    $configured = function_exists('accumul8_plaid_is_configured') && accumul8_plaid_is_configured();
     return [
-        'provider' => 'teller',
-        'env' => accumul8_teller_env(),
-        'configured' => accumul8_teller_is_configured() ? 1 : 0,
+        'provider' => 'plaid',
+        'env' => $plaidEnv,
+        'configured' => $configured ? 1 : 0,
     ];
 }
 
@@ -20493,22 +20509,20 @@ if ($action === 'teller_enroll') {
     ]);
 }
 
-if ($action === 'teller_sync_transactions') {
-    catn8_require_method('POST');
-    $body = catn8_read_json_body();
+if ($action === 'plaid_link_token') {
+    accumul8_dispatch_plaid_link_token($viewerId);
+}
 
-    $connectionId = (int)($body['connection_id'] ?? 0);
-    if ($connectionId <= 0) {
-        catn8_json_response(['success' => false, 'error' => 'connection_id is required'], 400);
-    }
+if ($action === 'plaid_exchange_public_token') {
+    accumul8_dispatch_plaid_exchange($viewerId);
+}
 
-    try {
-        $result = accumul8_teller_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
-        catn8_json_response(array_merge(['success' => true], $result));
-    } catch (Throwable $exception) {
-        $statusCode = $exception->getMessage() === 'Connection not found' ? 404 : 500;
-        catn8_json_response(['success' => false, 'error' => $exception->getMessage()], $statusCode);
-    }
+if ($action === 'remap_accounts_to_plaid') {
+    accumul8_dispatch_remap_accounts_to_plaid($viewerId);
+}
+
+if ($action === 'teller_sync_transactions' || $action === 'sync_transactions' || $action === 'plaid_sync_transactions') {
+    accumul8_dispatch_connection_sync($viewerId, $actorUserId);
 }
 
 catn8_json_response(['success' => false, 'error' => 'Unknown action'], 400);

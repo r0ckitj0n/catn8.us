@@ -189,7 +189,8 @@ export function Accumul8SyncInstitutionsManager({
             {syncTable.rows.map((connection) => {
               const isEditing = editingConnectionId === connection.id;
               const linkedAccounts = linkedAccountsByConnectionId[Number(connection.id || 0)] || [];
-              const canSync = String(connection.teller_enrollment_id || '').trim() !== '';
+              const tellerRetired = String(connection.provider_name || '') === 'teller' || String(connection.status || '') === 'retired_teller';
+              const canSync = !tellerRetired && (String(connection.provider_name || '') === 'plaid' || String(connection.teller_enrollment_id || '').trim() !== '');
               return (
                 <React.Fragment key={connection.id}>
                   <tr>
@@ -209,7 +210,7 @@ export function Accumul8SyncInstitutionsManager({
                             </div>
                           ))
                         ) : (
-                          <div className="accumul8-sync-empty">No local account mappings yet. Run Sync to import and map Teller accounts.</div>
+                          <div className="accumul8-sync-empty">No local account mappings yet. Reconnect via Plaid, then run Sync.</div>
                         )}
                       </div>
                     </td>
@@ -227,7 +228,7 @@ export function Accumul8SyncInstitutionsManager({
                           className="btn btn-sm btn-outline-primary"
                           onClick={() => void onSync(Number(connection.id || 0), String(connection.institution_name || connection.institution_id || 'Unknown'))}
                           disabled={busy || !canSync}
-                          title={canSync ? 'Sync this institution now' : 'Finish Teller Connect before syncing'}
+                          title={tellerRetired ? 'Teller has shut down; reconnect this bank via Plaid on the Sync tab' : (canSync ? 'Sync this institution now' : 'Finish Plaid Link before syncing')}
                         >
                           {syncingConnectionId === Number(connection.id || 0) ? 'Syncing...' : 'Sync'}
                         </button>
@@ -236,9 +237,9 @@ export function Accumul8SyncInstitutionsManager({
                           className="btn btn-sm btn-outline-secondary"
                           onClick={() => void onReconnect(connection)}
                           disabled={busy}
-                          title={`Reconnect ${connection.institution_name || connection.institution_id || 'Institution'} through Teller`}
+                          title={`Reconnect ${connection.institution_name || connection.institution_id || 'Institution'} via Plaid`}
                         >
-                          Reconnect
+                          Reconnect via Plaid
                         </button>
                         <button
                           type="button"

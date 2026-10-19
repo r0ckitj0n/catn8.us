@@ -69,10 +69,13 @@ export function Accumul8SyncTab({
   return (
     <React.Suspense fallback={<div className="accumul8-panel text-muted py-4">Loading view...</div>}>
       <div className="accumul8-panel accumul8-panel--viewport-fill">
-        <h3>Bank Sync Groundwork</h3>
-        <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
+        <h3>Bank Sync</h3>
+        <p className="mb-2">Provider: <strong>Plaid</strong>. Environment: <strong>{syncProvider.env === 'production' ? 'production' : 'sandbox'}</strong>. Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
+        {!syncProvider.configured ? (
+          <div className="alert alert-info py-2" role="status">Plaid not configured — add keys in Settings</div>
+        ) : null}
         <div className="d-flex gap-2 flex-wrap mb-3">
-          <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
+          <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Plaid</button>
           <button type="button" className="btn btn-outline-secondary" onClick={openSyncHelp}>Show Setup Guide</button>
         </div>
         <Accumul8SyncInstitutionsManager
@@ -113,7 +116,7 @@ export function Accumul8SyncTab({
                     </div>
                     {account.history_start_date && account.history_end_date ? (
                       <div className="accumul8-sync-report__account-meta">
-                        Teller history returned: {account.history_start_date} to {account.history_end_date}.
+                        History returned: {account.history_start_date} to {account.history_end_date}.
                       </div>
                     ) : null}
                     <div className="accumul8-sync-report__account-meta">
@@ -128,17 +131,17 @@ export function Accumul8SyncTab({
                       Transactions added: {account.transactions_added}; modified: {account.transactions_modified}; unchanged: {account.transactions_unchanged}; removed: {account.transactions_removed}.
                     </div>
                     <div className="accumul8-sync-report__account-meta">
-                      Cleanup removed {account.stale_teller_removed} stale Teller row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside Teller&apos;s returned history window.
+                      Cleanup removed {account.stale_teller_removed} stale imported row{account.stale_teller_removed === 1 ? '' : 's'} and {account.statement_imports_removed} statement import row{account.statement_imports_removed === 1 ? '' : 's'} inside the returned history window.
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="accumul8-sync-empty">No Teller accounts were returned in the most recent sync.</div>
+                <div className="accumul8-sync-empty">No accounts were returned in the most recent sync.</div>
               )}
             </div>
           </div>
         ) : null}
-        <p className="small text-muted mb-0">Teller accounts are matched by Teller&apos;s stable account IDs and enrollment IDs. On sync, Accumul8 creates or updates a local account record for each returned Teller account and then attaches transactions to that mapped local account.</p>
+        <p className="small text-muted mb-0">Plaid accounts are matched by Plaid account IDs, and by institution plus the last 4 digits when a Teller account already exists. Existing transactions stay in place. Reconnect via Plaid on a retired Teller connection to keep that history.</p>
       </div>
     </React.Suspense>
   );

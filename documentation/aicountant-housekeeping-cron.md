@@ -4,7 +4,7 @@ Use this when you want AIcountant to run unattended on live and keep Accumul8 cu
 
 ## What the housekeeping run does
 
-- Syncs all Teller-backed bank connections.
+- Syncs Plaid bank connections. Teller and retired Teller connections are skipped.
 - Reconciles opening balances when the bank balance and Accumul8 ledger are still offset.
 - Materializes recurring ledger transactions through the next 90 days by default.
 - Runs the AIcountant watchlist over overdue bills, bills due soon, recurring outflows, and near-term cash-flow pressure.
@@ -72,5 +72,5 @@ If `php` is not at `/usr/bin/php`, run `which php` over SSH and replace it.
 
 - The housekeeping run writes bookkeeping actions into live MySQL through the same Accumul8 code paths used by the app.
 - No new schema change is required for this cron setup.
-- The script assumes Teller credentials, AI provider settings, SMTP settings, and `CATN8_ADMIN_TOKEN` are already configured on live.
+- The script assumes Plaid credentials, AI provider settings, SMTP settings, and `CATN8_ADMIN_TOKEN` are already configured on live. Teller connections are retired and are not synced.
 - If you use the API endpoint from cron, prefer a server-side cron command that runs `curl -X POST` with an `Authorization: Bearer ...` header instead of a plain URL cron.

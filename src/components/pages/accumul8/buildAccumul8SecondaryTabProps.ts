@@ -162,6 +162,7 @@ export function buildAccumul8SecondaryTabProps(options: any) {
       summaryFormatAccountLabel: options.formatSyncSummaryAccountLabel,
       syncProvider: options.syncProvider,
       syncingConnectionId: options.syncingConnectionId,
+      plaidHealthUrl: typeof options.scopedActionUrl === 'function' ? options.scopedActionUrl('plaid_health') : '/api/accumul8.php?action=plaid_health',
       updateBankConnection: options.updateBankConnection,
     },
     tab: options.tab,

@@ -82,6 +82,7 @@ export function formatSyncConnectionStatus(status: string): string {
   if (normalized === 'connected') return 'Connected';
   if (normalized === 'setup_pending') return 'Setup Pending';
   if (normalized === 'sync_error') return 'Sync Error';
+  if (normalized === 'needs_reauth') return 'Needs Reconnect';
   if (normalized === '') return 'Unknown';
   return normalized.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 }

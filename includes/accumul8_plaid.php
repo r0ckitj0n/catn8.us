@@ -13,6 +13,8 @@ class Accumul8ClientException extends RuntimeException
     }
 }
 
+require_once __DIR__ . '/accumul8_plaid_webhook.php';
+
 function accumul8_exception_http_status(Throwable $exception): int
 {
     if ($exception instanceof Accumul8ClientException) {
@@ -140,8 +142,15 @@ function accumul8_plaid_request(string $path, array $body = []): array
         throw new RuntimeException('Plaid returned invalid JSON (HTTP ' . $status . ')');
     }
     if ($status < 200 || $status >= 300) {
-        $errorMessage = accumul8_normalize_text((string)($decoded['error_message'] ?? $decoded['error_code'] ?? 'Plaid request failed'), 500);
-        throw new RuntimeException($errorMessage !== '' ? $errorMessage : ('Plaid request failed with HTTP ' . $status));
+        $errorCode = strtoupper(accumul8_normalize_text((string)($decoded['error_code'] ?? ''), 64));
+        $errorMessage = accumul8_normalize_text((string)($decoded['error_message'] ?? 'Plaid request failed'), 500);
+        if ($errorMessage === '') {
+            $errorMessage = 'Plaid request failed with HTTP ' . $status;
+        }
+        if ($errorCode !== '') {
+            $errorMessage = $errorCode . ': ' . $errorMessage;
+        }
+        throw new RuntimeException($errorMessage);
     }
     return $decoded;
 }
@@ -444,6 +453,7 @@ function accumul8_plaid_create_link_token(int $viewerId, ?string $existingItemId
     if (($creds['redirect_uri'] ?? '') !== '') {
         $body['redirect_uri'] = $creds['redirect_uri'];
     }
+    $body['webhook'] = ACCUMUL8_PLAID_WEBHOOK_URL;
     $res = accumul8_plaid_request('/link/token/create', $body);
     $linkToken = accumul8_normalize_text((string)($res['link_token'] ?? ''), 512);
     if ($linkToken === '') {
@@ -569,6 +579,15 @@ function accumul8_plaid_exchange_public_token(int $viewerId, string $publicToken
             ]
         );
         $connectionId = (int)Database::lastInsertId();
+    }
+
+    try {
+        accumul8_plaid_request('/item/webhook/update', [
+            'access_token' => $accessToken,
+            'webhook' => ACCUMUL8_PLAID_WEBHOOK_URL,
+        ]);
+    } catch (Throwable $webhookError) {
+        error_log('accumul8 plaid webhook update failed: ' . accumul8_normalize_text($webhookError->getMessage(), 300));
     }
 
     return [
@@ -829,7 +848,7 @@ function accumul8_plaid_sync_transactions_for_connection(int $viewerId, int $act
 
     Database::execute(
         'UPDATE accumul8_bank_connections
-         SET institution_id = ?, institution_name = ?, plaid_item_id = ?, plaid_transactions_cursor = ?, plaid_access_token_secret_key = ?, status = ?, last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
+         SET institution_id = ?, institution_name = ?, plaid_item_id = ?, plaid_transactions_cursor = ?, plaid_access_token_secret_key = ?, status = ?, last_sync_at = NOW(), last_error = NULL, plaid_consecutive_error_count = 0, updated_at = NOW()
          WHERE id = ? AND owner_user_id = ?',
         [
             $institutionId === '' ? null : $institutionId,
@@ -842,6 +861,24 @@ function accumul8_plaid_sync_transactions_for_connection(int $viewerId, int $act
             $viewerId,
         ]
     );
+    try {
+        $flagRow = Database::queryOne(
+            'SELECT plaid_health_flags FROM accumul8_bank_connections WHERE id = ? AND owner_user_id = ? LIMIT 1',
+            [$connectionId, $viewerId]
+        );
+        $remainingFlags = array_values(array_intersect(
+            accumul8_plaid_parse_flag_list((string)($flagRow['plaid_health_flags'] ?? '')),
+            ['missing_webhook']
+        ));
+        Database::execute(
+            'UPDATE accumul8_bank_connections
+             SET plaid_health_flags = ?
+             WHERE id = ? AND owner_user_id = ?',
+            [$remainingFlags === [] ? null : implode(',', $remainingFlags), $connectionId, $viewerId]
+        );
+    } catch (Throwable $flagError) {
+        error_log('accumul8 plaid health flag reset failed: ' . accumul8_normalize_text($flagError->getMessage(), 300));
+    }
 
     return [
         'added' => $added,
@@ -1256,6 +1293,13 @@ function accumul8_dispatch_connection_sync(int $viewerId, int $actorUserId): voi
         $result = accumul8_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
         catn8_json_response(array_merge(['success' => true], $result));
     } catch (Throwable $exception) {
+        if ($exception->getMessage() !== 'Connection not found') {
+            try {
+                accumul8_plaid_record_sync_failure($viewerId, $connectionId, $exception->getMessage());
+            } catch (Throwable $recordError) {
+                error_log('accumul8 plaid sync failure record failed: ' . accumul8_normalize_text($recordError->getMessage(), 300));
+            }
+        }
         catn8_json_response([
             'success' => false,
             'error' => $exception->getMessage(),

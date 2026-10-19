@@ -7,6 +7,7 @@ import {
   Accumul8TellerSyncAccountSummary,
   Accumul8TellerSyncResponse,
 } from '../../../types/accumul8';
+import { Accumul8PlaidHealthBadge } from '../../accumul8/Accumul8PlaidHealthBadge';
 import { Accumul8SyncInstitutionsManager } from '../../accumul8/Accumul8SyncInstitutionsManager';
 
 type SyncProvider = {
@@ -41,6 +42,7 @@ interface Accumul8SyncTabProps {
   summaryFormatAccountLabel: (account: Accumul8TellerSyncAccountSummary) => string;
   syncProvider: SyncProvider;
   syncingConnectionId: number | null;
+  plaidHealthUrl: string;
   updateBankConnection: (id: number, payload: Accumul8BankConnectionUpsertRequest) => Promise<void>;
 }
 
@@ -64,6 +66,7 @@ export function Accumul8SyncTab({
   summaryFormatAccountLabel,
   syncProvider,
   syncingConnectionId,
+  plaidHealthUrl,
   updateBankConnection,
 }: Accumul8SyncTabProps) {
   return (
@@ -74,6 +77,7 @@ export function Accumul8SyncTab({
         {!syncProvider.configured ? (
           <div className="alert alert-info py-2" role="status">Plaid not configured — add keys in Settings</div>
         ) : null}
+        <Accumul8PlaidHealthBadge healthUrl={plaidHealthUrl} />
         <div className="d-flex gap-2 flex-wrap mb-3">
           <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Plaid</button>
           <button type="button" className="btn btn-outline-secondary" onClick={openSyncHelp}>Show Setup Guide</button>

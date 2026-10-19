@@ -150,6 +150,7 @@ export function buildAccumul8PresentationOptions(options: any) {
     runTellerReconnect: actions.runTellerReconnect,
     runningAIcountantHousekeeping: ui.runningAIcountantHousekeeping,
     runningAIcountantWatchlist: ui.runningAIcountantWatchlist,
+    scopedActionUrl: ui.scopedActionUrl,
     saveDebtorRow: actions.saveDebtorRow,
     saveEntityAlias: actions.saveEntityAlias,
     saveEntityRow: actions.saveEntityRow,

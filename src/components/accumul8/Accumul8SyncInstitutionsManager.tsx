@@ -215,7 +215,7 @@ export function Accumul8SyncInstitutionsManager({
                       </div>
                     </td>
                     <td>
-                      <div className={`accumul8-sync-status${isTellerRateLimited(String(connection.last_error || '')) ? ' is-rate-limited' : ''}`}>
+                      <div className={`accumul8-sync-status${isTellerRateLimited(String(connection.last_error || '')) ? ' is-rate-limited' : ''}${String(connection.status || '') === 'needs_reauth' ? ' is-needs-reauth' : ''}`}>
                         {formatSyncStatusLabel(String(connection.status || ''), String(connection.last_error || ''))}
                       </div>
                       {connection.last_error ? <div className="accumul8-sync-error">{formatSyncStatusMessage(String(connection.last_error || ''))}</div> : null}

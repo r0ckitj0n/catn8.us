@@ -14,3 +14,20 @@ export interface Accumul8PlaidExchangeResponse {
   institution_id?: string;
   institution_name?: string;
 }
+
+export interface Accumul8PlaidHealthConnection {
+  connection_id: number;
+  institution_name: string;
+  status: string;
+  last_sync_at: string;
+  flags: string[];
+  action: string;
+}
+
+export interface Accumul8PlaidHealthResponse {
+  success: boolean;
+  healthy: number;
+  problem_count: number;
+  webhook_url?: string;
+  connections: Accumul8PlaidHealthConnection[];
+}

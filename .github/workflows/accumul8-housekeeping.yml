@@ -1,0 +1,37 @@
+name: Accumul8 housekeeping
+
+# 14:00 and 19:00 UTC are 10:00 and 15:00 in America/New_York (EDT and EST).
+# A second run the same day is safe: Plaid sync is cursor-based, the watchlist
+# email is deduped, and the Plaid health email sends only when the problem set changes.
+on:
+  schedule:
+    - cron: '0 14 * * *'
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      owner_user_id:
+        description: 'Accumul8 owner user id (primary admin is 1)'
+        required: false
+        default: '1'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accumul8-housekeeping
+  cancel-in-progress: false
+
+jobs:
+  housekeeping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: POST housekeeping
+        env:
+          CATN8_ADMIN_TOKEN: ${{ secrets.CATN8_ADMIN_TOKEN }}
+          ACCUMUL8_OWNER_USER_ID: ${{ github.event.inputs.owner_user_id || '1' }}
+        run: bash scripts/accumul8/post_aicountant_housekeeping.sh

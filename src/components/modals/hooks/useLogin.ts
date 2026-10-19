@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ApiClient } from '../../../core/ApiClient';
 import { getLoginRedirectTarget } from '../../../entries/appConfig';
+import { AuthMfaChallengeResponse, AuthMfaResendResponse, AuthMfaVerifyRequest } from '../../../types/authMfa';
 import { IToast } from '../../../types/common';
 
 function readLoginFields(form: HTMLFormElement | null, fallbackUser: string, fallbackPass: string): {
@@ -35,6 +36,10 @@ export function useLogin(
   const [message, setMessage] = React.useState('');
   const [error, setError] = React.useState('');
   const [forgotOpen, setForgotOpen] = React.useState(false);
+  const [mfaRequired, setMfaRequired] = React.useState(false);
+  const [mfaEmailMasked, setMfaEmailMasked] = React.useState('');
+  const [mfaError, setMfaError] = React.useState('');
+  const [trustDevice, setTrustDevice] = React.useState(false);
 
   const submitLogin = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +54,13 @@ export function useLogin(
       if (!username || !password) {
         throw new Error('Username and password are required');
       }
-      await ApiClient.post('/api/auth/login.php', { username, password });
+      const loginRes = await ApiClient.post<AuthMfaChallengeResponse>('/api/auth/login.php', { username, password });
+      if (loginRes?.mfa_required) {
+        setMfaEmailMasked(String(loginRes.email_masked || ''));
+        setMfaError(loginRes.email_sent === false ? (loginRes.error || 'We could not email a verification code.') : '');
+        setMfaRequired(true);
+        return;
+      }
 
       let u = null;
       if (typeof onLoggedIn === 'function') {
@@ -72,6 +83,13 @@ export function useLogin(
       }
       onClose();
     } catch (err: any) {
+      const payload = err?.payload as AuthMfaChallengeResponse | undefined;
+      if (payload?.mfa_required) {
+        setMfaEmailMasked(String(payload.email_masked || ''));
+        setMfaError(payload.error || err?.message || 'We could not email a verification code.');
+        setMfaRequired(true);
+        return;
+      }
       const msg = err?.message || 'Login failed';
       setError(msg);
       onToast({ tone: 'error', title: 'Login failed', message: msg });
@@ -79,6 +97,55 @@ export function useLogin(
       setBusy(false);
     }
   }, [loginUsername, loginPassword, onLoggedIn, onToast, onClose]);
+
+  const finishLogin = React.useCallback(async () => {
+    let u = null;
+    if (typeof onLoggedIn === 'function') {
+      u = await onLoggedIn();
+    }
+    if (!u || !u.id) {
+      const msg = 'Login succeeded, but your session was not detected. Please refresh the page and try again.';
+      setMfaError(msg);
+      onToast({ tone: 'error', title: 'Login incomplete', message: msg });
+      return;
+    }
+    setMfaRequired(false);
+    setMessage('Logged in.');
+    onToast({ tone: 'success', title: 'Login successful', message: 'You are now logged in.' });
+    const redirectTarget = getLoginRedirectTarget();
+    if (redirectTarget) {
+      window.location.assign(redirectTarget);
+      return;
+    }
+    onClose();
+  }, [onClose, onLoggedIn, onToast]);
+
+  const submitMfa = React.useCallback(async (code: string) => {
+    setBusy(true);
+    setMfaError('');
+    try {
+      const body: AuthMfaVerifyRequest = { code, trust_device: trustDevice };
+      await ApiClient.post<AuthMfaChallengeResponse>('/api/auth/mfa_verify.php', body);
+      await finishLogin();
+    } catch (err: any) {
+      setMfaError(err?.message || 'That code is incorrect.');
+    } finally {
+      setBusy(false);
+    }
+  }, [finishLogin, trustDevice]);
+
+  const resendMfa = React.useCallback(async () => {
+    setBusy(true);
+    setMfaError('');
+    try {
+      const res = await ApiClient.post<AuthMfaResendResponse>('/api/auth/mfa_resend.php', {});
+      if (res?.email_masked) setMfaEmailMasked(res.email_masked);
+    } catch (err: any) {
+      setMfaError(err?.message || 'Could not resend the code');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const submitSignup = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +183,7 @@ export function useLogin(
     signupPassword2, setSignupPassword2,
     busy, message, error, setError, setMessage,
     forgotOpen, setForgotOpen,
-    submitLogin, submitSignup
+    mfaRequired, mfaEmailMasked, mfaError, trustDevice, setTrustDevice,
+    submitLogin, submitSignup, submitMfa, resendMfa
   };
 }

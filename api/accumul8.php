@@ -20510,6 +20510,11 @@ if ($action === 'teller_enroll') {
 }
 
 if ($action === 'plaid_link_token') {
+    require_once __DIR__ . '/../includes/auth_mfa.php';
+    $mfaGate = catn8_mfa_plaid_step_up_gate($actorUserId);
+    if ($mfaGate !== null) {
+        catn8_json_response($mfaGate['body'], $mfaGate['status']);
+    }
     accumul8_dispatch_plaid_link_token($viewerId);
 }
 

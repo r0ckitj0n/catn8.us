@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { AppShellPageProps } from '../../../types/pages/commonPageProps';
+import { MfaStepUpHost } from '../../modals/MfaStepUpHost';
 import { PageLayout } from '../../layout/PageLayout';
 import { Accumul8PageHeader } from './Accumul8PageHeader';
 import { Accumul8PageModalAssembly } from './Accumul8PageModalAssembly';
@@ -35,6 +36,7 @@ export function Accumul8PageContent({
           <Accumul8PageTabContent {...tabContentProps} />
           <Accumul8PageOverlays {...overlayProps} />
           <Accumul8PageModalAssembly props={modalProps} />
+          <MfaStepUpHost />
           {!loaded ? <div className="text-muted mt-2">Loading Accumul8...</div> : null}
         </div>
       </section>

@@ -19,3 +19,40 @@
     width: min(420px, calc(100vw - 24px));
   }
 }
+
+.catn8-mfa-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--catn8-z-toast, 6300);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--catn8-color-ink-strong, #1a1630) 35%, transparent);
+}
+
+.catn8-mfa-card {
+  width: min(440px, 100%);
+  padding: 28px 24px 20px;
+  border: 0;
+  border-top: 6px solid var(--catn8-color-brand-primary, #9b59b6);
+  border-radius: 18px;
+  background: var(--catn8-color-white, #ffffff);
+}
+
+.catn8-mfa-title {
+  margin: 0 0 8px;
+  color: var(--catn8-color-ink-strong, #1a1630);
+  font-size: 1.6rem;
+}
+
+.catn8-mfa-lead,
+.catn8-mfa-note {
+  color: var(--catn8-color-ink-base, #121826);
+}
+
+.catn8-mfa-code {
+  font-size: 1.4rem;
+  letter-spacing: 0.35rem;
+  text-align: center;
+}

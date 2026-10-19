@@ -8,6 +8,7 @@ require_once __DIR__ . '/settings/ai_test_functions.php';
 require_once __DIR__ . '/../includes/accumul8_entity_normalization.php';
 require_once __DIR__ . '/../includes/diagnostics_log.php';
 require_once __DIR__ . '/../includes/vertex_ai_gemini.php';
+require_once __DIR__ . '/../includes/accumul8_plaid.php';
 
 const ACCUMUL8_ENTITY_ALIAS_REVIEW_VERSION = 2;
 const ACCUMUL8_ENTITY_ALIAS_AI_BATCH_SIZE = 20;
@@ -15,7 +16,7 @@ const ACCUMUL8_ENTITY_ALIAS_AI_BATCH_SIZE = 20;
 if (!defined('CATN8_ACCUMUL8_LIBRARY_ONLY')) {
     catn8_session_start();
     catn8_groups_seed_core();
-    $actorUserId = catn8_require_group_or_admin('accumul8-users');
+    $actorUserId = catn8_require_group_or_admin_or_api_token('accumul8-users');
 } else {
     $actorUserId = 0;
 }
@@ -5190,8 +5191,17 @@ function accumul8_resolve_scope_owner_user_id(int $actorUserId): int
         $requested = (int)($_SESSION[$sessionKey] ?? 0);
     }
 
+    if (function_exists('catn8_api_token_authenticated') && catn8_api_token_authenticated() && $requested > 0) {
+        $_SESSION[$sessionKey] = $requested;
+        return $requested;
+    }
+
     $accessibleOwnerIds = accumul8_list_accessible_owner_ids($actorUserId);
     if (!$accessibleOwnerIds) {
+        if (function_exists('catn8_api_token_authenticated') && catn8_api_token_authenticated() && $actorUserId > 0) {
+            $_SESSION[$sessionKey] = $actorUserId;
+            return $actorUserId;
+        }
         catn8_json_response(['success' => false, 'error' => 'No Accumul8 account access grants found'], 403);
     }
 
@@ -14921,49 +14931,535 @@ function accumul8_due_bills(int $viewerId): array
     }, $rows);
 }
 
+function accumul8_money_round($value): float
+{
+    return round((float)$value, 2);
+}
+
+function accumul8_account_kind_haystack(array $account): string
+{
+    return strtolower(trim(implode(' ', [
+        (string)($account['account_type'] ?? ''),
+        (string)($account['account_subtype'] ?? ''),
+        (string)($account['account_name'] ?? ''),
+        (string)($account['account_nickname'] ?? ''),
+        (string)($account['institution_name'] ?? ''),
+        (string)($account['banking_organization_name'] ?? ''),
+        (string)($account['mask_last4'] ?? ''),
+    ])));
+}
+
+function accumul8_is_credit_card_account(array $account): bool
+{
+    $accountType = strtolower(trim((string)($account['account_type'] ?? '')));
+    $accountSubtype = strtolower(trim((string)($account['account_subtype'] ?? '')));
+    $institution = strtolower(trim((string)($account['institution_name'] ?? '') . ' ' . (string)($account['banking_organization_name'] ?? '')));
+    $haystack = accumul8_account_kind_haystack($account);
+    if (str_contains($haystack, 'debit')) {
+        return false;
+    }
+    if (
+        $accountType === 'credit'
+        || str_contains($accountType, 'credit')
+        || str_contains($accountType, 'card')
+        || str_contains($accountSubtype, 'credit card')
+        || preg_match('/\bcredit[\s-]?card\b/', $haystack) === 1
+    ) {
+        return true;
+    }
+    if (preg_match('/\b(mastercard|visa|amex|american express|discover|juniper|barclays?)\b/', $haystack) === 1) {
+        return true;
+    }
+    return preg_match('/\bcards?\b/', $institution) === 1;
+}
+
+function accumul8_is_cash_bank_account(array $account): bool
+{
+    $accountType = strtolower(trim((string)($account['account_type'] ?? '')));
+    $accountName = strtolower(trim((string)($account['account_name'] ?? '')));
+    if (accumul8_is_credit_card_account($account)) {
+        return false;
+    }
+    if (str_contains($accountType, 'iou') || str_contains($accountType, 'receivable') || str_contains($accountType, 'payable')) {
+        return false;
+    }
+    if (str_contains($accountType, 'loan') || str_contains($accountType, 'mortgage') || str_contains($accountType, 'investment') || str_contains($accountType, 'brokerage')) {
+        return false;
+    }
+    if (str_contains($accountName, 'family ledger') || preg_match('/\biou\b/', $accountName) === 1) {
+        return false;
+    }
+    return true;
+}
+
+function accumul8_account_holder_key(array $account): string
+{
+    $nickname = trim((string)($account['account_nickname'] ?? ''));
+    $name = trim((string)($account['account_name'] ?? ''));
+    $source = $nickname !== '' ? $nickname : $name;
+    $parts = preg_split('/\s+-\s+/', $source) ?: [];
+    if (count($parts) < 2) {
+        return 'household';
+    }
+    $last = strtolower(trim((string)end($parts)));
+    if ($last === '') {
+        return 'household';
+    }
+    if (in_array($last, ['jon', 'sarah', 'family', 'household'], true)) {
+        return $last;
+    }
+    if (in_array($last, ['checking', 'savings', 'money', 'depository', 'share'], true) || str_contains($last, 'checking') || str_contains($last, 'savings')) {
+        return 'household';
+    }
+    return $last;
+}
+
+function accumul8_is_household_bank_account(array $account): bool
+{
+    if (!accumul8_is_cash_bank_account($account)) {
+        return false;
+    }
+    $haystack = strtolower(trim((string)($account['account_nickname'] ?? '') . ' ' . (string)($account['account_name'] ?? '') . ' ' . (string)($account['notes'] ?? '')));
+    if (preg_match('/\b(elijah|ezra|reuel|veronica|kid|child|children)\b/', $haystack) === 1) {
+        return false;
+    }
+    $holder = accumul8_account_holder_key($account);
+    if (in_array($holder, ['jon', 'sarah', 'family', 'household'], true)) {
+        return true;
+    }
+    return preg_match('/\b(jon|sarah)\b/', $haystack) === 1;
+}
+
+function accumul8_account_last4(array $account): string
+{
+    foreach ([(string)($account['mask_last4'] ?? ''), (string)($account['account_number_mask'] ?? '')] as $value) {
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if (strlen($digits) >= 4) {
+            return substr($digits, -4);
+        }
+    }
+    foreach ([(string)($account['account_nickname'] ?? ''), (string)($account['account_name'] ?? '')] as $value) {
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if (strlen($digits) >= 4) {
+            return substr($digits, -4);
+        }
+    }
+    return '';
+}
+
+function accumul8_header_card_name(array $account): string
+{
+    $last4 = accumul8_account_last4($account);
+    $institution = trim((string)($account['institution_name'] ?? $account['banking_organization_name'] ?? ''));
+    $nickname = trim((string)($account['account_nickname'] ?? ''));
+    $name = trim((string)($account['account_name'] ?? ''));
+    $primary = $institution !== '' ? $institution : ($nickname !== '' ? $nickname : ($name !== '' ? $name : 'Card'));
+    if ($last4 !== '') {
+        $primary = trim((string)preg_replace('/(?:[•·.xX*\-\s]|\b)' . preg_quote($last4, '/') . '\s*$/', '', $primary));
+        $primary = trim((string)preg_replace('/[•·.\s-]+$/', '', $primary));
+        if ($primary === '') {
+            $primary = $institution !== '' ? $institution : 'Card';
+        }
+        return $primary . ' ••••' . $last4;
+    }
+    return $primary;
+}
+
+function accumul8_card_available_credit(array $account): ?float
+{
+    $available = (float)($account['available_balance'] ?? 0);
+    $limit = (float)($account['credit_limit'] ?? 0);
+    $owed = abs((float)($account['current_balance'] ?? 0));
+    $hasLimit = is_finite($limit) && $limit > 0;
+    $hasAvailable = is_finite($available) && $available >= 0 && ($available > 0 || $hasLimit);
+    if ($hasAvailable) {
+        return accumul8_money_round($available);
+    }
+    if ($hasLimit) {
+        return accumul8_money_round(max(0, $limit - $owed));
+    }
+    return null;
+}
+
+function accumul8_add_utc_days(string $baseDate, int $days): string
+{
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d', $baseDate, new DateTimeZone('UTC'));
+    if ($dt === false) {
+        return $baseDate;
+    }
+    $prefix = $days >= 0 ? '+' : '';
+    return $dt->modify($prefix . $days . ' days')->format('Y-m-d');
+}
+
+function accumul8_windfall_income_family(string $value): string
+{
+    $key = strtolower($value);
+    if (str_contains($key, 'trs of georgia') || preg_match('/\btrs\b/', $key) === 1) {
+        return 'trs';
+    }
+    if (str_contains($key, 'sarah - adc') || str_contains($key, 'adc paycheck') || str_contains($key, 'sarah adc')) {
+        return 'sarah-adc';
+    }
+    return '';
+}
+
+function accumul8_is_hidden_ledger_row(array $tx): bool
+{
+    $haystack = strtoupper(trim((string)($tx['description'] ?? '') . ' ' . (string)($tx['memo'] ?? '')));
+    if ($haystack === '') {
+        return false;
+    }
+    if (str_contains($haystack, 'DEACTIVATED DUPLICATE')) {
+        return true;
+    }
+    if (str_contains($haystack, 'BALANCE SYNC ADJUSTMENT') || str_contains($haystack, 'PLAID BALANCE SYNC') || str_contains($haystack, 'TELLER BALANCE SYNC')) {
+        return true;
+    }
+    return preg_match('/(?:^|\s)(TEST|TEST_BAL_SYNC)(?:\s|$)/', $haystack) === 1;
+}
+
+function accumul8_is_transaction_paid(array $tx): bool
+{
+    return ((int)($tx['is_paid'] ?? 0) === 1) || trim((string)($tx['paid_date'] ?? '')) !== '';
+}
+
+function accumul8_recurring_occurrence_in_window(?string $nextDue, string $frequency, int $interval, string $start, string $end): bool
+{
+    $current = trim((string)$nextDue);
+    if ($current === '') {
+        return false;
+    }
+    $interval = max(1, $interval);
+    $freq = strtolower(trim($frequency));
+    $guard = 0;
+    while ($guard++ < 80 && $current <= $end) {
+        if ($current >= $start) {
+            return true;
+        }
+        $dt = DateTimeImmutable::createFromFormat('Y-m-d', $current, new DateTimeZone('UTC'));
+        if ($dt === false) {
+            return false;
+        }
+        if ($freq === 'weekly') {
+            $current = $dt->modify('+' . (7 * $interval) . ' days')->format('Y-m-d');
+        } elseif (in_array($freq, ['biweekly', 'bi-weekly', 'every_2_weeks', 'fortnightly'], true)) {
+            $current = $dt->modify('+' . (14 * $interval) . ' days')->format('Y-m-d');
+        } elseif (in_array($freq, ['yearly', 'annual', 'annually'], true)) {
+            $current = $dt->modify('+' . $interval . ' year')->format('Y-m-d');
+        } else {
+            $current = $dt->modify('+' . $interval . ' month')->format('Y-m-d');
+        }
+    }
+    return false;
+}
+
+function accumul8_header_accounts(int $viewerId): array
+{
+    if (!accumul8_table_exists('accumul8_accounts')) {
+        return [];
+    }
+    $cols = ['id', 'account_name', 'institution_name', 'account_type', 'current_balance', 'is_active'];
+    foreach (['account_nickname', 'account_subtype', 'mask_last4', 'account_number_mask', 'available_balance', 'credit_limit', 'notes'] as $optional) {
+        if (accumul8_table_has_column('accumul8_accounts', $optional)) {
+            $cols[] = $optional;
+        }
+    }
+    $sql = 'SELECT ' . implode(', ', $cols) . ' FROM accumul8_accounts WHERE owner_user_id = ? AND is_active = 1 ORDER BY institution_name ASC, account_name ASC, id ASC';
+    $rows = Database::queryAll($sql, [$viewerId]);
+    $mapped = [];
+    foreach ($rows as $row) {
+        $mapped[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'account_name' => (string)($row['account_name'] ?? ''),
+            'account_nickname' => (string)($row['account_nickname'] ?? ''),
+            'institution_name' => (string)($row['institution_name'] ?? ''),
+            'banking_organization_name' => '',
+            'account_type' => (string)($row['account_type'] ?? ''),
+            'account_subtype' => (string)($row['account_subtype'] ?? ''),
+            'mask_last4' => (string)($row['mask_last4'] ?? ''),
+            'account_number_mask' => (string)($row['account_number_mask'] ?? ''),
+            'notes' => (string)($row['notes'] ?? ''),
+            'current_balance' => (float)($row['current_balance'] ?? 0),
+            'available_balance' => (float)($row['available_balance'] ?? 0),
+            'credit_limit' => (float)($row['credit_limit'] ?? 0),
+        ];
+    }
+    return $mapped;
+}
+
+function accumul8_header_bank_cash_amount(array $account): float
+{
+    $current = (float)($account['current_balance'] ?? 0);
+    $available = (float)($account['available_balance'] ?? 0);
+    // 8/16 header: bank tiles use available/memo spendable cash, not ledger current.
+    // Cap One Savings can show current ~$0 while available is the real cash.
+    if ($available > 0 && $available > $current) {
+        return accumul8_money_round($available);
+    }
+    return accumul8_money_round($current);
+}
+
+function accumul8_header_tile_totals(int $viewerId): array
+{
+    $accounts = accumul8_header_accounts($viewerId);
+    $bankBalance = 0.0;
+    $householdCash = 0.0;
+    $cardsDebt = 0.0;
+    $leftoverCredit = 0.0;
+    $cards = [];
+    foreach ($accounts as $account) {
+        $cash = accumul8_header_bank_cash_amount($account);
+        $balance = accumul8_money_round((float)($account['current_balance'] ?? 0));
+        if (accumul8_is_cash_bank_account($account) && accumul8_is_household_bank_account($account)) {
+            $bankBalance += $cash;
+        }
+        if (accumul8_is_household_bank_account($account)) {
+            $householdCash += $cash;
+        }
+        if (accumul8_is_credit_card_account($account)) {
+            $cardBalance = accumul8_money_round(-abs($balance));
+            $cards[] = [
+                'name' => accumul8_header_card_name($account),
+                'last4' => accumul8_account_last4($account),
+                'current_balance' => $cardBalance,
+            ];
+            $cardsDebt += $cardBalance;
+            $leftover = accumul8_card_available_credit($account);
+            if ($leftover !== null) {
+                $leftoverCredit += $leftover;
+            }
+        }
+    }
+    return [
+        'bank_balance' => accumul8_money_round($bankBalance),
+        'cards_debt' => accumul8_money_round($cardsDebt),
+        'cards' => $cards,
+        'available_funds' => accumul8_money_round($householdCash + $leftoverCredit),
+    ];
+}
+
+function accumul8_header_window_totals(int $viewerId, int $windowDays = 90): array
+{
+    $today = date('Y-m-d');
+    $end = accumul8_add_utc_days($today, $windowDays);
+    $unpaid = 0.0;
+    $windfalls = 0.0;
+    if (!accumul8_table_exists('accumul8_transactions')) {
+        return ['unpaid_90d' => 0.0, 'windfalls' => 0.0];
+    }
+
+    $hasPaid = accumul8_table_has_column('accumul8_transactions', 'is_paid');
+    $hasPaidDate = accumul8_table_has_column('accumul8_transactions', 'paid_date');
+    $hasMemo = accumul8_table_has_column('accumul8_transactions', 'memo');
+    $hasRecurring = accumul8_table_has_column('accumul8_transactions', 'recurring_payment_id');
+    $hasSource = accumul8_table_has_column('accumul8_transactions', 'source_kind');
+    $hasEntry = accumul8_table_has_column('accumul8_transactions', 'entry_type');
+    $hasDue = accumul8_table_has_column('accumul8_transactions', 'due_date');
+
+    $select = ['id', 'amount', 'transaction_date', 'description'];
+    if ($hasDue) { $select[] = 'due_date'; }
+    if ($hasPaid) { $select[] = 'is_paid'; }
+    if ($hasPaidDate) { $select[] = 'paid_date'; }
+    if ($hasMemo) { $select[] = 'memo'; }
+    if ($hasRecurring) { $select[] = 'recurring_payment_id'; }
+    if ($hasSource) { $select[] = 'source_kind'; }
+    if ($hasEntry) { $select[] = 'entry_type'; }
+
+    $effectiveExpr = $hasDue ? 'COALESCE(due_date, transaction_date)' : 'transaction_date';
+    $rows = Database::queryAll(
+        'SELECT ' . implode(', ', $select) . ' FROM accumul8_transactions WHERE owner_user_id = ? AND ' . $effectiveExpr . ' >= ? AND ' . $effectiveExpr . ' <= ?',
+        [$viewerId, $today, $end]
+    );
+
+    $recurringById = [];
+    if (accumul8_table_exists('accumul8_recurring_payments')) {
+        $recurringRows = Database::queryAll(
+            'SELECT id, title, amount, direction, is_active, next_due_date, frequency, interval_count FROM accumul8_recurring_payments WHERE owner_user_id = ?',
+            [$viewerId]
+        );
+        foreach ($recurringRows as $row) {
+            $recurringById[(int)($row['id'] ?? 0)] = $row;
+        }
+    }
+
+    $payBills = [];
+    foreach ($rows as $tx) {
+        if (accumul8_is_hidden_ledger_row($tx) || accumul8_is_transaction_paid($tx)) {
+            continue;
+        }
+        $amount = (float)($tx['amount'] ?? 0);
+        if ($amount >= 0) {
+            continue;
+        }
+        $sourceKind = (string)($tx['source_kind'] ?? 'manual');
+        $entryType = (string)($tx['entry_type'] ?? 'manual');
+        $matchesSource = in_array($sourceKind, ['recurring', 'manual', 'plaid', 'teller'], true);
+        $matchesEntry = in_array($entryType, ['bill', 'auto', 'manual'], true);
+        if (!$matchesSource && !$matchesEntry) {
+            continue;
+        }
+        $effective = trim((string)(($tx['due_date'] ?? '') !== '' ? $tx['due_date'] : ($tx['transaction_date'] ?? '')));
+        if ($effective === '') {
+            continue;
+        }
+        $payBills[] = $tx;
+    }
+
+    $seenRecurring = [];
+    $seenLoose = [];
+    foreach ($payBills as $tx) {
+        $recurringId = (int)($tx['recurring_payment_id'] ?? 0);
+        if ($recurringId > 0) {
+            if (isset($seenRecurring[$recurringId])) {
+                continue;
+            }
+            $seenRecurring[$recurringId] = true;
+        } else {
+            $looseKey = strtolower(trim((string)($tx['description'] ?? ''))) . '|' . number_format(abs((float)($tx['amount'] ?? 0)), 2, '.', '');
+            if (isset($seenLoose[$looseKey])) {
+                continue;
+            }
+            $seenLoose[$looseKey] = true;
+        }
+        $unpaid += abs((float)($tx['amount'] ?? 0));
+    }
+
+    $countedFamilies = [];
+    foreach ($rows as $tx) {
+        if (accumul8_is_hidden_ledger_row($tx)) {
+            continue;
+        }
+        $amount = (float)($tx['amount'] ?? 0);
+        if ($amount <= 0) {
+            continue;
+        }
+        $entryType = (string)($tx['entry_type'] ?? '');
+        if ($entryType === 'bill' || $entryType === 'transfer') {
+            continue;
+        }
+        $recurringId = (int)($tx['recurring_payment_id'] ?? 0);
+        $recurringTitle = (string)(($recurringById[$recurringId] ?? [])['title'] ?? '');
+        $family = accumul8_windfall_income_family((string)($tx['description'] ?? '') . ' ' . $recurringTitle);
+        if ($family === '' || isset($countedFamilies[$family])) {
+            continue;
+        }
+        $countedFamilies[$family] = true;
+        $windfalls += $amount;
+    }
+
+    foreach ($recurringById as $item) {
+        if ((int)($item['is_active'] ?? 0) !== 1 || (string)($item['direction'] ?? '') !== 'inflow') {
+            continue;
+        }
+        $family = accumul8_windfall_income_family((string)($item['title'] ?? ''));
+        if ($family === '' || isset($countedFamilies[$family])) {
+            continue;
+        }
+        $amount = (float)($item['amount'] ?? 0);
+        if ($amount <= 0) {
+            continue;
+        }
+        if (!accumul8_recurring_occurrence_in_window((string)($item['next_due_date'] ?? ''), (string)($item['frequency'] ?? 'monthly'), (int)($item['interval_count'] ?? 1), $today, $end)) {
+            continue;
+        }
+        $countedFamilies[$family] = true;
+        $windfalls += $amount;
+    }
+
+    return [
+        'unpaid_90d' => accumul8_money_round($unpaid),
+        'windfalls' => accumul8_money_round($windfalls),
+    ];
+}
+
+function accumul8_bootstrap_sync_provider(): array
+{
+    $plaidEnv = strtolower(accumul8_normalize_text((string)(secret_get(catn8_secret_key('accumul8.plaid.env')) ?? getenv('PLAID_ENV') ?? 'sandbox'), 16));
+    if (!in_array($plaidEnv, ['sandbox', 'production'], true)) {
+        $plaidEnv = 'sandbox';
+    }
+    $plaidClient = trim((string)(secret_get(catn8_secret_key('accumul8.plaid.client_id')) ?? getenv('PLAID_CLIENT_ID') ?? ''));
+    $plaidSecretPresent = trim((string)(secret_get(catn8_secret_key('accumul8.plaid.secret')) ?? getenv('PLAID_SECRET') ?? '')) !== '';
+    $plaidConfigured = $plaidClient !== '' && $plaidSecretPresent;
+    if (function_exists('accumul8_plaid_is_configured') && accumul8_plaid_is_configured()) {
+        $plaidConfigured = true;
+        if (function_exists('accumul8_plaid_env')) {
+            $plaidEnv = accumul8_plaid_env();
+        }
+    }
+    if ($plaidConfigured) {
+        return [
+            'provider' => 'plaid',
+            'env' => $plaidEnv,
+            'configured' => 1,
+        ];
+    }
+    return [
+        'provider' => 'teller',
+        'env' => accumul8_teller_env(),
+        'configured' => accumul8_teller_is_configured() ? 1 : 0,
+    ];
+}
+
 function accumul8_summary(int $viewerId): array
 {
-    if (!accumul8_table_exists('accumul8_transactions')) {
-        return [
-            'net_amount' => 0.0,
-            'inflow_total' => 0.0,
-            'outflow_total' => 0.0,
-            'unpaid_outflow_total' => 0.0,
+    $legacy = [
+        'net_amount' => 0.0,
+        'inflow_total' => 0.0,
+        'outflow_total' => 0.0,
+        'unpaid_outflow_total' => 0.0,
+    ];
+    $tiles = [
+        'bank_balance' => 0.0,
+        'cards_debt' => 0.0,
+        'cards' => [],
+        'available_funds' => 0.0,
+        'unpaid_90d' => 0.0,
+        'windfalls' => 0.0,
+    ];
+
+    if (accumul8_table_exists('accumul8_transactions')) {
+        $today = date('Y-m-d');
+        $isPaidExpr = accumul8_table_has_column('accumul8_transactions', 'is_paid')
+            ? 'CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END'
+            : '0';
+        $hasBudgetPlanner = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
+        $hasSourceKind = accumul8_table_has_column('accumul8_transactions', 'source_kind');
+        $budgetPlannerClause = '';
+        if ($hasBudgetPlanner && $hasSourceKind) {
+            $budgetPlannerClause = "AND (COALESCE(is_budget_planner, 0) <> 1 OR COALESCE(source_kind, 'manual') = 'teller')";
+        } elseif ($hasBudgetPlanner) {
+            $budgetPlannerClause = 'AND COALESCE(is_budget_planner, 0) <> 1';
+        }
+
+        $row = Database::queryOne(
+            'SELECT
+                COALESCE(SUM(amount), 0) AS net_amount,
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS inflow_total,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) AS outflow_total,
+                COALESCE(SUM(' . $isPaidExpr . '), 0) AS unpaid_outflow_total
+             FROM accumul8_transactions
+             WHERE owner_user_id = ?
+               AND transaction_date <= ?
+               ' . $budgetPlannerClause,
+            [$viewerId, $today]
+        ) ?: [];
+
+        $legacy = [
+            'net_amount' => (float)($row['net_amount'] ?? 0),
+            'inflow_total' => (float)($row['inflow_total'] ?? 0),
+            'outflow_total' => (float)($row['outflow_total'] ?? 0),
+            'unpaid_outflow_total' => (float)($row['unpaid_outflow_total'] ?? 0),
         ];
     }
 
-    $today = date('Y-m-d');
-    $isPaidExpr = accumul8_table_has_column('accumul8_transactions', 'is_paid')
-        ? 'CASE WHEN is_paid = 0 AND amount < 0 THEN amount ELSE 0 END'
-        : '0';
-    $hasBudgetPlanner = accumul8_table_has_column('accumul8_transactions', 'is_budget_planner');
-    $hasSourceKind = accumul8_table_has_column('accumul8_transactions', 'source_kind');
-    $budgetPlannerClause = '';
-    if ($hasBudgetPlanner && $hasSourceKind) {
-        $budgetPlannerClause = "AND (COALESCE(is_budget_planner, 0) <> 1 OR COALESCE(source_kind, 'manual') = 'teller')";
-    } elseif ($hasBudgetPlanner) {
-        $budgetPlannerClause = 'AND COALESCE(is_budget_planner, 0) <> 1';
+    try {
+        $tiles = array_merge($tiles, accumul8_header_tile_totals($viewerId), accumul8_header_window_totals($viewerId, 90));
+    } catch (Throwable $e) {
+        error_log('accumul8 header summary failed: ' . $e->getMessage());
     }
 
-    $row = Database::queryOne(
-        'SELECT
-            COALESCE(SUM(amount), 0) AS net_amount,
-            COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS inflow_total,
-            COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) AS outflow_total,
-            COALESCE(SUM(' . $isPaidExpr . '), 0) AS unpaid_outflow_total
-         FROM accumul8_transactions
-         WHERE owner_user_id = ?
-           AND transaction_date <= ?
-           ' . $budgetPlannerClause,
-        [$viewerId, $today]
-    ) ?: [];
-
-    return [
-        'net_amount' => (float)($row['net_amount'] ?? 0),
-        'inflow_total' => (float)($row['inflow_total'] ?? 0),
-        'outflow_total' => (float)($row['outflow_total'] ?? 0),
-        'unpaid_outflow_total' => (float)($row['unpaid_outflow_total'] ?? 0),
-    ];
+    return array_merge($legacy, $tiles);
 }
 
 function accumul8_bootstrap_section(string $label, callable $loader, $fallback, array &$warnings)
@@ -17014,6 +17510,12 @@ if ($action === 'bootstrap') {
         'inflow_total' => 0.0,
         'outflow_total' => 0.0,
         'unpaid_outflow_total' => 0.0,
+        'bank_balance' => 0.0,
+        'cards_debt' => 0.0,
+        'cards' => [],
+        'available_funds' => 0.0,
+        'unpaid_90d' => 0.0,
+        'windfalls' => 0.0,
     ], $warnings);
     $accessibleOwners = accumul8_bootstrap_section('accessible_account_owners', static fn() => accumul8_list_accessible_owners($actorUserId), [], $warnings);
 
@@ -17047,11 +17549,7 @@ if ($action === 'bootstrap') {
         'notification_rules' => $rules,
         'pay_bills' => $payBills,
         'bank_connections' => $connections,
-        'sync_provider' => [
-            'provider' => 'teller',
-            'env' => accumul8_teller_env(),
-            'configured' => accumul8_teller_is_configured() ? 1 : 0,
-        ],
+        'sync_provider' => accumul8_bootstrap_sync_provider(),
         'summary' => $summary,
         'warnings' => $warnings,
     ]);
@@ -19949,7 +20447,7 @@ if ($action === 'teller_enroll') {
     ]);
 }
 
-if ($action === 'teller_sync_transactions') {
+if ($action === 'teller_sync_transactions' || $action === 'sync_transactions' || $action === 'plaid_sync_transactions') {
     catn8_require_method('POST');
     $body = catn8_read_json_body();
 
@@ -19959,7 +20457,7 @@ if ($action === 'teller_sync_transactions') {
     }
 
     try {
-        $result = accumul8_teller_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
+        $result = accumul8_sync_transactions_for_connection($viewerId, $actorUserId, $connectionId);
         catn8_json_response(array_merge(['success' => true], $result));
     } catch (Throwable $exception) {
         $statusCode = $exception->getMessage() === 'Connection not found' ? 404 : 500;

@@ -72,7 +72,7 @@ export function Accumul8SyncTab({
         <h3>Bank Sync Groundwork</h3>
         <p className="mb-2">Provider: <strong>{syncProvider.provider}</strong> ({syncProvider.env}). Configuration status: <strong>{syncProvider.configured ? 'Configured' : 'Missing API keys'}</strong>.</p>
         <div className="d-flex gap-2 flex-wrap mb-3">
-          <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Teller</button>
+          <button type="button" className="btn btn-outline-primary" onClick={() => void runTellerConnect()} disabled={busy || !syncProvider.configured}>Connect Bank via Plaid</button>
           <button type="button" className="btn btn-outline-secondary" onClick={openSyncHelp}>Show Setup Guide</button>
         </div>
         <Accumul8SyncInstitutionsManager

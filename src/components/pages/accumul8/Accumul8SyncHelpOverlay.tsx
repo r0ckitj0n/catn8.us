@@ -35,6 +35,7 @@ export function Accumul8SyncHelpOverlay({
           <li>Click <strong>Connect Bank via Plaid</strong> in this tab, or <strong>Reconnect via Plaid</strong> on an existing connection.</li>
           <li>Complete Plaid Link and authorize your institution.</li>
           <li>Accumul8 will automatically exchange the public token, save the connection, and sync transactions.</li>
+          <li>After that, Plaid calls the site webhook when new transactions are ready, and housekeeping syncs every active Plaid connection at least twice a day. The status badge on this tab turns red when a bank needs <strong>Reconnect via Plaid</strong>.</li>
         </ol>
         <div className="alert alert-info py-2">
           Teller shut down its API, so retired Teller connections stay on file for history and do not sync until you reconnect them with Plaid. If a bank does not expose accounts through Plaid Link, import those accounts from the Bank Statements tab instead.

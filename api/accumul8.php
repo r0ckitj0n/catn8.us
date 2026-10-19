@@ -7203,6 +7203,11 @@ function accumul8_balance_books_sync(int $viewerId, int $actorUserId): array
                 'error' => accumul8_normalize_text($exception->getMessage(), 2000),
                 'trace' => accumul8_normalize_text($exception->getTraceAsString(), 8000),
             ];
+            try {
+                accumul8_plaid_record_sync_failure($viewerId, $connectionId, $exception->getMessage());
+            } catch (Throwable $recordError) {
+                error_log('accumul8 plaid balance-books failure record failed: ' . accumul8_normalize_text($recordError->getMessage(), 300));
+            }
             accumul8_message_board_post(
                 $viewerId,
                 $actorUserId,
@@ -8243,6 +8248,21 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
     if (!$skipBalanceBooks) {
         $balanceResult = accumul8_balance_books($viewerId, $actorUserId, ['include_messages' => 0]);
     }
+    $plaidHealth = [
+        'healthy' => 1,
+        'problem_count' => 0,
+        'email_decision' => 'none',
+        'email_sent' => 0,
+        'email_error' => '',
+        'connections' => [],
+    ];
+    try {
+        $plaidHealth = accumul8_plaid_run_health($viewerId, true);
+    } catch (Throwable $plaidHealthError) {
+        $plaidHealth['healthy'] = 0;
+        $plaidHealth['email_error'] = accumul8_normalize_text($plaidHealthError->getMessage(), 300);
+        error_log('accumul8 plaid health failed: ' . $plaidHealth['email_error']);
+    }
     $openingBalanceResult = is_array($balanceResult['opening_balance_reconciliation'] ?? null)
         ? $balanceResult['opening_balance_reconciliation']
         : [
@@ -8318,7 +8338,7 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
             $viewerId,
             $actorUserId,
             'aicountant_housekeeping',
-            ((int)($balanceResult['error_connection_count'] ?? 0) > 0 || (int)($watchlistResult['overdue_count'] ?? 0) > 0 || (int)($watchlistPreview['cash_tight'] ?? 0) === 1)
+            ((int)($balanceResult['error_connection_count'] ?? 0) > 0 || (int)($watchlistResult['overdue_count'] ?? 0) > 0 || (int)($watchlistPreview['cash_tight'] ?? 0) === 1 || (int)($plaidHealth['healthy'] ?? 0) !== 1)
                 ? 'warning'
                 : 'success',
             'AIcountant housekeeping finished',
@@ -8331,12 +8351,20 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
                 . ', ' . (int)($openingBalanceResult['reconciled_count'] ?? 0) . ' opening-balance adjustment'
                 . ((int)($openingBalanceResult['reconciled_count'] ?? 0) === 1 ? '' : 's')
                 . ', and ' . (int)($watchlistResult['sent_email_count'] ?? 0) . ' email alert'
-                . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's') . '.',
+                . ((int)($watchlistResult['sent_email_count'] ?? 0) === 1 ? '' : 's')
+                . '. Plaid health: ' . ((int)($plaidHealth['healthy'] ?? 0) === 1 ? 'healthy' : ((int)($plaidHealth['problem_count'] ?? 0) . ' connection(s) need attention'))
+                . '.',
             [
                 'ledger_sync' => $ledgerSyncResult,
                 'balance_books' => $balanceResult,
                 'opening_balance_reconciliation' => $openingBalanceResult,
                 'watchlist' => $watchlistResult,
+                'plaid_health' => [
+                    'healthy' => (int)($plaidHealth['healthy'] ?? 0),
+                    'problem_count' => (int)($plaidHealth['problem_count'] ?? 0),
+                    'email_decision' => (string)($plaidHealth['email_decision'] ?? 'none'),
+                    'email_sent' => (int)($plaidHealth['email_sent'] ?? 0),
+                ],
                 'entity_maintenance' => $entityMaintenanceResult,
                 'attention_needed' => $attentionNeeded ? 1 : 0,
             ]
@@ -8368,6 +8396,14 @@ function accumul8_run_aicountant_housekeeping(int $viewerId, int $actorUserId, a
         'balance_books' => $balanceResult,
         'opening_balance_reconciliation' => $openingBalanceResult,
         'watchlist' => $watchlistResult,
+        'plaid_health' => [
+            'healthy' => (int)($plaidHealth['healthy'] ?? 0),
+            'problem_count' => (int)($plaidHealth['problem_count'] ?? 0),
+            'email_decision' => (string)($plaidHealth['email_decision'] ?? 'none'),
+            'email_sent' => (int)($plaidHealth['email_sent'] ?? 0),
+            'email_error' => (string)($plaidHealth['email_error'] ?? ''),
+            'connections' => is_array($plaidHealth['connections'] ?? null) ? $plaidHealth['connections'] : [],
+        ],
         'entity_maintenance' => $entityMaintenanceResult,
         'attention_needed' => $attentionNeeded ? 1 : 0,
         'messages' => $messages,
@@ -9878,6 +9914,8 @@ function accumul8_tables_ensure(): void
         plaid_item_id VARCHAR(191) NULL,
         plaid_access_token_secret_key VARCHAR(191) NULL,
         plaid_transactions_cursor TEXT NULL,
+        plaid_consecutive_error_count INT NOT NULL DEFAULT 0,
+        plaid_health_flags VARCHAR(191) NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'setup_pending',
         last_sync_at DATETIME NULL,
         last_error TEXT NULL,
@@ -10254,6 +10292,8 @@ function accumul8_tables_ensure(): void
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_item_id', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_access_token_secret_key', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_transactions_cursor', 'TEXT NULL');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_consecutive_error_count', 'INT NOT NULL DEFAULT 0');
+        accumul8_table_add_column_if_missing('accumul8_bank_connections', 'plaid_health_flags', 'VARCHAR(191) NULL');
         accumul8_table_add_column_if_missing('accumul8_accounts', 'plaid_account_id', 'VARCHAR(191) NULL');
         if (!accumul8_table_has_index('accumul8_bank_connections', 'uniq_accumul8_bank_plaid_item')
             && accumul8_table_has_column('accumul8_bank_connections', 'plaid_item_id')) {
@@ -20520,6 +20560,10 @@ if ($action === 'plaid_link_token') {
 
 if ($action === 'plaid_exchange_public_token') {
     accumul8_dispatch_plaid_exchange($viewerId);
+}
+
+if ($action === 'plaid_health') {
+    accumul8_dispatch_plaid_health($viewerId);
 }
 
 if ($action === 'remap_accounts_to_plaid') {

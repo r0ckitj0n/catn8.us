@@ -1976,6 +1976,29 @@ body.accumul8-column-resize-active {
   color: #ffe28c;
 }
 
+.accumul8-sync-status.is-needs-reauth {
+  color: #ffd4c4;
+}
+
+.accumul8-plaid-health {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  font-size: 0.78rem;
+}
+
+.accumul8-plaid-health.is-healthy {
+  color: #d8f5c8;
+}
+
+.accumul8-plaid-health.is-attention {
+  color: #ffd4c4;
+  border-color: rgba(255, 140, 100, 0.7);
+}
+
 .accumul8-sync-error,
 .accumul8-sync-empty {
   font-size: 0.74rem;

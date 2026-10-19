@@ -4,7 +4,9 @@ Use this when you want AIcountant to run unattended on live and keep Accumul8 cu
 
 ## What the housekeeping run does
 
-- Syncs Plaid bank connections. Teller and retired Teller connections are skipped.
+- Syncs Plaid bank connections. Teller and retired Teller connections are skipped. This is the scheduled fallback for the Plaid webhook at `https://catn8.us/api/accumul8_plaid_webhook.php`.
+- Checks Plaid health for each active connection: last successful sync older than 36 hours, `needs_reauth`, repeated errors, a missing webhook, and Plaid API or credential failures.
+- Emails jon@catn8.us once when a Plaid problem appears or clears. A repeated healthy or unchanged problem does not send another email. The message names the bank and says to click Reconnect via Plaid on the Sync tab.
 - Reconciles opening balances when the bank balance and Accumul8 ledger are still offset.
 - Materializes recurring ledger transactions through the next 90 days by default.
 - Runs the AIcountant watchlist over overdue bills, bills due soon, recurring outflows, and near-term cash-flow pressure.
@@ -54,6 +56,8 @@ https://catn8.us/api/accumul8_housekeeping.php?admin_token=YOUR_ADMIN_TOKEN&owne
 
 ## Recommended IONOS cron setup
 
+The twice-daily entries below are the Plaid fallback sync. Run both. The live SSH login is SFTP-only, so this deploy cannot read `crontab -l`. Confirm the jobs in the IONOS cron panel. If neither `run_aicountant_housekeeping.php` nor `accumul8_housekeeping.php` is scheduled, add both entries there.
+
 If your IONOS package gives you SSH and server-side cron, use that path. If not, use the token-guarded URL form above in the IONOS cron UI.
 
 Recommended crontab:
@@ -71,6 +75,8 @@ If `php` is not at `/usr/bin/php`, run `which php` over SSH and replace it.
 ## Notes
 
 - The housekeeping run writes bookkeeping actions into live MySQL through the same Accumul8 code paths used by the app.
-- No new schema change is required for this cron setup.
+- The first Accumul8 request after deploy adds `plaid_consecutive_error_count` and `plaid_health_flags` on `accumul8_bank_connections`. That change is additive.
+- In the Plaid dashboard, set the webhook URL to `https://catn8.us/api/accumul8_plaid_webhook.php`. Link tokens and item updates also send that URL.
 - The script assumes Plaid credentials, AI provider settings, SMTP settings, and `CATN8_ADMIN_TOKEN` are already configured on live. Teller connections are retired and are not synced.
+- Plaid health mail uses the same SMTP path as the rest of the site and is separate from the watchlist attention email.
 - If you use the API endpoint from cron, prefer a server-side cron command that runs `curl -X POST` with an `Authorization: Bearer ...` header instead of a plain URL cron.

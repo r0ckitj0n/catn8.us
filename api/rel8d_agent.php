@@ -111,7 +111,7 @@ try {
     }
 
     if ($action === 'upsert_person') {
-        $body = catn8_read_json_body();
+        $body = catn8_read_json_body(false);
         $record = $body['record'] ?? $body;
         if (!is_array($record)) {
             catn8_json_response(['success' => false, 'error' => 'record object required'], 400);
@@ -122,19 +122,19 @@ try {
     }
 
     if ($action === 'add_note') {
-        $body = catn8_read_json_body();
+        $body = catn8_read_json_body(false);
         $result = Rel8dModel::addNote($body, $actorUid, !empty($body['dry_run']), $actorLabel);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'add_source') {
-        $body = catn8_read_json_body();
+        $body = catn8_read_json_body(false);
         $result = Rel8dModel::addSource($body, $actorUid, !empty($body['dry_run']), $actorLabel);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'import_preview') {
-        $body = catn8_read_json_body();
+        $body = catn8_read_json_body(false);
         $text = (string)($body['gedcom'] ?? $body['text'] ?? '');
         if ($text === '' && !empty($_FILES['file']['tmp_name'])) {
             $text = (string)file_get_contents((string)$_FILES['file']['tmp_name']);
@@ -151,7 +151,7 @@ try {
     }
 
     if ($action === 'import_apply') {
-        $body = catn8_read_json_body();
+        $body = catn8_read_json_body(false);
         if (!empty($body['dry_run'])) {
             catn8_json_response(['success' => true, 'dry_run' => true, 'action' => 'import_apply']);
         }

@@ -121,6 +121,7 @@ $appPhpRoutes = [
     '/medic8' => '/medic8.php',
     '/litig8' => '/litig8.php',
     '/rel8d' => '/rel8d.php',
+    '/rel8ed' => '/rel8ed.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
@@ -183,6 +184,10 @@ if (!$isPhpRoute) {
     }
     if ($canonical === '/rel8d' || preg_match('#^/rel8d/#', $canonical) === 1) {
         require $root . '/rel8d.php';
+        exit;
+    }
+    if ($canonical === '/rel8ed' || preg_match('#^/rel8ed/#', $canonical) === 1) {
+        require $root . '/rel8ed.php';
         exit;
     }
 }

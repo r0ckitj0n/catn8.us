@@ -4,4 +4,10 @@ Disallow: /api/
 Disallow: /includes/
 Disallow: /scripts/
 Disallow: /.local/
+Disallow: /rel8ed
+Disallow: /rel8ed/
+Disallow: /medic8
+Disallow: /medic8/
+Disallow: /litig8
+Disallow: /litig8/
 Sitemap: https://catn8.us/sitemap.xml

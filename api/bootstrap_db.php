@@ -113,6 +113,7 @@ function catn8_groups_seed_core(): void
     catn8_group_ensure('valid8-users', 'VALID8 Users');
     catn8_group_ensure('medic8-users', 'Medic8 Users');
     catn8_group_ensure('litig8-users', 'Litig8 Users');
+    catn8_group_ensure('rel8ed-users', 'Rel8ed Users');
 
     $adminUsers = Database::queryAll('SELECT id FROM users WHERE is_admin = 1');
     foreach ($adminUsers as $r) {

@@ -5,6 +5,8 @@ vendor/
 # --- Build Outputs ---
 dist/
 dist_medic8_build/
+dist_litig8_build/
+dist_rel8ed_build/
 build/
 .cache/
 .local/
@@ -63,6 +65,10 @@ backups/**
 /documentation/info.txt
 private/medic8/**
 !private/medic8/.htaccess
+private/litig8/**
+!private/litig8/.htaccess
+private/rel8ed/**
+!private/rel8ed/.htaccess
 scripts/tabul8/__pycache__/
 *.pyc
 config/secret.key.previous

@@ -29,6 +29,7 @@ $isAccumul8User = catn8_user_in_group($uid, 'accumul8-users') ? 1 : 0;
 $isValid8User = catn8_user_in_group($uid, 'valid8-users') ? 1 : 0;
 $isMedic8User = catn8_user_in_group($uid, 'medic8-users') ? 1 : 0;
 $isLitig8User = catn8_user_in_group($uid, 'litig8-users') ? 1 : 0;
+$isRel8edUser = catn8_user_in_group($uid, 'rel8ed-users') ? 1 : 0;
 
 catn8_json_response(['success' => true, 'user' => [
     'id' => (int)$user['id'],
@@ -45,4 +46,5 @@ catn8_json_response(['success' => true, 'user' => [
     'is_valid8_user' => $isValid8User,
     'is_medic8_user' => $isMedic8User,
     'is_litig8_user' => $isLitig8User,
+    'is_rel8ed_user' => $isRel8edUser,
 ]]);

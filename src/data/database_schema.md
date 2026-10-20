@@ -1193,3 +1193,7 @@ Business term: Banking Organizations
 ## Medic8
 
 See `scripts/db/migrations/2026_10_10_medic8.sql` and `documentation/medic8.md` for the full additive Medic8 schema (`medic8_people`, `medic8_medications`, `medic8_med_fills`, `medic8_appointments`, `medic8_providers`, `medic8_conditions`, `medic8_allergies`, `medic8_labs`, `medic8_procedures`, `medic8_encounters`, `medic8_disability_events`, `medic8_insurance`, `medic8_documents`, `medic8_portal_messages`, `medic8_invoices`, `medic8_sources`, `medic8_shares`, `medic8_invites`, `medic8_audit_log`, `medic8_ingest_queue`). Sensitive columns end in `_enc` and are encrypted with `secret_encrypt`.
+
+## Rel8ed
+
+See `scripts/db/migrations/2026_10_20_rel8ed.sql` and `documentation/rel8ed.md` for the additive Rel8ed schema (`rel8ed_trees`, `rel8ed_people`, `rel8ed_names`, `rel8ed_families`, `rel8ed_family_children`, `rel8ed_events`, `rel8ed_attributes`, `rel8ed_sources`, `rel8ed_citations`, `rel8ed_notes`, `rel8ed_media`, `rel8ed_places`, `rel8ed_imports`, `rel8ed_dna_profiles`, `rel8ed_dna_regions`, `rel8ed_dna_communities`, `rel8ed_quality_flags`, `rel8ed_audit_log`). Private media lives under `private/rel8ed/` (deny-all) and is served only via `/api/rel8ed_media.php`.

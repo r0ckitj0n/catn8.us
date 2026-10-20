@@ -133,19 +133,31 @@ accumul8_plaid_test_assert(
         && accumul8_plaid_institution_family('NFCU') === 'nfcu',
     'NFCU names share one institution family'
 );
+accumul8_plaid_test_assert(
+    accumul8_plaid_institution_family('Capital One') === 'capitalone'
+        && accumul8_plaid_institution_family('Capital One 360') === 'capitalone'
+        && accumul8_plaid_institutions_match('', 'Capital One 360', 'ins_128026', 'Capital One'),
+    'Capital One and Capital One 360 share one institution family'
+);
 
 $connections = [
+    ['id' => 1, 'provider_name' => 'teller', 'status' => 'retired_teller', 'institution_name' => 'Capital One', 'institution_id' => '', 'plaid_item_id' => ''],
     ['id' => 11, 'provider_name' => 'teller', 'status' => 'retired_teller', 'institution_name' => 'Navy Federal Credit Union', 'institution_id' => '', 'plaid_item_id' => ''],
     ['id' => 21, 'provider_name' => 'plaid', 'status' => 'connected', 'institution_name' => 'Navy Federal Credit Union', 'institution_id' => 'ins_nfcu', 'plaid_item_id' => 'item-nfcu'],
     ['id' => 22, 'provider_name' => 'plaid', 'status' => 'connected', 'institution_name' => 'Barclays Bank Delaware', 'institution_id' => 'ins_barclays', 'plaid_item_id' => 'item-barclays'],
+    ['id' => 31, 'provider_name' => 'plaid', 'status' => 'connected', 'institution_name' => 'Capital One', 'institution_id' => 'ins_128026', 'plaid_item_id' => 'item-capitalone'],
 ];
 $accounts = [
+    ['id' => 51, 'bank_connection_id' => 1, 'provider_name' => 'teller', 'institution_name' => 'Capital One 360', 'mask_last4' => '5074', 'account_number_mask' => '****5074', 'plaid_account_id' => '', 'teller_account_id' => 'teller-5074'],
+    ['id' => 52, 'bank_connection_id' => 1, 'provider_name' => 'teller', 'institution_name' => 'Capital One', 'mask_last4' => '1234', 'account_number_mask' => '****1234', 'plaid_account_id' => '', 'teller_account_id' => 'teller-1234'],
     ['id' => 4581, 'bank_connection_id' => 11, 'provider_name' => 'teller', 'institution_name' => 'NFCU', 'mask_last4' => '4581', 'account_number_mask' => '****4581', 'plaid_account_id' => '', 'teller_account_id' => 'teller-4581'],
     ['id' => 4607, 'bank_connection_id' => 11, 'provider_name' => 'teller', 'institution_name' => 'Navy Federal', 'mask_last4' => '4607', 'account_number_mask' => '', 'plaid_account_id' => '', 'teller_account_id' => 'teller-4607'],
     ['id' => 9001, 'bank_connection_id' => 21, 'provider_name' => 'plaid', 'institution_name' => 'Navy Federal Credit Union', 'mask_last4' => '4581', 'account_number_mask' => '', 'plaid_account_id' => 'plaid-acc-4581', 'teller_account_id' => ''],
     ['id' => 9002, 'bank_connection_id' => 21, 'provider_name' => 'plaid', 'institution_name' => 'Navy Federal Credit Union', 'mask_last4' => '4607', 'account_number_mask' => '', 'plaid_account_id' => 'plaid-acc-4607', 'teller_account_id' => ''],
     ['id' => 7001, 'bank_connection_id' => 11, 'provider_name' => 'teller', 'institution_name' => 'Juniper', 'mask_last4' => '4242', 'account_number_mask' => '************4242', 'plaid_account_id' => '', 'teller_account_id' => 'teller-juniper'],
     ['id' => 7002, 'bank_connection_id' => 22, 'provider_name' => 'plaid', 'institution_name' => 'Barclays', 'mask_last4' => '4242', 'account_number_mask' => '', 'plaid_account_id' => 'plaid-acc-barclays', 'teller_account_id' => ''],
+    ['id' => 9051, 'bank_connection_id' => 31, 'provider_name' => 'plaid', 'institution_name' => 'Capital One', 'mask_last4' => '5074', 'account_number_mask' => '', 'plaid_account_id' => 'plaid-acc-5074', 'teller_account_id' => ''],
+    ['id' => 9052, 'bank_connection_id' => 31, 'provider_name' => 'plaid', 'institution_name' => 'Capital One', 'mask_last4' => '1234', 'account_number_mask' => '', 'plaid_account_id' => 'plaid-acc-1234', 'teller_account_id' => ''],
 ];
 $plans = accumul8_plan_remap_accounts_to_plaid($accounts, $connections);
 $byId = [];
@@ -155,7 +167,15 @@ foreach ($plans as $plan) {
 accumul8_plaid_test_assert(isset($byId[4581]) && $byId[4581]['mask'] === '4581' && (int)$byId[4581]['bank_connection_id'] === 21 && $byId[4581]['plaid_account_id'] === 'plaid-acc-4581', 'dry-run remap plans NFCU 4581');
 accumul8_plaid_test_assert(isset($byId[4607]) && $byId[4607]['mask'] === '4607' && $byId[4607]['plaid_account_id'] === 'plaid-acc-4607', 'dry-run remap plans NFCU 4607 separately');
 accumul8_plaid_test_assert(isset($byId[7001]) && $byId[7001]['institution_family'] === 'barclays' && (int)$byId[7001]['bank_connection_id'] === 22, 'dry-run remap plans Juniper onto Barclays');
-accumul8_plaid_test_assert(!isset($byId[9001]) && !isset($byId[7002]), 'accounts already on the Plaid connection are unchanged');
+accumul8_plaid_test_assert(
+    isset($byId[51]) && $byId[51]['mask'] === '5074' && $byId[51]['institution_family'] === 'capitalone' && (int)$byId[51]['bank_connection_id'] === 31 && $byId[51]['plaid_account_id'] === 'plaid-acc-5074',
+    'dry-run remap plans Capital One 360 Savings 5074 (account 51) onto the Plaid item'
+);
+accumul8_plaid_test_assert(
+    isset($byId[52]) && $byId[52]['mask'] === '1234' && (int)$byId[52]['bank_connection_id'] === 31,
+    'dry-run remap plans other Capital One accounts on connection 1'
+);
+accumul8_plaid_test_assert(!isset($byId[9001]) && !isset($byId[7002]) && !isset($byId[9051]), 'accounts already on the Plaid connection are unchanged');
 $public = accumul8_public_remap_matches($plans);
 $encoded = json_encode($public);
 accumul8_plaid_test_assert(is_string($encoded) && !str_contains($encoded, 'plaid_account_id') && !str_contains($encoded, 'account_number') && !str_contains($encoded, 'teller-'), 'remap output is masks and ids only');

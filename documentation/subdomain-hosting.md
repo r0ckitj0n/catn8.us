@@ -35,8 +35,30 @@ Spell the genealogy product **Rel8d** (`rel8d`), not “rel8ed”.
 - Absolute URLs use the current request host via `catn8_public_origin()`; OAuth/Plaid callback URLs stay on the apex path.
 - `X-Robots-Tag: noindex` on media endpoints is unchanged.
 
-## SSL (IONOS)
+## SSL plan (IONOS)
 
-Prefer **one wildcard certificate** for `*.catn8.us` (plus the apex `catn8.us` cert already in use). Alternatively issue one cert per subdomain. In the IONOS panel, add each hostname as a **subdomain / domain alias** pointing at the same webspace document root as `catn8.us` (not a separate site), then assign the wildcard (or per-host) SSL certificate.
+Prefer **one wildcard certificate** for `*.catn8.us` (covers every product host) in addition to the existing apex `catn8.us` cert. Per-subdomain certificates also work but are more clicks to renew. Do **not** enable HSTS `includeSubDomains` until every product host serves HTTPS.
 
-DNS for `catn8.us` is currently on **GoDaddy** (`ns71.domaincontrol.com` / `ns72.domaincontrol.com`). Add only the new CNAME records; leave MX/TXT/NS/SOA untouched for iCloud Mail.
+DNS is on **GoDaddy** (`ns71.domaincontrol.com` / `ns72.domaincontrol.com`). Web hosting is **IONOS**. Mail (iCloud custom domain) uses existing MX/TXT — leave those alone.
+
+## Jon steps (DNS + hosting panels)
+
+### A. GoDaddy DNS (add CNAMEs only)
+
+1. Open **GoDaddy → My Products → Domains → catn8.us → DNS** (DNS Management).
+2. Confirm existing **MX** (`mx01/mx02.mail.icloud.com`) and **TXT** (SPF / Apple domain / verifications) are present — do not edit or delete them.
+3. Open the agent-store zone fragment `dns/catn8-subdomains.zone` (BIND, `$ORIGIN catn8.us.`, `$TTL 3600`, CNAME-only; no SOA/NS/MX/TXT).
+4. Prefer **manual add** (safer than full-zone replace): for each label in that file (`accumul8`, `medic8`, `litig8`, `valid8`, `celebr8`, `tabul8`, `fabric8`, `investig8`, `photo-m8`, `loc8`, `elucid8`, `activ8`, `recre8`, `illumin8`, `stimul8`, `narr8`, `sheriff-station`, `rel8d`) create a **CNAME** record:
+   - Host/Name: the label (e.g. `medic8`)
+   - Points to / Value: `catn8.us` (or `catn8.us.` if the UI wants a trailing dot)
+   - TTL: `3600` (or “1 hour”)
+5. If using **Zone File Editor → Import**, import **only** that fragment after confirming the importer merges records and does **not** wipe MX/TXT/NS. If unsure, use step 4 instead.
+6. Wait for propagation (often a few minutes; up to the old TTL). Spot-check with `dig medic8.catn8.us CNAME +short` → `catn8.us.`.
+
+### B. IONOS hosting (subdomains + SSL)
+
+7. In **IONOS → Hosting → catn8.us webspace**, add each product hostname as a **subdomain** (or domain alias) of the **same** contract/document root as `catn8.us` — not a separate website.
+8. Preferred SSL: order/assign a **wildcard** certificate for `*.catn8.us` and bind it to the webspace (keep the existing apex cert for `catn8.us` / `www`).
+9. Alternative SSL: issue one certificate per subdomain and assign each under SSL management.
+10. Confirm HTTPS loads for at least one host (e.g. `https://elucid8.catn8.us`) with a valid cert and no browser warning.
+11. Only after every product host has working HTTPS, optionally set live env `CATN8_FORCE_SUBDOMAIN_REDIRECTS=1` so apex paths 301 to subdomains (keep `0` until then).

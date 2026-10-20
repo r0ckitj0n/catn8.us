@@ -213,6 +213,10 @@ function accumul8_plaid_institution_family(string $name, string $id = ''): strin
     if (str_contains($key, 'navyfederal') || str_contains($key, 'nfcu')) {
         return 'nfcu';
     }
+    // Capital One 360 / Performance Savings share one Plaid institution with Capital One.
+    if (str_contains($key, 'capitalone')) {
+        return 'capitalone';
+    }
     return $key;
 }
 

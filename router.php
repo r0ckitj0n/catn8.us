@@ -42,24 +42,29 @@ function catn8_router_respond_file(string $file): void
         echo 'Not found';
         exit;
     }
-    $mime = function_exists('mime_content_type') ? (string)(mime_content_type($file) ?: '') : '';
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    // Prefer extension map for web assets: mime_content_type often returns
+    // text/plain for .js/.css on minimal hosts, which breaks ES modules.
+    $mimeMap = [
+        'html' => 'text/html; charset=UTF-8',
+        'css' => 'text/css; charset=UTF-8',
+        'js' => 'application/javascript; charset=UTF-8',
+        'mjs' => 'application/javascript; charset=UTF-8',
+        'json' => 'application/json; charset=UTF-8',
+        'svg' => 'image/svg+xml',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'webmanifest' => 'application/manifest+json',
+    ];
+    $mime = $mimeMap[$ext] ?? '';
     if ($mime === '') {
-        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-        $mimeMap = [
-            'html' => 'text/html; charset=UTF-8',
-            'css' => 'text/css; charset=UTF-8',
-            'js' => 'application/javascript; charset=UTF-8',
-            'json' => 'application/json; charset=UTF-8',
-            'svg' => 'image/svg+xml',
-            'png' => 'image/png',
-            'jpg' => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'gif' => 'image/gif',
-            'webp' => 'image/webp',
-            'woff' => 'font/woff',
-            'woff2' => 'font/woff2',
-        ];
-        $mime = $mimeMap[$ext] ?? 'application/octet-stream';
+        $detected = function_exists('mime_content_type') ? (string)(mime_content_type($file) ?: '') : '';
+        $mime = $detected !== '' ? $detected : 'application/octet-stream';
     }
     header('Content-Type: ' . $mime);
     readfile($file);
@@ -121,6 +126,7 @@ $appPhpRoutes = [
     '/medic8' => '/medic8.php',
     '/litig8' => '/litig8.php',
     '/rel8d' => '/rel8d.php',
+    '/rel8ed' => '/rel8ed.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
@@ -183,6 +189,10 @@ if (!$isPhpRoute) {
     }
     if ($canonical === '/rel8d' || preg_match('#^/rel8d/#', $canonical) === 1) {
         require $root . '/rel8d.php';
+        exit;
+    }
+    if ($canonical === '/rel8ed' || preg_match('#^/rel8ed/#', $canonical) === 1) {
+        require $root . '/rel8ed.php';
         exit;
     }
 }

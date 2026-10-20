@@ -26,6 +26,7 @@ export default defineConfig(({ command }) => ({
         app: resolve(__dirname, 'src/entries/app.tsx'),
         medic8: resolve(__dirname, 'src/entries/medic8.tsx'),
         litig8: resolve(__dirname, 'src/entries/litig8.tsx'),
+        rel8d: resolve(__dirname, 'src/entries/rel8d.tsx'),
       },
       output: {
         // Keep already-hashed static names (favicon-*.ico, manifest-*.webmanifest)

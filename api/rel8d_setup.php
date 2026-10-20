@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Admin-token protected Rel8d bootstrap:
+ * - ensures schema + rel8d-users group
+ * - adds Jon (admin) to rel8d-users
+ * - rotates agent API token (returned once for Mac-side storage)
+ */
+
+require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../includes/rel8d_model.php';
+
+catn8_require_method('POST', false);
+
+$expected = trim((string)catn8_env('CATN8_ADMIN_TOKEN', ''));
+$got = trim((string)($_GET['admin_token'] ?? $_POST['admin_token'] ?? ''));
+if ($expected === '' || $got === '' || !hash_equals($expected, $got)) {
+    catn8_json_response(['success' => false, 'error' => 'Invalid admin token'], 403);
+}
+
+Rel8dModel::ensureSchema();
+Rel8dModel::ensureDnaSeed();
+
+$admin = Database::queryOne('SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1');
+$adminUid = (int)($admin['id'] ?? 0);
+if ($adminUid > 0) {
+    $groupId = catn8_group_ensure(Rel8dModel::GROUP_SLUG, 'Rel8d Users');
+    $existing = Database::queryOne(
+        'SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?',
+        [$groupId, $adminUid]
+    );
+    if (!$existing) {
+        Database::execute('INSERT INTO group_memberships (group_id, user_id) VALUES (?, ?)', [$groupId, $adminUid]);
+    }
+}
+
+$agentToken = Rel8dModel::rotateApiToken();
+
+catn8_json_response([
+    'success' => true,
+    'group' => Rel8dModel::GROUP_SLUG,
+    'tokens' => [
+        'agent' => $agentToken,
+    ],
+    'secret_keys' => [
+        'agent' => Rel8dModel::AGENT_TOKEN_SECRET_KEY,
+    ],
+    'note' => 'Store plaintext token on the Mac only; server stores SHA-256 hash in secrets.',
+]);

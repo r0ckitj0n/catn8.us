@@ -167,6 +167,8 @@
         page = 'medic8';
       } else if (/^\/litig8(?:\/|$)/.test(path)) {
         page = 'litig8';
+      } else if (/^\/rel8d(?:\/|$)/.test(path)) {
+        page = 'rel8d';
       } else if (routes[path]) {
         page = routes[path];
       } else if (path.endsWith('.php')) {
@@ -175,6 +177,17 @@
 
       if (page === 'investig8' || page === 'sheriff_station') {
         document.documentElement.classList.add('catn8-noir-mode');
+      }
+
+      if (page === 'rel8d' || page === 'medic8' || page === 'litig8') {
+        var robots = document.createElement('meta');
+        robots.name = 'robots';
+        robots.content = 'noindex, nofollow, noarchive';
+        document.head.appendChild(robots);
+        var googlebot = document.createElement('meta');
+        googlebot.name = 'googlebot';
+        googlebot.content = 'noindex, nofollow, noarchive';
+        document.head.appendChild(googlebot);
       }
 
       window.__CATN8_PAGE__ = page;
@@ -335,7 +348,8 @@
         var manifest = await manifestResp.json();
         var pageName = String(window.__CATN8_PAGE__ || 'home');
         var entry = manifest && (
-          (pageName === 'litig8' && manifest['src/entries/litig8.tsx'])
+          (pageName === 'rel8d' && manifest['src/entries/rel8d.tsx'])
+          || (pageName === 'litig8' && manifest['src/entries/litig8.tsx'])
           || (pageName === 'medic8' && manifest['src/entries/medic8.tsx'])
           || manifest['src/entries/app.tsx']
           || manifest['index.html']

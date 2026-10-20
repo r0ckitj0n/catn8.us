@@ -3,25 +3,25 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
-require_once __DIR__ . '/../includes/rel8ed_model.php';
+require_once __DIR__ . '/../includes/rel8d_model.php';
 
 catn8_session_start();
-Rel8edModel::ensureSchema();
+Rel8dModel::ensureSchema();
 
-function rel8ed_media_agent_token(): string
+function rel8d_media_agent_token(): string
 {
     $header = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
     if (preg_match('/^\s*Bearer\s+(\S+)\s*$/i', $header, $m)) {
         return trim($m[1]);
     }
-    $alt = trim((string)($_SERVER['HTTP_X_REL8ED_AGENT_TOKEN'] ?? ''));
+    $alt = trim((string)($_SERVER['HTTP_X_REL8D_AGENT_TOKEN'] ?? ''));
     if ($alt !== '') {
         return $alt;
     }
     return trim((string)($_SERVER['HTTP_X_API_KEY'] ?? ''));
 }
 
-function rel8ed_media_serve_file(string $full, ?string $mime, string $downloadName): void
+function rel8d_media_serve_file(string $full, ?string $mime, string $downloadName): void
 {
     $mime = $mime !== null && $mime !== '' ? $mime : 'application/octet-stream';
     header('Content-Type: ' . $mime);
@@ -43,12 +43,12 @@ if ($mediaId <= 0) {
 }
 
 $uid = catn8_auth_user_id();
-$agentOk = Rel8edModel::verifyApiToken(rel8ed_media_agent_token());
+$agentOk = Rel8dModel::verifyApiToken(rel8d_media_agent_token());
 $exp = (int)($_GET['exp'] ?? 0);
 $sig = trim((string)($_GET['sig'] ?? ''));
-$signedOk = Rel8edModel::verifyDocumentAccess($mediaId, $exp, $sig);
+$signedOk = Rel8dModel::verifyDocumentAccess($mediaId, $exp, $sig);
 
-$row = Database::queryOne('SELECT * FROM rel8ed_media WHERE id = ? AND deleted_at IS NULL', [$mediaId]);
+$row = Database::queryOne('SELECT * FROM rel8d_media WHERE id = ? AND deleted_at IS NULL', [$mediaId]);
 if (!$row) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=UTF-8');
@@ -59,7 +59,7 @@ if (!$row) {
 $sessionOk = false;
 if ($uid !== null) {
     try {
-        $sessionOk = Rel8edModel::canAccessApp($uid);
+        $sessionOk = Rel8dModel::canAccessApp($uid);
     } catch (Throwable $e) {
         $sessionOk = false;
     }
@@ -72,7 +72,7 @@ if (!$sessionOk && !$agentOk && !$signedOk) {
     exit;
 }
 
-$full = Rel8edModel::resolveMediaPath($row);
+$full = Rel8dModel::resolveMediaPath($row);
 if ($full === null || !is_file($full)) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=UTF-8');
@@ -80,15 +80,15 @@ if ($full === null || !is_file($full)) {
     exit;
 }
 
-Rel8edModel::audit(
+Rel8dModel::audit(
     $uid,
     'view_media',
-    'rel8ed_media',
+    'rel8d_media',
     $mediaId,
     isset($row['person_id']) ? (int)$row['person_id'] : null,
     null,
     null,
-    $agentOk ? 'agent:rel8ed' : null
+    $agentOk ? 'agent:rel8d' : null
 );
 
-rel8ed_media_serve_file($full, isset($row['mime']) ? (string)$row['mime'] : null, (string)($row['title'] ?? $row['file_name'] ?? 'media'));
+rel8d_media_serve_file($full, isset($row['mime']) ? (string)$row['mime'] : null, (string)($row['title'] ?? $row['file_name'] ?? 'media'));

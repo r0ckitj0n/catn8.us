@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap");
 @import url("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
 
-.rel8ed-page {
+.rel8d-page {
   --r8-ink: #1e2a24;
   --r8-muted: #5f6f66;
   --r8-paper: #eef2ea;
@@ -20,13 +20,13 @@
   font-family: "Literata", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
 }
 
-.rel8ed-shell {
+.rel8d-shell {
   max-width: 1180px;
   margin: 0 auto;
   padding: 1.25rem 1rem 3rem;
 }
 
-.rel8ed-hero {
+.rel8d-hero {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -35,10 +35,10 @@
   margin-bottom: 1.1rem;
   border-bottom: 1px solid var(--r8-line);
   padding-bottom: 1rem;
-  animation: rel8ed-fade 0.7s ease both;
+  animation: rel8d-fade 0.7s ease both;
 }
 
-.rel8ed-kicker {
+.rel8d-kicker {
   margin: 0;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -46,42 +46,42 @@
   color: var(--r8-accent-2);
 }
 
-.rel8ed-hero h1 {
+.rel8d-hero h1 {
   font-family: "Fraunces", Georgia, serif;
   font-size: clamp(2.2rem, 5vw, 3.2rem);
   letter-spacing: 0.06em;
   margin: 0.15rem 0 0;
   color: var(--r8-accent);
-  animation: rel8ed-rise 0.8s ease both;
+  animation: rel8d-rise 0.8s ease both;
 }
 
-.rel8ed-hero p {
+.rel8d-hero p {
   margin: 0.4rem 0 0;
   color: var(--r8-muted);
   max-width: 34rem;
 }
 
-.rel8ed-stats {
+.rel8d-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
 }
 
-.rel8ed-stats span {
+.rel8d-stats span {
   border: 1px solid var(--r8-line);
   padding: 0.35rem 0.65rem;
   background: var(--r8-panel);
   font-size: 0.92rem;
 }
 
-.rel8ed-tabs {
+.rel8d-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-bottom: 1rem;
 }
 
-.rel8ed-tabs button {
+.rel8d-tabs button {
   border: 1px solid var(--r8-line);
   background: transparent;
   color: var(--r8-ink);
@@ -89,36 +89,36 @@
   border-radius: 0;
 }
 
-.rel8ed-tabs button.active {
+.rel8d-tabs button.active {
   background: var(--r8-accent);
   border-color: var(--r8-accent);
   color: #f4f7f2;
 }
 
-.rel8ed-grid {
+.rel8d-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1rem;
 }
 
-.rel8ed-section,
-.rel8ed-profile {
+.rel8d-section,
+.rel8d-profile {
   background: var(--r8-panel);
   border: 1px solid var(--r8-line);
   padding: 1rem 1.1rem 1.2rem;
-  animation: rel8ed-fade 0.45s ease both;
+  animation: rel8d-fade 0.45s ease both;
 }
 
-.rel8ed-section h2,
-.rel8ed-profile h2,
-.rel8ed-section h3,
-.rel8ed-profile h3 {
+.rel8d-section h2,
+.rel8d-profile h2,
+.rel8d-section h3,
+.rel8d-profile h3 {
   font-family: "Fraunces", Georgia, serif;
   margin: 0 0 0.75rem;
   color: var(--r8-accent);
 }
 
-.rel8ed-list {
+.rel8d-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -126,31 +126,31 @@
   gap: 0.55rem;
 }
 
-.rel8ed-list li,
-.rel8ed-place-list li {
+.rel8d-list li,
+.rel8d-place-list li {
   display: grid;
   gap: 0.15rem;
   padding-bottom: 0.45rem;
   border-bottom: 1px solid var(--r8-line);
 }
 
-.rel8ed-list.compact {
+.rel8d-list.compact {
   max-height: 420px;
   overflow: auto;
 }
 
-.rel8ed-meta,
-.rel8ed-empty,
-.rel8ed-loading {
+.rel8d-meta,
+.rel8d-empty,
+.rel8d-loading {
   color: var(--r8-muted);
 }
 
-.rel8ed-error {
+.rel8d-error {
   color: var(--r8-error);
   margin-bottom: 0.75rem;
 }
 
-.rel8ed-badge {
+.rel8d-badge {
   display: inline-block;
   font-style: normal;
   font-size: 0.75rem;
@@ -161,12 +161,12 @@
   width: fit-content;
 }
 
-.rel8ed-badge.sourced { color: var(--r8-accent); border-color: rgba(61, 90, 64, 0.35); }
-.rel8ed-badge.unsourced { color: var(--r8-warn); }
-.rel8ed-badge.error { color: var(--r8-error); }
-.rel8ed-badge.warn { color: var(--r8-warn); }
+.rel8d-badge.sourced { color: var(--r8-accent); border-color: rgba(61, 90, 64, 0.35); }
+.rel8d-badge.unsourced { color: var(--r8-warn); }
+.rel8d-badge.error { color: var(--r8-error); }
+.rel8d-badge.warn { color: var(--r8-warn); }
 
-.rel8ed-chart-viewport {
+.rel8d-chart-viewport {
   overflow: hidden;
   border: 1px solid var(--r8-line);
   background:
@@ -178,20 +178,20 @@
   touch-action: none;
 }
 
-.rel8ed-pedigree {
+.rel8d-pedigree {
   transform-origin: 40px 40px;
   padding: 1.5rem;
   width: max-content;
   transition: transform 0.08s linear;
 }
 
-.rel8ed-branch {
+.rel8d-branch {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
 }
 
-.rel8ed-parents {
+.rel8d-parents {
   display: flex;
   gap: 1rem;
   margin-left: 1.2rem;
@@ -199,7 +199,7 @@
   border-left: 2px solid rgba(61, 90, 64, 0.25);
 }
 
-.rel8ed-node {
+.rel8d-node {
   display: grid;
   gap: 0.2rem;
   text-align: left;
@@ -211,59 +211,59 @@
   color: inherit;
 }
 
-.rel8ed-node.empty {
+.rel8d-node.empty {
   opacity: 0.55;
   font-style: italic;
 }
 
-.rel8ed-zoom {
+.rel8d-zoom {
   display: flex;
   gap: 0.4rem;
   margin-bottom: 0.5rem;
 }
 
-.rel8ed-zoom button {
+.rel8d-zoom button {
   border: 1px solid var(--r8-line);
   background: #fff;
   padding: 0.25rem 0.55rem;
 }
 
-.rel8ed-search,
-.rel8ed-note-form {
+.rel8d-search,
+.rel8d-note-form {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.85rem;
 }
 
-.rel8ed-search input,
-.rel8ed-note-form input,
-.rel8ed-note-form textarea {
+.rel8d-search input,
+.rel8d-note-form input,
+.rel8d-note-form textarea {
   flex: 1 1 180px;
   border: 1px solid var(--r8-line);
   background: #fff;
   padding: 0.4rem 0.55rem;
 }
 
-.rel8ed-split {
+.rel8d-split {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1rem;
 }
 
-.rel8ed-timeline {
+.rel8d-timeline {
   margin: 0;
   padding-left: 1.1rem;
   display: grid;
   gap: 0.55rem;
 }
 
-.rel8ed-timeline li {
+.rel8d-timeline li {
   display: grid;
   gap: 0.15rem;
 }
 
-.rel8ed-profile header {
+.rel8d-profile header {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
@@ -271,18 +271,18 @@
   margin-bottom: 0.5rem;
 }
 
-.rel8ed-vital {
+.rel8d-vital {
   color: var(--r8-muted);
 }
 
-.rel8ed-leaflet {
+.rel8d-leaflet {
   height: 380px;
   width: 100%;
   border: 1px solid var(--r8-line);
   margin-bottom: 0.75rem;
 }
 
-.rel8ed-map-toolbar {
+.rel8d-map-toolbar {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
@@ -290,7 +290,7 @@
   color: var(--r8-muted);
 }
 
-.rel8ed-place-list {
+.rel8d-place-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -298,7 +298,7 @@
   overflow: auto;
 }
 
-.rel8ed-dna {
+.rel8d-dna {
   list-style: none;
   margin: 0 0 1rem;
   padding: 0;
@@ -306,24 +306,24 @@
   gap: 0.75rem;
 }
 
-.rel8ed-dna > li {
+.rel8d-dna > li {
   border-bottom: 1px solid var(--r8-line);
   padding-bottom: 0.55rem;
 }
 
-.rel8ed-dna ul {
+.rel8d-dna ul {
   margin: 0.35rem 0 0;
   padding-left: 1rem;
 }
 
-.rel8ed-gallery {
+.rel8d-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 0.75rem;
   margin-top: 0.75rem;
 }
 
-.rel8ed-media-card {
+.rel8d-media-card {
   display: grid;
   gap: 0.25rem;
   padding: 0.7rem;
@@ -333,7 +333,7 @@
   text-decoration: none;
 }
 
-.rel8ed-diff pre {
+.rel8d-diff pre {
   background: #1e2a24;
   color: #e8f0e4;
   padding: 0.75rem;
@@ -341,48 +341,48 @@
   max-height: 220px;
 }
 
-.rel8ed-relation {
+.rel8d-relation {
   margin-top: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--r8-line);
   background: #fff;
 }
 
-@keyframes rel8ed-fade {
+@keyframes rel8d-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes rel8ed-rise {
+@keyframes rel8d-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @media print {
   .navbar,
-  .rel8ed-tabs,
-  .rel8ed-zoom,
-  .rel8ed-stats {
+  .rel8d-tabs,
+  .rel8d-zoom,
+  .rel8d-stats {
     display: none !important;
   }
-  .rel8ed-page {
+  .rel8d-page {
     background: #fff;
   }
-  .rel8ed-chart-viewport {
+  .rel8d-chart-viewport {
     overflow: visible;
     border: none;
     min-height: auto;
   }
-  .rel8ed-print {
+  .rel8d-print {
     break-inside: avoid;
   }
 }
 
 @media (max-width: 800px) {
-  .rel8ed-split {
+  .rel8d-split {
     grid-template-columns: 1fr;
   }
-  .rel8ed-parents {
+  .rel8d-parents {
     flex-direction: column;
   }
 }

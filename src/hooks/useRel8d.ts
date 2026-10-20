@@ -2,37 +2,37 @@ import React from 'react';
 
 import { ApiClient } from '../core/ApiClient';
 import type {
-  Rel8edDashboard,
-  Rel8edDnaRegion,
-  Rel8edImportPreview,
-  Rel8edMedia,
-  Rel8edNote,
-  Rel8edPedigreeNode,
-  Rel8edPerson,
-  Rel8edPlace,
-} from '../types/rel8ed';
+  Rel8dDashboard,
+  Rel8dDnaRegion,
+  Rel8dImportPreview,
+  Rel8dMedia,
+  Rel8dNote,
+  Rel8dPedigreeNode,
+  Rel8dPerson,
+  Rel8dPlace,
+} from '../types/rel8d';
 
-export function useRel8ed() {
+export function useRel8d() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
-  const [dashboard, setDashboard] = React.useState<Rel8edDashboard | null>(null);
-  const [people, setPeople] = React.useState<Rel8edPerson[]>([]);
+  const [dashboard, setDashboard] = React.useState<Rel8dDashboard | null>(null);
+  const [people, setPeople] = React.useState<Rel8dPerson[]>([]);
   const [peopleTotal, setPeopleTotal] = React.useState(0);
-  const [selectedPerson, setSelectedPerson] = React.useState<Rel8edPerson | null>(null);
-  const [pedigree, setPedigree] = React.useState<Rel8edPedigreeNode | null>(null);
+  const [selectedPerson, setSelectedPerson] = React.useState<Rel8dPerson | null>(null);
+  const [pedigree, setPedigree] = React.useState<Rel8dPedigreeNode | null>(null);
   const [surnames, setSurnames] = React.useState<Array<{ surname: string; person_count: number }>>([]);
   const [quality, setQuality] = React.useState<Array<Record<string, unknown>>>([]);
-  const [places, setPlaces] = React.useState<Rel8edPlace[]>([]);
+  const [places, setPlaces] = React.useState<Rel8dPlace[]>([]);
   const [dna, setDna] = React.useState<{
-    regions: Rel8edDnaRegion[];
+    regions: Rel8dDnaRegion[];
     communities: Array<{ id?: number; community_name: string }>;
     can_edit?: number;
     profile?: Record<string, unknown> | null;
   } | null>(null);
-  const [media, setMedia] = React.useState<Rel8edMedia[]>([]);
-  const [stories, setStories] = React.useState<Rel8edNote[]>([]);
-  const [importPreview, setImportPreview] = React.useState<Rel8edImportPreview | null>(null);
+  const [media, setMedia] = React.useState<Rel8dMedia[]>([]);
+  const [stories, setStories] = React.useState<Rel8dNote[]>([]);
+  const [importPreview, setImportPreview] = React.useState<Rel8dImportPreview | null>(null);
   const [relationResult, setRelationResult] = React.useState<Record<string, unknown> | null>(null);
   const [audit, setAudit] = React.useState<Array<Record<string, unknown>>>([]);
 
@@ -40,8 +40,8 @@ export function useRel8ed() {
     setLoading(true);
     setError(null);
     try {
-      const res = await ApiClient.get<{ success: boolean; is_admin?: number; error?: string } & Rel8edDashboard>(
-        '/api/rel8ed.php?action=bootstrap',
+      const res = await ApiClient.get<{ success: boolean; is_admin?: number; error?: string } & Rel8dDashboard>(
+        '/api/rel8d.php?action=bootstrap',
       );
       if (!res?.success) {
         throw new Error(res?.error || 'Bootstrap failed');
@@ -61,8 +61,8 @@ export function useRel8ed() {
     setLoading(true);
     setError(null);
     try {
-      const res = await ApiClient.get<{ success: boolean; dashboard?: Rel8edDashboard; error?: string }>(
-        '/api/rel8ed.php?action=dashboard',
+      const res = await ApiClient.get<{ success: boolean; dashboard?: Rel8dDashboard; error?: string }>(
+        '/api/rel8d.php?action=dashboard',
       );
       if (!res?.success || !res.dashboard) {
         throw new Error(res?.error || 'Dashboard failed');
@@ -83,8 +83,8 @@ export function useRel8ed() {
     const params = new URLSearchParams({ action: 'search', limit: '200' });
     if (q) params.set('q', q);
     if (surname) params.set('surname', surname);
-    const res = await ApiClient.get<{ success: boolean; records?: Rel8edPerson[]; total?: number; error?: string }>(
-      `/api/rel8ed.php?${params.toString()}`,
+    const res = await ApiClient.get<{ success: boolean; records?: Rel8dPerson[]; total?: number; error?: string }>(
+      `/api/rel8d.php?${params.toString()}`,
     );
     if (!res?.success) {
       throw new Error(res?.error || 'Search failed');
@@ -95,8 +95,8 @@ export function useRel8ed() {
   }, []);
 
   const loadPerson = React.useCallback(async (id: number) => {
-    const res = await ApiClient.get<{ success: boolean; record?: Rel8edPerson; error?: string }>(
-      `/api/rel8ed.php?action=get_person&id=${id}`,
+    const res = await ApiClient.get<{ success: boolean; record?: Rel8dPerson; error?: string }>(
+      `/api/rel8d.php?action=get_person&id=${id}`,
     );
     if (!res?.success || !res.record) {
       throw new Error(res?.error || 'Person not found');
@@ -108,8 +108,8 @@ export function useRel8ed() {
   const loadPedigree = React.useCallback(async (id?: number, generations = 5) => {
     const params = new URLSearchParams({ action: 'pedigree', generations: String(generations) });
     if (id) params.set('id', String(id));
-    const res = await ApiClient.get<{ success: boolean; pedigree?: Rel8edPedigreeNode; error?: string }>(
-      `/api/rel8ed.php?${params.toString()}`,
+    const res = await ApiClient.get<{ success: boolean; pedigree?: Rel8dPedigreeNode; error?: string }>(
+      `/api/rel8d.php?${params.toString()}`,
     );
     if (!res?.success) {
       throw new Error(res?.error || 'Pedigree failed');
@@ -120,21 +120,21 @@ export function useRel8ed() {
 
   const loadSurnames = React.useCallback(async () => {
     const res = await ApiClient.get<{ success: boolean; records?: Array<{ surname: string; person_count: number }> }>(
-      '/api/rel8ed.php?action=surname_index',
+      '/api/rel8d.php?action=surname_index',
     );
     setSurnames(Array.isArray(res.records) ? res.records : []);
   }, []);
 
   const loadQuality = React.useCallback(async () => {
     const res = await ApiClient.get<{ success: boolean; records?: Array<Record<string, unknown>> }>(
-      '/api/rel8ed.php?action=quality_flags',
+      '/api/rel8d.php?action=quality_flags',
     );
     setQuality(Array.isArray(res.records) ? res.records : []);
   }, []);
 
   const loadMap = React.useCallback(async () => {
-    const res = await ApiClient.get<{ success: boolean; places?: Rel8edPlace[] }>(
-      '/api/rel8ed.php?action=map_places',
+    const res = await ApiClient.get<{ success: boolean; places?: Rel8dPlace[] }>(
+      '/api/rel8d.php?action=map_places',
     );
     setPlaces(Array.isArray(res.places) ? res.places : []);
   }, []);
@@ -142,11 +142,11 @@ export function useRel8ed() {
   const loadDna = React.useCallback(async () => {
     const res = await ApiClient.get<{
       success: boolean;
-      regions?: Rel8edDnaRegion[];
+      regions?: Rel8dDnaRegion[];
       communities?: Array<{ id?: number; community_name: string }>;
       can_edit?: number;
       profile?: Record<string, unknown> | null;
-    }>('/api/rel8ed.php?action=dna');
+    }>('/api/rel8d.php?action=dna');
     setDna({
       regions: Array.isArray(res.regions) ? res.regions : [],
       communities: Array.isArray(res.communities) ? res.communities : [],
@@ -156,22 +156,22 @@ export function useRel8ed() {
   }, []);
 
   const loadMedia = React.useCallback(async () => {
-    const res = await ApiClient.get<{ success: boolean; records?: Rel8edMedia[] }>(
-      '/api/rel8ed.php?action=list_media',
+    const res = await ApiClient.get<{ success: boolean; records?: Rel8dMedia[] }>(
+      '/api/rel8d.php?action=list_media',
     );
     setMedia(Array.isArray(res.records) ? res.records : []);
   }, []);
 
   const loadStories = React.useCallback(async () => {
-    const res = await ApiClient.get<{ success: boolean; records?: Rel8edNote[] }>(
-      '/api/rel8ed.php?action=list_stories',
+    const res = await ApiClient.get<{ success: boolean; records?: Rel8dNote[] }>(
+      '/api/rel8d.php?action=list_stories',
     );
     setStories(Array.isArray(res.records) ? res.records : []);
   }, []);
 
   const loadAudit = React.useCallback(async () => {
     const res = await ApiClient.get<{ success: boolean; records?: Array<Record<string, unknown>>; error?: string }>(
-      '/api/rel8ed.php?action=list_audit',
+      '/api/rel8d.php?action=list_audit',
     );
     if (!res?.success) {
       throw new Error(res?.error || 'Audit failed');
@@ -181,7 +181,7 @@ export function useRel8ed() {
 
   const calcRelation = React.useCallback(async (fromId: number, toId: number) => {
     const res = await ApiClient.get<Record<string, unknown> & { success: boolean; error?: string }>(
-      `/api/rel8ed.php?action=relationship&from_id=${fromId}&to_id=${toId}`,
+      `/api/rel8d.php?action=relationship&from_id=${fromId}&to_id=${toId}`,
     );
     if (!res?.success) {
       throw new Error(res?.error || 'Relationship failed');
@@ -193,8 +193,8 @@ export function useRel8ed() {
   const previewImport = React.useCallback(async (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await ApiClient.postFormData<{ success: boolean; error?: string } & Rel8edImportPreview>(
-      '/api/rel8ed.php?action=import_preview',
+    const res = await ApiClient.postFormData<{ success: boolean; error?: string } & Rel8dImportPreview>(
+      '/api/rel8d.php?action=import_preview',
       fd,
     );
     if (!res?.success) {
@@ -206,7 +206,7 @@ export function useRel8ed() {
 
   const applyImport = React.useCallback(async (importId: number) => {
     const res = await ApiClient.post<{ success: boolean; counts?: Record<string, number>; error?: string }>(
-      '/api/rel8ed.php?action=import_apply',
+      '/api/rel8d.php?action=import_apply',
       { import_id: importId },
     );
     if (!res?.success) {
@@ -223,7 +223,7 @@ export function useRel8ed() {
     fd.append('title', title);
     if (personId) fd.append('person_id', String(personId));
     const res = await ApiClient.postFormData<{ success: boolean; error?: string }>(
-      '/api/rel8ed.php?action=upload_media',
+      '/api/rel8d.php?action=upload_media',
       fd,
     );
     if (!res?.success) {
@@ -233,7 +233,7 @@ export function useRel8ed() {
   }, [loadMedia]);
 
   const addNote = React.useCallback(async (body: string, personId?: number, isStory = false, title = '') => {
-    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8ed.php?action=add_note', {
+    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8d.php?action=add_note', {
       body,
       person_id: personId,
       is_story: isStory,
@@ -246,7 +246,7 @@ export function useRel8ed() {
   }, [loadStories]);
 
   const saveDna = React.useCallback(async (payload: Record<string, unknown>) => {
-    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8ed.php?action=save_dna', payload);
+    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8d.php?action=save_dna', payload);
     if (!res?.success) {
       throw new Error(res?.error || 'DNA save failed');
     }
@@ -254,7 +254,7 @@ export function useRel8ed() {
   }, [loadDna]);
 
   const geocode = React.useCallback(async (limit = 10) => {
-    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8ed.php?action=geocode_places', { limit });
+    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8d.php?action=geocode_places', { limit });
     if (!res?.success) {
       throw new Error(res?.error || 'Geocode failed');
     }
@@ -263,7 +263,7 @@ export function useRel8ed() {
   }, [loadMap]);
 
   const setRoot = React.useCallback(async (personId: number) => {
-    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8ed.php?action=set_root', {
+    const res = await ApiClient.post<{ success: boolean; error?: string }>('/api/rel8d.php?action=set_root', {
       person_id: personId,
     });
     if (!res?.success) {

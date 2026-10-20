@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Full GEDCOM 5.5.1 parser that preserves every tag in a nested raw tree.
  * Never logs personal names/dates from real imports in caller code.
  */
-final class Rel8edGedcom
+final class Rel8dGedcom
 {
     /** Individual/family event and attribute tags commonly used in Ancestry exports. */
     public const EVENT_TAGS = [
@@ -328,7 +328,7 @@ final class Rel8edGedcom
         if ($header) {
             $out[] = self::encodeRecord($header);
         } else {
-            $out[] = "0 HEAD\n1 SOUR REL8ED\n1 GEDC\n2 VERS 5.5.1\n2 FORM LINEAGE-LINKED\n1 CHAR UTF-8";
+            $out[] = "0 HEAD\n1 SOUR REL8D\n1 GEDC\n2 VERS 5.5.1\n2 FORM LINEAGE-LINKED\n1 CHAR UTF-8";
         }
         foreach ($records as $rec) {
             $out[] = self::encodeRecord($rec);

@@ -1,19 +1,19 @@
 import React from 'react';
 
-import type { Rel8edDnaRegion } from '../../types/rel8ed';
+import type { Rel8dDnaRegion } from '../../types/rel8d';
 
 type Props = {
-  regions: Rel8edDnaRegion[];
+  regions: Rel8dDnaRegion[];
   communities: Array<{ id?: number; community_name: string }>;
   isAdmin?: boolean;
 };
 
-export function Rel8edDnaPanel({ regions, communities, isAdmin }: Props) {
+export function Rel8dDnaPanel({ regions, communities, isAdmin }: Props) {
   const parents = regions.filter((x) => !x.parent_region_id);
   return (
-    <section className="rel8ed-section">
+    <section className="rel8d-section">
       <h2>DNA ethnicity</h2>
-      <ul className="rel8ed-dna">
+      <ul className="rel8d-dna">
         {parents.map((region) => (
           <li key={region.id || region.region_name}>
             <strong>{region.region_name}</strong>
@@ -31,13 +31,13 @@ export function Rel8edDnaPanel({ regions, communities, isAdmin }: Props) {
         ))}
       </ul>
       <h3>Communities</h3>
-      <ul className="rel8ed-list">
+      <ul className="rel8d-list">
         {communities.map((c) => (
           <li key={c.id || c.community_name}>{c.community_name}</li>
         ))}
       </ul>
       {isAdmin ? (
-        <p className="rel8ed-meta">Admin can revise ethnicity via Rel8r agent or save_dna API.</p>
+        <p className="rel8d-meta">Admin can revise ethnicity via Rel8r agent or save_dna API.</p>
       ) : null}
     </section>
   );

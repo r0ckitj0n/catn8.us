@@ -4,13 +4,13 @@ import { createRoot } from 'react-dom/client';
 import { ToastOverlay } from '../components/modals/ToastOverlay';
 import { LoginModal } from '../components/modals/LoginModal';
 import { AccountModal } from '../components/modals/AccountModal';
-import { Rel8edPage } from '../components/pages/Rel8edPage';
+import { Rel8dPage } from '../components/pages/Rel8dPage';
 import { ApiClient } from '../core/ApiClient';
 import './app.css';
 
 type Toast = { tone: 'success' | 'error' | 'info' | 'warning'; message: string } | null;
 
-function Rel8edApp() {
+function Rel8dApp() {
   const [viewer, setViewer] = React.useState<any>(null);
   const [viewerResolved, setViewerResolved] = React.useState(false);
   const [loginOpen, setLoginOpen] = React.useState(false);
@@ -54,12 +54,12 @@ function Rel8edApp() {
   }, []);
 
   if (!viewerResolved) {
-    return <div className="container py-4 text-muted">Loading Rel8ed…</div>;
+    return <div className="container py-4 text-muted">Loading Rel8d…</div>;
   }
 
   return (
     <>
-      <Rel8edPage
+      <Rel8dPage
         viewer={viewer}
         isAdmin={isAdmin}
         onLoginClick={() => setLoginOpen(true)}
@@ -78,5 +78,5 @@ function Rel8edApp() {
 const mount = document.getElementById('catn8-app') as HTMLElement | null;
 if (mount) {
   const root = createRoot(mount);
-  root.render(<Rel8edApp />);
+  root.render(<Rel8dApp />);
 }

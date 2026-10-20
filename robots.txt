@@ -4,6 +4,8 @@ Disallow: /api/
 Disallow: /includes/
 Disallow: /scripts/
 Disallow: /.local/
+Disallow: /rel8d
+Disallow: /rel8d/
 Disallow: /rel8ed
 Disallow: /rel8ed/
 Disallow: /medic8

@@ -2,10 +2,10 @@ import React from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-import type { Rel8edPlace } from '../../types/rel8ed';
+import type { Rel8dPlace } from '../../types/rel8d';
 
 type Props = {
-  places: Rel8edPlace[];
+  places: Rel8dPlace[];
   onGeocode?: () => void;
   canGeocode?: boolean;
 };
@@ -15,8 +15,8 @@ export function MigrationMap({ places, onGeocode, canGeocode }: Props) {
   const unmapped = places.filter((p) => p.lat == null || p.lng == null);
 
   return (
-    <div className="rel8ed-map-wrap">
-      <div className="rel8ed-map-toolbar">
+    <div className="rel8d-map-wrap">
+      <div className="rel8d-map-toolbar">
         <span>{mapped.length} geocoded · {unmapped.length} pending / list-only</span>
         {canGeocode && onGeocode ? (
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onGeocode}>
@@ -29,7 +29,7 @@ export function MigrationMap({ places, onGeocode, canGeocode }: Props) {
           center={[mapped[0].lat as number, mapped[0].lng as number]}
           zoom={3}
           scrollWheelZoom
-          className="rel8ed-leaflet"
+          className="rel8d-leaflet"
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -51,9 +51,9 @@ export function MigrationMap({ places, onGeocode, canGeocode }: Props) {
           ))}
         </MapContainer>
       ) : (
-        <div className="rel8ed-empty">No geocoded places yet. Showing place list below.</div>
+        <div className="rel8d-empty">No geocoded places yet. Showing place list below.</div>
       )}
-      <ul className="rel8ed-place-list">
+      <ul className="rel8d-place-list">
         {places.slice(0, 80).map((p) => (
           <li key={p.id}>
             <strong>{p.place_name}</strong>

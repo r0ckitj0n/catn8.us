@@ -1,4 +1,4 @@
-export type Rel8edPerson = {
+export type Rel8dPerson = {
   id: number;
   name_display?: string;
   name_given?: string | null;
@@ -12,17 +12,17 @@ export type Rel8edPerson = {
   is_private?: number;
   has_sources?: number;
   sourced_badge?: 'sourced' | 'unsourced';
-  events?: Rel8edEvent[];
-  citations?: Rel8edCitation[];
-  notes?: Rel8edNote[];
-  media?: Rel8edMedia[];
+  events?: Rel8dEvent[];
+  citations?: Rel8dCitation[];
+  notes?: Rel8dNote[];
+  media?: Rel8dMedia[];
   names?: Array<Record<string, unknown>>;
   child_of_families?: Array<Record<string, unknown>>;
   spouse_families?: Array<Record<string, unknown>>;
   attributes?: Array<Record<string, unknown>>;
 };
 
-export type Rel8edEvent = {
+export type Rel8dEvent = {
   id?: number;
   tag?: string;
   type_label?: string | null;
@@ -32,7 +32,7 @@ export type Rel8edEvent = {
   has_sources?: number;
 };
 
-export type Rel8edCitation = {
+export type Rel8dCitation = {
   id?: number;
   page?: string | null;
   quality?: string | null;
@@ -40,7 +40,7 @@ export type Rel8edCitation = {
   note?: string | null;
 };
 
-export type Rel8edNote = {
+export type Rel8dNote = {
   id?: number;
   title?: string | null;
   body?: string;
@@ -49,7 +49,7 @@ export type Rel8edNote = {
   name_display?: string | null;
 };
 
-export type Rel8edMedia = {
+export type Rel8dMedia = {
   id: number;
   title?: string | null;
   file_name?: string | null;
@@ -61,7 +61,7 @@ export type Rel8edMedia = {
   size_bytes?: number;
 };
 
-export type Rel8edPedigreeNode = {
+export type Rel8dPedigreeNode = {
   id: number;
   name: string;
   birth?: string | null;
@@ -70,11 +70,11 @@ export type Rel8edPedigreeNode = {
   ahnentafel?: number;
   generation?: number;
   has_sources?: number;
-  father?: Rel8edPedigreeNode | null;
-  mother?: Rel8edPedigreeNode | null;
+  father?: Rel8dPedigreeNode | null;
+  mother?: Rel8dPedigreeNode | null;
 };
 
-export type Rel8edDnaRegion = {
+export type Rel8dDnaRegion = {
   id?: number;
   parent_region_id?: number | null;
   region_name: string;
@@ -82,7 +82,7 @@ export type Rel8edDnaRegion = {
   sort_order?: number;
 };
 
-export type Rel8edDashboard = {
+export type Rel8dDashboard = {
   is_admin?: number;
   can_view_living?: number;
   tree?: { id?: number; title?: string; root_person_id?: number | null };
@@ -93,12 +93,12 @@ export type Rel8edDashboard = {
     media?: number;
     quality_flags?: number;
   };
-  on_this_day?: Rel8edPerson[];
-  recent_people?: Rel8edPerson[];
+  on_this_day?: Rel8dPerson[];
+  recent_people?: Rel8dPerson[];
   surname_preview?: Array<{ surname: string; person_count: number }>;
 };
 
-export type Rel8edImportPreview = {
+export type Rel8dImportPreview = {
   import_id: number;
   sha256?: string;
   counts?: Record<string, number>;
@@ -112,7 +112,7 @@ export type Rel8edImportPreview = {
   };
 };
 
-export type Rel8edPlace = {
+export type Rel8dPlace = {
   id: number;
   place_name: string;
   event_count: number;

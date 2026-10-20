@@ -133,6 +133,9 @@ Options -MultiViews -Indexes
   RewriteRule ^narr8/?$ /narr8.php [L,NC,QSA]
   RewriteRule ^rel8d/?$ /rel8d.php [L,NC,QSA]
   RewriteRule ^rel8d/.+$ /rel8d.php [L,NC,QSA]
+  # Legacy Rel8ed spelling → Rel8d
+  RewriteRule ^rel8ed/(.*)$ /rel8d/$1 [R=301,L,NC,QSA]
+  RewriteRule ^rel8ed/?$ /rel8d/ [R=301,L,NC,QSA]
   RewriteRule ^loc8/?$ /loc8.php [L,NC,QSA]
   RewriteRule ^investig8/?$ /investig8.php [L,NC,QSA]
   RewriteRule ^fabric8/?$ /fabric8.php [L,NC,QSA]
@@ -150,8 +153,6 @@ Options -MultiViews -Indexes
   RewriteRule ^medic8/.+$ /medic8.php [L,NC,QSA]
   RewriteRule ^litig8/?$ /litig8.php [L,NC,QSA]
   RewriteRule ^litig8/.+$ /litig8.php [L,NC,QSA]
-  RewriteRule ^rel8ed/?$ /rel8ed.php [L,NC,QSA]
-  RewriteRule ^rel8ed/.+$ /rel8ed.php [L,NC,QSA]
   RewriteRule ^login/?$ /login.php [L,NC,QSA]
   RewriteRule ^sheriff_station/?$ /sheriff_station.php [L,NC,QSA]
   RewriteRule ^settings/?$ /settings.php [L,NC,QSA]

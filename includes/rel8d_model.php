@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/secret_store.php';
-require_once __DIR__ . '/rel8ed_gedcom.php';
+require_once __DIR__ . '/rel8d_gedcom.php';
 
-final class Rel8edModel
+final class Rel8dModel
 {
-    public const AGENT_TOKEN_SECRET_KEY = 'rel8ed.agent.api_token_hash';
-    public const MEDIA_SIGNING_SECRET_KEY = 'rel8ed.media.signing_key';
-    public const GROUP_SLUG = 'rel8ed-users';
+    public const AGENT_TOKEN_SECRET_KEY = 'rel8d.agent.api_token_hash';
+    public const MEDIA_SIGNING_SECRET_KEY = 'rel8d.media.signing_key';
+    public const GROUP_SLUG = 'rel8d-users';
     public const DEFAULT_TREE_SLUG = 'graves';
     public const LIVING_YEARS = 100;
 
@@ -28,11 +28,11 @@ final class Rel8edModel
         }
 
         catn8_groups_seed_core();
-        catn8_group_ensure(self::GROUP_SLUG, 'Rel8ed Users');
+        catn8_group_ensure(self::GROUP_SLUG, 'Rel8d Users');
 
-        $sqlFile = dirname(__DIR__) . '/scripts/db/migrations/2026_10_20_rel8ed.sql';
+        $sqlFile = dirname(__DIR__) . '/scripts/db/migrations/2026_10_20_rel8d.sql';
         if (!is_file($sqlFile)) {
-            throw new RuntimeException('Rel8ed migration file missing');
+            throw new RuntimeException('Rel8d migration file missing');
         }
         $sql = (string)file_get_contents($sqlFile);
         foreach (preg_split('/;\s*\n/', $sql) as $stmt) {
@@ -53,10 +53,10 @@ final class Rel8edModel
 
         $people = Database::queryOne(
             "SELECT 1 AS ok FROM information_schema.TABLES
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rel8ed_people' LIMIT 1"
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rel8d_people' LIMIT 1"
         );
         if (!$people) {
-            throw new RuntimeException('Rel8ed schema bootstrap failed (rel8ed_people missing)');
+            throw new RuntimeException('Rel8d schema bootstrap failed (rel8d_people missing)');
         }
 
         self::ensureDefaultTree();
@@ -66,14 +66,14 @@ final class Rel8edModel
 
     public static function ensureDefaultTree(): int
     {
-        $row = Database::queryOne('SELECT id FROM rel8ed_trees WHERE slug = ? LIMIT 1', [self::DEFAULT_TREE_SLUG]);
+        $row = Database::queryOne('SELECT id FROM rel8d_trees WHERE slug = ? LIMIT 1', [self::DEFAULT_TREE_SLUG]);
         if ($row) {
             return (int)$row['id'];
         }
         $owner = self::privilegedUserId();
         Database::execute(
-            'INSERT INTO rel8ed_trees (slug, title, description, owner_user_id) VALUES (?, ?, ?, ?)',
-            [self::DEFAULT_TREE_SLUG, 'Graves Family Tree', 'Private Rel8ed tree', max(1, $owner)]
+            'INSERT INTO rel8d_trees (slug, title, description, owner_user_id) VALUES (?, ?, ?, ?)',
+            [self::DEFAULT_TREE_SLUG, 'Graves Family Tree', 'Private Rel8d tree', max(1, $owner)]
         );
         return (int)Database::lastInsertId();
     }
@@ -89,12 +89,12 @@ final class Rel8edModel
 
     public static function storageRoot(): string
     {
-        $root = dirname(__DIR__) . '/private/rel8ed';
-        self::ensureStorageDir($root, 'rel8ed storage root');
+        $root = dirname(__DIR__) . '/private/rel8d';
+        self::ensureStorageDir($root, 'rel8d storage root');
         $ht = $root . '/.htaccess';
         if (!is_file($ht)) {
             if (@file_put_contents($ht, "Require all denied\n") === false) {
-                throw new RuntimeException('Failed to write rel8ed deny-all .htaccess at ' . $ht);
+                throw new RuntimeException('Failed to write rel8d deny-all .htaccess at ' . $ht);
             }
             @chmod($ht, 0644);
         }
@@ -108,7 +108,7 @@ final class Rel8edModel
     {
         if (is_dir($path)) {
             if (!is_writable($path)) {
-                throw new RuntimeException('Rel8ed ' . $label . ' is not writable: ' . $path);
+                throw new RuntimeException('Rel8d ' . $label . ' is not writable: ' . $path);
             }
             return;
         }
@@ -117,14 +117,14 @@ final class Rel8edModel
             $ok = @mkdir($path, 0700, true);
         }
         if (!$ok && !is_dir($path)) {
-            throw new RuntimeException('Failed to create rel8ed ' . $label . ': ' . $path);
+            throw new RuntimeException('Failed to create rel8d ' . $label . ': ' . $path);
         }
         @chmod($path, 0750);
     }
 
     public static function localTokenPath(): string
     {
-        return (string)(getenv('HOME') ?: dirname(__DIR__)) . '/.local/state/catn8/rel8ed/agent-api-token';
+        return (string)(getenv('HOME') ?: dirname(__DIR__)) . '/.local/state/catn8/rel8d/agent-api-token';
     }
 
     public static function verifyApiToken(string $provided): bool
@@ -144,7 +144,7 @@ final class Rel8edModel
     {
         $token = catn8_random_token();
         if (!secret_set(self::AGENT_TOKEN_SECRET_KEY, hash('sha256', $token))) {
-            throw new RuntimeException('Failed to store rel8ed agent token hash');
+            throw new RuntimeException('Failed to store rel8d agent token hash');
         }
         return $token;
     }
@@ -154,10 +154,10 @@ final class Rel8edModel
         $path = self::localTokenPath();
         $dir = dirname($path);
         if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new RuntimeException('Failed to create rel8ed token directory');
+            throw new RuntimeException('Failed to create rel8d token directory');
         }
         if (file_put_contents($path, $token . "\n") === false) {
-            throw new RuntimeException('Failed to write rel8ed token file');
+            throw new RuntimeException('Failed to write rel8d token file');
         }
         @chmod($path, 0600);
         return $path;
@@ -169,7 +169,7 @@ final class Rel8edModel
         if (!is_string($key) || $key === '') {
             $key = bin2hex(random_bytes(32));
             if (!secret_set(self::MEDIA_SIGNING_SECRET_KEY, $key)) {
-                throw new RuntimeException('Failed to store rel8ed media signing key');
+                throw new RuntimeException('Failed to store rel8d media signing key');
             }
         }
         return $key;
@@ -177,7 +177,7 @@ final class Rel8edModel
 
     public static function signDocumentAccess(int $mediaId, int $exp): string
     {
-        return hash_hmac('sha256', 'rel8ed-media|' . $mediaId . '|' . $exp, self::signingKey());
+        return hash_hmac('sha256', 'rel8d-media|' . $mediaId . '|' . $exp, self::signingKey());
     }
 
     public static function verifyDocumentAccess(int $mediaId, int $exp, string $sig): bool
@@ -192,7 +192,7 @@ final class Rel8edModel
     {
         $exp = time() + max(30, min(3600, $ttlSeconds));
         $sig = self::signDocumentAccess($mediaId, $exp);
-        return '/api/rel8ed_media.php?media_id=' . $mediaId . '&exp=' . $exp . '&sig=' . rawurlencode($sig);
+        return '/api/rel8d_media.php?media_id=' . $mediaId . '&exp=' . $exp . '&sig=' . rawurlencode($sig);
     }
 
     public static function resolveMediaPath(array $row): ?string
@@ -226,7 +226,7 @@ final class Rel8edModel
     ): void {
         self::ensureSchema();
         Database::execute(
-            'INSERT INTO rel8ed_audit_log (actor_user_id, actor_label, action, table_name, record_id, person_id, before_json, after_json, ip, ua)
+            'INSERT INTO rel8d_audit_log (actor_user_id, actor_label, action, table_name, record_id, person_id, before_json, after_json, ip, ua)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $actorUserId,
@@ -321,25 +321,25 @@ final class Rel8edModel
     {
         self::ensureSchema();
         $treeId = self::defaultTreeId();
-        $tree = Database::queryOne('SELECT * FROM rel8ed_trees WHERE id = ?', [$treeId]);
+        $tree = Database::queryOne('SELECT * FROM rel8d_trees WHERE id = ?', [$treeId]);
         $peopleTotal = (int)(Database::queryOne(
-            'SELECT COUNT(*) AS c FROM rel8ed_people WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8ed_people', $uid),
+            'SELECT COUNT(*) AS c FROM rel8d_people WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8d_people', $uid),
             [$treeId]
         )['c'] ?? 0);
         $familiesTotal = (int)(Database::queryOne(
-            'SELECT COUNT(*) AS c FROM rel8ed_families WHERE tree_id = ? AND deleted_at IS NULL',
+            'SELECT COUNT(*) AS c FROM rel8d_families WHERE tree_id = ? AND deleted_at IS NULL',
             [$treeId]
         )['c'] ?? 0);
         $sourcesTotal = (int)(Database::queryOne(
-            'SELECT COUNT(*) AS c FROM rel8ed_sources WHERE tree_id = ? AND deleted_at IS NULL',
+            'SELECT COUNT(*) AS c FROM rel8d_sources WHERE tree_id = ? AND deleted_at IS NULL',
             [$treeId]
         )['c'] ?? 0);
         $mediaTotal = (int)(Database::queryOne(
-            'SELECT COUNT(*) AS c FROM rel8ed_media WHERE tree_id = ? AND deleted_at IS NULL',
+            'SELECT COUNT(*) AS c FROM rel8d_media WHERE tree_id = ? AND deleted_at IS NULL',
             [$treeId]
         )['c'] ?? 0);
         $flagsTotal = (int)(Database::queryOne(
-            'SELECT COUNT(*) AS c FROM rel8ed_quality_flags WHERE tree_id = ? AND resolved_at IS NULL',
+            'SELECT COUNT(*) AS c FROM rel8d_quality_flags WHERE tree_id = ? AND resolved_at IS NULL',
             [$treeId]
         )['c'] ?? 0);
 
@@ -364,8 +364,8 @@ final class Rel8edModel
         $onThisDay = self::onThisDay($uid, (int)date('n'), (int)date('j'));
         $recentPeople = Database::queryAll(
             'SELECT id, name_display, birth_date_raw, death_date_raw, has_sources, is_living, is_private
-             FROM rel8ed_people
-             WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8ed_people', $uid) . '
+             FROM rel8d_people
+             WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8d_people', $uid) . '
              ORDER BY updated_at DESC LIMIT 12',
             [$treeId]
         );
@@ -387,7 +387,7 @@ final class Rel8edModel
         $treeId = self::defaultTreeId();
         $limit = max(1, min(1000, $limit));
         $offset = max(0, $offset);
-        $where = 'tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8ed_people', $uid);
+        $where = 'tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8d_people', $uid);
         $params = [$treeId];
         if ($surname !== null && trim($surname) !== '') {
             $where .= ' AND name_surname = ?';
@@ -398,13 +398,13 @@ final class Rel8edModel
             $like = '%' . trim($q) . '%';
             array_push($params, $like, $like, $like, $like, $like);
         }
-        $total = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8ed_people WHERE ' . $where, $params)['c'] ?? 0);
+        $total = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8d_people WHERE ' . $where, $params)['c'] ?? 0);
         $rows = Database::queryAll(
             'SELECT id, gedcom_xref, name_display, name_given, name_surname, sex,
                     birth_date_raw, birth_date_sort, birth_place,
                     death_date_raw, death_date_sort, death_place,
                     is_living, is_private, has_sources
-             FROM rel8ed_people WHERE ' . $where . '
+             FROM rel8d_people WHERE ' . $where . '
              ORDER BY name_surname ASC, name_given ASC, id ASC
              LIMIT ' . $limit . ' OFFSET ' . $offset,
             $params
@@ -421,32 +421,32 @@ final class Rel8edModel
     public static function getPerson(int $uid, int $id): ?array
     {
         self::ensureSchema();
-        $row = Database::queryOne('SELECT * FROM rel8ed_people WHERE id = ? AND deleted_at IS NULL', [$id]);
+        $row = Database::queryOne('SELECT * FROM rel8d_people WHERE id = ? AND deleted_at IS NULL', [$id]);
         if (!$row || !self::personVisibleTo($row, $uid)) {
             return null;
         }
         $personId = (int)$row['id'];
-        $names = Database::queryAll('SELECT * FROM rel8ed_names WHERE person_id = ? ORDER BY is_primary DESC, sort_order ASC, id ASC', [$personId]);
+        $names = Database::queryAll('SELECT * FROM rel8d_names WHERE person_id = ? ORDER BY is_primary DESC, sort_order ASC, id ASC', [$personId]);
         $events = Database::queryAll(
-            'SELECT * FROM rel8ed_events WHERE person_id = ? ORDER BY COALESCE(date_sort, \'9999-12-31\') ASC, sort_order ASC, id ASC',
+            'SELECT * FROM rel8d_events WHERE person_id = ? ORDER BY COALESCE(date_sort, \'9999-12-31\') ASC, sort_order ASC, id ASC',
             [$personId]
         );
-        $attrs = Database::queryAll('SELECT * FROM rel8ed_attributes WHERE person_id = ? ORDER BY sort_order ASC, id ASC', [$personId]);
+        $attrs = Database::queryAll('SELECT * FROM rel8d_attributes WHERE person_id = ? ORDER BY sort_order ASC, id ASC', [$personId]);
         $citations = Database::queryAll(
             'SELECT c.*, s.title AS source_title, s.gedcom_xref AS source_xref
-             FROM rel8ed_citations c
-             LEFT JOIN rel8ed_sources s ON s.id = c.source_id
+             FROM rel8d_citations c
+             LEFT JOIN rel8d_sources s ON s.id = c.source_id
              WHERE c.person_id = ?
              ORDER BY c.id ASC',
             [$personId]
         );
         $notes = Database::queryAll(
-            'SELECT id, title, body, is_story, created_at, updated_at FROM rel8ed_notes
+            'SELECT id, title, body, is_story, created_at, updated_at FROM rel8d_notes
              WHERE person_id = ? AND deleted_at IS NULL ORDER BY is_story DESC, id DESC',
             [$personId]
         );
         $media = Database::queryAll(
-            'SELECT id, title, file_name, mime, media_type, size_bytes, created_at FROM rel8ed_media
+            'SELECT id, title, file_name, mime, media_type, size_bytes, created_at FROM rel8d_media
              WHERE person_id = ? AND deleted_at IS NULL ORDER BY id DESC',
             [$personId]
         );
@@ -458,17 +458,17 @@ final class Rel8edModel
         $childOf = Database::queryAll(
             'SELECT f.id AS family_id, f.gedcom_xref, f.husband_person_id, f.wife_person_id, fc.pedigree,
                     h.name_display AS husband_name, w.name_display AS wife_name
-             FROM rel8ed_family_children fc
-             JOIN rel8ed_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
-             LEFT JOIN rel8ed_people h ON h.id = f.husband_person_id
-             LEFT JOIN rel8ed_people w ON w.id = f.wife_person_id
+             FROM rel8d_family_children fc
+             JOIN rel8d_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
+             LEFT JOIN rel8d_people h ON h.id = f.husband_person_id
+             LEFT JOIN rel8d_people w ON w.id = f.wife_person_id
              WHERE fc.person_id = ?',
             [$personId]
         );
         $spouseFamilies = Database::queryAll(
             'SELECT f.*, 
-                    (SELECT COUNT(*) FROM rel8ed_family_children fc WHERE fc.family_id = f.id) AS child_count
-             FROM rel8ed_families f
+                    (SELECT COUNT(*) FROM rel8d_family_children fc WHERE fc.family_id = f.id) AS child_count
+             FROM rel8d_families f
              WHERE f.deleted_at IS NULL AND (f.husband_person_id = ? OR f.wife_person_id = ?)',
             [$personId, $personId]
         );
@@ -502,10 +502,10 @@ final class Rel8edModel
         $ext = trim((string)($record['external_source_id'] ?? $record['gedcom_xref'] ?? ''));
         $existing = null;
         if ($id > 0) {
-            $existing = Database::queryOne('SELECT * FROM rel8ed_people WHERE id = ?', [$id]);
+            $existing = Database::queryOne('SELECT * FROM rel8d_people WHERE id = ?', [$id]);
         } elseif ($ext !== '') {
             $existing = Database::queryOne(
-                'SELECT * FROM rel8ed_people WHERE tree_id = ? AND (external_source_id = ? OR gedcom_xref = ?) LIMIT 1',
+                'SELECT * FROM rel8d_people WHERE tree_id = ? AND (external_source_id = ? OR gedcom_xref = ?) LIMIT 1',
                 [$treeId, $ext, $ext]
             );
         }
@@ -520,8 +520,8 @@ final class Rel8edModel
 
         $birthRaw = array_key_exists('birth_date_raw', $record) ? (string)$record['birth_date_raw'] : ($existing['birth_date_raw'] ?? null);
         $deathRaw = array_key_exists('death_date_raw', $record) ? (string)$record['death_date_raw'] : ($existing['death_date_raw'] ?? null);
-        $birthSort = Rel8edGedcom::parseDateSort($birthRaw !== null ? (string)$birthRaw : null);
-        $deathSort = Rel8edGedcom::parseDateSort($deathRaw !== null ? (string)$deathRaw : null);
+        $birthSort = Rel8dGedcom::parseDateSort($birthRaw !== null ? (string)$birthRaw : null);
+        $deathSort = Rel8dGedcom::parseDateSort($deathRaw !== null ? (string)$deathRaw : null);
         $flags = self::computeLivingFlags($birthSort, $deathRaw !== null ? (string)$deathRaw : null, $deathSort);
 
         $payload = [
@@ -557,7 +557,7 @@ final class Rel8edModel
 
         if ($existing) {
             Database::execute(
-                'UPDATE rel8ed_people SET gedcom_xref=?, name_display=?, name_given=?, name_surname=?, name_prefix=?, name_suffix=?,
+                'UPDATE rel8d_people SET gedcom_xref=?, name_display=?, name_given=?, name_surname=?, name_prefix=?, name_suffix=?,
                  sex=?, birth_date_raw=?, birth_date_sort=?, birth_place=?, death_date_raw=?, death_date_sort=?, death_place=?,
                  is_living=?, is_private=?, has_sources=?, notes_text=?, external_source_id=?, deleted_at=NULL
                  WHERE id=?',
@@ -570,12 +570,12 @@ final class Rel8edModel
                 ]
             );
             $newId = (int)$existing['id'];
-            self::audit($actorUid, 'update_person', 'rel8ed_people', $newId, $newId, ['id' => $newId], ['id' => $newId], $actorLabel);
+            self::audit($actorUid, 'update_person', 'rel8d_people', $newId, $newId, ['id' => $newId], ['id' => $newId], $actorLabel);
             return ['action' => 'update', 'id' => $newId, 'created' => 0, 'updated' => 1];
         }
 
         Database::execute(
-            'INSERT INTO rel8ed_people
+            'INSERT INTO rel8d_people
              (tree_id, gedcom_xref, name_display, name_given, name_surname, name_prefix, name_suffix, sex,
               birth_date_raw, birth_date_sort, birth_place, death_date_raw, death_date_sort, death_place,
               is_living, is_private, has_sources, notes_text, external_source_id)
@@ -590,7 +590,7 @@ final class Rel8edModel
             ]
         );
         $newId = (int)Database::lastInsertId();
-        self::audit($actorUid, 'create_person', 'rel8ed_people', $newId, $newId, null, ['id' => $newId], $actorLabel);
+        self::audit($actorUid, 'create_person', 'rel8d_people', $newId, $newId, null, ['id' => $newId], $actorLabel);
         return ['action' => 'create', 'id' => $newId, 'created' => 1, 'updated' => 0];
     }
 
@@ -617,7 +617,7 @@ final class Rel8edModel
             return ['dry_run' => true, 'action' => 'create', 'record' => $payload];
         }
         Database::execute(
-            'INSERT INTO rel8ed_notes (tree_id, person_id, family_id, title, body, is_story, external_source_id, created_by)
+            'INSERT INTO rel8d_notes (tree_id, person_id, family_id, title, body, is_story, external_source_id, created_by)
              VALUES (?,?,?,?,?,?,?,?)',
             [
                 $payload['tree_id'], $payload['person_id'], $payload['family_id'], $payload['title'],
@@ -625,7 +625,7 @@ final class Rel8edModel
             ]
         );
         $id = (int)Database::lastInsertId();
-        self::audit($actorUid, 'add_note', 'rel8ed_notes', $id, $personId > 0 ? $personId : null, null, ['id' => $id], $actorLabel);
+        self::audit($actorUid, 'add_note', 'rel8d_notes', $id, $personId > 0 ? $personId : null, null, ['id' => $id], $actorLabel);
         return ['action' => 'create', 'id' => $id, 'created' => 1, 'updated' => 0];
     }
 
@@ -641,7 +641,7 @@ final class Rel8edModel
         $existing = null;
         if ($ext !== '') {
             $existing = Database::queryOne(
-                'SELECT * FROM rel8ed_sources WHERE tree_id = ? AND (external_source_id = ? OR gedcom_xref = ?) LIMIT 1',
+                'SELECT * FROM rel8d_sources WHERE tree_id = ? AND (external_source_id = ? OR gedcom_xref = ?) LIMIT 1',
                 [$treeId, $ext, $ext]
             );
         }
@@ -660,28 +660,28 @@ final class Rel8edModel
         }
         if ($existing) {
             Database::execute(
-                'UPDATE rel8ed_sources SET title=?, author=?, publication=?, repository=?, text_body=?, external_source_id=?, deleted_at=NULL WHERE id=?',
+                'UPDATE rel8d_sources SET title=?, author=?, publication=?, repository=?, text_body=?, external_source_id=?, deleted_at=NULL WHERE id=?',
                 [$payload['title'], $payload['author'], $payload['publication'], $payload['repository'], $payload['text_body'], $payload['external_source_id'], (int)$existing['id']]
             );
             $id = (int)$existing['id'];
-            self::audit($actorUid, 'update_source', 'rel8ed_sources', $id, null, null, ['id' => $id], $actorLabel);
+            self::audit($actorUid, 'update_source', 'rel8d_sources', $id, null, null, ['id' => $id], $actorLabel);
             return ['action' => 'update', 'id' => $id, 'created' => 0, 'updated' => 1];
         }
         Database::execute(
-            'INSERT INTO rel8ed_sources (tree_id, gedcom_xref, title, author, publication, repository, text_body, external_source_id)
+            'INSERT INTO rel8d_sources (tree_id, gedcom_xref, title, author, publication, repository, text_body, external_source_id)
              VALUES (?,?,?,?,?,?,?,?)',
             [$payload['tree_id'], $payload['gedcom_xref'], $payload['title'], $payload['author'], $payload['publication'], $payload['repository'], $payload['text_body'], $payload['external_source_id']]
         );
         $id = (int)Database::lastInsertId();
-        self::audit($actorUid, 'add_source', 'rel8ed_sources', $id, null, null, ['id' => $id], $actorLabel);
+        self::audit($actorUid, 'add_source', 'rel8d_sources', $id, null, null, ['id' => $id], $actorLabel);
 
         $personId = (int)($record['person_id'] ?? 0);
         if ($personId > 0) {
             Database::execute(
-                'INSERT INTO rel8ed_citations (tree_id, source_id, person_id, page, quality, note) VALUES (?,?,?,?,?,?)',
+                'INSERT INTO rel8d_citations (tree_id, source_id, person_id, page, quality, note) VALUES (?,?,?,?,?,?)',
                 [$treeId, $id, $personId, $record['page'] ?? null, $record['quality'] ?? null, $record['note'] ?? null]
             );
-            Database::execute('UPDATE rel8ed_people SET has_sources = 1 WHERE id = ?', [$personId]);
+            Database::execute('UPDATE rel8d_people SET has_sources = 1 WHERE id = ?', [$personId]);
         }
         return ['action' => 'create', 'id' => $id, 'created' => 1, 'updated' => 0];
     }
@@ -693,9 +693,9 @@ final class Rel8edModel
         $limit = max(1, min(2000, $limit));
         return Database::queryAll(
             'SELECT name_surname AS surname, COUNT(*) AS person_count
-             FROM rel8ed_people
+             FROM rel8d_people
              WHERE tree_id = ? AND deleted_at IS NULL AND name_surname IS NOT NULL AND name_surname <> \'\''
-            . self::livingPrivacySql('rel8ed_people', $uid) . '
+            . self::livingPrivacySql('rel8d_people', $uid) . '
              GROUP BY name_surname
              ORDER BY person_count DESC, name_surname ASC
              LIMIT ' . $limit,
@@ -712,8 +712,8 @@ final class Rel8edModel
         $like = sprintf('%% %02d', $day); // rough; also match month names via PHP filter
         $rows = Database::queryAll(
             'SELECT id, name_display, birth_date_raw, death_date_raw, birth_date_sort, death_date_sort
-             FROM rel8ed_people
-             WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8ed_people', $uid) . '
+             FROM rel8d_people
+             WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8d_people', $uid) . '
                AND (
                  (birth_date_sort IS NOT NULL AND MONTH(birth_date_sort) = ? AND DAY(birth_date_sort) = ?)
                  OR (death_date_sort IS NOT NULL AND MONTH(death_date_sort) = ? AND DAY(death_date_sort) = ?)
@@ -756,7 +756,7 @@ final class Rel8edModel
             }
             $p = Database::queryOne(
                 'SELECT id, name_display, birth_date_raw, death_date_raw, sex, is_living, is_private, has_sources
-                 FROM rel8ed_people WHERE id = ? AND deleted_at IS NULL',
+                 FROM rel8d_people WHERE id = ? AND deleted_at IS NULL',
                 [$personId]
             );
             if (!$p || !self::personVisibleTo($p, $uid)) {
@@ -777,8 +777,8 @@ final class Rel8edModel
             if ($gen < $generations) {
                 $fam = Database::queryOne(
                     'SELECT f.husband_person_id, f.wife_person_id
-                     FROM rel8ed_family_children fc
-                     JOIN rel8ed_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
+                     FROM rel8d_family_children fc
+                     JOIN rel8d_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
                      WHERE fc.person_id = ?
                      ORDER BY fc.id ASC LIMIT 1',
                     [$personId]
@@ -800,7 +800,7 @@ final class Rel8edModel
     public static function familyGroup(int $uid, int $familyId): ?array
     {
         self::ensureSchema();
-        $fam = Database::queryOne('SELECT * FROM rel8ed_families WHERE id = ? AND deleted_at IS NULL', [$familyId]);
+        $fam = Database::queryOne('SELECT * FROM rel8d_families WHERE id = ? AND deleted_at IS NULL', [$familyId]);
         if (!$fam) {
             return null;
         }
@@ -810,7 +810,7 @@ final class Rel8edModel
             }
             $p = Database::queryOne(
                 'SELECT id, name_display, birth_date_raw, death_date_raw, sex, has_sources, is_living, is_private
-                 FROM rel8ed_people WHERE id = ? AND deleted_at IS NULL',
+                 FROM rel8d_people WHERE id = ? AND deleted_at IS NULL',
                 [$pid]
             );
             if (!$p || !self::personVisibleTo($p, $uid)) {
@@ -820,15 +820,15 @@ final class Rel8edModel
         };
         $children = Database::queryAll(
             'SELECT p.id, p.name_display, p.birth_date_raw, p.death_date_raw, p.sex, p.has_sources, p.is_living, p.is_private, fc.pedigree
-             FROM rel8ed_family_children fc
-             JOIN rel8ed_people p ON p.id = fc.person_id AND p.deleted_at IS NULL
+             FROM rel8d_family_children fc
+             JOIN rel8d_people p ON p.id = fc.person_id AND p.deleted_at IS NULL
              WHERE fc.family_id = ?
              ORDER BY COALESCE(p.birth_date_sort, \'9999-12-31\') ASC, fc.sort_order ASC, fc.id ASC',
             [$familyId]
         );
         $children = array_values(array_filter($children, fn($c) => self::personVisibleTo($c, $uid)));
         $events = Database::queryAll(
-            'SELECT * FROM rel8ed_events WHERE family_id = ? ORDER BY COALESCE(date_sort, \'9999-12-31\') ASC, id ASC',
+            'SELECT * FROM rel8d_events WHERE family_id = ? ORDER BY COALESCE(date_sort, \'9999-12-31\') ASC, id ASC',
             [$familyId]
         );
         return [
@@ -844,7 +844,7 @@ final class Rel8edModel
     {
         $root = Database::queryOne(
             'SELECT id, name_display, birth_date_raw, death_date_raw, sex, has_sources, is_living, is_private
-             FROM rel8ed_people WHERE id = ? AND deleted_at IS NULL',
+             FROM rel8d_people WHERE id = ? AND deleted_at IS NULL',
             [$rootPersonId]
         );
         if (!$root || !self::personVisibleTo($root, $uid)) {
@@ -856,15 +856,15 @@ final class Rel8edModel
                 return [];
             }
             $families = Database::queryAll(
-                'SELECT id FROM rel8ed_families WHERE deleted_at IS NULL AND (husband_person_id = ? OR wife_person_id = ?)',
+                'SELECT id FROM rel8d_families WHERE deleted_at IS NULL AND (husband_person_id = ? OR wife_person_id = ?)',
                 [$personId, $personId]
             );
             $kids = [];
             foreach ($families as $f) {
                 $children = Database::queryAll(
                     'SELECT p.id, p.name_display, p.birth_date_raw, p.death_date_raw, p.sex, p.has_sources, p.is_living, p.is_private
-                     FROM rel8ed_family_children fc
-                     JOIN rel8ed_people p ON p.id = fc.person_id AND p.deleted_at IS NULL
+                     FROM rel8d_family_children fc
+                     JOIN rel8d_people p ON p.id = fc.person_id AND p.deleted_at IS NULL
                      WHERE fc.family_id = ?
                      ORDER BY COALESCE(p.birth_date_sort, \'9999-12-31\') ASC',
                     [(int)$f['id']]
@@ -903,8 +903,8 @@ final class Rel8edModel
         $neighbors = function (int $pid): array {
             $out = [];
             $famc = Database::queryAll(
-                'SELECT f.husband_person_id, f.wife_person_id FROM rel8ed_family_children fc
-                 JOIN rel8ed_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
+                'SELECT f.husband_person_id, f.wife_person_id FROM rel8d_family_children fc
+                 JOIN rel8d_families f ON f.id = fc.family_id AND f.deleted_at IS NULL
                  WHERE fc.person_id = ?',
                 [$pid]
             );
@@ -917,8 +917,8 @@ final class Rel8edModel
                 }
             }
             $asParent = Database::queryAll(
-                'SELECT fc.person_id FROM rel8ed_families f
-                 JOIN rel8ed_family_children fc ON fc.family_id = f.id
+                'SELECT fc.person_id FROM rel8d_families f
+                 JOIN rel8d_family_children fc ON fc.family_id = f.id
                  WHERE f.deleted_at IS NULL AND (f.husband_person_id = ? OR f.wife_person_id = ?)',
                 [$pid, $pid]
             );
@@ -926,7 +926,7 @@ final class Rel8edModel
                 $out[(int)$c['person_id']] = 'child';
             }
             $spouses = Database::queryAll(
-                'SELECT husband_person_id, wife_person_id FROM rel8ed_families
+                'SELECT husband_person_id, wife_person_id FROM rel8d_families
                  WHERE deleted_at IS NULL AND (husband_person_id = ? OR wife_person_id = ?)',
                 [$pid, $pid]
             );
@@ -974,7 +974,7 @@ final class Rel8edModel
         $labels = [];
         $names = [];
         foreach ($found as $i => $pid) {
-            $p = Database::queryOne('SELECT name_display FROM rel8ed_people WHERE id = ?', [$pid]);
+            $p = Database::queryOne('SELECT name_display FROM rel8d_people WHERE id = ?', [$pid]);
             $names[] = (string)($p['name_display'] ?? ('#' . $pid));
             if ($i > 0) {
                 $labels[] = $edgeType[$pid] ?? 'related';
@@ -1054,10 +1054,10 @@ final class Rel8edModel
     public static function rebuildQualityFlags(int $treeId): int
     {
         self::ensureSchema();
-        Database::execute('DELETE FROM rel8ed_quality_flags WHERE tree_id = ?', [$treeId]);
+        Database::execute('DELETE FROM rel8d_quality_flags WHERE tree_id = ?', [$treeId]);
         $people = Database::queryAll(
             'SELECT id, name_display, birth_date_sort, death_date_sort, birth_date_raw, death_date_raw
-             FROM rel8ed_people WHERE tree_id = ? AND deleted_at IS NULL',
+             FROM rel8d_people WHERE tree_id = ? AND deleted_at IS NULL',
             [$treeId]
         );
         $count = 0;
@@ -1077,7 +1077,7 @@ final class Rel8edModel
                 }
             }
             $events = Database::queryAll(
-                'SELECT id, tag, date_sort FROM rel8ed_events WHERE person_id = ? AND date_sort IS NOT NULL',
+                'SELECT id, tag, date_sort FROM rel8d_events WHERE person_id = ? AND date_sort IS NOT NULL',
                 [$pid]
             );
             if ($d) {
@@ -1093,8 +1093,8 @@ final class Rel8edModel
             }
             // Parents too young / too old
             $parents = Database::queryOne(
-                'SELECT f.husband_person_id, f.wife_person_id FROM rel8ed_family_children fc
-                 JOIN rel8ed_families f ON f.id = fc.family_id
+                'SELECT f.husband_person_id, f.wife_person_id FROM rel8d_family_children fc
+                 JOIN rel8d_families f ON f.id = fc.family_id
                  WHERE fc.person_id = ? LIMIT 1',
                 [$pid]
             );
@@ -1104,7 +1104,7 @@ final class Rel8edModel
                     if ($ppid <= 0) {
                         continue;
                     }
-                    $par = Database::queryOne('SELECT birth_date_sort FROM rel8ed_people WHERE id = ?', [$ppid]);
+                    $par = Database::queryOne('SELECT birth_date_sort FROM rel8d_people WHERE id = ?', [$ppid]);
                     $pb = $par['birth_date_sort'] ?? null;
                     if (!$pb) {
                         continue;
@@ -1122,7 +1122,7 @@ final class Rel8edModel
             // Conflicting birth/death facts (multiple BIRT/DEAT with different dates)
             foreach (['BIRT' => 'conflicting_birth', 'DEAT' => 'conflicting_death'] as $tag => $flag) {
                 $dates = Database::queryAll(
-                    'SELECT DISTINCT date_raw FROM rel8ed_events WHERE person_id = ? AND tag = ? AND date_raw IS NOT NULL AND date_raw <> \'\'',
+                    'SELECT DISTINCT date_raw FROM rel8d_events WHERE person_id = ? AND tag = ? AND date_raw IS NOT NULL AND date_raw <> \'\'',
                     [$pid, $tag]
                 );
                 if (count($dates) > 1) {
@@ -1137,7 +1137,7 @@ final class Rel8edModel
     private static function insertFlag(int $treeId, ?int $personId, ?int $familyId, string $type, string $severity, string $message): void
     {
         Database::execute(
-            'INSERT INTO rel8ed_quality_flags (tree_id, person_id, family_id, flag_type, severity, message) VALUES (?,?,?,?,?,?)',
+            'INSERT INTO rel8d_quality_flags (tree_id, person_id, family_id, flag_type, severity, message) VALUES (?,?,?,?,?,?)',
             [$treeId, $personId, $familyId, $type, $severity, $message]
         );
     }
@@ -1149,8 +1149,8 @@ final class Rel8edModel
         $limit = max(1, min(1000, $limit));
         $rows = Database::queryAll(
             'SELECT q.*, p.name_display
-             FROM rel8ed_quality_flags q
-             LEFT JOIN rel8ed_people p ON p.id = q.person_id
+             FROM rel8d_quality_flags q
+             LEFT JOIN rel8d_people p ON p.id = q.person_id
              WHERE q.tree_id = ? AND q.resolved_at IS NULL
              ORDER BY FIELD(q.severity, \'error\', \'warn\', \'info\'), q.id DESC
              LIMIT ' . $limit,
@@ -1161,8 +1161,8 @@ final class Rel8edModel
                 if (empty($r['person_id'])) {
                     return true;
                 }
-                $p = Database::queryOne('SELECT is_living, is_private FROM rel8ed_people WHERE id = ?', [(int)$r['person_id']]);
-                return $p ? Rel8edModel::personVisibleTo($p, $uid) : false;
+                $p = Database::queryOne('SELECT is_living, is_private FROM rel8d_people WHERE id = ?', [(int)$r['person_id']]);
+                return $p ? Rel8dModel::personVisibleTo($p, $uid) : false;
             }));
         }
         return $rows;
@@ -1175,15 +1175,15 @@ final class Rel8edModel
     public static function syncPlaces(int $treeId): int
     {
         $places = Database::queryAll(
-            'SELECT place, COUNT(*) AS c FROM rel8ed_events
+            'SELECT place, COUNT(*) AS c FROM rel8d_events
              WHERE tree_id = ? AND place IS NOT NULL AND place <> \'\'
              GROUP BY place',
             [$treeId]
         );
         $peoplePlaces = Database::queryAll(
-            'SELECT birth_place AS place FROM rel8ed_people WHERE tree_id = ? AND birth_place IS NOT NULL AND birth_place <> \'\'
+            'SELECT birth_place AS place FROM rel8d_people WHERE tree_id = ? AND birth_place IS NOT NULL AND birth_place <> \'\'
              UNION
-             SELECT death_place AS place FROM rel8ed_people WHERE tree_id = ? AND death_place IS NOT NULL AND death_place <> \'\'',
+             SELECT death_place AS place FROM rel8d_people WHERE tree_id = ? AND death_place IS NOT NULL AND death_place <> \'\'',
             [$treeId, $treeId]
         );
         $map = [];
@@ -1205,14 +1205,14 @@ final class Rel8edModel
         foreach ($map as $name => $c) {
             $norm = mb_strtolower($name);
             $existing = Database::queryOne(
-                'SELECT id, event_count FROM rel8ed_places WHERE tree_id = ? AND normalized = ?',
+                'SELECT id, event_count FROM rel8d_places WHERE tree_id = ? AND normalized = ?',
                 [$treeId, $norm]
             );
             if ($existing) {
-                Database::execute('UPDATE rel8ed_places SET place_name = ?, event_count = ? WHERE id = ?', [$name, $c, (int)$existing['id']]);
+                Database::execute('UPDATE rel8d_places SET place_name = ?, event_count = ? WHERE id = ?', [$name, $c, (int)$existing['id']]);
             } else {
                 Database::execute(
-                    'INSERT INTO rel8ed_places (tree_id, place_name, normalized, event_count, geocode_status) VALUES (?,?,?,?,?)',
+                    'INSERT INTO rel8d_places (tree_id, place_name, normalized, event_count, geocode_status) VALUES (?,?,?,?,?)',
                     [$treeId, $name, $norm, $c, 'pending']
                 );
                 $n++;
@@ -1227,7 +1227,7 @@ final class Rel8edModel
         $treeId = self::defaultTreeId();
         $limit = max(1, min(50, $limit));
         $rows = Database::queryAll(
-            'SELECT * FROM rel8ed_places WHERE tree_id = ? AND geocode_status = ? ORDER BY event_count DESC, id ASC LIMIT ' . $limit,
+            'SELECT * FROM rel8d_places WHERE tree_id = ? AND geocode_status = ? ORDER BY event_count DESC, id ASC LIMIT ' . $limit,
             [$treeId, 'pending']
         );
         $done = 0;
@@ -1237,13 +1237,13 @@ final class Rel8edModel
             $result = self::nominatimGeocode((string)$row['place_name']);
             if ($result) {
                 Database::execute(
-                    'UPDATE rel8ed_places SET lat=?, lng=?, geocode_status=?, geocode_raw=?, geocoded_at=NOW() WHERE id=?',
+                    'UPDATE rel8d_places SET lat=?, lng=?, geocode_status=?, geocode_raw=?, geocoded_at=NOW() WHERE id=?',
                     [$result['lat'], $result['lng'], 'ok', json_encode($result['raw']), (int)$row['id']]
                 );
                 $done++;
             } else {
                 Database::execute(
-                    'UPDATE rel8ed_places SET geocode_status=?, geocoded_at=NOW() WHERE id=?',
+                    'UPDATE rel8d_places SET geocode_status=?, geocoded_at=NOW() WHERE id=?',
                     ['failed', (int)$row['id']]
                 );
                 $failed++;
@@ -1258,7 +1258,7 @@ final class Rel8edModel
         $ctx = stream_context_create([
             'http' => [
                 'method' => 'GET',
-                'header' => "User-Agent: Rel8ed/catn8.us (private genealogy; contact admin@catn8.us)\r\nAccept: application/json\r\n",
+                'header' => "User-Agent: Rel8d/catn8.us (private genealogy; contact admin@catn8.us)\r\nAccept: application/json\r\n",
                 'timeout' => 12,
             ],
         ]);
@@ -1283,7 +1283,7 @@ final class Rel8edModel
         $treeId = self::defaultTreeId();
         self::syncPlaces($treeId);
         $rows = Database::queryAll(
-            'SELECT id, place_name, event_count, lat, lng, geocode_status FROM rel8ed_places
+            'SELECT id, place_name, event_count, lat, lng, geocode_status FROM rel8d_places
              WHERE tree_id = ? ORDER BY event_count DESC, place_name ASC LIMIT 500',
             [$treeId]
         );
@@ -1302,12 +1302,12 @@ final class Rel8edModel
     {
         self::ensureSchema();
         $treeId = self::defaultTreeId();
-        $existing = Database::queryOne('SELECT id FROM rel8ed_dna_profiles WHERE tree_id = ? LIMIT 1', [$treeId]);
+        $existing = Database::queryOne('SELECT id FROM rel8d_dna_profiles WHERE tree_id = ? LIMIT 1', [$treeId]);
         if ($existing) {
             return;
         }
         Database::execute(
-            'INSERT INTO rel8ed_dna_profiles (tree_id, label, notes) VALUES (?,?,?)',
+            'INSERT INTO rel8d_dna_profiles (tree_id, label, notes) VALUES (?,?,?)',
             [$treeId, 'Primary ethnicity estimate', 'Editable admin DNA summary']
         );
         $profileId = (int)Database::lastInsertId();
@@ -1339,21 +1339,21 @@ final class Rel8edModel
         $order = 0;
         foreach ($regions as $region) {
             Database::execute(
-                'INSERT INTO rel8ed_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
+                'INSERT INTO rel8d_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
                 [$profileId, null, $region[0], $region[1], $order++]
             );
             $parentId = (int)Database::lastInsertId();
             $subOrder = 0;
             foreach ($region[2] as $sub) {
                 Database::execute(
-                    'INSERT INTO rel8ed_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
+                    'INSERT INTO rel8d_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
                     [$profileId, $parentId, $sub[0], $sub[1], $subOrder++]
                 );
             }
         }
         foreach (['Georgia & Florida Settlers', 'Southern Backcountry to OK & TX'] as $i => $community) {
             Database::execute(
-                'INSERT INTO rel8ed_dna_communities (profile_id, community_name, sort_order) VALUES (?,?,?)',
+                'INSERT INTO rel8d_dna_communities (profile_id, community_name, sort_order) VALUES (?,?,?)',
                 [$profileId, $community, $i]
             );
         }
@@ -1363,16 +1363,16 @@ final class Rel8edModel
     {
         self::ensureDnaSeed();
         $treeId = self::defaultTreeId();
-        $profile = Database::queryOne('SELECT * FROM rel8ed_dna_profiles WHERE tree_id = ? ORDER BY id ASC LIMIT 1', [$treeId]);
+        $profile = Database::queryOne('SELECT * FROM rel8d_dna_profiles WHERE tree_id = ? ORDER BY id ASC LIMIT 1', [$treeId]);
         if (!$profile) {
             return ['profile' => null, 'regions' => [], 'communities' => []];
         }
         $regions = Database::queryAll(
-            'SELECT * FROM rel8ed_dna_regions WHERE profile_id = ? ORDER BY parent_region_id IS NOT NULL, sort_order ASC, id ASC',
+            'SELECT * FROM rel8d_dna_regions WHERE profile_id = ? ORDER BY parent_region_id IS NOT NULL, sort_order ASC, id ASC',
             [(int)$profile['id']]
         );
         $communities = Database::queryAll(
-            'SELECT * FROM rel8ed_dna_communities WHERE profile_id = ? ORDER BY sort_order ASC, id ASC',
+            'SELECT * FROM rel8d_dna_communities WHERE profile_id = ? ORDER BY sort_order ASC, id ASC',
             [(int)$profile['id']]
         );
         return ['profile' => $profile, 'regions' => $regions, 'communities' => $communities, 'can_edit' => self::isSiteAdmin($uid) ? 1 : 0];
@@ -1385,16 +1385,16 @@ final class Rel8edModel
         }
         self::ensureDnaSeed();
         $treeId = self::defaultTreeId();
-        $profile = Database::queryOne('SELECT * FROM rel8ed_dna_profiles WHERE tree_id = ? ORDER BY id ASC LIMIT 1', [$treeId]);
+        $profile = Database::queryOne('SELECT * FROM rel8d_dna_profiles WHERE tree_id = ? ORDER BY id ASC LIMIT 1', [$treeId]);
         $profileId = (int)$profile['id'];
         if (isset($payload['label']) || isset($payload['notes'])) {
             Database::execute(
-                'UPDATE rel8ed_dna_profiles SET label = COALESCE(?, label), notes = COALESCE(?, notes), updated_by = ? WHERE id = ?',
+                'UPDATE rel8d_dna_profiles SET label = COALESCE(?, label), notes = COALESCE(?, notes), updated_by = ? WHERE id = ?',
                 [$payload['label'] ?? null, $payload['notes'] ?? null, $actorUid, $profileId]
             );
         }
         if (isset($payload['regions']) && is_array($payload['regions'])) {
-            Database::execute('DELETE FROM rel8ed_dna_regions WHERE profile_id = ?', [$profileId]);
+            Database::execute('DELETE FROM rel8d_dna_regions WHERE profile_id = ?', [$profileId]);
             $order = 0;
             $idMap = [];
             foreach ($payload['regions'] as $region) {
@@ -1404,7 +1404,7 @@ final class Rel8edModel
                 $parentKey = $region['parent_key'] ?? null;
                 $parentId = ($parentKey !== null && isset($idMap[$parentKey])) ? $idMap[$parentKey] : null;
                 Database::execute(
-                    'INSERT INTO rel8ed_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
+                    'INSERT INTO rel8d_dna_regions (profile_id, parent_region_id, region_name, percent, sort_order) VALUES (?,?,?,?,?)',
                     [$profileId, $parentId, (string)($region['region_name'] ?? ''), (float)($region['percent'] ?? 0), $order++]
                 );
                 if (isset($region['key'])) {
@@ -1413,19 +1413,19 @@ final class Rel8edModel
             }
         }
         if (isset($payload['communities']) && is_array($payload['communities'])) {
-            Database::execute('DELETE FROM rel8ed_dna_communities WHERE profile_id = ?', [$profileId]);
+            Database::execute('DELETE FROM rel8d_dna_communities WHERE profile_id = ?', [$profileId]);
             foreach ($payload['communities'] as $i => $c) {
                 $name = is_array($c) ? (string)($c['community_name'] ?? $c['name'] ?? '') : (string)$c;
                 if ($name === '') {
                     continue;
                 }
                 Database::execute(
-                    'INSERT INTO rel8ed_dna_communities (profile_id, community_name, sort_order) VALUES (?,?,?)',
+                    'INSERT INTO rel8d_dna_communities (profile_id, community_name, sort_order) VALUES (?,?,?)',
                     [$profileId, $name, (int)$i]
                 );
             }
         }
-        self::audit($actorUid, 'save_dna', 'rel8ed_dna_profiles', $profileId, null, null, ['id' => $profileId]);
+        self::audit($actorUid, 'save_dna', 'rel8d_dna_profiles', $profileId, null, null, ['id' => $profileId]);
         return self::getDna($actorUid);
     }
 
@@ -1472,7 +1472,7 @@ final class Rel8edModel
         $title = trim((string)($meta['title'] ?? $origName));
         $personId = (int)($meta['person_id'] ?? 0);
         Database::execute(
-            'INSERT INTO rel8ed_media (tree_id, person_id, title, file_name, stored_path, mime, size_bytes, sha256, media_type, uploaded_by, external_source_id)
+            'INSERT INTO rel8d_media (tree_id, person_id, title, file_name, stored_path, mime, size_bytes, sha256, media_type, uploaded_by, external_source_id)
              VALUES (?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $treeId,
@@ -1489,7 +1489,7 @@ final class Rel8edModel
             ]
         );
         $id = (int)Database::lastInsertId();
-        self::audit($actorUid, 'upload_media', 'rel8ed_media', $id, $personId > 0 ? $personId : null, null, ['id' => $id, 'sha256' => $sha], $actorLabel);
+        self::audit($actorUid, 'upload_media', 'rel8d_media', $id, $personId > 0 ? $personId : null, null, ['id' => $id, 'sha256' => $sha], $actorLabel);
         return [
             'id' => $id,
             'media_url' => self::mediaSignedUrl($id),
@@ -1505,11 +1505,11 @@ final class Rel8edModel
         $treeId = self::defaultTreeId();
         $limit = max(1, min(500, $limit));
         $offset = max(0, $offset);
-        $total = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8ed_media WHERE tree_id = ? AND deleted_at IS NULL', [$treeId])['c'] ?? 0);
+        $total = (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8d_media WHERE tree_id = ? AND deleted_at IS NULL', [$treeId])['c'] ?? 0);
         $rows = Database::queryAll(
             'SELECT m.id, m.title, m.file_name, m.mime, m.media_type, m.size_bytes, m.person_id, m.created_at, p.name_display
-             FROM rel8ed_media m
-             LEFT JOIN rel8ed_people p ON p.id = m.person_id
+             FROM rel8d_media m
+             LEFT JOIN rel8d_people p ON p.id = m.person_id
              WHERE m.tree_id = ? AND m.deleted_at IS NULL
              ORDER BY m.id DESC
              LIMIT ' . $limit . ' OFFSET ' . $offset,
@@ -1530,19 +1530,19 @@ final class Rel8edModel
     {
         self::ensureSchema();
         $treeId = self::defaultTreeId();
-        $parsed = Rel8edGedcom::parse($gedcomText);
+        $parsed = Rel8dGedcom::parse($gedcomText);
         $sha = hash('sha256', $gedcomText);
 
         // Build synthetic old parse from DB raw_json where available
         $oldRecords = [];
-        $people = Database::queryAll('SELECT gedcom_xref, raw_json FROM rel8ed_people WHERE tree_id = ? AND deleted_at IS NULL AND gedcom_xref IS NOT NULL', [$treeId]);
+        $people = Database::queryAll('SELECT gedcom_xref, raw_json FROM rel8d_people WHERE tree_id = ? AND deleted_at IS NULL AND gedcom_xref IS NOT NULL', [$treeId]);
         foreach ($people as $p) {
             $raw = json_decode((string)($p['raw_json'] ?? ''), true);
             if (is_array($raw)) {
                 $oldRecords[(string)$p['gedcom_xref']] = $raw;
             }
         }
-        $fams = Database::queryAll('SELECT gedcom_xref, raw_json FROM rel8ed_families WHERE tree_id = ? AND deleted_at IS NULL AND gedcom_xref IS NOT NULL', [$treeId]);
+        $fams = Database::queryAll('SELECT gedcom_xref, raw_json FROM rel8d_families WHERE tree_id = ? AND deleted_at IS NULL AND gedcom_xref IS NOT NULL', [$treeId]);
         foreach ($fams as $f) {
             $raw = json_decode((string)($f['raw_json'] ?? ''), true);
             if (is_array($raw)) {
@@ -1554,7 +1554,7 @@ final class Rel8edModel
             'counts' => [
                 'INDI' => count($people),
                 'FAM' => count($fams),
-                'SOUR' => (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8ed_sources WHERE tree_id = ? AND deleted_at IS NULL', [$treeId])['c'] ?? 0),
+                'SOUR' => (int)(Database::queryOne('SELECT COUNT(*) AS c FROM rel8d_sources WHERE tree_id = ? AND deleted_at IS NULL', [$treeId])['c'] ?? 0),
                 'NOTE' => 0,
                 'OBJE' => 0,
                 'REPO' => 0,
@@ -1562,10 +1562,10 @@ final class Rel8edModel
                 'other' => 0,
             ],
         ];
-        $diff = Rel8edGedcom::diff($oldParsed, $parsed);
+        $diff = Rel8dGedcom::diff($oldParsed, $parsed);
 
         Database::execute(
-            'INSERT INTO rel8ed_imports (tree_id, file_name, sha256, status, counts_json, diff_json, created_by)
+            'INSERT INTO rel8d_imports (tree_id, file_name, sha256, status, counts_json, diff_json, created_by)
              VALUES (?,?,?,?,?,?,?)',
             [
                 $treeId,
@@ -1595,7 +1595,7 @@ final class Rel8edModel
     public static function applyImport(int $importId, int $actorUid, ?string $actorLabel = null): array
     {
         self::ensureSchema();
-        $row = Database::queryOne('SELECT * FROM rel8ed_imports WHERE id = ?', [$importId]);
+        $row = Database::queryOne('SELECT * FROM rel8d_imports WHERE id = ?', [$importId]);
         if (!$row) {
             throw new InvalidArgumentException('import not found');
         }
@@ -1606,10 +1606,10 @@ final class Rel8edModel
         $text = (string)file_get_contents($path);
         $result = self::importGedcomText($text, $actorUid, $actorLabel);
         Database::execute(
-            'UPDATE rel8ed_imports SET status = ?, applied_at = NOW(), created_by = ?, counts_json = ? WHERE id = ?',
+            'UPDATE rel8d_imports SET status = ?, applied_at = NOW(), created_by = ?, counts_json = ? WHERE id = ?',
             ['applied', $actorUid > 0 ? $actorUid : null, json_encode($result['counts']), $importId]
         );
-        self::audit($actorUid, 'apply_import', 'rel8ed_imports', $importId, null, null, ['counts' => $result['counts']], $actorLabel);
+        self::audit($actorUid, 'apply_import', 'rel8d_imports', $importId, null, null, ['counts' => $result['counts']], $actorLabel);
         return $result + ['import_id' => $importId];
     }
 
@@ -1617,7 +1617,7 @@ final class Rel8edModel
     {
         self::ensureSchema();
         $treeId = self::defaultTreeId();
-        $parsed = Rel8edGedcom::parse($gedcomText);
+        $parsed = Rel8dGedcom::parse($gedcomText);
 
         $xrefToPersonId = [];
         $xrefToFamilyId = [];
@@ -1633,23 +1633,23 @@ final class Rel8edModel
             if (($rec['tag'] ?? '') !== 'SOUR') {
                 continue;
             }
-            $title = Rel8edGedcom::firstChildValue($rec, 'TITL') ?: Rel8edGedcom::concatContConc($rec);
-            $author = Rel8edGedcom::firstChildValue($rec, 'AUTH');
-            $pub = Rel8edGedcom::firstChildValue($rec, 'PUBL');
+            $title = Rel8dGedcom::firstChildValue($rec, 'TITL') ?: Rel8dGedcom::concatContConc($rec);
+            $author = Rel8dGedcom::firstChildValue($rec, 'AUTH');
+            $pub = Rel8dGedcom::firstChildValue($rec, 'PUBL');
             $existing = Database::queryOne(
-                'SELECT id FROM rel8ed_sources WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
+                'SELECT id FROM rel8d_sources WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
                 [$treeId, $xref]
             );
             $raw = json_encode($rec, JSON_UNESCAPED_UNICODE);
             if ($existing) {
                 Database::execute(
-                    'UPDATE rel8ed_sources SET title=?, author=?, publication=?, raw_json=?, deleted_at=NULL WHERE id=?',
+                    'UPDATE rel8d_sources SET title=?, author=?, publication=?, raw_json=?, deleted_at=NULL WHERE id=?',
                     [$title !== '' ? $title : 'Source ' . $xref, $author ?: null, $pub ?: null, $raw, (int)$existing['id']]
                 );
                 $xrefToSourceId[$xref] = (int)$existing['id'];
             } else {
                 Database::execute(
-                    'INSERT INTO rel8ed_sources (tree_id, gedcom_xref, title, author, publication, raw_json, external_source_id)
+                    'INSERT INTO rel8d_sources (tree_id, gedcom_xref, title, author, publication, raw_json, external_source_id)
                      VALUES (?,?,?,?,?,?,?)',
                     [$treeId, $xref, $title !== '' ? $title : 'Source ' . $xref, $author ?: null, $pub ?: null, $raw, $xref]
                 );
@@ -1663,15 +1663,15 @@ final class Rel8edModel
             if (($rec['tag'] ?? '') !== 'INDI') {
                 continue;
             }
-            $nameNodes = Rel8edGedcom::childValues($rec, 'NAME');
-            $primaryName = isset($nameNodes[0]) ? Rel8edGedcom::parseName((string)($nameNodes[0]['value'] ?? '')) : [
+            $nameNodes = Rel8dGedcom::childValues($rec, 'NAME');
+            $primaryName = isset($nameNodes[0]) ? Rel8dGedcom::parseName((string)($nameNodes[0]['value'] ?? '')) : [
                 'display' => 'Unknown', 'given' => null, 'surname' => null, 'prefix' => null, 'suffix' => null,
             ];
             if (isset($nameNodes[0])) {
-                $givn = Rel8edGedcom::firstChildValue($nameNodes[0], 'GIVN');
-                $surn = Rel8edGedcom::firstChildValue($nameNodes[0], 'SURN');
-                $npfx = Rel8edGedcom::firstChildValue($nameNodes[0], 'NPFX');
-                $nsfx = Rel8edGedcom::firstChildValue($nameNodes[0], 'NSFX');
+                $givn = Rel8dGedcom::firstChildValue($nameNodes[0], 'GIVN');
+                $surn = Rel8dGedcom::firstChildValue($nameNodes[0], 'SURN');
+                $npfx = Rel8dGedcom::firstChildValue($nameNodes[0], 'NPFX');
+                $nsfx = Rel8dGedcom::firstChildValue($nameNodes[0], 'NSFX');
                 if ($givn !== '') {
                     $primaryName['given'] = $givn;
                 }
@@ -1688,15 +1688,15 @@ final class Rel8edModel
                     $primaryName['display'] = trim(($primaryName['given'] ?? '') . ' ' . ($primaryName['surname'] ?? '') . ' ' . ($primaryName['suffix'] ?? ''));
                 }
             }
-            $sex = Rel8edGedcom::firstChildValue($rec, 'SEX');
-            $birt = Rel8edGedcom::firstChild($rec, 'BIRT');
-            $deat = Rel8edGedcom::firstChild($rec, 'DEAT');
-            $birthRaw = $birt ? Rel8edGedcom::firstChildValue($birt, 'DATE') : '';
-            $birthPlace = $birt ? Rel8edGedcom::firstChildValue($birt, 'PLAC') : '';
-            $deathRaw = $deat ? Rel8edGedcom::firstChildValue($deat, 'DATE') : '';
-            $deathPlace = $deat ? Rel8edGedcom::firstChildValue($deat, 'PLAC') : '';
-            $birthSort = Rel8edGedcom::parseDateSort($birthRaw !== '' ? $birthRaw : null);
-            $deathSort = Rel8edGedcom::parseDateSort($deathRaw !== '' ? $deathRaw : null);
+            $sex = Rel8dGedcom::firstChildValue($rec, 'SEX');
+            $birt = Rel8dGedcom::firstChild($rec, 'BIRT');
+            $deat = Rel8dGedcom::firstChild($rec, 'DEAT');
+            $birthRaw = $birt ? Rel8dGedcom::firstChildValue($birt, 'DATE') : '';
+            $birthPlace = $birt ? Rel8dGedcom::firstChildValue($birt, 'PLAC') : '';
+            $deathRaw = $deat ? Rel8dGedcom::firstChildValue($deat, 'DATE') : '';
+            $deathPlace = $deat ? Rel8dGedcom::firstChildValue($deat, 'PLAC') : '';
+            $birthSort = Rel8dGedcom::parseDateSort($birthRaw !== '' ? $birthRaw : null);
+            $deathSort = Rel8dGedcom::parseDateSort($deathRaw !== '' ? $deathRaw : null);
             $live = self::computeLivingFlags($birthSort, $deathRaw !== '' ? $deathRaw : null, $deathSort);
 
             $hasSources = 0;
@@ -1715,7 +1715,7 @@ final class Rel8edModel
 
             $raw = json_encode($rec, JSON_UNESCAPED_UNICODE);
             $existing = Database::queryOne(
-                'SELECT id FROM rel8ed_people WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
+                'SELECT id FROM rel8d_people WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
                 [$treeId, $xref]
             );
             $fields = [
@@ -1727,19 +1727,19 @@ final class Rel8edModel
             ];
             if ($existing) {
                 Database::execute(
-                    'UPDATE rel8ed_people SET name_display=?, name_given=?, name_surname=?, name_prefix=?, name_suffix=?, sex=?,
+                    'UPDATE rel8d_people SET name_display=?, name_given=?, name_surname=?, name_prefix=?, name_suffix=?, sex=?,
                      birth_date_raw=?, birth_date_sort=?, birth_place=?, death_date_raw=?, death_date_sort=?, death_place=?,
                      is_living=?, is_private=?, has_sources=?, raw_json=?, external_source_id=?, deleted_at=NULL WHERE id=?',
                     array_merge($fields, [(int)$existing['id']])
                 );
                 $personId = (int)$existing['id'];
-                Database::execute('DELETE FROM rel8ed_names WHERE person_id = ?', [$personId]);
-                Database::execute('DELETE FROM rel8ed_events WHERE person_id = ?', [$personId]);
-                Database::execute('DELETE FROM rel8ed_attributes WHERE person_id = ?', [$personId]);
-                Database::execute('DELETE FROM rel8ed_citations WHERE person_id = ?', [$personId]);
+                Database::execute('DELETE FROM rel8d_names WHERE person_id = ?', [$personId]);
+                Database::execute('DELETE FROM rel8d_events WHERE person_id = ?', [$personId]);
+                Database::execute('DELETE FROM rel8d_attributes WHERE person_id = ?', [$personId]);
+                Database::execute('DELETE FROM rel8d_citations WHERE person_id = ?', [$personId]);
             } else {
                 Database::execute(
-                    'INSERT INTO rel8ed_people
+                    'INSERT INTO rel8d_people
                      (tree_id, gedcom_xref, name_display, name_given, name_surname, name_prefix, name_suffix, sex,
                       birth_date_raw, birth_date_sort, birth_place, death_date_raw, death_date_sort, death_place,
                       is_living, is_private, has_sources, raw_json, external_source_id)
@@ -1751,9 +1751,9 @@ final class Rel8edModel
             $xrefToPersonId[$xref] = $personId;
 
             foreach ($nameNodes as $i => $nn) {
-                $parsedName = Rel8edGedcom::parseName((string)($nn['value'] ?? ''));
-                $givn = Rel8edGedcom::firstChildValue($nn, 'GIVN');
-                $surn = Rel8edGedcom::firstChildValue($nn, 'SURN');
+                $parsedName = Rel8dGedcom::parseName((string)($nn['value'] ?? ''));
+                $givn = Rel8dGedcom::firstChildValue($nn, 'GIVN');
+                $surn = Rel8dGedcom::firstChildValue($nn, 'SURN');
                 if ($givn !== '') {
                     $parsedName['given'] = $givn;
                 }
@@ -1761,14 +1761,14 @@ final class Rel8edModel
                     $parsedName['surname'] = $surn;
                 }
                 Database::execute(
-                    'INSERT INTO rel8ed_names (person_id, name_type, name_display, name_given, name_surname, name_prefix, name_suffix, is_primary, sort_order)
+                    'INSERT INTO rel8d_names (person_id, name_type, name_display, name_given, name_surname, name_prefix, name_suffix, is_primary, sort_order)
                      VALUES (?,?,?,?,?,?,?,?,?)',
                     [
                         $personId,
-                        Rel8edGedcom::firstChildValue($nn, 'TYPE') ?: ($i === 0 ? 'primary' : 'aka'),
+                        Rel8dGedcom::firstChildValue($nn, 'TYPE') ?: ($i === 0 ? 'primary' : 'aka'),
                         $parsedName['display'], $parsedName['given'], $parsedName['surname'],
-                        Rel8edGedcom::firstChildValue($nn, 'NPFX') ?: null,
-                        Rel8edGedcom::firstChildValue($nn, 'NSFX') ?: null,
+                        Rel8dGedcom::firstChildValue($nn, 'NPFX') ?: null,
+                        Rel8dGedcom::firstChildValue($nn, 'NSFX') ?: null,
                         $i === 0 ? 1 : 0,
                         $i,
                     ]
@@ -1782,10 +1782,10 @@ final class Rel8edModel
                     continue;
                 }
                 if ($tag === 'NOTE') {
-                    $body = Rel8edGedcom::concatContConc($ch);
+                    $body = Rel8dGedcom::concatContConc($ch);
                     if ($body !== '') {
                         Database::execute(
-                            'INSERT INTO rel8ed_notes (tree_id, person_id, body, is_story, raw_json) VALUES (?,?,?,?,?)',
+                            'INSERT INTO rel8d_notes (tree_id, person_id, body, is_story, raw_json) VALUES (?,?,?,?,?)',
                             [$treeId, $personId, $body, 0, json_encode($ch, JSON_UNESCAPED_UNICODE)]
                         );
                         $noteN++;
@@ -1796,61 +1796,61 @@ final class Rel8edModel
                     $sourX = trim((string)($ch['value'] ?? ''));
                     $sid = $xrefToSourceId[$sourX] ?? null;
                     Database::execute(
-                        'INSERT INTO rel8ed_citations (tree_id, source_id, person_id, page, quality, raw_json) VALUES (?,?,?,?,?,?)',
+                        'INSERT INTO rel8d_citations (tree_id, source_id, person_id, page, quality, raw_json) VALUES (?,?,?,?,?,?)',
                         [
                             $treeId, $sid, $personId,
-                            Rel8edGedcom::firstChildValue($ch, 'PAGE') ?: null,
-                            Rel8edGedcom::firstChildValue($ch, 'QUAY') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'PAGE') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'QUAY') ?: null,
                             json_encode($ch, JSON_UNESCAPED_UNICODE),
                         ]
                     );
                     continue;
                 }
-                if (in_array($tag, Rel8edGedcom::EVENT_TAGS, true) || Rel8edGedcom::isEventTag($tag)) {
-                    if (in_array($tag, Rel8edGedcom::ATTR_TAGS, true) && !in_array($tag, ['RESI', 'OCCU', 'MILI', '_MILT'], true)) {
+                if (in_array($tag, Rel8dGedcom::EVENT_TAGS, true) || Rel8dGedcom::isEventTag($tag)) {
+                    if (in_array($tag, Rel8dGedcom::ATTR_TAGS, true) && !in_array($tag, ['RESI', 'OCCU', 'MILI', '_MILT'], true)) {
                         // fall through to attrs for pure attributes; RESI/OCCU/MILI also as events
                     }
-                    $dateRaw = Rel8edGedcom::firstChildValue($ch, 'DATE');
-                    $place = Rel8edGedcom::firstChildValue($ch, 'PLAC');
-                    $type = Rel8edGedcom::firstChildValue($ch, 'TYPE');
-                    $desc = Rel8edGedcom::concatContConc($ch);
-                    $hasEvSource = Rel8edGedcom::firstChild($ch, 'SOUR') ? 1 : 0;
+                    $dateRaw = Rel8dGedcom::firstChildValue($ch, 'DATE');
+                    $place = Rel8dGedcom::firstChildValue($ch, 'PLAC');
+                    $type = Rel8dGedcom::firstChildValue($ch, 'TYPE');
+                    $desc = Rel8dGedcom::concatContConc($ch);
+                    $hasEvSource = Rel8dGedcom::firstChild($ch, 'SOUR') ? 1 : 0;
                     Database::execute(
-                        'INSERT INTO rel8ed_events
+                        'INSERT INTO rel8d_events
                          (tree_id, person_id, tag, type_label, date_raw, date_sort, place, description, age_text, cause, raw_json, has_sources, sort_order)
                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         [
                             $treeId, $personId, $tag, $type !== '' ? $type : null,
-                            $dateRaw !== '' ? $dateRaw : null, Rel8edGedcom::parseDateSort($dateRaw !== '' ? $dateRaw : null),
+                            $dateRaw !== '' ? $dateRaw : null, Rel8dGedcom::parseDateSort($dateRaw !== '' ? $dateRaw : null),
                             $place !== '' ? $place : null, $desc !== '' ? $desc : null,
-                            Rel8edGedcom::firstChildValue($ch, 'AGE') ?: null,
-                            Rel8edGedcom::firstChildValue($ch, 'CAUS') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'AGE') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'CAUS') ?: null,
                             json_encode($ch, JSON_UNESCAPED_UNICODE), $hasEvSource, $sort++,
                         ]
                     );
                     $eventId = (int)Database::lastInsertId();
-                    foreach (Rel8edGedcom::childValues($ch, 'SOUR') as $sc) {
+                    foreach (Rel8dGedcom::childValues($ch, 'SOUR') as $sc) {
                         $sx = trim((string)($sc['value'] ?? ''));
                         Database::execute(
-                            'INSERT INTO rel8ed_citations (tree_id, source_id, person_id, event_id, page, quality, raw_json) VALUES (?,?,?,?,?,?,?)',
+                            'INSERT INTO rel8d_citations (tree_id, source_id, person_id, event_id, page, quality, raw_json) VALUES (?,?,?,?,?,?,?)',
                             [
                                 $treeId, $xrefToSourceId[$sx] ?? null, $personId, $eventId,
-                                Rel8edGedcom::firstChildValue($sc, 'PAGE') ?: null,
-                                Rel8edGedcom::firstChildValue($sc, 'QUAY') ?: null,
+                                Rel8dGedcom::firstChildValue($sc, 'PAGE') ?: null,
+                                Rel8dGedcom::firstChildValue($sc, 'QUAY') ?: null,
                                 json_encode($sc, JSON_UNESCAPED_UNICODE),
                             ]
                         );
                     }
                 }
-                if (in_array($tag, Rel8edGedcom::ATTR_TAGS, true)) {
+                if (in_array($tag, Rel8dGedcom::ATTR_TAGS, true)) {
                     Database::execute(
-                        'INSERT INTO rel8ed_attributes (tree_id, person_id, tag, value_text, date_raw, place, raw_json, sort_order)
+                        'INSERT INTO rel8d_attributes (tree_id, person_id, tag, value_text, date_raw, place, raw_json, sort_order)
                          VALUES (?,?,?,?,?,?,?,?)',
                         [
                             $treeId, $personId, $tag,
-                            Rel8edGedcom::concatContConc($ch) ?: null,
-                            Rel8edGedcom::firstChildValue($ch, 'DATE') ?: null,
-                            Rel8edGedcom::firstChildValue($ch, 'PLAC') ?: null,
+                            Rel8dGedcom::concatContConc($ch) ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'DATE') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'PLAC') ?: null,
                             json_encode($ch, JSON_UNESCAPED_UNICODE), $sort++,
                         ]
                     );
@@ -1864,38 +1864,38 @@ final class Rel8edModel
             if (($rec['tag'] ?? '') !== 'FAM') {
                 continue;
             }
-            $husb = Rel8edGedcom::firstChildValue($rec, 'HUSB');
-            $wife = Rel8edGedcom::firstChildValue($rec, 'WIFE');
-            $marr = Rel8edGedcom::firstChild($rec, 'MARR');
-            $marrDate = $marr ? Rel8edGedcom::firstChildValue($marr, 'DATE') : '';
-            $marrPlace = $marr ? Rel8edGedcom::firstChildValue($marr, 'PLAC') : '';
+            $husb = Rel8dGedcom::firstChildValue($rec, 'HUSB');
+            $wife = Rel8dGedcom::firstChildValue($rec, 'WIFE');
+            $marr = Rel8dGedcom::firstChild($rec, 'MARR');
+            $marrDate = $marr ? Rel8dGedcom::firstChildValue($marr, 'DATE') : '';
+            $marrPlace = $marr ? Rel8dGedcom::firstChildValue($marr, 'PLAC') : '';
             $raw = json_encode($rec, JSON_UNESCAPED_UNICODE);
             $existing = Database::queryOne(
-                'SELECT id FROM rel8ed_families WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
+                'SELECT id FROM rel8d_families WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
                 [$treeId, $xref]
             );
             $husbId = $xrefToPersonId[$husb] ?? null;
             $wifeId = $xrefToPersonId[$wife] ?? null;
             if ($existing) {
                 Database::execute(
-                    'UPDATE rel8ed_families SET husband_person_id=?, wife_person_id=?, marriage_date_raw=?, marriage_date_sort=?, marriage_place=?, raw_json=?, deleted_at=NULL WHERE id=?',
+                    'UPDATE rel8d_families SET husband_person_id=?, wife_person_id=?, marriage_date_raw=?, marriage_date_sort=?, marriage_place=?, raw_json=?, deleted_at=NULL WHERE id=?',
                     [
                         $husbId, $wifeId,
-                        $marrDate !== '' ? $marrDate : null, Rel8edGedcom::parseDateSort($marrDate !== '' ? $marrDate : null),
+                        $marrDate !== '' ? $marrDate : null, Rel8dGedcom::parseDateSort($marrDate !== '' ? $marrDate : null),
                         $marrPlace !== '' ? $marrPlace : null, $raw, (int)$existing['id'],
                     ]
                 );
                 $famId = (int)$existing['id'];
-                Database::execute('DELETE FROM rel8ed_family_children WHERE family_id = ?', [$famId]);
-                Database::execute('DELETE FROM rel8ed_events WHERE family_id = ?', [$famId]);
+                Database::execute('DELETE FROM rel8d_family_children WHERE family_id = ?', [$famId]);
+                Database::execute('DELETE FROM rel8d_events WHERE family_id = ?', [$famId]);
             } else {
                 Database::execute(
-                    'INSERT INTO rel8ed_families
+                    'INSERT INTO rel8d_families
                      (tree_id, gedcom_xref, husband_person_id, wife_person_id, marriage_date_raw, marriage_date_sort, marriage_place, raw_json, external_source_id)
                      VALUES (?,?,?,?,?,?,?,?,?)',
                     [
                         $treeId, $xref, $husbId, $wifeId,
-                        $marrDate !== '' ? $marrDate : null, Rel8edGedcom::parseDateSort($marrDate !== '' ? $marrDate : null),
+                        $marrDate !== '' ? $marrDate : null, Rel8dGedcom::parseDateSort($marrDate !== '' ? $marrDate : null),
                         $marrPlace !== '' ? $marrPlace : null, $raw, $xref,
                     ]
                 );
@@ -1903,33 +1903,33 @@ final class Rel8edModel
             }
             $xrefToFamilyId[$xref] = $famId;
             $ci = 0;
-            foreach (Rel8edGedcom::childValues($rec, 'CHIL') as $ch) {
+            foreach (Rel8dGedcom::childValues($rec, 'CHIL') as $ch) {
                 $cx = trim((string)($ch['value'] ?? ''));
                 $pid = $xrefToPersonId[$cx] ?? null;
                 if (!$pid) {
                     continue;
                 }
-                $pedigree = Rel8edGedcom::firstChildValue($ch, 'PEDI') ?: null;
+                $pedigree = Rel8dGedcom::firstChildValue($ch, 'PEDI') ?: null;
                 Database::execute(
-                    'INSERT INTO rel8ed_family_children (family_id, person_id, pedigree, sort_order) VALUES (?,?,?,?)',
+                    'INSERT INTO rel8d_family_children (family_id, person_id, pedigree, sort_order) VALUES (?,?,?,?)',
                     [$famId, $pid, $pedigree, $ci++]
                 );
             }
             foreach ($rec['children'] ?? [] as $ch) {
                 $tag = strtoupper((string)($ch['tag'] ?? ''));
-                if (in_array($tag, Rel8edGedcom::EVENT_TAGS, true)) {
+                if (in_array($tag, Rel8dGedcom::EVENT_TAGS, true)) {
                     Database::execute(
-                        'INSERT INTO rel8ed_events (tree_id, family_id, tag, type_label, date_raw, date_sort, place, description, raw_json, has_sources, sort_order)
+                        'INSERT INTO rel8d_events (tree_id, family_id, tag, type_label, date_raw, date_sort, place, description, raw_json, has_sources, sort_order)
                          VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                         [
                             $treeId, $famId, $tag,
-                            Rel8edGedcom::firstChildValue($ch, 'TYPE') ?: null,
-                            Rel8edGedcom::firstChildValue($ch, 'DATE') ?: null,
-                            Rel8edGedcom::parseDateSort(Rel8edGedcom::firstChildValue($ch, 'DATE') ?: null),
-                            Rel8edGedcom::firstChildValue($ch, 'PLAC') ?: null,
-                            Rel8edGedcom::concatContConc($ch) ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'TYPE') ?: null,
+                            Rel8dGedcom::firstChildValue($ch, 'DATE') ?: null,
+                            Rel8dGedcom::parseDateSort(Rel8dGedcom::firstChildValue($ch, 'DATE') ?: null),
+                            Rel8dGedcom::firstChildValue($ch, 'PLAC') ?: null,
+                            Rel8dGedcom::concatContConc($ch) ?: null,
                             json_encode($ch, JSON_UNESCAPED_UNICODE),
-                            Rel8edGedcom::firstChild($ch, 'SOUR') ? 1 : 0,
+                            Rel8dGedcom::firstChild($ch, 'SOUR') ? 1 : 0,
                             0,
                         ]
                     );
@@ -1943,24 +1943,24 @@ final class Rel8edModel
             if (($rec['tag'] ?? '') !== 'OBJE') {
                 continue;
             }
-            $title = Rel8edGedcom::firstChildValue($rec, 'TITL');
+            $title = Rel8dGedcom::firstChildValue($rec, 'TITL');
             $file = '';
-            $fileNode = Rel8edGedcom::firstChild($rec, 'FILE');
+            $fileNode = Rel8dGedcom::firstChild($rec, 'FILE');
             if ($fileNode) {
                 $file = (string)($fileNode['value'] ?? '');
             }
             $existing = Database::queryOne(
-                'SELECT id FROM rel8ed_media WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
+                'SELECT id FROM rel8d_media WHERE tree_id = ? AND gedcom_xref = ? LIMIT 1',
                 [$treeId, $xref]
             );
             if ($existing) {
                 Database::execute(
-                    'UPDATE rel8ed_media SET title=?, file_name=?, raw_json=?, deleted_at=NULL WHERE id=?',
+                    'UPDATE rel8d_media SET title=?, file_name=?, raw_json=?, deleted_at=NULL WHERE id=?',
                     [$title ?: null, $file !== '' ? $file : null, json_encode($rec, JSON_UNESCAPED_UNICODE), (int)$existing['id']]
                 );
             } else {
                 Database::execute(
-                    'INSERT INTO rel8ed_media (tree_id, gedcom_xref, title, file_name, media_type, raw_json, external_source_id)
+                    'INSERT INTO rel8d_media (tree_id, gedcom_xref, title, file_name, media_type, raw_json, external_source_id)
                      VALUES (?,?,?,?,?,?,?)',
                     [$treeId, $xref, $title ?: null, $file !== '' ? $file : null, 'reference', json_encode($rec, JSON_UNESCAPED_UNICODE), $xref]
                 );
@@ -1969,10 +1969,10 @@ final class Rel8edModel
         }
 
         // Set tree root if empty: prefer person with most ancestors (ahnentafel) or first
-        $tree = Database::queryOne('SELECT root_person_id FROM rel8ed_trees WHERE id = ?', [$treeId]);
+        $tree = Database::queryOne('SELECT root_person_id FROM rel8d_trees WHERE id = ?', [$treeId]);
         if (empty($tree['root_person_id']) && $xrefToPersonId) {
             $firstId = (int)reset($xrefToPersonId);
-            Database::execute('UPDATE rel8ed_trees SET root_person_id = ? WHERE id = ?', [$firstId, $treeId]);
+            Database::execute('UPDATE rel8d_trees SET root_person_id = ? WHERE id = ?', [$firstId, $treeId]);
         }
 
         self::syncPlaces($treeId);
@@ -1988,7 +1988,7 @@ final class Rel8edModel
             'quality_flags' => $flags,
             'gedcom' => $parsed['counts'],
         ];
-        self::audit($actorUid, 'import_gedcom', 'rel8ed_trees', $treeId, null, null, ['counts' => $counts], $actorLabel);
+        self::audit($actorUid, 'import_gedcom', 'rel8d_trees', $treeId, null, null, ['counts' => $counts], $actorLabel);
         return ['counts' => $counts];
     }
 
@@ -1997,35 +1997,35 @@ final class Rel8edModel
         self::ensureSchema();
         $treeId = self::defaultTreeId();
         $records = [];
-        $people = Database::queryAll('SELECT raw_json, gedcom_xref FROM rel8ed_people WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
+        $people = Database::queryAll('SELECT raw_json, gedcom_xref FROM rel8d_people WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
         foreach ($people as $p) {
             $raw = json_decode((string)$p['raw_json'], true);
             if (is_array($raw)) {
                 $records[] = $raw;
             }
         }
-        $fams = Database::queryAll('SELECT raw_json FROM rel8ed_families WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
+        $fams = Database::queryAll('SELECT raw_json FROM rel8d_families WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
         foreach ($fams as $f) {
             $raw = json_decode((string)$f['raw_json'], true);
             if (is_array($raw)) {
                 $records[] = $raw;
             }
         }
-        $sources = Database::queryAll('SELECT raw_json FROM rel8ed_sources WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
+        $sources = Database::queryAll('SELECT raw_json FROM rel8d_sources WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL', [$treeId]);
         foreach ($sources as $s) {
             $raw = json_decode((string)$s['raw_json'], true);
             if (is_array($raw)) {
                 $records[] = $raw;
             }
         }
-        $media = Database::queryAll('SELECT raw_json FROM rel8ed_media WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL AND gedcom_xref IS NOT NULL', [$treeId]);
+        $media = Database::queryAll('SELECT raw_json FROM rel8d_media WHERE tree_id = ? AND deleted_at IS NULL AND raw_json IS NOT NULL AND gedcom_xref IS NOT NULL', [$treeId]);
         foreach ($media as $m) {
             $raw = json_decode((string)$m['raw_json'], true);
             if (is_array($raw)) {
                 $records[] = $raw;
             }
         }
-        return Rel8edGedcom::buildDocument($records);
+        return Rel8dGedcom::buildDocument($records);
     }
 
     public static function listStories(int $uid): array
@@ -2034,8 +2034,8 @@ final class Rel8edModel
         $treeId = self::defaultTreeId();
         return Database::queryAll(
             'SELECT n.id, n.title, n.body, n.is_story, n.person_id, n.created_at, p.name_display
-             FROM rel8ed_notes n
-             LEFT JOIN rel8ed_people p ON p.id = n.person_id
+             FROM rel8d_notes n
+             LEFT JOIN rel8d_people p ON p.id = n.person_id
              WHERE n.tree_id = ? AND n.deleted_at IS NULL AND n.is_story = 1
              ORDER BY n.id DESC LIMIT 200',
             [$treeId]
@@ -2046,32 +2046,32 @@ final class Rel8edModel
     {
         self::ensureSchema();
         $limit = max(1, min(500, $limit));
-        return Database::queryAll('SELECT * FROM rel8ed_audit_log ORDER BY id DESC LIMIT ' . $limit);
+        return Database::queryAll('SELECT * FROM rel8d_audit_log ORDER BY id DESC LIMIT ' . $limit);
     }
 
     public static function setRootPerson(int $personId, int $actorUid): void
     {
         $treeId = self::defaultTreeId();
-        $p = Database::queryOne('SELECT id FROM rel8ed_people WHERE id = ? AND tree_id = ?', [$personId, $treeId]);
+        $p = Database::queryOne('SELECT id FROM rel8d_people WHERE id = ? AND tree_id = ?', [$personId, $treeId]);
         if (!$p) {
             throw new InvalidArgumentException('person not found');
         }
-        Database::execute('UPDATE rel8ed_trees SET root_person_id = ? WHERE id = ?', [$personId, $treeId]);
-        self::audit($actorUid, 'set_root', 'rel8ed_trees', $treeId, $personId, null, ['root_person_id' => $personId]);
+        Database::execute('UPDATE rel8d_trees SET root_person_id = ? WHERE id = ?', [$personId, $treeId]);
+        self::audit($actorUid, 'set_root', 'rel8d_trees', $treeId, $personId, null, ['root_person_id' => $personId]);
     }
 
     public static function findRootCandidate(int $uid): ?int
     {
-        $tree = Database::queryOne('SELECT root_person_id FROM rel8ed_trees WHERE id = ?', [self::defaultTreeId()]);
+        $tree = Database::queryOne('SELECT root_person_id FROM rel8d_trees WHERE id = ?', [self::defaultTreeId()]);
         if (!empty($tree['root_person_id'])) {
             $id = (int)$tree['root_person_id'];
-            $p = Database::queryOne('SELECT * FROM rel8ed_people WHERE id = ?', [$id]);
+            $p = Database::queryOne('SELECT * FROM rel8d_people WHERE id = ?', [$id]);
             if ($p && self::personVisibleTo($p, $uid)) {
                 return $id;
             }
         }
         $row = Database::queryOne(
-            'SELECT id FROM rel8ed_people WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8ed_people', $uid) . ' ORDER BY id ASC LIMIT 1',
+            'SELECT id FROM rel8d_people WHERE tree_id = ? AND deleted_at IS NULL' . self::livingPrivacySql('rel8d_people', $uid) . ' ORDER BY id ASC LIMIT 1',
             [self::defaultTreeId()]
         );
         return $row ? (int)$row['id'] : null;

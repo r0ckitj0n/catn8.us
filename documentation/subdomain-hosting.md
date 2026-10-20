@@ -25,7 +25,7 @@ Every product module that already has a clean path (`/medic8`, `/accumul8`, …)
 | `narr8.catn8.us` | `/narr8` |
 | `rel8d.catn8.us` | `/rel8d` |
 
-Spell the genealogy product **Rel8d** (`rel8d`), not “rel8ed”.
+Spell the genealogy product **Rel8d** (`rel8d`), not “rel8d”.
 
 ## Behaviour
 

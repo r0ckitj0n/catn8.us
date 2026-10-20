@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
-require_once __DIR__ . '/../includes/rel8ed_model.php';
+require_once __DIR__ . '/../includes/rel8d_model.php';
 
-Rel8edModel::ensureSchema();
+Rel8dModel::ensureSchema();
 
-$actorUserId = catn8_require_group_or_admin(Rel8edModel::GROUP_SLUG);
+$actorUserId = catn8_require_group_or_admin(Rel8dModel::GROUP_SLUG);
 $action = trim((string)($_GET['action'] ?? ''));
 
 $readActions = [
@@ -37,16 +37,16 @@ if (in_array($action, $writeActions, true)) {
 
 try {
     if ($action === 'bootstrap') {
-        catn8_json_response(['success' => true] + Rel8edModel::bootstrap($actorUserId));
+        catn8_json_response(['success' => true] + Rel8dModel::bootstrap($actorUserId));
     }
 
     if ($action === 'dashboard') {
-        Rel8edModel::audit($actorUserId, 'view_dashboard', 'rel8ed', null, null, null, null);
-        catn8_json_response(['success' => true, 'dashboard' => Rel8edModel::dashboard($actorUserId)]);
+        Rel8dModel::audit($actorUserId, 'view_dashboard', 'rel8d', null, null, null, null);
+        catn8_json_response(['success' => true, 'dashboard' => Rel8dModel::dashboard($actorUserId)]);
     }
 
     if ($action === 'list_people' || $action === 'search') {
-        $page = Rel8edModel::listPeople(
+        $page = Rel8dModel::listPeople(
             $actorUserId,
             (int)($_GET['limit'] ?? 100),
             (int)($_GET['offset'] ?? $_GET['cursor'] ?? 0),
@@ -61,27 +61,27 @@ try {
         if ($id <= 0) {
             catn8_json_response(['success' => false, 'error' => 'id required'], 400);
         }
-        $record = Rel8edModel::getPerson($actorUserId, $id);
+        $record = Rel8dModel::getPerson($actorUserId, $id);
         if (!$record) {
             catn8_json_response(['success' => false, 'error' => 'Not found'], 404);
         }
-        Rel8edModel::audit($actorUserId, 'view_person', 'rel8ed_people', $id, $id, null, null);
+        Rel8dModel::audit($actorUserId, 'view_person', 'rel8d_people', $id, $id, null, null);
         catn8_json_response(['success' => true, 'record' => $record]);
     }
 
     if ($action === 'surname_index') {
-        catn8_json_response(['success' => true, 'records' => Rel8edModel::surnameIndex($actorUserId)]);
+        catn8_json_response(['success' => true, 'records' => Rel8dModel::surnameIndex($actorUserId)]);
     }
 
     if ($action === 'pedigree') {
         $id = (int)($_GET['id'] ?? $_GET['person_id'] ?? 0);
         if ($id <= 0) {
-            $id = (int)(Rel8edModel::findRootCandidate($actorUserId) ?? 0);
+            $id = (int)(Rel8dModel::findRootCandidate($actorUserId) ?? 0);
         }
         if ($id <= 0) {
             catn8_json_response(['success' => false, 'error' => 'No root person'], 404);
         }
-        $tree = Rel8edModel::pedigree($actorUserId, $id, (int)($_GET['generations'] ?? 5));
+        $tree = Rel8dModel::pedigree($actorUserId, $id, (int)($_GET['generations'] ?? 5));
         catn8_json_response(['success' => true, 'pedigree' => $tree, 'root_id' => $id]);
     }
 
@@ -90,7 +90,7 @@ try {
         if ($id <= 0) {
             catn8_json_response(['success' => false, 'error' => 'family_id required'], 400);
         }
-        $sheet = Rel8edModel::familyGroup($actorUserId, $id);
+        $sheet = Rel8dModel::familyGroup($actorUserId, $id);
         if (!$sheet) {
             catn8_json_response(['success' => false, 'error' => 'Not found'], 404);
         }
@@ -102,7 +102,7 @@ try {
         if ($id <= 0) {
             catn8_json_response(['success' => false, 'error' => 'id required'], 400);
         }
-        $tree = Rel8edModel::descendants($actorUserId, $id, (int)($_GET['generations'] ?? 4));
+        $tree = Rel8dModel::descendants($actorUserId, $id, (int)($_GET['generations'] ?? 4));
         if (!$tree) {
             catn8_json_response(['success' => false, 'error' => 'Not found'], 404);
         }
@@ -115,29 +115,29 @@ try {
         if ($from <= 0 || $to <= 0) {
             catn8_json_response(['success' => false, 'error' => 'from_id and to_id required'], 400);
         }
-        catn8_json_response(['success' => true] + Rel8edModel::relationship($actorUserId, $from, $to));
+        catn8_json_response(['success' => true] + Rel8dModel::relationship($actorUserId, $from, $to));
     }
 
     if ($action === 'quality_flags') {
-        catn8_json_response(['success' => true, 'records' => Rel8edModel::listQualityFlags($actorUserId)]);
+        catn8_json_response(['success' => true, 'records' => Rel8dModel::listQualityFlags($actorUserId)]);
     }
 
     if ($action === 'on_this_day') {
         $month = (int)($_GET['month'] ?? date('n'));
         $day = (int)($_GET['day'] ?? date('j'));
-        catn8_json_response(['success' => true, 'records' => Rel8edModel::onThisDay($actorUserId, $month, $day)]);
+        catn8_json_response(['success' => true, 'records' => Rel8dModel::onThisDay($actorUserId, $month, $day)]);
     }
 
     if ($action === 'map_places') {
-        catn8_json_response(['success' => true] + Rel8edModel::mapPlaces($actorUserId));
+        catn8_json_response(['success' => true] + Rel8dModel::mapPlaces($actorUserId));
     }
 
     if ($action === 'dna') {
-        catn8_json_response(['success' => true] + Rel8edModel::getDna($actorUserId));
+        catn8_json_response(['success' => true] + Rel8dModel::getDna($actorUserId));
     }
 
     if ($action === 'list_media') {
-        catn8_json_response(['success' => true] + Rel8edModel::listMedia(
+        catn8_json_response(['success' => true] + Rel8dModel::listMedia(
             $actorUserId,
             (int)($_GET['limit'] ?? 100),
             (int)($_GET['offset'] ?? 0)
@@ -145,20 +145,20 @@ try {
     }
 
     if ($action === 'list_stories' || $action === 'list_notes') {
-        catn8_json_response(['success' => true, 'records' => Rel8edModel::listStories($actorUserId)]);
+        catn8_json_response(['success' => true, 'records' => Rel8dModel::listStories($actorUserId)]);
     }
 
     if ($action === 'list_audit') {
-        if (!Rel8edModel::isSiteAdmin($actorUserId)) {
+        if (!Rel8dModel::isSiteAdmin($actorUserId)) {
             catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
         }
-        catn8_json_response(['success' => true, 'records' => Rel8edModel::listAudit((int)($_GET['limit'] ?? 100))]);
+        catn8_json_response(['success' => true, 'records' => Rel8dModel::listAudit((int)($_GET['limit'] ?? 100))]);
     }
 
     if ($action === 'export_gedcom') {
-        $ged = Rel8edModel::exportGedcom();
+        $ged = Rel8dModel::exportGedcom();
         header('Content-Type: text/plain; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="rel8ed-export.ged"');
+        header('Content-Disposition: attachment; filename="rel8d-export.ged"');
         header('X-Robots-Tag: noindex, nofollow');
         header('Cache-Control: private, no-store');
         echo $ged;
@@ -172,24 +172,24 @@ try {
             catn8_json_response(['success' => false, 'error' => 'record object required'], 400);
         }
         $dry = !empty($body['dry_run']);
-        $result = Rel8edModel::upsertPerson($record, $actorUserId, $dry);
+        $result = Rel8dModel::upsertPerson($record, $actorUserId, $dry);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'add_note') {
         $body = catn8_read_json_body();
-        $result = Rel8edModel::addNote($body, $actorUserId, !empty($body['dry_run']));
+        $result = Rel8dModel::addNote($body, $actorUserId, !empty($body['dry_run']));
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'add_source') {
         $body = catn8_read_json_body();
-        $result = Rel8edModel::addSource($body, $actorUserId, !empty($body['dry_run']));
+        $result = Rel8dModel::addSource($body, $actorUserId, !empty($body['dry_run']));
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'import_preview') {
-        catn8_rate_limit_require('rel8ed_import_' . $actorUserId, 10, 3600);
+        catn8_rate_limit_require('rel8d_import_' . $actorUserId, 10, 3600);
         $text = '';
         $fileName = null;
         if (!empty($_FILES['file']['tmp_name'])) {
@@ -203,23 +203,23 @@ try {
         if (trim($text) === '') {
             catn8_json_response(['success' => false, 'error' => 'GEDCOM content required'], 400);
         }
-        $result = Rel8edModel::previewImport($text, $fileName);
+        $result = Rel8dModel::previewImport($text, $fileName);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'import_apply') {
-        catn8_rate_limit_require('rel8ed_import_apply_' . $actorUserId, 5, 3600);
+        catn8_rate_limit_require('rel8d_import_apply_' . $actorUserId, 5, 3600);
         $body = catn8_read_json_body();
         $importId = (int)($body['import_id'] ?? 0);
         if ($importId <= 0) {
             catn8_json_response(['success' => false, 'error' => 'import_id required'], 400);
         }
-        $result = Rel8edModel::applyImport($importId, $actorUserId);
+        $result = Rel8dModel::applyImport($importId, $actorUserId);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'upload_media') {
-        catn8_rate_limit_require('rel8ed_upload_' . $actorUserId, 30, 3600);
+        catn8_rate_limit_require('rel8d_upload_' . $actorUserId, 30, 3600);
         $meta = [
             'title' => (string)($_POST['title'] ?? ''),
             'person_id' => (int)($_POST['person_id'] ?? 0),
@@ -230,23 +230,23 @@ try {
         if (!is_array($file)) {
             catn8_json_response(['success' => false, 'error' => 'multipart file field required'], 400);
         }
-        $result = Rel8edModel::storeUploadedMedia($file, $meta, $actorUserId);
+        $result = Rel8dModel::storeUploadedMedia($file, $meta, $actorUserId);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'save_dna') {
         $body = catn8_read_json_body();
-        $result = Rel8edModel::saveDna($body, $actorUserId);
+        $result = Rel8dModel::saveDna($body, $actorUserId);
         catn8_json_response(['success' => true] + $result);
     }
 
     if ($action === 'geocode_places') {
-        if (!Rel8edModel::isSiteAdmin($actorUserId)) {
+        if (!Rel8dModel::isSiteAdmin($actorUserId)) {
             catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
         }
         $body = catn8_read_json_body();
         $limit = (int)($body['limit'] ?? 10);
-        catn8_json_response(['success' => true] + Rel8edModel::geocodePending($limit));
+        catn8_json_response(['success' => true] + Rel8dModel::geocodePending($limit));
     }
 
     if ($action === 'set_root') {
@@ -255,15 +255,15 @@ try {
         if ($personId <= 0) {
             catn8_json_response(['success' => false, 'error' => 'person_id required'], 400);
         }
-        Rel8edModel::setRootPerson($personId, $actorUserId);
+        Rel8dModel::setRootPerson($personId, $actorUserId);
         catn8_json_response(['success' => true, 'root_person_id' => $personId]);
     }
 
     if ($action === 'rebuild_quality') {
-        if (!Rel8edModel::isSiteAdmin($actorUserId)) {
+        if (!Rel8dModel::isSiteAdmin($actorUserId)) {
             catn8_json_response(['success' => false, 'error' => 'Not authorized'], 403);
         }
-        $n = Rel8edModel::rebuildQualityFlags(Rel8edModel::defaultTreeId());
+        $n = Rel8dModel::rebuildQualityFlags(Rel8dModel::defaultTreeId());
         catn8_json_response(['success' => true, 'flags' => $n]);
     }
 } catch (InvalidArgumentException $e) {
@@ -273,6 +273,6 @@ try {
     $code = $msg === 'Not authorized' ? 403 : 400;
     catn8_json_response(['success' => false, 'error' => $msg], $code);
 } catch (Throwable $e) {
-    catn8_log_error('rel8ed api error', ['action' => $action, 'error' => $e->getMessage()]);
+    catn8_log_error('rel8d api error', ['action' => $action, 'error' => $e->getMessage()]);
     catn8_json_response(['success' => false, 'error' => 'Server error'], 500);
 }

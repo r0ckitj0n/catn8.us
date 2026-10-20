@@ -4,7 +4,7 @@ import WebSocket from 'ws';
 
 const OUT = '/opt/cursor/artifacts';
 const PORT = 9334;
-const ud = '/tmp/rel8ed-chrome-cdp';
+const ud = '/tmp/rel8d-chrome-cdp';
 fs.rmSync(ud, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -80,7 +80,7 @@ await send('Runtime.enable');
 await send('Page.enable');
 await send('Network.enable');
 
-for (const c of parseJar('/tmp/rel8ed.jar')) {
+for (const c of parseJar('/tmp/rel8d.jar')) {
   await send('Network.setCookie', {
     name: c.name,
     value: c.value,
@@ -90,7 +90,7 @@ for (const c of parseJar('/tmp/rel8ed.jar')) {
   });
 }
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8888/rel8ed' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8888/rel8d' });
 await new Promise((r) => setTimeout(r, 4500));
 
 const evalHome = await send('Runtime.evaluate', {
@@ -102,7 +102,7 @@ const evalHome = await send('Runtime.evaluate', {
   returnByValue: true,
 });
 const homeValue = evalHome?.result?.value || evalHome?.value || evalHome || {};
-fs.writeFileSync(`${OUT}/rel8ed-headless-eval.json`, JSON.stringify(homeValue, null, 2));
+fs.writeFileSync(`${OUT}/rel8d-headless-eval.json`, JSON.stringify(homeValue, null, 2));
 console.error('evalHome keys', Object.keys(evalHome || {}), JSON.stringify(homeValue).slice(0, 300));
 
 async function shot(name) {
@@ -115,7 +115,7 @@ async function shot(name) {
   fs.writeFileSync(`${OUT}/${name}`, Buffer.from(data, 'base64'));
 }
 
-await shot('rel8ed-home-ui.png');
+await shot('rel8d-home-ui.png');
 
 async function clickTab(label) {
   await send('Runtime.evaluate', {
@@ -126,25 +126,25 @@ async function clickTab(label) {
 }
 
 await clickTab('Tree');
-await shot('rel8ed-tree-ui.png');
+await shot('rel8d-tree-ui.png');
 await clickTab('DNA');
-await shot('rel8ed-dna-ui.png');
+await shot('rel8d-dna-ui.png');
 await clickTab('Search');
-await shot('rel8ed-search-ui.png');
+await shot('rel8d-search-ui.png');
 await send('Runtime.evaluate', {
   expression: `([...document.querySelectorAll('button')].find(b => /Example/.test(b.textContent)) || {click(){}}).click()`,
   returnByValue: true,
 });
 await new Promise((r) => setTimeout(r, 1500));
-await shot('rel8ed-person-ui.png');
+await shot('rel8d-person-ui.png');
 
 const report = {
   eval: homeValue,
   console_errors: consoleErrors,
-  screenshots: ['rel8ed-home-ui.png', 'rel8ed-tree-ui.png', 'rel8ed-dna-ui.png', 'rel8ed-search-ui.png', 'rel8ed-person-ui.png']
+  screenshots: ['rel8d-home-ui.png', 'rel8d-tree-ui.png', 'rel8d-dna-ui.png', 'rel8d-search-ui.png', 'rel8d-person-ui.png']
     .filter((f) => fs.existsSync(`${OUT}/${f}`)),
 };
-fs.writeFileSync(`${OUT}/rel8ed-headless-report.json`, JSON.stringify(report, null, 2));
+fs.writeFileSync(`${OUT}/rel8d-headless-report.json`, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 
 ws.close();

@@ -1,19 +1,19 @@
 import React from 'react';
 
-import type { Rel8edPerson } from '../../types/rel8ed';
+import type { Rel8dPerson } from '../../types/rel8d';
 
 type Props = {
   query: string;
   onQueryChange: (q: string) => void;
   onSearch: () => void;
-  people: Rel8edPerson[];
+  people: Rel8dPerson[];
   peopleTotal: number;
   surnames: Array<{ surname: string; person_count: number }>;
   onOpenPerson: (id: number) => void;
   onSurname: (surname: string) => void;
 };
 
-export function Rel8edSearchPanel({
+export function Rel8dSearchPanel({
   query,
   onQueryChange,
   onSearch,
@@ -24,10 +24,10 @@ export function Rel8edSearchPanel({
   onSurname,
 }: Props) {
   return (
-    <section className="rel8ed-section">
+    <section className="rel8d-section">
       <h2>Search &amp; surname index</h2>
       <form
-        className="rel8ed-search"
+        className="rel8d-search"
         onSubmit={(e) => {
           e.preventDefault();
           onSearch();
@@ -36,9 +36,9 @@ export function Rel8edSearchPanel({
         <input value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Name or place" />
         <button type="submit" className="btn btn-sm btn-success">Search</button>
       </form>
-      <p className="rel8ed-meta">{peopleTotal} matches</p>
-      <div className="rel8ed-split">
-        <ul className="rel8ed-list">
+      <p className="rel8d-meta">{peopleTotal} matches</p>
+      <div className="rel8d-split">
+        <ul className="rel8d-list">
           {people.map((p) => (
             <li key={p.id}>
               <button type="button" className="btn btn-link p-0" onClick={() => onOpenPerson(p.id)}>
@@ -48,7 +48,7 @@ export function Rel8edSearchPanel({
             </li>
           ))}
         </ul>
-        <ul className="rel8ed-list compact">
+        <ul className="rel8d-list compact">
           {surnames.map((s) => (
             <li key={s.surname}>
               <button type="button" className="btn btn-link p-0" onClick={() => onSurname(s.surname)}>

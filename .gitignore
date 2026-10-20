@@ -6,6 +6,7 @@ vendor/
 dist/
 dist_medic8_build/
 dist_litig8_build/
+dist_rel8d_build/
 dist_rel8ed_build/
 build/
 .cache/
@@ -67,6 +68,8 @@ private/medic8/**
 !private/medic8/.htaccess
 private/litig8/**
 !private/litig8/.htaccess
+private/rel8d/**
+!private/rel8d/.htaccess
 private/rel8ed/**
 !private/rel8ed/.htaccess
 scripts/tabul8/__pycache__/

@@ -29,14 +29,14 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
   const isValid8User = Number(viewer?.is_valid8_user || 0) === 1;
   const isMedic8User = Number(viewer?.is_medic8_user || 0) === 1;
   const isLitig8User = Number(viewer?.is_litig8_user || 0) === 1;
-  const isRel8edUser = Number(viewer?.is_rel8ed_user || 0) === 1;
+  const isRel8dUser = Number(viewer?.is_rel8d_user || 0) === 1;
   const canUseBuildWizard = isAuthed && (isAdministrator || isBuildWizardUser);
   const canUsePhotoAlbums = isAuthed && (isAdministrator || isPhotoAlbumsUser);
   const canUseAccumul8 = isAuthed && (isAdministrator || isAccumul8User);
   const canUseValid8 = isAuthed && (isAdministrator || isValid8User);
   const canUseMedic8 = isAuthed && (isAdministrator || isMedic8User);
   const canUseLitig8 = isAuthed && (isAdministrator || isLitig8User);
-  const canUseRel8ed = isAuthed && (isAdministrator || isRel8edUser);
+  const canUseRel8d = isAuthed && (isAdministrator || isRel8dUser);
 
   const links = [
     { key: 'elucid8', href: '/elucid8', label: 'ELUCID8' },
@@ -84,8 +84,8 @@ export function NavBar({ active, viewer, isAdmin, onLoginClick, onLogout, onAcco
     ...(canUseLitig8
       ? [{ key: 'litig8', label: 'LITIG8', href: '/litig8' }]
       : []),
-    ...(canUseRel8ed
-      ? [{ key: 'rel8ed', label: 'REL8ED', href: '/rel8ed' }]
+    ...(canUseRel8d
+      ? [{ key: 'rel8d', label: 'REL8D', href: '/rel8d' }]
       : []),
     ...((active === 'investig8' || active === 'sheriff_station') && isAuthed && isAdministrator
       ? [

@@ -1,17 +1,17 @@
 import React from 'react';
 
-import type { Rel8edImportPreview } from '../../types/rel8ed';
+import type { Rel8dImportPreview } from '../../types/rel8d';
 
 type Props = {
-  importPreview: Rel8edImportPreview | null;
+  importPreview: Rel8dImportPreview | null;
   onPreviewFile: (file: File) => void;
   onApply: (importId: number) => void;
   onCancel: () => void;
 };
 
-export function Rel8edImportPanel({ importPreview, onPreviewFile, onApply, onCancel }: Props) {
+export function Rel8dImportPanel({ importPreview, onPreviewFile, onApply, onCancel }: Props) {
   return (
-    <section className="rel8ed-section">
+    <section className="rel8d-section">
       <h2>GEDCOM import / export</h2>
       <input
         type="file"
@@ -24,7 +24,7 @@ export function Rel8edImportPanel({ importPreview, onPreviewFile, onApply, onCan
         }}
       />
       {importPreview ? (
-        <div className="rel8ed-diff">
+        <div className="rel8d-diff">
           <p>
             Import #{importPreview.import_id}: +{importPreview.diff?.people_added ?? 0} people,
             −{importPreview.diff?.people_removed ?? 0}, ~{importPreview.diff?.people_changed ?? 0} changed;
@@ -40,7 +40,7 @@ export function Rel8edImportPanel({ importPreview, onPreviewFile, onApply, onCan
         </div>
       ) : null}
       <p>
-        <a className="btn btn-sm btn-outline-secondary" href="/api/rel8ed.php?action=export_gedcom">
+        <a className="btn btn-sm btn-outline-secondary" href="/api/rel8d.php?action=export_gedcom">
           Download GEDCOM export
         </a>
       </p>

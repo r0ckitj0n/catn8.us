@@ -69,6 +69,39 @@ function catn8_router_respond_file(string $file): void
 $isApiRoute = strncmp($path, '/api/', 5) === 0;
 $isPhpRoute = $isApiRoute || substr($path, -4) === '.php';
 
+// Product subdomain Host simulation (e.g. Host: medic8.catn8.us) for local PHP server.
+$routerHost = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+if (str_contains($routerHost, ':')) {
+    $routerHost = explode(':', $routerHost, 2)[0];
+}
+$routerDnsMap = [
+    'elucid8' => 'elucid8.php',
+    'activ8' => 'activ8.php',
+    'recre8' => 'recre8.php',
+    'illumin8' => 'illumin8.php',
+    'stimul8' => 'stimul8.php',
+    'narr8' => 'narr8.php',
+    'loc8' => 'loc8.php',
+    'investig8' => 'investig8.php',
+    'sheriff-station' => 'sheriff_station.php',
+    'fabric8' => 'fabric8.php',
+    'photo-m8' => 'photo-m8.php',
+    'accumul8' => 'accumul8.php',
+    'valid8' => 'valid8.php',
+    'celebr8' => 'celebr8.php',
+    'tabul8' => 'tabul8.php',
+    'medic8' => 'medic8.php',
+    'litig8' => 'litig8.php',
+];
+if (str_ends_with($routerHost, '.catn8.us')) {
+    $routerLabel = substr($routerHost, 0, -strlen('.catn8.us'));
+    $shared = preg_match('#^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon)#i', $path) === 1;
+    if (!$shared && $routerLabel !== '' && $routerLabel !== 'www' && isset($routerDnsMap[$routerLabel])) {
+        require $root . '/' . $routerDnsMap[$routerLabel];
+        exit;
+    }
+}
+
 $appPhpRoutes = [
     '/elucid8' => '/elucid8.php',
     '/activ8' => '/activ8.php',
@@ -85,6 +118,7 @@ $appPhpRoutes = [
     '/celebr8' => '/celebr8.php',
     '/tabul8' => '/tabul8.php',
     '/medic8' => '/medic8.php',
+    '/litig8' => '/litig8.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
@@ -139,6 +173,10 @@ if (!$isPhpRoute) {
     }
     if ($canonical === '/medic8' || preg_match('#^/medic8/#', $canonical) === 1) {
         require $root . '/medic8.php';
+        exit;
+    }
+    if ($canonical === '/litig8' || preg_match('#^/litig8/#', $canonical) === 1) {
+        require $root . '/litig8.php';
         exit;
     }
 }

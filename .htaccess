@@ -14,16 +14,16 @@ Options -MultiViews -Indexes
   # Force HTTP to HTTPS without looping behind IONOS's TLS proxy.
   # Redirect only when every signal still says the client used HTTP:
   # Apache %{HTTPS}, %{ENV:HTTPS}, X-Forwarded-Proto, and port 443.
-  # Skip local dev hosts so Apache/PHP on localhost stays on HTTP.
+  # Preserve the requested host so product subdomains keep working.
+  # Skip local (dev) hosts so Apache/PHP stays on HTTP.
   RewriteCond %{HTTP_HOST} !^localhost(:[0-9]+)?$ [NC]
   RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:[0-9]+)?$
   RewriteCond %{HTTPS} !=on
   RewriteCond %{ENV:HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
   RewriteCond %{SERVER_PORT} !=443
-  RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
-  # Keep a single canonical host to avoid split cookies/cache and stale host-level fallbacks.
   # www always lands on https://catn8.us (covers https://www and any leftover http://www).
   RewriteCond %{HTTP_HOST} ^www\.catn8\.us$ [NC]
   RewriteRule ^ https://catn8.us%{REQUEST_URI} [R=301,L]
@@ -42,6 +42,83 @@ Options -MultiViews -Indexes
   # Fabric8 ICS / Reminders feeds (kill-switch defaults OFF → 410).
   RewriteRule ^(?:fabric8|cabin|cabin-build|calendar)\.ics$ /api/fabric8_reminders_feed.php [L,NC,QSA]
   RewriteRule ^api/fabric8(?:_reminders)?(?:_feed)?\.ics$ /api/fabric8_reminders_feed.php [L,NC,QSA]
+
+  # ---------------------------------------------------------------------------
+  # Product subdomains (*.catn8.us) → existing path entry PHP wrappers.
+  # Shared paths (/api, /dist, /login, ...) stay unprefixed on every host.
+  # Apex path URLs (/medic8, /accumul8, ...) remain valid. Optional forced
+  # 301s from path → subdomain are gated by CATN8_FORCE_SUBDOMAIN_REDIRECTS
+  # (off by default; see includes/subdomains.php). Do not enable until SSL
+  # exists on every product subdomain.
+  # ---------------------------------------------------------------------------
+
+  RewriteCond %{HTTP_HOST} ^accumul8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|accumul8) [NC]
+  RewriteRule ^(.*)$ /accumul8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^medic8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|medic8) [NC]
+  RewriteRule ^(.*)$ /medic8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^litig8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|litig8) [NC]
+  RewriteRule ^(.*)$ /litig8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^valid8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|valid8) [NC]
+  RewriteRule ^(.*)$ /valid8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^celebr8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|celebr8) [NC]
+  RewriteRule ^(.*)$ /celebr8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^tabul8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|tabul8) [NC]
+  RewriteRule ^(.*)$ /tabul8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^fabric8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|fabric8) [NC]
+  RewriteRule ^(.*)$ /fabric8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^investig8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|investig8) [NC]
+  RewriteRule ^(.*)$ /investig8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^sheriff-station\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|sheriff_station) [NC]
+  RewriteRule ^(.*)$ /sheriff_station.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^photo-m8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|photo-m8) [NC]
+  RewriteRule ^(.*)$ /photo-m8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^loc8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|loc8) [NC]
+  RewriteRule ^(.*)$ /loc8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^elucid8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|elucid8) [NC]
+  RewriteRule ^(.*)$ /elucid8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^activ8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|activ8) [NC]
+  RewriteRule ^(.*)$ /activ8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^recre8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|recre8) [NC]
+  RewriteRule ^(.*)$ /recre8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^illumin8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|illumin8) [NC]
+  RewriteRule ^(.*)$ /illumin8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^stimul8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|stimul8) [NC]
+  RewriteRule ^(.*)$ /stimul8.php [L,NC,QSA]
+
+  RewriteCond %{HTTP_HOST} ^narr8\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|narr8) [NC]
+  RewriteRule ^(.*)$ /narr8.php [L,NC,QSA]
 
   # Route clean entrypoint URLs through PHP wrappers so server-side auth still runs.
   RewriteRule ^elucid8/?$ /elucid8.php [L,NC,QSA]

@@ -35,6 +35,9 @@ function catn8_require_csrf(): void
     if (function_exists('catn8_presented_admin_api_token') && catn8_request_has_valid_admin_api_token()) {
         return;
     }
+    if (function_exists('catn8_request_has_trusted_browser_origin') && !catn8_request_has_trusted_browser_origin()) {
+        catn8_json_response(['success' => false, 'error' => 'Invalid request origin'], 403);
+    }
     catn8_session_start();
     $expected = catn8_csrf_token();
     $got = (string)($_SERVER['HTTP_X_CATN8_CSRF'] ?? '');
@@ -53,13 +56,18 @@ function catn8_session_start(): void
         } else {
             $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
         }
-        session_set_cookie_params([
+        $params = [
             'lifetime' => 0,
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Lax',
             'secure' => $secure,
-        ]);
+        ];
+        $cookieDomain = function_exists('catn8_cookie_domain') ? catn8_cookie_domain() : '';
+        if ($cookieDomain !== '') {
+            $params['domain'] = $cookieDomain;
+        }
+        session_set_cookie_params($params);
         session_start();
     }
 }

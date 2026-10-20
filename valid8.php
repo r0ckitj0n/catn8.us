@@ -6,7 +6,7 @@ require_once __DIR__ . '/includes/valid8_vault_entry_model.php';
 
 $uid = catn8_auth_user_id();
 if ($uid === null) {
-    header('Location: ' . catn8_login_redirect_url('/valid8'));
+    header('Location: ' . catn8_login_redirect_url(catn8_subsite_login_redirect_path('valid8', '/')));
     exit;
 }
 

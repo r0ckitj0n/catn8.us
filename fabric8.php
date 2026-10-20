@@ -5,7 +5,7 @@ require_once __DIR__ . '/api/bootstrap.php';
 
 $uid = catn8_auth_user_id();
 if ($uid === null) {
-    header('Location: ' . catn8_login_redirect_url('/fabric8'));
+    header('Location: ' . catn8_login_redirect_url(catn8_subsite_login_redirect_path('fabric8', '/')));
     exit;
 }
 

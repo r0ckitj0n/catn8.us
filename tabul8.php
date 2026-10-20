@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/api/bootstrap.php';
 require_once __DIR__ . '/includes/tabul8_model.php';
 
-$requestPath = (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/tabul8'), PHP_URL_PATH) ?: '/tabul8');
+$requestPath = catn8_logical_request_path();
 $isPhoneVotePath = (bool)preg_match('#^/tabul8/vote/#', $requestPath);
 
 /**
@@ -15,7 +15,13 @@ $isPhoneVotePath = (bool)preg_match('#^/tabul8/vote/#', $requestPath);
 if (!$isPhoneVotePath) {
     $uid = catn8_auth_user_id();
     if ($uid === null) {
-        $redirect = str_starts_with($requestPath, '/tabul8') ? $requestPath : '/tabul8';
+        $redirect = str_starts_with($requestPath, '/tabul8')
+            ? $requestPath
+            : catn8_subsite_login_redirect_path('tabul8', '/');
+        if (catn8_request_subsite_slug() === 'tabul8' && str_starts_with($requestPath, '/tabul8')) {
+            $rest = substr($requestPath, strlen('/tabul8'));
+            $redirect = ($rest === '' || $rest === false) ? '/' : $rest;
+        }
         header('Location: ' . catn8_login_redirect_url($redirect));
         exit;
     }

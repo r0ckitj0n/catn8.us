@@ -40,6 +40,46 @@
   <script>
     (function setPageInfo() {
       var path = (window.location.pathname || '/').toLowerCase();
+      var host = (window.location.hostname || '').toLowerCase();
+      var dnsToSlug = {
+        'elucid8': 'elucid8',
+        'activ8': 'activ8',
+        'recre8': 'recre8',
+        'illumin8': 'illumin8',
+        'stimul8': 'stimul8',
+        'narr8': 'narr8',
+        'loc8': 'loc8',
+        'investig8': 'investig8',
+        'sheriff-station': 'sheriff_station',
+        'fabric8': 'fabric8',
+        'photo-m8': 'photo-m8',
+        'accumul8': 'accumul8',
+        'valid8': 'valid8',
+        'celebr8': 'celebr8',
+        'tabul8': 'tabul8',
+        'medic8': 'medic8',
+        'litig8': 'litig8'
+      };
+      var hostSlug = null;
+      if (host.endsWith('.catn8.us')) {
+        var label = host.slice(0, -'.catn8.us'.length);
+        if (label && label !== 'www' && label.indexOf('.') === -1 && dnsToSlug[label]) {
+          hostSlug = dnsToSlug[label];
+        }
+      }
+      // On product hosts, treat bare/deep paths as the apex /{slug}/... logical path.
+      var sharedPrefixes = ['/api/', '/dist/', '/images/', '/css/', '/assets/', '/emojis/', '/vendor/', '/login', '/settings', '/verify', '/reset', '/favicon'];
+      var isShared = sharedPrefixes.some(function (prefix) {
+        return path === prefix.replace(/\/$/, '') || path.indexOf(prefix) === 0;
+      });
+      if (hostSlug && !isShared) {
+        var prefix = '/' + hostSlug;
+        if (path === '/' || path === '') {
+          path = prefix + '/';
+        } else if (path !== prefix && path.indexOf(prefix + '/') !== 0) {
+          path = prefix + path;
+        }
+      }
       var page = 'home';
       var routes = {
         '/': 'home',

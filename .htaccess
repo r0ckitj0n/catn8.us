@@ -120,6 +120,10 @@ Options -MultiViews -Indexes
   RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|narr8) [NC]
   RewriteRule ^(.*)$ /narr8.php [L,NC,QSA]
 
+  RewriteCond %{HTTP_HOST} ^rel8d\.catn8\.us$ [NC]
+  RewriteCond %{REQUEST_URI} !^/(api/|dist/|images/|css/|assets/|emojis/|vendor/|login|settings|verify|reset|favicon|android-|apple-|robots\.txt|sitemap|rel8d) [NC]
+  RewriteRule ^(.*)$ /rel8d.php [L,NC,QSA]
+
   # Route clean entrypoint URLs through PHP wrappers so server-side auth still runs.
   RewriteRule ^elucid8/?$ /elucid8.php [L,NC,QSA]
   RewriteRule ^activ8/?$ /activ8.php [L,NC,QSA]
@@ -127,6 +131,8 @@ Options -MultiViews -Indexes
   RewriteRule ^illumin8/?$ /illumin8.php [L,NC,QSA]
   RewriteRule ^stimul8/?$ /stimul8.php [L,NC,QSA]
   RewriteRule ^narr8/?$ /narr8.php [L,NC,QSA]
+  RewriteRule ^rel8d/?$ /rel8d.php [L,NC,QSA]
+  RewriteRule ^rel8d/.+$ /rel8d.php [L,NC,QSA]
   RewriteRule ^loc8/?$ /loc8.php [L,NC,QSA]
   RewriteRule ^investig8/?$ /investig8.php [L,NC,QSA]
   RewriteRule ^fabric8/?$ /fabric8.php [L,NC,QSA]

@@ -81,9 +81,14 @@ $_ENV['CATN8_FORCE_SUBDOMAIN_REDIRECTS'] = '0';
 $expectedSlugs = [
     'elucid8', 'activ8', 'recre8', 'illumin8', 'stimul8', 'narr8', 'loc8',
     'investig8', 'sheriff_station', 'fabric8', 'photo-m8', 'accumul8', 'valid8',
-    'celebr8', 'tabul8', 'medic8', 'litig8',
+    'celebr8', 'tabul8', 'medic8', 'litig8', 'rel8d',
 ];
 subdomain_test_assert(catn8_subsite_path_slugs() === $expectedSlugs, 'subsite slug inventory matches routes');
+
+with_request(['HTTP_HOST' => 'rel8d.catn8.us', 'REQUEST_URI' => '/', 'HTTPS' => 'on'], static function (): void {
+    subdomain_test_assert(catn8_request_subsite_slug() === 'rel8d', 'rel8d host maps to rel8d slug');
+    subdomain_test_assert(catn8_logical_request_path() === '/rel8d/', 'rel8d root logical path');
+});
 
 if ($failures > 0) {
     fwrite(STDERR, "\n{$failures} subdomain routing assertion(s) failed\n");

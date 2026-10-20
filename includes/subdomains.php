@@ -38,6 +38,7 @@ function catn8_subsite_dns_map(): array
         'tabul8' => 'tabul8',
         'medic8' => 'medic8',
         'litig8' => 'litig8',
+        'rel8d' => 'rel8d',
     ];
 }
 

@@ -23,8 +23,9 @@ Every product module that already has a clean path (`/medic8`, `/accumul8`, …)
 | `illumin8.catn8.us` | `/illumin8` |
 | `stimul8.catn8.us` | `/stimul8` |
 | `narr8.catn8.us` | `/narr8` |
+| `rel8d.catn8.us` | `/rel8d` |
 
-`rel8ed` is not a current route in this repo.
+Spell the genealogy product **Rel8d** (`rel8d`), not “rel8ed”.
 
 ## Behaviour
 

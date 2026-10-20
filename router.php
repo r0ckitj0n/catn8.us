@@ -92,6 +92,7 @@ $routerDnsMap = [
     'tabul8' => 'tabul8.php',
     'medic8' => 'medic8.php',
     'litig8' => 'litig8.php',
+    'rel8d' => 'rel8d.php',
 ];
 if (str_ends_with($routerHost, '.catn8.us')) {
     $routerLabel = substr($routerHost, 0, -strlen('.catn8.us'));
@@ -119,6 +120,7 @@ $appPhpRoutes = [
     '/tabul8' => '/tabul8.php',
     '/medic8' => '/medic8.php',
     '/litig8' => '/litig8.php',
+    '/rel8d' => '/rel8d.php',
     '/login' => '/login.php',
     '/sheriff_station' => '/sheriff_station.php',
     '/settings' => '/settings.php',
@@ -177,6 +179,10 @@ if (!$isPhpRoute) {
     }
     if ($canonical === '/litig8' || preg_match('#^/litig8/#', $canonical) === 1) {
         require $root . '/litig8.php';
+        exit;
+    }
+    if ($canonical === '/rel8d' || preg_match('#^/rel8d/#', $canonical) === 1) {
+        require $root . '/rel8d.php';
         exit;
     }
 }

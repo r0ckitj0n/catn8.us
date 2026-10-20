@@ -20,10 +20,12 @@ import { Medic8Page } from '../components/pages/Medic8Page';
 import { Tabul8Page } from '../components/pages/Tabul8Page';
 import { Valid8Page } from '../components/pages/Valid8Page';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
+import { Rel8dPage } from '../components/pages/Rel8dPage';
 
 export type AppPage =
   | 'home'
   | 'elucid8'
+  | 'rel8d'
   | 'narr8'
   | 'stimul8'
   | 'recre8'
@@ -70,6 +72,7 @@ export const BACKGROUND_LAYER_STYLE: React.CSSProperties = {
 export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>> = {
   home: HomePage,
   elucid8: AboutPage,
+  rel8d: Rel8dPage,
   narr8: StoriesPage,
   stimul8: GamesPage,
   recre8: ArcadePage,
@@ -108,6 +111,7 @@ const SUBSITE_DNS_TO_SLUG: Record<string, string> = {
   tabul8: 'tabul8',
   medic8: 'medic8',
   litig8: 'litig8',
+  rel8d: 'rel8d',
 };
 
 function currentSubsiteSlug(): string | null {

@@ -42,24 +42,29 @@ function catn8_router_respond_file(string $file): void
         echo 'Not found';
         exit;
     }
-    $mime = function_exists('mime_content_type') ? (string)(mime_content_type($file) ?: '') : '';
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    // Prefer extension map for web assets: mime_content_type often returns
+    // text/plain for .js/.css on minimal hosts, which breaks ES modules.
+    $mimeMap = [
+        'html' => 'text/html; charset=UTF-8',
+        'css' => 'text/css; charset=UTF-8',
+        'js' => 'application/javascript; charset=UTF-8',
+        'mjs' => 'application/javascript; charset=UTF-8',
+        'json' => 'application/json; charset=UTF-8',
+        'svg' => 'image/svg+xml',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'webmanifest' => 'application/manifest+json',
+    ];
+    $mime = $mimeMap[$ext] ?? '';
     if ($mime === '') {
-        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-        $mimeMap = [
-            'html' => 'text/html; charset=UTF-8',
-            'css' => 'text/css; charset=UTF-8',
-            'js' => 'application/javascript; charset=UTF-8',
-            'json' => 'application/json; charset=UTF-8',
-            'svg' => 'image/svg+xml',
-            'png' => 'image/png',
-            'jpg' => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'gif' => 'image/gif',
-            'webp' => 'image/webp',
-            'woff' => 'font/woff',
-            'woff2' => 'font/woff2',
-        ];
-        $mime = $mimeMap[$ext] ?? 'application/octet-stream';
+        $detected = function_exists('mime_content_type') ? (string)(mime_content_type($file) ?: '') : '';
+        $mime = $detected !== '' ? $detected : 'application/octet-stream';
     }
     header('Content-Type: ' . $mime);
     readfile($file);

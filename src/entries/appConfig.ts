@@ -20,10 +20,12 @@ import { Medic8Page } from '../components/pages/Medic8Page';
 import { Tabul8Page } from '../components/pages/Tabul8Page';
 import { Valid8Page } from '../components/pages/Valid8Page';
 import { WordsearchPage } from '../components/pages/WordsearchPage';
+import { Rel8dPage } from '../components/pages/Rel8dPage';
 
 export type AppPage =
   | 'home'
   | 'elucid8'
+  | 'rel8d'
   | 'narr8'
   | 'stimul8'
   | 'recre8'
@@ -70,6 +72,7 @@ export const BACKGROUND_LAYER_STYLE: React.CSSProperties = {
 export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType<any>>> = {
   home: HomePage,
   elucid8: AboutPage,
+  rel8d: Rel8dPage,
   narr8: StoriesPage,
   stimul8: GamesPage,
   recre8: ArcadePage,
@@ -90,6 +93,42 @@ export const SIMPLE_PAGE_COMPONENTS: Partial<Record<AppPage, React.ComponentType
   tetris: TetrisPage,
 };
 
+const SUBSITE_DNS_TO_SLUG: Record<string, string> = {
+  elucid8: 'elucid8',
+  activ8: 'activ8',
+  recre8: 'recre8',
+  illumin8: 'illumin8',
+  stimul8: 'stimul8',
+  narr8: 'narr8',
+  loc8: 'loc8',
+  investig8: 'investig8',
+  'sheriff-station': 'sheriff_station',
+  fabric8: 'fabric8',
+  'photo-m8': 'photo-m8',
+  accumul8: 'accumul8',
+  valid8: 'valid8',
+  celebr8: 'celebr8',
+  tabul8: 'tabul8',
+  medic8: 'medic8',
+  litig8: 'litig8',
+  rel8d: 'rel8d',
+};
+
+function currentSubsiteSlug(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const host = (window.location.hostname || '').toLowerCase();
+  if (!host.endsWith('.catn8.us')) {
+    return null;
+  }
+  const label = host.slice(0, -'.catn8.us'.length);
+  if (!label || label === 'www' || label.includes('.')) {
+    return null;
+  }
+  return SUBSITE_DNS_TO_SLUG[label] || null;
+}
+
 /** Same-origin path-only redirect target from ?redirect= (blocks open redirects). */
 export function getLoginRedirectTarget(): string | null {
   if (typeof window === 'undefined') {
@@ -106,8 +145,19 @@ export function getLoginRedirectTarget(): string | null {
     if (resolved.origin !== window.location.origin) {
       return null;
     }
+    let path = resolved.pathname;
+    const slug = currentSubsiteSlug();
+    // On product hosts, /{slug}/... login targets collapse to host-relative paths.
+    if (slug) {
+      const prefix = `/${slug}`;
+      if (path === prefix || path === `${prefix}/`) {
+        path = '/';
+      } else if (path.startsWith(`${prefix}/`)) {
+        path = path.slice(prefix.length) || '/';
+      }
+    }
     // Path + query + hash only; never return a full absolute URL to assign/replace.
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    return `${path}${resolved.search}${resolved.hash}`;
   } catch {
     return null;
   }

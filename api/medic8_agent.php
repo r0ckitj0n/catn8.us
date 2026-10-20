@@ -103,7 +103,7 @@ try {
                 'format' => 'json',
                 'pdf_available' => false,
                 'med_list' => Medic8Model::medicationListSummary($uid, $personId),
-                'print_url' => 'https://catn8.us/medic8/med-list?person_id=' . $personId,
+                'print_url' => catn8_apex_origin() . '/medic8/med-list?person_id=' . $personId,
                 'note' => 'PDF libraries are not available on this host; use format=html or the print_url.',
             ]);
         }

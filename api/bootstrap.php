@@ -237,3 +237,20 @@ function catn8_login_redirect_url(string $targetPath): string
 {
     return '/login?redirect=' . rawurlencode(catn8_safe_internal_redirect_target($targetPath));
 }
+
+// Optional apex-path → product-subdomain 301s (CATN8_FORCE_SUBDOMAIN_REDIRECTS).
+// Off by default until DNS + SSL exist for every product host. Skips /api/*.
+if (
+    PHP_SAPI !== 'cli'
+    && strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'GET'
+    && function_exists('catn8_maybe_force_subdomain_redirect_url')
+) {
+    $requestPath = (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/');
+    if (!str_starts_with($requestPath, '/api/')) {
+        $forceLocation = catn8_maybe_force_subdomain_redirect_url();
+        if (is_string($forceLocation) && $forceLocation !== '') {
+            header('Location: ' . $forceLocation, true, 301);
+            exit;
+        }
+    }
+}

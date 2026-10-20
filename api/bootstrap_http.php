@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/includes/subdomains.php';
+
 function catn8_http_json_with_status(string $method, string $url, array $headers, $body, int $connectTimeoutSeconds = 10, int $timeoutSeconds = 30): array
 {
     $method = strtoupper(trim($method));
@@ -140,11 +142,19 @@ function catn8_request_is_https(): bool
 function catn8_public_origin(): string
 {
     if (function_exists('catn8_is_local_request') && catn8_is_local_request()) {
-        return 'http://localhost:8888';
+        $scheme = catn8_request_is_https() ? 'https' : 'http';
+        $rawHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($rawHost !== '') {
+            return $scheme . '://' . strtolower($rawHost);
+        }
+        return 'http://127.0.0.1:8888';
     }
-    $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? 'catn8.us')));
-    if ($host === '' || strpos($host, 'www.catn8.us') === 0) {
-        $host = 'catn8.us';
+    $host = catn8_request_host();
+    if ($host === '' || str_starts_with($host, 'www.')) {
+        $host = CATN8_PARENT_DOMAIN;
+    }
+    if (!catn8_is_trusted_catn8_host($host)) {
+        $host = CATN8_PARENT_DOMAIN;
     }
     return 'https://' . $host;
 }

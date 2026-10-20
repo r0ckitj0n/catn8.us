@@ -5,13 +5,16 @@ require_once __DIR__ . '/api/bootstrap.php';
 require_once __DIR__ . '/includes/medic8_model.php';
 
 $uid = catn8_auth_user_id();
-$requestPath = (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/medic8'), PHP_URL_PATH) ?: '/medic8');
+$requestPath = catn8_logical_request_path();
 $isMedList = (bool)preg_match('#/medic8/med-list/?$#i', $requestPath);
 
 if ($uid === null) {
     $redirect = $isMedList
-        ? '/medic8/med-list' . (isset($_GET['person_id']) ? ('?person_id=' . rawurlencode((string)$_GET['person_id'])) : '')
-        : '/medic8/';
+        ? catn8_subsite_login_redirect_path(
+            'medic8',
+            '/med-list' . (isset($_GET['person_id']) ? ('?person_id=' . rawurlencode((string)$_GET['person_id'])) : '')
+        )
+        : catn8_subsite_login_redirect_path('medic8', '/');
     header('Location: ' . catn8_login_redirect_url($redirect));
     exit;
 }

@@ -528,7 +528,9 @@ export function getOrCreateDeviceToken(): string {
     crypto.getRandomValues(bytes);
     const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     window.localStorage.setItem(key, token);
-    document.cookie = `${key}=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+    const host = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase();
+    const domainPart = host === 'catn8.us' || host.endsWith('.catn8.us') ? '; domain=.catn8.us' : '';
+    document.cookie = `${key}=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${domainPart}`;
     return token;
   } catch {
     return `anon_${Date.now()}`;

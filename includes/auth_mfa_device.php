@@ -16,13 +16,18 @@ function catn8_mfa_device_signing_key(): string
 }
 function catn8_mfa_set_device_cookie(string $value, int $expiresAt): void
 {
-    setcookie(CATN8_MFA_DEVICE_COOKIE, $value, [
+    $params = [
         'expires' => $expiresAt,
         'path' => '/',
         'secure' => catn8_mfa_cookie_secure(),
         'httponly' => true,
         'samesite' => 'Lax',
-    ]);
+    ];
+    $cookieDomain = function_exists('catn8_cookie_domain') ? catn8_cookie_domain() : '';
+    if ($cookieDomain !== '') {
+        $params['domain'] = $cookieDomain;
+    }
+    setcookie(CATN8_MFA_DEVICE_COOKIE, $value, $params);
 }
 function catn8_mfa_trusted_user_id(): int
 {

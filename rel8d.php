@@ -6,7 +6,8 @@ require_once __DIR__ . '/includes/rel8d_model.php';
 
 $uid = catn8_auth_user_id();
 if ($uid === null) {
-    header('Location: ' . catn8_login_redirect_url('/rel8d/'));
+    // Host-aware: on rel8d.catn8.us redirect target is `/`; on apex it is `/rel8d/`.
+    header('Location: ' . catn8_login_redirect_url(catn8_subsite_login_redirect_path('rel8d', '/')));
     exit;
 }
 

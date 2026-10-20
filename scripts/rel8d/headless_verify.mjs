@@ -38,19 +38,39 @@ async function main() {
       res.end(html);
       return;
     }
-    // Proxy API + dist to PHP/dist
-    const target = req.url.startsWith('/api') || req.url.startsWith('/dist') || req.url.startsWith('/css')
-      ? `http://127.0.0.1:8888${req.url}`
-      : null;
-    if (!target) {
+    // Proxy API + dist to the fixed local PHP backend only (no user-controlled host).
+    let pathname = '/';
+    let search = '';
+    try {
+      const parsed = new URL(String(req.url || '/'), 'http://127.0.0.1');
+      pathname = parsed.pathname;
+      search = parsed.search || '';
+    } catch {
+      res.writeHead(400);
+      res.end('bad request');
+      return;
+    }
+    const allowed =
+      pathname.startsWith('/api/')
+      || pathname === '/api'
+      || pathname.startsWith('/dist/')
+      || pathname === '/dist'
+      || pathname.startsWith('/css/');
+    if (!allowed) {
       res.writeHead(404);
       res.end('missing');
       return;
     }
-    http.get(target, { headers: { cookie: fs.readFileSync('/tmp/rel8d.jar', 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).map((l) => {
+    const cookie = fs.readFileSync('/tmp/rel8d.jar', 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).map((l) => {
       const p = l.split('\t');
       return p.length >= 7 ? `${p[5]}=${p[6]}` : '';
-    }).filter(Boolean).join('; ') } }, (up) => {
+    }).filter(Boolean).join('; ');
+    http.get({
+      hostname: '127.0.0.1',
+      port: 8888,
+      path: pathname + search,
+      headers: { cookie },
+    }, (up) => {
       res.writeHead(up.statusCode || 500, up.headers);
       up.pipe(res);
     }).on('error', (e) => {

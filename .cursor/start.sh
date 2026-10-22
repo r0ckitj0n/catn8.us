@@ -5,6 +5,15 @@
 # database and local root access exist.
 set -euo pipefail
 
+# Debian installs mariadbd in /usr/sbin, which is often absent from a
+# non-root Cloud Agent PATH.
+PATH="/usr/sbin:/usr/bin:${PATH}"
+MARIADBD="$(command -v mariadbd || command -v mysqld || true)"
+if [ -z "${MARIADBD}" ]; then
+    echo "ERROR: mariadbd/mysqld not found on PATH=$PATH" >&2
+    exit 1
+fi
+
 STATE_DIR="${CATN8_MYSQL_HOME:-$HOME/.catn8}"
 DATA_DIR="$STATE_DIR/mysql-data"
 SOCKET="$STATE_DIR/mysqld.sock"
@@ -24,7 +33,7 @@ fi
 
 # Start mysqld if it is not already accepting connections.
 if ! mysqladmin --no-defaults --socket="$SOCKET" ping >/dev/null 2>&1; then
-    nohup mariadbd --no-defaults \
+    nohup "${MARIADBD}" --no-defaults \
         --datadir="$DATA_DIR" \
         --socket="$SOCKET" \
         --pid-file="$PIDFILE" \

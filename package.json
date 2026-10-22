@@ -7,6 +7,8 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host localhost --port 5179",
     "images:webp": "bash scripts/convert_images_to_webp.sh",
+    "sync:from-live": "bash scripts/sync_from_live.sh --images --refresh",
+    "sync:from-live:dry": "bash scripts/sync_from_live.sh --images --refresh --dry-run",
     "stop": "rm -f hot",
     "typecheck": "mkdir -p .local/state/typescript && tsc -p tsconfig.json --noEmit"
   },

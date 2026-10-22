@@ -58,6 +58,7 @@
 - **`scripts/secrets/`**: **Deployment-time credential fetching.**
   - `env_or_keychain.sh`: Resolves secrets from local environment or macOS Keychain.
 - `dev.sh`, `prod.sh`, `deploy.sh`: Lifecycle management scripts.
+- `sync_from_live.sh`: Pull current live images (and optional paths) into local/dev so stale local assets cannot overwrite newer production files. See `documentation/sync-dev-from-live.md`.
 
 ### Key Architectural Flows
 1.  **State Management:** `GameContext` (Frontend) <-> `play.php` (Backend).
